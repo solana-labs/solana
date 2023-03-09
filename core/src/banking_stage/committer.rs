@@ -3,7 +3,7 @@ use {
     solana_ledger::{
         blockstore_processor::TransactionStatusSender, token_balances::collect_token_balances,
     },
-    solana_measure::{measure, measure_us},
+    solana_measure::measure_us,
     solana_runtime::{
         accounts::TransactionLoadResult,
         bank::{

@@ -1,8 +1,8 @@
 use {
     crate::{
         accounts_index::{
-            AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue,
-            PreAllocatedAccountMapEntry, RefCount, SlotList, SlotSlice, UpsertReclaim, ZeroLamport,
+            AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, DiskIndexValue, IndexValue,
+            PreAllocatedAccountMapEntry, RefCount, SlotList, UpsertReclaim, ZeroLamport,
         },
         bucket_map_holder::{Age, BucketMapHolder},
         bucket_map_holder_stats::BucketMapHolderStats,
@@ -83,15 +83,15 @@ impl<T: IndexValue> PossibleEvictions<T> {
 }
 
 // one instance of this represents one bin of the accounts index.
-pub struct InMemAccountsIndex<T: IndexValue> {
+pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     last_age_flushed: AtomicU8,
 
     // backing store
     map_internal: RwLock<InMemMap<T>>,
-    storage: Arc<BucketMapHolder<T>>,
+    storage: Arc<BucketMapHolder<T, U>>,
     bin: usize,
 
-    bucket: Option<Arc<BucketApi<(Slot, T)>>>,
+    bucket: Option<Arc<BucketApi<(Slot, U)>>>,
 
     // pubkey ranges that this bin must hold in the cache while the range is present in this vec
     pub(crate) cache_ranges_held: CacheRangesHeld,
@@ -112,7 +112,7 @@ pub struct InMemAccountsIndex<T: IndexValue> {
     age_to_flush_bin_mod: Age,
 }
 
-impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
+impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Debug for InMemAccountsIndex<T, U> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
@@ -141,8 +141,8 @@ struct FlushScanResult<T> {
     evictions_random: Vec<(Pubkey, AccountMapEntry<T>)>,
 }
 
-impl<T: IndexValue> InMemAccountsIndex<T> {
-    pub fn new(storage: &Arc<BucketMapHolder<T>>, bin: usize) -> Self {
+impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T, U> {
+    pub fn new(storage: &Arc<BucketMapHolder<T, U>>, bin: usize) -> Self {
         let ages_to_stay_in_cache = storage.ages_to_stay_in_cache;
         Self {
             map_internal: RwLock::default(),
@@ -230,14 +230,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     // only called in debug code paths
     pub fn keys(&self) -> Vec<Pubkey> {
         Self::update_stat(&self.stats().keys, 1);
-        // easiest implementation is to load evrything from disk into cache and return the keys
+        // easiest implementation is to load everything from disk into cache and return the keys
         let evictions_guard = EvictionsGuard::lock(self);
         self.put_range_in_cache(&None::<&RangeInclusive<Pubkey>>, &evictions_guard);
         let keys = self.map_internal.read().unwrap().keys().cloned().collect();
         keys
     }
 
-    fn load_from_disk(&self, pubkey: &Pubkey) -> Option<(SlotList<T>, RefCount)> {
+    fn load_from_disk(&self, pubkey: &Pubkey) -> Option<(SlotList<U>, RefCount)> {
         self.bucket.as_ref().and_then(|disk| {
             let m = Measure::start("load_disk_found_count");
             let entry_disk = disk.read_value(pubkey);
@@ -348,8 +348,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         })
     }
 
-    fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
-        if slot_list.is_empty() {
+    fn remove_if_slot_list_empty_value(&self, is_empty: bool) -> bool {
+        if is_empty {
             self.stats().inc_delete();
             true
         } else {
@@ -368,8 +368,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     fn remove_if_slot_list_empty_entry(&self, entry: Entry<K, AccountMapEntry<T>>) -> bool {
         match entry {
             Entry::Occupied(occupied) => {
-                let result =
-                    self.remove_if_slot_list_empty_value(&occupied.get().slot_list.read().unwrap());
+                let result = self.remove_if_slot_list_empty_value(
+                    occupied.get().slot_list.read().unwrap().is_empty(),
+                );
                 if result {
                     // note there is a potential race here that has existed.
                     // if someone else holds the arc,
@@ -389,7 +390,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 match entry_disk {
                     Some(entry_disk) => {
                         // on disk
-                        if self.remove_if_slot_list_empty_value(&entry_disk.0) {
+                        if self.remove_if_slot_list_empty_value(entry_disk.0.is_empty()) {
                             // not in cache, but on disk, so just delete from disk
                             self.delete_disk_key(vacant.key());
                             true
@@ -640,11 +641,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     // convert from raw data on disk to AccountMapEntry, set to age in future
     fn disk_to_cache_entry(
         &self,
-        slot_list: SlotList<T>,
+        slot_list: SlotList<U>,
         ref_count: RefCount,
     ) -> AccountMapEntry<T> {
         Arc::new(AccountMapEntryInner::new(
-            slot_list,
+            slot_list
+                .into_iter()
+                .map(|(slot, info)| (slot, info.into()))
+                .collect(),
             ref_count,
             AccountMapEntryMeta::new_clean(&self.storage),
         ))
@@ -680,7 +684,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             Entry::Occupied(occupied) => {
                 // in cache, so merge into cache
                 let (slot, account_info) = new_entry.into();
-                InMemAccountsIndex::lock_and_update_slot_list(
+                InMemAccountsIndex::<T, U>::lock_and_update_slot_list(
                     occupied.get(),
                     (slot, account_info),
                     None, // should be None because we don't expect a different slot # during index generation
@@ -698,7 +702,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 self.stats().inc_mem_count(self.bin);
                 if let Some(disk_entry) = disk_entry {
                     let (slot, account_info) = new_entry.into();
-                    InMemAccountsIndex::lock_and_update_slot_list(
+                    InMemAccountsIndex::<T, U>::lock_and_update_slot_list(
                         &disk_entry,
                         (slot, account_info),
                         // None because we are inserting the first element in the slot list for this pubkey.
@@ -949,19 +953,22 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             if exceeds_budget {
                 // if we are already holding too many items in-mem, then we need to be more aggressive at kicking things out
                 (true, None)
+            } else if entry.ref_count() != 1 {
+                Self::update_stat(&self.stats().held_in_mem.ref_count, 1);
+                (false, None)
             } else {
                 // only read the slot list if we are planning to throw the item out
                 let slot_list = entry.slot_list.read().unwrap();
                 if slot_list.len() != 1 {
                     if update_stats {
-                        Self::update_stat(&self.stats().held_in_mem_slot_list_len, 1);
+                        Self::update_stat(&self.stats().held_in_mem.slot_list_len, 1);
                     }
                     (false, None) // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
                 } else {
                     // keep items with slot lists that contained cached items
                     let evict = !slot_list.iter().any(|(_, info)| info.is_cached());
                     if !evict && update_stats {
-                        Self::update_stat(&self.stats().held_in_mem_slot_list_cached, 1);
+                        Self::update_stat(&self.stats().held_in_mem.slot_list_cached, 1);
                     }
                     (evict, if evict { Some(slot_list) } else { None })
                 }
@@ -1047,7 +1054,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         // merge this in, mark as conflict
                         let mut slot_list = Vec::with_capacity(current_slot_list.len() + 1);
                         slot_list.extend_from_slice(current_slot_list);
-                        slot_list.push(entry); // will never be from the same slot that already exists in the list
+                        slot_list.push((entry.0, entry.1.into())); // will never be from the same slot that already exists in the list
                         ref_count += new_ref_count;
                         duplicates.push((slot, k));
                         Some((slot_list, ref_count))
@@ -1055,7 +1062,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     None => {
                         count += 1;
                         // not on disk, insert it
-                        Some((vec![entry], new_ref_count))
+                        Some((vec![(entry.0, entry.1.into())], new_ref_count))
                     }
                 }
             });
@@ -1136,6 +1143,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 // not evicting, so don't write, even if dirty
                                 continue;
                             }
+                        } else if v.ref_count() != 1 {
+                            continue;
                         }
                         // if we are evicting it, then we need to update disk if we're dirty
                         if v.clear_dirty() {
@@ -1153,7 +1162,16 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                     let slot_list = slot_list
                                         .take()
                                         .unwrap_or_else(|| v.slot_list.read().unwrap());
-                                    disk.try_write(&k, (&slot_list, v.ref_count()))
+                                    disk.try_write(
+                                        &k,
+                                        (
+                                            &slot_list
+                                                .iter()
+                                                .map(|(slot, info)| (*slot, (*info).into()))
+                                                .collect::<Vec<_>>(),
+                                            v.ref_count(),
+                                        ),
+                                    )
                                 };
                                 match disk_resize {
                                     Ok(_) => {
@@ -1379,7 +1397,9 @@ struct EvictionsGuard<'a> {
 
 impl<'a> EvictionsGuard<'a> {
     #[must_use = "if unused, this evictions lock will be immediately unlocked"]
-    fn lock<T: IndexValue>(in_mem_accounts_index: &'a InMemAccountsIndex<T>) -> Self {
+    fn lock<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
+        in_mem_accounts_index: &'a InMemAccountsIndex<T, U>,
+    ) -> Self {
         Self::lock_with(
             &in_mem_accounts_index.stop_evictions,
             &in_mem_accounts_index.stop_evictions_changes,
@@ -1427,7 +1447,7 @@ mod tests {
         itertools::Itertools,
     };
 
-    fn new_for_test<T: IndexValue>() -> InMemAccountsIndex<T> {
+    fn new_for_test<T: IndexValue>() -> InMemAccountsIndex<T, T> {
         let holder = Arc::new(BucketMapHolder::new(
             BINS_FOR_TESTING,
             &Some(AccountsIndexConfig::default()),
@@ -1437,7 +1457,7 @@ mod tests {
         InMemAccountsIndex::new(&holder, bin)
     }
 
-    fn new_disk_buckets_for_test<T: IndexValue>() -> InMemAccountsIndex<T> {
+    fn new_disk_buckets_for_test<T: IndexValue>() -> InMemAccountsIndex<T, T> {
         let holder = Arc::new(BucketMapHolder::new(
             BINS_FOR_TESTING,
             &Some(AccountsIndexConfig {
@@ -1453,12 +1473,41 @@ mod tests {
     }
 
     #[test]
+    fn test_should_evict_from_mem_ref_count() {
+        for ref_count in [0, 1, 2] {
+            let bucket = new_for_test::<u64>();
+            let startup = false;
+            let current_age = 0;
+            let one_element_slot_list = vec![(0, 0)];
+            let one_element_slot_list_entry = Arc::new(AccountMapEntryInner::new(
+                one_element_slot_list,
+                ref_count,
+                AccountMapEntryMeta::default(),
+            ));
+
+            // exceeded budget
+            assert_eq!(
+                bucket
+                    .should_evict_from_mem(
+                        current_age,
+                        &one_element_slot_list_entry,
+                        startup,
+                        false,
+                        false,
+                    )
+                    .0,
+                ref_count == 1
+            );
+        }
+    }
+
+    #[test]
     fn test_should_evict_from_mem() {
         solana_logger::setup();
         let bucket = new_for_test::<u64>();
         let mut startup = false;
         let mut current_age = 0;
-        let ref_count = 0;
+        let ref_count = 1;
         let one_element_slot_list = vec![(0, 0)];
         let one_element_slot_list_entry = Arc::new(AccountMapEntryInner::new(
             one_element_slot_list,
@@ -1688,7 +1737,7 @@ mod tests {
             let mut slot_list = Vec::default();
             // upserting into empty slot_list, so always addref
             assert!(
-                InMemAccountsIndex::update_slot_list(
+                InMemAccountsIndex::<u64, u64>::update_slot_list(
                     &mut slot_list,
                     new_slot,
                     info,
@@ -1711,7 +1760,7 @@ mod tests {
             // upserting into slot_list that does NOT contain an entry at 'new_slot'
             // but, it DOES contain an entry at other_slot, so we do NOT add-ref. The assumption is that 'other_slot' is going away
             // and that the previously held add-ref is now used by 'new_slot'
-            !InMemAccountsIndex::update_slot_list(
+            !InMemAccountsIndex::<u64, u64>::update_slot_list(
                 &mut slot_list,
                 new_slot,
                 info,
@@ -1731,7 +1780,7 @@ mod tests {
         // upserting into slot_list that already contain an entry at 'new-slot', so do NOT addref
         let mut reclaims = Vec::default();
         assert!(
-            !InMemAccountsIndex::update_slot_list(
+            !InMemAccountsIndex::<u64, u64>::update_slot_list(
                 &mut slot_list,
                 new_slot,
                 info,
@@ -1802,7 +1851,7 @@ mod tests {
                     let original = slot_list.clone();
                     let mut reclaims = Vec::default();
 
-                    let result = InMemAccountsIndex::update_slot_list(
+                    let result = InMemAccountsIndex::<u64, u64>::update_slot_list(
                         &mut slot_list,
                         new_slot,
                         info,
@@ -1930,7 +1979,7 @@ mod tests {
         let info = 65;
         let mut reclaims = Vec::default();
         // first upsert, should increase
-        let len = InMemAccountsIndex::lock_and_update_slot_list(
+        let len = InMemAccountsIndex::<u64, u64>::lock_and_update_slot_list(
             &test,
             (1, info),
             None,
@@ -1940,7 +1989,7 @@ mod tests {
         assert_eq!(test.slot_list.read().unwrap().len(), len);
         assert_eq!(len, 1);
         // update to different slot, should increase
-        let len = InMemAccountsIndex::lock_and_update_slot_list(
+        let len = InMemAccountsIndex::<u64, u64>::lock_and_update_slot_list(
             &test,
             (2, info),
             None,
@@ -1950,7 +1999,7 @@ mod tests {
         assert_eq!(test.slot_list.read().unwrap().len(), len);
         assert_eq!(len, 2);
         // update to same slot, should not increase
-        let len = InMemAccountsIndex::lock_and_update_slot_list(
+        let len = InMemAccountsIndex::<u64, u64>::lock_and_update_slot_list(
             &test,
             (2, info),
             None,

@@ -5,19 +5,20 @@
 //! Otherwise, an ancient append vec is the same as any other append vec
 use {
     crate::{
-        account_storage::ShrinkInProgress,
+        account_storage::{meta::StoredAccountMeta, ShrinkInProgress},
         accounts_db::{
             AccountStorageEntry, AccountsDb, AliveAccounts, GetUniqueAccountsResult, ShrinkCollect,
             ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub, StoreReclaims,
             INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
         },
+        accounts_file::AccountsFile,
         accounts_index::ZeroLamport,
         active_stats::ActiveStatItem,
-        append_vec::{aligned_stored_size, AppendVec, StoredAccountMeta},
+        append_vec::aligned_stored_size,
         storable_accounts::{StorableAccounts, StorableAccountsBySlot},
     },
     rand::{thread_rng, Rng},
-    solana_measure::{measure, measure_us},
+    solana_measure::measure_us,
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, saturating_add_assign},
     std::{
         collections::HashMap,
@@ -433,9 +434,9 @@ impl AccountsDb {
     /// finish shrink operation on slots where a new storage was created
     /// drop root and storage for all original slots whose contents were combined into other storages
     #[allow(dead_code)]
-    fn finish_combine_ancient_slots_packed_internal<'a>(
+    fn finish_combine_ancient_slots_packed_internal(
         &self,
-        accounts_to_combine: AccountsToCombine<'a>,
+        accounts_to_combine: AccountsToCombine<'_>,
         mut write_ancient_accounts: WriteAncientAccounts,
         metrics: &mut ShrinkStatsSub,
     ) {
@@ -705,7 +706,7 @@ impl<'a> AccountsToStore<'a> {
         if alive_total_bytes > available_bytes as usize {
             // not all the alive bytes fit, so we have to find how many accounts fit within available_bytes
             for (i, account) in accounts.iter().enumerate() {
-                let account_size = account.stored_size as u64;
+                let account_size = account.stored_size() as u64;
                 if available_bytes >= account_size {
                     available_bytes = available_bytes.saturating_sub(account_size);
                 } else if index_first_item_overflow == num_accounts {
@@ -748,8 +749,10 @@ pub fn get_ancient_append_vec_capacity() -> u64 {
 }
 
 /// is this a max-size append vec designed to be used as an ancient append vec?
-pub fn is_ancient(storage: &AppendVec) -> bool {
-    storage.capacity() >= get_ancient_append_vec_capacity()
+pub fn is_ancient(storage: &AccountsFile) -> bool {
+    match storage {
+        AccountsFile::AppendVec(storage) => storage.capacity() >= get_ancient_append_vec_capacity(),
+    }
 }
 
 #[cfg(test)]
@@ -757,6 +760,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
+            account_storage::meta::{AccountMeta, StoredAccountMeta, StoredMeta},
             accounts_db::{
                 get_temp_accounts_paths,
                 tests::{
@@ -766,7 +770,7 @@ pub mod tests {
                 },
                 INCLUDE_SLOT_IN_HASH_TESTS,
             },
-            append_vec::{aligned_stored_size, AccountMeta, StoredAccountMeta, StoredMeta},
+            append_vec::{aligned_stored_size, AppendVec},
             storable_accounts::StorableAccountsBySlot,
         },
         solana_sdk::{
@@ -1670,7 +1674,7 @@ pub mod tests {
         ] {
             let tf = crate::append_vec::test_utils::get_append_vec_path("test_is_ancient");
             let (_temp_dirs, _paths) = get_temp_accounts_paths(1).unwrap();
-            let av = AppendVec::new(&tf.path, true, size as usize);
+            let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, size as usize));
 
             assert_eq!(expected_ancient, is_ancient(&av));
         }

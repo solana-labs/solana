@@ -305,7 +305,7 @@ pub fn new_cluster_nodes<T: 'static>(
         nodes,
         index,
         weighted_shuffle,
-        _phantom: PhantomData::default(),
+        _phantom: PhantomData,
     }
 }
 

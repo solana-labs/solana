@@ -268,7 +268,7 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     /// the account is updated during transaction processing.
     #[allow(unused_variables)]
     fn update_account(
-        &mut self,
+        &self,
         account: ReplicaAccountInfoVersions,
         slot: u64,
         is_startup: bool,
@@ -277,25 +277,20 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     }
 
     /// Called when all accounts are notified of during startup.
-    fn notify_end_of_startup(&mut self) -> Result<()> {
+    fn notify_end_of_startup(&self) -> Result<()> {
         Ok(())
     }
 
     /// Called when a slot status is updated
     #[allow(unused_variables)]
-    fn update_slot_status(
-        &mut self,
-        slot: u64,
-        parent: Option<u64>,
-        status: SlotStatus,
-    ) -> Result<()> {
+    fn update_slot_status(&self, slot: u64, parent: Option<u64>, status: SlotStatus) -> Result<()> {
         Ok(())
     }
 
     /// Called when a transaction is updated at a slot.
     #[allow(unused_variables)]
     fn notify_transaction(
-        &mut self,
+        &self,
         transaction: ReplicaTransactionInfoVersions,
         slot: u64,
     ) -> Result<()> {
@@ -304,7 +299,7 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
 
     /// Called when block's metadata is updated.
     #[allow(unused_variables)]
-    fn notify_block_metadata(&mut self, blockinfo: ReplicaBlockInfoVersions) -> Result<()> {
+    fn notify_block_metadata(&self, blockinfo: ReplicaBlockInfoVersions) -> Result<()> {
         Ok(())
     }
 

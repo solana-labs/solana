@@ -273,6 +273,7 @@ impl<'a> TypeContext<'a> for Context {
         let accounts_delta_hash = serializable_db
             .accounts_db
             .get_accounts_delta_hash(slot)
+            .map(Into::into)
             .unwrap_or_else(|| panic!("Missing accounts delta hash entry for slot {slot}"));
         // NOTE: The accounts hash is calculated in AHV, which is *after* a bank snapshot is taken
         // (and serialized here).  Thus it is expected that an accounts hash is *not* found for
@@ -281,6 +282,7 @@ impl<'a> TypeContext<'a> for Context {
         let accounts_hash = serializable_db
             .accounts_db
             .get_accounts_hash(slot)
+            .map(Into::into)
             .unwrap_or_default();
         let stats = serializable_db
             .accounts_db
@@ -369,7 +371,7 @@ impl<'a> TypeContext<'a> for Context {
     {
         let (bank_fields, mut accounts_db_fields) =
             Self::deserialize_bank_fields(stream_reader).unwrap();
-        accounts_db_fields.3.accounts_hash = *accounts_hash;
+        accounts_db_fields.3.accounts_hash = (*accounts_hash).into();
         let mut rhs = bank_fields;
         let blockhash_queue = RwLock::new(std::mem::take(&mut rhs.blockhash_queue));
         let hard_forks = RwLock::new(std::mem::take(&mut rhs.hard_forks));

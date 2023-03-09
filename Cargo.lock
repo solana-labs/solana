@@ -1677,9 +1677,9 @@ checksum = "398ea4fabe40b9b0d885340a2a991a44c8a645624075ad966d21f88688e2b69e"
 
 [[package]]
 name = "flate2"
-version = "1.0.24"
+version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f82b0f4c27ad9f8bfd1f3208d882da2b09c301bc1c828fd3a00d0216d2fbbff6"
+checksum = "a8a2db397cb1c8772f31494cb8917e48cd1e64f0fa7efac59fbd741a0a8ce841"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
@@ -2814,9 +2814,9 @@ checksum = "9c64630dcdd71f1a64c435f54885086a0de5d6a12d104d69b165fb7d5286d677"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.5.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2b29bd4bc3f33391105ebee3589c19197c4271e3e5a9ec9bfe8127eeff8f082"
+checksum = "b275950c28b37e794e8c55d88aeb5e139d0ce23fdbbeda68f8d7174abdf9e8fa"
 dependencies = [
  "adler",
 ]
@@ -4145,9 +4145,20 @@ dependencies = [
 
 [[package]]
 name = "rpassword"
-version = "7.0.0"
+version = "7.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26b763cb66df1c928432cc35053f8bd4cec3335d8559fc16010017d16b3c1680"
+checksum = "6678cf63ab3491898c0d021b493c94c9b221d91295294a2a5746eacbe5928322"
+dependencies = [
+ "libc",
+ "rtoolbox",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "rtoolbox"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "034e22c514f5c0cb8a10ff341b9b048b5ceb21591f31c8f44c43b960f9b3524a"
 dependencies = [
  "libc",
  "winapi 0.3.9",
@@ -4411,9 +4422,9 @@ dependencies = [
 
 [[package]]
 name = "serde_bytes"
-version = "0.11.8"
+version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "718dc5fff5b36f99093fc49b280cfc96ce6fc824317783bff5a1fed0c7a64819"
+checksum = "416bda436f9aab92e02c8e10d49a15ddd339cea90b6e340fe51ed97abb548294"
 dependencies = [
  "serde",
 ]
@@ -4926,6 +4937,7 @@ dependencies = [
  "solana-tpu-client",
  "solana-version",
  "spl-instruction-padding",
+ "tempfile",
  "thiserror",
 ]
 
@@ -4954,6 +4966,7 @@ dependencies = [
  "byteorder",
  "libsecp256k1",
  "log",
+ "memoffset 0.8.0",
  "rand 0.7.3",
  "solana-measure",
  "solana-program-runtime",
@@ -5538,6 +5551,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "clap 2.33.3",
+ "itertools",
  "serde",
  "serde_json",
  "serde_yaml 0.9.13",
@@ -5662,6 +5676,7 @@ dependencies = [
  "scopeguard",
  "semver 1.0.16",
  "serde",
+ "serde_yaml 0.8.26",
  "serde_yaml 0.9.13",
  "solana-clap-utils",
  "solana-config-program",
@@ -6433,6 +6448,7 @@ dependencies = [
  "lz4",
  "memmap2",
  "memoffset 0.8.0",
+ "modular-bitfield",
  "num-derive",
  "num-traits",
  "num_cpus",
@@ -6763,6 +6779,7 @@ name = "solana-test-validator"
 version = "1.16.0"
 dependencies = [
  "base64 0.13.0",
+ "bincode",
  "log",
  "serde_derive",
  "serde_json",
@@ -6941,6 +6958,7 @@ dependencies = [
  "crossbeam-channel",
  "fd-lock",
  "indicatif",
+ "itertools",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -6985,6 +7003,7 @@ dependencies = [
  "solana-vote-program",
  "spl-token-2022",
  "symlink",
+ "thiserror",
  "tikv-jemallocator",
 ]
 
@@ -7118,9 +7137,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.38"
+version = "0.2.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4e9e5085099858adba23d0a0b5298da8803f89999cb567ecafab9c916cdf53d"
+checksum = "199a2e8ced67a32b47695256509d5a62b39cb7340f52f0a5d8de99f4dc2aeb43"
 dependencies = [
  "byteorder",
  "combine",
@@ -7360,9 +7379,9 @@ dependencies = [
 
 [[package]]
 name = "systemstat"
-version = "0.2.0"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79ef8054a60d76603befaecaf7efe08d32d1a05a1e5df70c547b07507e9e262d"
+checksum = "a24aec24a9312c83999a28e3ef9db7e2afd5c64bf47725b758cdc1cafd5b0bd2"
 dependencies = [
  "bytesize",
  "lazy_static",

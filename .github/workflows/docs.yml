@@ -90,6 +90,7 @@ jobs:
           ./build.sh
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
 
   error_reporting:
     needs:

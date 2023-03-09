@@ -17,7 +17,7 @@ pub enum ProgramError {
     /// or serialized to a u32 integer.
     #[error("Custom program error: {0:#x}")]
     Custom(u32),
-    #[error("The arguments provided to a program instruction where invalid")]
+    #[error("The arguments provided to a program instruction were invalid")]
     InvalidArgument,
     #[error("An instruction's data contents was invalid")]
     InvalidInstructionData,

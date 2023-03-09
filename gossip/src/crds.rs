@@ -485,21 +485,30 @@ impl Crds {
             // all associated values.
             let origin = CrdsValueLabel::LegacyContactInfo(*pubkey);
             if let Some(origin) = self.table.get(&origin) {
-                if now < origin.local_timestamp.saturating_add(timeout) {
+                if origin
+                    .value
+                    .wallclock()
+                    .min(origin.local_timestamp)
+                    .saturating_add(timeout)
+                    > now
+                {
                     return vec![];
                 }
             }
             // Otherwise check each value's timestamp individually.
             index
                 .into_iter()
-                .filter_map(|ix| {
-                    let (label, value) = self.table.get_index(*ix).unwrap();
-                    if value.local_timestamp.saturating_add(timeout) <= now {
-                        Some(label.clone())
-                    } else {
-                        None
-                    }
+                .map(|&ix| self.table.get_index(ix).unwrap())
+                .filter(|(_, entry)| {
+                    entry
+                        .value
+                        .wallclock()
+                        .min(entry.local_timestamp)
+                        .saturating_add(timeout)
+                        <= now
                 })
+                .map(|(label, _)| label)
+                .cloned()
                 .collect::<Vec<_>>()
         };
         thread_pool.install(|| {
@@ -871,7 +880,10 @@ mod tests {
     fn test_find_old_records_default() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
-        let val = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ContactInfo::default()));
+        let val = {
+            let node = ContactInfo::new_localhost(&Pubkey::default(), /*now:*/ 1);
+            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(node))
+        };
         assert_eq!(
             crds.insert(val.clone(), 1, GossipRoute::LocalMessage),
             Ok(())
@@ -941,7 +953,10 @@ mod tests {
     fn test_find_old_records_staked() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
-        let val = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ContactInfo::default()));
+        let val = {
+            let node = ContactInfo::new_localhost(&Pubkey::default(), /*now:*/ 1);
+            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(node))
+        };
         assert_eq!(
             crds.insert(val.clone(), 1, GossipRoute::LocalMessage),
             Ok(())

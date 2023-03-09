@@ -15,7 +15,7 @@ OUT_DIR ?= ./out
 OS := $(shell uname)
 
 LLVM_DIR = $(LOCAL_PATH)../dependencies/sbf-tools/llvm
-LLVM_SYSTEM_INC_DIRS := $(LLVM_DIR)/lib/clang/14.0.0/include
+LLVM_SYSTEM_INC_DIRS := $(LLVM_DIR)/lib/clang/15.0.4/include
 COMPILER_RT_DIR = $(LOCAL_PATH)../dependencies/sbf-tools/rust/lib/rustlib/sbf-solana-solana/lib
 STD_INC_DIRS := $(LLVM_DIR)/include
 STD_LIB_DIRS := $(LLVM_DIR)/lib

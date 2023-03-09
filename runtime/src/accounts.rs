@@ -4,8 +4,8 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            IncludeSlotInHash, LoadHint, LoadedAccount, ScanStorageResult,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            BankHashLamportsVerifyConfig, IncludeSlotInHash, LoadHint, LoadedAccount,
+            ScanStorageResult, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
             AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
@@ -25,14 +25,16 @@ use {
     dashmap::DashMap,
     log::*,
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
+    solana_program_runtime::compute_budget::{self, ComputeBudget},
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, enable_request_heap_frame_ix, remove_congestion_multiplier_from_fee_calculation,
-            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
+            self, add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
+            remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
+            use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -49,7 +51,7 @@ use {
         saturating_add_assign,
         slot_hashes::SlotHashes,
         system_program,
-        sysvar::{self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data},
+        sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
@@ -142,10 +144,7 @@ pub enum AccountAddressFilter {
 
 impl Accounts {
     pub fn default_for_tests() -> Self {
-        Self {
-            accounts_db: Arc::new(AccountsDb::default_for_tests()),
-            account_locks: Mutex::default(),
-        }
+        Self::new_empty(AccountsDb::default_for_tests())
     }
 
     pub fn new_with_config_for_tests(
@@ -191,32 +190,24 @@ impl Accounts {
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        Self {
-            accounts_db: Arc::new(AccountsDb::new_with_config(
-                paths,
-                cluster_type,
-                account_indexes,
-                shrink_ratio,
-                accounts_db_config,
-                accounts_update_notifier,
-                exit,
-            )),
-            account_locks: Mutex::new(AccountLocks::default()),
-        }
-    }
-
-    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
-        let accounts_db = parent.accounts_db.clone();
-        accounts_db.insert_default_bank_hash_stats(slot, parent_slot);
-        Self {
-            accounts_db,
-            account_locks: Mutex::new(AccountLocks::default()),
-        }
+        Self::new_empty(AccountsDb::new_with_config(
+            paths,
+            cluster_type,
+            account_indexes,
+            shrink_ratio,
+            accounts_db_config,
+            accounts_update_notifier,
+            exit,
+        ))
     }
 
     pub(crate) fn new_empty(accounts_db: AccountsDb) -> Self {
+        Self::new(Arc::new(accounts_db))
+    }
+
+    pub(crate) fn new(accounts_db: Arc<AccountsDb>) -> Self {
         Self {
-            accounts_db: Arc::new(accounts_db),
+            accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
         }
     }
@@ -239,18 +230,35 @@ impl Accounts {
     }
 
     /// If feature `cap_transaction_accounts_data_size` is active, total accounts data a
-    /// transaction can load is limited to 64MiB to not break anyone in Mainnet-beta today.
-    /// (It will be set by compute_budget instruction in the future to more reasonable level).
+    /// transaction can load is limited to
+    ///   if `set_tx_loaded_accounts_data_size` instruction is not activated or not used, then
+    ///     default value of 64MiB to not break anyone in Mainnet-beta today
+    ///   else
+    ///     user requested loaded accounts size.
+    ///     Note, requesting zero bytes will result transaction error
     fn get_requested_loaded_accounts_data_size_limit(
+        tx: &SanitizedTransaction,
         feature_set: &FeatureSet,
-    ) -> Option<NonZeroUsize> {
-        feature_set
-            .is_active(&feature_set::cap_transaction_accounts_data_size::id())
-            .then(|| {
-                const REQUESTED_LOADED_ACCOUNTS_DATA_SIZE: usize = 64 * 1024 * 1024;
-                NonZeroUsize::new(REQUESTED_LOADED_ACCOUNTS_DATA_SIZE)
-                    .expect("requested loaded accounts data size is greater than 0")
-            })
+    ) -> Result<Option<NonZeroUsize>> {
+        if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
+            let mut compute_budget =
+                ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
+            let _process_transaction_result = compute_budget.process_instructions(
+                tx.message().program_instructions_iter(),
+                feature_set.is_active(&use_default_units_in_fee_calculation::id()),
+                !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+                true, // don't reject txs that use request heap size ix
+                feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+            );
+            // sanitize against setting size limit to zero
+            NonZeroUsize::new(compute_budget.loaded_accounts_data_size_limit).map_or(
+                Err(TransactionError::InvalidLoadedAccountsDataSizeLimit),
+                |v| Ok(Some(v)),
+            )
+        } else {
+            // feature not activated, no loaded accounts data limit imposed.
+            Ok(None)
+        }
     }
 
     /// Accumulate loaded account data size into `accumulated_accounts_data_size`.
@@ -306,7 +314,7 @@ impl Accounts {
             feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
 
         let requested_loaded_accounts_data_size_limit =
-            Self::get_requested_loaded_accounts_data_size_limit(feature_set);
+            Self::get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
         let mut accumulated_accounts_data_size: usize = 0;
 
         let mut accounts = account_keys
@@ -569,6 +577,56 @@ impl Accounts {
         )
     }
 
+    /// Returns a hash map of executable program accounts (program accounts that are not writable
+    /// in the given transactions), and their owners, for the transactions with a valid
+    /// blockhash or nonce.
+    pub fn filter_executable_program_accounts<'a>(
+        &self,
+        ancestors: &Ancestors,
+        txs: &[SanitizedTransaction],
+        lock_results: &mut [TransactionCheckResult],
+        program_owners: &[&'a Pubkey],
+        hash_queue: &BlockhashQueue,
+    ) -> HashMap<Pubkey, &'a Pubkey> {
+        let mut result = HashMap::new();
+        lock_results.iter_mut().zip(txs).for_each(|etx| {
+            if let ((Ok(()), nonce), tx) = etx {
+                if nonce
+                    .as_ref()
+                    .map(|nonce| nonce.lamports_per_signature())
+                    .unwrap_or_else(|| {
+                        hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
+                    })
+                    .is_some()
+                {
+                    tx.message()
+                        .account_keys()
+                        .iter()
+                        .enumerate()
+                        .for_each(|(i, key)| {
+                            if !tx.message().is_writable(i) && !result.contains_key(key) {
+                                if let Ok(index) = self.accounts_db.account_matches_owners(
+                                    ancestors,
+                                    key,
+                                    program_owners,
+                                ) {
+                                    program_owners
+                                        .get(index)
+                                        .and_then(|owner| result.insert(*key, *owner));
+                                }
+                            }
+                        });
+                } else {
+                    // If the transaction's nonce account was not valid, and blockhash is not found,
+                    // the transaction will fail to process. Let's not load any programs from the
+                    // transaction, and update the status of the transaction.
+                    *etx.0 = (Err(TransactionError::BlockhashNotFound), None);
+                }
+            }
+        });
+        result
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn load_accounts(
         &self,
@@ -601,6 +659,7 @@ impl Accounts {
                             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                             feature_set.is_active(&enable_request_heap_frame_ix::id()) || self.accounts_db.expected_cluster_type() != ClusterType::MainnetBeta,
+                            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -803,30 +862,16 @@ impl Accounts {
 
     /// Only called from startup or test code.
     #[must_use]
-    #[allow(clippy::too_many_arguments)]
     pub fn verify_bank_hash_and_lamports(
         &self,
         slot: Slot,
-        ancestors: &Ancestors,
         total_lamports: u64,
-        test_hash_calculation: bool,
-        epoch_schedule: &EpochSchedule,
-        rent_collector: &RentCollector,
-        ignore_mismatch: bool,
-        store_detailed_debug_info: bool,
-        use_bg_thread_pool: bool,
+        config: BankHashLamportsVerifyConfig,
     ) -> bool {
-        if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
-            slot,
-            ancestors,
-            total_lamports,
-            test_hash_calculation,
-            epoch_schedule,
-            rent_collector,
-            ignore_mismatch,
-            store_detailed_debug_info,
-            use_bg_thread_pool,
-        ) {
+        if let Err(err) =
+            self.accounts_db
+                .verify_bank_hash_and_lamports(slot, total_lamports, config)
+        {
             warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
             false
         } else {
@@ -1642,6 +1687,7 @@ mod tests {
             false,
             true,
             true,
+            true,
         );
         assert_eq!(fee, lamports_per_signature);
 
@@ -1881,6 +1927,218 @@ mod tests {
             loaded_accounts[0],
             (Err(TransactionError::InvalidProgramForExecution), None,)
         );
+    }
+
+    #[test]
+    fn test_filter_executable_program_accounts() {
+        let mut tx_accounts: Vec<TransactionAccount> = Vec::new();
+
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+
+        let non_program_pubkey1 = Pubkey::new_unique();
+        let non_program_pubkey2 = Pubkey::new_unique();
+        let program1_pubkey = Pubkey::new_unique();
+        let program2_pubkey = Pubkey::new_unique();
+        let account1_pubkey = Pubkey::new_unique();
+        let account2_pubkey = Pubkey::new_unique();
+        let account3_pubkey = Pubkey::new_unique();
+        let account4_pubkey = Pubkey::new_unique();
+
+        let account5_pubkey = Pubkey::new_unique();
+
+        tx_accounts.push((
+            non_program_pubkey1,
+            AccountSharedData::new(1, 10, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            non_program_pubkey2,
+            AccountSharedData::new(1, 10, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            program1_pubkey,
+            AccountSharedData::new(40, 1, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            program2_pubkey,
+            AccountSharedData::new(40, 1, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            account1_pubkey,
+            AccountSharedData::new(1, 10, &non_program_pubkey1),
+        ));
+        tx_accounts.push((
+            account2_pubkey,
+            AccountSharedData::new(1, 10, &non_program_pubkey2),
+        ));
+        tx_accounts.push((
+            account3_pubkey,
+            AccountSharedData::new(40, 1, &program1_pubkey),
+        ));
+        tx_accounts.push((
+            account4_pubkey,
+            AccountSharedData::new(40, 1, &program2_pubkey),
+        ));
+
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+        );
+        for tx_account in tx_accounts.iter() {
+            accounts.store_for_tests(0, &tx_account.0, &tx_account.1);
+        }
+
+        let mut hash_queue = BlockhashQueue::new(100);
+
+        let tx1 = Transaction::new_with_compiled_instructions(
+            &[&keypair1],
+            &[non_program_pubkey1],
+            Hash::new_unique(),
+            vec![account1_pubkey, account2_pubkey, account3_pubkey],
+            vec![CompiledInstruction::new(1, &(), vec![0])],
+        );
+        hash_queue.register_hash(&tx1.message().recent_blockhash, 0);
+        let sanitized_tx1 = SanitizedTransaction::from_transaction_for_tests(tx1);
+
+        let tx2 = Transaction::new_with_compiled_instructions(
+            &[&keypair2],
+            &[non_program_pubkey2],
+            Hash::new_unique(),
+            vec![account4_pubkey, account3_pubkey, account2_pubkey],
+            vec![CompiledInstruction::new(1, &(), vec![0])],
+        );
+        hash_queue.register_hash(&tx2.message().recent_blockhash, 0);
+        let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let programs = accounts.filter_executable_program_accounts(
+            &ancestors,
+            &[sanitized_tx1, sanitized_tx2],
+            &mut [(Ok(()), None), (Ok(()), None)],
+            &[&program1_pubkey, &program2_pubkey],
+            &hash_queue,
+        );
+
+        // The result should contain only account3_pubkey, and account4_pubkey as the program accounts
+        assert_eq!(programs.len(), 2);
+        assert_eq!(
+            programs
+                .get(&account3_pubkey)
+                .expect("failed to find the program account"),
+            &&program1_pubkey
+        );
+        assert_eq!(
+            programs
+                .get(&account4_pubkey)
+                .expect("failed to find the program account"),
+            &&program2_pubkey
+        );
+    }
+
+    #[test]
+    fn test_filter_executable_program_accounts_invalid_blockhash() {
+        let mut tx_accounts: Vec<TransactionAccount> = Vec::new();
+
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+
+        let non_program_pubkey1 = Pubkey::new_unique();
+        let non_program_pubkey2 = Pubkey::new_unique();
+        let program1_pubkey = Pubkey::new_unique();
+        let program2_pubkey = Pubkey::new_unique();
+        let account1_pubkey = Pubkey::new_unique();
+        let account2_pubkey = Pubkey::new_unique();
+        let account3_pubkey = Pubkey::new_unique();
+        let account4_pubkey = Pubkey::new_unique();
+
+        let account5_pubkey = Pubkey::new_unique();
+
+        tx_accounts.push((
+            non_program_pubkey1,
+            AccountSharedData::new(1, 10, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            non_program_pubkey2,
+            AccountSharedData::new(1, 10, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            program1_pubkey,
+            AccountSharedData::new(40, 1, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            program2_pubkey,
+            AccountSharedData::new(40, 1, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            account1_pubkey,
+            AccountSharedData::new(1, 10, &non_program_pubkey1),
+        ));
+        tx_accounts.push((
+            account2_pubkey,
+            AccountSharedData::new(1, 10, &non_program_pubkey2),
+        ));
+        tx_accounts.push((
+            account3_pubkey,
+            AccountSharedData::new(40, 1, &program1_pubkey),
+        ));
+        tx_accounts.push((
+            account4_pubkey,
+            AccountSharedData::new(40, 1, &program2_pubkey),
+        ));
+
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+        );
+        for tx_account in tx_accounts.iter() {
+            accounts.store_for_tests(0, &tx_account.0, &tx_account.1);
+        }
+
+        let mut hash_queue = BlockhashQueue::new(100);
+
+        let tx1 = Transaction::new_with_compiled_instructions(
+            &[&keypair1],
+            &[non_program_pubkey1],
+            Hash::new_unique(),
+            vec![account1_pubkey, account2_pubkey, account3_pubkey],
+            vec![CompiledInstruction::new(1, &(), vec![0])],
+        );
+        hash_queue.register_hash(&tx1.message().recent_blockhash, 0);
+        let sanitized_tx1 = SanitizedTransaction::from_transaction_for_tests(tx1);
+
+        let tx2 = Transaction::new_with_compiled_instructions(
+            &[&keypair2],
+            &[non_program_pubkey2],
+            Hash::new_unique(),
+            vec![account4_pubkey, account3_pubkey, account2_pubkey],
+            vec![CompiledInstruction::new(1, &(), vec![0])],
+        );
+        // Let's not register blockhash from tx2. This should cause the tx2 to fail
+        let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let mut lock_results = vec![(Ok(()), None), (Ok(()), None)];
+        let programs = accounts.filter_executable_program_accounts(
+            &ancestors,
+            &[sanitized_tx1, sanitized_tx2],
+            &mut lock_results,
+            &[&program1_pubkey, &program2_pubkey],
+            &hash_queue,
+        );
+
+        // The result should contain only account3_pubkey as the program accounts
+        assert_eq!(programs.len(), 1);
+        assert_eq!(
+            programs
+                .get(&account3_pubkey)
+                .expect("failed to find the program account"),
+            &&program1_pubkey
+        );
+        assert_eq!(lock_results[1].0, Err(TransactionError::BlockhashNotFound));
     }
 
     #[test]
@@ -3844,5 +4102,77 @@ mod tests {
                 Err(TransactionError::MaxLoadedAccountsDataSizeExceeded)
             );
         }
+    }
+
+    #[test]
+    fn test_get_requested_loaded_accounts_data_size_limit() {
+        // an prrivate helper function
+        fn test(
+            instructions: &[solana_sdk::instruction::Instruction],
+            feature_set: &FeatureSet,
+            expected_result: &Result<Option<NonZeroUsize>>,
+        ) {
+            let payer_keypair = Keypair::new();
+            let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
+                &[&payer_keypair],
+                Message::new(instructions, Some(&payer_keypair.pubkey())),
+                Hash::default(),
+            ));
+            assert_eq!(
+                *expected_result,
+                Accounts::get_requested_loaded_accounts_data_size_limit(&tx, feature_set)
+            );
+        }
+
+        let tx_not_set_limit = &[solana_sdk::instruction::Instruction::new_with_bincode(
+            Pubkey::new_unique(),
+            &0_u8,
+            vec![],
+        )];
+        let tx_set_limit_99 =
+                &[
+                    solana_sdk::compute_budget::ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(99u32),
+                    solana_sdk::instruction::Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ];
+        let tx_set_limit_0 =
+                &[
+                    solana_sdk::compute_budget::ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(0u32),
+                    solana_sdk::instruction::Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ];
+
+        let result_no_limit = Ok(None);
+        let result_default_limit = Ok(Some(
+            NonZeroUsize::new(compute_budget::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES).unwrap(),
+        ));
+        let result_requested_limit: Result<Option<NonZeroUsize>> =
+            Ok(Some(NonZeroUsize::new(99).unwrap()));
+        let result_invalid_limit = Err(TransactionError::InvalidLoadedAccountsDataSizeLimit);
+
+        let mut feature_set = FeatureSet::default();
+
+        // if `cap_transaction_accounts_data_size feature` is disable,
+        // the result will always be no limit
+        test(tx_not_set_limit, &feature_set, &result_no_limit);
+        test(tx_set_limit_99, &feature_set, &result_no_limit);
+        test(tx_set_limit_0, &feature_set, &result_no_limit);
+
+        // if `cap_transaction_accounts_data_size` is enabled, and
+        //    `add_set_tx_loaded_accounts_data_size_instruction` is disabled,
+        // the result will always be default limit (64MiB)
+        feature_set.activate(&feature_set::cap_transaction_accounts_data_size::id(), 0);
+        test(tx_not_set_limit, &feature_set, &result_default_limit);
+        test(tx_set_limit_99, &feature_set, &result_default_limit);
+        test(tx_set_limit_0, &feature_set, &result_default_limit);
+
+        // if `cap_transaction_accounts_data_size` and
+        //    `add_set_tx_loaded_accounts_data_size_instruction` are both enabled,
+        // the results are:
+        //    if tx doesn't set limit, then default limit (64MiB)
+        //    if tx sets limit, then requested limit
+        //    if tx sets limit to zero, then TransactionError::InvalidLoadedAccountsDataSizeLimit
+        feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
+        test(tx_not_set_limit, &feature_set, &result_default_limit);
+        test(tx_set_limit_99, &feature_set, &result_requested_limit);
+        test(tx_set_limit_0, &feature_set, &result_invalid_limit);
     }
 }

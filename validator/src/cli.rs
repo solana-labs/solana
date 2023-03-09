@@ -45,6 +45,9 @@ const INCLUDE_KEY: &str = "account-index-include-key";
 const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
 // The maximum times of snapshot download abort and retry
 const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
+// We've observed missed leader slots leading to deadlocks on test validator
+// with less than 2 ticks per slot.
+const MINIMUM_TICKS_PER_SLOT: u64 = 2;
 
 pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
     return App::new(crate_name!()).about(crate_description!())
@@ -195,6 +198,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("no_port_check")
                 .long("no-port-check")
                 .takes_value(false)
+                .hidden(true)
                 .help("Do not perform TCP/UDP reachable port checks at start-up")
         )
         .arg(
@@ -589,7 +593,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .possible_values(&["none", "lz4", "snappy", "zlib"])
                 .default_value(&default_args.rocksdb_ledger_compression)
-                .help("The compression alrogithm that is used to compress \
+                .help("The compression algorithm that is used to compress \
                        transaction status data.  \
                        Turning on compression can save ~10% of the ledger size."),
         )
@@ -2015,9 +2019,23 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .number_of_values(2)
                 .multiple(true)
                 .help(
-                    "Add a SBF program to the genesis configuration. \
+                    "Add a SBF program to the genesis configuration with upgrades disabled. \
                        If the ledger already exists then this parameter is silently ignored. \
                        First argument can be a pubkey string or path to a keypair",
+                ),
+        )
+        .arg(
+            Arg::with_name("upgradeable_program")
+                .long("upgradeable-program")
+                .value_names(&["ADDRESS_OR_KEYPAIR", "SBF_PROGRAM.SO", "UPGRADE_AUTHORITY"])
+                .takes_value(true)
+                .number_of_values(3)
+                .multiple(true)
+                .help(
+                    "Add an upgradeable SBF program to the genesis configuration. \
+                       If the ledger already exists then this parameter is silently ignored. \
+                       First and third arguments can be a pubkey string or path to a keypair. \
+                       Upgrade authority set to \"none\" disables upgrades",
                 ),
         )
         .arg(
@@ -2069,7 +2087,18 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
             Arg::with_name("ticks_per_slot")
                 .long("ticks-per-slot")
                 .value_name("TICKS")
-                .validator(is_parsable::<u64>)
+                .validator(|value| {
+                    value
+                        .parse::<u64>()
+                        .map_err(|err| format!("error parsing '{value}': {err}"))
+                        .and_then(|ticks| {
+                            if ticks < MINIMUM_TICKS_PER_SLOT {
+                                Err(format!("value must be >= {MINIMUM_TICKS_PER_SLOT}"))
+                            } else {
+                                Ok(())
+                            }
+                        })
+                })
                 .takes_value(true)
                 .help("The number of ticks in a slot"),
         )
@@ -2159,6 +2188,20 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .help(
                     "Copy an account from the cluster referenced by the --url argument, \
                      skipping it if it doesn't exist. \
+                     If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
+            Arg::with_name("clone_upgradeable_program")
+                .long("clone-upgradeable-program")
+                .value_name("ADDRESS")
+                .takes_value(true)
+                .validator(is_pubkey_or_keypair)
+                .multiple(true)
+                .requires("json_rpc_url")
+                .help(
+                    "Copy an upgradeable program and its executable data from the cluster \
+                     referenced by the --url argument the genesis configuration. \
                      If the ledger already exists then this parameter is silently ignored",
                 ),
         )

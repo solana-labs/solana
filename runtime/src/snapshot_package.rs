@@ -2,7 +2,7 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::AccountStorageEntry,
-        accounts_hash::AccountsHash,
+        accounts_hash::{AccountsHash, AccountsHashEnum},
         bank::Bank,
         epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
@@ -14,11 +14,11 @@ use {
         },
     },
     log::*,
-    solana_sdk::{clock::Slot, sysvar::epoch_schedule::EpochSchedule},
+    solana_sdk::{clock::Slot, feature_set, sysvar::epoch_schedule::EpochSchedule},
     std::{
         fs,
         path::{Path, PathBuf},
-        sync::{Arc, Mutex},
+        sync::Arc,
         time::Instant,
     },
     tempfile::TempDir,
@@ -26,10 +26,6 @@ use {
 
 mod compare;
 pub use compare::*;
-
-/// The PendingSnapshotPackage passes a SnapshotPackage from AccountsHashVerifier to
-/// SnapshotPackagerService for archiving
-pub type PendingSnapshotPackage = Arc<Mutex<Option<SnapshotPackage>>>;
 
 /// This struct packages up fields to send from AccountsBackgroundService to AccountsHashVerifier
 pub struct AccountsPackage {
@@ -42,6 +38,7 @@ pub struct AccountsPackage {
     pub accounts: Arc<Accounts>,
     pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
+    pub is_incremental_accounts_hash_feature_enabled: bool,
 
     /// Supplemental information needed for snapshots
     pub snapshot_info: Option<SupplementalSnapshotInfo>,
@@ -148,6 +145,9 @@ impl AccountsPackage {
         accounts_hash_for_testing: Option<AccountsHash>,
         snapshot_info: Option<SupplementalSnapshotInfo>,
     ) -> Self {
+        let is_incremental_accounts_hash_feature_enabled = bank
+            .feature_set
+            .is_active(&feature_set::incremental_snapshot_only_incremental_hash_calculation::id());
         Self {
             package_type,
             slot: bank.slot(),
@@ -158,6 +158,7 @@ impl AccountsPackage {
             accounts: bank.accounts(),
             epoch_schedule: *bank.epoch_schedule(),
             rent_collector: bank.rent_collector().clone(),
+            is_incremental_accounts_hash_feature_enabled,
             snapshot_info,
             enqueued: Instant::now(),
         }
@@ -176,6 +177,7 @@ impl AccountsPackage {
             accounts: Arc::new(Accounts::default_for_tests()),
             epoch_schedule: EpochSchedule::default(),
             rent_collector: RentCollector::default(),
+            is_incremental_accounts_hash_feature_enabled: bool::default(),
             snapshot_info: Some(SupplementalSnapshotInfo {
                 snapshot_links: TempDir::new().unwrap(),
                 archive_format: ArchiveFormat::Tar,
@@ -235,6 +237,7 @@ pub enum AccountsPackageType {
     EpochAccountsHash,
 }
 
+/// This struct packages up fields to send from AccountsHashVerifier to SnapshotPackagerService
 pub struct SnapshotPackage {
     pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
@@ -242,10 +245,14 @@ pub struct SnapshotPackage {
     pub snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     pub snapshot_version: SnapshotVersion,
     pub snapshot_type: SnapshotType,
+
+    /// The instant this snapshot package was sent to the queue.
+    /// Used to track how long snapshot packages wait before handling.
+    pub enqueued: Instant,
 }
 
 impl SnapshotPackage {
-    pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHash) -> Self {
+    pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHashEnum) -> Self {
         let AccountsPackageType::Snapshot(snapshot_type) = accounts_package.package_type else {
             panic!("The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!");
         };
@@ -290,7 +297,18 @@ impl SnapshotPackage {
             snapshot_storages,
             snapshot_version: snapshot_info.snapshot_version,
             snapshot_type,
+            enqueued: Instant::now(),
         }
+    }
+}
+
+impl std::fmt::Debug for SnapshotPackage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SnapshotPackage")
+            .field("type", &self.snapshot_type)
+            .field("slot", &self.slot())
+            .field("block_height", &self.block_height)
+            .finish_non_exhaustive()
     }
 }
 

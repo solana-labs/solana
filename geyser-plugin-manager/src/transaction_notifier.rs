@@ -38,13 +38,13 @@ impl TransactionNotifier for TransactionNotifierImpl {
             transaction,
         );
 
-        let mut plugin_manager = self.plugin_manager.write().unwrap();
+        let plugin_manager = self.plugin_manager.read().unwrap();
 
         if plugin_manager.plugins.is_empty() {
             return;
         }
 
-        for plugin in plugin_manager.plugins.iter_mut() {
+        for plugin in plugin_manager.plugins.iter() {
             if !plugin.transaction_notifications_enabled() {
                 continue;
             }
