@@ -52,7 +52,7 @@ use {
         fs::{self, File},
         io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
         path::{Path, PathBuf},
-        process::{exit, ExitStatus},
+        process::ExitStatus,
         str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicU32},
@@ -550,8 +550,7 @@ pub fn set_up_account_run_and_snapshot_paths(
             match fs::create_dir_all(account_path).and_then(|_| fs::canonicalize(account_path)) {
                 Ok(account_path) => account_path,
                 Err(err) => {
-                    eprintln!("Unable to access account path: {account_path:?}, err: {err:?}");
-                    exit(1);
+                    panic!("Unable to access account path: {account_path:?}, err: {err:?}");
                 }
             }
         })
