@@ -272,13 +272,13 @@ impl SnapshotStorageRebuilder {
     fn process_append_vec_file(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let filename = path.file_name().unwrap().to_str().unwrap().to_owned();
         if let Some(SnapshotFileKind::Storage) = get_snapshot_file_kind(&filename) {
-            let (slot, appendvec_id) = get_slot_and_append_vec_id(&filename);
+            let (slot, append_vec_id) = get_slot_and_append_vec_id(&filename);
             if self.snapshot_from == SnapshotFrom::Dir {
-                let next_appendvec_id = appendvec_id + 1;
+                let next_append_vec_id = append_vec_id + 1;
                 // Always set to the maximum to avoid id conflict.
                 let _ = &self
                     .next_append_vec_id
-                    .fetch_max(next_appendvec_id as u32, Ordering::Relaxed);
+                    .fetch_max(next_append_vec_id as u32, Ordering::Relaxed);
             }
             let slot_storage_count = self.insert_storage_file(&slot, path);
             if slot_storage_count == self.snapshot_storage_lengths.get(&slot).unwrap().len() {
@@ -328,7 +328,7 @@ impl SnapshotStorageRebuilder {
                         &slot,
                         path.as_path(),
                         current_len,
-                        old_append_vec_id as u32,
+                        old_append_vec_id as AppendVecId,
                     )?,
                 };
 

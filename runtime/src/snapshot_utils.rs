@@ -1878,25 +1878,23 @@ where
 
 /// Streams snapshot dir files across channel
 /// Follow the flow of streaming_unarchive_snapshot(), but handle the from_dir case.
-fn streaming_snapshot_dir_files<P>(
+fn streaming_snapshot_dir_files(
     file_sender: Sender<PathBuf>,
-    snapshot_file_path: P,
-    snapshot_version_path: P,
+    snapshot_file_path: impl Into<PathBuf>,
+    snapshot_version_path: impl Into<PathBuf>,
     account_paths: Vec<PathBuf>,
-) where
-    P: AsRef<Path>,
-{
+) {
     file_sender
-        .send(snapshot_file_path.as_ref().to_path_buf())
-        .unwrap();
+        .send(snapshot_file_path.into())
+        .expect("send snapshot file path");
     file_sender
-        .send(snapshot_version_path.as_ref().to_path_buf())
-        .unwrap();
+        .send(snapshot_version_path.into())
+        .expect("send snapshot version path");
 
     for account_path in account_paths {
         for file in fs::read_dir(account_path).unwrap() {
             let file_path = file.unwrap().path().to_path_buf();
-            file_sender.send(file_path).unwrap();
+            file_sender.send(file_path).expect("send account file path");
         }
     }
 }
@@ -1919,15 +1917,17 @@ fn build_storage_from_snapshot_dir(
     let account_paths = account_paths.to_vec();
     let account_paths_set: HashSet<PathBuf> = HashSet::from_iter(account_paths.clone());
 
-    for dir_symlink in fs::read_dir(accounts_hardlinks).unwrap() {
+    for dir_symlink in fs::read_dir(accounts_hardlinks).expect("read_dir should return dir entries")
+    {
         // The symlink point to <account_path>/snapshot/<slot> which contain the account files hardlinks
         // The corresponding run path should be <account_path>/run/
-        let snapshot_account_path = fs::read_link(dir_symlink.unwrap().path()).unwrap();
+        let snapshot_account_path =
+            fs::read_link(dir_symlink.expect("dir path").path()).expect("symlink dest path");
         let account_run_path = snapshot_account_path
             .parent()
-            .unwrap()
+            .expect("expected parent dir <account_path>/snapshot/")
             .parent()
-            .unwrap()
+            .expect("expected parent dir <account_path>/")
             .join("run");
         if !account_paths_set.contains(&account_run_path) {
             // The appendvec from the bank snapshot stoarge does not match any of the provided account_paths set.
@@ -1936,9 +1936,13 @@ fn build_storage_from_snapshot_dir(
         }
         // Generate hard-links to make the account files available in the main accounts/, and let the new appendvec
         // paths be in accounts/
-        for file in fs::read_dir(snapshot_account_path).unwrap() {
-            let file_path = file.unwrap().path().to_path_buf();
-            let file_name = file_path.file_name().unwrap();
+        for file in fs::read_dir(snapshot_account_path).expect("read_dir should return dir entries")
+        {
+            let file_path = file
+                .expect("file path should be valid")
+                .path()
+                .to_path_buf();
+            let file_name = file_path.file_name().expect("file name");
             let dest_path = account_run_path.clone().join(file_name);
             fs::hard_link(&file_path, &dest_path).map_err(|e| {
                 let err_msg = format!(
@@ -5397,15 +5401,15 @@ mod tests {
             &bank_snapshot,
             &genesis_config,
             &RuntimeConfig::default(),
-            None, // Option<Arc<HashSet<Pubkey>>>,
-            None, // additional_builtins: Option<&Builtins>,
+            None,
+            None,
             AccountSecondaryIndexes::default(),
-            None, // limit_load_slot_count_from_snapshot: Option<usize>,
-            AccountShrinkThreshold::default(), // shrink_ratio: AccountShrinkThreshold,
-            false, // verify_index: bool,
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING), // accounts_db_config: Option<AccountsDbConfig>,
-            None, // accounts_update_notifier: Option<AccountsUpdateNotifier>,
-            &Arc::default(), // exit: &Arc<AtomicBool>,
+            None,
+            AccountShrinkThreshold::default(),
+            false,
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
+            &Arc::default(),
         )
         .unwrap();
 
