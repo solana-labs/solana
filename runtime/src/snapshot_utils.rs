@@ -1824,7 +1824,7 @@ fn unarchive_snapshot<P, Q>(
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
-    next_append_vec_id: Arc<AtomicU32>,
+    next_append_vec_id: Arc<AtomicAppendVecId>,
 ) -> Result<UnarchivedSnapshot>
 where
     P: AsRef<Path>,
@@ -1905,7 +1905,7 @@ fn build_storage_from_snapshot_dir(
     snapshot_info: &BankSnapshotInfo,
     measure_name: &'static str,
     account_paths: &[PathBuf],
-    next_append_vec_id: Arc<AtomicU32>,
+    next_append_vec_id: Arc<AtomicAppendVecId>,
 ) -> Result<(AccountStorageMap, Measure)> {
     let bank_snapshot_dir = &snapshot_info.snapshot_dir;
     let snapshot_file_path = &snapshot_info.snapshot_path();
@@ -1914,8 +1914,7 @@ fn build_storage_from_snapshot_dir(
 
     let accounts_hardlinks = bank_snapshot_dir.join("accounts_hardlinks");
 
-    let account_paths = account_paths.to_vec();
-    let account_paths_set: HashSet<PathBuf> = HashSet::from_iter(account_paths.clone());
+    let account_paths_set: HashSet<_> = HashSet::from_iter(account_paths.iter().cloned());
 
     for dir_symlink in fs::read_dir(accounts_hardlinks).expect("read_dir should return dir entries")
     {
@@ -5371,7 +5370,7 @@ mod tests {
         let collecter_id = Pubkey::new_unique();
         let snapshot_version = SnapshotVersion::default();
 
-        let bank = Arc::new(Bank::new_from_parent(&bank0, &collecter_id, 1));
+        let bank = Bank::new_from_parent(&bank0, &collecter_id, 1);
         bank.fill_bank_with_ticks_for_tests();
         bank.squash();
         bank.force_flush_accounts_cache();
@@ -5414,6 +5413,6 @@ mod tests {
         .unwrap();
 
         bank_constructed.wait_for_initial_accounts_hash_verification_completed_for_tests();
-        assert_eq!(bank_constructed, *bank);
+        assert_eq!(bank_constructed, bank);
     }
 }
