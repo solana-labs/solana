@@ -322,7 +322,15 @@ impl RepairService {
                             // `slot` is dumped in blockstore wanting to be repaired, we orphan it along with
                             // descendants while copying the weighting heuristic so that it can be
                             // repaired with correct ancestor information
-                            repair_weight.split_off(slot);
+                            //
+                            // We still check to see if this slot is too old, as bank forks root
+                            // might have been updated in between the send and our receive. If that
+                            // is the case we can safely ignore this dump request as the slot in
+                            // question would have already been purged in `repair_weight.set_root`
+                            // and there is no chance of it being part of the rooted path.
+                            if slot >= repair_weight.root() {
+                                repair_weight.split_off(slot);
+                            }
                         }
                     });
                 dump_slots_elapsed.stop();
