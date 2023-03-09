@@ -1616,8 +1616,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                          then this not a good time for a restart")
         ).
         subcommand(
-            SubCommand::with_name("set-tpu")
-                .about("Set the validator tpu address")
+            SubCommand::with_name("set-tpu-host-addr")
+                .about("Specify TPU address to advertise in gossip")
                 .arg(
                     Arg::with_name("tpu_host_port")
                         .index(1)
