@@ -181,7 +181,8 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
                 "zk_token_proof_program",
                 solana_zk_token_sdk::zk_token_proof_program::id(),
                 solana_zk_token_proof_program::process_instruction,
-                1000, // TODO - find value
+                125906, // the average CUs for 6 zkp program instructions,
+                        // see comment at https://github.com/solana-labs/solana/pull/30639
             ),
             feature_id: feature_set::zk_token_sdk_enabled::id(),
         },
