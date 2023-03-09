@@ -9,7 +9,7 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::{measure::Measure, measure_us},
     solana_runtime::{
-        accounts_hash::{AccountsHash, AccountsHashEnum, CalcAccountsHashConfig, HashStats},
+        accounts_hash::{AccountsHashEnum, CalcAccountsHashConfig, HashStats},
         snapshot_config::SnapshotConfig,
         snapshot_package::{
             self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
@@ -56,7 +56,6 @@ impl AccountsHashVerifier {
         let t_accounts_hash_verifier = Builder::new()
             .name("solAcctHashVer".to_string())
             .spawn(move || {
-                let mut last_full_snapshot = None;
                 let mut hashes = vec![];
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -87,7 +86,6 @@ impl AccountsHashVerifier {
                         &exit,
                         fault_injection_rate_slots,
                         &snapshot_config,
-                        &mut last_full_snapshot,
                     ));
 
                     datapoint_info!(
@@ -187,10 +185,8 @@ impl AccountsHashVerifier {
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
         snapshot_config: &SnapshotConfig,
-        last_full_snapshot: &mut Option<FullSnapshotAccountsHashInfo>,
     ) {
-        let accounts_hash =
-            Self::calculate_and_verify_accounts_hash(&accounts_package, last_full_snapshot);
+        let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
         Self::save_epoch_accounts_hash(&accounts_package, accounts_hash);
 
@@ -214,10 +210,7 @@ impl AccountsHashVerifier {
     }
 
     /// returns calculated accounts hash
-    fn calculate_and_verify_accounts_hash(
-        accounts_package: &AccountsPackage,
-        last_full_snapshot: &mut Option<FullSnapshotAccountsHashInfo>,
-    ) -> AccountsHashEnum {
+    fn calculate_and_verify_accounts_hash(accounts_package: &AccountsPackage) -> AccountsHashEnum {
         let mut measure_hash = Measure::start("hash");
         let mut sort_time = Measure::start("sort_storages");
         let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
@@ -325,16 +318,10 @@ impl AccountsHashVerifier {
         if accounts_package.package_type
             == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
         {
-            let last_full_snapshot_slot = accounts_package.slot;
-            *last_full_snapshot = Some(FullSnapshotAccountsHashInfo {
-                slot: last_full_snapshot_slot,
-                accounts_hash,
-                capitalization: lamports,
-            });
             accounts_package
                 .accounts
                 .accounts_db
-                .purge_old_accounts_hashes(last_full_snapshot_slot);
+                .purge_old_accounts_hashes(accounts_package.slot);
         }
 
         datapoint_info!(
@@ -485,16 +472,6 @@ impl AccountsHashVerifier {
     }
 }
 
-/// Soon incremental snapshots will no longer calculate a *full* accounts hash.  To support correct
-/// snapshot verification at load time, the incremental snapshot will need to include *this*
-/// information about the full snapshot it was based on.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-struct FullSnapshotAccountsHashInfo {
-    slot: Slot,
-    accounts_hash: AccountsHash,
-    capitalization: u64,
-}
-
 #[cfg(test)]
 mod tests {
     use {
@@ -581,7 +558,6 @@ mod tests {
                 &exit,
                 0,
                 &snapshot_config,
-                &mut None,
             );
 
             // sleep for 1ms to create a newer timestamp for gossip entry
