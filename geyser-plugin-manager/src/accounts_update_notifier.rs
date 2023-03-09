@@ -17,11 +17,11 @@ use {
         pubkey::Pubkey,
         transaction::SanitizedTransaction,
     },
-    std::sync::{Arc, RwLock},
+    std::sync::Arc,
 };
 #[derive(Debug)]
 pub(crate) struct AccountsUpdateNotifierImpl {
-    plugin_manager: Arc<RwLock<GeyserPluginManager>>,
+    plugin_manager: Arc<GeyserPluginManager>,
 }
 
 impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
@@ -68,12 +68,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
     }
 
     fn notify_end_of_restore_from_snapshot(&self) {
-        let plugin_manager = self.plugin_manager.read().unwrap();
-        if plugin_manager.plugins.is_empty() {
-            return;
-        }
-
-        for plugin in plugin_manager.plugins.iter() {
+        for plugin in self.plugin_manager.plugins.iter() {
             let mut measure = Measure::start("geyser-plugin-end-of-restore-from-snapshot");
             match plugin.notify_end_of_startup() {
                 Err(err) => {
@@ -100,7 +95,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
 }
 
 impl AccountsUpdateNotifierImpl {
-    pub fn new(plugin_manager: Arc<RwLock<GeyserPluginManager>>) -> Self {
+    pub fn new(plugin_manager: Arc<GeyserPluginManager>) -> Self {
         AccountsUpdateNotifierImpl { plugin_manager }
     }
 
@@ -145,13 +140,12 @@ impl AccountsUpdateNotifierImpl {
         slot: Slot,
         is_startup: bool,
     ) {
-        let mut measure2 = Measure::start("geyser-plugin-notify_plugins_of_account_update");
-        let plugin_manager = self.plugin_manager.read().unwrap();
-
-        if plugin_manager.plugins.is_empty() {
+        if self.plugin_manager.plugins.is_empty() {
             return;
         }
-        for plugin in plugin_manager.plugins.iter() {
+
+        let mut measure2 = Measure::start("geyser-plugin-notify_plugins_of_account_update");
+        for plugin in self.plugin_manager.plugins.iter() {
             let mut measure = Measure::start("geyser-plugin-update-account");
             match plugin.update_account(
                 ReplicaAccountInfoVersions::V0_0_3(&account),

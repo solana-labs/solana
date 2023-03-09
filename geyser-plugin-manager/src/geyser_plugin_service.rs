@@ -47,7 +47,7 @@ pub enum GeyserPluginServiceError {
 /// The service managing the Geyser plugin workflow.
 pub struct GeyserPluginService {
     slot_status_observer: Option<SlotStatusObserver>,
-    plugin_manager: Arc<RwLock<GeyserPluginManager>>,
+    plugin_manager: Arc<GeyserPluginManager>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
     block_metadata_notifier: Option<BlockMetadataNotifierLock>,
@@ -84,7 +84,7 @@ impl GeyserPluginService {
             plugin_manager.account_data_notifications_enabled();
         let transaction_notifications_enabled = plugin_manager.transaction_notifications_enabled();
 
-        let plugin_manager = Arc::new(RwLock::new(plugin_manager));
+        let plugin_manager = Arc::new(plugin_manager);
 
         let accounts_update_notifier: Option<AccountsUpdateNotifier> =
             if account_data_notifications_enabled {
@@ -205,7 +205,7 @@ impl GeyserPluginService {
         if let Some(mut slot_status_observer) = self.slot_status_observer {
             slot_status_observer.join()?;
         }
-        self.plugin_manager.write().unwrap().unload();
+        self.plugin_manager.unload();
         Ok(())
     }
 }

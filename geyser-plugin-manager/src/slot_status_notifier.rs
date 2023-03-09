@@ -22,7 +22,7 @@ pub trait SlotStatusNotifierInterface {
 pub type SlotStatusNotifier = Arc<RwLock<dyn SlotStatusNotifierInterface + Sync + Send>>;
 
 pub struct SlotStatusNotifierImpl {
-    plugin_manager: Arc<RwLock<GeyserPluginManager>>,
+    plugin_manager: Arc<GeyserPluginManager>,
 }
 
 impl SlotStatusNotifierInterface for SlotStatusNotifierImpl {
@@ -40,17 +40,12 @@ impl SlotStatusNotifierInterface for SlotStatusNotifierImpl {
 }
 
 impl SlotStatusNotifierImpl {
-    pub fn new(plugin_manager: Arc<RwLock<GeyserPluginManager>>) -> Self {
+    pub fn new(plugin_manager: Arc<GeyserPluginManager>) -> Self {
         Self { plugin_manager }
     }
 
     pub fn notify_slot_status(&self, slot: Slot, parent: Option<Slot>, slot_status: SlotStatus) {
-        let plugin_manager = self.plugin_manager.read().unwrap();
-        if plugin_manager.plugins.is_empty() {
-            return;
-        }
-
-        for plugin in plugin_manager.plugins.iter() {
+        for plugin in self.plugin_manager.plugins.iter() {
             let mut measure = Measure::start("geyser-plugin-update-slot");
             match plugin.update_slot_status(slot, parent, slot_status) {
                 Err(err) => {

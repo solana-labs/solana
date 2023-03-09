@@ -10,7 +10,7 @@ use {
     solana_rpc::transaction_notifier_interface::TransactionNotifier,
     solana_sdk::{clock::Slot, signature::Signature, transaction::SanitizedTransaction},
     solana_transaction_status::TransactionStatusMeta,
-    std::sync::{Arc, RwLock},
+    std::sync::Arc,
 };
 
 /// This implementation of TransactionNotifier is passed to the rpc's TransactionStatusService
@@ -18,7 +18,7 @@ use {
 /// for new transactions. The implementation in turn invokes the notify_transaction of each
 /// plugin enabled with transaction notification managed by the GeyserPluginManager.
 pub(crate) struct TransactionNotifierImpl {
-    plugin_manager: Arc<RwLock<GeyserPluginManager>>,
+    plugin_manager: Arc<GeyserPluginManager>,
 }
 
 impl TransactionNotifier for TransactionNotifierImpl {
@@ -30,6 +30,10 @@ impl TransactionNotifier for TransactionNotifierImpl {
         transaction_status_meta: &TransactionStatusMeta,
         transaction: &SanitizedTransaction,
     ) {
+        if self.plugin_manager.plugins.is_empty() {
+            return;
+        }
+
         let mut measure = Measure::start("geyser-plugin-notify_plugins_of_transaction_info");
         let transaction_log_info = Self::build_replica_transaction_info(
             index,
@@ -38,13 +42,7 @@ impl TransactionNotifier for TransactionNotifierImpl {
             transaction,
         );
 
-        let plugin_manager = self.plugin_manager.read().unwrap();
-
-        if plugin_manager.plugins.is_empty() {
-            return;
-        }
-
-        for plugin in plugin_manager.plugins.iter() {
+        for plugin in self.plugin_manager.plugins.iter() {
             if !plugin.transaction_notifications_enabled() {
                 continue;
             }
@@ -78,7 +76,7 @@ impl TransactionNotifier for TransactionNotifierImpl {
 }
 
 impl TransactionNotifierImpl {
-    pub fn new(plugin_manager: Arc<RwLock<GeyserPluginManager>>) -> Self {
+    pub fn new(plugin_manager: Arc<GeyserPluginManager>) -> Self {
         Self { plugin_manager }
     }
 

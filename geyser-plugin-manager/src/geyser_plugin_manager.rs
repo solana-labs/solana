@@ -42,34 +42,28 @@ impl GeyserPluginManager {
 
     /// Unload all plugins and loaded plugin libraries, making sure to fire
     /// their `on_plugin_unload()` methods so they can do any necessary cleanup.
-    pub fn unload(&mut self) {
-        for mut plugin in self.plugins.drain(..) {
+    pub fn unload(self) {
+        for mut plugin in self.plugins {
             info!("Unloading plugin for {:?}", plugin.name());
             plugin.on_unload();
         }
 
-        for lib in self.libs.drain(..) {
+        for lib in self.libs {
             drop(lib);
         }
     }
 
     /// Check if there is any plugin interested in account data
     pub fn account_data_notifications_enabled(&self) -> bool {
-        for plugin in &self.plugins {
-            if plugin.account_data_notifications_enabled() {
-                return true;
-            }
-        }
-        false
+        self.plugins
+            .iter()
+            .any(|plugin| plugin.account_data_notifications_enabled())
     }
 
     /// Check if there is any plugin interested in transaction data
     pub fn transaction_notifications_enabled(&self) -> bool {
-        for plugin in &self.plugins {
-            if plugin.transaction_notifications_enabled() {
-                return true;
-            }
-        }
-        false
+        self.plugins
+            .iter()
+            .any(|plugin| plugin.transaction_notifications_enabled())
     }
 }
