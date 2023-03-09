@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-# eval "$(ejson2env .buildkite/env/secrets.ejson)"
-
 # Ensure the pattern "+++ ..." never occurs when |set -x| is set, as buildkite
 # interprets this as the start of a log group.
 # Ref: https://buildkite.com/docs/pipelines/managing-log-output
