@@ -13,6 +13,8 @@ pub trait TransactionNotifier {
         transaction_status_meta: &TransactionStatusMeta,
         transaction: &SanitizedTransaction,
     );
+
+    fn join(&mut self);
 }
 
 pub type TransactionNotifierLock = Arc<RwLock<dyn TransactionNotifier + Sync + Send>>;

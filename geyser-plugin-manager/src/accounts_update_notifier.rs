@@ -21,7 +21,7 @@ use {
 };
 #[derive(Debug)]
 pub(crate) struct AccountsUpdateNotifierImpl {
-    plugin_manager: Arc<GeyserPluginManager>,
+    plugin_manager: Option<Arc<GeyserPluginManager>>,
 }
 
 impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
@@ -68,7 +68,13 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
     }
 
     fn notify_end_of_restore_from_snapshot(&self) {
-        for plugin in self.plugin_manager.plugins.iter() {
+        let plugin_manager = match &self.plugin_manager {
+            Some(plugin_manager) if plugin_manager.plugins.is_empty() => return,
+            Some(plugin_manager) => plugin_manager,
+            None => return,
+        };
+
+        for plugin in plugin_manager.plugins.iter() {
             let mut measure = Measure::start("geyser-plugin-end-of-restore-from-snapshot");
             match plugin.notify_end_of_startup() {
                 Err(err) => {
@@ -92,11 +98,17 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
             );
         }
     }
+
+    fn join(&mut self) {
+        self.plugin_manager = None;
+    }
 }
 
 impl AccountsUpdateNotifierImpl {
     pub fn new(plugin_manager: Arc<GeyserPluginManager>) -> Self {
-        AccountsUpdateNotifierImpl { plugin_manager }
+        AccountsUpdateNotifierImpl {
+            plugin_manager: Some(plugin_manager),
+        }
     }
 
     fn accountinfo_from_shared_account_data<'a>(
@@ -140,12 +152,14 @@ impl AccountsUpdateNotifierImpl {
         slot: Slot,
         is_startup: bool,
     ) {
-        if self.plugin_manager.plugins.is_empty() {
-            return;
-        }
+        let plugin_manager = match &self.plugin_manager {
+            Some(plugin_manager) if plugin_manager.plugins.is_empty() => return,
+            Some(plugin_manager) => plugin_manager,
+            None => return,
+        };
 
         let mut measure2 = Measure::start("geyser-plugin-notify_plugins_of_account_update");
-        for plugin in self.plugin_manager.plugins.iter() {
+        for plugin in plugin_manager.plugins.iter() {
             let mut measure = Measure::start("geyser-plugin-update-account");
             match plugin.update_account(
                 ReplicaAccountInfoVersions::V0_0_3(&account),

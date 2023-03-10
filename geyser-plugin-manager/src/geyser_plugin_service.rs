@@ -201,11 +201,20 @@ impl GeyserPluginService {
         self.block_metadata_notifier.clone()
     }
 
-    pub fn join(self) -> thread::Result<()> {
+    pub fn join(mut self) -> thread::Result<()> {
         if let Some(mut slot_status_observer) = self.slot_status_observer {
             slot_status_observer.join()?;
         }
-        self.plugin_manager.unload();
+        if let Some(accounts_update_notifier) = self.accounts_update_notifier {
+            accounts_update_notifier.write().unwrap().join();
+        }
+        if let Some(transaction_notifier) = self.transaction_notifier {
+            transaction_notifier.write().unwrap().join();
+        }
+        if let Some(block_metadata_notifier) = self.block_metadata_notifier {
+            block_metadata_notifier.write().unwrap().join();
+        }
+        Arc::get_mut(&mut self.plugin_manager).unwrap().unload();
         Ok(())
     }
 }

@@ -16,7 +16,7 @@ use {
 };
 
 pub(crate) struct BlockMetadataNotifierImpl {
-    plugin_manager: Arc<GeyserPluginManager>,
+    plugin_manager: Option<Arc<GeyserPluginManager>>,
 }
 
 impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
@@ -32,12 +32,14 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
         block_height: Option<u64>,
         executed_transaction_count: u64,
     ) {
-        if self.plugin_manager.plugins.is_empty() {
-            return;
-        }
-        let rewards = Self::build_rewards(rewards);
+        let plugin_manager = match &self.plugin_manager {
+            Some(plugin_manager) if plugin_manager.plugins.is_empty() => return,
+            Some(plugin_manager) => plugin_manager,
+            None => return,
+        };
 
-        for plugin in self.plugin_manager.plugins.iter() {
+        let rewards = Self::build_rewards(rewards);
+        for plugin in plugin_manager.plugins.iter() {
             let mut measure = Measure::start("geyser-plugin-update-slot");
             let block_info = Self::build_replica_block_info(
                 parent_slot,
@@ -75,6 +77,10 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
                 1000
             );
         }
+    }
+
+    fn join(&mut self) {
+        self.plugin_manager = None;
     }
 }
 
@@ -116,6 +122,8 @@ impl BlockMetadataNotifierImpl {
     }
 
     pub fn new(plugin_manager: Arc<GeyserPluginManager>) -> Self {
-        Self { plugin_manager }
+        Self {
+            plugin_manager: Some(plugin_manager),
+        }
     }
 }

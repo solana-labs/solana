@@ -18,6 +18,8 @@ pub trait BlockMetadataNotifier {
         block_height: Option<u64>,
         executed_transaction_count: u64,
     );
+
+    fn join(&mut self);
 }
 
 pub type BlockMetadataNotifierLock = Arc<RwLock<dyn BlockMetadataNotifier + Sync + Send>>;

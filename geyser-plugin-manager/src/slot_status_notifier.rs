@@ -17,12 +17,14 @@ pub trait SlotStatusNotifierInterface {
 
     /// Notified when a slot is rooted.
     fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>);
+
+    fn join(&mut self);
 }
 
 pub type SlotStatusNotifier = Arc<RwLock<dyn SlotStatusNotifierInterface + Sync + Send>>;
 
 pub struct SlotStatusNotifierImpl {
-    plugin_manager: Arc<GeyserPluginManager>,
+    plugin_manager: Option<Arc<GeyserPluginManager>>,
 }
 
 impl SlotStatusNotifierInterface for SlotStatusNotifierImpl {
@@ -37,15 +39,27 @@ impl SlotStatusNotifierInterface for SlotStatusNotifierImpl {
     fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>) {
         self.notify_slot_status(slot, parent, SlotStatus::Rooted);
     }
+
+    fn join(&mut self) {
+        self.plugin_manager = None;
+    }
 }
 
 impl SlotStatusNotifierImpl {
     pub fn new(plugin_manager: Arc<GeyserPluginManager>) -> Self {
-        Self { plugin_manager }
+        Self {
+            plugin_manager: Some(plugin_manager),
+        }
     }
 
     pub fn notify_slot_status(&self, slot: Slot, parent: Option<Slot>, slot_status: SlotStatus) {
-        for plugin in self.plugin_manager.plugins.iter() {
+        let plugin_manager = match &self.plugin_manager {
+            Some(plugin_manager) if plugin_manager.plugins.is_empty() => return,
+            Some(plugin_manager) => plugin_manager,
+            None => return,
+        };
+
+        for plugin in plugin_manager.plugins.iter() {
             let mut measure = Measure::start("geyser-plugin-update-slot");
             match plugin.update_slot_status(slot, parent, slot_status) {
                 Err(err) => {

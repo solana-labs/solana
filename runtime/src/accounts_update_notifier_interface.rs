@@ -23,6 +23,8 @@ pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
 
     /// Notified when all accounts have been notified when restoring from a snapshot.
     fn notify_end_of_restore_from_snapshot(&self);
+
+    fn join(&mut self);
 }
 
 pub type AccountsUpdateNotifier = Arc<RwLock<dyn AccountsUpdateNotifierInterface + Sync + Send>>;

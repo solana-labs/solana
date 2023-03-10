@@ -74,6 +74,7 @@ impl SlotStatusObserver {
                         }
                     }
                 }
+                slot_status_notifier.write().unwrap().join();
             })
             .unwrap()
     }
