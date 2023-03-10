@@ -756,8 +756,9 @@ impl<'a> InvokeContext<'a> {
                 self.transaction_context
                     .set_return_data(program_id, Vec::new())?;
 
+                let is_builtin_program = builtin_id == program_id;
                 let pre_remaining_units = self.get_remaining();
-                let result = if builtin_id == program_id {
+                let result = if is_builtin_program {
                     let logger = self.get_log_collector();
                     stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
                     (entry.process_instruction)(self)
@@ -773,6 +774,12 @@ impl<'a> InvokeContext<'a> {
                 };
                 let post_remaining_units = self.get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+
+                // if builtin program didn't manually consume units when processing instruction,
+                // then its default_compute_unit_cost is used to deduct from budget.
+                if is_builtin_program && *compute_units_consumed == 0 {
+                    self.consume_checked(entry.default_compute_unit_cost)?;
+                }
 
                 process_executable_chain_time.stop();
                 saturating_add_assign!(
