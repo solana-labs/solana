@@ -6577,6 +6577,7 @@ impl Bank {
                     &builtin.name,
                     &builtin.id,
                     builtin.process_instruction_with_context,
+                    builtin.default_compute_unit_cost,
                 );
             }
             for precompile in get_precompiles() {
@@ -7521,8 +7522,12 @@ impl Bank {
         name: &str,
         program_id: &Pubkey,
         process_instruction: ProcessInstructionWithContext,
+        default_compute_unit_cost: u64,
     ) {
-        debug!("Adding program {} under {:?}", name, program_id);
+        debug!(
+            "Adding program {} under {:?} default_compute_unit_cost {}",
+            name, program_id, default_compute_unit_cost
+        );
         self.add_builtin_account(name, program_id, false);
         if let Some(entry) = self
             .builtin_programs
@@ -7531,13 +7536,18 @@ impl Bank {
             .find(|entry| entry.program_id == *program_id)
         {
             entry.process_instruction = process_instruction;
+            entry.default_compute_unit_cost = default_compute_unit_cost;
         } else {
             self.builtin_programs.vec.push(BuiltinProgram {
                 program_id: *program_id,
                 process_instruction,
+                default_compute_unit_cost,
             });
         }
-        debug!("Added program {} under {:?}", name, program_id);
+        debug!(
+            "Added program {} under {:?} default_compute_unit_cost {}",
+            name, program_id, default_compute_unit_cost
+        );
     }
 
     /// Remove a builtin instruction processor if it already exists
@@ -7805,6 +7815,7 @@ impl Bank {
                         &builtin.name,
                         &builtin.id,
                         builtin.process_instruction_with_context,
+                        builtin.default_compute_unit_cost,
                     ),
                     BuiltinAction::Remove(program_id) => self.remove_builtin(&program_id),
                 }

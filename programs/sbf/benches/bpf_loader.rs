@@ -159,8 +159,8 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
         ..
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_benches(&genesis_config);
-    let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, &id, entrypoint);
+    let (name, id, entrypoint, cost) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, &id, entrypoint, cost);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
