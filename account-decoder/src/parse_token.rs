@@ -303,8 +303,8 @@ mod test {
 
     #[test]
     fn test_parse_token() {
-        let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
-        let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
+        let mint_pubkey = SplTokenPubkey::new_from_array([2; 32]);
+        let owner_pubkey = SplTokenPubkey::new_from_array([3; 32]);
         let mut account_data = vec![0; Account::get_packed_len()];
         let mut account = Account::unpack_unchecked(&account_data).unwrap();
         account.mint = mint_pubkey;
@@ -358,9 +358,9 @@ mod test {
             }),
         );
 
-        let signer1 = SplTokenPubkey::new(&[1; 32]);
-        let signer2 = SplTokenPubkey::new(&[2; 32]);
-        let signer3 = SplTokenPubkey::new(&[3; 32]);
+        let signer1 = SplTokenPubkey::new_from_array([1; 32]);
+        let signer2 = SplTokenPubkey::new_from_array([2; 32]);
+        let signer3 = SplTokenPubkey::new_from_array([3; 32]);
         let mut multisig_data = vec![0; Multisig::get_packed_len()];
         let mut signers = [SplTokenPubkey::default(); 11];
         signers[0] = signer1;
@@ -393,7 +393,7 @@ mod test {
 
     #[test]
     fn test_get_token_account_mint() {
-        let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
+        let mint_pubkey = SplTokenPubkey::new_from_array([2; 32]);
         let mut account_data = vec![0; Account::get_packed_len()];
         let mut account = Account::unpack_unchecked(&account_data).unwrap();
         account.mint = mint_pubkey;
@@ -495,8 +495,8 @@ mod test {
 
     #[test]
     fn test_parse_token_account_with_extensions() {
-        let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
-        let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
+        let mint_pubkey = SplTokenPubkey::new_from_array([2; 32]);
+        let owner_pubkey = SplTokenPubkey::new_from_array([3; 32]);
 
         let account_base = Account {
             mint: mint_pubkey,
@@ -586,7 +586,7 @@ mod test {
 
     #[test]
     fn test_parse_token_mint_with_extensions() {
-        let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
+        let owner_pubkey = SplTokenPubkey::new_from_array([3; 32]);
         let mint_size =
             ExtensionType::get_account_len::<Mint>(&[ExtensionType::MintCloseAuthority]);
         let mint_base = Mint {
