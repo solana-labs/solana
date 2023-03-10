@@ -10,7 +10,7 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
-        quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
+        quic::{QUIC_MAX_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
     },
     std::{
@@ -20,7 +20,7 @@ use {
             Arc, RwLock,
         },
         thread,
-        time::{Duration, SystemTime},
+        time::SystemTime,
     },
     tokio::runtime::{Builder, Runtime},
 };
@@ -88,7 +88,6 @@ pub(crate) fn configure_server(
     );
     let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
     config.max_idle_timeout(Some(timeout));
-    config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
 
     // disable bidi & datagrams
     const MAX_CONCURRENT_BIDI_STREAMS: u32 = 0;
