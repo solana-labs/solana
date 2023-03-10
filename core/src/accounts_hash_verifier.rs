@@ -9,7 +9,9 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::{measure::Measure, measure_us},
     solana_runtime::{
-        accounts_hash::{AccountsHashEnum, CalcAccountsHashConfig, HashStats},
+        accounts_hash::{
+            AccountsHashEnum, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
+        },
         bank::BankIncrementalSnapshotPersistence,
         serde_snapshot::SerdeIncrementalAccountsHash,
         snapshot_config::SnapshotConfig,
@@ -243,15 +245,33 @@ impl AccountsHashVerifier {
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
 
-        let old_accounts_hash = accounts_package
-            .accounts
-            .accounts_db
-            .set_accounts_hash(accounts_package.slot, (accounts_hash, lamports));
-        if let Some(old_accounts_hash) = old_accounts_hash {
-            warn!(
-                "Accounts hash was already set for slot {}! old: {}, new: {}",
-                accounts_package.slot, &old_accounts_hash.0 .0, &accounts_hash.0
-            );
+        if let AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(_)) =
+            accounts_package.package_type
+        {
+            // Once we calculate incremental accounts hashes, we can use the calculation result
+            // directly.  Until then, convert the full accounts hash into an incremental.
+            let incremental_accounts_hash = IncrementalAccountsHash(accounts_hash.0);
+            let old_incremental_accounts_hash = accounts_package
+                .accounts
+                .accounts_db
+                .set_incremental_accounts_hash(
+                    accounts_package.slot,
+                    (incremental_accounts_hash, lamports),
+                );
+            if let Some(old_incremental_accounts_hash) = old_incremental_accounts_hash {
+                warn!("Incremental accounts hash was already set for slot {}! old: {old_incremental_accounts_hash:?}, new: {incremental_accounts_hash:?}", accounts_package.slot);
+            }
+        } else {
+            let old_accounts_hash = accounts_package
+                .accounts
+                .accounts_db
+                .set_accounts_hash(accounts_package.slot, (accounts_hash, lamports));
+            if let Some(old_accounts_hash) = old_accounts_hash {
+                warn!(
+                    "Accounts hash was already set for slot {}! old: {}, new: {}",
+                    accounts_package.slot, &old_accounts_hash.0 .0, &accounts_hash.0
+                );
+            }
         }
 
         if accounts_package.expected_capitalization != lamports {
