@@ -862,7 +862,7 @@ impl Accounts {
 
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_bank_hash_and_lamports(
+    pub fn verify_accounts_hash_and_lamports(
         &self,
         slot: Slot,
         total_lamports: u64,
@@ -870,9 +870,9 @@ impl Accounts {
     ) -> bool {
         if let Err(err) =
             self.accounts_db
-                .verify_bank_hash_and_lamports(slot, total_lamports, config)
+                .verify_accounts_hash_and_lamports(slot, total_lamports, config)
         {
-            warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
+            warn!("verify_accounts_hash failed: {err:?}, slot: {slot}");
             false
         } else {
             true
