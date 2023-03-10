@@ -1265,7 +1265,10 @@ impl Bank {
     ) -> Self {
         Self::new_with_paths_for_tests(
             genesis_config,
-            Arc::<RuntimeConfig>::default(),
+            Arc::new(RuntimeConfig {
+                bpf_jit: true,
+                ..RuntimeConfig::default()
+            }),
             Vec::new(),
             account_indexes,
             shrink_ratio,
