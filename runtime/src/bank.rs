@@ -7275,13 +7275,14 @@ impl Bank {
     ) -> bool {
         let (_, clean_time_us) = measure_us!({
             let should_clean = !accounts_db_skip_shrink && self.slot() > 0;
-            info!("Cleaning...");
-            self.rc
-                .accounts
-                .accounts_db
-                .clean_accounts(None, true, Some(last_full_snapshot_slot));
-            info!("Cleaning... Done.");
             if should_clean {
+                info!("Cleaning...");
+                self.rc.accounts.accounts_db.clean_accounts(
+                    None,
+                    true,
+                    Some(last_full_snapshot_slot),
+                );
+                info!("Cleaning... Done.");
             } else {
                 info!("Cleaning... Skipped.");
             }
