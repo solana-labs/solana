@@ -300,12 +300,14 @@ fn check_loader_id(id: &Pubkey) -> bool {
 
 fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
     const KILOBYTE: u64 = 1024;
+    const PAGE_SIZE_KB: u64 = 32;
     let mut rounded_heap_size = heap_size;
     if enable_rounding_fix {
-        rounded_heap_size = rounded_heap_size.saturating_add((32_u64 - 1).saturating_mul(KILOBYTE));
+        rounded_heap_size = rounded_heap_size
+            .saturating_add(PAGE_SIZE_KB.saturating_sub(1).saturating_mul(KILOBYTE));
     }
     rounded_heap_size
-        .saturating_div(32_u64.saturating_mul(KILOBYTE))
+        .saturating_div(PAGE_SIZE_KB.saturating_mul(KILOBYTE))
         .saturating_sub(1)
         .saturating_mul(heap_cost)
 }
