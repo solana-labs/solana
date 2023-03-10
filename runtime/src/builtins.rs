@@ -14,7 +14,7 @@ pub struct Builtin {
     pub process_instruction_with_context: ProcessInstructionWithContext,
     // compute units to deduct from transaction's compute budget if builtin
     // does not consume actual units during process_instruction. No builtin
-    // actively consumes units as bpf does (as of v1.16), but they could
+    // manually consumes units as bpf does (as of v1.16), but they could
     // in the future.
     pub default_compute_unit_cost: u64,
 }
