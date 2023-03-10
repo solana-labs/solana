@@ -100,7 +100,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
         .update_accounts_hash_for_tests(0, &ancestors, false, false);
     let test_hash_calculation = false;
     bencher.iter(|| {
-        assert!(accounts.verify_bank_hash_and_lamports(
+        assert!(accounts.verify_accounts_hash_and_lamports(
             0,
             total_lamports,
             BankHashLamportsVerifyConfig {

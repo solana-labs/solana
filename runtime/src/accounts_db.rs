@@ -7640,7 +7640,7 @@ impl AccountsDb {
     }
 
     /// Only called from startup or test code.
-    pub fn verify_bank_hash_and_lamports(
+    pub fn verify_accounts_hash_and_lamports(
         &self,
         slot: Slot,
         total_lamports: u64,
@@ -7680,8 +7680,8 @@ impl AccountsDb {
                 Ok(())
             } else {
                 warn!(
-                    "mismatched bank hash for slot {}: {:?} (calculated) != {:?} (expected)",
-                    slot, calculated_accounts_hash, found_accounts_hash,
+                    "mismatched accounts hash for slot {slot}: \
+                    {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
                 );
                 Err(MismatchedBankHash)
             }
@@ -12196,7 +12196,7 @@ pub mod tests {
         );
 
         accounts
-            .verify_bank_hash_and_lamports(4, 1222, config)
+            .verify_accounts_hash_and_lamports(4, 1222, config)
             .unwrap();
     }
 
@@ -12620,21 +12620,21 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, 1, config.clone()),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, config.clone()),
             Ok(_)
         );
 
         db.remove_bank_hash_info(&some_slot);
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, 1, config.clone()),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, config.clone()),
             Err(MissingBankHash)
         );
 
         db.set_accounts_hash(some_slot, AccountsHash(Hash::new(&[0xca; HASH_BYTES])));
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, 1, config),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, config),
             Err(MismatchedBankHash)
         );
     }
@@ -12665,7 +12665,7 @@ pub mod tests {
                 db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
 
                 assert_matches!(
-                    db.verify_bank_hash_and_lamports(some_slot, 1, config.clone()),
+                    db.verify_accounts_hash_and_lamports(some_slot, 1, config.clone()),
                     Ok(_)
                 );
                 continue;
@@ -12683,12 +12683,12 @@ pub mod tests {
             db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
 
             assert_matches!(
-                db.verify_bank_hash_and_lamports(some_slot, 2, config.clone()),
+                db.verify_accounts_hash_and_lamports(some_slot, 2, config.clone()),
                 Ok(_)
             );
 
             assert_matches!(
-                db.verify_bank_hash_and_lamports(some_slot, 10, config),
+                db.verify_accounts_hash_and_lamports(some_slot, 10, config),
                 Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
             );
         }
@@ -12714,7 +12714,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, 0, config),
+            db.verify_accounts_hash_and_lamports(some_slot, 0, config),
             Ok(_)
         );
     }
@@ -12754,7 +12754,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, 1, config),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, config),
             Err(MismatchedBankHash)
         );
     }
@@ -13294,12 +13294,12 @@ pub mod tests {
 
             accounts.update_accounts_hash_for_tests(current_slot, &no_ancestors, false, false);
             accounts
-                .verify_bank_hash_and_lamports(current_slot, 22300, config.clone())
+                .verify_accounts_hash_and_lamports(current_slot, 22300, config.clone())
                 .unwrap();
 
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             accounts
-                .verify_bank_hash_and_lamports(current_slot, 22300, config)
+                .verify_accounts_hash_and_lamports(current_slot, 22300, config)
                 .unwrap();
 
             // repeating should be no-op

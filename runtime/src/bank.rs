@@ -6944,7 +6944,7 @@ impl Bank {
     /// return true if all is good
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_bank_hash(&self, config: VerifyBankHash) -> bool {
+    pub fn verify_accounts_hash(&self, config: VerifyBankHash) -> bool {
         let accounts = &self.rc.accounts;
         // Wait until initial hash calc is complete before starting a new hash calc.
         // This should only occur when we halt at a slot in ledger-tool.
@@ -6961,7 +6961,7 @@ impl Bank {
         {
             if let Some(parent) = self.parent() {
                 info!("{} is not a root, so attempting to verify bank hash on parent bank at slot: {}", self.slot(), parent.slot());
-                return parent.verify_bank_hash(config);
+                return parent.verify_accounts_hash(config);
             } else {
                 // this will result in mismatch errors
                 // accounts hash calc doesn't include unrooted slots
@@ -6986,7 +6986,7 @@ impl Bank {
                         info!(
                             "running initial verification accounts hash calculation in background"
                         );
-                        let result = accounts_.verify_bank_hash_and_lamports(
+                        let result = accounts_.verify_accounts_hash_and_lamports(
                             slot,
                             cap,
                             BankHashLamportsVerifyConfig {
@@ -7009,7 +7009,7 @@ impl Bank {
             });
             true // initial result is true. We haven't failed yet. If verification fails, we'll panic from bg thread.
         } else {
-            let result = accounts.verify_bank_hash_and_lamports(
+            let result = accounts.verify_accounts_hash_and_lamports(
                 slot,
                 cap,
                 BankHashLamportsVerifyConfig {
@@ -7307,7 +7307,7 @@ impl Bank {
             let should_verify_accounts = !self.rc.accounts.accounts_db.skip_initial_hash_calc;
             if should_verify_accounts {
                 info!("Verifying accounts...");
-                let verified = self.verify_bank_hash(VerifyBankHash {
+                let verified = self.verify_accounts_hash(VerifyBankHash {
                     test_hash_calculation,
                     ignore_mismatch: false,
                     require_rooted_bank: false,
