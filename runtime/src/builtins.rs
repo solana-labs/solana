@@ -181,8 +181,10 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
                 "zk_token_proof_program",
                 solana_zk_token_sdk::zk_token_proof_program::id(),
                 solana_zk_token_proof_program::process_instruction,
-                125906, // the average CUs for 6 zkp program instructions,
-                        // see comment at https://github.com/solana-labs/solana/pull/30639
+                219_290, // zk proof program CU per instruction were sampled here:
+                         // https://github.com/solana-labs/solana/pull/30639
+                         // Picking `VerifyTransfer`'s CU as program default
+                         // because it is the most used instruction.
             ),
             feature_id: feature_set::zk_token_sdk_enabled::id(),
         },
