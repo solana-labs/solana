@@ -2897,7 +2897,7 @@ mod tests {
             system_transaction,
             transaction::SanitizedTransaction,
         },
-        std::{convert::TryFrom, mem::size_of},
+        std::{convert::TryFrom, mem::size_of, sync::Arc},
         tempfile::NamedTempFile,
     };
 
@@ -4783,5 +4783,70 @@ mod tests {
         fs::remove_file(status_cache_file).unwrap();
         let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 1);
+    }
+
+    #[test]
+    fn test_clean_orphaned_account_snapshot_dirs() {
+        solana_logger::setup();
+        let genesis_config = GenesisConfig::default();
+        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let bank_snapshots_dir = tmp_dir.path();
+        let collecter_id = Pubkey::new_unique();
+        let snapshot_version = SnapshotVersion::default();
+
+        for _ in 0..2 {
+            // prepare the bank
+            bank = Arc::new(Bank::new_from_parent(&bank, &collecter_id, bank.slot() + 1));
+            bank.fill_bank_with_ticks_for_tests();
+            bank.squash();
+            bank.force_flush_accounts_cache();
+
+            // generate the bank snapshot directory for slot+1
+            let snapshot_storages = bank.get_snapshot_storages(None);
+            let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+            add_bank_snapshot(
+                bank_snapshots_dir,
+                &bank,
+                &snapshot_storages,
+                snapshot_version,
+                slot_deltas,
+            )
+            .unwrap();
+        }
+
+        let snapshot_dir_slot_2 = bank_snapshots_dir.join("2");
+        let accounts_link_dir_slot_2 = snapshot_dir_slot_2.join("accounts_hardlinks");
+
+        // the symlinks point to the account snapshot hardlink directories <account_path>/snapshot/<slot>/ for slot 2
+        // get them via read_link
+        let hardlink_dirs_slot_2: Vec<PathBuf> = fs::read_dir(accounts_link_dir_slot_2)
+            .unwrap()
+            .map(|entry| {
+                let symlink = entry.unwrap().path();
+                fs::read_link(symlink).unwrap()
+            })
+            .collect();
+
+        // remove the bank snapshot directory for slot 2, so the account snapshot slot 2 directories become orphaned
+        fs::remove_dir_all(snapshot_dir_slot_2).unwrap();
+
+        // verify the orphaned account snapshot hardlink directories are still there
+        assert!(hardlink_dirs_slot_2
+            .iter()
+            .all(|dir| fs::metadata(dir).is_ok()));
+
+        let account_snapshot_paths: Vec<PathBuf> = hardlink_dirs_slot_2
+            .iter()
+            .map(|dir| dir.parent().unwrap().parent().unwrap().to_path_buf())
+            .collect();
+        // clean the orphaned hardlink directories
+        clean_orphaned_account_snapshot_dirs(bank_snapshots_dir, &account_snapshot_paths);
+
+        // verify the hardlink directories are gone
+        assert!(hardlink_dirs_slot_2
+            .iter()
+            .all(|dir| fs::metadata(dir).is_err()));
     }
 }
