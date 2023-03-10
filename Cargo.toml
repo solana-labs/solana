@@ -256,8 +256,8 @@ protobuf-src = "1.0.5"
 qstring = "0.7.2"
 #quinn = "0.9.3"
 #quinn-proto = "0.9.2"
-quinn = {git = "https://github.com/lijunwangs/quinn.git", rev = "0747ba612e0c964d81e8c0df6e2ca62ae621d874"}
-quinn-proto = {git = "https://github.com/lijunwangs/quinn.git", rev = "0747ba612e0c964d81e8c0df6e2ca62ae621d874"}
+quinn = {git = "https://github.com/lijunwangs/quinn.git", rev = "39dcce2d4624cca25c014083074444ce80287122"}
+quinn-proto = {git = "https://github.com/lijunwangs/quinn.git", rev = "39dcce2d4624cca25c014083074444ce80287122"}
 
 quinn-udp = "0.3.2"
 quote = "1.0"
