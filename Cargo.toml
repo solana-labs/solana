@@ -356,11 +356,11 @@ solana-version = { path = "version", version = "=1.16.0" }
 solana-vote-program = { path = "programs/vote", version = "=1.16.0" }
 solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=1.16.0" }
 solana-zk-token-sdk = { path = "zk-token-sdk", version = "=1.16.0" }
-spl-associated-token-account = "=1.1.2"
+spl-associated-token-account = "=1.1.3"
 spl-instruction-padding = "0.1"
 spl-memo = "=3.0.1"
 spl-token = "=3.5.0"
-spl-token-2022 = "=0.5.0"
+spl-token-2022 = "=0.6.0"
 static_assertions = "1.1.0"
 stream-cancel = "0.8.1"
 strum = "0.24"
