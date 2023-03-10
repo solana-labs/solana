@@ -243,6 +243,7 @@ esac
 
 (
   export CARGO_TOOLCHAIN=+"$rust_stable"
+  export RUST_LOG="solana_metrics=warn,info,$RUST_LOG"
   echo --- ci/localnet-sanity.sh
   ci/localnet-sanity.sh -x
 
