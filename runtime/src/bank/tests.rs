@@ -2661,7 +2661,7 @@ fn test_bank_update_rewards_determinism() {
     }
 }
 
-impl VerifyBankHash {
+impl VerifyAccountsHashConfig {
     fn default_for_test() -> Self {
         Self {
             test_hash_calculation: true,
@@ -2744,7 +2744,7 @@ fn test_purge_empty_accounts() {
 
         if pass == 0 {
             add_root_and_flush_write_cache(&bank0);
-            assert!(bank0.verify_accounts_hash(VerifyBankHash::default_for_test()));
+            assert!(bank0.verify_accounts_hash(VerifyAccountsHashConfig::default_for_test()));
             continue;
         }
 
@@ -2753,7 +2753,7 @@ fn test_purge_empty_accounts() {
         bank0.squash();
         add_root_and_flush_write_cache(&bank0);
         if pass == 1 {
-            assert!(bank0.verify_accounts_hash(VerifyBankHash::default_for_test()));
+            assert!(bank0.verify_accounts_hash(VerifyAccountsHashConfig::default_for_test()));
             continue;
         }
 
@@ -2761,7 +2761,7 @@ fn test_purge_empty_accounts() {
         bank1.squash();
         add_root_and_flush_write_cache(&bank1);
         bank1.update_accounts_hash_for_tests();
-        assert!(bank1.verify_accounts_hash(VerifyBankHash::default_for_test()));
+        assert!(bank1.verify_accounts_hash(VerifyAccountsHashConfig::default_for_test()));
 
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
@@ -2769,7 +2769,7 @@ fn test_purge_empty_accounts() {
 
         bank1.clean_accounts_for_tests();
 
-        assert!(bank1.verify_accounts_hash(VerifyBankHash::default_for_test()));
+        assert!(bank1.verify_accounts_hash(VerifyAccountsHashConfig::default_for_test()));
     }
 }
 
@@ -3923,7 +3923,7 @@ fn test_bank_hash_internal_state() {
     add_root_and_flush_write_cache(&bank1);
     add_root_and_flush_write_cache(&bank2);
     bank2.update_accounts_hash_for_tests();
-    assert!(bank2.verify_accounts_hash(VerifyBankHash::default_for_test()));
+    assert!(bank2.verify_accounts_hash(VerifyAccountsHashConfig::default_for_test()));
 }
 
 #[test]
@@ -3953,13 +3953,13 @@ fn test_bank_hash_internal_state_verify() {
             // we later modify bank 2, so this flush is destructive to the test
             add_root_and_flush_write_cache(&bank2);
             bank2.update_accounts_hash_for_tests();
-            assert!(bank2.verify_accounts_hash(VerifyBankHash::default_for_test()));
+            assert!(bank2.verify_accounts_hash(VerifyAccountsHashConfig::default_for_test()));
         }
         let bank3 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
         assert_eq!(bank0_state, bank0.hash_internal_state());
         if pass == 0 {
             // this relies on us having set the bank hash in the pass==0 if above
-            assert!(bank2.verify_accounts_hash(VerifyBankHash::default_for_test()));
+            assert!(bank2.verify_accounts_hash(VerifyAccountsHashConfig::default_for_test()));
             continue;
         }
         if pass == 1 {
@@ -3968,7 +3968,7 @@ fn test_bank_hash_internal_state_verify() {
             // Doing so throws an assert. So, we can't flush 3 until 2 is flushed.
             add_root_and_flush_write_cache(&bank3);
             bank3.update_accounts_hash_for_tests();
-            assert!(bank3.verify_accounts_hash(VerifyBankHash::default_for_test()));
+            assert!(bank3.verify_accounts_hash(VerifyAccountsHashConfig::default_for_test()));
             continue;
         }
 
@@ -3977,10 +3977,10 @@ fn test_bank_hash_internal_state_verify() {
         bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
         add_root_and_flush_write_cache(&bank2);
         bank2.update_accounts_hash_for_tests();
-        assert!(bank2.verify_accounts_hash(VerifyBankHash::default_for_test()));
+        assert!(bank2.verify_accounts_hash(VerifyAccountsHashConfig::default_for_test()));
         add_root_and_flush_write_cache(&bank3);
         bank3.update_accounts_hash_for_tests();
-        assert!(bank3.verify_accounts_hash(VerifyBankHash::default_for_test()));
+        assert!(bank3.verify_accounts_hash(VerifyAccountsHashConfig::default_for_test()));
     }
 }
 

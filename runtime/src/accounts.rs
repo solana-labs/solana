@@ -4,8 +4,9 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashLamportsVerifyConfig, IncludeSlotInHash, LoadHint, LoadedAccount,
-            ScanStorageResult, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            IncludeSlotInHash, LoadHint, LoadedAccount, ScanStorageResult,
+            VerifyAccountsHashAndLamportsConfig, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
+            ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
             AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
@@ -866,7 +867,7 @@ impl Accounts {
         &self,
         slot: Slot,
         total_lamports: u64,
-        config: BankHashLamportsVerifyConfig,
+        config: VerifyAccountsHashAndLamportsConfig,
     ) -> bool {
         if let Err(err) =
             self.accounts_db
