@@ -13,7 +13,7 @@
 //!
 //! The bank then stores the results to the accounts store.
 //!
-//! It then has apis for retrieving if a transaction has been processed and it's status.
+//! It then has APIs for retrieving if a transaction has been processed and it's status.
 //! See `get_signature_status` et al.
 //!
 //! Bank lifecycle:
