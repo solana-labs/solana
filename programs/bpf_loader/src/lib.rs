@@ -28,9 +28,10 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::{HOST_ALIGN, MM_HEAP_START},
+        ebpf::{self, HOST_ALIGN, MM_HEAP_START},
+        elf::Executable,
         error::{EbpfError, UserDefinedError},
-        memory_region::MemoryRegion,
+        memory_region::{MemoryCowCallback, MemoryMapping, MemoryRegion},
         verifier::{RequisiteVerifier, VerifierError},
         vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
@@ -38,7 +39,7 @@ use {
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::Slot,
-        entrypoint::{HEAP_LENGTH, SUCCESS},
+        entrypoint::SUCCESS,
         feature_set::{
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
             check_slice_translation_size, delay_visibility_of_program_deployment,
@@ -64,6 +65,7 @@ use {
     std::{
         cell::{RefCell, RefMut},
         fmt::Debug,
+        mem,
         rc::Rc,
         sync::Arc,
     },
@@ -296,21 +298,19 @@ fn check_loader_id(id: &Pubkey) -> bool {
 }
 
 /// Create the SBF virtual machine
-pub fn create_vm<'a, 'b>(
+pub fn create_ebpf_vm<'a, 'b>(
     program: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>,
+    stack: &'a mut AlignedMemory<HOST_ALIGN>,
+    heap: AlignedMemory<HOST_ALIGN>,
     regions: Vec<MemoryRegion>,
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, EbpfError> {
-    let compute_budget = invoke_context.get_compute_budget();
-    let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
     let _ = invoke_context.consume_checked(
-        ((heap_size as u64).saturating_div(32_u64.saturating_mul(1024)))
+        ((heap.len() as u64).saturating_div(32_u64.saturating_mul(1024)))
             .saturating_sub(1)
-            .saturating_mul(compute_budget.heap_cost),
+            .saturating_mul(invoke_context.get_compute_budget().heap_cost),
     );
-    let heap =
-        AlignedMemory::<HOST_ALIGN>::zero_filled(compute_budget.heap_size.unwrap_or(HEAP_LENGTH));
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
             .transaction_context
@@ -333,13 +333,76 @@ pub fn create_vm<'a, 'b>(
             allocator.clone(),
         )
         .map_err(SyscallError::InstructionError)?;
-    let result = EbpfVm::new(
-        program,
-        invoke_context,
-        allocator.borrow_mut().get_heap(),
+    let stack_len = stack.len();
+    let memory_mapping = create_memory_mapping(
+        program.get_executable(),
+        stack,
+        allocator.borrow_mut().heap_mut(),
         regions,
-    );
-    result
+        None,
+    )?;
+
+    EbpfVm::new(program, invoke_context, memory_mapping, stack_len)
+}
+
+#[macro_export]
+macro_rules! create_vm {
+    ($vm_name:ident, $executable:expr, $stack:ident, $heap:ident, $additional_regions:expr, $orig_account_lengths:expr, $invoke_context:expr) => {
+        let mut $stack = solana_rbpf::aligned_memory::AlignedMemory::<
+            { solana_rbpf::ebpf::HOST_ALIGN },
+        >::zero_filled($executable.get_executable().get_config().stack_size());
+
+        // this is needed if the caller passes "&mut invoke_context" to the
+        // macro. The lint complains that (&mut invoke_context).get_compute_budget()
+        // does an unnecessary mutable borrow
+        #[allow(clippy::unnecessary_mut_passed)]
+        let heap_size = $invoke_context
+            .get_compute_budget()
+            .heap_size
+            .unwrap_or(solana_sdk::entrypoint::HEAP_LENGTH);
+        let $heap = solana_rbpf::aligned_memory::AlignedMemory::<{ solana_rbpf::ebpf::HOST_ALIGN }>::zero_filled(heap_size);
+
+        let $vm_name = create_ebpf_vm(
+            $executable,
+            &mut $stack,
+            $heap,
+            $additional_regions,
+            $orig_account_lengths,
+            $invoke_context,
+        );
+    };
+}
+
+fn create_memory_mapping<'a, 'b, C: ContextObject>(
+    executable: &'a Executable<C>,
+    stack: &'b mut AlignedMemory<{ HOST_ALIGN }>,
+    heap: &'b mut AlignedMemory<{ HOST_ALIGN }>,
+    additional_regions: Vec<MemoryRegion>,
+    cow_cb: Option<MemoryCowCallback>,
+) -> Result<MemoryMapping<'a>, EbpfError> {
+    let config = executable.get_config();
+    let regions: Vec<MemoryRegion> = vec![
+        executable.get_ro_region(),
+        MemoryRegion::new_writable_gapped(
+            stack.as_slice_mut(),
+            ebpf::MM_STACK_START,
+            if !config.dynamic_stack_frames && config.enable_stack_frame_gaps {
+                config.stack_frame_size as u64
+            } else {
+                0
+            },
+        ),
+        MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
+    ]
+    .into_iter()
+    .chain(additional_regions.into_iter())
+    .collect();
+
+    Ok(if let Some(cow_cb) = cow_cb {
+        MemoryMapping::new_with_cow(regions, cow_cb, config)?
+    } else {
+        MemoryMapping::new(regions, config)?
+    })
 }
 
 pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
@@ -1345,9 +1408,9 @@ fn process_loader_instruction(
     Ok(())
 }
 
-fn execute(
-    executable: &VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
-    invoke_context: &mut InvokeContext,
+fn execute<'a, 'b: 'a>(
+    executable: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
+    invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
     let stack_height = invoke_context.get_stack_height();
@@ -1373,14 +1436,22 @@ fn execute(
     let mut execute_time;
     let execution_result = {
         let compute_meter_prev = invoke_context.get_remaining();
-        let mut vm = match create_vm(
+        create_vm!(
+            vm,
             // We dropped the lifetime tracking in the Executor by setting it to 'static,
             // thus we need to reintroduce the correct lifetime of InvokeContext here again.
-            unsafe { std::mem::transmute(executable) },
+            unsafe {
+                mem::transmute::<_, &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>>(
+                    executable,
+                )
+            },
+            stack,
+            heap,
             regions,
             account_lengths,
-            invoke_context,
-        ) {
+            invoke_context
+        );
+        let mut vm = match vm {
             Ok(info) => info,
             Err(e) => {
                 ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", e);
@@ -1592,11 +1663,28 @@ mod tests {
                 .unwrap();
         let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
         let mut context_object = TestContextObject { remaining: 10 };
+        let mut stack = AlignedMemory::zero_filled(
+            verified_executable
+                .get_executable()
+                .get_config()
+                .stack_size(),
+        );
+        let mut heap = AlignedMemory::with_capacity(0);
+        let stack_len = stack.len();
+
+        let memory_mapping = create_memory_mapping(
+            verified_executable.get_executable(),
+            &mut stack,
+            &mut heap,
+            vec![input_region],
+            None,
+        )
+        .unwrap();
         let mut vm = EbpfVm::new(
             &verified_executable,
             &mut context_object,
-            &mut [],
-            vec![input_region],
+            memory_mapping,
+            stack_len,
         )
         .unwrap();
         vm.execute_program(true).1.unwrap();

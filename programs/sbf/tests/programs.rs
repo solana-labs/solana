@@ -54,7 +54,7 @@ use {
 };
 use {
     solana_bpf_loader_program::{
-        create_vm,
+        create_ebpf_vm, create_vm,
         serialization::{deserialize_parameters, serialize_parameters},
         syscalls::create_loader,
     },
@@ -134,13 +134,16 @@ fn run_program(name: &str) -> u64 {
             .unwrap();
 
             {
-                let mut vm = create_vm(
+                create_vm!(
+                    vm,
                     &verified_executable,
+                    stack,
+                    heap,
                     regions,
                     account_lengths.clone(),
-                    invoke_context,
-                )
-                .unwrap();
+                    invoke_context
+                );
+                let mut vm = vm.unwrap();
                 let (compute_units_consumed, result) = vm.execute_program(i == 0);
                 assert_eq!(SUCCESS, result.unwrap());
                 if i == 1 {

@@ -1333,7 +1333,7 @@ mod tests {
             ..Config::default()
         };
         let memory_mapping =
-            MemoryMapping::new(vec![mock_caller_account.region.clone()], &config).unwrap();
+            MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
 
         let mut caller_account = mock_caller_account.caller_account();
 
@@ -1390,7 +1390,7 @@ mod tests {
             ..Config::default()
         };
         let memory_mapping =
-            MemoryMapping::new(vec![mock_caller_account.region.clone()], &config).unwrap();
+            MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
 
         let data_slice = mock_caller_account.data_slice();
         let len_ptr = unsafe {
@@ -1608,7 +1608,7 @@ mod tests {
         vm_addr: u64,
         data: Vec<u8>,
         len: u64,
-        region: MemoryRegion,
+        regions: Vec<MemoryRegion>,
     }
 
     impl MockCallerAccount {
@@ -1620,7 +1620,7 @@ mod tests {
             d[mem::size_of::<u64>()..][..data.len()].copy_from_slice(data);
 
             // the memory region must include the realloc data
-            let region = MemoryRegion::new_writable(d.as_mut_slice(), vm_addr);
+            let regions = vec![MemoryRegion::new_writable(d.as_mut_slice(), vm_addr)];
 
             // caller_account.data must have the actual data length
             d.truncate(mem::size_of::<u64>() + data.len());
@@ -1631,7 +1631,7 @@ mod tests {
                 vm_addr,
                 data: d,
                 len: data.len() as u64,
-                region,
+                regions,
             }
         }
 
