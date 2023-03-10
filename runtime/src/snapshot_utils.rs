@@ -1653,6 +1653,7 @@ pub fn bank_from_snapshot_dir(
         account_paths,
         next_append_vec_id.clone(),
     )?;
+    info!("{}", measure_build_storage);
 
     let next_append_vec_id =
         Arc::try_unwrap(next_append_vec_id).expect("this is the only strong reference");
@@ -1892,7 +1893,7 @@ fn streaming_snapshot_dir_files(
         .expect("send snapshot version path");
 
     for account_path in account_paths {
-        for file in fs::read_dir(account_path).unwrap() {
+        for file in fs::read_dir(account_path).expect("read account path dir") {
             let file_path = file.unwrap().path().to_path_buf();
             file_sender.send(file_path).expect("send account file path");
         }
