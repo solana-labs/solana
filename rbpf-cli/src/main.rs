@@ -3,7 +3,7 @@ use {
     serde::{Deserialize, Serialize},
     serde_json::Result,
     solana_bpf_loader_program::{
-        create_vm, serialization::serialize_parameters, syscalls::create_loader,
+        create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
     solana_program_runtime::{
         compute_budget::ComputeBudget,
@@ -292,14 +292,16 @@ before execting it in the virtual machine.",
         }
         _ => {}
     }
-
-    let mut vm = create_vm(
+    create_vm!(
+        vm,
         &verified_executable,
+        stack,
+        heap,
         regions,
         account_lengths,
-        &mut invoke_context,
-    )
-    .unwrap();
+        &mut invoke_context
+    );
+    let mut vm = vm.unwrap();
     let start_time = Instant::now();
     if matches.value_of("use").unwrap() == "debugger" {
         vm.debug_port = Some(matches.value_of("port").unwrap().parse::<u16>().unwrap());

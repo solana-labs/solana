@@ -1,6 +1,8 @@
 #![feature(test)]
 #![cfg(feature = "sbf_c")]
 
+use {solana_rbpf::memory_region::MemoryState, std::slice};
+
 extern crate test;
 #[macro_use]
 extern crate solana_bpf_loader_program;
@@ -8,7 +10,7 @@ extern crate solana_bpf_loader_program;
 use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_bpf_loader_program::{
-        create_vm, serialization::serialize_parameters, syscalls::create_loader,
+        create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
     solana_measure::measure::Measure,
     solana_program_runtime::{
@@ -88,13 +90,16 @@ fn bench_program_alu(bencher: &mut Bencher) {
                 .unwrap();
 
         verified_executable.jit_compile().unwrap();
-        let mut vm = create_vm(
+        create_vm!(
+            vm,
             &verified_executable,
+            stack,
+            heap,
             vec![MemoryRegion::new_writable(&mut inner_iter, MM_INPUT_START)],
             vec![],
-            invoke_context,
-        )
-        .unwrap();
+            invoke_context
+        );
+        let mut vm = vm.unwrap();
 
         println!("Interpreted:");
         vm.env
@@ -188,17 +193,6 @@ fn bench_create_vm(bencher: &mut Bencher) {
         const BUDGET: u64 = 200_000;
         invoke_context.mock_set_remaining(BUDGET);
 
-        // Serialize account data
-        let (_serialized, regions, account_lengths) = serialize_parameters(
-            invoke_context.transaction_context,
-            invoke_context
-                .transaction_context
-                .get_current_instruction_context()
-                .unwrap(),
-            true, // should_cap_ix_accounts
-        )
-        .unwrap();
-
         let loader = create_loader(
             &invoke_context.feature_set,
             &ComputeBudget::default(),
@@ -213,14 +207,28 @@ fn bench_create_vm(bencher: &mut Bencher) {
             VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
                 .unwrap();
 
+        // Serialize account data
+        let (_serialized, regions, account_lengths) = serialize_parameters(
+            invoke_context.transaction_context,
+            invoke_context
+                .transaction_context
+                .get_current_instruction_context()
+                .unwrap(),
+            true, // should_cap_ix_accounts
+        )
+        .unwrap();
+
         bencher.iter(|| {
-            let _ = create_vm(
+            create_vm!(
+                vm,
                 &verified_executable,
-                regions.clone(),
+                stack,
+                heap,
+                clone_regions(&regions),
                 account_lengths.clone(),
-                invoke_context,
-            )
-            .unwrap();
+                invoke_context
+            );
+            let _ = vm.unwrap();
         });
     });
 }
@@ -258,13 +266,16 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
             VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
                 .unwrap();
 
-        let mut vm = create_vm(
+        create_vm!(
+            vm,
             &verified_executable,
+            stack,
+            heap,
             regions,
             account_lengths,
-            invoke_context,
-        )
-        .unwrap();
+            invoke_context
+        );
+        let mut vm = vm.unwrap();
 
         let mut measure = Measure::start("tune");
         let (instructions, _result) = vm.execute_program(true);
@@ -282,4 +293,30 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
             instructions,
         );
     });
+}
+
+fn clone_regions(regions: &[MemoryRegion]) -> Vec<MemoryRegion> {
+    unsafe {
+        regions
+            .iter()
+            .map(|region| match region.state.get() {
+                MemoryState::Readable => MemoryRegion::new_readonly(
+                    slice::from_raw_parts(region.host_addr.get() as *const _, region.len as usize),
+                    region.vm_addr,
+                ),
+                MemoryState::Writable => MemoryRegion::new_writable(
+                    slice::from_raw_parts_mut(
+                        region.host_addr.get() as *mut _,
+                        region.len as usize,
+                    ),
+                    region.vm_addr,
+                ),
+                MemoryState::Cow(id) => MemoryRegion::new_cow(
+                    slice::from_raw_parts(region.host_addr.get() as *const _, region.len as usize),
+                    region.vm_addr,
+                    id,
+                ),
+            })
+            .collect()
+    }
 }
