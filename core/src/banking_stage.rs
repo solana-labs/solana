@@ -399,7 +399,6 @@ impl BankingStage {
                     poh_recorder.read().unwrap().recorder(),
                     QosService::new(id),
                     log_messages_bytes_limit,
-                    None,
                 );
 
                 Builder::new()
