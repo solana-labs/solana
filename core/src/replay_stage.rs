@@ -6834,6 +6834,7 @@ pub(crate) mod tests {
         bank1.freeze();
         bank_forks.write().unwrap().insert(bank1);
 
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
