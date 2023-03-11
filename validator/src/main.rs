@@ -835,12 +835,12 @@ pub fn main() {
                 _ => unreachable!(),
             }
         }
-        ("set-tpu-host-addr", Some(subcommand_matches)) => {
+        ("set-tpu-host-address", Some(subcommand_matches)) => {
             let tpu_addr: SocketAddr = subcommand_matches
                 .value_of("tpu_host_port")
                 .map(|tpu_host_port| {
                     solana_net_utils::parse_host_port(tpu_host_port).unwrap_or_else(|err| {
-                        eprintln!("Failed to parse --set-tpu-host-addr HOST:PORT {err}");
+                        eprintln!("Failed to parse --set-tpu-host-address HOST:PORT {err}");
                         exit(1);
                     })
                 })
@@ -848,9 +848,9 @@ pub fn main() {
 
             let admin_client = admin_rpc_service::connect(&ledger_path);
             admin_rpc_service::runtime()
-                .block_on(async move { admin_client.await?.set_tpu_addr(tpu_addr).await })
+                .block_on(async move { admin_client.await?.set_tpu_host_address(tpu_addr).await })
                 .unwrap_or_else(|err| {
-                    println!("setTpuAddress request failed: {err}");
+                    println!("setTpuHostAddress request failed: {err}");
                     exit(1);
                 });
 

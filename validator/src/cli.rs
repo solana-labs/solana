@@ -373,7 +373,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         )
         .arg(
             Arg::with_name("tpu_host_addr")
-                .long("tpu-host-addr")
+                .long("tpu-host-address")
+                .alias("tpu-host-addr")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host_port)
@@ -1616,7 +1617,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                          then this not a good time for a restart")
         ).
         subcommand(
-            SubCommand::with_name("set-tpu-host-addr")
+            SubCommand::with_name("set-tpu-host-address")
                 .about("Specify TPU address to advertise in gossip")
                 .arg(
                     Arg::with_name("tpu_host_port")

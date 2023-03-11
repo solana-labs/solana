@@ -227,8 +227,8 @@ pub trait AdminRpc {
         max_entries: usize,
     ) -> Result<Vec<(String, usize)>>;
 
-    #[rpc(meta, name = "setTpuAddress")]
-    fn set_tpu_addr(&self, meta: Self::Metadata, tpu_addr: SocketAddr) -> Result<()>;
+    #[rpc(meta, name = "setTpuHostAddress")]
+    fn set_tpu_host_address(&self, meta: Self::Metadata, tpu_addr: SocketAddr) -> Result<()>;
 }
 
 pub struct AdminRpcImpl;
@@ -592,8 +592,8 @@ impl AdminRpc for AdminRpcImpl {
         })
     }
 
-    fn set_tpu_addr(&self, meta: Self::Metadata, tpu_addr: SocketAddr) -> Result<()> {
-        debug!("set_tpu_addr rpc request received: {:?}", tpu_addr);
+    fn set_tpu_host_address(&self, meta: Self::Metadata, tpu_addr: SocketAddr) -> Result<()> {
+        debug!("set_tpu_host_address rpc request received: {:?}", tpu_addr);
 
         meta.with_post_init(|post_init| {
             post_init.cluster_info.set_tpu(tpu_addr);
