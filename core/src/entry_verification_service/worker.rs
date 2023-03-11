@@ -1,14 +1,15 @@
 //! Execution part of the [`super::EntryVerificationService`].
 
 use {
-    super::{DataSetFirstShred, SharedResults, SlotVerificationStatus},
+    super::{error, DataSetFirstShred, SharedResults, SlotVerificationStatus},
     crossbeam_channel::{self, RecvError, RecvTimeoutError},
+    rayon::{ThreadPool, ThreadPoolBuilder},
     solana_entry::entry::Entry,
     solana_ledger::blockstore::Blockstore,
+    solana_rayon_threadlimit::get_max_thread_count,
     solana_sdk::{clock::Slot, hash::Hash},
     std::{
         collections::HashMap,
-        io::Error,
         ops::RangeInclusive,
         result::Result,
         sync::Arc,
@@ -22,6 +23,8 @@ use {
 mod test;
 
 mod commands;
+mod poh;
+mod signature;
 
 /// API of the worker thread.
 pub(super) enum Command {
@@ -62,8 +65,13 @@ pub(super) enum Command {
 pub(super) fn start(
     blockstore: Arc<Blockstore>,
     results: Arc<SharedResults>,
-) -> Result<crossbeam_channel::Sender<Command>, Error> {
+) -> Result<crossbeam_channel::Sender<Command>, error::StartError> {
     let (commands_sender, commands_receiver) = crossbeam_channel::unbounded();
+
+    let verification_pool = ThreadPoolBuilder::new()
+        .num_threads(get_max_thread_count())
+        .thread_name(|i| format!("solVerifyEntries-p{i:02}"))
+        .build()?;
 
     let state = State {
         commands: commands_receiver,
@@ -72,6 +80,7 @@ pub(super) fn start(
         waiting_for_parent_hash: HashMap::new(),
         client_waiting_for: None,
         results,
+        verification_pool,
     };
 
     thread::Builder::new()
@@ -229,6 +238,9 @@ struct State {
     client_waiting_for: Option<(Slot, DataSetFirstShred)>,
 
     results: Arc<SharedResults>,
+
+    /// Rayon thread pool used to run the verification code in parallel.
+    verification_pool: ThreadPool,
 }
 
 /// Indicates which validation are we planning to do for a data set.
@@ -278,6 +290,7 @@ impl State {
             waiting_for_parent_hash,
             client_waiting_for,
             results,
+            ..
         } = self;
 
         // We accumulate verification requests for some time before actually running them.  As we
@@ -367,6 +380,7 @@ impl State {
         let Self {
             processing,
             results,
+            verification_pool,
             ..
         } = self;
 
@@ -379,12 +393,10 @@ impl State {
             }
         }
 
-        // TODO Send request to the GPU thread.
-
-        // TODO Run signature verification.
-
-        let failed = vec![];
-        // TODO Check results and mark any failed slots.
+        let mut failed = poh::verify(&verification_pool, &todo);
+        failed.extend(signature::verify(&verification_pool, &todo));
+        failed.sort_unstable();
+        failed.dedup();
 
         for slot in failed.iter() {
             if let Some(i) = verified.iter().position(|v| *v == *slot) {

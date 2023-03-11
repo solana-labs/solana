@@ -1,5 +1,6 @@
 use {
     super::DataSetFirstShred,
+    rayon,
     solana_sdk::clock::Slot,
     std::{io, time::Duration},
     thiserror::Error,
@@ -9,6 +10,8 @@ use {
 pub enum StartError {
     #[error(transparent)]
     Io(#[from] io::Error),
+    #[error(transparent)]
+    RayonBuildPool(#[from] rayon::ThreadPoolBuildError),
 }
 
 #[derive(Debug, Error)]

@@ -53,6 +53,7 @@ use {
 
 #[macro_use]
 pub mod error;
+
 mod shared_wrapper;
 mod worker;
 
