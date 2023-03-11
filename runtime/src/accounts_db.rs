@@ -196,9 +196,9 @@ pub(crate) struct ShrinkCollectAliveSeparatedByRefs<'a> {
     pub(crate) many_refs: AliveAccounts<'a>,
 }
 
-/// Configuration Parameters for running bank hash and total lamports verification
+/// Configuration Parameters for running accounts hash and total lamports verification
 #[derive(Debug, Clone)]
-pub struct BankHashLamportsVerifyConfig<'a> {
+pub struct VerifyAccountsHashAndLamportsConfig<'a> {
     /// bank ancestors
     pub ancestors: &'a Ancestors,
     /// true to verify hash calculation
@@ -985,10 +985,9 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
 }
 
 #[derive(Debug)]
-pub enum BankHashVerificationError {
-    MismatchedAccountHash,
-    MismatchedBankHash,
-    MissingBankHash,
+pub enum AccountsHashVerificationError {
+    MissingAccountsHash,
+    MismatchedAccountsHash,
     MismatchedTotalLamports(u64, u64),
 }
 
@@ -6856,8 +6855,8 @@ impl AccountsDb {
         &self,
         max_slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
-    ) -> Result<(AccountsHash, u64), BankHashVerificationError> {
-        use BankHashVerificationError::*;
+    ) -> Result<(AccountsHash, u64), AccountsHashVerificationError> {
+        use AccountsHashVerificationError::*;
         let mut collect = Measure::start("collect");
         let keys: Vec<_> = self
             .accounts_index
@@ -6953,7 +6952,7 @@ impl AccountsDb {
                 "{} mismatched account hash(es) found",
                 mismatch_found.load(Ordering::Relaxed)
             );
-            return Err(MismatchedAccountHash);
+            return Err(MismatchedAccountsHash);
         }
 
         scan.stop();
@@ -7255,7 +7254,7 @@ impl AccountsDb {
         data_source: CalcAccountsHashDataSource,
         slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
-    ) -> Result<(AccountsHash, u64), BankHashVerificationError> {
+    ) -> Result<(AccountsHash, u64), AccountsHashVerificationError> {
         match data_source {
             CalcAccountsHashDataSource::Storages => {
                 if self.accounts_cache.contains_any_slots(slot) {
@@ -7298,7 +7297,7 @@ impl AccountsDb {
         slot: Slot,
         config: CalcAccountsHashConfig<'_>,
         expected_capitalization: Option<u64>,
-    ) -> Result<(AccountsHash, u64), BankHashVerificationError> {
+    ) -> Result<(AccountsHash, u64), AccountsHashVerificationError> {
         let (accounts_hash, total_lamports) =
             self.calculate_accounts_hash(data_source, slot, &config)?;
         if debug_verify {
@@ -7385,7 +7384,7 @@ impl AccountsDb {
         bin_range: &Range<usize>,
         config: &CalcAccountsHashConfig<'_>,
         filler_account_suffix: Option<&Pubkey>,
-    ) -> Result<Vec<CacheHashDataFile>, BankHashVerificationError> {
+    ) -> Result<Vec<CacheHashDataFile>, AccountsHashVerificationError> {
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
@@ -7424,7 +7423,7 @@ impl AccountsDb {
                 "{} mismatched account hash(es) found",
                 mismatch_found.load(Ordering::Relaxed)
             );
-            return Err(BankHashVerificationError::MismatchedAccountHash);
+            return Err(AccountsHashVerificationError::MismatchedAccountsHash);
         }
 
         time.stop();
@@ -7489,7 +7488,7 @@ impl AccountsDb {
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
         stats: HashStats,
-    ) -> Result<(AccountsHash, u64), BankHashVerificationError> {
+    ) -> Result<(AccountsHash, u64), AccountsHashVerificationError> {
         let (accounts_hash, capitalization) = self._calculate_accounts_hash_from_storages(
             config,
             storages,
@@ -7518,7 +7517,7 @@ impl AccountsDb {
         storages: &SortedStorages<'_>,
         base_slot: Slot,
         stats: HashStats,
-    ) -> Result<(IncrementalAccountsHash, /* capitalization */ u64), BankHashVerificationError>
+    ) -> Result<(IncrementalAccountsHash, /* capitalization */ u64), AccountsHashVerificationError>
     {
         assert!(storages.range().start > base_slot, "The storages for calculating an incremental accounts hash must all be higher than the base slot");
         let (accounts_hash, capitalization) = self._calculate_accounts_hash_from_storages(
@@ -7541,7 +7540,7 @@ impl AccountsDb {
         mut stats: HashStats,
         flavor: CalcAccountsHashFlavor,
         accounts_hash_cache_path: PathBuf,
-    ) -> Result<(AccountsHashEnum, u64), BankHashVerificationError> {
+    ) -> Result<(AccountsHashEnum, u64), AccountsHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         stats.oldest_root = storages.range().start;
 
@@ -7644,9 +7643,9 @@ impl AccountsDb {
         &self,
         slot: Slot,
         total_lamports: u64,
-        config: BankHashLamportsVerifyConfig,
-    ) -> Result<(), BankHashVerificationError> {
-        use BankHashVerificationError::*;
+        config: VerifyAccountsHashAndLamportsConfig,
+    ) -> Result<(), AccountsHashVerificationError> {
+        use AccountsHashVerificationError::*;
 
         let check_hash = false; // this will not be supported anymore
         let (calculated_accounts_hash, calculated_lamports) = self
@@ -7683,10 +7682,10 @@ impl AccountsDb {
                     "mismatched accounts hash for slot {slot}: \
                     {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
                 );
-                Err(MismatchedBankHash)
+                Err(MismatchedAccountsHash)
             }
         } else {
-            Err(MissingBankHash)
+            Err(MissingAccountsHash)
         }
     }
 
@@ -9498,7 +9497,7 @@ pub mod tests {
             bins: usize,
             bin_range: &Range<usize>,
             check_hash: bool,
-        ) -> Result<Vec<CacheHashDataFile>, BankHashVerificationError> {
+        ) -> Result<Vec<CacheHashDataFile>, AccountsHashVerificationError> {
             let temp_dir = TempDir::new().unwrap();
             let accounts_hash_cache_path = temp_dir.path().to_path_buf();
             self.scan_snapshot_stores_with_cache(
@@ -9617,13 +9616,13 @@ pub mod tests {
         }
     }
 
-    impl<'a> BankHashLamportsVerifyConfig<'a> {
+    impl<'a> VerifyAccountsHashAndLamportsConfig<'a> {
         fn new_for_test(
             ancestors: &'a Ancestors,
             epoch_schedule: &'a EpochSchedule,
             rent_collector: &'a RentCollector,
-        ) -> BankHashLamportsVerifyConfig<'a> {
-            BankHashLamportsVerifyConfig {
+        ) -> VerifyAccountsHashAndLamportsConfig<'a> {
+            VerifyAccountsHashAndLamportsConfig {
                 ancestors,
                 test_hash_calculation: true,
                 epoch_schedule,
@@ -12189,7 +12188,7 @@ pub mod tests {
         let ancestors = Ancestors::default();
         let epoch_schedule = EpochSchedule::default();
         let rent_collector = RentCollector::default();
-        let config = BankHashLamportsVerifyConfig::new_for_test(
+        let config = VerifyAccountsHashAndLamportsConfig::new_for_test(
             &ancestors,
             &epoch_schedule,
             &rent_collector,
@@ -12597,7 +12596,7 @@ pub mod tests {
 
     #[test]
     fn test_verify_bank_hash() {
-        use BankHashVerificationError::*;
+        use AccountsHashVerificationError::*;
         solana_logger::setup();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
 
@@ -12613,7 +12612,7 @@ pub mod tests {
         db.add_root_and_flush_write_cache(some_slot);
         db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
 
-        let config = BankHashLamportsVerifyConfig::new_for_test(
+        let config = VerifyAccountsHashAndLamportsConfig::new_for_test(
             &ancestors,
             &epoch_schedule,
             &rent_collector,
@@ -12628,21 +12627,21 @@ pub mod tests {
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, config.clone()),
-            Err(MissingBankHash)
+            Err(MissingAccountsHash)
         );
 
         db.set_accounts_hash(some_slot, AccountsHash(Hash::new(&[0xca; HASH_BYTES])));
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, config),
-            Err(MismatchedBankHash)
+            Err(MismatchedAccountsHash)
         );
     }
 
     #[test]
     fn test_verify_bank_capitalization() {
         for pass in 0..2 {
-            use BankHashVerificationError::*;
+            use AccountsHashVerificationError::*;
             solana_logger::setup();
             let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
 
@@ -12653,7 +12652,7 @@ pub mod tests {
             let ancestors = vec![(some_slot, 0)].into_iter().collect();
             let epoch_schedule = EpochSchedule::default();
             let rent_collector = RentCollector::default();
-            let config = BankHashLamportsVerifyConfig::new_for_test(
+            let config = VerifyAccountsHashAndLamportsConfig::new_for_test(
                 &ancestors,
                 &epoch_schedule,
                 &rent_collector,
@@ -12707,7 +12706,7 @@ pub mod tests {
 
         let epoch_schedule = EpochSchedule::default();
         let rent_collector = RentCollector::default();
-        let config = BankHashLamportsVerifyConfig::new_for_test(
+        let config = VerifyAccountsHashAndLamportsConfig::new_for_test(
             &ancestors,
             &epoch_schedule,
             &rent_collector,
@@ -12721,7 +12720,7 @@ pub mod tests {
 
     #[test]
     fn test_verify_bank_hash_bad_account_hash() {
-        use BankHashVerificationError::*;
+        use AccountsHashVerificationError::*;
         solana_logger::setup();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
 
@@ -12747,7 +12746,7 @@ pub mod tests {
 
         let epoch_schedule = EpochSchedule::default();
         let rent_collector = RentCollector::default();
-        let config = BankHashLamportsVerifyConfig::new_for_test(
+        let config = VerifyAccountsHashAndLamportsConfig::new_for_test(
             &ancestors,
             &epoch_schedule,
             &rent_collector,
@@ -12755,7 +12754,7 @@ pub mod tests {
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, config),
-            Err(MismatchedBankHash)
+            Err(MismatchedAccountsHash)
         );
     }
 
@@ -13286,7 +13285,7 @@ pub mod tests {
 
             let epoch_schedule = EpochSchedule::default();
             let rent_collector = RentCollector::default();
-            let config = BankHashLamportsVerifyConfig::new_for_test(
+            let config = VerifyAccountsHashAndLamportsConfig::new_for_test(
                 &no_ancestors,
                 &epoch_schedule,
                 &rent_collector,

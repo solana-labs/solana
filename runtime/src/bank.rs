@@ -46,7 +46,7 @@ use {
         },
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig,
-            BankHashLamportsVerifyConfig, CalcAccountsHashDataSource, IncludeSlotInHash,
+            CalcAccountsHashDataSource, IncludeSlotInHash, VerifyAccountsHashAndLamportsConfig,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_hash::AccountsHash,
@@ -181,8 +181,8 @@ use {
     },
 };
 
-/// params to `verify_bank_hash`
-pub struct VerifyBankHash {
+/// params to `verify_accounts_hash`
+pub struct VerifyAccountsHashConfig {
     pub test_hash_calculation: bool,
     pub ignore_mismatch: bool,
     pub require_rooted_bank: bool,
@@ -6944,7 +6944,7 @@ impl Bank {
     /// return true if all is good
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_accounts_hash(&self, config: VerifyBankHash) -> bool {
+    pub fn verify_accounts_hash(&self, config: VerifyAccountsHashConfig) -> bool {
         let accounts = &self.rc.accounts;
         // Wait until initial hash calc is complete before starting a new hash calc.
         // This should only occur when we halt at a slot in ledger-tool.
@@ -6989,7 +6989,7 @@ impl Bank {
                         let result = accounts_.verify_accounts_hash_and_lamports(
                             slot,
                             cap,
-                            BankHashLamportsVerifyConfig {
+                            VerifyAccountsHashAndLamportsConfig {
                                 ancestors: &ancestors,
                                 test_hash_calculation: config.test_hash_calculation,
                                 epoch_schedule: &epoch_schedule,
@@ -7012,7 +7012,7 @@ impl Bank {
             let result = accounts.verify_accounts_hash_and_lamports(
                 slot,
                 cap,
-                BankHashLamportsVerifyConfig {
+                VerifyAccountsHashAndLamportsConfig {
                     ancestors,
                     test_hash_calculation: config.test_hash_calculation,
                     epoch_schedule,
@@ -7307,7 +7307,7 @@ impl Bank {
             let should_verify_accounts = !self.rc.accounts.accounts_db.skip_initial_hash_calc;
             if should_verify_accounts {
                 info!("Verifying accounts...");
-                let verified = self.verify_accounts_hash(VerifyBankHash {
+                let verified = self.verify_accounts_hash(VerifyAccountsHashConfig {
                     test_hash_calculation,
                     ignore_mismatch: false,
                     require_rooted_bank: false,

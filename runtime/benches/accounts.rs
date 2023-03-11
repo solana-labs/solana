@@ -10,7 +10,8 @@ use {
     solana_runtime::{
         accounts::{AccountAddressFilter, Accounts},
         accounts_db::{
-            test_utils::create_test_accounts, AccountShrinkThreshold, BankHashLamportsVerifyConfig,
+            test_utils::create_test_accounts, AccountShrinkThreshold,
+            VerifyAccountsHashAndLamportsConfig,
         },
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
@@ -103,7 +104,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
         assert!(accounts.verify_accounts_hash_and_lamports(
             0,
             total_lamports,
-            BankHashLamportsVerifyConfig {
+            VerifyAccountsHashAndLamportsConfig {
                 ancestors: &ancestors,
                 test_hash_calculation,
                 epoch_schedule: &EpochSchedule::default(),
