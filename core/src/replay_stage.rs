@@ -6811,13 +6811,14 @@ pub(crate) mod tests {
         bank1.freeze();
         bank_forks.write().unwrap().insert(bank1);
 
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
             &mut progress,
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
-        assert!(res.is_ok(), "retry_iteration=0, retry_time=None");
+        assert_matches!(res, Err(_));
         assert_eq!(
             progress.get_retransmit_info(0).unwrap().retry_iteration,
             0,
@@ -6835,8 +6836,9 @@ pub(crate) mod tests {
             "retry_iteration=0, elapsed < 2^0 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info_mut(0).unwrap().retry_time =
-            Some(Instant::now() - Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1));
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6864,8 +6866,9 @@ pub(crate) mod tests {
             "retry_iteration=1, elapsed < 2^1 * RETRY_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info_mut(0).unwrap().retry_time =
-            Some(Instant::now() - Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1));
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6877,8 +6880,9 @@ pub(crate) mod tests {
             "retry_iteration=1, elapsed < 2^1 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info_mut(0).unwrap().retry_time =
-            Some(Instant::now() - Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1));
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6901,8 +6905,9 @@ pub(crate) mod tests {
             .unwrap()
             .increment_retry_iteration();
 
-        progress.get_retransmit_info_mut(0).unwrap().retry_time =
-            Some(Instant::now() - Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1));
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6914,8 +6919,9 @@ pub(crate) mod tests {
             "retry_iteration=3, elapsed < 2^3 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info_mut(0).unwrap().retry_time =
-            Some(Instant::now() - Duration::from_millis(8 * RETRANSMIT_BASE_DELAY_MS + 1));
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(8 * RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6957,6 +6963,10 @@ pub(crate) mod tests {
         } = vote_simulator;
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = retry_time;
 
         let mut prev_index = 0;
         for i in (1..10).chain(11..15) {
@@ -6982,6 +6992,7 @@ pub(crate) mod tests {
             bank.freeze();
             bank_forks.write().unwrap().insert(bank);
             prev_index = i;
+            progress.get_retransmit_info_mut(i).unwrap().retry_time = retry_time;
         }
 
         // expect single slot when latest_leader_slot is the start of a consecutive range
