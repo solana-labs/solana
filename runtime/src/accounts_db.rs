@@ -9621,8 +9621,8 @@ pub mod tests {
             ancestors: &'a Ancestors,
             epoch_schedule: &'a EpochSchedule,
             rent_collector: &'a RentCollector,
-        ) -> VerifyAccountsHashAndLamportsConfig<'a> {
-            VerifyAccountsHashAndLamportsConfig {
+        ) -> Self {
+            Self {
                 ancestors,
                 test_hash_calculation: true,
                 epoch_schedule,
@@ -12595,7 +12595,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_verify_bank_hash() {
+    fn test_verify_accounts_hash() {
         use AccountsHashVerificationError::*;
         solana_logger::setup();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
@@ -12694,7 +12694,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_verify_bank_hash_no_account() {
+    fn test_verify_accounts_hash_no_account() {
         solana_logger::setup();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
 
@@ -12719,7 +12719,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_verify_bank_hash_bad_account_hash() {
+    fn test_verify_accounts_hash_bad_account_hash() {
         use AccountsHashVerificationError::*;
         solana_logger::setup();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
