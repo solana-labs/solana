@@ -6836,14 +6836,9 @@ pub(crate) mod tests {
             "retry_iteration=0, elapsed < 2^0 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-<<<<<<< HEAD
-        progress.get_retransmit_info_mut(0).unwrap().retry_time =
-            Some(Instant::now() - Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1));
-=======
         progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
             .checked_sub(Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1))
             .unwrap();
->>>>>>> f9805b6fb (stops nodes from broadcasting slots twice (#30681))
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6871,14 +6866,9 @@ pub(crate) mod tests {
             "retry_iteration=1, elapsed < 2^1 * RETRY_BASE_DELAY_MS"
         );
 
-<<<<<<< HEAD
-        progress.get_retransmit_info_mut(0).unwrap().retry_time =
-            Some(Instant::now() - Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1));
-=======
         progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
             .checked_sub(Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1))
             .unwrap();
->>>>>>> f9805b6fb (stops nodes from broadcasting slots twice (#30681))
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6890,14 +6880,9 @@ pub(crate) mod tests {
             "retry_iteration=1, elapsed < 2^1 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-<<<<<<< HEAD
-        progress.get_retransmit_info_mut(0).unwrap().retry_time =
-            Some(Instant::now() - Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1));
-=======
         progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
             .checked_sub(Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1))
             .unwrap();
->>>>>>> f9805b6fb (stops nodes from broadcasting slots twice (#30681))
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6920,14 +6905,9 @@ pub(crate) mod tests {
             .unwrap()
             .increment_retry_iteration();
 
-<<<<<<< HEAD
-        progress.get_retransmit_info_mut(0).unwrap().retry_time =
-            Some(Instant::now() - Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1));
-=======
         progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
             .checked_sub(Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1))
             .unwrap();
->>>>>>> f9805b6fb (stops nodes from broadcasting slots twice (#30681))
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6939,14 +6919,9 @@ pub(crate) mod tests {
             "retry_iteration=3, elapsed < 2^3 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-<<<<<<< HEAD
-        progress.get_retransmit_info_mut(0).unwrap().retry_time =
-            Some(Instant::now() - Duration::from_millis(8 * RETRANSMIT_BASE_DELAY_MS + 1));
-=======
         progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
             .checked_sub(Duration::from_millis(8 * RETRANSMIT_BASE_DELAY_MS + 1))
             .unwrap();
->>>>>>> f9805b6fb (stops nodes from broadcasting slots twice (#30681))
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
