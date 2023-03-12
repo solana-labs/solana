@@ -119,11 +119,7 @@ test-stable-bpf)
   # latest mainbeta release version.
   solana_program_count=$(grep -c 'solana-program v' cargo.log)
   rm -f cargo.log
-<<<<<<< HEAD
   if ((solana_program_count > 10)); then
-=======
-  if ((solana_program_count > 13)); then
->>>>>>> 4a94eeee5 (Upgrade to token-2022 0.6.0 (#30353))
       echo "Regression of build redundancy ${solana_program_count}."
       echo "Review dependency features that trigger redundant rebuilds of solana-program."
       exit 1

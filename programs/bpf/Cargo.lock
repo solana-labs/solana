@@ -4838,13 +4838,8 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
-<<<<<<< HEAD:programs/bpf/Cargo.lock
  "sha2 0.10.2",
  "solana-frozen-abi-macro 1.14.8",
-=======
- "sha2 0.10.6",
- "solana-frozen-abi-macro 1.15.2",
->>>>>>> 4a94eeee5 (Upgrade to token-2022 0.6.0 (#30353)):programs/sbf/Cargo.lock
  "subtle",
  "thiserror",
 ]
@@ -5184,12 +5179,7 @@ dependencies = [
  "libc",
  "libsecp256k1 0.6.0",
  "log",
-<<<<<<< HEAD:programs/bpf/Cargo.lock
  "memoffset",
-=======
- "memoffset 0.8.0",
- "num-bigint 0.4.3",
->>>>>>> 4a94eeee5 (Upgrade to token-2022 0.6.0 (#30353)):programs/sbf/Cargo.lock
  "num-derive",
  "num-traits",
  "parking_lot 0.12.1",
@@ -5201,19 +5191,11 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
-<<<<<<< HEAD:programs/bpf/Cargo.lock
  "sha2 0.10.2",
  "sha3 0.10.1",
  "solana-frozen-abi 1.14.8",
  "solana-frozen-abi-macro 1.14.8",
  "solana-sdk-macro 1.14.8",
-=======
- "sha2 0.10.6",
- "sha3 0.10.4",
- "solana-frozen-abi 1.15.2",
- "solana-frozen-abi-macro 1.15.2",
- "solana-sdk-macro 1.15.2",
->>>>>>> 4a94eeee5 (Upgrade to token-2022 0.6.0 (#30353)):programs/sbf/Cargo.lock
  "thiserror",
  "tiny-bip39",
  "wasm-bindgen",
@@ -5490,7 +5472,6 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
-<<<<<<< HEAD:programs/bpf/Cargo.lock
  "sha2 0.10.2",
  "sha3 0.10.1",
  "solana-frozen-abi 1.14.8",
@@ -5498,16 +5479,6 @@ dependencies = [
  "solana-logger 1.14.8",
  "solana-program 1.14.8",
  "solana-sdk-macro 1.14.8",
-=======
- "serde_with",
- "sha2 0.10.6",
- "sha3 0.10.4",
- "solana-frozen-abi 1.15.2",
- "solana-frozen-abi-macro 1.15.2",
- "solana-logger 1.15.2",
- "solana-program 1.15.2",
- "solana-sdk-macro 1.15.2",
->>>>>>> 4a94eeee5 (Upgrade to token-2022 0.6.0 (#30353)):programs/sbf/Cargo.lock
  "thiserror",
  "uriparse",
  "wasm-bindgen",
