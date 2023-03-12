@@ -18,6 +18,18 @@ pub enum AccountsFile {
 }
 
 impl AccountsFile {
+    /// Create an AccountsFile instance from the specified path.
+    ///
+    /// The second element of the returned tuple is the number of accounts in the
+    /// accounts file.
+    pub fn new_from_file<P: AsRef<std::path::Path>>(
+        path: P,
+        current_len: usize,
+    ) -> io::Result<(Self, usize)> {
+        let (av, num_accounts) = AppendVec::new_from_file(path, current_len).unwrap();
+        Ok((Self::AppendVec(av), num_accounts))
+    }
+
     /// By default, all AccountsFile will remove its underlying file on
     /// drop.  Calling this function to disable such behavior for this
     /// instance.
