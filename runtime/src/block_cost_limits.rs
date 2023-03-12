@@ -19,6 +19,8 @@ pub const MAX_CONCURRENCY: u64 = 4;
 
 // Cluster data, method of collecting at https://github.com/solana-labs/solana/issues/19627
 // Dashboard: https://metrics.solana.com:8889/sources/0/dashboards/10?refresh=Paused&lower=now%28%29%20-%2012h
+// the above link to monitor the cluster doesnt work, can we change or update it? Jito labs made some dashboards could replace the link with it as a temporary fix
+
 
 /// Cluster averaged compute unit to micro-sec conversion rate
 pub const COMPUTE_UNIT_TO_US_RATIO: u64 = 30;
