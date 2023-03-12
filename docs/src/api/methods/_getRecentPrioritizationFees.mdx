@@ -38,8 +38,7 @@ If this parameter is provided, the response will reflect a fee to land a transac
 An array of `RpcPrioritizationFee<object>` with the following fields:
 
 - `slot: <u64>` - slot in which the fee was observed
-- `prioritizationFee: <u64>` - the per-compute-unit fee paid by at least
-  one successfully landed transaction, specified in increments of 0.000001 lamports
+- `prioritizationFee: <u64>` - the minimum per-compute-unit fee paid considering all successfully landed transactions in this slot, specified in increments of 0.000001 lamports
 
 </CodeParams>
 
