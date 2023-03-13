@@ -8284,8 +8284,8 @@ pub mod tests {
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
-            max_complete_transaction_status_slot,
-            max_complete_rewards_slot,
+            max_complete_transaction_status_slot.clone(),
+            max_complete_rewards_slot.clone(),
             bank_forks.clone(),
             block_commitment_cache.clone(),
             optimistically_confirmed_bank.clone(),
@@ -8306,8 +8306,8 @@ pub mod tests {
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
-            Arc::new(AtomicU64::default()),
-            Arc::new(AtomicU64::default()),
+            max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             Arc::new(PrioritizationFeeCache::default()),
         );
 
