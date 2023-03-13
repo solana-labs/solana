@@ -9365,8 +9365,8 @@ pub enum CalcAccountsHashDataSource {
 }
 
 /// Which accounts hash calculation is being performed?
-#[derive(Debug)]
-enum CalcAccountsHashFlavor {
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum CalcAccountsHashFlavor {
     Full,
     Incremental,
 }

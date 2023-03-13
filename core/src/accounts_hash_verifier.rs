@@ -9,6 +9,7 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::{measure::Measure, measure_us},
     solana_runtime::{
+        accounts_db::CalcAccountsHashFlavor,
         accounts_hash::{
             AccountsHashEnum, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
         },
@@ -245,32 +246,37 @@ impl AccountsHashVerifier {
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
 
-        if let AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(_)) =
-            accounts_package.package_type
-        {
-            // Once we calculate incremental accounts hashes, we can use the calculation result
-            // directly.  Until then, convert the full accounts hash into an incremental.
-            let incremental_accounts_hash = IncrementalAccountsHash(accounts_hash.0);
-            let old_incremental_accounts_hash = accounts_package
-                .accounts
-                .accounts_db
-                .set_incremental_accounts_hash(
-                    accounts_package.slot,
-                    (incremental_accounts_hash, lamports),
-                );
-            if let Some(old_incremental_accounts_hash) = old_incremental_accounts_hash {
-                warn!("Incremental accounts hash was already set for slot {}! old: {old_incremental_accounts_hash:?}, new: {incremental_accounts_hash:?}", accounts_package.slot);
+        let accounts_hash_calculation_flavor = match accounts_package.package_type {
+            AccountsPackageType::AccountsHashVerifier => CalcAccountsHashFlavor::Full,
+            AccountsPackageType::EpochAccountsHash => CalcAccountsHashFlavor::Full,
+            AccountsPackageType::Snapshot(snapshot_type) => match snapshot_type {
+                SnapshotType::FullSnapshot => CalcAccountsHashFlavor::Full,
+                SnapshotType::IncrementalSnapshot(_) => CalcAccountsHashFlavor::Incremental,
+            },
+        };
+
+        let slot = accounts_package.slot;
+        match accounts_hash_calculation_flavor {
+            CalcAccountsHashFlavor::Full => {
+                let old_accounts_hash = accounts_package
+                    .accounts
+                    .accounts_db
+                    .set_accounts_hash(slot, (accounts_hash, lamports));
+                if let Some(old_accounts_hash) = old_accounts_hash {
+                    warn!("Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: {accounts_hash:?}");
+                }
             }
-        } else {
-            let old_accounts_hash = accounts_package
-                .accounts
-                .accounts_db
-                .set_accounts_hash(accounts_package.slot, (accounts_hash, lamports));
-            if let Some(old_accounts_hash) = old_accounts_hash {
-                warn!(
-                    "Accounts hash was already set for slot {}! old: {}, new: {}",
-                    accounts_package.slot, &old_accounts_hash.0 .0, &accounts_hash.0
-                );
+            CalcAccountsHashFlavor::Incremental => {
+                // Once we calculate incremental accounts hashes, we can use the calculation result
+                // directly.  Until then, convert the full accounts hash into an incremental.
+                let incremental_accounts_hash = IncrementalAccountsHash(accounts_hash.0);
+                let old_incremental_accounts_hash = accounts_package
+                    .accounts
+                    .accounts_db
+                    .set_incremental_accounts_hash(slot, (incremental_accounts_hash, lamports));
+                if let Some(old_incremental_accounts_hash) = old_incremental_accounts_hash {
+                    warn!("Incremental accounts hash was already set for slot {slot}! old: {old_incremental_accounts_hash:?}, new: {incremental_accounts_hash:?}");
+                }
             }
         }
 
@@ -285,14 +291,8 @@ impl AccountsHashVerifier {
             let result_with_index = accounts_package
                 .accounts
                 .accounts_db
-                .calculate_accounts_hash_from_index(
-                    accounts_package.slot,
-                    &calculate_accounts_hash_config,
-                );
-            info!(
-                "hash calc with index: {}, {result_with_index:?}",
-                accounts_package.slot
-            );
+                .calculate_accounts_hash_from_index(slot, &calculate_accounts_hash_config);
+            info!("hash calc with index: {slot}, {result_with_index:?}",);
             let calculate_accounts_hash_config = CalcAccountsHashConfig {
                 // now that we've failed, store off the failing contents that produced a bad capitalization
                 store_detailed_debug_info_on_failure: true,
@@ -352,7 +352,7 @@ impl AccountsHashVerifier {
         if let Some(snapshot_info) = &accounts_package.snapshot_info {
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
                 snapshot_info.snapshot_links.path(),
-                accounts_package.slot,
+                slot,
                 &accounts_hash,
                 bank_incremental_snapshot_persistence.as_ref(),
             );
@@ -364,7 +364,7 @@ impl AccountsHashVerifier {
             accounts_package
                 .accounts
                 .accounts_db
-                .purge_old_accounts_hashes(accounts_package.slot);
+                .purge_old_accounts_hashes(slot);
         }
 
         datapoint_info!(
