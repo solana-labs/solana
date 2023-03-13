@@ -10,7 +10,7 @@ pub mod upgradeable_with_jit;
 pub mod with_jit;
 
 use {
-    crate::{allocator_bump::BpfAllocator, syscalls::SyscallError},
+    crate::allocator_bump::BpfAllocator,
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
@@ -319,7 +319,7 @@ pub fn create_ebpf_vm<'a, 'b>(
         round_up_heap_size,
     ));
     if round_up_heap_size {
-        heap_cost_result.map_err(SyscallError::InstructionError)?;
+        heap_cost_result?;
     }
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
@@ -329,20 +329,17 @@ pub fn create_ebpf_vm<'a, 'b>(
                 instruction_context
                     .try_borrow_last_program_account(invoke_context.transaction_context)
             })
-            .map(|program_account| *program_account.get_owner())
-            .map_err(SyscallError::InstructionError)?;
+            .map(|program_account| *program_account.get_owner())?;
     let check_size = invoke_context
         .feature_set
         .is_active(&check_slice_translation_size::id());
     let allocator = Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START)));
-    invoke_context
-        .set_syscall_context(
-            check_aligned,
-            check_size,
-            orig_account_lengths,
-            allocator.clone(),
-        )
-        .map_err(SyscallError::InstructionError)?;
+    invoke_context.set_syscall_context(
+        check_aligned,
+        check_size,
+        orig_account_lengths,
+        allocator.clone(),
+    )?;
     let stack_len = stack.len();
     let memory_mapping = create_memory_mapping(
         program.get_executable(),

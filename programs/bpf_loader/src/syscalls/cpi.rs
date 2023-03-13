@@ -350,7 +350,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
                 invoke_context.get_check_size(),
             )?;
             if signers_seeds.len() > MAX_SIGNERS {
-                return Err(SyscallError::TooManySigners.into());
+                return Err(Box::new(SyscallError::TooManySigners));
             }
             for signer_seeds in signers_seeds.iter() {
                 let untranslated_seeds = translate_slice::<&[u8]>(
@@ -361,10 +361,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
                     invoke_context.get_check_size(),
                 )?;
                 if untranslated_seeds.len() > MAX_SEEDS {
-                    return Err(SyscallError::InstructionError(
-                        InstructionError::MaxSeedLengthExceeded,
-                    )
-                    .into());
+                    return Err(Box::new(InstructionError::MaxSeedLengthExceeded));
                 }
                 let seeds = untranslated_seeds
                     .iter()
@@ -583,7 +580,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                 invoke_context.get_check_size(),
             )?;
             if signers_seeds.len() > MAX_SIGNERS {
-                return Err(SyscallError::TooManySigners.into());
+                return Err(Box::new(SyscallError::TooManySigners));
             }
             Ok(signers_seeds
                 .iter()
@@ -596,10 +593,8 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                         invoke_context.get_check_size(),
                     )?;
                     if seeds.len() > MAX_SEEDS {
-                        return Err(SyscallError::InstructionError(
-                            InstructionError::MaxSeedLengthExceeded,
-                        )
-                        .into());
+                        return Err(Box::new(InstructionError::MaxSeedLengthExceeded)
+                            as Box<dyn std::error::Error>);
                     }
                     let seeds_bytes = seeds
                         .iter()
@@ -613,8 +608,9 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                             )
                         })
                         .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
-                    Pubkey::create_program_address(&seeds_bytes, program_id)
-                        .map_err(|err| SyscallError::BadSeeds(err).into())
+                    Pubkey::create_program_address(&seeds_bytes, program_id).map_err(|err| {
+                        Box::new(SyscallError::BadSeeds(err)) as Box<dyn std::error::Error>
+                    })
                 })
                 .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?)
         } else {
@@ -677,16 +673,12 @@ where
     ) -> Result<CallerAccount<'a>, Box<dyn std::error::Error>>,
 {
     let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context
-        .get_current_instruction_context()
-        .map_err(SyscallError::InstructionError)?;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
     let mut accounts = Vec::with_capacity(instruction_accounts.len().saturating_add(1));
 
     let program_account_index = program_indices
         .last()
-        .ok_or(SyscallError::InstructionError(
-            InstructionError::MissingAccount,
-        ))?;
+        .ok_or_else(|| Box::new(InstructionError::MissingAccount))?;
     accounts.push((*program_account_index, None));
 
     // unwrapping here is fine: we're in a syscall and the method below fails
@@ -699,16 +691,13 @@ where
             continue; // Skip duplicate account
         }
 
-        let callee_account = instruction_context
-            .try_borrow_instruction_account(
-                transaction_context,
-                instruction_account.index_in_caller,
-            )
-            .map_err(SyscallError::InstructionError)?;
+        let callee_account = instruction_context.try_borrow_instruction_account(
+            transaction_context,
+            instruction_account.index_in_caller,
+        )?;
         let account_key = invoke_context
             .transaction_context
-            .get_key_of_account_at_index(instruction_account.index_in_transaction)
-            .map_err(SyscallError::InstructionError)?;
+            .get_key_of_account_at_index(instruction_account.index_in_transaction)?;
 
         if callee_account.is_executable() {
             // Use the known account
@@ -730,7 +719,7 @@ where
                         "Internal error: index mismatch for account {}",
                         account_key
                     );
-                    SyscallError::InstructionError(InstructionError::MissingAccount)
+                    Box::new(InstructionError::MissingAccount)
                 })?;
 
             // build the CallerAccount corresponding to this account.
@@ -765,7 +754,7 @@ where
                 "Instruction references an unknown account {}",
                 account_key
             );
-            return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
+            return Err(Box::new(InstructionError::MissingAccount));
         }
     }
 
@@ -784,21 +773,19 @@ fn check_instruction_size(
         let data_len = data_len as u64;
         let max_data_len = MAX_CPI_INSTRUCTION_DATA_LEN;
         if data_len > max_data_len {
-            return Err(SyscallError::MaxInstructionDataLenExceeded {
+            return Err(Box::new(SyscallError::MaxInstructionDataLenExceeded {
                 data_len,
                 max_data_len,
-            }
-            .into());
+            }));
         }
 
         let num_accounts = num_accounts as u64;
         let max_accounts = MAX_CPI_INSTRUCTION_ACCOUNTS as u64;
         if num_accounts > max_accounts {
-            return Err(SyscallError::MaxInstructionAccountsExceeded {
+            return Err(Box::new(SyscallError::MaxInstructionAccountsExceeded {
                 num_accounts,
                 max_accounts,
-            }
-            .into());
+            }));
         }
     } else {
         let max_size = invoke_context.get_compute_budget().max_cpi_instruction_size;
@@ -806,7 +793,7 @@ fn check_instruction_size(
             .saturating_mul(size_of::<AccountMeta>())
             .saturating_add(data_len);
         if size > max_size {
-            return Err(SyscallError::InstructionTooLarge(size, max_size).into());
+            return Err(Box::new(SyscallError::InstructionTooLarge(size, max_size)));
         }
     }
     Ok(())
@@ -831,11 +818,10 @@ fn check_account_infos(
         let num_account_infos = num_account_infos as u64;
         let max_account_infos = max_cpi_account_infos as u64;
         if num_account_infos > max_account_infos {
-            return Err(SyscallError::MaxInstructionAccountInfosExceeded {
+            return Err(Box::new(SyscallError::MaxInstructionAccountInfosExceeded {
                 num_account_infos,
                 max_account_infos,
-            }
-            .into());
+            }));
         }
     } else {
         let adjusted_len = num_account_infos.saturating_mul(size_of::<Pubkey>());
@@ -843,7 +829,7 @@ fn check_account_infos(
         if adjusted_len > invoke_context.get_compute_budget().max_cpi_instruction_size {
             // Cap the number of account_infos a caller can pass to approximate
             // maximum that accounts that could be passed in an instruction
-            return Err(SyscallError::TooManyAccounts.into());
+            return Err(Box::new(SyscallError::TooManyAccounts));
         };
     }
     Ok(())
@@ -871,7 +857,7 @@ fn check_authorized_program(
             invoke_context.feature_set.is_active(feature_id)
         })
     {
-        return Err(SyscallError::ProgramNotSupported(*program_id).into());
+        return Err(Box::new(SyscallError::ProgramNotSupported(*program_id)));
     }
     Ok(())
 }
@@ -897,12 +883,8 @@ fn cpi_common<S: SyscallInvokeSigned>(
 
     let instruction = S::translate_instruction(instruction_addr, memory_mapping, invoke_context)?;
     let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context
-        .get_current_instruction_context()
-        .map_err(SyscallError::InstructionError)?;
-    let caller_program_id = instruction_context
-        .get_last_program_key(transaction_context)
-        .map_err(SyscallError::InstructionError)?;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let caller_program_id = instruction_context.get_last_program_key(transaction_context)?;
     let signers = S::translate_signers(
         caller_program_id,
         signers_seeds_addr,
@@ -910,9 +892,8 @@ fn cpi_common<S: SyscallInvokeSigned>(
         memory_mapping,
         invoke_context,
     )?;
-    let (instruction_accounts, program_indices) = invoke_context
-        .prepare_instruction(&instruction, &signers)
-        .map_err(SyscallError::InstructionError)?;
+    let (instruction_accounts, program_indices) =
+        invoke_context.prepare_instruction(&instruction, &signers)?;
     check_authorized_program(&instruction.program_id, &instruction.data, invoke_context)?;
     let mut accounts = S::translate_accounts(
         &instruction_accounts,
@@ -925,21 +906,17 @@ fn cpi_common<S: SyscallInvokeSigned>(
 
     // Process the callee instruction
     let mut compute_units_consumed = 0;
-    invoke_context
-        .process_instruction(
-            &instruction.data,
-            &instruction_accounts,
-            &program_indices,
-            &mut compute_units_consumed,
-            &mut ExecuteTimings::default(),
-        )
-        .map_err(SyscallError::InstructionError)?;
+    invoke_context.process_instruction(
+        &instruction.data,
+        &instruction_accounts,
+        &program_indices,
+        &mut compute_units_consumed,
+        &mut ExecuteTimings::default(),
+    )?;
 
     // re-bind to please the borrow checker
     let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context
-        .get_current_instruction_context()
-        .map_err(SyscallError::InstructionError)?;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
 
     // CPI exit.
     //
@@ -947,8 +924,7 @@ fn cpi_common<S: SyscallInvokeSigned>(
     for (index_in_caller, caller_account) in accounts.iter_mut() {
         if let Some(caller_account) = caller_account {
             let callee_account = instruction_context
-                .try_borrow_instruction_account(transaction_context, *index_in_caller)
-                .map_err(SyscallError::InstructionError)?;
+                .try_borrow_instruction_account(transaction_context, *index_in_caller)?;
             update_caller_account(
                 invoke_context,
                 memory_mapping,
@@ -979,9 +955,7 @@ fn update_callee_account(
         .is_active(&disable_cpi_setting_executable_and_rent_epoch::id());
 
     if callee_account.get_lamports() != *caller_account.lamports {
-        callee_account
-            .set_lamports(*caller_account.lamports)
-            .map_err(SyscallError::InstructionError)?;
+        callee_account.set_lamports(*caller_account.lamports)?;
     }
 
     // The redundant check helps to avoid the expensive data comparison if we can
@@ -989,9 +963,7 @@ fn update_callee_account(
         .can_data_be_resized(caller_account.data.len())
         .and_then(|_| callee_account.can_data_be_changed())
     {
-        Ok(()) => callee_account
-            .set_data_from_slice(caller_account.data)
-            .map_err(SyscallError::InstructionError)?,
+        Ok(()) => callee_account.set_data_from_slice(caller_account.data)?,
         Err(err) if callee_account.get_data() != caller_account.data => {
             return Err(Box::new(err));
         }
@@ -1001,16 +973,12 @@ fn update_callee_account(
     if !is_disable_cpi_setting_executable_and_rent_epoch_active
         && callee_account.is_executable() != caller_account.executable
     {
-        callee_account
-            .set_executable(caller_account.executable)
-            .map_err(SyscallError::InstructionError)?;
+        callee_account.set_executable(caller_account.executable)?;
     }
 
     // Change the owner at the end so that we are allowed to change the lamports and data before
     if callee_account.get_owner() != caller_account.owner {
-        callee_account
-            .set_owner(caller_account.owner.as_ref())
-            .map_err(SyscallError::InstructionError)?;
+        callee_account.set_owner(caller_account.owner.as_ref())?;
     }
 
     // BorrowedAccount doesn't allow changing the rent epoch. Drop it and use
@@ -1019,8 +987,7 @@ fn update_callee_account(
     drop(callee_account);
     let callee_account = invoke_context
         .transaction_context
-        .get_account_at_index(index_in_transaction)
-        .map_err(SyscallError::InstructionError)?;
+        .get_account_at_index(index_in_transaction)?;
     if !is_disable_cpi_setting_executable_and_rent_epoch_active
         && callee_account.borrow().rent_epoch() != caller_account.rent_epoch
     {
@@ -1028,7 +995,7 @@ fn update_callee_account(
             .feature_set
             .is_active(&enable_early_verification_of_account_modifications::id())
         {
-            return Err(SyscallError::InstructionError(InstructionError::RentEpochModified).into());
+            return Err(Box::new(InstructionError::RentEpochModified));
         } else {
             callee_account
                 .borrow_mut()
@@ -1067,15 +1034,13 @@ fn update_caller_account(
                 "Account data size realloc limited to {} in inner instructions",
                 MAX_PERMITTED_DATA_INCREASE
             );
-            return Err(SyscallError::InstructionError(InstructionError::InvalidRealloc).into());
+            return Err(Box::new(InstructionError::InvalidRealloc));
         }
         if new_len < caller_account.data.len() {
             caller_account
                 .data
                 .get_mut(new_len..)
-                .ok_or(SyscallError::InstructionError(
-                    InstructionError::AccountDataTooSmall,
-                ))?
+                .ok_or_else(|| Box::new(InstructionError::AccountDataTooSmall))?
                 .fill(0);
         }
         caller_account.data = translate_slice_mut::<u8>(
@@ -1113,7 +1078,7 @@ fn update_caller_account(
         .get(0..new_len)
         .ok_or(SyscallError::InvalidLength)?;
     if to_slice.len() != from_slice.len() {
-        return Err(SyscallError::InstructionError(InstructionError::AccountDataTooSmall).into());
+        return Err(Box::new(InstructionError::AccountDataTooSmall));
     }
     to_slice.copy_from_slice(from_slice);
 

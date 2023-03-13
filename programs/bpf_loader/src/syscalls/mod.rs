@@ -92,8 +92,6 @@ pub enum SyscallError {
     BadSeeds(PubkeyError),
     #[error("Program {0} not supported by inner instructions")]
     ProgramNotSupported(Pubkey),
-    #[error("{0}")]
-    InstructionError(InstructionError),
     #[error("Unaligned pointer")]
     UnalignedPointer,
     #[error("Too many signers")]
@@ -130,9 +128,7 @@ fn consume_compute_meter(
     invoke_context: &InvokeContext,
     amount: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    invoke_context
-        .consume_checked(amount)
-        .map_err(SyscallError::InstructionError)?;
+    invoke_context.consume_checked(amount)?;
     Ok(())
 }
 
@@ -535,9 +531,7 @@ declare_syscall!(
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, Box<dyn std::error::Error>> {
-        let allocator = invoke_context
-            .get_allocator()
-            .map_err(SyscallError::InstructionError)?;
+        let allocator = invoke_context.get_allocator()?;
         let mut allocator = allocator
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
@@ -1398,12 +1392,9 @@ declare_syscall!(
             .get_current_instruction_context()
             .and_then(|instruction_context| {
                 instruction_context.get_last_program_key(transaction_context)
-            })
-            .map_err(SyscallError::InstructionError)?;
+            })?;
 
-        transaction_context
-            .set_return_data(program_id, return_data)
-            .map_err(SyscallError::InstructionError)?;
+        transaction_context.set_return_data(program_id, return_data)?;
 
         Ok(0)
     }
@@ -1506,8 +1497,7 @@ declare_syscall!(
         for index_in_trace in (0..instruction_trace_length).rev() {
             let instruction_context = invoke_context
                 .transaction_context
-                .get_instruction_context_at_index_in_trace(index_in_trace)
-                .map_err(SyscallError::InstructionError)?;
+                .get_instruction_context_at_index_in_trace(index_in_trace)?;
             if (stop_sibling_instruction_search_at_parent
                 || instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT)
                 && instruction_context.get_stack_height() < stack_height
@@ -1595,8 +1585,7 @@ declare_syscall!(
                 }
 
                 *program_id = *instruction_context
-                    .get_last_program_key(invoke_context.transaction_context)
-                    .map_err(SyscallError::InstructionError)?;
+                    .get_last_program_key(invoke_context.transaction_context)?;
                 data.clone_from_slice(instruction_context.get_instruction_data());
                 let account_metas = (0..instruction_context.get_number_of_instruction_accounts())
                     .map(|instruction_account_index| {
@@ -1615,8 +1604,7 @@ declare_syscall!(
                                 .is_instruction_account_writable(instruction_account_index)?,
                         })
                     })
-                    .collect::<Result<Vec<_>, InstructionError>>()
-                    .map_err(SyscallError::InstructionError)?;
+                    .collect::<Result<Vec<_>, InstructionError>>()?;
                 accounts.clone_from_slice(account_metas.as_slice());
             }
             result_header.data_len = instruction_context.get_instruction_data().len() as u64;

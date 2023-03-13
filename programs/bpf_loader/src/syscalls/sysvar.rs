@@ -16,7 +16,7 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
     )?;
     let var = translate_type_mut::<T>(memory_mapping, var_addr, check_aligned)?;
 
-    let sysvar: Arc<T> = sysvar.map_err(SyscallError::InstructionError)?;
+    let sysvar: Arc<T> = sysvar?;
     *var = T::clone(sysvar.as_ref());
 
     Ok(SUCCESS)
