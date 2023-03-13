@@ -267,15 +267,16 @@ impl AccountsHashVerifier {
                 "hash calc with index: {}, {result_with_index:?}",
                 accounts_package.slot
             );
+            let calculate_accounts_hash_config = CalcAccountsHashConfig {
+                // now that we've failed, store off the failing contents that produced a bad capitalization
+                store_detailed_debug_info_on_failure: true,
+                ..calculate_accounts_hash_config
+            };
             _ = accounts_package
                 .accounts
                 .accounts_db
                 .calculate_accounts_hash_from_storages(
-                    &CalcAccountsHashConfig {
-                        // now that we've failed, store off the failing contents that produced a bad capitalization
-                        store_detailed_debug_info_on_failure: true,
-                        ..calculate_accounts_hash_config
-                    },
+                    &calculate_accounts_hash_config,
                     &sorted_storages,
                     HashStats::default(),
                 );
