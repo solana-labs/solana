@@ -244,7 +244,18 @@ impl AccountsHashVerifier {
                 &sorted_storages,
                 timings,
             )
-            .unwrap();
+            .unwrap(); // unwrap here will never fail since check_hash = false
+
+        let old_accounts_hash = accounts_package
+            .accounts
+            .accounts_db
+            .set_accounts_hash(accounts_package.slot, (accounts_hash, lamports));
+        if let Some(old_accounts_hash) = old_accounts_hash {
+            warn!(
+                "Accounts hash was already set for slot {}! old: {}, new: {}",
+                accounts_package.slot, &old_accounts_hash.0 .0, &accounts_hash.0
+            );
+        }
 
         if accounts_package.expected_capitalization != lamports {
             // before we assert, run the hash calc again. This helps track down whether it could have been a failure in a race condition possibly with shrink.
