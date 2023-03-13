@@ -6,7 +6,7 @@ use {
     solana_transaction_status::Reward,
     std::{
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
         },
         thread::{self, Builder, JoinHandle},
@@ -31,6 +31,7 @@ impl RewardsRecorderService {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         rewards_receiver: RewardsRecorderReceiver,
+        max_complete_rewards_slot: Arc<AtomicU64>,
         blockstore: Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
@@ -42,7 +43,7 @@ impl RewardsRecorderService {
                     break;
                 }
                 if let Err(RecvTimeoutError::Disconnected) =
-                    Self::write_rewards(&rewards_receiver, &blockstore)
+                    Self::write_rewards(&rewards_receiver, &max_complete_rewards_slot, &blockstore)
                 {
                     break;
                 }
@@ -53,6 +54,7 @@ impl RewardsRecorderService {
 
     fn write_rewards(
         rewards_receiver: &RewardsRecorderReceiver,
+        max_complete_rewards_slot: &Arc<AtomicU64>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<(), RecvTimeoutError> {
         match rewards_receiver.recv_timeout(Duration::from_secs(1))? {
@@ -72,7 +74,9 @@ impl RewardsRecorderService {
                     .write_rewards(slot, rpc_rewards)
                     .expect("Expect database write to succeed");
             }
-            RewardsMessage::Complete(_) => {}
+            RewardsMessage::Complete(slot) => {
+                max_complete_rewards_slot.fetch_max(slot, Ordering::SeqCst);
+            }
         }
         Ok(())
     }
