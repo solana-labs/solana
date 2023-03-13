@@ -1417,7 +1417,7 @@ pub struct AccountsDb {
     pub thread_pool_clean: ThreadPool,
 
     accounts_delta_hashes: Mutex<HashMap<Slot, AccountsDeltaHash>>,
-    accounts_hashes: Mutex<HashMap<Slot, AccountsHash>>,
+    accounts_hashes: Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>>,
     bank_hash_stats: Mutex<HashMap<Slot, BankHashStats>>,
 
     pub stats: AccountsStats,
@@ -7346,14 +7346,18 @@ impl AccountsDb {
                 expected_capitalization,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
-        self.set_accounts_hash(slot, accounts_hash);
+        self.set_accounts_hash(slot, (accounts_hash, total_lamports));
         (accounts_hash, total_lamports)
     }
 
     /// Set the accounts hash for `slot` in the `accounts_hashes` map
     ///
     /// returns the previous accounts hash for `slot`
-    fn set_accounts_hash(&self, slot: Slot, accounts_hash: AccountsHash) -> Option<AccountsHash> {
+    fn set_accounts_hash(
+        &self,
+        slot: Slot,
+        accounts_hash: (AccountsHash, /*capitalization*/ u64),
+    ) -> Option<(AccountsHash, /*capitalization*/ u64)> {
         self.accounts_hashes
             .lock()
             .unwrap()
@@ -7365,12 +7369,13 @@ impl AccountsDb {
         &mut self,
         slot: Slot,
         accounts_hash: SerdeAccountsHash,
-    ) -> Option<AccountsHash> {
-        self.set_accounts_hash(slot, accounts_hash.into())
+        capitalization: u64,
+    ) -> Option<(AccountsHash, /*capitalization*/ u64)> {
+        self.set_accounts_hash(slot, (accounts_hash.into(), capitalization))
     }
 
     /// Get the accounts hash for `slot` in the `accounts_hashes` map
-    pub fn get_accounts_hash(&self, slot: Slot) -> Option<AccountsHash> {
+    pub fn get_accounts_hash(&self, slot: Slot) -> Option<(AccountsHash, /*capitalization*/ u64)> {
         self.accounts_hashes.lock().unwrap().get(&slot).cloned()
     }
 
@@ -7674,7 +7679,7 @@ impl AccountsDb {
 
         if config.ignore_mismatch {
             Ok(())
-        } else if let Some(found_accounts_hash) = self.get_accounts_hash(slot) {
+        } else if let Some((found_accounts_hash, _)) = self.get_accounts_hash(slot) {
             if calculated_accounts_hash == found_accounts_hash {
                 Ok(())
             } else {
@@ -9535,7 +9540,7 @@ pub mod tests {
 
         // used by serde_snapshot tests
         pub fn set_accounts_hash_for_tests(&self, slot: Slot, accounts_hash: AccountsHash) {
-            self.set_accounts_hash(slot, accounts_hash);
+            self.set_accounts_hash(slot, (accounts_hash, u64::default()));
         }
 
         // used by serde_snapshot tests
@@ -11878,8 +11883,8 @@ pub mod tests {
                 accounts.get_accounts_delta_hash(latest_slot).unwrap(),
             );
             assert_eq!(
-                daccounts.get_accounts_hash(latest_slot).unwrap(),
-                accounts.get_accounts_hash(latest_slot).unwrap(),
+                daccounts.get_accounts_hash(latest_slot).unwrap().0,
+                accounts.get_accounts_hash(latest_slot).unwrap().0,
             );
 
             daccounts.print_count_and_status("daccounts");
@@ -12610,7 +12615,8 @@ pub mod tests {
 
         db.store_for_tests(some_slot, &[(&key, &account)]);
         db.add_root_and_flush_write_cache(some_slot);
-        db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
+        let (_, capitalization) =
+            db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
 
         let config = VerifyAccountsHashAndLamportsConfig::new_for_test(
             &ancestors,
@@ -12630,7 +12636,10 @@ pub mod tests {
             Err(MissingAccountsHash)
         );
 
-        db.set_accounts_hash(some_slot, AccountsHash(Hash::new(&[0xca; HASH_BYTES])));
+        db.set_accounts_hash(
+            some_slot,
+            (AccountsHash(Hash::new(&[0xca; HASH_BYTES])), capitalization),
+        );
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, config),

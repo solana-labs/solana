@@ -7190,7 +7190,11 @@ impl Bank {
     }
 
     pub fn get_accounts_hash(&self) -> Option<AccountsHash> {
-        self.rc.accounts.accounts_db.get_accounts_hash(self.slot())
+        self.rc
+            .accounts
+            .accounts_db
+            .get_accounts_hash(self.slot())
+            .map(|(accounts_hash, _)| accounts_hash)
     }
 
     pub fn get_snapshot_hash(&self) -> SnapshotHash {
