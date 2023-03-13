@@ -626,6 +626,10 @@ pub mod switch_to_new_elf_parser {
     solana_sdk::declare_id!("Cdkc8PPTeTNUPoZEfCY5AyetUrEdkZtNPMgz58nqyaHD");
 }
 
+pub mod native_programs_consume_cu {
+    solana_sdk::declare_id!("8pgXCMNXC8qyEFypuwpXyRxLXZdpM4Qo72gJ6k87A6wL");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -777,6 +781,7 @@ lazy_static! {
         (apply_cost_tracker_during_replay::id(), "apply cost tracker to blocks during replay #29595"),
         (add_set_tx_loaded_accounts_data_size_instruction::id(), "add compute budget instruction for setting account data size per transaction #30366"),
         (switch_to_new_elf_parser::id(), "switch to new ELF parser #30497"),
+        (native_programs_consume_cu::id(), "Native program should consume compute units #30620"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
