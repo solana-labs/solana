@@ -19,6 +19,13 @@ use {
 };
 
 pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+    // Consume compute units if feature `native_programs_consume_cu` is activated,
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::native_programs_consume_cu::id())
+    {
+        invoke_context.consume_checked(750)?;
+    }
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();

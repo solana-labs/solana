@@ -4,6 +4,7 @@ use {
     bytemuck::Pod,
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
+        feature_set,
         instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
         system_program,
     },
@@ -119,12 +120,10 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
         return Err(InstructionError::UnsupportedProgramId);
     }
 
-    // Consume compute units since proof verification is an expensive operation
-    {
-        // TODO: Tune the number of units consumed.  The current value is just a rough estimate
-        invoke_context.consume_checked(100_000)?;
-    }
-
+    // Consume compute units if feature `native_programs_consume_cu` is activated
+    let native_programs_consume_cu = invoke_context
+        .feature_set
+        .is_active(&feature_set::native_programs_consume_cu::id());
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -137,28 +136,46 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
             process_close_proof_context(invoke_context)
         }
         ProofInstruction::VerifyCloseAccount => {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(6_012)?;
+            }
             ic_msg!(invoke_context, "VerifyCloseAccount");
             process_verify_proof::<CloseAccountData, CloseAccountProofContext>(invoke_context)
         }
         ProofInstruction::VerifyWithdraw => {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(112_454)?;
+            }
             ic_msg!(invoke_context, "VerifyWithdraw");
             process_verify_proof::<WithdrawData, WithdrawProofContext>(invoke_context)
         }
         ProofInstruction::VerifyWithdrawWithheldTokens => {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(7_943)?;
+            }
             ic_msg!(invoke_context, "VerifyWithdrawWithheldTokens");
             process_verify_proof::<WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext>(
                 invoke_context,
             )
         }
         ProofInstruction::VerifyTransfer => {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(219_290)?;
+            }
             ic_msg!(invoke_context, "VerifyTransfer");
             process_verify_proof::<TransferData, TransferProofContext>(invoke_context)
         }
         ProofInstruction::VerifyTransferWithFee => {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(407_121)?;
+            }
             ic_msg!(invoke_context, "VerifyTransferWithFee");
             process_verify_proof::<TransferWithFeeData, TransferWithFeeProofContext>(invoke_context)
         }
         ProofInstruction::VerifyPubkeyValidity => {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(2_619)?;
+            }
             ic_msg!(invoke_context, "VerifyPubkeyValidity");
             process_verify_proof::<PubkeyValidityData, PubkeyValidityProofContext>(invoke_context)
         }
