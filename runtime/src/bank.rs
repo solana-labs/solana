@@ -4956,7 +4956,8 @@ impl Bank {
     }
 
     // Calculate cost of loaded accounts size in the same way heap cost is charged at
-    // rate of 8cu per 32K.
+    // rate of 8cu per 32K. Citing `program_runtime\src\compute_budget.rs`: "(cost of
+    // heap is about) 0.5us per 32k at 15 units/us rounded up"
     //
     // Before feature `support_set_loaded_accounts_data_size_limit_ix` is enabled, or
     // if user doesn't use compute budget ix `set_loaded_accounts_data_size_limit_ix`

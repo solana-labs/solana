@@ -12931,6 +12931,7 @@ fn test_bank_verify_accounts_hash_with_base() {
     ));
 }
 
+#[allow(clippy::field_reassign_with_default)]
 fn test_calculate_loaded_accounts_data_size_cost() {
     let mut compute_budget = ComputeBudget::default();
 
