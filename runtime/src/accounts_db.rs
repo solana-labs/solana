@@ -7379,6 +7379,17 @@ impl AccountsDb {
         self.accounts_hashes.lock().unwrap().get(&slot).cloned()
     }
 
+    /// Purge accounts hashes that are older than `last_full_snapshot_slot`
+    ///
+    /// Should only be called by AccountsHashVerifier, since it consumes `account_hashes` and knows
+    /// which ones are still needed.
+    pub fn purge_old_accounts_hashes(&self, last_full_snapshot_slot: Slot) {
+        self.accounts_hashes
+            .lock()
+            .unwrap()
+            .retain(|&slot, _| slot >= last_full_snapshot_slot);
+    }
+
     /// scan 'storages', return a vec of 'CacheHashDataFile', one per pass
     fn scan_snapshot_stores_with_cache(
         &self,
@@ -7827,16 +7838,14 @@ impl AccountsDb {
 
     /// Remove "bank hash info" for `slots`
     ///
-    /// This fn removes the accounts delta hash, accounts hash, and bank hash stats for `slots` from
+    /// This fn removes the accounts delta hash and bank hash stats for `slots` from
     /// their respective maps.
     fn remove_bank_hash_infos<'s>(&self, slots: impl IntoIterator<Item = &'s Slot>) {
         let mut accounts_delta_hashes = self.accounts_delta_hashes.lock().unwrap();
-        let mut accounts_hashes = self.accounts_hashes.lock().unwrap();
         let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
 
-        for slot in slots.into_iter() {
+        for slot in slots {
             accounts_delta_hashes.remove(slot);
-            accounts_hashes.remove(slot);
             bank_hash_stats.remove(slot);
         }
     }
@@ -12629,7 +12638,7 @@ pub mod tests {
             Ok(_)
         );
 
-        db.remove_bank_hash_info(&some_slot);
+        db.accounts_hashes.lock().unwrap().remove(&some_slot);
 
         assert_matches!(
             db.verify_accounts_hash_and_lamports(some_slot, 1, config.clone()),
