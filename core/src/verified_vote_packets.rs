@@ -66,9 +66,13 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
             my_leader_bank
                 .vote_accounts()
                 .get(b)
-                .unwrap()
-                .0
-                .cmp(&my_leader_bank.vote_accounts().get(a).unwrap().0)
+                .map_or(0, |(stake, _)| *stake)
+                .cmp(
+                    &my_leader_bank
+                        .vote_accounts()
+                        .get(a)
+                        .map_or(0, |(stake, _)| *stake),
+                )
         });
 
         Self {
