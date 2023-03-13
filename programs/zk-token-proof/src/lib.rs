@@ -47,12 +47,15 @@ fn process_verify_proof<T: Pod + ZkProofData>(
         let proof_context_state_meta =
             ProofContextStateMeta::try_from_bytes(proof_context_account.get_data())?;
 
-        if proof_context_state_meta.is_initialized.into() {
+        if proof_context_state_meta.proof_type != ProofType::Uninitialized.into() {
             return Err(InstructionError::AccountAlreadyInitialized);
         }
 
-        let context_state_data =
-            ProofContextState::encode(&context_state_authority, true, proof_data.context_data());
+        let context_state_data = ProofContextState::encode(
+            &context_state_authority,
+            T::ProofContext::PROOF_TYPE,
+            proof_data.context_data(),
+        );
 
         if proof_context_account.get_data().len() != context_state_data.len() {
             return Err(InstructionError::InvalidAccountData);

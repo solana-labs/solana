@@ -12,10 +12,9 @@ use {
 use {
     crate::{
         instruction::{ProofType, ZkProofContext, ZkProofData},
-        zk_token_elgamal::pod::{self, PodProofType},
+        zk_token_elgamal::pod,
     },
     bytemuck::{Pod, Zeroable},
-    solana_program::instruction::InstructionError,
 };
 
 /// This struct includes the cryptographic proof *and* the account data information needed to verify
@@ -38,9 +37,6 @@ pub struct CloseAccountData {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct CloseAccountProofContext {
-    /// The proof type
-    pub proof_type: PodProofType, // 1 byte
-
     /// The source account ElGamal pubkey
     pub pubkey: pod::ElGamalPubkey, // 32 bytes
 
@@ -58,7 +54,6 @@ impl CloseAccountData {
         let pod_ciphertext = pod::ElGamalCiphertext(ciphertext.to_bytes());
 
         let context = CloseAccountProofContext {
-            proof_type: ProofType::CloseAccount.into(),
             pubkey: pod_pubkey,
             ciphertext: pod_ciphertext,
         };
@@ -89,9 +84,7 @@ impl ZkProofData for CloseAccountData {
 }
 
 impl ZkProofContext for CloseAccountProofContext {
-    fn proof_type(&self) -> Result<ProofType, InstructionError> {
-        self.proof_type.try_into()
-    }
+    const PROOF_TYPE: ProofType = ProofType::CloseAccount;
 }
 
 /// This struct represents the cryptographic proof component that certifies that the encrypted

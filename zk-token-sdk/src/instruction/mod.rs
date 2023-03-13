@@ -5,6 +5,7 @@ pub mod transfer_with_fee;
 pub mod withdraw;
 pub mod withdraw_withheld;
 
+use num_derive::{FromPrimitive, ToPrimitive};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -25,14 +26,12 @@ pub use {
     withdraw::{WithdrawData, WithdrawProofContext},
     withdraw_withheld::{WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext},
 };
-use {
-    num_derive::{FromPrimitive, ToPrimitive},
-    solana_program::instruction::InstructionError,
-};
 
 #[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ProofType {
+    /// Empty proof type used to distinguish if a proof context account is initialized
+    Uninitialized,
     CloseAccount,
     Withdraw,
     WithdrawWithheldTokens,
@@ -51,7 +50,7 @@ pub trait ZkProofData: Pod {
 }
 
 pub trait ZkProofContext: Pod {
-    fn proof_type(&self) -> Result<ProofType, InstructionError>;
+    const PROOF_TYPE: ProofType;
 }
 
 #[cfg(not(target_os = "solana"))]

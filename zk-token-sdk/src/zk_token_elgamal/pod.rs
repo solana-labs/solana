@@ -8,26 +8,6 @@ use {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
-pub struct PodBool(u8);
-impl From<bool> for PodBool {
-    fn from(b: bool) -> Self {
-        Self(u8::from(b))
-    }
-}
-impl From<&PodBool> for bool {
-    fn from(b: &PodBool) -> Self {
-        b.0 != 0
-    }
-}
-
-impl From<PodBool> for bool {
-    fn from(b: PodBool) -> Self {
-        b.0 != 0
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
-#[repr(transparent)]
 pub struct PodU16([u8; 2]);
 impl From<u16> for PodU16 {
     fn from(n: u16) -> Self {

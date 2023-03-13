@@ -28,10 +28,9 @@ use {
 use {
     crate::{
         instruction::{ProofType, ZkProofContext, ZkProofData},
-        zk_token_elgamal::pod::{self, PodProofType},
+        zk_token_elgamal::pod,
     },
     bytemuck::{Pod, Zeroable},
-    solana_program::instruction::InstructionError,
 };
 
 #[cfg(not(target_os = "solana"))]
@@ -75,9 +74,6 @@ pub struct TransferWithFeeData {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeeProofContext {
-    /// The proof type
-    pub proof_type: PodProofType, // 1 byte
-
     /// Group encryption of the low 16 bites of the transfer amount
     pub ciphertext_lo: pod::TransferAmountEncryption, // 128 bytes
 
@@ -188,7 +184,6 @@ impl TransferWithFeeData {
         let pod_fee_ciphertext_hi: pod::FeeEncryption = fee_ciphertext_hi.to_pod();
 
         let context = TransferWithFeeProofContext {
-            proof_type: ProofType::TransferWithFee.into(),
             ciphertext_lo: pod_ciphertext_lo,
             ciphertext_hi: pod_ciphertext_hi,
             transfer_with_fee_pubkeys: pod_transfer_with_fee_pubkeys,
@@ -386,9 +381,7 @@ impl ZkProofData for TransferWithFeeData {
 }
 
 impl ZkProofContext for TransferWithFeeProofContext {
-    fn proof_type(&self) -> Result<ProofType, InstructionError> {
-        self.proof_type.try_into()
-    }
+    const PROOF_TYPE: ProofType = ProofType::TransferWithFee;
 }
 
 // #[derive(Clone, Copy, Pod, Zeroable)]
