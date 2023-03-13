@@ -358,6 +358,7 @@ impl JsonRpcService {
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         connection_cache: Arc<ConnectionCache>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_rewards_slot: Arc<AtomicU64>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Result<Self, String> {
         info!("rpc bound to {:?}", rpc_addr);
@@ -470,6 +471,7 @@ impl JsonRpcService {
             max_slots,
             leader_schedule_cache,
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             prioritization_fee_cache,
         );
 
@@ -646,6 +648,7 @@ mod tests {
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
             connection_cache,
+            Arc::new(AtomicU64::default()),
             Arc::new(AtomicU64::default()),
             Arc::new(PrioritizationFeeCache::default()),
         )
