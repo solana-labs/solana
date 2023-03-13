@@ -430,6 +430,7 @@ impl JsonRpcService {
                                 blockstore.clone(),
                                 block_commitment_cache.clone(),
                                 max_complete_transaction_status_slot.clone(),
+                                max_complete_rewards_slot.clone(),
                                 ConfirmedBlockUploadConfig::default(),
                                 exit_bigtable_ledger_upload_service.clone(),
                             )))
