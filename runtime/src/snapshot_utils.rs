@@ -1650,12 +1650,8 @@ pub fn bank_from_snapshot_dir(
     exit: &Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let next_append_vec_id = Arc::new(AtomicAppendVecId::new(0));
-    let (storage, measure_build_storage) = build_storage_from_snapshot_dir(
-        bank_snapshot,
-        "build storage",
-        account_paths,
-        next_append_vec_id.clone(),
-    )?;
+    let (storage, measure_build_storage) =
+        build_storage_from_snapshot_dir(bank_snapshot, account_paths, next_append_vec_id.clone())?;
     info!("{}", measure_build_storage);
 
     let next_append_vec_id =
@@ -1907,7 +1903,6 @@ fn streaming_snapshot_dir_files(
 /// and then returning those fields plus the rebuilt storage
 fn build_storage_from_snapshot_dir(
     snapshot_info: &BankSnapshotInfo,
-    measure_name: &'static str,
     account_paths: &[PathBuf],
     next_append_vec_id: Arc<AtomicAppendVecId>,
 ) -> Result<(AccountStorageMap, Measure)> {
@@ -1974,9 +1969,8 @@ fn build_storage_from_snapshot_dir(
             next_append_vec_id,
             SnapshotFrom::Dir,
         )?,
-        measure_name
+        "build storage from snapshot dir"
     );
-    info!("{}", measure_storage);
 
     let RebuiltSnapshotStorage {
         snapshot_version: _,
