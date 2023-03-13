@@ -472,9 +472,16 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
         .unwrap();
 }
 
+/// The account snapshot directories under <account_path>/snapshot/<slot> contain account files hardlinked
+/// from <account_path>/run taken at snapshot <slot> time.  They are referenced by the symlinks from the
+/// bank snapshot dir snapshot/<slot>/accounts_hardlinks/.  We observed that sometimes the bank snapshot dir
+/// could be deleted but the account snapshot directories were left behind, possibly by some manual operations
+/// or some legacy code not using the symlinks to clean up the acccount snapshot hardlink directories.
+/// This function cleans up any account snapshot directories that are no longer referenced by the bank
+/// snapshot dirs, to ensure propper snapshot operations.
 pub fn clean_orphaned_account_snapshot_dirs(
-    bank_snapshots_dir: &Path,
-    account_snapshot_paths: &Vec<PathBuf>,
+    bank_snapshots_dir: impl AsRef<Path>,
+    account_snapshot_paths: &[PathBuf],
 ) {
     // Create the HashSet of the account snapshot hardlink directories referenced by the snapshot dirs.
     // This is used to clean up any hardlinks that are no longer referenced by the snapshot dirs.
@@ -528,7 +535,7 @@ pub fn clean_orphaned_account_snapshot_dirs(
                 let path = entry.path();
                 if !account_snapshot_dirs_referenced.contains(&path) {
                     info!(
-                        "Removing unreferenced account snapshot hardlink directory: {}",
+                        "Removing orphaned account snapshot hardlink directory: {}",
                         path.display()
                     );
                     move_and_async_delete_path(&path);
@@ -537,8 +544,8 @@ pub fn clean_orphaned_account_snapshot_dirs(
     }
 }
 
-// For all account_paths, set up the run/ and snapshot/ sub directories.
-// If the sub directories do not exist, the account_path will be cleaned because older version put account files there
+/// For all account_paths, set up the run/ and snapshot/ sub directories.
+/// If the sub directories do not exist, the account_path will be cleaned because older version put account files there
 pub fn set_up_account_run_and_snapshot_paths(
     account_paths: &[PathBuf],
 ) -> (Vec<PathBuf>, Vec<PathBuf>) {
