@@ -495,12 +495,7 @@ fn process_instruction_common(
     if let Some(load_program_metrics) = load_program_metrics {
         load_program_metrics.submit_datapoint(&mut invoke_context.timings);
     }
-    match &executor.program {
-        LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
-        LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
-        LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
-        LoadedProgramType::BuiltIn(_) => Err(InstructionError::IncorrectProgramId),
-    }
+    execute(loaded_program, invoke_context)
 }
 
 fn process_loader_upgradeable_instruction(
@@ -1463,9 +1458,9 @@ fn trace_bpf(
     }
 }
 
-fn execute(
+fn execute<'a, 'b: 'a>(
     loaded_program: Arc<LoadedProgram>,
-    invoke_context: &mut InvokeContext,
+    invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
     let stack_height = invoke_context.get_stack_height();
