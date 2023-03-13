@@ -796,7 +796,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                         } else {
                             (Keypair::new(), "".to_string())
                         };
-                        // Skip keypairs that will never match the user specified prefix 
+                        // Skip keypairs that will never match the user specified prefix
                         if skip_len_44_pubkeys && keypair.pubkey() >= smallest_length_44_public_key::id() {
                             continue;
                         }
