@@ -369,7 +369,12 @@ pub fn create_ebpf_vm<'a, 'b>(
         None,
     )?;
 
-    EbpfVm::new(program, invoke_context, memory_mapping, stack_len)
+    Ok(EbpfVm::new(
+        program,
+        invoke_context,
+        memory_mapping,
+        stack_len,
+    ))
 }
 
 #[macro_export]

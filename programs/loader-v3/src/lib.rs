@@ -160,12 +160,16 @@ pub fn create_vm<'a, 'b>(
         MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
     ];
     let log_collector = invoke_context.get_log_collector();
-    MemoryMapping::new(regions, config)
-        .and_then(|memory_mapping| EbpfVm::new(program, invoke_context, memory_mapping, stack_len))
-        .map_err(|err| {
-            ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", err);
-            Box::new(InstructionError::ProgramEnvironmentSetupFailure)
-        })
+    let memory_mapping = MemoryMapping::new(regions, config).map_err(|err| {
+        ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", err);
+        Box::new(InstructionError::ProgramEnvironmentSetupFailure)
+    })?;
+    Ok(EbpfVm::new(
+        program,
+        invoke_context,
+        memory_mapping,
+        stack_len,
+    ))
 }
 
 fn execute(
