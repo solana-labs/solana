@@ -469,6 +469,7 @@ impl Validator {
                 *start_progress.write().unwrap() = ValidatorStartProgress::CleaningBlockStore;
                 backup_and_clear_blockstore(
                     ledger_path,
+                    config,
                     wait_for_supermajority_slot + 1,
                     shred_version,
                 );
@@ -1379,6 +1380,15 @@ fn post_process_restored_tower(
     Ok(restored_tower)
 }
 
+fn blockstore_options_from_config(config: &ValidatorConfig) -> BlockstoreOptions {
+    BlockstoreOptions {
+        recovery_mode: config.wal_recovery_mode.clone(),
+        column_options: config.ledger_column_options.clone(),
+        enforce_ulimit_nofile: config.enforce_ulimit_nofile,
+        ..BlockstoreOptions::default()
+    }
+}
+
 #[allow(clippy::type_complexity)]
 fn load_blockstore(
     config: &ValidatorConfig,
@@ -1437,16 +1447,8 @@ fn load_blockstore(
         ledger_signal_receiver,
         completed_slots_receiver,
         ..
-    } = Blockstore::open_with_signal(
-        ledger_path,
-        BlockstoreOptions {
-            recovery_mode: config.wal_recovery_mode.clone(),
-            column_options: config.ledger_column_options.clone(),
-            enforce_ulimit_nofile: config.enforce_ulimit_nofile,
-            ..BlockstoreOptions::default()
-        },
-    )
-    .expect("Failed to open ledger database");
+    } = Blockstore::open_with_signal(ledger_path, blockstore_options_from_config(config))
+        .expect("Failed to open ledger database");
     blockstore.shred_timing_point_sender = poh_timing_point_sender;
     // following boot sequence (esp BankForks) could set root. so stash the original value
     // of blockstore root away here as soon as possible.
@@ -1798,15 +1800,31 @@ fn blockstore_contains_bad_shred_version(
     false
 }
 
-fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_version: u16) {
-    let blockstore = Blockstore::open(ledger_path).unwrap();
+fn backup_and_clear_blockstore(
+    ledger_path: &Path,
+    config: &ValidatorConfig,
+    start_slot: Slot,
+    shred_version: u16,
+) {
+    let blockstore =
+        Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config)).unwrap();
     let do_copy_and_clear =
         blockstore_contains_bad_shred_version(&blockstore, start_slot, shred_version);
 
     // If found, then copy shreds to another db and clear from start_slot
     if do_copy_and_clear {
-        let folder_name = format!("backup_rocksdb_{}", thread_rng().gen_range(0, 99999));
-        let backup_blockstore = Blockstore::open(&ledger_path.join(folder_name));
+        let folder_name = format!(
+            "backup_{}_{}",
+            config
+                .ledger_column_options
+                .shred_storage_type
+                .blockstore_directory(),
+            thread_rng().gen_range(0, 99999)
+        );
+        let backup_blockstore = Blockstore::open_with_options(
+            &ledger_path.join(folder_name),
+            blockstore_options_from_config(config),
+        );
         let mut last_print = Instant::now();
         let mut copied = 0;
         let mut last_slot = None;
@@ -2181,6 +2199,8 @@ mod tests {
             solana_entry::entry,
             solana_ledger::{blockstore, get_tmp_ledger_path},
         };
+
+        let validator_config = ValidatorConfig::default_for_test();
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -2207,7 +2227,7 @@ mod tests {
             drop(blockstore);
 
             // this purges and compacts all slots greater than or equal to 5
-            backup_and_clear_blockstore(&blockstore_path, 5, 2);
+            backup_and_clear_blockstore(&blockstore_path, &validator_config, 5, 2);
 
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             // assert that slots less than 5 aren't affected

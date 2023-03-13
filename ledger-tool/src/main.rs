@@ -87,7 +87,9 @@ use {
         shred_version::compute_shred_version,
         stake::{self, state::StakeState},
         system_program,
-        transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
+        transaction::{
+            MessageHash, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
+        },
     },
     solana_stake_program::stake_state::{self, PointValue},
     solana_vote_program::{
@@ -118,6 +120,16 @@ mod output;
 enum LedgerOutputMethod {
     Print,
     Json,
+}
+
+fn get_program_ids(tx: &VersionedTransaction) -> impl Iterator<Item = &Pubkey> + '_ {
+    let message = &tx.message;
+    let account_keys = message.static_account_keys();
+
+    message
+        .instructions()
+        .iter()
+        .map(|ix| ix.program_id(account_keys))
 }
 
 fn parse_encoding_format(matches: &ArgMatches<'_>) -> UiAccountEncoding {
@@ -270,27 +282,8 @@ fn output_slot(
             transactions += entry.transactions.len();
             num_hashes += entry.num_hashes;
             for transaction in entry.transactions {
-                let tx_signature = transaction.signatures[0];
-                let sanitize_result = SanitizedTransaction::try_create(
-                    transaction,
-                    MessageHash::Compute,
-                    None,
-                    SimpleAddressLoader::Disabled,
-                    true, // require_static_program_ids
-                );
-
-                match sanitize_result {
-                    Ok(transaction) => {
-                        for (program_id, _) in transaction.message().program_instructions_iter() {
-                            *program_ids.entry(*program_id).or_insert(0) += 1;
-                        }
-                    }
-                    Err(err) => {
-                        warn!(
-                            "Failed to analyze unsupported transaction {}: {:?}",
-                            tx_signature, err
-                        );
-                    }
+                for program_id in get_program_ids(&transaction) {
+                    *program_ids.entry(*program_id).or_insert(0) += 1;
                 }
             }
         }

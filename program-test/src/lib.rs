@@ -99,7 +99,6 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
 
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
-    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
@@ -181,16 +180,9 @@ pub fn builtin_process_instruction(
 #[macro_export]
 macro_rules! processor {
     ($process_instruction:expr) => {
-        Some(
-            |first_instruction_account: $crate::IndexOfAccount,
-             invoke_context: &mut solana_program_test::InvokeContext| {
-                $crate::builtin_process_instruction(
-                    $process_instruction,
-                    first_instruction_account,
-                    invoke_context,
-                )
-            },
-        )
+        Some(|invoke_context: &mut solana_program_test::InvokeContext| {
+            $crate::builtin_process_instruction($process_instruction, invoke_context)
+        })
     };
 }
 
@@ -630,7 +622,7 @@ impl ProgramTest {
         let add_native = |this: &mut ProgramTest, process_fn: ProcessInstructionWithContext| {
             info!("\"{}\" program loaded as native code", program_name);
             this.builtins
-                .push(Builtin::new(program_name, program_id, process_fn));
+                .push(Builtin::new(program_name, program_id, process_fn, 0));
         };
 
         let warn_invalid_program_name = || {
@@ -703,8 +695,12 @@ impl ProgramTest {
         process_instruction: ProcessInstructionWithContext,
     ) {
         info!("\"{}\" builtin program", program_name);
-        self.builtins
-            .push(Builtin::new(program_name, program_id, process_instruction));
+        self.builtins.push(Builtin::new(
+            program_name,
+            program_id,
+            process_instruction,
+            0,
+        ));
     }
 
     /// Deactivate a runtime feature.
@@ -797,7 +793,7 @@ impl ProgramTest {
         // Add loaders
         macro_rules! add_builtin {
             ($b:expr) => {
-                bank.add_builtin(&$b.0, &$b.1, $b.2)
+                bank.add_builtin(&$b.0, &$b.1, $b.2, $b.3)
             };
         }
         add_builtin!(solana_bpf_loader_deprecated_program!());
@@ -820,6 +816,7 @@ impl ProgramTest {
                 &builtin.name,
                 &builtin.id,
                 builtin.process_instruction_with_context,
+                0,
             );
         }
 

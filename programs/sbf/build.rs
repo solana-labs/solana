@@ -37,6 +37,11 @@ fn rerun_if_changed(files: &[&str], directories: &[&str], excludes: &[&str]) {
 }
 
 fn main() {
+    if env::var("CARGO_FEATURE_DUMMY_FOR_CI_CHECK").is_ok() {
+        println!("cargo:warning=(not a warning) Compiling with host toolchain for CI...");
+        return;
+    }
+
     let sbf_c = env::var("CARGO_FEATURE_SBF_C").is_ok();
     if sbf_c {
         let install_dir = "OUT_DIR=../target/".to_string() + &env::var("PROFILE").unwrap() + "/sbf";

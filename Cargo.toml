@@ -288,7 +288,7 @@ signal-hook = "0.3.14"
 smpl_jwt = "0.7.1"
 socket2 = "0.4.7"
 soketto = "0.7"
-solana_rbpf = "=0.2.39"
+solana_rbpf = "=0.2.40"
 solana-account-decoder = { path = "account-decoder", version = "=1.16.0" }
 solana-address-lookup-table-program = { path = "programs/address-lookup-table", version = "=1.16.0" }
 solana-banks-client = { path = "banks-client", version = "=1.16.0" }
@@ -358,11 +358,11 @@ solana-version = { path = "version", version = "=1.16.0" }
 solana-vote-program = { path = "programs/vote", version = "=1.16.0" }
 solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=1.16.0" }
 solana-zk-token-sdk = { path = "zk-token-sdk", version = "=1.16.0" }
-spl-associated-token-account = "=1.1.2"
+spl-associated-token-account = "=1.1.3"
 spl-instruction-padding = "0.1"
 spl-memo = "=3.0.1"
 spl-token = "=3.5.0"
-spl-token-2022 = "=0.5.0"
+spl-token-2022 = "=0.6.0"
 static_assertions = "1.1.0"
 stream-cancel = "0.8.1"
 strum = "0.24"

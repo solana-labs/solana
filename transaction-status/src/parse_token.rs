@@ -230,7 +230,8 @@ pub fn parse_token(
                 | AuthorityType::WithheldWithdraw
                 | AuthorityType::CloseMint
                 | AuthorityType::InterestRate
-                | AuthorityType::PermanentDelegate => "mint",
+                | AuthorityType::PermanentDelegate
+                | AuthorityType::ConfidentialTransferMint => "mint",
                 AuthorityType::AccountOwner | AuthorityType::CloseAccount => "account",
             };
             let mut value = json!({
@@ -606,6 +607,7 @@ pub enum UiAuthorityType {
     CloseMint,
     InterestRate,
     PermanentDelegate,
+    ConfidentialTransferMint,
 }
 
 impl From<AuthorityType> for UiAuthorityType {
@@ -620,6 +622,7 @@ impl From<AuthorityType> for UiAuthorityType {
             AuthorityType::CloseMint => UiAuthorityType::CloseMint,
             AuthorityType::InterestRate => UiAuthorityType::InterestRate,
             AuthorityType::PermanentDelegate => UiAuthorityType::PermanentDelegate,
+            AuthorityType::ConfidentialTransferMint => UiAuthorityType::ConfidentialTransferMint,
         }
     }
 }
@@ -640,6 +643,7 @@ pub enum UiExtensionType {
     InterestBearingConfig,
     CpiGuard,
     PermanentDelegate,
+    NonTransferableAccount,
 }
 
 impl From<ExtensionType> for UiExtensionType {
@@ -660,6 +664,7 @@ impl From<ExtensionType> for UiExtensionType {
             ExtensionType::InterestBearingConfig => UiExtensionType::InterestBearingConfig,
             ExtensionType::CpiGuard => UiExtensionType::CpiGuard,
             ExtensionType::PermanentDelegate => UiExtensionType::PermanentDelegate,
+            ExtensionType::NonTransferableAccount => UiExtensionType::NonTransferableAccount,
         }
     }
 }

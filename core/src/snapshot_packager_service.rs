@@ -10,7 +10,7 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::{
             FullSnapshotHash, FullSnapshotHashes, IncrementalSnapshotHash,
-            IncrementalSnapshotHashes, StartingSnapshotHashes,
+            IncrementalSnapshotHashes, SnapshotHash, StartingSnapshotHashes,
         },
         snapshot_package::{self, retain_max_n_elements, SnapshotPackage, SnapshotType},
         snapshot_utils,
@@ -58,17 +58,13 @@ impl SnapshotPackagerService {
             .name("solSnapshotPkgr".to_string())
             .spawn(move || {
                 renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
-                let mut snapshot_gossip_manager = if enable_gossip_push {
-                    Some(SnapshotGossipManager {
+                let mut snapshot_gossip_manager = enable_gossip_push.then(||
+                    SnapshotGossipManager::new(
                         cluster_info,
                         max_full_snapshot_hashes,
                         max_incremental_snapshot_hashes,
-                        full_snapshot_hashes: FullSnapshotHashes::default(),
-                        incremental_snapshot_hashes: IncrementalSnapshotHashes::default(),
-                    })
-                } else {
-                    None
-                };
+                    )
+                );
                 if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
                     snapshot_gossip_manager.push_starting_snapshot_hashes(starting_snapshot_hashes);
                 }
@@ -105,7 +101,7 @@ impl SnapshotPackagerService {
                         if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
                             snapshot_gossip_manager.push_snapshot_hash(
                                 snapshot_package.snapshot_type,
-                                (snapshot_package.slot(), snapshot_package.hash().0),
+                                (snapshot_package.slot(), *snapshot_package.hash()),
                             );
                         }
                     });
@@ -201,6 +197,26 @@ struct SnapshotGossipManager {
 }
 
 impl SnapshotGossipManager {
+    /// Construct a new SnapshotGossipManager with empty snapshot hashes
+    fn new(
+        cluster_info: Arc<ClusterInfo>,
+        max_full_snapshot_hashes: usize,
+        max_incremental_snapshot_hashes: usize,
+    ) -> Self {
+        SnapshotGossipManager {
+            cluster_info,
+            max_full_snapshot_hashes,
+            max_incremental_snapshot_hashes,
+            full_snapshot_hashes: FullSnapshotHashes {
+                hashes: Vec::default(),
+            },
+            incremental_snapshot_hashes: IncrementalSnapshotHashes {
+                base: (Slot::default(), SnapshotHash(Hash::default())),
+                hashes: Vec::default(),
+            },
+        }
+    }
+
     /// If there were starting snapshot hashes, add those to their respective vectors, then push
     /// those vectors to the cluster via CRDS.
     fn push_starting_snapshot_hashes(
@@ -219,7 +235,11 @@ impl SnapshotGossipManager {
 
     /// Add `snapshot_hash` to its respective vector of hashes, then push that vector to the
     /// cluster via CRDS.
-    fn push_snapshot_hash(&mut self, snapshot_type: SnapshotType, snapshot_hash: (Slot, Hash)) {
+    fn push_snapshot_hash(
+        &mut self,
+        snapshot_type: SnapshotType,
+        snapshot_hash: (Slot, SnapshotHash),
+    ) {
         match snapshot_type {
             SnapshotType::FullSnapshot => {
                 self.push_full_snapshot_hash(FullSnapshotHash {
@@ -254,7 +274,9 @@ impl SnapshotGossipManager {
         );
 
         self.cluster_info
-            .push_snapshot_hashes(self.full_snapshot_hashes.hashes.clone());
+            .push_snapshot_hashes(Self::clone_hashes_for_crds(
+                &self.full_snapshot_hashes.hashes,
+            ));
     }
 
     /// Add `incremental_snapshot_hash` to the vector of incremental snapshot hashes, then push
@@ -287,13 +309,23 @@ impl SnapshotGossipManager {
         // error condition here.
         self.cluster_info
             .push_incremental_snapshot_hashes(
-                self.incremental_snapshot_hashes.base,
-                self.incremental_snapshot_hashes.hashes.clone(),
+                Self::clone_hash_for_crds(&self.incremental_snapshot_hashes.base),
+                Self::clone_hashes_for_crds(&self.incremental_snapshot_hashes.hashes),
             )
             .expect(
                 "Bug! The programmer contract has changed for push_incremental_snapshot_hashes() \
                  and a new error case has been added, which has not been handled here.",
             );
+    }
+
+    /// Clones and maps snapshot hashes into what CRDS expects
+    fn clone_hashes_for_crds(hashes: &[(Slot, SnapshotHash)]) -> Vec<(Slot, Hash)> {
+        hashes.iter().map(Self::clone_hash_for_crds).collect()
+    }
+
+    /// Clones and maps a snapshot hash into what CRDS expects
+    fn clone_hash_for_crds(hash: &(Slot, SnapshotHash)) -> (Slot, Hash) {
+        (hash.0, hash.1 .0)
     }
 }
 

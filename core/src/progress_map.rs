@@ -163,26 +163,22 @@ impl ValidatorStakeInfo {
 pub const RETRANSMIT_BASE_DELAY_MS: u64 = 5_000;
 pub const RETRANSMIT_BACKOFF_CAP: u32 = 6;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RetransmitInfo {
-    pub retry_time: Option<Instant>,
-    pub retry_iteration: u32,
+    pub(crate) retry_time: Instant,
+    pub(crate) retry_iteration: u32,
 }
 
 impl RetransmitInfo {
     pub fn reached_retransmit_threshold(&self) -> bool {
         let backoff = std::cmp::min(self.retry_iteration, RETRANSMIT_BACKOFF_CAP);
         let backoff_duration_ms = (1_u64 << backoff) * RETRANSMIT_BASE_DELAY_MS;
-        self.retry_time
-            .map(|time| time.elapsed().as_millis() > backoff_duration_ms.into())
-            .unwrap_or(true)
+        self.retry_time.elapsed().as_millis() > u128::from(backoff_duration_ms)
     }
 
     pub fn increment_retry_iteration(&mut self) {
-        if self.retry_time.is_some() {
-            self.retry_iteration += 1;
-        }
-        self.retry_time = Some(Instant::now());
+        self.retry_iteration = self.retry_iteration.saturating_add(1);
+        self.retry_time = Instant::now();
     }
 }
 
@@ -250,7 +246,10 @@ impl ForkProgress {
                 total_epoch_stake,
                 ..PropagatedStats::default()
             },
-            retransmit_info: RetransmitInfo::default(),
+            retransmit_info: RetransmitInfo {
+                retry_time: Instant::now(),
+                retry_iteration: 0u32,
+            },
         }
     }
 
