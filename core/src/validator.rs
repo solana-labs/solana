@@ -720,6 +720,7 @@ impl Validator {
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_config(
             &exit,
             max_complete_transaction_status_slot.clone(),
+            max_complete_rewards_slot.clone(),
             blockstore.clone(),
             bank_forks.clone(),
             block_commitment_cache.clone(),

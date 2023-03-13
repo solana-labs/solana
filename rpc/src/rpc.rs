@@ -8281,9 +8281,11 @@ pub mod tests {
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let mut pending_optimistically_confirmed_banks = HashSet::new();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks.clone(),
             block_commitment_cache.clone(),
             optimistically_confirmed_bank.clone(),
