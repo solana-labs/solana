@@ -59,8 +59,17 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
 
         // TODO: my_leader_bank.vote_accounts() may not contain zero-staked validators
         // in this epoch, but those validators may have stake warming up in the next epoch
-        let vote_account_keys: Vec<Pubkey> =
+        let mut vote_account_keys: Vec<Pubkey> =
             my_leader_bank.vote_accounts().keys().copied().collect();
+        // Sort by stake weight so heavier validators' votes are sent first
+        vote_account_keys.sort_by(|a, b| {
+            my_leader_bank
+                .vote_accounts()
+                .get(b)
+                .unwrap()
+                .0
+                .cmp(&my_leader_bank.vote_accounts().get(a).unwrap().0)
+        });
 
         Self {
             my_leader_bank,
