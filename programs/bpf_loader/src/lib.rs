@@ -321,13 +321,17 @@ pub fn create_ebpf_vm<'a, 'b>(
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, EbpfError> {
-    let _ = invoke_context.consume_checked(calculate_heap_cost(
+    let round_up_heap_size = invoke_context
+        .feature_set
+        .is_active(&round_up_heap_size::id());
+    let heap_cost_result = invoke_context.consume_checked(calculate_heap_cost(
         heap.len() as u64,
         invoke_context.get_compute_budget().heap_cost,
-        invoke_context
-            .feature_set
-            .is_active(&round_up_heap_size::id()),
+        round_up_heap_size,
     ));
+    if round_up_heap_size {
+        heap_cost_result.map_err(SyscallError::InstructionError)?;
+    }
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
             .transaction_context
