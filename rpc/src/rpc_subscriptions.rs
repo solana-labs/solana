@@ -1025,7 +1025,9 @@ impl RpcSubscriptions {
                                 // caused by non-deterministic concurrency accesses, we
                                 // break out of the loop. Besides if the current `s` is
                                 // greater, then any `s + K` is also greater.
-                                if s > max_complete_transaction_status_slot.load(Ordering::SeqCst) {
+                                if s > max_complete_transaction_status_slot.load(Ordering::SeqCst)
+                                    || s > max_complete_rewards_slot.load(Ordering::SeqCst)
+                                {
                                     break;
                                 }
 
