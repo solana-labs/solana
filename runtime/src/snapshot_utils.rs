@@ -71,14 +71,6 @@ mod archive_format;
 mod snapshot_storage_rebuilder;
 pub use archive_format::*;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SnapshotFrom {
-    /// Build from the snapshot archive
-    Archive,
-    /// Build directly from the bank snapshot directory
-    Dir,
-}
-
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const SNAPSHOT_VERSION_FILENAME: &str = "version";
 pub const SNAPSHOT_STATE_COMPLETE_FILENAME: &str = "state_complete";
@@ -255,6 +247,17 @@ pub enum BankSnapshotType {
     Pre,
     /// This bank snapshot *has* had its accounts hash calculated
     Post,
+}
+
+/// When constructing a bank a snapshot, traditionally the snapshot was from a snapshot archive.  Now,
+/// the snapshot can be from a snapshot directory, or from a snapshot archive.  This is the flag to
+/// indicate which.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SnapshotFrom {
+    /// Build from the snapshot archive
+    Archive,
+    /// Build directly from the bank snapshot directory
+    Dir,
 }
 
 /// Helper type when rebuilding from snapshots.  Designed to handle when rebuilding from just a
