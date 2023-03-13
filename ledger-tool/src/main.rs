@@ -2438,13 +2438,13 @@ fn main() {
                 );
 
                 accounts_index_config.index_limit_mb = if let Some(limit) =
-                    value_t!(matches, "accounts_index_memory_limit_mb", usize).ok()
+                    value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
                 {
                     IndexLimitMb::Limit(limit)
-                } else if matches.is_present("enable_accounts_disk_index") {
+                } else if arg_matches.is_present("enable_accounts_disk_index") {
                     IndexLimitMb::Unspecified
                 } else {
-                    if matches.is_present("disable_accounts_disk_index") {
+                    if arg_matches.is_present("disable_accounts_disk_index") {
                         warn!("ignoring `--disable-accounts-disk-index` as it specifies default behavior");
                     }
                     IndexLimitMb::InMemOnly
@@ -2731,13 +2731,13 @@ fn main() {
 
                 let accounts_index_config = AccountsIndexConfig {
                     index_limit_mb: if let Some(limit) =
-                        value_t!(matches, "accounts_index_memory_limit_mb", usize).ok()
+                        value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
                     {
                         IndexLimitMb::Limit(limit)
-                    } else if matches.is_present("enable_accounts_disk_index") {
+                    } else if arg_matches.is_present("enable_accounts_disk_index") {
                         IndexLimitMb::Unspecified
                     } else {
-                        if matches.is_present("disable_accounts_disk_index") {
+                        if arg_matches.is_present("disable_accounts_disk_index") {
                             warn!("ignoring `--disable-accounts-disk-index` as it specifies default behavior");
                         }
                         IndexLimitMb::InMemOnly
