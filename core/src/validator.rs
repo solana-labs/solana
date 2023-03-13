@@ -2239,15 +2239,15 @@ mod tests {
     fn validator_parallel_exit() {
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
+        let genesis_config =
+            create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
+                .genesis_config;
 
         let mut ledger_paths = vec![];
         let mut validators: Vec<Validator> = (0..2)
             .map(|_| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
-                let genesis_config =
-                    create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
-                        .genesis_config;
                 let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
                 ledger_paths.push(validator_ledger_path.clone());
                 let vote_account_keypair = Keypair::new();
