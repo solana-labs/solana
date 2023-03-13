@@ -222,18 +222,20 @@ impl AccountsHashVerifier {
         };
         timings.calc_storage_size_quartiles(&accounts_package.snapshot_storages);
 
+        let calculate_accounts_hash_config = CalcAccountsHashConfig {
+            use_bg_thread_pool: true,
+            check_hash: false,
+            ancestors: None,
+            epoch_schedule: &accounts_package.epoch_schedule,
+            rent_collector: &accounts_package.rent_collector,
+            store_detailed_debug_info_on_failure: false,
+        };
+
         let (accounts_hash, lamports) = accounts_package
             .accounts
             .accounts_db
             .calculate_accounts_hash_from_storages(
-                &CalcAccountsHashConfig {
-                    use_bg_thread_pool: true,
-                    check_hash: false,
-                    ancestors: None,
-                    epoch_schedule: &accounts_package.epoch_schedule,
-                    rent_collector: &accounts_package.rent_collector,
-                    store_detailed_debug_info_on_failure: false,
-                },
+                &calculate_accounts_hash_config,
                 &sorted_storages,
                 timings,
             )
@@ -253,37 +255,32 @@ impl AccountsHashVerifier {
         if accounts_package.expected_capitalization != lamports {
             // before we assert, run the hash calc again. This helps track down whether it could have been a failure in a race condition possibly with shrink.
             // We could add diagnostics to the hash calc here to produce a per bin cap or something to help narrow down how many pubkeys are different.
+            let calculate_accounts_hash_config = CalcAccountsHashConfig {
+                // since we're going to assert, use the fg thread pool to go faster
+                use_bg_thread_pool: false,
+                ..calculate_accounts_hash_config
+            };
             let result_with_index = accounts_package
                 .accounts
                 .accounts_db
                 .calculate_accounts_hash_from_index(
                     accounts_package.slot,
-                    &CalcAccountsHashConfig {
-                        use_bg_thread_pool: false,
-                        check_hash: false,
-                        ancestors: None,
-                        epoch_schedule: &accounts_package.epoch_schedule,
-                        rent_collector: &accounts_package.rent_collector,
-                        store_detailed_debug_info_on_failure: false,
-                    },
+                    &calculate_accounts_hash_config,
                 );
             info!(
-                "hash calc with index: {}, {:?}",
-                accounts_package.slot, result_with_index
+                "hash calc with index: {}, {result_with_index:?}",
+                accounts_package.slot
             );
-            let _ = accounts_package
+            let calculate_accounts_hash_config = CalcAccountsHashConfig {
+                // now that we've failed, store off the failing contents that produced a bad capitalization
+                store_detailed_debug_info_on_failure: true,
+                ..calculate_accounts_hash_config
+            };
+            _ = accounts_package
                 .accounts
                 .accounts_db
                 .calculate_accounts_hash_from_storages(
-                    &CalcAccountsHashConfig {
-                        use_bg_thread_pool: false,
-                        check_hash: false,
-                        ancestors: None,
-                        epoch_schedule: &accounts_package.epoch_schedule,
-                        rent_collector: &accounts_package.rent_collector,
-                        // now that we've failed, store off the failing contents that produced a bad capitalization
-                        store_detailed_debug_info_on_failure: true,
-                    },
+                    &calculate_accounts_hash_config,
                     &sorted_storages,
                     HashStats::default(),
                 );
