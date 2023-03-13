@@ -487,7 +487,7 @@ mod tests {
     fn test_verified_vote_packets_validator_gossip_votes_iterator_correct_fork() {
         let (s, r) = unbounded();
         let num_validators = 2;
-        let vote_simulator = VoteSimulator::new(2);
+        let vote_simulator = VoteSimulator::new(num_validators);
         let mut my_leader_bank = vote_simulator.bank_forks.read().unwrap().root_bank();
 
         // Create a set of valid ancestor hashes for this fork
@@ -526,11 +526,9 @@ mod tests {
             .receive_and_process_vote_packets(&r, true, None)
             .unwrap();
 
-        // Check we get two batches, one for each validator. Each batch
-        // should only contain a packets structure with the specific number
-        // of packets associated with that batch
-        assert_eq!(verified_vote_packets.0.len(), 2);
-        // Every validator should have `slot_hashes.slot_hashes().len()` votes
+        // One batch of vote packets per validator
+        assert_eq!(verified_vote_packets.0.len(), num_validators);
+        // Each validator should have one vote per slot
         assert!(verified_vote_packets
             .0
             .values()
@@ -544,8 +542,7 @@ mod tests {
         );
 
         // Get and verify batches
-        let num_expected_batches = 2;
-        for _ in 0..num_expected_batches {
+        for _ in 0..num_validators {
             let validator_batch: Vec<PacketBatch> = gossip_votes_iterator.next().unwrap();
             assert_eq!(validator_batch.len(), slot_hashes.slot_hashes().len());
             let expected_len = validator_batch[0].len();
