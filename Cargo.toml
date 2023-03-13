@@ -259,9 +259,9 @@ qstring = "0.7.2"
 #quinn = "0.9.3"
 #quinn-proto = "0.9.2"
 
-quinn = {git = "https://github.com/lijunwangs/quinn.git", rev = "a16b3690c013bb40efaaa0fc62ee461e53953c4c"}
-quinn-proto = {git = "https://github.com/lijunwangs/quinn.git", rev = "a16b3690c013bb40efaaa0fc62ee461e53953c4c"}
-quinn-udp = {git = "https://github.com/lijunwangs/quinn.git", rev = "a16b3690c013bb40efaaa0fc62ee461e53953c4c"}
+quinn = {git = "https://github.com/lijunwangs/quinn.git", rev = "7e5e35d57f78124f77816d045ea7c210a61de0ca"}
+quinn-proto = {git = "https://github.com/lijunwangs/quinn.git", rev = "7e5e35d57f78124f77816d045ea7c210a61de0ca"}
+quinn-udp = {git = "https://github.com/lijunwangs/quinn.git", rev = "7e5e35d57f78124f77816d045ea7c210a61de0ca"}
 
 quote = "1.0"
 rand = "0.7.0"
