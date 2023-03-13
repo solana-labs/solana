@@ -45,6 +45,8 @@ impl LeaderBankStatus {
 
         *status = Status::InProgress;
         *self.bank.write().unwrap() = Some((bank.slot(), Arc::downgrade(bank)));
+        drop(status);
+
         self.condvar.notify_all();
     }
 
@@ -64,6 +66,8 @@ impl LeaderBankStatus {
         }
 
         *status = Status::Completed;
+        drop(status);
+
         self.condvar.notify_all();
     }
 
@@ -117,8 +121,8 @@ mod tests {
         let jh = std::thread::spawn(move || {
             let _weak_bank = leader_bank_status2.wait_for_in_progress(Duration::from_secs(1));
         });
+        std::thread::sleep(Duration::from_millis(10));
         leader_bank_status.set_in_progress(&Arc::new(Bank::default_for_tests()));
-        leader_bank_status.set_completed(1);
 
         jh.join().unwrap();
     }
@@ -129,9 +133,11 @@ mod tests {
         let leader_bank_status2 = leader_bank_status.clone();
 
         let jh = std::thread::spawn(move || {
-            let _weak_bank = leader_bank_status2.wait_for_next_completed(Duration::from_secs(1));
+            let _slot = leader_bank_status2.wait_for_next_completed(Duration::from_secs(1));
         });
         leader_bank_status.set_in_progress(&Arc::new(Bank::default_for_tests()));
+        std::thread::sleep(Duration::from_millis(10));
+        leader_bank_status.set_completed(1);
 
         jh.join().unwrap();
     }
