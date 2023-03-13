@@ -124,6 +124,7 @@ where
         None,
         &Arc::default(),
         None,
+        u64::default(),
     )
     .map(|(accounts_db, _)| accounts_db)
 }
@@ -221,8 +222,8 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     check_accounts(&daccounts, &pubkeys, 100);
     let daccounts_delta_hash = daccounts.accounts_db.calculate_accounts_delta_hash(slot);
     assert_eq!(accounts_delta_hash, daccounts_delta_hash);
-    let daccounts_hash = daccounts.accounts_db.get_accounts_hash(slot);
-    assert_eq!(Some(accounts_hash), daccounts_hash);
+    let daccounts_hash = daccounts.accounts_db.get_accounts_hash(slot).unwrap().0;
+    assert_eq!(accounts_hash, daccounts_hash);
 }
 
 fn test_bank_serialize_style(

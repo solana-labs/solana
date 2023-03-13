@@ -314,11 +314,16 @@ impl AccountsHashVerifier {
         if accounts_package.package_type
             == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
         {
+            let last_full_snapshot_slot = accounts_package.slot;
             *last_full_snapshot = Some(FullSnapshotAccountsHashInfo {
-                slot: accounts_package.slot,
+                slot: last_full_snapshot_slot,
                 accounts_hash,
                 capitalization: lamports,
             });
+            accounts_package
+                .accounts
+                .accounts_db
+                .purge_old_accounts_hashes(last_full_snapshot_slot);
         }
 
         datapoint_info!(
