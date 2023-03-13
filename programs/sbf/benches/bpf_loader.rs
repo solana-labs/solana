@@ -1,5 +1,7 @@
 #![feature(test)]
 #![cfg(feature = "sbf_c")]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::integer_arithmetic)]
 
 use {solana_rbpf::memory_region::MemoryState, std::slice};
 

@@ -12,6 +12,10 @@ edition = { workspace = true }
 [dependencies]
 solana-program = { workspace = true }
 
+[features]
+test-bpf = []
+dummy-for-ci-check = ["test-bpf"]
+
 [dev-dependencies]
 solana-program-runtime = { workspace = true }
 solana-program-test = { workspace = true }

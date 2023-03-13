@@ -12,7 +12,7 @@ use {
 };
 
 #[tokio::test]
-async fn test_sysvars() {
+async fn test_sanity() {
     let program_id = Pubkey::new_unique();
     let program_test = ProgramTest::new(
         "solana_sbf_rust_sanity",
