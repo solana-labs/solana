@@ -11,13 +11,11 @@ pub use self::{
 };
 #[allow(deprecated)]
 use {
-    crate::BpfError,
     solana_program_runtime::{
         compute_budget::ComputeBudget, ic_logger_msg, ic_msg, invoke_context::InvokeContext,
         stable_log, timings::ExecuteTimings,
     },
     solana_rbpf::{
-        error::EbpfError,
         memory_region::{AccessType, MemoryMapping},
         vm::{BuiltInProgram, Config, ProgramResult, PROGRAM_ENVIRONMENT_KEY_SHIFT},
     },
@@ -126,11 +124,6 @@ pub enum SyscallError {
     },
     #[error("InvalidAttribute")]
     InvalidAttribute,
-}
-impl From<SyscallError> for EbpfError {
-    fn from(error: SyscallError) -> Self {
-        EbpfError::UserError(Box::<BpfError>::new(error.into()))
-    }
 }
 
 fn consume_compute_meter(

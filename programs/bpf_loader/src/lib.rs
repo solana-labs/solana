@@ -26,9 +26,8 @@ use {
         aligned_memory::AlignedMemory,
         ebpf::{self, HOST_ALIGN, MM_HEAP_START},
         elf::Executable,
-        error::UserDefinedError,
         memory_region::{MemoryCowCallback, MemoryMapping, MemoryRegion},
-        verifier::{RequisiteVerifier, VerifierError},
+        verifier::RequisiteVerifier,
         vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
@@ -61,12 +60,10 @@ use {
     },
     std::{
         cell::{RefCell, RefMut},
-        fmt::Debug,
         mem,
         rc::Rc,
         sync::{atomic::Ordering, Arc},
     },
-    thiserror::Error,
 };
 
 solana_sdk::declare_builtin!(
@@ -74,16 +71,6 @@ solana_sdk::declare_builtin!(
     solana_bpf_loader_program,
     solana_bpf_loader_program::process_instruction
 );
-
-/// Errors returned by functions the BPF Loader registers with the VM
-#[derive(Debug, Error, PartialEq, Eq)]
-pub enum BpfError {
-    #[error("{0}")]
-    VerifierError(#[from] VerifierError),
-    #[error("{0}")]
-    SyscallError(#[from] SyscallError),
-}
-impl UserDefinedError for BpfError {}
 
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
