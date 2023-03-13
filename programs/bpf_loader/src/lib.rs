@@ -1751,7 +1751,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "ExceededMaxInstructions(31, 10)")]
+    #[should_panic(expected = "ExceededMaxInstructions(31)")]
     fn test_bpf_loader_non_terminating_program() {
         #[rustfmt::skip]
         let program = &[

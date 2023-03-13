@@ -289,7 +289,7 @@ signal-hook = "0.3.14"
 smpl_jwt = "0.7.1"
 socket2 = "0.4.7"
 soketto = "0.7"
-solana_rbpf = "=0.2.40"
+solana_rbpf = "=0.3.0"
 solana-account-decoder = { path = "account-decoder", version = "=1.16.0" }
 solana-address-lookup-table-program = { path = "programs/address-lookup-table", version = "=1.16.0" }
 solana-banks-client = { path = "banks-client", version = "=1.16.0" }
