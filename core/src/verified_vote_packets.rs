@@ -107,48 +107,50 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         use SingleValidatorVotes::*;
-        // TODO: Maybe prioritize by stake weight
         while !self.vote_account_keys.is_empty() {
-            let vote_account_key = self.vote_account_keys.pop().unwrap();
-            // Get all the gossip votes we've queued up for this validator
-            // that are:
-            // 1) missing from the current leader bank
-            // 2) on the same fork
-            let validator_votes = self
-                .verified_vote_packets
-                .0
-                .get(&vote_account_key)
-                .and_then(|validator_gossip_votes| {
-                    // Fetch the validator's vote state from the bank
-                    self.my_leader_bank
-                        .vote_accounts()
-                        .get(&vote_account_key)
-                        .and_then(|(_stake, vote_account)| {
-                            vote_account.vote_state().as_ref().ok().map(|vote_state| {
-                                let start_vote_slot =
-                                    vote_state.last_voted_slot().map(|x| x + 1).unwrap_or(0);
-                                match validator_gossip_votes {
-                                    FullTowerVote(GossipVote {
-                                        slot,
-                                        hash,
-                                        packet_batch,
-                                        signature,
-                                    }) => self
-                                        .filter_vote(slot, hash, packet_batch, signature)
-                                        .map(|packet| vec![packet])
-                                        .unwrap_or_default(),
-                                    IncrementalVotes(validator_gossip_votes) => {
-                                        validator_gossip_votes
-                                            .range((start_vote_slot, Hash::default())..)
-                                            .filter_map(|((slot, hash), (packet, tx_signature))| {
-                                                self.filter_vote(slot, hash, packet, tx_signature)
-                                            })
-                                            .collect::<Vec<PacketBatch>>()
-                                    }
-                                }
-                            })
+            let mut heaviest_validator_vote_info = None;
+            let mut max_stake = 0;
+            for (index, vote_account_key) in self.vote_account_keys.iter().enumerate() {
+                match (
+                    self.my_leader_bank.vote_accounts().get(&vote_account_key),
+                    self.verified_vote_packets.0.get(&vote_account_key),
+                ) {
+                    (Some((stake, vote_account)), Some(validator_gossip_votes)) => {
+                        if *stake >= max_stake {
+                            max_stake = *stake;
+                            heaviest_validator_vote_info =
+                                Some((index, vote_account.clone(), validator_gossip_votes));
+                        }
+                    }
+                    _ => (),
+                }
+            }
+
+            let (index, vote_account, validator_gossip_votes) =
+                heaviest_validator_vote_info.expect("Must find a vote account");
+            self.vote_account_keys.remove(index);
+
+            let validator_votes = vote_account.vote_state().as_ref().ok().map(|vote_state| {
+                let start_vote_slot = vote_state.last_voted_slot().map(|x| x + 1).unwrap_or(0);
+                match validator_gossip_votes {
+                    FullTowerVote(GossipVote {
+                        slot,
+                        hash,
+                        packet_batch,
+                        signature,
+                    }) => self
+                        .filter_vote(slot, hash, packet_batch, signature)
+                        .map(|packet| vec![packet])
+                        .unwrap_or_default(),
+                    IncrementalVotes(validator_gossip_votes) => validator_gossip_votes
+                        .range((start_vote_slot, Hash::default())..)
+                        .filter_map(|((slot, hash), (packet, tx_signature))| {
+                            self.filter_vote(slot, hash, packet, tx_signature)
                         })
-                });
+                        .collect::<Vec<PacketBatch>>(),
+                }
+            });
+
             if let Some(validator_votes) = validator_votes {
                 if !validator_votes.is_empty() {
                     return Some(validator_votes);
