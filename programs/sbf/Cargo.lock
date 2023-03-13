@@ -4395,6 +4395,7 @@ dependencies = [
  "libsecp256k1 0.6.0",
  "log",
  "rand 0.7.3",
+ "solana-bpf-tracer-plugin-interface",
  "solana-measure",
  "solana-program-runtime",
  "solana-sdk 1.16.0",
@@ -4421,6 +4422,15 @@ dependencies = [
  "serde",
  "serde_json",
  "solana-program 1.16.0",
+]
+
+[[package]]
+name = "solana-bpf-tracer-plugin-interface"
+version = "1.16.0"
+dependencies = [
+ "solana-sdk 1.16.0",
+ "solana_rbpf",
+ "thiserror",
 ]
 
 [[package]]
@@ -4593,6 +4603,7 @@ dependencies = [
  "serde_derive",
  "solana-address-lookup-table-program",
  "solana-bloom",
+ "solana-bpf-tracer-plugin-interface",
  "solana-client",
  "solana-entry",
  "solana-frozen-abi 1.16.0",
@@ -4797,6 +4808,7 @@ dependencies = [
  "libloading",
  "log",
  "serde_json",
+ "solana-bpf-tracer-plugin-interface",
  "solana-geyser-plugin-interface",
  "solana-measure",
  "solana-metrics",
@@ -4886,6 +4898,7 @@ dependencies = [
  "sha2 0.10.6",
  "solana-account-decoder",
  "solana-bpf-loader-program",
+ "solana-bpf-tracer-plugin-interface",
  "solana-entry",
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
@@ -5145,6 +5158,7 @@ dependencies = [
  "rand 0.7.3",
  "rustc_version 0.4.0",
  "serde",
+ "solana-bpf-tracer-plugin-interface",
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
  "solana-measure",
@@ -5399,6 +5413,7 @@ dependencies = [
  "serde_derive",
  "solana-address-lookup-table-program",
  "solana-bpf-loader-program",
+ "solana-bpf-tracer-plugin-interface",
  "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
