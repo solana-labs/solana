@@ -14,8 +14,14 @@ use {
     },
 };
 
-pub type RewardsRecorderReceiver = Receiver<(Slot, Vec<(Pubkey, RewardInfo)>)>;
-pub type RewardsRecorderSender = Sender<(Slot, Vec<(Pubkey, RewardInfo)>)>;
+pub type RewardsBatch = (Slot, Vec<(Pubkey, RewardInfo)>);
+pub type RewardsRecorderReceiver = Receiver<RewardsMessage>;
+pub type RewardsRecorderSender = Sender<RewardsMessage>;
+
+pub enum RewardsMessage {
+    Batch(RewardsBatch),
+    Complete(Slot),
+}
 
 pub struct RewardsRecorderService {
     thread_hdl: JoinHandle<()>,
@@ -49,21 +55,25 @@ impl RewardsRecorderService {
         rewards_receiver: &RewardsRecorderReceiver,
         blockstore: &Arc<Blockstore>,
     ) -> Result<(), RecvTimeoutError> {
-        let (slot, rewards) = rewards_receiver.recv_timeout(Duration::from_secs(1))?;
-        let rpc_rewards = rewards
-            .into_iter()
-            .map(|(pubkey, reward_info)| Reward {
-                pubkey: pubkey.to_string(),
-                lamports: reward_info.lamports,
-                post_balance: reward_info.post_balance,
-                reward_type: Some(reward_info.reward_type),
-                commission: reward_info.commission,
-            })
-            .collect();
+        match rewards_receiver.recv_timeout(Duration::from_secs(1))? {
+            RewardsMessage::Batch((slot, rewards)) => {
+                let rpc_rewards = rewards
+                    .into_iter()
+                    .map(|(pubkey, reward_info)| Reward {
+                        pubkey: pubkey.to_string(),
+                        lamports: reward_info.lamports,
+                        post_balance: reward_info.post_balance,
+                        reward_type: Some(reward_info.reward_type),
+                        commission: reward_info.commission,
+                    })
+                    .collect();
 
-        blockstore
-            .write_rewards(slot, rpc_rewards)
-            .expect("Expect database write to succeed");
+                blockstore
+                    .write_rewards(slot, rpc_rewards)
+                    .expect("Expect database write to succeed");
+            }
+            RewardsMessage::Complete(_) => {}
+        }
         Ok(())
     }
 
