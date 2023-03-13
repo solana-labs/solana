@@ -40,7 +40,7 @@ use {
 mod smallest_length_44_public_key {
     use solana_sdk::declare_id;
 
-    declare_id!("21111111111111111111111111111111111111111111");
+    pubkey!("21111111111111111111111111111111111111111111");
 
     #[test]
     fn assert_length() {
