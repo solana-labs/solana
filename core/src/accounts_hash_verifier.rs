@@ -216,6 +216,22 @@ impl AccountsHashVerifier {
 
     /// returns calculated accounts hash
     fn calculate_and_verify_accounts_hash(accounts_package: &AccountsPackage) -> AccountsHashEnum {
+        let slot = accounts_package.slot;
+        let accounts_hash_calculation_flavor = match accounts_package.package_type {
+            AccountsPackageType::AccountsHashVerifier => CalcAccountsHashFlavor::Full,
+            AccountsPackageType::EpochAccountsHash => CalcAccountsHashFlavor::Full,
+            AccountsPackageType::Snapshot(snapshot_type) => match snapshot_type {
+                SnapshotType::FullSnapshot => CalcAccountsHashFlavor::Full,
+                SnapshotType::IncrementalSnapshot(_) => {
+                    if accounts_package.is_incremental_accounts_hash_feature_enabled {
+                        CalcAccountsHashFlavor::Incremental
+                    } else {
+                        CalcAccountsHashFlavor::Full
+                    }
+                }
+            },
+        };
+
         let mut measure_hash = Measure::start("hash");
         let mut sort_time = Measure::start("sort_storages");
         let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
@@ -246,16 +262,6 @@ impl AccountsHashVerifier {
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
 
-        let accounts_hash_calculation_flavor = match accounts_package.package_type {
-            AccountsPackageType::AccountsHashVerifier => CalcAccountsHashFlavor::Full,
-            AccountsPackageType::EpochAccountsHash => CalcAccountsHashFlavor::Full,
-            AccountsPackageType::Snapshot(snapshot_type) => match snapshot_type {
-                SnapshotType::FullSnapshot => CalcAccountsHashFlavor::Full,
-                SnapshotType::IncrementalSnapshot(_) => CalcAccountsHashFlavor::Incremental,
-            },
-        };
-
-        let slot = accounts_package.slot;
         match accounts_hash_calculation_flavor {
             CalcAccountsHashFlavor::Full => {
                 let old_accounts_hash = accounts_package
