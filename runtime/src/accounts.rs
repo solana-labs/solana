@@ -309,6 +309,7 @@ impl Accounts {
         Ok(program_account)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn load_transaction_accounts(
         &self,
         ancestors: &Ancestors,
