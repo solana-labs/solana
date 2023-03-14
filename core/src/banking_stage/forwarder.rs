@@ -9,7 +9,7 @@ use {
     },
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_gossip::cluster_info::ClusterInfo,
-    solana_measure::measure::Measure,
+    solana_measure::measure_us,
     solana_perf::{data_budget::DataBudget, packet::Packet},
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::bank_forks::BankForks,
@@ -167,33 +167,20 @@ impl Forwarder {
         // in favor of shipping Quic support, which was considered higher-priority
         if !packet_vec.is_empty() {
             inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec_len);
+            let (res, forward_us) =
+                measure_us!(self.forward_packets(forward_option, packet_vec, &addr));
 
-            let mut measure = Measure::start("banking_stage-forward-us");
-
-            let res = if let ForwardOption::ForwardTpuVote = forward_option {
-                // The vote must be forwarded using only UDP.
+            if let ForwardOption::ForwardTpuVote = forward_option {
                 banking_stage_stats
                     .forwarded_vote_count
                     .fetch_add(packet_vec_len, Ordering::Relaxed);
-                let pkts: Vec<_> = packet_vec.into_iter().zip(repeat(addr)).collect();
-                batch_send(&self.socket, &pkts).map_err(|err| err.into())
             } else {
-                // All other transactions can be forwarded using QUIC, get_connection() will use
-                // system wide setting to pick the correct connection object.
                 banking_stage_stats
                     .forwarded_transaction_count
                     .fetch_add(packet_vec_len, Ordering::Relaxed);
-                let conn = self.connection_cache.get_connection(&addr);
-                conn.send_data_batch_async(packet_vec)
-            };
+            }
 
-            measure.stop();
-            inc_new_counter_info!(
-                "banking_stage-forward-us",
-                measure.as_us() as usize,
-                1000,
-                1000
-            );
+            inc_new_counter_info!("banking_stage-forward-us", forward_us as usize, 1000, 1000);
 
             if let Err(err) = res {
                 inc_new_counter_info!("banking_stage-forward_packets-failed-batches", 1);
@@ -231,6 +218,24 @@ impl Forwarder {
                 MAX_BYTES_BUDGET,
             )
         });
+    }
+
+    fn forward_packets(
+        &self,
+        forward_option: &ForwardOption,
+        packet_vec: Vec<Vec<u8>>,
+        addr: &SocketAddr,
+    ) -> Result<(), TransportError> {
+        if let ForwardOption::ForwardTpuVote = forward_option {
+            // The vote must be forwarded using only UDP.
+            let pkts: Vec<_> = packet_vec.into_iter().zip(repeat(addr)).collect();
+            batch_send(&self.socket, &pkts).map_err(|err| err.into())
+        } else {
+            // All other transactions can be forwarded using QUIC, get_connection() will use
+            // system wide setting to pick the correct connection object.
+            let conn = self.connection_cache.get_connection(addr);
+            conn.send_data_batch_async(packet_vec)
+        }
     }
 }
 
