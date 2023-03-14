@@ -7353,7 +7353,7 @@ impl AccountsDb {
     /// Set the accounts hash for `slot` in the `accounts_hashes` map
     ///
     /// returns the previous accounts hash for `slot`
-    fn set_accounts_hash(
+    pub fn set_accounts_hash(
         &self,
         slot: Slot,
         accounts_hash: (AccountsHash, /*capitalization*/ u64),
