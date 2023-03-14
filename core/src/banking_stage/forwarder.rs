@@ -17,7 +17,7 @@ use {
     solana_streamer::sendmmsg::batch_send,
     std::{
         iter::repeat,
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc, RwLock},
     },
 };
@@ -94,6 +94,7 @@ impl Forwarder {
                 slot_metrics_tracker.increment_forwardable_batches_count(1);
 
                 let batched_forwardable_packets_count = forward_batch.len();
+
                 let (_forward_result, sucessful_forwarded_packets_count, leader_pubkey) = self
                     .forward_buffered_packets(
                         &forward_option,
@@ -147,19 +148,8 @@ impl Forwarder {
         usize,
         Option<Pubkey>,
     ) {
-        let leader_and_addr = match forward_option {
-            ForwardOption::NotForward => return (Ok(()), 0, None),
-            ForwardOption::ForwardTransaction => {
-                next_leader_tpu_forwards(&self.cluster_info, &self.poh_recorder)
-            }
-
-            ForwardOption::ForwardTpuVote => {
-                next_leader_tpu_vote(&self.cluster_info, &self.poh_recorder)
-            }
-        };
-        let (leader_pubkey, addr) = match leader_and_addr {
-            Some(leader_and_addr) => leader_and_addr,
-            None => return (Ok(()), 0, None),
+        let Some((leader_pubkey, addr)) = self.forward_to_leader(forward_option) else {
+            return (Ok(()), 0, None);
         };
 
         self.update_data_budget();
@@ -212,6 +202,20 @@ impl Forwarder {
         }
 
         (Ok(()), packet_vec_len, Some(leader_pubkey))
+    }
+
+    // Get the next leader to forward to, if any
+    fn forward_to_leader(&self, forward_option: &ForwardOption) -> Option<(Pubkey, SocketAddr)> {
+        match forward_option {
+            ForwardOption::NotForward => None,
+            ForwardOption::ForwardTransaction => {
+                next_leader_tpu_forwards(&self.cluster_info, &self.poh_recorder)
+            }
+
+            ForwardOption::ForwardTpuVote => {
+                next_leader_tpu_vote(&self.cluster_info, &self.poh_recorder)
+            }
+        }
     }
 
     // Updates the data budget for forwarding packets if enough time has passed
