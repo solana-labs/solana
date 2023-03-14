@@ -83,15 +83,9 @@ pub fn spl_programs(rent: &Rent) -> Vec<(Pubkey, AccountSharedData)> {
             accounts.push((
                 *program_id,
                 AccountSharedData::from(Account {
-<<<<<<< HEAD
-                    lamports: rent.minimum_balance(elf.len()).min(1),
-                    data: elf.to_vec(),
-                    owner: solana_sdk::bpf_loader::id(),
-=======
                     lamports: rent.minimum_balance(data.len()).max(1),
                     data,
                     owner: *loader_id,
->>>>>>> e326f4f60 (program-test: Add token-2022 to default programs (#29878))
                     executable: true,
                     rent_epoch: 0,
                 }),
