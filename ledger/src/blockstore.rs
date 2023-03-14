@@ -4600,12 +4600,12 @@ pub fn make_chaining_slot_entries(
     slots_shreds_and_entries
 }
 
-#[cfg(not(unixx))]
+#[cfg(not(unix))]
 fn adjust_ulimit_nofile(_enforce_ulimit_nofile: bool) -> Result<()> {
     Ok(())
 }
 
-#[cfg(unixx)]
+#[cfg(unix)]
 fn adjust_ulimit_nofile(enforce_ulimit_nofile: bool) -> Result<()> {
     // Rocks DB likes to have many open files.  The default open file descriptor limit is
     // usually not enough
