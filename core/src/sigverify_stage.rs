@@ -362,7 +362,7 @@ impl SigVerifyStage {
         // Peel off limited number of batches to verify so as not to overwhelm the verifier.
         let mut num_packets_to_verify_total = buffered_batches[0].len();
         let mut num_batches_to_verify = 1;
-        for batch in buffered_batches.iter_mut() {
+        for batch in buffered_batches[1..].iter_mut() {
             if num_packets_to_verify_total + batch.len() > MAX_SIGVERIFY_BATCH {
                 break;
             } else {
