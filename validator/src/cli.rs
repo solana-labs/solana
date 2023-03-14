@@ -1188,8 +1188,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("accounts_db_skip_shrink")
                 .long("accounts-db-skip-shrink")
-                .help("Enables faster starting of validators by skipping shrink. \
-                      This option is for use during testing."),
+                .help("This is obsolete since it is now enabled by default. Enables faster starting of validators by skipping startup clean and shrink.")
+                .hidden(true),
         )
         .arg(
             Arg::with_name("accounts_db_create_ancient_storage_packed")
