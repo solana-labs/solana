@@ -15,7 +15,10 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        feature_set::{enable_early_verification_of_account_modifications, FeatureSet},
+        feature_set::{
+            enable_early_verification_of_account_modifications, native_programs_consume_cu,
+            FeatureSet,
+        },
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
         native_loader,
@@ -777,7 +780,12 @@ impl<'a> InvokeContext<'a> {
 
                 // if builtin program didn't manually consume units when processing instruction,
                 // then its default_compute_unit_cost is used to deduct from budget.
-                if is_builtin_program && *compute_units_consumed == 0 {
+                if is_builtin_program
+                    && *compute_units_consumed == 0
+                    && self
+                        .feature_set
+                        .is_active(&native_programs_consume_cu::id())
+                {
                     self.consume_checked(entry.default_compute_unit_cost)?;
                 }
 
