@@ -1128,7 +1128,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             return;
         }
 
-        let write_to_disk = self.get_write_bucket_to_disk();
+        let mut write_to_disk = self.get_write_bucket_to_disk();
+        if write_to_disk {
+            write_to_disk = !self.storage.write_active.swap(true, Ordering::Relaxed);
+        }
         Self::update_stat(
             if write_to_disk {
                 &self.stats().buckets_written_to_disk
@@ -1257,6 +1260,11 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 assert_eq!(current_age, self.storage.current_age());
                 self.set_has_aged(current_age, can_advance_age);
             }
+        }
+
+        if write_to_disk {
+            // no longer active
+            self.storage.write_active.store(false, Ordering::Relaxed);
         }
     }
 

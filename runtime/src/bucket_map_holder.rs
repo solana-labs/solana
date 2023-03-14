@@ -68,6 +68,8 @@ pub struct BucketMapHolder<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>
     /// Note startup is an optimization and is not required for correctness.
     startup: AtomicBool,
     _phantom: PhantomData<T>,
+
+    pub(crate) write_active: AtomicBool,
 }
 
 impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Debug for BucketMapHolder<T, U> {
@@ -258,6 +260,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> BucketMapHolder<T, U>
             startup: AtomicBool::default(),
             mem_budget_mb,
             threads,
+            write_active: AtomicBool::default(),
             _phantom: PhantomData,
         }
     }
