@@ -26,8 +26,10 @@ use {
     dashmap::DashMap,
     log::*,
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
-    solana_program_runtime::compute_budget::{self, ComputeBudget},
-    solana_program_runtime::loaded_programs::LoadedProgram,
+    solana_program_runtime::{
+        compute_budget::{self, ComputeBudget},
+        loaded_programs::LoadedProgram,
+    },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
