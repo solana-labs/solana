@@ -1425,6 +1425,7 @@ mod tests {
         solana_program_runtime::executor_cache::TransactionExecutorCache,
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
+            bpf_loader_upgradeable::UpgradeableLoaderState,
             epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,
             hash::Hash,
