@@ -1443,9 +1443,11 @@ mod tests {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
             optimistically_confirmed_bank,
@@ -1557,9 +1559,11 @@ mod tests {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
             optimistically_confirmed_bank,

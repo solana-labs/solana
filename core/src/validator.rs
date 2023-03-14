@@ -329,6 +329,7 @@ struct TransactionHistoryServices {
     max_complete_transaction_status_slot: Arc<AtomicU64>,
     rewards_recorder_sender: Option<RewardsRecorderSender>,
     rewards_recorder_service: Option<RewardsRecorderService>,
+    max_complete_rewards_slot: Arc<AtomicU64>,
     cache_block_meta_sender: Option<CacheBlockMetaSender>,
     cache_block_meta_service: Option<CacheBlockMetaService>,
 }
@@ -545,6 +546,7 @@ impl Validator {
                 max_complete_transaction_status_slot,
                 rewards_recorder_sender,
                 rewards_recorder_service,
+                max_complete_rewards_slot,
                 cache_block_meta_sender,
                 cache_block_meta_service,
             },
@@ -740,6 +742,7 @@ impl Validator {
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_config(
             &exit,
             max_complete_transaction_status_slot.clone(),
+            max_complete_rewards_slot.clone(),
             blockstore.clone(),
             bank_forks.clone(),
             block_commitment_cache.clone(),
@@ -824,6 +827,35 @@ impl Validator {
             } else {
                 None
             };
+<<<<<<< HEAD
+=======
+
+            let json_rpc_service = JsonRpcService::new(
+                rpc_addr,
+                config.rpc_config.clone(),
+                Some(config.snapshot_config.clone()),
+                bank_forks.clone(),
+                block_commitment_cache.clone(),
+                blockstore.clone(),
+                cluster_info.clone(),
+                Some(poh_recorder.clone()),
+                genesis_config.hash(),
+                ledger_path,
+                config.validator_exit.clone(),
+                config.known_validators.clone(),
+                rpc_override_health_check.clone(),
+                startup_verification_complete,
+                optimistically_confirmed_bank.clone(),
+                config.send_transaction_service_config.clone(),
+                max_slots.clone(),
+                leader_schedule_cache.clone(),
+                connection_cache.clone(),
+                max_complete_transaction_status_slot,
+                max_complete_rewards_slot,
+                prioritization_fee_cache.clone(),
+            )?;
+
+>>>>>>> b389d509a (Track max_complete_rewards_slot for use in rpc, bigtable (#30698))
             (
                 Some(JsonRpcService::new(
                     rpc_addr,
@@ -1860,10 +1892,12 @@ fn initialize_rpc_transaction_history_services(
         exit,
     ));
 
+    let max_complete_rewards_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
     let (rewards_recorder_sender, rewards_receiver) = unbounded();
     let rewards_recorder_sender = Some(rewards_recorder_sender);
     let rewards_recorder_service = Some(RewardsRecorderService::new(
         rewards_receiver,
+        max_complete_rewards_slot.clone(),
         blockstore.clone(),
         exit,
     ));
@@ -1881,6 +1915,7 @@ fn initialize_rpc_transaction_history_services(
         max_complete_transaction_status_slot,
         rewards_recorder_sender,
         rewards_recorder_service,
+        max_complete_rewards_slot,
         cache_block_meta_sender,
         cache_block_meta_service,
     }
