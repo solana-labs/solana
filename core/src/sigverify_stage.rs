@@ -355,6 +355,7 @@ impl SigVerifyStage {
         // Shrink batches if many packets were discarded randomly.
         let (pre_shrink_time_us, pre_shrink_total) = Self::maybe_shrink_batches(buffered_batches);
         if buffered_batches.is_empty() {
+            verifier.send_packets(batches)?;
             return Ok(());
         }
 
@@ -374,6 +375,7 @@ impl SigVerifyStage {
         let num_packets_to_verify_valid = count_packets_in_batches(&batches_to_verify);
 
         if num_packets_to_verify_valid == 0 {
+            verifier.send_packets(batches)?;
             return Ok(());
         }
 
