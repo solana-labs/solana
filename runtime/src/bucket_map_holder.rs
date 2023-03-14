@@ -51,7 +51,7 @@ pub struct BucketMapHolder<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>
     // used by bg processing to know when any bucket has become dirty
     pub wait_dirty_or_aged: Arc<WaitableCondvar>,
     next_bucket_to_flush: AtomicUsize,
-    bins: usize,
+    pub(crate) bins: usize,
 
     pub threads: usize,
 

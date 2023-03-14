@@ -1112,7 +1112,13 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 // assume each entry is this many bytes
                 let average_size = 400;
                 let threshold_flush_entries = threshold_flush_bytes / average_size;
-                self.stats().count_in_mem.load(Ordering::Relaxed) > threshold_flush_entries
+                let total_items = self.stats().count_in_mem.load(Ordering::Relaxed);
+                total_items > threshold_flush_entries && {
+                    // only try to flush bins that contain an above average # of entries
+                    // make divisor slightly larger so even if perfectly spaced out, average bins will trigger to flush
+                    let average_per_bin = total_items / (self.storage.bins + 1);
+                    average_per_bin < self.map_internal.read().unwrap().len()
+                }
             })
             .unwrap_or(true)
     }
