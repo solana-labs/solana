@@ -2557,10 +2557,6 @@ mod tests {
         );
         assert_eq!(
             result.accounts[result.program_indices[0][1] as usize],
-            accounts[4]
-        );
-        assert_eq!(
-            result.accounts[result.program_indices[0][2] as usize],
             accounts[3]
         );
     }
