@@ -22,6 +22,12 @@ use {
     },
 };
 
+struct ForwardStats {
+    successful: bool,
+    attempted_forwarded_packets: usize,
+    forward_time_us: u64,
+}
+
 pub(crate) struct Forwarder {
     poh_recorder: Arc<RwLock<PohRecorder>>,
     bank_forks: Arc<RwLock<BankForks>>,
@@ -95,7 +101,7 @@ impl Forwarder {
 
                 let batched_forwardable_packets_count = forward_batch.len();
 
-                let (_forward_result, sucessful_forwarded_packets_count, leader_pubkey) = self
+                let (sucessful_forwarded_packets_count, leader_pubkey) = self
                     .forward_buffered_packets(
                         &forward_option,
                         forward_batch.get_forwardable_packets(),
@@ -136,63 +142,88 @@ impl Forwarder {
         }
     }
 
+    /// Forward `packets` to the appropriate leader if available using `forward_option`.
+    fn forward<'a>(
+        &self,
+        forward_option: &ForwardOption,
+        addr: &SocketAddr,
+        packets: impl Iterator<Item = &'a Packet>,
+    ) -> ForwardStats {
+        self.update_data_budget();
+        let packet_vec: Vec<_> = packets
+            .filter(|p| !p.meta().forwarded())
+            .filter(|p| self.data_budget.take(p.meta().size))
+            .filter_map(|p| p.data(..).map(|d| d.to_vec()))
+            .collect();
+        let attempted_forwarded_packets = packet_vec.len();
+
+        // TODO: see https://github.com/solana-labs/solana/issues/23819
+        // fix this so returns the correct number of succeeded packets
+        // when there's an error sending the batch. This was left as-is for now
+        // in favor of shipping Quic support, which was considered higher-priority
+        let (successful, forward_time_us) = measure_us!(self
+            .forward_packets_to(forward_option, packet_vec, addr)
+            .is_ok());
+
+        ForwardStats {
+            successful,
+            attempted_forwarded_packets,
+            forward_time_us,
+        }
+    }
+
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
-    /// the number of successfully forwarded packets in second part of tuple
+    /// the number of successfully forwarded packets and the leader pubkey if any.
     fn forward_buffered_packets<'a>(
         &self,
         forward_option: &ForwardOption,
         forwardable_packets: impl Iterator<Item = &'a Packet>,
         banking_stage_stats: &BankingStageStats,
-    ) -> (
-        std::result::Result<(), TransportError>,
-        usize,
-        Option<Pubkey>,
-    ) {
-        let Some((leader_pubkey, addr)) = self.forward_to_leader(forward_option) else {
-            return (Ok(()), 0, None);
+    ) -> (usize, Option<Pubkey>) {
+        let Some((leader_pubkey, addr)) = self.get_leader_for_forwarding(forward_option) else {
+            return (0, None);
         };
 
-        self.update_data_budget();
+        let ForwardStats {
+            successful,
+            attempted_forwarded_packets,
+            forward_time_us,
+        } = self.forward(forward_option, &addr, forwardable_packets);
 
-        let packet_vec: Vec<_> = forwardable_packets
-            .filter(|p| !p.meta().forwarded())
-            .filter(|p| self.data_budget.take(p.meta().size))
-            .filter_map(|p| p.data(..).map(|d| d.to_vec()))
-            .collect();
-
-        let packet_vec_len = packet_vec.len();
-        // TODO: see https://github.com/solana-labs/solana/issues/23819
-        // fix this so returns the correct number of succeeded packets
-        // when there's an error sending the batch. This was left as-is for now
-        // in favor of shipping Quic support, which was considered higher-priority
-        if !packet_vec.is_empty() {
-            inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec_len);
-            let (res, forward_us) =
-                measure_us!(self.forward_packets(forward_option, packet_vec, &addr));
-
-            if let ForwardOption::ForwardTpuVote = forward_option {
-                banking_stage_stats
-                    .forwarded_vote_count
-                    .fetch_add(packet_vec_len, Ordering::Relaxed);
-            } else {
-                banking_stage_stats
-                    .forwarded_transaction_count
-                    .fetch_add(packet_vec_len, Ordering::Relaxed);
-            }
-
-            inc_new_counter_info!("banking_stage-forward-us", forward_us as usize, 1000, 1000);
-
-            if let Err(err) = res {
-                inc_new_counter_info!("banking_stage-forward_packets-failed-batches", 1);
-                return (Err(err), 0, Some(leader_pubkey));
-            }
+        if let ForwardOption::ForwardTpuVote = forward_option {
+            banking_stage_stats
+                .forwarded_vote_count
+                .fetch_add(attempted_forwarded_packets, Ordering::Relaxed);
+        } else {
+            banking_stage_stats
+                .forwarded_transaction_count
+                .fetch_add(attempted_forwarded_packets, Ordering::Relaxed);
         }
 
-        (Ok(()), packet_vec_len, Some(leader_pubkey))
+        inc_new_counter_info!(
+            "banking_stage-forwarded_packets",
+            attempted_forwarded_packets
+        );
+        inc_new_counter_info!(
+            "banking_stage-forward-us",
+            forward_time_us as usize,
+            1000,
+            1000
+        );
+
+        if !successful {
+            inc_new_counter_info!("banking_stage-forward_packets-failed-batches", 1);
+            (0, Some(leader_pubkey))
+        } else {
+            (attempted_forwarded_packets, Some(leader_pubkey))
+        }
     }
 
     // Get the next leader to forward to, if any
-    fn forward_to_leader(&self, forward_option: &ForwardOption) -> Option<(Pubkey, SocketAddr)> {
+    fn get_leader_for_forwarding(
+        &self,
+        forward_option: &ForwardOption,
+    ) -> Option<(Pubkey, SocketAddr)> {
         match forward_option {
             ForwardOption::NotForward => None,
             ForwardOption::ForwardTransaction => {
@@ -220,12 +251,16 @@ impl Forwarder {
         });
     }
 
-    fn forward_packets(
+    fn forward_packets_to(
         &self,
         forward_option: &ForwardOption,
         packet_vec: Vec<Vec<u8>>,
         addr: &SocketAddr,
     ) -> Result<(), TransportError> {
+        if packet_vec.is_empty() {
+            return Ok(());
+        }
+
         if let ForwardOption::ForwardTpuVote = forward_option {
             // The vote must be forwarded using only UDP.
             let pkts: Vec<_> = packet_vec.into_iter().zip(repeat(addr)).collect();
