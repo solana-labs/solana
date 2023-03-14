@@ -2588,6 +2588,10 @@ pub fn main() {
     }
     let full_api = matches.is_present("full_rpc_api");
 
+    if matches.is_present("accounts_db_skip_shrink") {
+        warn!("`--accounts-db-skip-shrink` is deprecated. please consider removing it from the validator command line argument list");
+    }
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
