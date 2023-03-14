@@ -20,13 +20,8 @@ use {
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::{ForkProgress, ProgressMap, PropagatedStats, ReplaySlotStats},
-<<<<<<< HEAD
         repair_service::DuplicateSlotsResetReceiver,
-        rewards_recorder_service::RewardsRecorderSender,
-=======
-        repair_service::{DumpedSlotsSender, DuplicateSlotsResetReceiver},
         rewards_recorder_service::{RewardsMessage, RewardsRecorderSender},
->>>>>>> b389d509a (Track max_complete_rewards_slot for use in rpc, bigtable (#30698))
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
         validator::ProcessBlockStore,
