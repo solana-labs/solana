@@ -49,7 +49,7 @@ use {
             CalcAccountsHashDataSource, IncludeSlotInHash, VerifyAccountsHashAndLamportsConfig,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
-        accounts_hash::AccountsHash,
+        accounts_hash::{AccountsHash, IncrementalAccountsHash},
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
@@ -7197,12 +7197,26 @@ impl Bank {
             .map(|(accounts_hash, _)| accounts_hash)
     }
 
+    pub fn get_incremental_accounts_hash(&self) -> Option<IncrementalAccountsHash> {
+        self.rc
+            .accounts
+            .accounts_db
+            .get_incremental_accounts_hash(self.slot())
+            .map(|(incremental_accounts_hash, _)| incremental_accounts_hash)
+    }
+
     pub fn get_snapshot_hash(&self) -> SnapshotHash {
-        let accounts_hash = self
-            .get_accounts_hash()
-            .expect("accounts hash is required to get snapshot hash");
+        let accounts_hash = self.get_accounts_hash();
+        let incremental_accounts_hash = self.get_incremental_accounts_hash();
+
+        let accounts_hash = match (accounts_hash, incremental_accounts_hash) {
+            (Some(_), Some(_)) => panic!("Both full and incremental accounts hashes are present for slot {}; it is ambiguous which one to use for the snapshot hash!", self.slot()),
+            (Some(accounts_hash), None) => accounts_hash.into(),
+            (None, Some(incremental_accounts_hash)) => incremental_accounts_hash.into(),
+            (None, None) => panic!("accounts hash is required to get snapshot hash"),
+        };
         let epoch_accounts_hash = self.get_epoch_accounts_hash_to_serialize();
-        SnapshotHash::new(&accounts_hash.into(), epoch_accounts_hash.as_ref())
+        SnapshotHash::new(&accounts_hash, epoch_accounts_hash.as_ref())
     }
 
     pub fn get_thread_pool(&self) -> &ThreadPool {
