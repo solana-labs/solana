@@ -1371,9 +1371,9 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                         continue;
                     }
 
-                    if v.dirty()
+                    if v.dirty()/*
                         || (!randomly_evicted
-                            && !Self::should_evict_based_on_age(current_age, v, startup))
+                            && !Self::should_evict_based_on_age(current_age, v, startup))*/
                     {
                         // marked dirty or bumped in age after we looked above
                         // these evictions will be handled in later passes (at later ages)
