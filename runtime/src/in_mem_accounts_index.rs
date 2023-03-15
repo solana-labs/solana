@@ -1117,7 +1117,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             .mem_budget_mb
             .map(|budget_mb| {
                 // at half the overall bytes allowed
-                let threshold_flush_bytes = budget_mb * 1024 * 1024 / 2;
+                let threshold_flush_bytes = budget_mb * 1024 * 1024 / 10;
                 // assume each entry is this many bytes
                 let average_size = 400;
                 let threshold_flush_entries = threshold_flush_bytes / average_size;
