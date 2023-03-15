@@ -207,7 +207,6 @@ struct ExecuteBatchesInternalMetrics {
 fn execute_batches_internal(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
-    #[cfg(test)] entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
@@ -227,9 +226,6 @@ fn execute_batches_internal(
                 let mut timings = ExecuteTimings::default();
                 let (result, execute_batches_time): (Result<()>, Measure) = measure!(
                     {
-                        // suppress clippy, which is confused by the following
-                        // #[cfg(test)]-ed entry_callback code
-                        #[cfg_attr(not(test), allow(clippy::let_and_return))]
                         let result = execute_batch(
                             transaction_batch,
                             bank,
@@ -238,10 +234,6 @@ fn execute_batches_internal(
                             &mut timings,
                             log_messages_bytes_limit,
                         );
-                        #[cfg(test)]
-                        if let Some(entry_callback) = entry_callback {
-                            entry_callback(bank);
-                        }
                         result
                     },
                     "execute_batch",
@@ -307,7 +299,6 @@ fn rebatch_transactions<'a>(
 fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
-    #[cfg(test)] entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
@@ -390,8 +381,6 @@ fn execute_batches(
     let execute_batches_internal_metrics = execute_batches_internal(
         bank,
         rebatched_txs,
-        #[cfg(test)]
-        entry_callback,
         transaction_status_sender,
         replay_vote_sender,
         log_messages_bytes_limit,
@@ -445,8 +434,6 @@ pub fn process_entries_for_tests(
         bank,
         &mut replay_entries,
         randomize,
-        #[cfg(test)]
-        None,
         transaction_status_sender,
         replay_vote_sender,
         &mut confirmation_timing,
@@ -464,7 +451,6 @@ fn process_entries_with_callback(
     bank: &Arc<Bank>,
     entries: &mut [ReplayEntry],
     randomize: bool,
-    #[cfg(test)] entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
@@ -491,8 +477,6 @@ fn process_entries_with_callback(
                     execute_batches(
                         bank,
                         &batches,
-                        #[cfg(test)]
-                        entry_callback,
                         transaction_status_sender,
                         replay_vote_sender,
                         confirmation_timing,
@@ -558,8 +542,6 @@ fn process_entries_with_callback(
                         execute_batches(
                             bank,
                             &batches,
-                            #[cfg(test)]
-                            entry_callback,
                             transaction_status_sender,
                             replay_vote_sender,
                             confirmation_timing,
@@ -574,8 +556,6 @@ fn process_entries_with_callback(
     execute_batches(
         bank,
         &batches,
-        #[cfg(test)]
-        entry_callback,
         transaction_status_sender,
         replay_vote_sender,
         confirmation_timing,
@@ -619,8 +599,6 @@ pub struct ProcessOptions {
     pub poh_verify: bool,
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
-    #[cfg(test)]
-    pub entry_callback: Option<ProcessCallback>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
@@ -915,8 +893,6 @@ fn confirm_full_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        #[cfg(test)]
-        opts.entry_callback.as_ref(),
         recyclers,
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
@@ -1043,7 +1019,6 @@ pub fn confirm_slot(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    #[cfg(test)] entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
@@ -1073,8 +1048,6 @@ pub fn confirm_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        #[cfg(test)]
-        entry_callback,
         recyclers,
         log_messages_bytes_limit,
         prioritization_fee_cache,
@@ -1090,7 +1063,6 @@ fn confirm_slot_entries(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    #[cfg(test)] entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
@@ -1188,8 +1160,6 @@ fn confirm_slot_entries(
                 bank,
                 &mut replay_entries,
                 true, // shuffle transactions.
-                #[cfg(test)]
-                entry_callback,
                 transaction_status_sender,
                 replay_vote_sender,
                 timing,
@@ -2669,65 +2639,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_ledger_options_entry_callback() {
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config(100);
-        let (ledger_path, last_entry_hash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let blockhash = genesis_config.hash();
-        let keypairs = [Keypair::new(), Keypair::new(), Keypair::new()];
-
-        let tx = system_transaction::transfer(&mint_keypair, &keypairs[0].pubkey(), 1, blockhash);
-        let entry_1 = next_entry(&last_entry_hash, 1, vec![tx]);
-
-        let tx = system_transaction::transfer(&mint_keypair, &keypairs[1].pubkey(), 1, blockhash);
-        let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
-
-        let mut entries = vec![entry_1, entry_2];
-        entries.extend(create_ticks(
-            genesis_config.ticks_per_slot,
-            0,
-            last_entry_hash,
-        ));
-        blockstore
-            .write_entries(
-                1,
-                0,
-                0,
-                genesis_config.ticks_per_slot,
-                None,
-                true,
-                &Arc::new(Keypair::new()),
-                entries,
-                0,
-            )
-            .unwrap();
-
-        let callback_counter: Arc<RwLock<usize>> = Arc::default();
-        let entry_callback = {
-            let counter = callback_counter.clone();
-            let pubkeys: Vec<Pubkey> = keypairs.iter().map(|k| k.pubkey()).collect();
-            Arc::new(move |bank: &Bank| {
-                let mut counter = counter.write().unwrap();
-                assert_eq!(bank.get_balance(&pubkeys[*counter]), 1);
-                assert_eq!(bank.get_balance(&pubkeys[*counter + 1]), 0);
-                *counter += 1;
-            })
-        };
-
-        let opts = ProcessOptions {
-            entry_callback: Some(entry_callback),
-            accounts_db_test_hash_calculation: true,
-            ..ProcessOptions::default()
-        };
-        test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
-        assert_eq!(*callback_counter.write().unwrap(), 2);
-    }
-
-    #[test]
     fn test_process_entries_tick() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
@@ -4083,7 +3994,6 @@ pub mod tests {
             false,
             None,
             None,
-            None,
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
@@ -4227,7 +4137,6 @@ pub mod tests {
             false,
             Some(&transaction_status_sender),
             None,
-            None,
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
@@ -4272,7 +4181,6 @@ pub mod tests {
             &mut progress,
             false,
             Some(&transaction_status_sender),
-            None,
             None,
             &VerifyRecyclers::default(),
             None,
