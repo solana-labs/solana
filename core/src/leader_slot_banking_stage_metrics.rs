@@ -981,7 +981,7 @@ mod tests {
         {
             // Setup with first_bank
             let action = leader_slot_metrics_tracker
-                .check_leader_slot_boundary(Some(&first_poh_recorder_bank.clone()));
+                .check_leader_slot_boundary(Some(&first_poh_recorder_bank));
             assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
         }
         {
