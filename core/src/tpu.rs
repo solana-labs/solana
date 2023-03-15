@@ -161,6 +161,7 @@ impl Tpu {
 
         let stats = Arc::new(StreamStats::default());
         let (_, tpu_quic_t) = spawn_server(
+            "TpuQuic".into(),
             transactions_quic_sockets,
             keypair,
             cluster_info
@@ -181,6 +182,7 @@ impl Tpu {
         .unwrap();
 
         let (_, tpu_forwards_quic_t) = spawn_server(
+            "TpuForwardQ".into(),
             transactions_forwards_quic_sockets,
             keypair,
             cluster_info

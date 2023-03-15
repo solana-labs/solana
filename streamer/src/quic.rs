@@ -317,6 +317,7 @@ impl StreamStats {
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
+    server_name: String,
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
@@ -349,7 +350,7 @@ pub fn spawn_server(
         )
     }?;
     let handle = thread::Builder::new()
-        .name("solQuicServer".into())
+        .name(server_name)
         .spawn(move || {
             if let Err(e) = runtime.block_on(task) {
                 warn!("error from runtime.block_on: {:?}", e);

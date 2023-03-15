@@ -195,6 +195,7 @@ impl ShredFetchStage {
         let stats = Arc::new(StreamStats::default());
         let host = repair_quic_config.repair_address.local_addr().unwrap().ip();
         let (endpoint, repair_quic_t) = spawn_server(
+            "PacketModQ".into(),
             repair_quic_config.repair_address.try_clone().unwrap(),
             &repair_quic_config.identity_keypair,
             host,
