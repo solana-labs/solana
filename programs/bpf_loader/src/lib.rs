@@ -312,7 +312,7 @@ pub fn create_vm<'a, 'b>(
         heap,
         regions,
         Some(Box::new(move |index_in_transaction| {
-            // The two calls below can't relly fail. If they fail because of a bug,
+            // The two calls below can't really fail. If they fail because of a bug,
             // whatever is writing will trigger an EbpfError::AccessViolation like
             // if the region was readonly, and the transaction will fail gracefully.
             let mut account = accounts

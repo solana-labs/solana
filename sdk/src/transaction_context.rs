@@ -59,7 +59,6 @@ pub type TransactionAccount = (Pubkey, AccountSharedData);
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransactionAccounts {
     accounts: Vec<RefCell<AccountSharedData>>,
-    // FIXXME: use bitfield
     touched_flags: RefCell<Box<[bool]>>,
     is_early_verification_of_account_modifications_enabled: bool,
 }
