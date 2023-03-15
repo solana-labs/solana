@@ -478,7 +478,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
 /// could be deleted but the account snapshot directories were left behind, possibly by some manual operations
 /// or some legacy code not using the symlinks to clean up the acccount snapshot hardlink directories.
 /// This function cleans up any account snapshot directories that are no longer referenced by the bank
-/// snapshot dirs, to ensure propper snapshot operations.
+/// snapshot dirs, to ensure proper snapshot operations.
 pub fn clean_orphaned_account_snapshot_dirs(
     bank_snapshots_dir: impl AsRef<Path>,
     account_snapshot_paths: &[PathBuf],
@@ -545,10 +545,11 @@ pub fn clean_orphaned_account_snapshot_dirs(
 }
 
 /// For all account_paths, set up the run/ and snapshot/ sub directories.
-/// If the sub directories do not exist, the account_path will be cleaned because older version put account files there
+/// If the sub directories do not exist, the account_path will be cleaned because older version put account files there.
+/// It returns (run_paths, snapshot_paths) or error
 pub fn set_up_account_run_and_snapshot_paths(
     account_paths: &[PathBuf],
-) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> // (run_paths, snapshot_paths) or error
+) -> Result<(Vec<PathBuf>, Vec<PathBuf>)>
 {
     Ok(account_paths
         .iter()
