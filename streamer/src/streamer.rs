@@ -317,19 +317,17 @@ pub fn recv_vec_packet_batches(
     recvr: &Receiver<Vec<PacketBatch>>,
     buffered_packet_batches: bool,
 ) -> Result<(Vec<PacketBatch>, usize, Duration)> {
-    let mut packet_batches = if !buffered_packet_batches {
-        let timer = Duration::new(1, 0);
-        let batches = recvr.recv_timeout(timer)?;
+    let (mut packet_batches, mut num_packets) = if !buffered_packet_batches {
+        // Only wait for new packet batches if we don't have pending ones to
+        // process.
+        let batches = recvr.recv_timeout(Duration::new(1, 0))?;
         trace!("got packets");
-        batches
+        let num_packets = batches.iter().map(|packets| packets.len()).sum::<usize>();
+        (batches, num_packets)
     } else {
-        vec![]
+        (vec![], 0)
     };
     let recv_start = Instant::now();
-    let mut num_packets = packet_batches
-        .iter()
-        .map(|packets| packets.len())
-        .sum::<usize>();
     while let Ok(packet_batch) = recvr.try_recv() {
         trace!("got more packets");
         num_packets += packet_batch

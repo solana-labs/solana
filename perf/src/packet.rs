@@ -119,6 +119,10 @@ impl PacketBatch {
         self.packets.push(packet);
     }
 
+    pub fn split_off(&mut self, at: usize) -> Self {
+        Self::new(self.packets.split_off(at).into())
+    }
+
     pub fn set_addr(&mut self, addr: &SocketAddr) {
         for p in self.iter_mut() {
             p.meta_mut().set_socket_addr(addr);

@@ -311,7 +311,7 @@ impl SigVerifyStage {
             buffered_batches.len(),
         );
 
-        // Randomly discard excess packets from newly received so that deduper isn't overwhelmed.
+        // Discard excess new packets so deduper isn't overwhelmed.
         let mut discard_random_new_time = Measure::start("sigverify_discard_random_new_time");
         let non_discarded_packets = solana_perf::discard::discard_batches_randomly(
             &mut batches,
@@ -336,10 +336,13 @@ impl SigVerifyStage {
         ) as usize;
         dedup_time.stop();
 
+        // Shrink batches if many packets were discarded/deduped.
+        let (pre_shrink_time_us, pre_shrink_total) = Self::maybe_shrink_batches(&mut batches);
+
         // Add newly sanitized batches to the buffer.
         buffered_batches.append(&mut batches);
 
-        // Randomly discard excess packets from buffered batches so that shrink isn't overwhelmed.
+        // Discard excess buffered batches so buffer isn't overwhelmed.
         let mut discard_random_buffered_time =
             Measure::start("sigverify_discard_random_buffered_time");
         let num_buffered_packets = count_packets_in_batches(buffered_batches);
@@ -352,36 +355,38 @@ impl SigVerifyStage {
             num_buffered_packets.saturating_sub(non_discarded_packets);
         discard_random_buffered_time.stop();
 
-        // Shrink batches if many packets were discarded randomly.
-        let (pre_shrink_time_us, pre_shrink_total) = Self::maybe_shrink_batches(buffered_batches);
         if buffered_batches.is_empty() {
             verifier.send_packets(batches)?;
             return Ok(());
         }
 
-        // Peel off limited number of batches to verify so as not to overwhelm the verifier.
-        let mut num_packets_to_verify_total = buffered_batches[0].len();
-        let mut num_batches_to_verify = 1;
-        for batch in buffered_batches[1..].iter_mut() {
-            if num_packets_to_verify_total + batch.len() > MAX_SIGVERIFY_BATCH {
-                break;
-            } else {
-                num_packets_to_verify_total += batch.len();
-                num_batches_to_verify += 1;
+        // Peel off limited number of batches to not overwhelm the verifier.
+        let first_batch_length = buffered_batches[0].len();
+        let batches_to_verify: Vec<PacketBatch> = if first_batch_length > MAX_SIGVERIFY_BATCH {
+            // First batch too big! Peel off first MAX_SIGVERIFY_BATCH packets.
+            vec![buffered_batches[0].split_off(first_batch_length - MAX_SIGVERIFY_BATCH)]
+        } else {
+            let mut num_packets_to_verify = buffered_batches[0].len();
+            let mut num_batches_to_verify = 1;
+            for batch in buffered_batches[1..].iter_mut() {
+                if num_packets_to_verify + batch.len() > MAX_SIGVERIFY_BATCH {
+                    break;
+                } else {
+                    num_packets_to_verify += batch.len();
+                    num_batches_to_verify += 1;
+                }
             }
-        }
-        let batches_to_verify: Vec<PacketBatch> =
-            buffered_batches.drain(0..num_batches_to_verify).collect();
-        let num_packets_to_verify_valid = count_packets_in_batches(&batches_to_verify);
-
-        if num_packets_to_verify_valid == 0 {
+            buffered_batches.drain(0..num_batches_to_verify).collect()
+        };
+        let num_packets_to_verify = count_packets_in_batches(&batches_to_verify);
+        if num_packets_to_verify == 0 {
             verifier.send_packets(batches)?;
             return Ok(());
         }
 
         // Verify batches.
         let mut verify_time = Measure::start("sigverify_batch_time");
-        let mut batches = verifier.verify_batches(batches_to_verify, num_packets_to_verify_valid);
+        let mut batches = verifier.verify_batches(batches_to_verify, num_packets_to_verify);
         let num_valid_packets = count_valid_packets(
             &batches,
             #[inline(always)]
@@ -389,9 +394,10 @@ impl SigVerifyStage {
         );
         verify_time.stop();
 
-        // Post-shrink packet batches if many packets were discarded from sigverify
+        // Shrink batches if many packets were discarded via sigverify
         let (post_shrink_time_us, post_shrink_total) = Self::maybe_shrink_batches(&mut batches);
 
+        // Send verified packets to banking stage.
         verifier.send_packets(batches)?;
 
         debug!(
@@ -399,17 +405,18 @@ impl SigVerifyStage {
             timing::timestamp(),
             batches_len,
             verify_time.as_ms(),
-            num_packets_to_verify_valid,
-            (num_packets_to_verify_valid as f32 / verify_time.as_s())
+            num_packets_to_verify,
+            (num_packets_to_verify as f32 / verify_time.as_s())
         );
 
+        // Update stats.
         stats
             .recv_batches_us_hist
             .increment(recv_duration.as_micros() as u64)
             .unwrap();
         stats
             .verify_batches_pp_us_hist
-            .increment(verify_time.as_us() / (num_packets_to_verify_valid as u64))
+            .increment(verify_time.as_us() / (num_packets_to_verify as u64))
             .unwrap();
         if num_packets > 0 {
             stats

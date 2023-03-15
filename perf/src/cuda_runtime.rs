@@ -236,6 +236,15 @@ impl<T: Clone + Default + Sized> PinnedVec<T> {
         self.check_ptr(old_ptr, old_capacity, "resize");
     }
 
+    pub fn split_off(&mut self, at: usize) -> Self {
+        let mut other = Self::from_vec(self.x.split_off(at));
+        if self.pinned {
+            other.pinned = true;
+            other.pinnable = true;
+        }
+        other
+    }
+
     pub fn append(&mut self, other: &mut Vec<T>) {
         let (old_ptr, old_capacity) =
             self.prepare_realloc(self.x.len().saturating_add(other.len()));
