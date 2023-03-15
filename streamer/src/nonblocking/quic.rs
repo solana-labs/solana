@@ -437,7 +437,11 @@ async fn setup_connection(
     .await
     {
         if let Ok(new_connection) = connecting_result {
-            info!("Got a conneciton {:?} from {:?}", new_connection.stable_id(), new_connection.remote_address());
+            info!(
+                "Got a conneciton {:?} from {:?}",
+                new_connection.stable_id(),
+                new_connection.remote_address()
+            );
             stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
 
             let params = get_connection_stake(&new_connection, staked_nodes.clone()).map_or(

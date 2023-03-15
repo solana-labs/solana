@@ -54,6 +54,7 @@ impl ServeRepairService {
         let (request_sender_quic, request_receiver_quic) = unbounded();
         // Repair server using quic
         let (serve_repair_endpoint, repair_quic_t) = spawn_server(
+            "SrvRepairQ".into(),
             repair_quic_config.serve_repair_address.try_clone().unwrap(),
             &repair_quic_config.identity_keypair,
             host,

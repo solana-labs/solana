@@ -810,6 +810,7 @@ fn spawn_ancestor_hashes_quic_server(
             let stats = Arc::new(StreamStats::default());
 
             let (endpoint, ancestor_quic_t) = spawn_server(
+                "AcstrHashQ".into(),
                 repair_quic_config
                     .ancestor_hash_address
                     .try_clone()
