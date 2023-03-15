@@ -1022,11 +1022,20 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                         // flush all dirty entries now, regardless of age
                         0
                     } else {
-                        if ages_in_future >= ages_to_scan {
+                        if !can_write && ages_in_future >= ages_to_scan {
                             // not planning to evict this item from memory within the next few ages
                             continue;
                         }
-                        ages_in_future
+                        else if can_write {
+                            if ages_in_future >= Age::MAX.saturating_sub(self.storage.ages_to_stay_in_cache) {
+                                continue;
+                            }
+                            // clear all read entries that are not within 5 of current
+                            0
+                        }
+                        else {
+                            ages_in_future
+                        }
                     }
                 };
 
