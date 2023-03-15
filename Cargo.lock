@@ -6539,6 +6539,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-zk-token-proof-program-tests"
+version = "1.16.0"
+dependencies = [
+ "bytemuck",
+ "solana-program-runtime",
+ "solana-program-test",
+ "solana-sdk 1.16.0",
+ "solana-zk-token-sdk 1.16.0",
+]
+
+[[package]]
 name = "solana-zk-token-sdk"
 version = "1.14.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6680,9 +6691,15 @@ dependencies = [
 
 [[package]]
 name = "spl-token-2022"
+<<<<<<< HEAD
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0edb869dbe159b018f17fb9bfa67118c30f232d7f54a73742bc96794dff77ed8"
+=======
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0043b590232c400bad5ee9eb983ced003d15163c4c5d56b090ac6d9a57457b47"
+>>>>>>> 2d58bb287 ([zk-token-sdk] Add option to create proof context state in the proof verification program (#29996))
 dependencies = [
  "arrayref",
  "bytemuck",
