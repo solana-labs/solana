@@ -517,7 +517,10 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
             }
         }
     }
+    // Truncate batches that only contain discarded packets.
     batches.truncate(last_valid_batch);
+    // Truncate discarded packets from the last batch.
+    batches.last_mut().unwrap().truncate(valid_packet_ix + 1);
 }
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
