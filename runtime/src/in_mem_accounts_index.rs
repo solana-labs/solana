@@ -1134,6 +1134,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             return;
         }
 
+        if startup {
+            self.write_startup_info_to_disk();
+        }
+
         let mut write_to_disk = self.get_write_bucket_to_disk();
         if write_to_disk {
             write_to_disk = !self.storage.write_active.swap(true, Ordering::Relaxed);
@@ -1146,16 +1150,20 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             },
             1,
         );
+        if write_to_disk {
+            if iterate_for_age {
+                // completed iteration of the buckets at the current age
+                assert_eq!(current_age, self.storage.current_age());
+                self.set_has_aged(current_age, can_advance_age);
+            }
+            return;
+        }
 
         // scan in-mem map for items that we may evict
         let FlushScanResult {
             mut evictions_age_possible,
             mut evictions_random,
         } = self.flush_scan(current_age, startup, flush_guard, write_to_disk);
-
-        if startup {
-            self.write_startup_info_to_disk();
-        }
 
         // write to disk outside in-mem map read lock
         {
