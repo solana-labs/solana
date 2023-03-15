@@ -497,10 +497,14 @@ impl Validator {
         info!("done. {}", start);
 
         info!("Cleaning orphaned account snapshot directories..");
-        clean_orphaned_account_snapshot_dirs(
+        if let Err(e) = clean_orphaned_account_snapshot_dirs(
             &config.snapshot_config.bank_snapshots_dir,
             &config.account_snapshot_paths,
-        );
+        ) {
+            return Err(format!(
+                "Failed to clean orphaned account snapshot directories: {e:?}"
+            ));
+        }
 
         let exit = Arc::new(AtomicBool::new(false));
         {

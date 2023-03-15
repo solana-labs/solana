@@ -1206,7 +1206,12 @@ fn load_bank_forks(
         "Cleaning contents of account snapshot paths: {:?}",
         account_snapshot_paths
     );
-    clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths);
+    if let Err(e) =
+        clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths)
+    {
+        eprintln!("Failed to clean orphaned account snapshot dirs.  Error: {e:?}");
+        exit(1);
+    }
 
     let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
     let mut transaction_notifier = Option::<TransactionNotifierLock>::default();

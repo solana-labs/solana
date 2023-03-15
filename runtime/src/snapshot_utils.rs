@@ -482,66 +482,36 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
 pub fn clean_orphaned_account_snapshot_dirs(
     bank_snapshots_dir: impl AsRef<Path>,
     account_snapshot_paths: &[PathBuf],
-) {
+) -> Result<()> {
     // Create the HashSet of the account snapshot hardlink directories referenced by the snapshot dirs.
     // This is used to clean up any hardlinks that are no longer referenced by the snapshot dirs.
-
     let mut account_snapshot_dirs_referenced = HashSet::new();
     let snapshots = get_bank_snapshots(bank_snapshots_dir);
     for snapshot in snapshots {
         let account_hardlinks_dir = snapshot.snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
         // loop through entries in the snapshot_hardlink_dir, read the symlinks, add the target to the HashSet
-        fs::read_dir(&account_hardlinks_dir)
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Unable to read snapshot hardlink directory: {}",
-                    account_hardlinks_dir.display()
-                )
-            })
-            .for_each(|entry| {
-                let entry = entry.unwrap_or_else(|_| {
-                    panic!(
-                        "Unable to read snapshot hardlink directory entry: {}",
-                        account_hardlinks_dir.display()
-                    )
-                });
-                let path = entry.path();
-                let target = fs::read_link(&path).unwrap_or_else(|_| {
-                    panic!(
-                        "Unable to read snapshot hardlink directory entry: {}",
-                        path.display()
-                    )
-                });
-                account_snapshot_dirs_referenced.insert(target);
-            });
+        for entry in fs::read_dir(&account_hardlinks_dir)? {
+            let path = entry?.path();
+            let target = fs::read_link(&path)?;
+            account_snapshot_dirs_referenced.insert(target);
+        }
     }
 
     // loop through the account snapshot hardlink directories, if the directory is not in the account_snapshot_dirs_referenced set, delete it
     for account_snapshot_path in account_snapshot_paths {
-        fs::read_dir(account_snapshot_path)
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Unable to read snapshot hardlink directory: {}",
-                    account_snapshot_path.display()
-                )
-            })
-            .for_each(|entry| {
-                let entry = entry.unwrap_or_else(|_| {
-                    panic!(
-                        "Unable to read snapshot hardlink directory entry: {}",
-                        account_snapshot_path.display()
-                    )
-                });
-                let path = entry.path();
-                if !account_snapshot_dirs_referenced.contains(&path) {
-                    info!(
-                        "Removing orphaned account snapshot hardlink directory: {}",
-                        path.display()
-                    );
-                    move_and_async_delete_path(&path);
-                }
-            });
+        for entry in fs::read_dir(account_snapshot_path)? {
+            let path = entry?.path();
+            if !account_snapshot_dirs_referenced.contains(&path) {
+                info!(
+                    "Removing orphaned account snapshot hardlink directory: {}",
+                    path.display()
+                );
+                move_and_async_delete_path(&path);
+            }
+        }
     }
+
+    Ok(())
 }
 
 /// For all account_paths, set up the run/ and snapshot/ sub directories.
@@ -549,18 +519,19 @@ pub fn clean_orphaned_account_snapshot_dirs(
 /// It returns (run_paths, snapshot_paths) or error
 pub fn set_up_account_run_and_snapshot_paths(
     account_paths: &[PathBuf],
-) -> Result<(Vec<PathBuf>, Vec<PathBuf>)>
-{
+) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
     Ok(account_paths
         .iter()
         .map(|account_path| -> Result<(PathBuf, PathBuf)> {
-            fs::create_dir_all(account_path).and_then(|_| fs::canonicalize(account_path)).map_err(|err| {
-                SnapshotError::IoWithSourceAndFile(
-                    err,
-                    "Unable to create account directory",
-                    account_path.to_path_buf(),
-                )
-            })?;
+            fs::create_dir_all(account_path)
+                .and_then(|_| fs::canonicalize(account_path))
+                .map_err(|err| {
+                    SnapshotError::IoWithSourceAndFile(
+                        err,
+                        "Unable to create account directory",
+                        account_path.to_path_buf(),
+                    )
+                })?;
 
             // create the run/ and snapshot/ sub directories for each account_path
             create_accounts_run_and_snapshot_dirs(account_path).map_err(|err| {
@@ -4851,7 +4822,7 @@ mod tests {
             .map(|dir| dir.parent().unwrap().parent().unwrap().to_path_buf())
             .collect();
         // clean the orphaned hardlink directories
-        clean_orphaned_account_snapshot_dirs(bank_snapshots_dir, &account_snapshot_paths);
+        clean_orphaned_account_snapshot_dirs(bank_snapshots_dir, &account_snapshot_paths).unwrap();
 
         // verify the hardlink directories are gone
         assert!(hardlink_dirs_slot_2
