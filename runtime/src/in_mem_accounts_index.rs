@@ -1019,7 +1019,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                     0
                 } else {
                     let ages_in_future = v.age().wrapping_sub(current_age);
-                    if can_write && v.dirty() {
+                    if false { //can_write && v.dirty() {
                         // flush all dirty entries now, regardless of age
                         0
                     } else {
@@ -1028,7 +1028,8 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                             continue;
                         }
                         else if can_write {
-                            if ages_in_future >= Age::MAX.saturating_sub(self.storage.ages_to_stay_in_cache) {
+                            // ages_in_future >= Age::MAX.saturating_sub(self.storage.ages_to_stay_in_cache) {
+                            if ages_in_future > 0 && ages_in_future < self.storage.ages_to_stay_in_cache {
                                 continue;
                             }
                             // clear all read entries that are not within 5 of current
