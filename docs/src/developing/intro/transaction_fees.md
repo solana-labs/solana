@@ -70,26 +70,3 @@ Before any transaction instructions are processed, the fee payer account balance
 ### Fee Distribution
 
 Transaction fees are partially burned and the remaining fees are collected by the validator that produced the block that the corresponding transactions were included in. The transaction fee burn rate was initialized as 50% when inflation rewards were enabled at the beginning of 2021 and has not changed so far. These fees incentivize a validator to process as many transactions as possible during its slots in the leader schedule. Collected fees are deposited in the validator's account (listed in the leader schedule for the current slot) after processing all of the transactions included in a block.
-
-## Upcoming Changes
-
-### Transaction wide compute budget
-
-As of version 1.8 of the Solana protocol, the maximum compute budget for transactions is assessed on a per instruction basis. This has allowed for flexibility in protocol design to squeeze out more compute by splitting up operations across multiple instructions but this workaround has skewed the distribution of compute consumption across different transactions. To keep transaction fees properly priced, the maximum compute budget will instead be assessed over the entire transaction. This change is likely to be released in version 1.9 of the Solana protocol and is gated on the following feature switch:
-
-```bash
-$ ~/Workspace/solana (master branch) > cargo run --bin solana -- feature status 5ekBxc8itEnPv4NzGJtr8BVVQLNMQuLMNQQj7pHoLNZ9 --url mainnet-beta
-5ekBxc8itEnPv4NzGJtr8BVVQLNMQuLMNQQj7pHoLNZ9 | inactive | transaction wide compute cap
-```
-
-This adjustment could negatively impact the usability of some protocols which have relied on the compute budget being reset for each instruction in a transaction. For this reason, this compute budget change will not be enabled until a new mechanism for increasing total transaction compute budget is added. This mechanism is described below...
-
-### Request increased compute budget
-
-As protocols have gotten more complex, the [default compute budget of 200,000 compute units](https://github.com/solana-labs/solana/blob/647aa926673e3df4443d8b3d9e3f759e8ca2c44b/sdk/src/compute_budget.rs#L105) has become a common pain-point for developers. Developers have gotten creative in working around this limitation by breaking up operations across multiple instructions and/or transactions. But in order to properly address this issue, a new program instruction will be added to request additional compute units from the runtime (up to a max of 1 million compute units). To request more compute, [create a `RequestUnits` instruction which invokes the new `Compute Budget` program](https://github.com/solana-labs/solana/blob/647aa926673e3df4443d8b3d9e3f759e8ca2c44b/sdk/src/compute_budget.rs#L44) and insert it at the beginning of a transaction. This new program will be released along with the transaction-wide compute budget change described above and is gated on the same feature switch. There are currently no increased transaction fees for using this feature, however that is likely to change.
-
-Note that adding a `RequestUnits` compute budget instruction will take up 39 extra bytes in a serialized transaction. That breaks down into 32 bytes for the compute budget program id, 1 byte for program id index, 1 byte for empty ix account vec len, 1 byte for data vec len, and 4 bytes for the requested compute.
-
-### Calculate transaction fees with RPC API
-
-In order to simplify fee calculation for developers, a new [`getFeeForMessage`](/api/http#getfeeformessage) RPC API is planned to be released in v1.9 of the Solana protocol. This new method accepts a blockhash along with an encoded transaction message and will return the amount of fees that would be deducted if the transaction message is signed, sent, and processed by the cluster.

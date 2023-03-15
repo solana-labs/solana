@@ -169,6 +169,10 @@ A [public key](#public-key-pubkey) and corresponding [private key](#private-key)
 
 A fractional [native token](#native-token) with the value of 0.000000001 [sol](#sol).
 
+:::info
+Within the compute budget, a quantity of _[micro-lamports](https://github.com/solana-labs/solana/blob/ced8f6a512c61e0dd5308095ae8457add4a39e94/program-runtime/src/prioritization_fee.rs#L1-L2)_ is used in the calculation of [prioritization fees](#prioritization-fee).
+:::
+
 ## leader
 
 The role of a [validator](#validator) when it is appending [entries](#entry) to the [ledger](#ledger).

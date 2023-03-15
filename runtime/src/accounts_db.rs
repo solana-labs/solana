@@ -62,7 +62,7 @@ use {
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
         rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
-        serde_snapshot::{SerdeAccountsDeltaHash, SerdeAccountsHash},
+        serde_snapshot::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
         snapshot_utils::create_accounts_run_and_snapshot_dirs,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
@@ -1416,9 +1416,11 @@ pub struct AccountsDb {
 
     pub thread_pool_clean: ThreadPool,
 
+    bank_hash_stats: Mutex<HashMap<Slot, BankHashStats>>,
     accounts_delta_hashes: Mutex<HashMap<Slot, AccountsDeltaHash>>,
     accounts_hashes: Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>>,
-    bank_hash_stats: Mutex<HashMap<Slot, BankHashStats>>,
+    incremental_accounts_hashes:
+        Mutex<HashMap<Slot, (IncrementalAccountsHash, /*capitalization*/ u64)>>,
 
     pub stats: AccountsStats,
 
@@ -2422,9 +2424,10 @@ impl AccountsDb {
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
+            bank_hash_stats: Mutex::new(bank_hash_stats),
             accounts_delta_hashes: Mutex::new(HashMap::new()),
             accounts_hashes: Mutex::new(HashMap::new()),
-            bank_hash_stats: Mutex::new(bank_hash_stats),
+            incremental_accounts_hashes: Mutex::new(HashMap::new()),
             external_purge_slots_stats: PurgeStats::default(),
             clean_accounts_stats: CleanAccountsStats::default(),
             shrink_stats: ShrinkStats::default(),
@@ -7350,7 +7353,7 @@ impl AccountsDb {
         (accounts_hash, total_lamports)
     }
 
-    /// Set the accounts hash for `slot` in the `accounts_hashes` map
+    /// Set the accounts hash for `slot`
     ///
     /// returns the previous accounts hash for `slot`
     pub fn set_accounts_hash(
@@ -7374,17 +7377,57 @@ impl AccountsDb {
         self.set_accounts_hash(slot, (accounts_hash.into(), capitalization))
     }
 
-    /// Get the accounts hash for `slot` in the `accounts_hashes` map
+    /// Get the accounts hash for `slot`
     pub fn get_accounts_hash(&self, slot: Slot) -> Option<(AccountsHash, /*capitalization*/ u64)> {
         self.accounts_hashes.lock().unwrap().get(&slot).cloned()
     }
 
+    /// Set the incremental accounts hash for `slot`
+    ///
+    /// returns the previous incremental accounts hash for `slot`
+    pub fn set_incremental_accounts_hash(
+        &self,
+        slot: Slot,
+        incremental_accounts_hash: (IncrementalAccountsHash, /*capitalization*/ u64),
+    ) -> Option<(IncrementalAccountsHash, /*capitalization*/ u64)> {
+        self.incremental_accounts_hashes
+            .lock()
+            .unwrap()
+            .insert(slot, incremental_accounts_hash)
+    }
+
+    /// After deserializing a snapshot, set the incremental accounts hash for the new AccountsDb
+    pub fn set_incremental_accounts_hash_from_snapshot(
+        &mut self,
+        slot: Slot,
+        incremental_accounts_hash: SerdeIncrementalAccountsHash,
+        capitalization: u64,
+    ) -> Option<(IncrementalAccountsHash, /*capitalization*/ u64)> {
+        self.set_incremental_accounts_hash(slot, (incremental_accounts_hash.into(), capitalization))
+    }
+
+    /// Get the incremental accounts hash for `slot`
+    pub fn get_incremental_accounts_hash(
+        &self,
+        slot: Slot,
+    ) -> Option<(IncrementalAccountsHash, /*capitalization*/ u64)> {
+        self.incremental_accounts_hashes
+            .lock()
+            .unwrap()
+            .get(&slot)
+            .cloned()
+    }
+
     /// Purge accounts hashes that are older than `last_full_snapshot_slot`
     ///
-    /// Should only be called by AccountsHashVerifier, since it consumes `account_hashes` and knows
-    /// which ones are still needed.
+    /// Should only be called by AccountsHashVerifier, since it consumes the accounts hashes and
+    /// knows which ones are still needed.
     pub fn purge_old_accounts_hashes(&self, last_full_snapshot_slot: Slot) {
         self.accounts_hashes
+            .lock()
+            .unwrap()
+            .retain(|&slot, _| slot >= last_full_snapshot_slot);
+        self.incremental_accounts_hashes
             .lock()
             .unwrap()
             .retain(|&slot, _| slot >= last_full_snapshot_slot);
@@ -9322,8 +9365,8 @@ pub enum CalcAccountsHashDataSource {
 }
 
 /// Which accounts hash calculation is being performed?
-#[derive(Debug)]
-enum CalcAccountsHashFlavor {
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum CalcAccountsHashFlavor {
     Full,
     Incremental,
 }
