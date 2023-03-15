@@ -554,19 +554,21 @@ pub fn set_up_account_run_and_snapshot_paths(
     Ok(account_paths
         .iter()
         .map(|account_path| -> Result<(PathBuf, PathBuf)> {
-            if let Err(err) =
-                fs::create_dir_all(account_path).and_then(|_| fs::canonicalize(account_path))
-            {
-                return Err(SnapshotError::IoWithSourceAndFile(err, "Unable to create account directory", account_path.to_path_buf()));
-            };
+            fs::create_dir_all(account_path).and_then(|_| fs::canonicalize(account_path)).map_err(|err| {
+                SnapshotError::IoWithSourceAndFile(
+                    err,
+                    "Unable to create account directory",
+                    account_path.to_path_buf(),
+                )
+            })?;
 
             // create the run/ and snapshot/ sub directories for each account_path
-            create_accounts_run_and_snapshot_dirs(&account_path).or_else(|err| {
-                Err(SnapshotError::IoWithSourceAndFile(
+            create_accounts_run_and_snapshot_dirs(account_path).map_err(|err| {
+                SnapshotError::IoWithSourceAndFile(
                     err,
                     "Unable to create account run and snapshot directories",
                     account_path.to_path_buf(),
-                ))
+                )
             })
         })
         .collect::<Result<Vec<(PathBuf, PathBuf)>>>()?
