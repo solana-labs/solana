@@ -631,7 +631,7 @@ pub mod round_up_heap_size {
 }
 
 pub mod vote_state_add_vote_latency {
-    solana_sdk::declare_id!("AWDJhNJaDy5AqHzGyuR7xfXjRoYZXbfqe3QStyJFEcgP");
+    solana_sdk::declare_id!("7axKe5BTYBDD87ftzWbk5DfzWMGyRvqmWTduuo22Yaqy");
 }
 
 lazy_static! {
