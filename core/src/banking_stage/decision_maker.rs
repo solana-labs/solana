@@ -18,6 +18,15 @@ pub enum BufferedPacketsDecision {
     Hold,
 }
 
+impl BufferedPacketsDecision {
+    pub fn bank_start(&self) -> Option<&BankStart> {
+        match self {
+            Self::Consume(bank_start) => Some(bank_start),
+            _ => None,
+        }
+    }
+}
+
 pub struct DecisionMaker {
     my_pubkey: Pubkey,
     poh_recorder: Arc<RwLock<PohRecorder>>,
@@ -97,6 +106,23 @@ mod tests {
         solana_runtime::bank::Bank,
         std::{sync::Arc, time::Instant},
     };
+
+    #[test]
+    fn test_buffered_packet_decision_bank_start() {
+        let bank = Arc::new(Bank::default_for_tests());
+        let bank_start = BankStart {
+            working_bank: bank,
+            bank_creation_time: Arc::new(Instant::now()),
+        };
+        assert!(BufferedPacketsDecision::Consume(bank_start)
+            .bank_start()
+            .is_some());
+        assert!(BufferedPacketsDecision::Forward.bank_start().is_none());
+        assert!(BufferedPacketsDecision::ForwardAndHold
+            .bank_start()
+            .is_none());
+        assert!(BufferedPacketsDecision::Hold.bank_start().is_none());
+    }
 
     #[test]
     fn test_should_process_or_forward_packets() {

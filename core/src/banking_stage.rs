@@ -434,6 +434,7 @@ impl BankingStage {
         }
         let (decision, make_decision_time) =
             measure!(decision_maker.make_consume_or_forward_decision());
+        let metrics_action = slot_metrics_tracker.check_leader_slot_boundary(decision.bank_start());
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
         match decision {
@@ -442,8 +443,6 @@ impl BankingStage {
                 // slot metrics tracker to the next slot) so that we don't count the
                 // packet processing metrics from the next slot towards the metrics
                 // of the previous slot
-                let metrics_action =
-                    slot_metrics_tracker.check_leader_slot_boundary(Some(&bank_start));
                 slot_metrics_tracker.apply_action(metrics_action);
                 let (_, consume_buffered_packets_time) = measure!(
                     consumer.consume_buffered_packets(
@@ -458,7 +457,6 @@ impl BankingStage {
                     .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
             }
             BufferedPacketsDecision::Forward => {
-                let metrics_action = slot_metrics_tracker.check_leader_slot_boundary(None);
                 let ((), forward_us) = measure_us!(forwarder.handle_forwarding(
                     unprocessed_transaction_storage,
                     false,
@@ -472,7 +470,6 @@ impl BankingStage {
                 slot_metrics_tracker.apply_action(metrics_action);
             }
             BufferedPacketsDecision::ForwardAndHold => {
-                let metrics_action = slot_metrics_tracker.check_leader_slot_boundary(None);
                 let ((), forward_and_hold_us) = measure_us!(forwarder.handle_forwarding(
                     unprocessed_transaction_storage,
                     true,
