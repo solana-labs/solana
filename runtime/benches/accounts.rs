@@ -104,6 +104,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
         assert!(accounts.verify_accounts_hash_and_lamports(
             0,
             total_lamports,
+            None,
             VerifyAccountsHashAndLamportsConfig {
                 ancestors: &ancestors,
                 test_hash_calculation,

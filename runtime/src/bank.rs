@@ -6989,6 +6989,7 @@ impl Bank {
                         let result = accounts_.verify_accounts_hash_and_lamports(
                             slot,
                             cap,
+                            None,
                             VerifyAccountsHashAndLamportsConfig {
                                 ancestors: &ancestors,
                                 test_hash_calculation: config.test_hash_calculation,
@@ -7012,6 +7013,7 @@ impl Bank {
             let result = accounts.verify_accounts_hash_and_lamports(
                 slot,
                 cap,
+                None,
                 VerifyAccountsHashAndLamportsConfig {
                     ancestors,
                     test_hash_calculation: config.test_hash_calculation,
