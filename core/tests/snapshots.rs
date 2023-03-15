@@ -181,6 +181,7 @@ fn restore_from_snapshot(
         &Arc::default(),
     )
     .unwrap();
+    deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
 
     let bank = old_bank_forks.get(deserialized_bank.slot()).unwrap();
     assert_eq!(bank.as_ref(), &deserialized_bank);
@@ -927,6 +928,7 @@ fn restore_from_snapshots_and_check_banks_are_equal(
         None,
         &Arc::default(),
     )?;
+    deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
 
     assert_eq!(bank, &deserialized_bank);
 
@@ -1143,6 +1145,7 @@ fn test_snapshots_with_background_services(
         &exit,
     )
     .unwrap();
+    deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
 
     assert_eq!(
         deserialized_bank.slot(),
