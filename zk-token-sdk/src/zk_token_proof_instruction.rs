@@ -211,11 +211,15 @@ pub fn verify_pubkey_validity(
 }
 
 impl ProofInstruction {
-    pub fn encode_verify_proof<T: ZkProofData>(
+    pub fn encode_verify_proof<T, U>(
         &self,
         context_state_info: Option<ContextStateInfo>,
         proof_data: &T,
-    ) -> Instruction {
+    ) -> Instruction
+    where
+        T: Pod + ZkProofData<U>,
+        U: Pod,
+    {
         let accounts = if let Some(context_state_info) = context_state_info {
             vec![
                 AccountMeta::new(*context_state_info.context_state_account, false),
@@ -241,7 +245,11 @@ impl ProofInstruction {
             .and_then(|instruction| FromPrimitive::from_u8(*instruction))
     }
 
-    pub fn proof_data<T: ZkProofData>(input: &[u8]) -> Option<&T> {
+    pub fn proof_data<T, U>(input: &[u8]) -> Option<&T>
+    where
+        T: Pod + ZkProofData<U>,
+        U: Pod,
+    {
         input
             .get(1..)
             .and_then(|data| bytemuck::try_from_bytes(data).ok())

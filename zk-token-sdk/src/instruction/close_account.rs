@@ -11,7 +11,7 @@ use {
 };
 use {
     crate::{
-        instruction::{ProofType, ZkProofContext, ZkProofData},
+        instruction::{ProofType, ZkProofData},
         zk_token_elgamal::pod,
     },
     bytemuck::{Pod, Zeroable},
@@ -65,8 +65,8 @@ impl CloseAccountData {
     }
 }
 
-impl ZkProofData for CloseAccountData {
-    type ProofContext = CloseAccountProofContext;
+impl ZkProofData<CloseAccountProofContext> for CloseAccountData {
+    const PROOF_TYPE: ProofType = ProofType::CloseAccount;
 
     fn context_data(&self) -> &CloseAccountProofContext {
         &self.context
@@ -81,10 +81,6 @@ impl ZkProofData for CloseAccountData {
         let ciphertext = self.context.ciphertext.try_into()?;
         self.proof.verify(&pubkey, &ciphertext, &mut transcript)
     }
-}
-
-impl ZkProofContext for CloseAccountProofContext {
-    const PROOF_TYPE: ProofType = ProofType::CloseAccount;
 }
 
 /// This struct represents the cryptographic proof component that certifies that the encrypted

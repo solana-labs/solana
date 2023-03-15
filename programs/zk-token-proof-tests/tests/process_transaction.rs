@@ -318,11 +318,14 @@ async fn test_pubkey_validity() {
     .await;
 }
 
-async fn test_verify_proof_without_context<T: Pod + ZkProofData>(
+async fn test_verify_proof_without_context<T, U>(
     proof_instruction: ProofInstruction,
     success_proof_data: &T,
     fail_proof_data: &T,
-) {
+) where
+    T: Pod + ZkProofData<U>,
+    U: Pod,
+{
     let mut context = ProgramTest::default().start_with_context().await;
 
     let client = &mut context.banks_client;
@@ -383,12 +386,15 @@ async fn test_verify_proof_without_context<T: Pod + ZkProofData>(
     }
 }
 
-async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
+async fn test_verify_proof_with_context<T, U>(
     instruction_type: ProofInstruction,
     space: usize,
     success_proof_data: &T,
     fail_proof_data: &T,
-) {
+) where
+    T: Pod + ZkProofData<U>,
+    U: Pod,
+{
     let mut context = ProgramTest::default().start_with_context().await;
     let rent = context.banks_client.get_rent().await.unwrap();
 
@@ -583,11 +589,14 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
     client.process_transaction(transaction).await.unwrap();
 }
 
-async fn test_close_context_state<T: Pod + ZkProofData>(
+async fn test_close_context_state<T, U>(
     instruction_type: ProofInstruction,
     space: usize,
     success_proof_data: &T,
-) {
+) where
+    T: Pod + ZkProofData<U>,
+    U: Pod,
+{
     let mut context = ProgramTest::default().start_with_context().await;
     let rent = context.banks_client.get_rent().await.unwrap();
 

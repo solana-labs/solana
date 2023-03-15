@@ -1,8 +1,5 @@
 use {
-    crate::{
-        zk_token_elgamal::pod::PodProofType,
-        zk_token_proof_instruction::{ProofType, ZkProofContext},
-    },
+    crate::{zk_token_elgamal::pod::PodProofType, zk_token_proof_instruction::ProofType},
     bytemuck::{bytes_of, Pod, Zeroable},
     num_traits::ToPrimitive,
     solana_program::{
@@ -15,7 +12,7 @@ use {
 /// The proof context account state
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
-pub struct ProofContextState<T: ZkProofContext> {
+pub struct ProofContextState<T: Pod> {
     /// The proof context authority that can close the account
     pub context_state_authority: Pubkey,
     /// The proof type for the context data
@@ -28,10 +25,10 @@ pub struct ProofContextState<T: ZkProofContext> {
 // `repr(packed)`, which may cause unnecessary complications when referencing its fields. Directly
 // mark `ProofContextState` as `Zeroable` and `Pod` since since none of its fields has an alignment
 // requirement greater than 1 and therefore, guaranteed to be `packed`.
-unsafe impl<T: ZkProofContext> Zeroable for ProofContextState<T> {}
-unsafe impl<T: ZkProofContext> Pod for ProofContextState<T> {}
+unsafe impl<T: Pod> Zeroable for ProofContextState<T> {}
+unsafe impl<T: Pod> Pod for ProofContextState<T> {}
 
-impl<T: ZkProofContext> ProofContextState<T> {
+impl<T: Pod> ProofContextState<T> {
     pub fn encode(
         context_state_authority: &Pubkey,
         proof_type: ProofType,

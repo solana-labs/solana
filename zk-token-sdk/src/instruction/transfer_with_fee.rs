@@ -27,7 +27,7 @@ use {
 };
 use {
     crate::{
-        instruction::{ProofType, ZkProofContext, ZkProofData},
+        instruction::{ProofType, ZkProofData},
         zk_token_elgamal::pod,
     },
     bytemuck::{Pod, Zeroable},
@@ -340,8 +340,8 @@ impl TransferWithFeeData {
     }
 }
 
-impl ZkProofData for TransferWithFeeData {
-    type ProofContext = TransferWithFeeProofContext;
+impl ZkProofData<TransferWithFeeProofContext> for TransferWithFeeData {
+    const PROOF_TYPE: ProofType = ProofType::TransferWithFee;
 
     fn context_data(&self) -> &TransferWithFeeProofContext {
         &self.context
@@ -378,10 +378,6 @@ impl ZkProofData for TransferWithFeeData {
             &mut transcript,
         )
     }
-}
-
-impl ZkProofContext for TransferWithFeeProofContext {
-    const PROOF_TYPE: ProofType = ProofType::TransferWithFee;
 }
 
 // #[derive(Clone, Copy, Pod, Zeroable)]

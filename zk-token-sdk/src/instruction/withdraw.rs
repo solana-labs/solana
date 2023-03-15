@@ -15,7 +15,7 @@ use {
 };
 use {
     crate::{
-        instruction::{ProofType, ZkProofContext, ZkProofData},
+        instruction::{ProofType, ZkProofData},
         zk_token_elgamal::pod,
     },
     bytemuck::{Pod, Zeroable},
@@ -86,8 +86,8 @@ impl WithdrawData {
     }
 }
 
-impl ZkProofData for WithdrawData {
-    type ProofContext = WithdrawProofContext;
+impl ZkProofData<WithdrawProofContext> for WithdrawData {
+    const PROOF_TYPE: ProofType = ProofType::Withdraw;
 
     fn context_data(&self) -> &WithdrawProofContext {
         &self.context
@@ -103,10 +103,6 @@ impl ZkProofData for WithdrawData {
         self.proof
             .verify(&elgamal_pubkey, &final_balance_ciphertext, &mut transcript)
     }
-}
-
-impl ZkProofContext for WithdrawProofContext {
-    const PROOF_TYPE: ProofType = ProofType::Withdraw;
 }
 
 /// This struct represents the cryptographic proof component that certifies the account's solvency

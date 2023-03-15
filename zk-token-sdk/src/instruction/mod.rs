@@ -40,17 +40,13 @@ pub enum ProofType {
     PubkeyValidity,
 }
 
-pub trait ZkProofData: Pod {
-    type ProofContext: ZkProofContext;
+pub trait ZkProofData<T: Pod> {
+    const PROOF_TYPE: ProofType;
 
-    fn context_data(&self) -> &Self::ProofContext;
+    fn context_data(&self) -> &T;
 
     #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError>;
-}
-
-pub trait ZkProofContext: Pod {
-    const PROOF_TYPE: ProofType;
 }
 
 #[cfg(not(target_os = "solana"))]

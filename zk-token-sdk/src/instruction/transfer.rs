@@ -21,7 +21,7 @@ use {
 };
 use {
     crate::{
-        instruction::{ProofType, ZkProofContext, ZkProofData},
+        instruction::{ProofType, ZkProofData},
         zk_token_elgamal::pod,
     },
     bytemuck::{Pod, Zeroable},
@@ -212,8 +212,8 @@ impl TransferData {
     }
 }
 
-impl ZkProofData for TransferData {
-    type ProofContext = TransferProofContext;
+impl ZkProofData<TransferProofContext> for TransferData {
+    const PROOF_TYPE: ProofType = ProofType::Transfer;
 
     fn context_data(&self) -> &TransferProofContext {
         &self.context
@@ -242,10 +242,6 @@ impl ZkProofData for TransferData {
             &mut transcript,
         )
     }
-}
-
-impl ZkProofContext for TransferProofContext {
-    const PROOF_TYPE: ProofType = ProofType::Transfer;
 }
 
 #[allow(non_snake_case)]

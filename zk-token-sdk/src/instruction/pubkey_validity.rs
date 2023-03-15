@@ -11,7 +11,7 @@ use {
 };
 use {
     crate::{
-        instruction::{ProofType, ZkProofContext, ZkProofData},
+        instruction::{ProofType, ZkProofData},
         zk_token_elgamal::pod,
     },
     bytemuck::{Pod, Zeroable},
@@ -54,8 +54,8 @@ impl PubkeyValidityData {
     }
 }
 
-impl ZkProofData for PubkeyValidityData {
-    type ProofContext = PubkeyValidityProofContext;
+impl ZkProofData<PubkeyValidityProofContext> for PubkeyValidityData {
+    const PROOF_TYPE: ProofType = ProofType::PubkeyValidity;
 
     fn context_data(&self) -> &PubkeyValidityProofContext {
         &self.context
@@ -67,10 +67,6 @@ impl ZkProofData for PubkeyValidityData {
         let pubkey = self.context.pubkey.try_into()?;
         self.proof.verify(&pubkey, &mut transcript)
     }
-}
-
-impl ZkProofContext for PubkeyValidityProofContext {
-    const PROOF_TYPE: ProofType = ProofType::PubkeyValidity;
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
