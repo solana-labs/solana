@@ -226,15 +226,14 @@ fn execute_batches_internal(
                 let mut timings = ExecuteTimings::default();
                 let (result, execute_batches_time): (Result<()>, Measure) = measure!(
                     {
-                        let result = execute_batch(
+                        execute_batch(
                             transaction_batch,
                             bank,
                             transaction_status_sender,
                             replay_vote_sender,
                             &mut timings,
                             log_messages_bytes_limit,
-                        );
-                        result
+                        )
                     },
                     "execute_batch",
                 );
