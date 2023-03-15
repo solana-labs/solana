@@ -548,10 +548,9 @@ pub fn clean_orphaned_account_snapshot_dirs(
 /// If the sub directories do not exist, the account_path will be cleaned because older version put account files there
 pub fn set_up_account_run_and_snapshot_paths(
     account_paths: &[PathBuf],
-) -> (Vec<PathBuf>, Vec<PathBuf>) {
-    // create the run/ and snapshot/ sub directories for each account_path
-
-    let account_run_and_snapshot_paths: Vec<(PathBuf, PathBuf)> = account_paths
+) -> (Vec<PathBuf>, Vec<PathBuf>) // (run_paths, snapshot_paths)
+{
+    account_paths
         .iter()
         .map(|account_path| {
             match fs::create_dir_all(account_path).and_then(|_| fs::canonicalize(account_path)) {
@@ -562,6 +561,7 @@ pub fn set_up_account_run_and_snapshot_paths(
             }
         })
         .map(|account_path| {
+            // create the run/ and snapshot/ sub directories for each account_path
             create_accounts_run_and_snapshot_dirs(&account_path).unwrap_or_else(|err| {
                 panic!(
                     "Unable to create account run and snapshot sub directories: {}, err: {err:?}",
@@ -569,9 +569,7 @@ pub fn set_up_account_run_and_snapshot_paths(
                 );
             })
         })
-        .collect();
-
-    account_run_and_snapshot_paths.into_iter().unzip()
+        .unzip()
 }
 
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
