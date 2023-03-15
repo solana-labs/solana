@@ -7083,6 +7083,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-zk-token-proof-program-tests"
+version = "1.16.0"
+dependencies = [
+ "bytemuck",
+ "solana-program-runtime",
+ "solana-program-test",
+ "solana-sdk 1.16.0",
+ "solana-zk-token-sdk 1.16.0",
+]
+
+[[package]]
 name = "solana-zk-token-sdk"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7236,9 +7247,9 @@ dependencies = [
 
 [[package]]
 name = "spl-token-2022"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67fcd758e8d22c5fce17315015f5ff319604d1a6e57a73c72795639dba898890"
+checksum = "0043b590232c400bad5ee9eb983ced003d15163c4c5d56b090ac6d9a57457b47"
 dependencies = [
  "arrayref",
  "bytemuck",
