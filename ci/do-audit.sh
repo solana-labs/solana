@@ -31,4 +31,4 @@ cargo_audit_ignores=(
 )
 scripts/cargo-for-all-lock-files.sh audit "${cargo_audit_ignores[@]}" | $dep_tree_filter
 # we want the `cargo audit` exit code, not `$dep_tree_filter`'s
-exit ${PIPESTATUS[0]}
+exit "${PIPESTATUS[0]}"
