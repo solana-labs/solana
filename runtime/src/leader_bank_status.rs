@@ -71,25 +71,26 @@ impl LeaderBankStatus {
         self.condvar.notify_all();
     }
 
-    /// Return weak bank reference or wait for notification for an in progress bank.
+    /// If the status is `InProgress`, immediately return a weak reference to the bank.
+    /// Otherwise, wait up to the `timeout` for the status to become `InProgress`.
+    /// Returns `None` if the timeout is reached.
     pub fn wait_for_in_progress(&self, timeout: Duration) -> Option<Weak<Bank>> {
         let status = self.status.lock().unwrap();
 
         // Hold status lock until after the weak bank reference is cloned.
-        let status = self
+        let (_status, wait_timeout_result) = self
             .condvar
             .wait_timeout_while(status, timeout, |status| {
                 matches!(*status, Status::Uninitialized | Status::Completed)
             })
             .unwrap();
-        let bank = self.bank.read().unwrap().as_ref().unwrap().1.clone();
-        drop(status);
 
-        Some(bank)
+        (!wait_timeout_result.timed_out())
+            .then(|| self.bank.read().unwrap().as_ref().unwrap().1.clone())
     }
 
-    /// Wait for next notification for a completed slot.
-    /// Returns None if the timeout is reached
+    /// Wait for next notification for a completed leader slot.
+    /// Returns `None` if the timeout is reached
     pub fn wait_for_next_completed(&self, mut timeout: Duration) -> Option<Slot> {
         loop {
             let start = Instant::now();
@@ -128,7 +129,18 @@ mod tests {
     }
 
     #[test]
-    fn test_leader_bank_status_wait_for_completed() {
+    fn test_leader_bank_status_wait_for_in_progress_timeout() {
+        let leader_bank_status = Arc::new(LeaderBankStatus::default());
+        leader_bank_status.set_in_progress(&Arc::new(Bank::default_for_tests()));
+        leader_bank_status.set_completed(1);
+
+        assert!(leader_bank_status
+            .wait_for_in_progress(Duration::from_millis(1))
+            .is_none());
+    }
+
+    #[test]
+    fn test_leader_bank_status_wait_for_next_completed() {
         let leader_bank_status = Arc::new(LeaderBankStatus::default());
         let leader_bank_status2 = leader_bank_status.clone();
 
@@ -140,5 +152,16 @@ mod tests {
         leader_bank_status.set_completed(1);
 
         jh.join().unwrap();
+    }
+
+    #[test]
+    fn test_leader_bank_status_wait_for_next_completed_timeout() {
+        let leader_bank_status = Arc::new(LeaderBankStatus::default());
+
+        leader_bank_status.set_in_progress(&Arc::new(Bank::default_for_tests()));
+        assert_eq!(
+            leader_bank_status.wait_for_next_completed(Duration::from_millis(1)),
+            None
+        );
     }
 }
