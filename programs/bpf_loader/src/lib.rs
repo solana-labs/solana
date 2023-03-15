@@ -45,7 +45,7 @@ use {
             check_slice_translation_size, delay_visibility_of_program_deployment,
             disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
             enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, FeatureSet,
+            limit_max_instruction_trace_length, round_up_heap_size, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -298,6 +298,20 @@ fn check_loader_id(id: &Pubkey) -> bool {
         || bpf_loader_upgradeable::check_id(id)
 }
 
+fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
+    const KIBIBYTE: u64 = 1024;
+    const PAGE_SIZE_KB: u64 = 32;
+    let mut rounded_heap_size = heap_size;
+    if enable_rounding_fix {
+        rounded_heap_size = rounded_heap_size
+            .saturating_add(PAGE_SIZE_KB.saturating_mul(KIBIBYTE).saturating_sub(1));
+    }
+    rounded_heap_size
+        .saturating_div(PAGE_SIZE_KB.saturating_mul(KIBIBYTE))
+        .saturating_sub(1)
+        .saturating_mul(heap_cost)
+}
+
 /// Create the SBF virtual machine
 pub fn create_ebpf_vm<'a, 'b>(
     program: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>,
@@ -307,11 +321,17 @@ pub fn create_ebpf_vm<'a, 'b>(
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, EbpfError> {
-    let _ = invoke_context.consume_checked(
-        ((heap.len() as u64).saturating_div(32_u64.saturating_mul(1024)))
-            .saturating_sub(1)
-            .saturating_mul(invoke_context.get_compute_budget().heap_cost),
-    );
+    let round_up_heap_size = invoke_context
+        .feature_set
+        .is_active(&round_up_heap_size::id());
+    let heap_cost_result = invoke_context.consume_checked(calculate_heap_cost(
+        heap.len() as u64,
+        invoke_context.get_compute_budget().heap_cost,
+        round_up_heap_size,
+    ));
+    if round_up_heap_size {
+        heap_cost_result.map_err(SyscallError::InstructionError)?;
+    }
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
             .transaction_context
@@ -3920,5 +3940,51 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn test_calculate_heap_cost() {
+        let heap_cost = 8_u64;
+
+        // heap allocations are in 32K block, `heap_cost` of CU is consumed per additional 32k
+
+        // when `enable_heap_size_round_up` not enabled:
+        {
+            // assert less than 32K heap should cost zero unit
+            assert_eq!(0, calculate_heap_cost(31_u64 * 1024, heap_cost, false));
+
+            // assert exact 32K heap should be cost zero unit
+            assert_eq!(0, calculate_heap_cost(32_u64 * 1024, heap_cost, false));
+
+            // assert slightly more than 32K heap is mistakenly cost zero unit
+            assert_eq!(0, calculate_heap_cost(33_u64 * 1024, heap_cost, false));
+
+            // assert exact 64K heap should cost 1 * heap_cost
+            assert_eq!(
+                heap_cost,
+                calculate_heap_cost(64_u64 * 1024, heap_cost, false)
+            );
+        }
+
+        // when `enable_heap_size_round_up` is enabled:
+        {
+            // assert less than 32K heap should cost zero unit
+            assert_eq!(0, calculate_heap_cost(31_u64 * 1024, heap_cost, true));
+
+            // assert exact 32K heap should be cost zero unit
+            assert_eq!(0, calculate_heap_cost(32_u64 * 1024, heap_cost, true));
+
+            // assert slightly more than 32K heap should cost 1 * heap_cost
+            assert_eq!(
+                heap_cost,
+                calculate_heap_cost(33_u64 * 1024, heap_cost, true)
+            );
+
+            // assert exact 64K heap should cost 1 * heap_cost
+            assert_eq!(
+                heap_cost,
+                calculate_heap_cost(64_u64 * 1024, heap_cost, true)
+            );
+        }
     }
 }
