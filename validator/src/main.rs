@@ -1668,8 +1668,8 @@ pub fn main() {
         .arg(
             Arg::with_name("accounts_db_skip_shrink")
                 .long("accounts-db-skip-shrink")
-                .help("Enables faster starting of validators by skipping shrink. \
-                      This option is for use during testing."),
+                .help("This is obsolete since it is now enabled by default. Enables faster starting of validators by skipping startup clean and shrink.")
+                .hidden(true),
         )
         .arg(
             Arg::with_name("accounts_db_skip_rewrites")
@@ -2588,6 +2588,10 @@ pub fn main() {
     }
     let full_api = matches.is_present("full_rpc_api");
 
+    if matches.is_present("accounts_db_skip_shrink") {
+        warn!("`--accounts-db-skip-shrink` is deprecated. please consider removing it from the validator command line argument list");
+    }
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2707,7 +2711,7 @@ pub fn main() {
         accounts_db_caching_enabled: true,
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         accounts_db_config,
-        accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
+        accounts_db_skip_shrink: true,
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
