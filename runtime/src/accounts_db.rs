@@ -7705,21 +7705,21 @@ impl AccountsDb {
         config: VerifyAccountsHashAndLamportsConfig,
     ) -> Result<(), AccountsHashVerificationError> {
         use AccountsHashVerificationError::*;
+        let calc_config = CalcAccountsHashConfig {
+            use_bg_thread_pool: config.use_bg_thread_pool,
+            check_hash: false, // this will not be supported anymore
+            ancestors: Some(config.ancestors),
+            epoch_schedule: config.epoch_schedule,
+            rent_collector: config.rent_collector,
+            store_detailed_debug_info_on_failure: config.store_detailed_debug_info,
+        };
 
-        let check_hash = false; // this will not be supported anymore
         let (calculated_accounts_hash, calculated_lamports) = self
             .calculate_accounts_hash_with_verify(
                 CalcAccountsHashDataSource::Storages,
                 config.test_hash_calculation,
                 slot,
-                CalcAccountsHashConfig {
-                    use_bg_thread_pool: config.use_bg_thread_pool,
-                    check_hash,
-                    ancestors: Some(config.ancestors),
-                    epoch_schedule: config.epoch_schedule,
-                    rent_collector: config.rent_collector,
-                    store_detailed_debug_info_on_failure: config.store_detailed_debug_info,
-                },
+                calc_config,
                 None,
             )?;
 
@@ -7732,20 +7732,19 @@ impl AccountsDb {
         }
 
         if config.ignore_mismatch {
-            Ok(())
-        } else if let Some((found_accounts_hash, _)) = self.get_accounts_hash(slot) {
-            if calculated_accounts_hash == found_accounts_hash {
-                Ok(())
-            } else {
-                warn!(
-                    "mismatched accounts hash for slot {slot}: \
-                    {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
-                );
-                Err(MismatchedAccountsHash)
-            }
-        } else {
-            Err(MissingAccountsHash)
+            return Ok(());
         }
+
+        let (found_accounts_hash, _) = self.get_accounts_hash(slot).ok_or(MissingAccountsHash)?;
+        if calculated_accounts_hash != found_accounts_hash {
+            warn!(
+                "Mismatched accounts hash for slot {slot}: \
+                {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
+            );
+            return Err(MismatchedAccountsHash);
+        }
+
+        Ok(())
     }
 
     /// helper to return
