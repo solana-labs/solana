@@ -349,6 +349,7 @@ pub fn spawn_server(
             coalesce_ms,
         )
     }?;
+    debug!("Spawning server {} at address {:?}", server_name, endpoint.local_addr());
     let handle = thread::Builder::new()
         .name(server_name)
         .spawn(move || {
