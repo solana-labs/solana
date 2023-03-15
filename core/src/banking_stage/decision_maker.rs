@@ -19,6 +19,7 @@ pub enum BufferedPacketsDecision {
 }
 
 impl BufferedPacketsDecision {
+    /// Returns the `BankStart` if the decision is `Consume`. Otherwise, returns `None`.
     pub fn bank_start(&self) -> Option<&BankStart> {
         match self {
             Self::Consume(bank_start) => Some(bank_start),
