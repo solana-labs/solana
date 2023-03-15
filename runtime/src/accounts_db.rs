@@ -7731,17 +7731,15 @@ impl AccountsDb {
             return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
         }
 
-        if config.ignore_mismatch {
-            return Ok(());
-        }
-
         let (found_accounts_hash, _) = self.get_accounts_hash(slot).ok_or(MissingAccountsHash)?;
         if calculated_accounts_hash != found_accounts_hash {
             warn!(
                 "Mismatched accounts hash for slot {slot}: \
                 {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
             );
-            return Err(MismatchedAccountsHash);
+            if !config.ignore_mismatch {
+                return Err(MismatchedAccountsHash);
+            }
         }
 
         Ok(())
