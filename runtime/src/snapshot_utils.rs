@@ -548,28 +548,29 @@ pub fn clean_orphaned_account_snapshot_dirs(
 /// If the sub directories do not exist, the account_path will be cleaned because older version put account files there
 pub fn set_up_account_run_and_snapshot_paths(
     account_paths: &[PathBuf],
-) -> (Vec<PathBuf>, Vec<PathBuf>) // (run_paths, snapshot_paths)
+) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> // (run_paths, snapshot_paths) or error
 {
-    account_paths
+    Ok(account_paths
         .iter()
-        .map(|account_path| {
-            match fs::create_dir_all(account_path).and_then(|_| fs::canonicalize(account_path)) {
-                Ok(account_path) => account_path,
-                Err(err) => {
-                    panic!("Unable to access account path: {account_path:?}, err: {err:?}");
-                }
-            }
-        })
-        .map(|account_path| {
+        .map(|account_path| -> Result<(PathBuf, PathBuf)> {
+            if let Err(err) =
+                fs::create_dir_all(account_path).and_then(|_| fs::canonicalize(account_path))
+            {
+                return Err(SnapshotError::IoWithSourceAndFile(err, "Unable to create account directory", account_path.to_path_buf()));
+            };
+
             // create the run/ and snapshot/ sub directories for each account_path
-            create_accounts_run_and_snapshot_dirs(&account_path).unwrap_or_else(|err| {
-                panic!(
-                    "Unable to create account run and snapshot sub directories: {}, err: {err:?}",
-                    account_path.display()
-                );
+            create_accounts_run_and_snapshot_dirs(&account_path).or_else(|err| {
+                Err(SnapshotError::IoWithSourceAndFile(
+                    err,
+                    "Unable to create account run and snapshot directories",
+                    account_path.to_path_buf(),
+                ))
             })
         })
-        .unzip()
+        .collect::<Result<Vec<(PathBuf, PathBuf)>>>()?
+        .into_iter()
+        .unzip())
 }
 
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging

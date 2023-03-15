@@ -1181,7 +1181,13 @@ fn load_bank_forks(
     };
 
     let (account_run_paths, account_snapshot_paths) =
-        set_up_account_run_and_snapshot_paths(&account_paths);
+        match set_up_account_run_and_snapshot_paths(&account_paths) {
+            Ok((run_paths, snapshot_paths)) => (run_paths, snapshot_paths),
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                exit(1);
+            }
+        };
 
     // From now on, use run/ paths in the same way as the previous account_paths.
     let account_paths = account_run_paths;
