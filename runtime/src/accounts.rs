@@ -360,19 +360,22 @@ impl Accounts {
                             .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
                     )
                 } else {
+                    let upgradeable_program = program_accounts
+                        .get(key)
+                        .map_or(false, |owner| bpf_loader_upgradeable::check_id(owner));
                     let (account_size, mut account, rent) = if let Some(account_override) =
                         account_overrides.and_then(|overrides| overrides.get(key))
                     {
                         (account_override.data().len(), account_override.clone(), 0)
-                    } else if let Some(program) =
-                        loaded_programs.get(key).and_then(|maybe_program| {
-                            // Return the program if it's not a tombstone.
-                            // (If it's a tombstone let's return None, so that it can be loaded as a data account.
-                            //  Upgradeable loader could own data accounts, which do not contain executables.)
-                            (!message.is_writable(i) && !maybe_program.is_tombstone())
-                                .then_some(maybe_program)
-                        })
+                    } else if let Some(program) = (!upgradeable_program && !message.is_writable(i))
+                        .then_some(())
+                        .and_then(|_| loaded_programs.get(key))
                     {
+                        // This condition block does special handling for upgradeable programs.
+                        // It's been noticed that some upgradeable programs fail if their account is
+                        // not loaded, even if the compiled program already exists in the cache.
+                        // So, for now, the code flow will go to the else clause for such accounts
+                        // and load them.
                         Self::account_shared_data_from_program(key, program, program_accounts)
                             .map(|program_account| (program.account_size, program_account, 0))?
                     } else {
