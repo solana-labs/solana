@@ -486,42 +486,67 @@ pub fn generate_offsets(
     )
 }
 
-//inplace shrink a batch of packets
+// Shrink batches of packets in place
 pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
-    let mut valid_batch_ix = 0;
-    let mut valid_packet_ix = 0;
-    let mut last_valid_batch = 0;
+    if batches.is_empty() {
+        return;
+    }
+    let mut valid_batch_idx = batches.len().saturating_sub(1);
+    let mut valid_packet_idx = batches[valid_batch_idx].len().saturating_sub(1);
+    let mut truncation_length_batch = 0;
+    let mut truncation_length_packet = 0;
     for batch_ix in 0..batches.len() {
+        if batch_ix > valid_batch_idx {
+            break;
+        }
         for packet_ix in 0..batches[batch_ix].len() {
-            if batches[batch_ix][packet_ix].meta().discard() {
+            // Find a free packet location we can insert into.
+            if !batches[batch_ix][packet_ix].meta().discard() {
+                truncation_length_batch = batch_ix.saturating_add(1);
+                truncation_length_packet = packet_ix.saturating_add(1);
                 continue;
             }
-            last_valid_batch = batch_ix.saturating_add(1);
-            let mut found_spot = false;
-            while valid_batch_ix < batch_ix && !found_spot {
-                while valid_packet_ix < batches[valid_batch_ix].len() {
-                    if batches[valid_batch_ix][valid_packet_ix].meta().discard() {
-                        batches[valid_batch_ix][valid_packet_ix] =
-                            batches[batch_ix][packet_ix].clone();
-                        batches[batch_ix][packet_ix].meta_mut().set_discard(true);
-                        last_valid_batch = valid_batch_ix.saturating_add(1);
-                        found_spot = true;
-                        break;
-                    }
-                    valid_packet_ix = valid_packet_ix.saturating_add(1);
+
+            // Find a valid packet location we can insert from.
+            while batches[valid_batch_idx][valid_packet_idx].meta().discard() {
+                if valid_batch_idx == 0 && valid_packet_idx == 0 {
+                    // No valid packets found. Truncate everything.
+                    batches.truncate(0);
+                    return;
                 }
-                if valid_packet_ix >= batches[valid_batch_ix].len() {
-                    valid_packet_ix = 0;
-                    valid_batch_ix = valid_batch_ix.saturating_add(1);
+                if valid_packet_idx == 0 {
+                    valid_batch_idx = valid_batch_idx.saturating_sub(1);
+                    valid_packet_idx = batches[valid_batch_idx].len().saturating_sub(1);
+                } else {
+                    valid_packet_idx = valid_packet_idx.saturating_sub(1);
                 }
             }
+
+            // If the free packet location is after the valid packet location,
+            // we're done.
+            if batch_ix > valid_batch_idx
+                || (batch_ix == valid_batch_idx && packet_ix >= valid_packet_idx)
+            {
+                break;
+            }
+
+            // Insert the valid packet into the free packet location.
+            batches[batch_ix][packet_ix] = batches[valid_batch_idx][valid_packet_idx].clone();
+            truncation_length_batch = batch_ix.saturating_add(1);
+            truncation_length_packet = packet_ix.saturating_add(1);
+
+            // Mark the old valid packet location free.
+            batches[valid_batch_idx][valid_packet_idx]
+                .meta_mut()
+                .set_discard(true);
         }
     }
+
     // Truncate batches that only contain discarded packets.
-    batches.truncate(last_valid_batch);
+    batches.truncate(truncation_length_batch);
     // Truncate discarded packets from the last batch.
     if let Some(batch) = batches.last_mut() {
-        batch.truncate(valid_packet_ix.saturating_add(1))
+        batch.truncate(truncation_length_packet)
     }
 }
 
