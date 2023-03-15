@@ -1150,7 +1150,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             },
             1,
         );
-        if write_to_disk {
+        if !write_to_disk {
             if iterate_for_age {
                 // completed iteration of the buckets at the current age
                 assert_eq!(current_age, self.storage.current_age());
