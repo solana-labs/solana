@@ -10,7 +10,6 @@ use {
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankIncrementalSnapshotPersistence, BankRc},
         blockhash_queue::BlockhashQueue,
         builtins::Builtins,
@@ -607,8 +606,7 @@ fn reconstruct_single_storage(
     current_len: usize,
     append_vec_id: AppendVecId,
 ) -> io::Result<Arc<AccountStorageEntry>> {
-    let (append_vec, num_accounts) = AppendVec::new_from_file(append_vec_path, current_len)?;
-    let accounts_file = AccountsFile::AppendVec(append_vec);
+    let (accounts_file, num_accounts) = AccountsFile::new_from_file(append_vec_path, current_len)?;
     Ok(Arc::new(AccountStorageEntry::new_existing(
         *slot,
         append_vec_id,
@@ -628,7 +626,7 @@ fn remap_append_vec_file(
     // due to full snapshots and incremental snapshots generated from different nodes
     let (remapped_append_vec_id, remapped_append_vec_path) = loop {
         let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::AcqRel);
-        let remapped_file_name = AppendVec::file_name(slot, remapped_append_vec_id);
+        let remapped_file_name = AccountsFile::file_name(slot, remapped_append_vec_id);
         let remapped_append_vec_path = append_vec_path.parent().unwrap().join(remapped_file_name);
 
         // Break out of the loop in the following situations:
