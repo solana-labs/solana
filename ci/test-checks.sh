@@ -51,10 +51,12 @@ echo --- build environment
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings -A incomplete_features"
 
+# run cargo check for all rust files in this monorepo for faster turnaround in
+# case of any compilation/build error for nightly
+
 # Only force up-to-date lock files on edge
 if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
-  # Exclude --benches as it's not available in rust stable yet
-  if _ scripts/cargo-for-all-lock-files.sh check --locked --tests --bins --examples; then
+  if _ scripts/cargo-for-all-lock-files.sh "+${rust_nightly}" check --locked --workspace --all-targets --features dummy-for-ci-check; then
     true
   else
     check_status=$?
@@ -63,9 +65,6 @@ if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
     echo "$0:   [tree (for outdated Cargo.lock sync)|check (for compilation error)|update -p foo --precise x.y.z (for your Cargo.toml update)] ..." >&2
     exit "$check_status"
   fi
-
-   # Ensure nightly and --benches
-  _ scripts/cargo-for-all-lock-files.sh "+${rust_nightly}" check --locked --all-targets
 else
   echo "Note: cargo-for-all-lock-files.sh skipped because $CI_BASE_BRANCH != $EDGE_CHANNEL"
 fi
@@ -76,7 +75,7 @@ nightly_clippy_allows=()
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
- _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy -Zunstable-options --all-targets -- \
+ _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy -Zunstable-options --workspace --all-targets --features dummy-for-ci-check -- \
    --deny=warnings \
    --deny=clippy::integer_arithmetic \
    "${nightly_clippy_allows[@]}"

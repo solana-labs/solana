@@ -13,7 +13,7 @@
 //!
 //! The bank then stores the results to the accounts store.
 //!
-//! It then has apis for retrieving if a transaction has been processed and it's status.
+//! It then has APIs for retrieving if a transaction has been processed and it's status.
 //! See `get_signature_status` et al.
 //!
 //! Bank lifecycle:
@@ -46,10 +46,10 @@ use {
         },
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig,
-            BankHashLamportsVerifyConfig, CalcAccountsHashDataSource, IncludeSlotInHash,
+            CalcAccountsHashDataSource, IncludeSlotInHash, VerifyAccountsHashAndLamportsConfig,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
-        accounts_hash::AccountsHash,
+        accounts_hash::{AccountsHash, IncrementalAccountsHash},
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
@@ -181,8 +181,8 @@ use {
     },
 };
 
-/// params to `verify_bank_hash`
-pub struct VerifyBankHash {
+/// params to `verify_accounts_hash`
+pub struct VerifyAccountsHashConfig {
     pub test_hash_calculation: bool,
     pub ignore_mismatch: bool,
     pub require_rooted_bank: bool,
@@ -281,7 +281,7 @@ impl RentDebits {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "AwRx17Bgesvvu9NZVwAoqofq7MU52gkwvjLvjVQpW64S")]
+#[frozen_abi(digest = "3qia1Zm8X66bzFaBuC8ahz3hADRRATyUPRV36ZzrSois")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -1265,7 +1265,10 @@ impl Bank {
     ) -> Self {
         Self::new_with_paths_for_tests(
             genesis_config,
-            Arc::<RuntimeConfig>::default(),
+            Arc::new(RuntimeConfig {
+                bpf_jit: true,
+                ..RuntimeConfig::default()
+            }),
             Vec::new(),
             account_indexes,
             shrink_ratio,
@@ -6940,7 +6943,7 @@ impl Bank {
     /// return true if all is good
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_bank_hash(&self, config: VerifyBankHash) -> bool {
+    pub fn verify_accounts_hash(&self, config: VerifyAccountsHashConfig) -> bool {
         let accounts = &self.rc.accounts;
         // Wait until initial hash calc is complete before starting a new hash calc.
         // This should only occur when we halt at a slot in ledger-tool.
@@ -6957,7 +6960,7 @@ impl Bank {
         {
             if let Some(parent) = self.parent() {
                 info!("{} is not a root, so attempting to verify bank hash on parent bank at slot: {}", self.slot(), parent.slot());
-                return parent.verify_bank_hash(config);
+                return parent.verify_accounts_hash(config);
             } else {
                 // this will result in mismatch errors
                 // accounts hash calc doesn't include unrooted slots
@@ -6982,10 +6985,11 @@ impl Bank {
                         info!(
                             "running initial verification accounts hash calculation in background"
                         );
-                        let result = accounts_.verify_bank_hash_and_lamports(
+                        let result = accounts_.verify_accounts_hash_and_lamports(
                             slot,
                             cap,
-                            BankHashLamportsVerifyConfig {
+                            None,
+                            VerifyAccountsHashAndLamportsConfig {
                                 ancestors: &ancestors,
                                 test_hash_calculation: config.test_hash_calculation,
                                 epoch_schedule: &epoch_schedule,
@@ -7005,10 +7009,11 @@ impl Bank {
             });
             true // initial result is true. We haven't failed yet. If verification fails, we'll panic from bg thread.
         } else {
-            let result = accounts.verify_bank_hash_and_lamports(
+            let result = accounts.verify_accounts_hash_and_lamports(
                 slot,
                 cap,
-                BankHashLamportsVerifyConfig {
+                None,
+                VerifyAccountsHashAndLamportsConfig {
                     ancestors,
                     test_hash_calculation: config.test_hash_calculation,
                     epoch_schedule,
@@ -7186,15 +7191,33 @@ impl Bank {
     }
 
     pub fn get_accounts_hash(&self) -> Option<AccountsHash> {
-        self.rc.accounts.accounts_db.get_accounts_hash(self.slot())
+        self.rc
+            .accounts
+            .accounts_db
+            .get_accounts_hash(self.slot())
+            .map(|(accounts_hash, _)| accounts_hash)
+    }
+
+    pub fn get_incremental_accounts_hash(&self) -> Option<IncrementalAccountsHash> {
+        self.rc
+            .accounts
+            .accounts_db
+            .get_incremental_accounts_hash(self.slot())
+            .map(|(incremental_accounts_hash, _)| incremental_accounts_hash)
     }
 
     pub fn get_snapshot_hash(&self) -> SnapshotHash {
-        let accounts_hash = self
-            .get_accounts_hash()
-            .expect("accounts hash is required to get snapshot hash");
+        let accounts_hash = self.get_accounts_hash();
+        let incremental_accounts_hash = self.get_incremental_accounts_hash();
+
+        let accounts_hash = match (accounts_hash, incremental_accounts_hash) {
+            (Some(_), Some(_)) => panic!("Both full and incremental accounts hashes are present for slot {}; it is ambiguous which one to use for the snapshot hash!", self.slot()),
+            (Some(accounts_hash), None) => accounts_hash.into(),
+            (None, Some(incremental_accounts_hash)) => incremental_accounts_hash.into(),
+            (None, None) => panic!("accounts hash is required to get snapshot hash"),
+        };
         let epoch_accounts_hash = self.get_epoch_accounts_hash_to_serialize();
-        SnapshotHash::new(&accounts_hash.into(), epoch_accounts_hash.as_ref())
+        SnapshotHash::new(&accounts_hash, epoch_accounts_hash.as_ref())
     }
 
     pub fn get_thread_pool(&self) -> &ThreadPool {
@@ -7270,62 +7293,75 @@ impl Bank {
         accounts_db_skip_shrink: bool,
         last_full_snapshot_slot: Slot,
     ) -> bool {
-        let mut clean_time = Measure::start("clean");
-        if !accounts_db_skip_shrink && self.slot() > 0 {
-            info!("cleaning..");
-            self.rc
-                .accounts
-                .accounts_db
-                .clean_accounts(None, true, Some(last_full_snapshot_slot));
-        }
-        clean_time.stop();
+        let (_, clean_time_us) = measure_us!({
+            let should_clean = !accounts_db_skip_shrink && self.slot() > 0;
+            if should_clean {
+                info!("Cleaning...");
+                self.rc.accounts.accounts_db.clean_accounts(
+                    None,
+                    true,
+                    Some(last_full_snapshot_slot),
+                );
+                info!("Cleaning... Done.");
+            } else {
+                info!("Cleaning... Skipped.");
+            }
+        });
 
-        let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
-        if !accounts_db_skip_shrink && self.slot() > 0 {
-            info!("shrinking..");
-            self.rc
-                .accounts
-                .accounts_db
-                .shrink_all_slots(true, Some(last_full_snapshot_slot));
-        }
-        shrink_all_slots_time.stop();
+        let (_, shrink_time_us) = measure_us!({
+            let should_shrink = !accounts_db_skip_shrink && self.slot() > 0;
+            if should_shrink {
+                info!("Shrinking...");
+                self.rc
+                    .accounts
+                    .accounts_db
+                    .shrink_all_slots(true, Some(last_full_snapshot_slot));
+                info!("Shrinking... Done.");
+            } else {
+                info!("Shrinking... Skipped.");
+            }
+        });
 
-        let (mut verify, verify_time_us) = if !self.rc.accounts.accounts_db.skip_initial_hash_calc {
-            info!("verify_bank_hash..");
-            let mut verify_time = Measure::start("verify_bank_hash");
-            let verify = self.verify_bank_hash(VerifyBankHash {
-                test_hash_calculation,
-                ignore_mismatch: false,
-                require_rooted_bank: false,
-                run_in_background: true,
-                store_hash_raw_data_for_debug: false,
-            });
-            verify_time.stop();
-            (verify, verify_time.as_us())
-        } else {
-            self.rc
-                .accounts
-                .accounts_db
-                .verify_accounts_hash_in_bg
-                .verification_complete();
-            (true, 0)
-        };
+        let (verified_accounts, verify_accounts_time_us) = measure_us!({
+            let should_verify_accounts = !self.rc.accounts.accounts_db.skip_initial_hash_calc;
+            if should_verify_accounts {
+                info!("Verifying accounts...");
+                let verified = self.verify_accounts_hash(VerifyAccountsHashConfig {
+                    test_hash_calculation,
+                    ignore_mismatch: false,
+                    require_rooted_bank: false,
+                    run_in_background: true,
+                    store_hash_raw_data_for_debug: false,
+                });
+                info!("Verifying accounts... In background.");
+                verified
+            } else {
+                info!("Verifying accounts... Skipped.");
+                self.rc
+                    .accounts
+                    .accounts_db
+                    .verify_accounts_hash_in_bg
+                    .verification_complete();
+                true
+            }
+        });
 
-        info!("verify_hash..");
-        let mut verify2_time = Measure::start("verify_hash");
-        // Order and short-circuiting is significant; verify_hash requires a valid bank hash
-        verify = verify && self.verify_hash();
-        verify2_time.stop();
+        let (verified_bank, verify_bank_time_us) = measure_us!({
+            info!("Verifying bank...");
+            let verified = self.verify_hash();
+            info!("Verifying bank... Done.");
+            verified
+        });
 
         datapoint_info!(
             "verify_snapshot_bank",
-            ("clean_us", clean_time.as_us(), i64),
-            ("shrink_all_slots_us", shrink_all_slots_time.as_us(), i64),
-            ("verify_bank_hash_us", verify_time_us, i64),
-            ("verify_hash_us", verify2_time.as_us(), i64),
+            ("clean_us", clean_time_us, i64),
+            ("shrink_us", shrink_time_us, i64),
+            ("verify_accounts_us", verify_accounts_time_us, i64),
+            ("verify_bank_us", verify_bank_time_us, i64),
         );
 
-        verify
+        verified_accounts && verified_bank
     }
 
     /// Return the number of hashes per tick

@@ -2187,7 +2187,7 @@ fn bank_fields_from_snapshots(
         Ok(
             match incremental_snapshot_version.unwrap_or(full_snapshot_version) {
                 SnapshotVersion::V1_2_0 => fields_from_streams(SerdeStyle::Newer, snapshot_streams)
-                    .map(|(bank_fields, _accountsdb_fields)| bank_fields),
+                    .map(|(bank_fields, _accountsdb_fields)| bank_fields.collapse_into()),
             }?,
         )
     })

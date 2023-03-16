@@ -30,8 +30,8 @@ fn run_cargo_build(crate_name: &str, extra_args: &[&str], fail: bool) {
     let mut cmd = assert_cmd::Command::cargo_bin("cargo-build-sbf").unwrap();
     let assert = cmd.env("RUST_LOG", "debug").args(&args).assert();
     let output = assert.get_output();
-    println!("Test stdout\n{}\n", String::from_utf8_lossy(&output.stdout));
-    println!("Test stderr\n{}\n", String::from_utf8_lossy(&output.stderr));
+    eprintln!("Test stdout\n{}\n", String::from_utf8_lossy(&output.stdout));
+    eprintln!("Test stderr\n{}\n", String::from_utf8_lossy(&output.stderr));
     if fail {
         assert.failure();
     } else {

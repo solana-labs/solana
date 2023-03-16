@@ -802,6 +802,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             28 => TransactionError::WouldExceedMaxVoteCostLimit,
             29 => TransactionError::WouldExceedAccountDataTotalLimit,
             32 => TransactionError::MaxLoadedAccountsDataSizeExceeded,
+            33 => TransactionError::InvalidLoadedAccountsDataSizeLimit,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -907,6 +908,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::MaxLoadedAccountsDataSizeExceeded => {
                     tx_by_addr::TransactionErrorType::MaxLoadedAccountsDataSizeExceeded
+                }
+                TransactionError::InvalidLoadedAccountsDataSizeLimit => {
+                    tx_by_addr::TransactionErrorType::InvalidLoadedAccountsDataSizeLimit
                 }
             } as i32,
             instruction_error: match transaction_error {

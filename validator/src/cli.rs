@@ -45,6 +45,9 @@ const INCLUDE_KEY: &str = "account-index-include-key";
 const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
 // The maximum times of snapshot download abort and retry
 const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
+// We've observed missed leader slots leading to deadlocks on test validator
+// with less than 2 ticks per slot.
+const MINIMUM_TICKS_PER_SLOT: u64 = 2;
 
 pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
     return App::new(crate_name!()).about(crate_description!())
@@ -1183,12 +1186,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .hidden(true)
         )
         .arg(
-            Arg::with_name("accounts_db_skip_shrink")
-                .long("accounts-db-skip-shrink")
-                .help("Enables faster starting of validators by skipping shrink. \
-                      This option is for use during testing."),
-        )
-        .arg(
             Arg::with_name("accounts_db_create_ancient_storage_packed")
                 .long("accounts-db-create-ancient-storage-packed")
                 .help("Create ancient storages in one shot instead of appending.")
@@ -1599,6 +1596,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
 // avoid breaking validator startup commands
 fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
     vec![
+        Arg::with_name("accounts_db_skip_shrink")
+            .long("accounts-db-skip-shrink")
+            .help("This is obsolete since it is now enabled by default. Enables faster starting of validators by skipping startup clean and shrink.")
+            .hidden(true),
         Arg::with_name("accounts_db_caching_enabled")
             .long("accounts-db-caching-enabled")
             .hidden(true),
@@ -2126,7 +2127,18 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
             Arg::with_name("ticks_per_slot")
                 .long("ticks-per-slot")
                 .value_name("TICKS")
-                .validator(is_parsable::<u64>)
+                .validator(|value| {
+                    value
+                        .parse::<u64>()
+                        .map_err(|err| format!("error parsing '{value}': {err}"))
+                        .and_then(|ticks| {
+                            if ticks < MINIMUM_TICKS_PER_SLOT {
+                                Err(format!("value must be >= {MINIMUM_TICKS_PER_SLOT}"))
+                            } else {
+                                Ok(())
+                            }
+                        })
+                })
                 .takes_value(true)
                 .help("The number of ticks in a slot"),
         )

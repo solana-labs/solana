@@ -1,5 +1,4 @@
 use {
-    crate::leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, MetricsTrackerAction},
     solana_poh::poh_recorder::{BankStart, PohRecorder},
     solana_sdk::{
         clock::{
@@ -19,6 +18,16 @@ pub enum BufferedPacketsDecision {
     Hold,
 }
 
+impl BufferedPacketsDecision {
+    /// Returns the `BankStart` if the decision is `Consume`. Otherwise, returns `None`.
+    pub fn bank_start(&self) -> Option<&BankStart> {
+        match self {
+            Self::Consume(bank_start) => Some(bank_start),
+            _ => None,
+        }
+    }
+}
+
 pub struct DecisionMaker {
     my_pubkey: Pubkey,
     poh_recorder: Arc<RwLock<PohRecorder>>,
@@ -32,10 +41,7 @@ impl DecisionMaker {
         }
     }
 
-    pub(crate) fn make_consume_or_forward_decision(
-        &self,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-    ) -> (MetricsTrackerAction, BufferedPacketsDecision) {
+    pub(crate) fn make_consume_or_forward_decision(&self) -> BufferedPacketsDecision {
         let (leader_at_slot_offset, bank_start, would_be_leader, would_be_leader_shortly) = {
             let poh = self.poh_recorder.read().unwrap();
             let bank_start = poh
@@ -51,15 +57,12 @@ impl DecisionMaker {
             )
         };
 
-        (
-            slot_metrics_tracker.check_leader_slot_boundary(&bank_start),
-            Self::consume_or_forward_packets(
-                &self.my_pubkey,
-                leader_at_slot_offset,
-                bank_start,
-                would_be_leader,
-                would_be_leader_shortly,
-            ),
+        Self::consume_or_forward_packets(
+            &self.my_pubkey,
+            leader_at_slot_offset,
+            bank_start,
+            would_be_leader,
+            would_be_leader_shortly,
         )
     }
 
@@ -104,6 +107,23 @@ mod tests {
         solana_runtime::bank::Bank,
         std::{sync::Arc, time::Instant},
     };
+
+    #[test]
+    fn test_buffered_packet_decision_bank_start() {
+        let bank = Arc::new(Bank::default_for_tests());
+        let bank_start = BankStart {
+            working_bank: bank,
+            bank_creation_time: Arc::new(Instant::now()),
+        };
+        assert!(BufferedPacketsDecision::Consume(bank_start)
+            .bank_start()
+            .is_some());
+        assert!(BufferedPacketsDecision::Forward.bank_start().is_none());
+        assert!(BufferedPacketsDecision::ForwardAndHold
+            .bank_start()
+            .is_none());
+        assert!(BufferedPacketsDecision::Hold.bank_start().is_none());
+    }
 
     #[test]
     fn test_should_process_or_forward_packets() {

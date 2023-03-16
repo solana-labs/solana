@@ -463,6 +463,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
             )
             .unwrap()
             .0;
+            deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
 
             assert_eq!(&deserialized_bank, bank.as_ref());
             assert_eq!(

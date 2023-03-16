@@ -10,7 +10,6 @@ use {
         },
         accounts_file::AccountsFile,
         accounts_hash::{AccountsDeltaHash, AccountsHash},
-        append_vec::AppendVec,
         bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
         genesis_utils::{self, activate_all_features, activate_feature},
@@ -50,14 +49,14 @@ fn copy_append_vecs<P: AsRef<Path>>(
     for storage_entry in storage_entries.into_iter() {
         // Copy file to new directory
         let storage_path = storage_entry.get_path();
-        let file_name = AppendVec::file_name(storage_entry.slot(), storage_entry.append_vec_id());
+        let file_name =
+            AccountsFile::file_name(storage_entry.slot(), storage_entry.append_vec_id());
         let output_path = output_dir.as_ref().join(file_name);
         std::fs::copy(storage_path, &output_path)?;
 
         // Read new file into append-vec and build new entry
-        let (append_vec, num_accounts) =
-            AppendVec::new_from_file(output_path, storage_entry.accounts.len())?;
-        let accounts_file = AccountsFile::AppendVec(append_vec);
+        let (accounts_file, num_accounts) =
+            AccountsFile::new_from_file(output_path, storage_entry.accounts.len())?;
         let new_storage_entry = AccountStorageEntry::new_existing(
             storage_entry.slot(),
             storage_entry.append_vec_id(),
@@ -124,6 +123,7 @@ where
         None,
         &Arc::default(),
         None,
+        (u64::default(), None),
     )
     .map(|(accounts_db, _)| accounts_db)
 }
@@ -221,8 +221,8 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     check_accounts(&daccounts, &pubkeys, 100);
     let daccounts_delta_hash = daccounts.accounts_db.calculate_accounts_delta_hash(slot);
     assert_eq!(accounts_delta_hash, daccounts_delta_hash);
-    let daccounts_hash = daccounts.accounts_db.get_accounts_hash(slot);
-    assert_eq!(Some(accounts_hash), daccounts_hash);
+    let daccounts_hash = daccounts.accounts_db.get_accounts_hash(slot).unwrap().0;
+    assert_eq!(accounts_hash, daccounts_hash);
 }
 
 fn test_bank_serialize_style(

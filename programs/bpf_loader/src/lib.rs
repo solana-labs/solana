@@ -28,9 +28,10 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::{HOST_ALIGN, MM_HEAP_START},
+        ebpf::{self, HOST_ALIGN, MM_HEAP_START},
+        elf::Executable,
         error::{EbpfError, UserDefinedError},
-        memory_region::MemoryRegion,
+        memory_region::{MemoryCowCallback, MemoryMapping, MemoryRegion},
         verifier::{RequisiteVerifier, VerifierError},
         vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
@@ -38,13 +39,13 @@ use {
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::Slot,
-        entrypoint::{HEAP_LENGTH, SUCCESS},
+        entrypoint::SUCCESS,
         feature_set::{
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
             check_slice_translation_size, delay_visibility_of_program_deployment,
             disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
             enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, FeatureSet,
+            limit_max_instruction_trace_length, round_up_heap_size, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -64,6 +65,7 @@ use {
     std::{
         cell::{RefCell, RefMut},
         fmt::Debug,
+        mem,
         rc::Rc,
         sync::Arc,
     },
@@ -85,40 +87,6 @@ pub enum BpfError {
     SyscallError(#[from] SyscallError),
 }
 impl UserDefinedError for BpfError {}
-
-// The BPF loader is special in that it is the only place in the runtime and its built-in programs,
-// where data comes not only from instruction account but also program accounts.
-// Thus, these two helper methods have to distinguish the mixed sources via index_in_instruction.
-
-fn get_index_in_transaction(
-    instruction_context: &InstructionContext,
-    index_in_instruction: IndexOfAccount,
-) -> Result<IndexOfAccount, InstructionError> {
-    if index_in_instruction < instruction_context.get_number_of_program_accounts() {
-        instruction_context.get_index_of_program_account_in_transaction(index_in_instruction)
-    } else {
-        instruction_context.get_index_of_instruction_account_in_transaction(
-            index_in_instruction
-                .saturating_sub(instruction_context.get_number_of_program_accounts()),
-        )
-    }
-}
-
-fn try_borrow_account<'a>(
-    transaction_context: &'a TransactionContext,
-    instruction_context: &'a InstructionContext,
-    index_in_instruction: IndexOfAccount,
-) -> Result<BorrowedAccount<'a>, InstructionError> {
-    if index_in_instruction < instruction_context.get_number_of_program_accounts() {
-        instruction_context.try_borrow_program_account(transaction_context, index_in_instruction)
-    } else {
-        instruction_context.try_borrow_instruction_account(
-            transaction_context,
-            index_in_instruction
-                .saturating_sub(instruction_context.get_number_of_program_accounts()),
-        )
-    }
-}
 
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
@@ -299,18 +267,13 @@ macro_rules! deploy_program {
 }
 
 fn write_program_data(
-    program_account_index: IndexOfAccount,
     program_data_offset: usize,
     bytes: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
-    let mut program = try_borrow_account(
-        transaction_context,
-        instruction_context,
-        program_account_index,
-    )?;
+    let mut program = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
     let data = program.get_data_mut()?;
     let write_offset = program_data_offset.saturating_add(bytes.len());
     if data.len() < write_offset {
@@ -334,22 +297,40 @@ fn check_loader_id(id: &Pubkey) -> bool {
         || bpf_loader_upgradeable::check_id(id)
 }
 
+fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
+    const KIBIBYTE: u64 = 1024;
+    const PAGE_SIZE_KB: u64 = 32;
+    let mut rounded_heap_size = heap_size;
+    if enable_rounding_fix {
+        rounded_heap_size = rounded_heap_size
+            .saturating_add(PAGE_SIZE_KB.saturating_mul(KIBIBYTE).saturating_sub(1));
+    }
+    rounded_heap_size
+        .saturating_div(PAGE_SIZE_KB.saturating_mul(KIBIBYTE))
+        .saturating_sub(1)
+        .saturating_mul(heap_cost)
+}
+
 /// Create the SBF virtual machine
-pub fn create_vm<'a, 'b>(
+pub fn create_ebpf_vm<'a, 'b>(
     program: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>,
+    stack: &'a mut AlignedMemory<HOST_ALIGN>,
+    heap: AlignedMemory<HOST_ALIGN>,
     regions: Vec<MemoryRegion>,
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, EbpfError> {
-    let compute_budget = invoke_context.get_compute_budget();
-    let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
-    let _ = invoke_context.consume_checked(
-        ((heap_size as u64).saturating_div(32_u64.saturating_mul(1024)))
-            .saturating_sub(1)
-            .saturating_mul(compute_budget.heap_cost),
-    );
-    let heap =
-        AlignedMemory::<HOST_ALIGN>::zero_filled(compute_budget.heap_size.unwrap_or(HEAP_LENGTH));
+    let round_up_heap_size = invoke_context
+        .feature_set
+        .is_active(&round_up_heap_size::id());
+    let heap_cost_result = invoke_context.consume_checked(calculate_heap_cost(
+        heap.len() as u64,
+        invoke_context.get_compute_budget().heap_cost,
+        round_up_heap_size,
+    ));
+    if round_up_heap_size {
+        heap_cost_result.map_err(SyscallError::InstructionError)?;
+    }
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
             .transaction_context
@@ -372,13 +353,76 @@ pub fn create_vm<'a, 'b>(
             allocator.clone(),
         )
         .map_err(SyscallError::InstructionError)?;
-    let result = EbpfVm::new(
-        program,
-        invoke_context,
-        allocator.borrow_mut().get_heap(),
+    let stack_len = stack.len();
+    let memory_mapping = create_memory_mapping(
+        program.get_executable(),
+        stack,
+        allocator.borrow_mut().heap_mut(),
         regions,
-    );
-    result
+        None,
+    )?;
+
+    EbpfVm::new(program, invoke_context, memory_mapping, stack_len)
+}
+
+#[macro_export]
+macro_rules! create_vm {
+    ($vm_name:ident, $executable:expr, $stack:ident, $heap:ident, $additional_regions:expr, $orig_account_lengths:expr, $invoke_context:expr) => {
+        let mut $stack = solana_rbpf::aligned_memory::AlignedMemory::<
+            { solana_rbpf::ebpf::HOST_ALIGN },
+        >::zero_filled($executable.get_executable().get_config().stack_size());
+
+        // this is needed if the caller passes "&mut invoke_context" to the
+        // macro. The lint complains that (&mut invoke_context).get_compute_budget()
+        // does an unnecessary mutable borrow
+        #[allow(clippy::unnecessary_mut_passed)]
+        let heap_size = $invoke_context
+            .get_compute_budget()
+            .heap_size
+            .unwrap_or(solana_sdk::entrypoint::HEAP_LENGTH);
+        let $heap = solana_rbpf::aligned_memory::AlignedMemory::<{ solana_rbpf::ebpf::HOST_ALIGN }>::zero_filled(heap_size);
+
+        let $vm_name = create_ebpf_vm(
+            $executable,
+            &mut $stack,
+            $heap,
+            $additional_regions,
+            $orig_account_lengths,
+            $invoke_context,
+        );
+    };
+}
+
+fn create_memory_mapping<'a, 'b, C: ContextObject>(
+    executable: &'a Executable<C>,
+    stack: &'b mut AlignedMemory<{ HOST_ALIGN }>,
+    heap: &'b mut AlignedMemory<{ HOST_ALIGN }>,
+    additional_regions: Vec<MemoryRegion>,
+    cow_cb: Option<MemoryCowCallback>,
+) -> Result<MemoryMapping<'a>, EbpfError> {
+    let config = executable.get_config();
+    let regions: Vec<MemoryRegion> = vec![
+        executable.get_ro_region(),
+        MemoryRegion::new_writable_gapped(
+            stack.as_slice_mut(),
+            ebpf::MM_STACK_START,
+            if !config.dynamic_stack_frames && config.enable_stack_frame_gaps {
+                config.stack_frame_size as u64
+            } else {
+                0
+            },
+        ),
+        MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
+    ]
+    .into_iter()
+    .chain(additional_regions.into_iter())
+    .collect();
+
+    Ok(if let Some(cow_cb) = cow_cb {
+        MemoryMapping::new_with_cow(regions, cow_cb, config)?
+    } else {
+        MemoryMapping::new(regions, config)?
+    })
 }
 
 pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
@@ -396,120 +440,80 @@ fn process_instruction_common(
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
-    let program_id = instruction_context.get_last_program_key(transaction_context)?;
+    let program_account =
+        instruction_context.try_borrow_last_program_account(transaction_context)?;
 
-    let first_instruction_account = {
-        let borrowed_root_account =
-            instruction_context.try_borrow_program_account(transaction_context, 0)?;
-        let owner_id = borrowed_root_account.get_owner();
-        if native_loader::check_id(owner_id) {
-            1
-        } else {
-            0
-        }
-    };
-    let first_account_key = transaction_context.get_key_of_account_at_index(
-        get_index_in_transaction(instruction_context, first_instruction_account)?,
-    )?;
-    let second_account_key = get_index_in_transaction(
-        instruction_context,
-        first_instruction_account.saturating_add(1),
-    )
-    .and_then(|index_in_transaction| {
-        transaction_context.get_key_of_account_at_index(index_in_transaction)
-    });
-
-    let program_account_index = if first_account_key == program_id {
-        first_instruction_account
-    } else if second_account_key
-        .map(|key| key == program_id)
-        .unwrap_or(false)
-    {
-        first_instruction_account.saturating_add(1)
-    } else {
-        let first_account = try_borrow_account(
-            transaction_context,
-            instruction_context,
-            first_instruction_account,
-        )?;
-        if first_account.is_executable() {
+    // Program Management Instruction
+    if native_loader::check_id(program_account.get_owner()) {
+        drop(program_account);
+        if instruction_context
+            .try_borrow_instruction_account(transaction_context, 0)
+            .map(|account| account.is_executable())
+            .unwrap_or(false)
+        {
             ic_logger_msg!(log_collector, "BPF loader is executable");
             return Err(InstructionError::IncorrectProgramId);
         }
-        first_instruction_account
-    };
-
-    let program = try_borrow_account(
-        transaction_context,
-        instruction_context,
-        program_account_index,
-    )?;
-    if program.is_executable() {
-        // First instruction account can only be zero if called from CPI, which
-        // means stack height better be greater than one
-        debug_assert_eq!(
-            first_instruction_account == 0,
-            invoke_context.get_stack_height() > 1
-        );
-
-        let programdata = if program_account_index == first_instruction_account {
-            None
-        } else {
-            Some(try_borrow_account(
-                transaction_context,
-                instruction_context,
-                first_instruction_account,
-            )?)
-        };
-        let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-        let (executor, load_program_metrics) = load_program_from_account(
-            &invoke_context.feature_set,
-            invoke_context.get_compute_budget(),
-            log_collector,
-            Some(invoke_context.tx_executor_cache.borrow_mut()),
-            &program,
-            programdata.as_ref().unwrap_or(&program),
-            use_jit,
-        )?;
-        drop(program);
-        drop(programdata);
-        get_or_create_executor_time.stop();
-        saturating_add_assign!(
-            invoke_context.timings.get_or_create_executor_us,
-            get_or_create_executor_time.as_us()
-        );
-        if let Some(load_program_metrics) = load_program_metrics {
-            load_program_metrics.submit_datapoint(&mut invoke_context.timings);
-        }
-        match &executor.program {
-            LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
-            LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
-            LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
-            LoadedProgramType::BuiltIn(_) => Err(InstructionError::IncorrectProgramId),
-        }
-    } else {
-        drop(program);
-        debug_assert_eq!(first_instruction_account, 1);
-        if bpf_loader_upgradeable::check_id(program_id) {
-            process_loader_upgradeable_instruction(
-                first_instruction_account,
-                invoke_context,
-                use_jit,
-            )
+        let program_id = instruction_context.get_last_program_key(transaction_context)?;
+        return if bpf_loader_upgradeable::check_id(program_id) {
+            process_loader_upgradeable_instruction(invoke_context, use_jit)
         } else if bpf_loader::check_id(program_id) {
-            process_loader_instruction(first_instruction_account, invoke_context, use_jit)
+            process_loader_instruction(invoke_context, use_jit)
         } else if bpf_loader_deprecated::check_id(program_id) {
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
             Err(InstructionError::UnsupportedProgramId)
         } else {
             ic_logger_msg!(log_collector, "Invalid BPF loader id");
             Err(InstructionError::IncorrectProgramId)
-        }
+        };
+    }
+
+    // Program Invocation
+    if !program_account.is_executable() {
+        ic_logger_msg!(log_collector, "Program is not executable");
+        return Err(InstructionError::IncorrectProgramId);
+    }
+    let programdata_account = if bpf_loader_upgradeable::check_id(program_account.get_owner()) {
+        let programdata_account = instruction_context.try_borrow_program_account(
+            transaction_context,
+            instruction_context
+                .get_number_of_program_accounts()
+                .saturating_sub(2),
+        )?;
+        Some(programdata_account)
+    } else {
+        None
+    };
+
+    let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
+    let (executor, load_program_metrics) = load_program_from_account(
+        &invoke_context.feature_set,
+        invoke_context.get_compute_budget(),
+        log_collector,
+        Some(invoke_context.tx_executor_cache.borrow_mut()),
+        &program_account,
+        programdata_account.as_ref().unwrap_or(&program_account),
+        use_jit,
+    )?;
+    drop(program_account);
+    drop(programdata_account);
+    get_or_create_executor_time.stop();
+    saturating_add_assign!(
+        invoke_context.timings.get_or_create_executor_us,
+        get_or_create_executor_time.as_us()
+    );
+    if let Some(load_program_metrics) = load_program_metrics {
+        load_program_metrics.submit_datapoint(&mut invoke_context.timings);
+    }
+    match &executor.program {
+        LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
+        LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
+        LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
+        LoadedProgramType::BuiltIn(_) => Err(InstructionError::IncorrectProgramId),
     }
 }
 
 fn process_loader_upgradeable_instruction(
-    first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -565,7 +569,6 @@ fn process_loader_upgradeable_instruction(
             }
             drop(buffer);
             write_program_data(
-                first_instruction_account,
                 UpgradeableLoaderState::size_of_buffer_metadata().saturating_add(offset as usize),
                 &bytes,
                 invoke_context,
@@ -1377,7 +1380,6 @@ fn common_close_account(
 }
 
 fn process_loader_instruction(
-    first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -1401,12 +1403,7 @@ fn process_loader_instruction(
                 return Err(InstructionError::MissingRequiredSignature);
             }
             drop(program);
-            write_program_data(
-                first_instruction_account,
-                offset as usize,
-                &bytes,
-                invoke_context,
-            )?;
+            write_program_data(offset as usize, &bytes, invoke_context)?;
         }
         LoaderInstruction::Finalize => {
             if !is_program_signer {
@@ -1431,9 +1428,9 @@ fn process_loader_instruction(
     Ok(())
 }
 
-fn execute(
-    executable: &VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
-    invoke_context: &mut InvokeContext,
+fn execute<'a, 'b: 'a>(
+    executable: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
+    invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
     let stack_height = invoke_context.get_stack_height();
@@ -1459,14 +1456,22 @@ fn execute(
     let mut execute_time;
     let execution_result = {
         let compute_meter_prev = invoke_context.get_remaining();
-        let mut vm = match create_vm(
+        create_vm!(
+            vm,
             // We dropped the lifetime tracking in the Executor by setting it to 'static,
             // thus we need to reintroduce the correct lifetime of InvokeContext here again.
-            unsafe { std::mem::transmute(executable) },
+            unsafe {
+                mem::transmute::<_, &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>>(
+                    executable,
+                )
+            },
+            stack,
+            heap,
             regions,
             account_lengths,
-            invoke_context,
-        ) {
+            invoke_context
+        );
+        let mut vm = match vm {
             Ok(info) => info,
             Err(e) => {
                 ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", e);
@@ -1678,11 +1683,28 @@ mod tests {
                 .unwrap();
         let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
         let mut context_object = TestContextObject { remaining: 10 };
+        let mut stack = AlignedMemory::zero_filled(
+            verified_executable
+                .get_executable()
+                .get_config()
+                .stack_size(),
+        );
+        let mut heap = AlignedMemory::with_capacity(0);
+        let stack_len = stack.len();
+
+        let memory_mapping = create_memory_mapping(
+            verified_executable.get_executable(),
+            &mut stack,
+            &mut heap,
+            vec![input_region],
+            None,
+        )
+        .unwrap();
         let mut vm = EbpfVm::new(
             &verified_executable,
             &mut context_object,
-            &mut [],
-            vec![input_region],
+            memory_mapping,
+            stack_len,
         )
         .unwrap();
         vm.execute_program(true).1.unwrap();
@@ -3917,5 +3939,51 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn test_calculate_heap_cost() {
+        let heap_cost = 8_u64;
+
+        // heap allocations are in 32K block, `heap_cost` of CU is consumed per additional 32k
+
+        // when `enable_heap_size_round_up` not enabled:
+        {
+            // assert less than 32K heap should cost zero unit
+            assert_eq!(0, calculate_heap_cost(31_u64 * 1024, heap_cost, false));
+
+            // assert exact 32K heap should be cost zero unit
+            assert_eq!(0, calculate_heap_cost(32_u64 * 1024, heap_cost, false));
+
+            // assert slightly more than 32K heap is mistakenly cost zero unit
+            assert_eq!(0, calculate_heap_cost(33_u64 * 1024, heap_cost, false));
+
+            // assert exact 64K heap should cost 1 * heap_cost
+            assert_eq!(
+                heap_cost,
+                calculate_heap_cost(64_u64 * 1024, heap_cost, false)
+            );
+        }
+
+        // when `enable_heap_size_round_up` is enabled:
+        {
+            // assert less than 32K heap should cost zero unit
+            assert_eq!(0, calculate_heap_cost(31_u64 * 1024, heap_cost, true));
+
+            // assert exact 32K heap should be cost zero unit
+            assert_eq!(0, calculate_heap_cost(32_u64 * 1024, heap_cost, true));
+
+            // assert slightly more than 32K heap should cost 1 * heap_cost
+            assert_eq!(
+                heap_cost,
+                calculate_heap_cost(33_u64 * 1024, heap_cost, true)
+            );
+
+            // assert exact 64K heap should cost 1 * heap_cost
+            assert_eq!(
+                heap_cost,
+                calculate_heap_cost(64_u64 * 1024, heap_cost, true)
+            );
+        }
     }
 }

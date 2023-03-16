@@ -626,6 +626,10 @@ pub mod switch_to_new_elf_parser {
     solana_sdk::declare_id!("Cdkc8PPTeTNUPoZEfCY5AyetUrEdkZtNPMgz58nqyaHD");
 }
 
+pub mod round_up_heap_size {
+    solana_sdk::declare_id!("CE2et8pqgyQMP2mQRg3CgvX8nJBKUArMu3wfiQiQKY1y");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -777,6 +781,7 @@ lazy_static! {
         (apply_cost_tracker_during_replay::id(), "apply cost tracker to blocks during replay #29595"),
         (add_set_tx_loaded_accounts_data_size_instruction::id(), "add compute budget instruction for setting account data size per transaction #30366"),
         (switch_to_new_elf_parser::id(), "switch to new ELF parser #30497"),
+        (round_up_heap_size::id(), "round up heap size when calculating heap cost #30679"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
