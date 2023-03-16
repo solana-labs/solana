@@ -104,7 +104,7 @@ impl<T: Clone + Copy + Debug + 'static> IndexEntry<T> {
                     let data_bucket = &bucket.data[data_bucket_ix as usize];
                     let loc = self.data_loc(data_bucket);
                     let uid = Self::key_uid(&self.key);
-                    assert_eq!(Some(uid), bucket.data[data_bucket_ix as usize].uid(loc));
+                    assert_eq!(Some(uid), data_bucket.uid(loc));
                     let slice: &[T] =
                         bucket.data[data_bucket_ix as usize].get_cell_slice(loc, self.num_slots);
                     slice
