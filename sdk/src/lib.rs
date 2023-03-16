@@ -77,6 +77,7 @@ pub mod hash;
 pub mod inflation;
 pub mod log;
 pub mod native_loader;
+pub mod net;
 pub mod nonce_account;
 pub mod offchain_message;
 pub mod packet;
