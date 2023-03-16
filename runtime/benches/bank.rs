@@ -136,7 +136,6 @@ fn do_bench_transactions(
         "builtin_program",
         &Pubkey::from(BUILTIN_PROGRAM_ID),
         process_instruction,
-        0,
     );
     bank.add_builtin_account("solana_noop_program", &Pubkey::from(NOOP_PROGRAM_ID), false);
     let bank = Arc::new(bank);
