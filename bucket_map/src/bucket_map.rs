@@ -25,7 +25,7 @@ impl BucketMapConfig {
     }
 }
 
-pub struct BucketMap<T: Clone + Copy + Debug + 'static> {
+pub struct BucketMap<T: Clone + Copy + Debug + Default + 'static> {
     buckets: Vec<Arc<BucketApi<T>>>,
     drives: Arc<Vec<PathBuf>>,
     max_buckets_pow2: u8,
@@ -33,7 +33,7 @@ pub struct BucketMap<T: Clone + Copy + Debug + 'static> {
     pub temp_dir: Option<TempDir>,
 }
 
-impl<T: Clone + Copy + Debug> Drop for BucketMap<T> {
+impl<T: Clone + Copy + Debug + Default> Drop for BucketMap<T> {
     fn drop(&mut self) {
         if self.temp_dir.is_none() {
             BucketMap::<T>::erase_previous_drives(&self.drives);
@@ -41,7 +41,7 @@ impl<T: Clone + Copy + Debug> Drop for BucketMap<T> {
     }
 }
 
-impl<T: Clone + Copy + Debug> std::fmt::Debug for BucketMap<T> {
+impl<T: Clone + Copy + Debug + Default> std::fmt::Debug for BucketMap<T> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
@@ -55,7 +55,7 @@ pub enum BucketMapError {
     IndexNoSpace(u8),
 }
 
-impl<T: Clone + Copy + Debug> BucketMap<T> {
+impl<T: Clone + Copy + Debug + Default> BucketMap<T> {
     pub fn new(config: BucketMapConfig) -> Self {
         assert_ne!(
             config.max_buckets, 0,
@@ -198,29 +198,70 @@ mod tests {
     }
 
     #[test]
-    fn bucket_map_test_insert2() {
+    fn bucket_map_test_insert_empty_then_1() {
+        let key = Pubkey::new_unique();
+        let config = BucketMapConfig::new(1 << 1);
+        let index = BucketMap::new(config);
+        index.update(&key, |_| Some((Vec::default(), 0)));
+        assert_eq!(index.read_value(&key), Some((Vec::default(), 0)));
+        index.update(&key, |_| Some((vec![0], 0)));
+        assert_eq!(index.read_value(&key), Some((vec![0], 0)));
+        index.update(&key, |_| Some((Vec::default(), 0)));
+        assert_eq!(index.read_value(&key), Some((Vec::default(), 0)));
+    }
+
+    #[test]
+    fn bucket_map_test_insert2_1_element() {
+        for pass in 0..3 {
+            let key = Pubkey::new_unique();
+            let config = BucketMapConfig::new(1 << 1);
+            let index = BucketMap::new(config);
+            let src = [0];
+            let value = &src;
+            if pass == 0 {
+                index.insert(&key, (value, 0));
+            } else {
+                // try always succeeds when we have a len of 1 since it can be stored in place in the index file
+                let result = index.try_insert(&key, (value, 0));
+                assert!(result.is_ok());
+                assert_eq!(index.read_value(&key), Some((value.to_vec(), 0)));
+                if pass == 2 {
+                    // another call to try insert again - should still work
+                    let result = index.try_insert(&key, (value, 0));
+                    assert!(result.is_ok());
+                    assert_eq!(index.read_value(&key), Some((value.to_vec(), 0)));
+                }
+            }
+            assert_eq!(index.read_value(&key), Some((value.to_vec(), 0)));
+        }
+    }
+
+    #[test]
+    fn bucket_map_test_insert2_2_elements() {
         for pass in 0..3 {
             let key = Pubkey::new_unique();
             let config = BucketMapConfig::new(1 << 1);
             let index = BucketMap::new(config);
             let bucket = index.get_bucket(&key);
+            let src = [0, 1];
+            let value = &src;
             if pass == 0 {
-                index.insert(&key, (&[0], 0));
+                index.insert(&key, (value, 0));
             } else {
-                let result = index.try_insert(&key, (&[0], 0));
+                let result = index.try_insert(&key, (value, 0));
                 assert!(result.is_err());
                 assert_eq!(index.read_value(&key), None);
                 if pass == 2 {
                     // another call to try insert again - should still return an error
-                    let result = index.try_insert(&key, (&[0], 0));
+                    let result = index.try_insert(&key, (value, 0));
                     assert!(result.is_err());
                     assert_eq!(index.read_value(&key), None);
                 }
                 bucket.grow(result.unwrap_err());
-                let result = index.try_insert(&key, (&[0], 0));
+                let result = index.try_insert(&key, (value, 0));
                 assert!(result.is_ok());
             }
-            assert_eq!(index.read_value(&key), Some((vec![0], 0)));
+            assert_eq!(index.read_value(&key), Some((value.to_vec(), 0)));
         }
     }
 

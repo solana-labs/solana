@@ -5,6 +5,7 @@ use {
     },
     solana_sdk::pubkey::Pubkey,
     std::{
+        fmt::Debug,
         ops::RangeBounds,
         path::PathBuf,
         sync::{
@@ -25,7 +26,7 @@ pub struct BucketApi<T: Clone + Copy + 'static> {
     count: Arc<AtomicU64>,
 }
 
-impl<T: Clone + Copy> BucketApi<T> {
+impl<T: Clone + Copy + Debug + Default> BucketApi<T> {
     pub fn new(
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
