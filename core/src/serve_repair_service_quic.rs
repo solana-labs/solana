@@ -105,6 +105,7 @@ impl ServeRepairService {
     }
 
     pub fn join(self) -> thread::Result<()> {
+        error!("zzzzz Quiting ServeRepairService!");
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
