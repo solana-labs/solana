@@ -105,7 +105,7 @@ impl<T: Clone + Copy + Debug + 'static> IndexEntry<T> {
                     let loc = self.data_loc(data_bucket);
                     let uid = Self::key_uid(&self.key);
                     assert_eq!(Some(uid), data_bucket.uid(loc));
-                    data_bucket.get_cell_slice::<&[T]>(loc, self.num_slots)
+                    data_bucket.get_cell_slice::<T>(loc, self.num_slots)
                 }
                 1 => {
                     // only element is in `first_element`
