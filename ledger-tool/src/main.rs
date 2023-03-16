@@ -2083,14 +2083,14 @@ fn main() {
                     .help("List of accounts to remove while creating the snapshot"),
             )
             .arg(
-                Arg::with_name("features_to_deactivate")
+                Arg::with_name("feature_gates_to_deactivate")
                     .required(false)
-                    .long("deactivate-feature")
+                    .long("deactivate-feature-gate")
                     .takes_value(true)
                     .value_name("PUBKEY")
                     .validator(is_pubkey)
                     .multiple(true)
-                    .help("List of features to deactivate while creating the snapshot")
+                    .help("List of feature gates to deactivate while creating the snapshot")
             )
             .arg(
                 Arg::with_name("vote_accounts_to_destake")
@@ -2973,8 +2973,8 @@ fn main() {
                 let bootstrap_validator_pubkeys = pubkeys_of(arg_matches, "bootstrap_validator");
                 let accounts_to_remove =
                     pubkeys_of(arg_matches, "accounts_to_remove").unwrap_or_default();
-                let features_to_deactivate =
-                    pubkeys_of(arg_matches, "features_to_deactivate").unwrap_or_default();
+                let feature_gates_to_deactivate =
+                    pubkeys_of(arg_matches, "feature_gates_to_deactivate").unwrap_or_default();
                 let vote_accounts_to_destake: HashSet<_> =
                     pubkeys_of(arg_matches, "vote_accounts_to_destake")
                         .unwrap_or_default()
@@ -3093,7 +3093,7 @@ fn main() {
                             || hashes_per_tick.is_some()
                             || remove_stake_accounts
                             || !accounts_to_remove.is_empty()
-                            || !features_to_deactivate.is_empty()
+                            || !feature_gates_to_deactivate.is_empty()
                             || !vote_accounts_to_destake.is_empty()
                             || faucet_pubkey.is_some()
                             || bootstrap_validator_pubkeys.is_some();
@@ -3149,10 +3149,10 @@ fn main() {
                             debug!("Account removed: {address}");
                         }
 
-                        for address in features_to_deactivate {
+                        for address in feature_gates_to_deactivate {
                             let mut account = bank.get_account(&address).unwrap_or_else(|| {
                                 eprintln!(
-                                    "Error: Feature account does not exist, unable to deactivate it: {address}"
+                                    "Error: Feature-gate account does not exist, unable to deactivate it: {address}"
                                 );
                                 exit(1);
                             });
@@ -3160,18 +3160,18 @@ fn main() {
                             match feature::from_account(&account) {
                                 Some(feature) => {
                                     if feature.activated_at.is_none() {
-                                        warn!("Feature is not yet activated: {address}");
+                                        warn!("Feature gate is not yet activated: {address}");
                                     }
                                 }
                                 None => {
-                                    eprintln!("Error: Account is not a Feature: {address}");
+                                    eprintln!("Error: Account is not a `Feature`: {address}");
                                     exit(1);
                                 }
                             }
 
                             account.set_lamports(0);
                             bank.store_account(&address, &account);
-                            debug!("Feature deactivated: {address}");
+                            debug!("Feature gate deactivated: {address}");
                         }
 
                         if !vote_accounts_to_destake.is_empty() {
