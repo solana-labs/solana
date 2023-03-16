@@ -957,7 +957,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             if exceeds_budget {
                 // if we are already holding too many items in-mem, then we need to be more aggressive at kicking things out
                 (true, None)
-            } else if entry.ref_count() != 1 {
+            } else if false && entry.ref_count() != 1 {
                 Self::update_stat(&self.stats().held_in_mem.ref_count, 1);
                 (false, None)
             } else {
@@ -1245,7 +1245,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                                 continue;
                             }
                         } else if v.ref_count() != 1 {
-                            continue;
+                            //continue;
                         }
 
                         // try to evict this entry. If it is dirty and we don't write it (or if it becomes dirty in the interim), then we will fail to evict it this time.
