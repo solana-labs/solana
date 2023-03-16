@@ -49,6 +49,8 @@ pub struct BucketMapHolderStats {
     pub per_bucket_count: Vec<AtomicUsize>,
     pub flush_entries_updated_on_disk: AtomicU64,
     pub flush_entries_evicted_from_mem: AtomicU64,
+    pub flush_entries_remaining_age: AtomicU64,
+    pub flush_entries_scanned: AtomicU64,
     pub active_threads: AtomicU64,
     pub get_range_us: AtomicU64,
     last_age: AtomicU8,
@@ -496,6 +498,18 @@ impl BucketMapHolderStats {
                 (
                     "flush_entries_evicted_from_mem",
                     self.flush_entries_evicted_from_mem
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "flush_entries_remaining_age",
+                    self.flush_entries_remaining_age
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "flush_entries_scanned",
+                    self.flush_entries_scanned
                         .swap(0, Ordering::Relaxed),
                     i64
                 ),

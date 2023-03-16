@@ -1007,9 +1007,12 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         };
         possible_evictions.reset(ages_to_scan);
 
+        let mut flush_entries_remaining_age = 0;
+
         let m;
         {
             let map = self.map_internal.read().unwrap();
+            Self::update_stat(&self.stats().flush_entries_scanned, map.len() as u64);
             m = Measure::start("flush_scan"); // we don't care about lock time in this metric - bg threads can wait
             for (k, v) in map.iter() {
                 let random = Self::random_chance_of_eviction();
@@ -1030,6 +1033,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                         else if can_write {
                             // ages_in_future >= Age::MAX.saturating_sub(self.storage.ages_to_stay_in_cache) {
                             if ages_in_future > 0 && ages_in_future < self.storage.ages_to_stay_in_cache {
+                                flush_entries_remaining_age += 1;
                                 continue;
                             }
                             // clear all read entries that are not within 5 of current
@@ -1044,6 +1048,8 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 possible_evictions.insert(age_offset, *k, Arc::clone(v), random);
             }
         }
+        Self::update_stat(&self.stats().flush_entries_remaining_age, flush_entries_remaining_age);
+
         Self::update_time_stat(&self.stats().flush_scan_us, m);
 
         possible_evictions.get_possible_evictions().unwrap()
