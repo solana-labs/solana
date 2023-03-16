@@ -110,6 +110,8 @@ pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<
     /// when age % ages_to_stay_in_cache == 'age_to_flush_bin_offset', then calculate the next 'ages_to_stay_in_cache' 'possible_evictions'
     /// this causes us to scan the entire in-mem hash map every 1/'ages_to_stay_in_cache' instead of each age
     age_to_flush_bin_mod: Age,
+
+    next_age_to_consider_writing: AtomicU8,
 }
 
 impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Debug for InMemAccountsIndex<T, U> {
@@ -164,6 +166,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             // Spread out the scanning across all ages within the window.
             // This causes us to scan 1/N of the bins each 'Age'
             age_to_flush_bin_mod: thread_rng().gen_range(0, ages_to_stay_in_cache),
+            next_age_to_consider_writing: AtomicU8::default(),
         }
     }
 
@@ -1022,24 +1025,25 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                     0
                 } else {
                     let ages_in_future = v.age().wrapping_sub(current_age);
-                    if false { //can_write && v.dirty() {
+                    if false {
+                        //can_write && v.dirty() {
                         // flush all dirty entries now, regardless of age
                         0
                     } else {
                         if !can_write && ages_in_future >= ages_to_scan {
                             // not planning to evict this item from memory within the next few ages
                             continue;
-                        }
-                        else if can_write {
+                        } else if can_write {
                             // ages_in_future >= Age::MAX.saturating_sub(self.storage.ages_to_stay_in_cache) {
-                            if ages_in_future > 0 && ages_in_future < self.storage.ages_to_stay_in_cache {
+                            if ages_in_future > 0
+                                && ages_in_future < self.storage.ages_to_stay_in_cache
+                            {
                                 flush_entries_remaining_age += 1;
                                 continue;
                             }
                             // clear all read entries that are not within 5 of current
                             0
-                        }
-                        else {
+                        } else {
                             ages_in_future
                         }
                     }
@@ -1048,7 +1052,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 possible_evictions.insert(age_offset, *k, Arc::clone(v), random);
             }
         }
-        Self::update_stat(&self.stats().flush_entries_remaining_age, flush_entries_remaining_age);
+        Self::update_stat(
+            &self.stats().flush_entries_remaining_age,
+            flush_entries_remaining_age,
+        );
 
         Self::update_time_stat(&self.stats().flush_scan_us, m);
 
@@ -1120,8 +1127,18 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
 
     /// only write to disk when we have exceeded a threshold, then write entire buckets
     /// until we are below the threshold
-    fn get_write_bucket_to_disk(&self) -> bool {
-        self.storage
+    fn get_write_bucket_to_disk(&self, current_age: Age) -> bool {
+        let next_age_to_consider_writing =
+            self.next_age_to_consider_writing.load(Ordering::Relaxed);
+        if next_age_to_consider_writing.wrapping_sub(current_age)
+            < self.storage.ages_to_stay_in_cache
+        {
+            // it has been too recently that we tried to flush this bucket
+            return false;
+        }
+
+        let result = self
+            .storage
             .mem_budget_mb
             .map(|budget_mb| {
                 // at half the overall bytes allowed
@@ -1137,7 +1154,16 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                     average_per_bin < self.map_internal.read().unwrap().len()
                 }
             })
-            .unwrap_or(true)
+            .unwrap_or(true);
+
+        if result {
+            // don't revisit this bucket again until a few slot times
+            self.next_age_to_consider_writing.store(
+                current_age.wrapping_add(self.storage.ages_to_stay_in_cache),
+                Ordering::Relaxed,
+            );
+        }
+        result
     }
 
     /// synchronize the in-mem index with the disk index
@@ -1155,7 +1181,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             self.write_startup_info_to_disk();
         }
 
-        let mut write_to_disk = self.get_write_bucket_to_disk();
+        let mut write_to_disk = self.get_write_bucket_to_disk(current_age);
         if write_to_disk {
             write_to_disk = !self.storage.write_active.swap(true, Ordering::Relaxed);
         }
@@ -1380,9 +1406,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                         continue;
                     }
 
-                    if v.dirty()/*
-                        || (!randomly_evicted
-                            && !Self::should_evict_based_on_age(current_age, v, startup))*/
+                    if v.dirty()
+                    /*
+                    || (!randomly_evicted
+                        && !Self::should_evict_based_on_age(current_age, v, startup))*/
                     {
                         // marked dirty or bumped in age after we looked above
                         // these evictions will be handled in later passes (at later ages)
