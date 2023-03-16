@@ -44,7 +44,7 @@ impl ShredFetchStage {
     ) {
         const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
         let mut rng = rand::thread_rng();
-        let mut deduper = Deduper::<2>::new(&mut rng, DEDUPER_NUM_BITS);
+        let mut deduper = Deduper::<2, [u8]>::new(&mut rng, DEDUPER_NUM_BITS);
         let mut last_updated = Instant::now();
         let mut keypair = repair_context
             .as_ref()
@@ -236,7 +236,7 @@ fn should_discard_packet<const K: usize>(
     root: Slot,
     max_slot: Slot, // Max slot to ingest shreds for.
     shred_version: u16,
-    deduper: &Deduper<K>,
+    deduper: &Deduper<K, [u8]>,
     should_drop_merkle_shreds: impl Fn(Slot) -> bool,
     stats: &mut ShredFetchStats,
 ) -> bool {
@@ -250,7 +250,11 @@ fn should_discard_packet<const K: usize>(
     ) {
         return true;
     }
-    if deduper.dedup_packet(packet) {
+    if packet
+        .data(..)
+        .map(|data| deduper.dedup(data))
+        .unwrap_or(true)
+    {
         stats.duplicate_shred += 1;
         true
     } else {
@@ -285,7 +289,7 @@ mod tests {
     fn test_data_code_same_index() {
         solana_logger::setup();
         let mut rng = rand::thread_rng();
-        let deduper = Deduper::<2>::new(&mut rng, /*num_bits:*/ 640_007);
+        let deduper = Deduper::<2, [u8]>::new(&mut rng, /*num_bits:*/ 640_007);
         let mut packet = Packet::default();
         let mut stats = ShredFetchStats::default();
 
@@ -337,7 +341,7 @@ mod tests {
     fn test_shred_filter() {
         solana_logger::setup();
         let mut rng = rand::thread_rng();
-        let deduper = Deduper::<2>::new(&mut rng, /*num_bits:*/ 640_007);
+        let deduper = Deduper::<2, [u8]>::new(&mut rng, /*num_bits:*/ 640_007);
         let mut packet = Packet::default();
         let mut stats = ShredFetchStats::default();
         let last_root = 0;
