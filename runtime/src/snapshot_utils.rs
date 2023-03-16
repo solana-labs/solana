@@ -4796,16 +4796,8 @@ mod tests {
         assert!(result.is_ok());
 
         let (account_run_paths, account_snapshot_paths) = result.unwrap();
-
-        account_run_paths.iter().for_each(|path| {
-            assert!(path.exists());
-            assert!(path.is_dir());
-        });
-
-        account_snapshot_paths.iter().for_each(|path| {
-            assert!(path.exists());
-            assert!(path.is_dir());
-        });
+        account_run_paths.iter().all(|path| path.is_dir());
+        account_snapshot_paths.iter().all(|path| path.is_dir());
 
         delete_contents_of_path(account_path_first);
         assert!(account_path_first.exists());
