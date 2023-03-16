@@ -106,13 +106,22 @@ impl ServeRepairService {
 
         let thread_hdls = vec![repair_quic_t, responder_quic_t, listen_quic_t];
 
-        let svc =  Self { thread_hdls, local_addr };
-        error!("zzzzz created ServeRepairService {:?} {:p}", local_addr, &svc);
+        let svc = Self {
+            thread_hdls,
+            local_addr,
+        };
+        error!(
+            "zzzzz created ServeRepairService {:?} {:p}",
+            local_addr, &svc
+        );
         svc
     }
 
     pub fn join(self) -> thread::Result<()> {
-        error!("zzzzz Quiting ServeRepairService {:p} at {:?}!", &self, self.local_addr);
+        error!(
+            "zzzzz Quiting ServeRepairService {:p} at {:?}!",
+            &self, self.local_addr
+        );
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }

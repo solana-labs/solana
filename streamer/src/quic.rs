@@ -328,7 +328,11 @@ pub fn spawn_server(
             wait_for_chunk_timeout_ms,
         )
     }?;
-    debug!("Spawning server {} at address {:?}", server_name, endpoint.local_addr());
+    debug!(
+        "Spawning server {} at address {:?}",
+        server_name,
+        endpoint.local_addr()
+    );
     let handle = thread::Builder::new()
         .name(server_name)
         .spawn(move || {
