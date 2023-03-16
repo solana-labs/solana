@@ -25,7 +25,7 @@ impl BucketMapConfig {
     }
 }
 
-pub struct BucketMap<T: Clone + Copy + Debug> {
+pub struct BucketMap<T: Clone + Copy + Debug + 'static> {
     buckets: Vec<Arc<BucketApi<T>>>,
     drives: Arc<Vec<PathBuf>>,
     max_buckets_pow2: u8,

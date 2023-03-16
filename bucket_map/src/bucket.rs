@@ -76,7 +76,7 @@ pub struct Bucket<T> {
     pub reallocated: Reallocated,
 }
 
-impl<'b, T: Clone + Copy + 'b> Bucket<T> {
+impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     pub fn new(
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
