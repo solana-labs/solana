@@ -416,7 +416,7 @@ mod tests {
                     for i in 0..map.len() {
                         if k == &map[i].pubkey {
                             assert_eq!(map[i].slot_list, v.0);
-                            assert_eq!(map[i].ref_count, v.1);
+                            assert_eq!(map[i].ref_count, v.1 + 1);
                             map.remove(i);
                             break;
                         }
