@@ -7,7 +7,7 @@ use {
         storable_accounts::StorableAccounts,
     },
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
-    std::{borrow::Borrow, io, path::PathBuf},
+    std::{borrow::Borrow, io, path::{Path, PathBuf}},
 };
 
 #[derive(Debug)]
@@ -22,11 +22,11 @@ impl AccountsFile {
     ///
     /// The second element of the returned tuple is the number of accounts in the
     /// accounts file.
-    pub fn new_from_file<P: AsRef<std::path::Path>>(
-        path: P,
+    pub fn new_from_file(
+        path: impl AsRef<Path>,
         current_len: usize,
     ) -> io::Result<(Self, usize)> {
-        let (av, num_accounts) = AppendVec::new_from_file(path, current_len).unwrap();
+        let (av, num_accounts) = AppendVec::new_from_file(path, current_len)?;
         Ok((Self::AppendVec(av), num_accounts))
     }
 
