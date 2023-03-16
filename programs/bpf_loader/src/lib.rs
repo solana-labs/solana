@@ -557,20 +557,31 @@ fn process_instruction_common(
         return Err(InstructionError::IncorrectProgramId);
     }
 
+    let programdata_account = if bpf_loader_upgradeable::check_id(program_account.get_owner()) {
+        instruction_context
+            .try_borrow_program_account(
+                transaction_context,
+                instruction_context
+                    .get_number_of_program_accounts()
+                    .saturating_sub(2),
+            )
+            .ok()
+    } else {
+        None
+    };
+
     let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-    let executor = invoke_context
-        .tx_executor_cache
-        .borrow()
-        .get(program_account.get_key())
-        .expect("Failed to find the program in the cache");
-
-    if executor.is_tombstone() {
-        // We cached that the Executor does not exist, abort
-        // This case can only happen once delay_visibility_of_program_deployment is active.
-        return Err(InstructionError::InvalidAccountData);
-    }
-
+    let (executor, load_program_metrics) = load_program_from_account(
+        &invoke_context.feature_set,
+        invoke_context.get_compute_budget(),
+        log_collector,
+        Some(invoke_context.tx_executor_cache.borrow_mut()),
+        &program_account,
+        programdata_account.as_ref().unwrap_or(&program_account),
+        use_jit,
+    )?;
     drop(program_account);
+    drop(programdata_account);
     get_or_create_executor_time.stop();
     saturating_add_assign!(
         invoke_context.timings.get_or_create_executor_us,
