@@ -15,6 +15,7 @@ if [[ -n $CI && -z $NO_INTERCEPT ]]; then
     # noop
     true
   else
+    echo "$0: command failed; please see $console_log for details"
     exit_code=$?
   fi
   exit "$exit_code"
