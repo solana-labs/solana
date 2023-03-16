@@ -460,9 +460,13 @@ impl SigVerifyStage {
                     Deduper::<2>::new(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, DEDUPER_NUM_BITS);
                 loop {
                     deduper.maybe_reset(&mut rng, &MAX_DEDUPER_AGE);
-                    if let Err(e) =
-                        Self::verifier(&deduper, &packet_receiver, &mut verifier, &mut stats)
-                    {
+                    if let Err(e) = Self::verifier(
+                        &deduper,
+                        &packet_receiver,
+                        &mut verifier,
+                        &mut buffered_batches,
+                        &mut stats,
+                    ) {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
                                 RecvTimeoutError::Disconnected,
