@@ -103,7 +103,10 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{
-        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, socket::SocketAddrSpace,
+        nonblocking::quic::{
+            DEFAULT_PACKET_BATCH_COALESCE_TIMEOUT_MS, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+        },
+        socket::SocketAddrSpace,
         streamer::StakedNodes,
     },
     solana_vote_program::vote_state,
@@ -937,6 +940,7 @@ impl Validator {
             identity_keypair: identity_keypair.clone(),
             staked_nodes: staked_nodes.clone(),
             wait_for_chunk_timeout_ms: DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            repair_packet_coalesce_timeout_ms: DEFAULT_PACKET_BATCH_COALESCE_TIMEOUT_MS,
         };
 
         let serve_repair_quic_service = ServeRepairQuicService::new(

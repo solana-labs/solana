@@ -109,6 +109,8 @@ pub struct RepairQuicConfig {
     pub staked_nodes: Arc<RwLock<StakedNodes>>,
     /// Timeout for the quic server waiting for a chunk.
     pub wait_for_chunk_timeout_ms: u64,
+    /// Packet batching coalesce timeout in MS
+    pub repair_packet_coalesce_timeout_ms: u64,
 }
 
 impl Tvu {
