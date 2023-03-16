@@ -69,6 +69,7 @@ impl ServeRepairService {
         )
         .unwrap();
 
+        let local_addr = serve_repair_endpoint.local_addr().unwrap();
         // The connection cache used to send to repair responses back to the client.
         let connection_cache = ConnectionCache::new_with_client_and_port_offset_options(
             1,
@@ -101,11 +102,14 @@ impl ServeRepairService {
         );
 
         let thread_hdls = vec![repair_quic_t, responder_quic_t, listen_quic_t];
-        Self { thread_hdls }
+
+        let svc =  Self { thread_hdls };
+        error!("zzzzz created ServeRepairService {:?} {:p}", local_addr, &svc);
+        svc
     }
 
     pub fn join(self) -> thread::Result<()> {
-        error!("zzzzz Quiting ServeRepairService!");
+        error!("zzzzz Quiting ServeRepairService {:p}!", &self);
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
