@@ -34,9 +34,16 @@ solana-version = { path = "../version", version = "=1.14.18" }
 thiserror = "1.0"
 
 [dev-dependencies]
+<<<<<<< HEAD
 serial_test = "0.8.0"
 solana-local-cluster = { path = "../local-cluster", version = "=1.14.18" }
 solana-test-validator = { path = "../test-validator", version = "=1.14.18" }
+=======
+serial_test = { workspace = true }
+solana-local-cluster = { workspace = true }
+solana-test-validator = { workspace = true }
+tempfile = "3.4.0"
+>>>>>>> 3cc74a608 (updates tempfile to 3.4.0 (#30727))
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
