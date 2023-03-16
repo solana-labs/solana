@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use {
     crate::{serve_repair::ServeRepair, tpu::MAX_QUIC_CONNECTIONS_PER_PEER, tvu::RepairQuicConfig},
     crossbeam_channel::{unbounded, Sender},
@@ -18,6 +20,7 @@ use {
 
 pub struct ServeRepairService {
     thread_hdls: Vec<JoinHandle<()>>,
+    local_addr: SocketAddr,
 }
 
 impl ServeRepairService {
@@ -103,13 +106,13 @@ impl ServeRepairService {
 
         let thread_hdls = vec![repair_quic_t, responder_quic_t, listen_quic_t];
 
-        let svc =  Self { thread_hdls };
+        let svc =  Self { thread_hdls, local_addr };
         error!("zzzzz created ServeRepairService {:?} {:p}", local_addr, &svc);
         svc
     }
 
     pub fn join(self) -> thread::Result<()> {
-        error!("zzzzz Quiting ServeRepairService {:p}!", &self);
+        error!("zzzzz Quiting ServeRepairService {:p} at {:?}!", &self, self.local_addr);
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
