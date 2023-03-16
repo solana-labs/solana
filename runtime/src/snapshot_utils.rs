@@ -514,39 +514,6 @@ pub fn clean_orphaned_account_snapshot_dirs(
     Ok(())
 }
 
-/// For all account_paths, set up the run/ and snapshot/ sub directories.
-/// If the sub directories do not exist, the account_path will be cleaned because older version put account files there.
-/// It returns (account_run_paths, account_snapshot_paths) or error
-pub fn set_up_account_run_and_snapshot_paths(
-    account_paths: &[PathBuf],
-) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
-    Ok(account_paths
-        .iter()
-        .map(|account_path| -> Result<(PathBuf, PathBuf)> {
-            fs::create_dir_all(account_path)
-                .and_then(|_| fs::canonicalize(account_path))
-                .map_err(|err| {
-                    SnapshotError::IoWithSourceAndFile(
-                        err,
-                        "Unable to create account directory",
-                        account_path.to_path_buf(),
-                    )
-                })?;
-
-            // create the run/ and snapshot/ sub directories for each account_path
-            create_accounts_run_and_snapshot_dirs(account_path).map_err(|err| {
-                SnapshotError::IoWithSourceAndFile(
-                    err,
-                    "Unable to create account run and snapshot directories",
-                    account_path.to_path_buf(),
-                )
-            })
-        })
-        .collect::<Result<Vec<(PathBuf, PathBuf)>>>()?
-        .into_iter()
-        .unzip())
-}
-
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
 /// directory won't be cleaned up.  Call this function to clean them up.
 pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
@@ -1037,6 +1004,39 @@ pub fn create_accounts_run_and_snapshot_dirs(
     }
 
     Ok((run_path, snapshot_path))
+}
+
+/// For all account_paths, set up the run/ and snapshot/ sub directories.
+/// If the sub directories do not exist, the account_path will be cleaned because older version put account files there.
+/// It returns (account_run_paths, account_snapshot_paths) or error
+pub fn create_all_accounts_run_and_snapshot_dirs(
+    account_paths: &[PathBuf],
+) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
+    Ok(account_paths
+        .iter()
+        .map(|account_path| -> Result<(PathBuf, PathBuf)> {
+            fs::create_dir_all(account_path)
+                .and_then(|_| fs::canonicalize(account_path))
+                .map_err(|err| {
+                    SnapshotError::IoWithSourceAndFile(
+                        err,
+                        "Unable to create account directory",
+                        account_path.to_path_buf(),
+                    )
+                })?;
+
+            // create the run/ and snapshot/ sub directories for each account_path
+            create_accounts_run_and_snapshot_dirs(account_path).map_err(|err| {
+                SnapshotError::IoWithSourceAndFile(
+                    err,
+                    "Unable to create account run and snapshot directories",
+                    account_path.to_path_buf(),
+                )
+            })
+        })
+        .collect::<Result<Vec<(PathBuf, PathBuf)>>>()?
+        .into_iter()
+        .unzip())
 }
 
 /// Return account path from the appendvec path after checking its format.
@@ -4766,7 +4766,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_set_up_account_run_and_snapshot_paths() {
+    pub fn test_create_all_accounts_run_and_snapshot_dirs() {
         solana_logger::setup();
 
         let (_tmp_dirs, account_paths): (Vec<TempDir>, Vec<PathBuf>) = (0..4)
@@ -4778,21 +4778,22 @@ mod tests {
             .unzip();
 
         // Set the parent directory of the first account path to be readonly, so that
-        // create_dir_all in set_up_account_run_and_snapshot_paths fails.
+        // create_dir_all in create_all_accounts_run_and_snapshot_dirs fails.
         let account_path_first = &account_paths[0];
         let parent = account_path_first.parent().unwrap();
         let mut parent_permissions = fs::metadata(parent).unwrap().permissions();
         parent_permissions.set_readonly(true);
         fs::set_permissions(parent, parent_permissions.clone()).unwrap();
 
-        // assert that set_up_account_run_and_snapshot_paths returns error when the first account path
-        assert!(set_up_account_run_and_snapshot_paths(&account_paths).is_err());
+        // assert that create_all_accounts_run_and_snapshot_dirs returns error when the first account path
+        // is readonly.
+        assert!(create_all_accounts_run_and_snapshot_dirs(&account_paths).is_err());
 
         // Set the parent directory of the first account path to be writable, so that
-        // set_up_account_run_and_snapshot_paths returns Ok.
+        // create_all_accounts_run_and_snapshot_dirs returns Ok.
         parent_permissions.set_mode(0o744);
         fs::set_permissions(parent, parent_permissions.clone()).unwrap();
-        let result = set_up_account_run_and_snapshot_paths(&account_paths);
+        let result = create_all_accounts_run_and_snapshot_dirs(&account_paths);
         assert!(result.is_ok());
 
         let (account_run_paths, account_snapshot_paths) = result.unwrap();
@@ -4806,10 +4807,10 @@ mod tests {
         fs::set_permissions(account_path_first, permissions.clone()).unwrap();
         parent_permissions.set_readonly(true);
         fs::set_permissions(parent, parent_permissions.clone()).unwrap();
-        // assert that set_up_account_run_and_snapshot_paths returns error when the first account path
+        // assert that create_all_accounts_run_and_snapshot_dirs returns error when the first account path
         // and its parent are readonly.  This exercises the case where the first account path is readonly,
         // causing create_accounts_run_and_snapshot_dirs to fail.
-        assert!(set_up_account_run_and_snapshot_paths(&account_paths).is_err());
+        assert!(create_all_accounts_run_and_snapshot_dirs(&account_paths).is_err());
     }
 
     #[test]

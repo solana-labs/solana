@@ -40,7 +40,7 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
-            self, set_up_account_run_and_snapshot_paths, ArchiveFormat, SnapshotVersion,
+            self, create_all_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
         },
     },
     solana_sdk::{
@@ -1351,7 +1351,7 @@ pub fn main() {
             .ok();
 
     let (account_run_paths, account_snapshot_paths) =
-        match set_up_account_run_and_snapshot_paths(&account_paths) {
+        match create_all_accounts_run_and_snapshot_dirs(&account_paths) {
             Ok((account_run_paths, account_snapshot_paths)) => {
                 (account_run_paths, account_snapshot_paths)
             }

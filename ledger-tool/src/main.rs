@@ -68,8 +68,8 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path,
-            set_up_account_run_and_snapshot_paths, ArchiveFormat, SnapshotVersion,
+            self, clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
+            move_and_async_delete_path, ArchiveFormat, SnapshotVersion,
             DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
@@ -1181,7 +1181,7 @@ fn load_bank_forks(
     };
 
     let (account_run_paths, account_snapshot_paths) =
-        match set_up_account_run_and_snapshot_paths(&account_paths) {
+        match create_all_accounts_run_and_snapshot_dirs(&account_paths) {
             Ok((run_paths, snapshot_paths)) => (run_paths, snapshot_paths),
             Err(err) => {
                 eprintln!("Error: {err:?}");
