@@ -155,7 +155,7 @@ fn test_stake_redelegation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config).unwrap();
@@ -219,7 +219,7 @@ fn test_stake_redelegation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: Some(stake2_keypair.pubkey()),
+        redelegation_stake_account: Some(1),
         compute_unit_price: None,
     };
     process_command(&config).unwrap();
@@ -374,7 +374,7 @@ fn test_stake_delegation_force() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config).unwrap_err();
@@ -392,7 +392,7 @@ fn test_stake_delegation_force() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config).unwrap();
@@ -471,7 +471,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config_validator).unwrap();
@@ -563,7 +563,7 @@ fn test_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config_validator).unwrap();
@@ -679,7 +679,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
@@ -702,7 +702,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
@@ -840,7 +840,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        redelegation_stake_account_pubkey: None,
+        redelegation_stake_account: None,
         compute_unit_price: None,
     };
     process_command(&config).unwrap();
