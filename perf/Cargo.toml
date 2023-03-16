@@ -37,7 +37,9 @@ name = "solana_perf"
 
 [dev-dependencies]
 matches = { workspace = true }
+rand_chacha = "0.2.2"
 solana-logger = { workspace = true }
+test-case = { workspace = true }
 
 [[bench]]
 name = "sigverify"

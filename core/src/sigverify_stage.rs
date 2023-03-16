@@ -290,7 +290,7 @@ impl SigVerifyStage {
     }
 
     fn verifier<T: SigVerifier>(
-        deduper: &Deduper,
+        deduper: &Deduper<2>,
         recvr: &FindPacketSenderStakeReceiver,
         verifier: &mut T,
         stats: &mut SigVerifierStats,
@@ -410,13 +410,16 @@ impl SigVerifyStage {
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
         const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
-        const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
+        const DEDUPER_FALSE_POSITIVE_RATE: f64 = 0.001;
+        const DEDUPER_NUM_BITS: u64 = 63_999_979;
         Builder::new()
             .name("solSigVerifier".to_string())
             .spawn(move || {
-                let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
+                let mut rng = rand::thread_rng();
+                let mut deduper =
+                    Deduper::<2>::new(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, DEDUPER_NUM_BITS);
                 loop {
-                    deduper.reset();
+                    deduper.maybe_reset(&mut rng, &MAX_DEDUPER_AGE);
                     if let Err(e) =
                         Self::verifier(&deduper, &packet_receiver, &mut verifier, &mut stats)
                     {
