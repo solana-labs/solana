@@ -42,7 +42,10 @@ use {
 /// When downloading snapshots, wait at most this long for snapshot hashes from
 /// _all_ known validators.  Afterwards, wait for snapshot hashes from _any_
 /// known validator.
-const WAIT_FOR_ALL_KNOWN_VALIDATORS: Duration = Duration::from_secs(60);
+const WAIT_FOR_ALL_KNOWN_VALIDATORS: Duration = Duration::from_secs(30);
+/// When downloading snapshots, wait at most this long for _incremental_ snapshot
+/// hashes from known validators.  Afterwards, only wait for _full_ snapshot hashes.
+const WAIT_FOR_INCREMENTAL_SNAPSHOTS: Duration = Duration::from_secs(60);
 /// If we don't have any alternative peers after this long, better off trying
 /// blacklisted peers again.
 const BLACKLIST_CLEAR_THRESHOLD: Duration = Duration::from_secs(60);
@@ -691,11 +694,22 @@ fn get_rpc_nodes(
         } else {
             KnownValidatorsToWaitFor::Any
         };
+        let snapshots_to_wait_for = if bootstrap_config.incremental_snapshot_fetch
+            && newer_cluster_snapshot_timeout
+                .as_ref()
+                .map(|timer: &Instant| timer.elapsed() < WAIT_FOR_INCREMENTAL_SNAPSHOTS)
+                .unwrap_or(true)
+        {
+            SnapshotsToWaitFor::FullAndIncremental
+        } else {
+            SnapshotsToWaitFor::FullOnly
+        };
         let peer_snapshot_hashes = get_peer_snapshot_hashes(
             cluster_info,
             &rpc_peers,
             validator_config.known_validators.as_ref(),
             known_validators_to_wait_for,
+            snapshots_to_wait_for,
             bootstrap_config.incremental_snapshot_fetch,
         );
         if peer_snapshot_hashes.is_empty() {
@@ -777,6 +791,7 @@ fn get_peer_snapshot_hashes(
     rpc_peers: &[ContactInfo],
     known_validators: Option<&HashSet<Pubkey>>,
     known_validators_to_wait_for: KnownValidatorsToWaitFor,
+    snapshots_to_wait_for: SnapshotsToWaitFor,
     incremental_snapshot_fetch: bool,
 ) -> Vec<PeerSnapshotHash> {
     let mut peer_snapshot_hashes =
@@ -786,6 +801,7 @@ fn get_peer_snapshot_hashes(
             cluster_info,
             known_validators,
             known_validators_to_wait_for,
+            snapshots_to_wait_for,
             incremental_snapshot_fetch,
         );
         retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
@@ -817,6 +833,7 @@ fn get_snapshot_hashes_from_known_validators(
     cluster_info: &ClusterInfo,
     known_validators: &HashSet<Pubkey>,
     known_validators_to_wait_for: KnownValidatorsToWaitFor,
+    snapshots_to_wait_for: SnapshotsToWaitFor,
     incremental_snapshot_fetch: bool,
 ) -> KnownSnapshotHashes {
     // Get the full snapshot hashes for a node from CRDS
@@ -838,9 +855,9 @@ fn get_snapshot_hashes_from_known_validators(
     if !do_known_validators_have_all_snapshot_hashes(
         known_validators,
         known_validators_to_wait_for,
+        snapshots_to_wait_for,
         get_full_snapshot_hashes_for_node,
         get_incremental_snapshot_hashes_for_node,
-        incremental_snapshot_fetch,
     ) {
         debug!(
             "Snapshot hashes have not been discovered from known validators. \
@@ -872,9 +889,9 @@ fn get_snapshot_hashes_from_known_validators(
 fn do_known_validators_have_all_snapshot_hashes<'a, F1, F2>(
     known_validators: impl IntoIterator<Item = &'a Pubkey>,
     known_validators_to_wait_for: KnownValidatorsToWaitFor,
+    snapshots_to_wait_for: SnapshotsToWaitFor,
     get_full_snapshot_hashes_for_node: F1,
     get_incremental_snapshot_hashes_for_node: F2,
-    incremental_snapshot_fetch: bool,
 ) -> bool
 where
     F1: Fn(&'a Pubkey) -> Vec<(Slot, Hash)>,
@@ -888,11 +905,11 @@ where
     };
 
     // Does this node have all the snapshot hashes?
-    // If incremental snapshots are disabled, only check for full snapshot hashes; otherwise check
-    // for both full and incremental snapshot hashes.
-    let node_has_all_snapshot_hashes = |node| {
-        node_has_full_snapshot_hashes(node)
-            && (!incremental_snapshot_fetch || node_has_incremental_snapshot_hashes(node))
+    let node_has_all_snapshot_hashes = |node| match snapshots_to_wait_for {
+        SnapshotsToWaitFor::FullAndIncremental => {
+            node_has_full_snapshot_hashes(node) && node_has_incremental_snapshot_hashes(node)
+        }
+        SnapshotsToWaitFor::FullOnly => node_has_full_snapshot_hashes(node),
     };
 
     match known_validators_to_wait_for {
@@ -905,12 +922,22 @@ where
     }
 }
 
-/// When waiting for snapshot hashes from the known validators, should we wait for *all* or *any*
-/// of them?
+/// When waiting for snapshot hashes from known validators, which *validators* should we wait for?
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum KnownValidatorsToWaitFor {
+    /// Wait for snapshot hashes from *all* known validators before proceeding
     All,
+    /// Wait for snapshot hashes from *any* known validator before proceeding
     Any,
+}
+
+/// When waiting for snapshot hashes from known validators, Which *snapshots* should we wait for?
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum SnapshotsToWaitFor {
+    /// Wait for both full and incremental snapshots before proceeding
+    FullAndIncremental,
+    /// Wait for only full snapshots before proceeding
+    FullOnly,
 }
 
 /// Build the known snapshot hashes from a set of nodes.
