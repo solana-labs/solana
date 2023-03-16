@@ -337,13 +337,16 @@ impl<'b, T: Clone + Copy + Debug + Default + 'static> Bucket<T> {
             for i in pos..pos + (self.index.max_search() * 10).min(cap) {
                 let ix = i % cap;
                 if best_bucket.is_free(ix) {
+                    let mut elem_loc = 0;
+                    if old_slots >= 2 {
+                        elem_loc = elem.data_loc(&self.data[bucket_ix as usize]);
+                    }
                     elem.set_storage_offset(ix);
                     elem.set_storage_capacity_when_created_pow2(best_bucket.capacity_pow2);
                     elem.num_slots = num_slots;
                     match old_slots {
                         2.. => {
                             // free the entry in the data bucket the data was previously stored in
-                            let elem_loc = elem.data_loc(&self.data[bucket_ix as usize]);
                             self.data[bucket_ix as usize].free(elem_loc, elem_uid);
                         }
                         1 => {
