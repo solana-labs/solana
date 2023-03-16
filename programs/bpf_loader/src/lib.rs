@@ -75,8 +75,7 @@ use {
 solana_sdk::declare_builtin!(
     solana_sdk::bpf_loader::ID,
     solana_bpf_loader_program,
-    solana_bpf_loader_program::process_instruction,
-    570
+    solana_bpf_loader_program::process_instruction
 );
 
 /// Errors returned by functions the BPF Loader registers with the VM
