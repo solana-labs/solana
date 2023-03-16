@@ -1728,8 +1728,8 @@ impl Bank {
 
         report_new_bank_metrics(
             slot,
-            new.block_height,
             parent.slot(),
+            new.block_height,
             NewBankTimings {
                 bank_rc_creation_time_us,
                 total_elapsed_time_us: time.as_us(),
