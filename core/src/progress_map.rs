@@ -65,7 +65,7 @@ impl ReplaySlotStats {
                     i64
                 ),
                 ("replay_time", self.replay_elapsed as i64, i64),
-                ("execute_batches_us", self.execute_batches_us as i64, i64),
+                ("execute_batches_us", self.batch_execute.wall_clock_us as i64, i64),
                 (
                     "replay_total_elapsed",
                     self.started.elapsed().as_micros() as i64,
@@ -77,14 +77,15 @@ impl ReplaySlotStats {
                 ("total_shreds", num_shreds as i64, i64),
                 // Everything inside the `eager!` block will be eagerly expanded before
                 // evaluation of the rest of the surrounding macro.
-                eager!{report_execute_timings!(self.execute_timings)}
+                eager!{report_execute_timings!(self.batch_execute.totals)}
             );
         };
 
-        self.end_to_end_execute_timings.report_stats(slot);
+        self.batch_execute.slowest_thread.report_stats(slot);
 
         let mut per_pubkey_timings: Vec<_> = self
-            .execute_timings
+            .batch_execute
+            .totals
             .details
             .per_program_timings
             .iter()
