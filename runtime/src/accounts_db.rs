@@ -7697,11 +7697,17 @@ impl AccountsDb {
             .remove_old_historical_roots(min_root, &alive_roots);
     }
 
-    /// Only called from startup or test code.
+    /// Verify accounts hash at startup (or tests)
+    ///
+    /// Calculate accounts hash(es) and compare them to the values set at startup.
+    /// If `base` is `None`, only calculates the full accounts hash for `[0, slot]`.
+    /// If `base` is `Some`, calculate the full accounts hash for `[0, base slot]`
+    /// and then calculate the incremental accounts hash for `(base slot, slot]`.
     pub fn verify_accounts_hash_and_lamports(
         &self,
         slot: Slot,
         total_lamports: u64,
+        base: Option<(Slot, /*capitalization*/ u64)>,
         config: VerifyAccountsHashAndLamportsConfig,
     ) -> Result<(), AccountsHashVerificationError> {
         use AccountsHashVerificationError::*;
@@ -7713,32 +7719,62 @@ impl AccountsDb {
             rent_collector: config.rent_collector,
             store_detailed_debug_info_on_failure: config.store_detailed_debug_info,
         };
+        let hash_mismatch_is_error = !config.ignore_mismatch;
 
-        let (calculated_accounts_hash, calculated_lamports) = self
-            .calculate_accounts_hash_with_verify(
-                CalcAccountsHashDataSource::Storages,
-                config.test_hash_calculation,
-                slot,
-                calc_config,
-                None,
+        if let Some((base_slot, base_capitalization)) = base {
+            self.verify_accounts_hash_and_lamports(base_slot, base_capitalization, None, config)?;
+            let (storages, slots) = self.get_snapshot_storages(
+                base_slot.checked_add(1).unwrap()..=slot,
+                calc_config.ancestors,
+            );
+            let sorted_storages =
+                SortedStorages::new_with_slots(storages.iter().zip(slots.into_iter()), None, None);
+            let calculated_incremental_accounts_hash = self.calculate_incremental_accounts_hash(
+                &calc_config,
+                &sorted_storages,
+                base_slot,
+                HashStats::default(),
             )?;
+            let found_incremental_accounts_hash = self
+                .get_incremental_accounts_hash(slot)
+                .ok_or(MissingAccountsHash)?;
+            if calculated_incremental_accounts_hash != found_incremental_accounts_hash {
+                warn!(
+                    "mismatched incremental accounts hash for slot {slot}: \
+                    {calculated_incremental_accounts_hash:?} (calculated) != {found_incremental_accounts_hash:?} (expected)"
+                );
+                if hash_mismatch_is_error {
+                    return Err(MismatchedAccountsHash);
+                }
+            }
+        } else {
+            let (calculated_accounts_hash, calculated_lamports) = self
+                .calculate_accounts_hash_with_verify(
+                    CalcAccountsHashDataSource::Storages,
+                    config.test_hash_calculation,
+                    slot,
+                    calc_config,
+                    None,
+                )?;
 
-        if calculated_lamports != total_lamports {
-            warn!(
-                "Mismatched total lamports: {} calculated: {}",
-                total_lamports, calculated_lamports
-            );
-            return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
-        }
+            if calculated_lamports != total_lamports {
+                warn!(
+                    "Mismatched total lamports: {} calculated: {}",
+                    total_lamports, calculated_lamports
+                );
+                return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
+            }
 
-        let (found_accounts_hash, _) = self.get_accounts_hash(slot).ok_or(MissingAccountsHash)?;
-        if calculated_accounts_hash != found_accounts_hash {
-            warn!(
-                "Mismatched accounts hash for slot {slot}: \
-                {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
-            );
-            if !config.ignore_mismatch {
-                return Err(MismatchedAccountsHash);
+            let (found_accounts_hash, _) =
+                self.get_accounts_hash(slot).ok_or(MissingAccountsHash)?;
+            if calculated_accounts_hash != found_accounts_hash {
+                warn!(
+                    "Mismatched accounts hash for slot {slot}: \
+                    {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
+                );
+                if hash_mismatch_is_error {
+                    return Err(MismatchedAccountsHash);
+                }
             }
         }
 
@@ -12249,7 +12285,7 @@ pub mod tests {
         );
 
         accounts
-            .verify_accounts_hash_and_lamports(4, 1222, config)
+            .verify_accounts_hash_and_lamports(4, 1222, None, config)
             .unwrap();
     }
 
@@ -12674,14 +12710,14 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, config.clone()),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
             Ok(_)
         );
 
         db.accounts_hashes.lock().unwrap().remove(&some_slot);
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, config.clone()),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
             Err(MissingAccountsHash)
         );
 
@@ -12691,7 +12727,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, config),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config),
             Err(MismatchedAccountsHash)
         );
     }
@@ -12722,7 +12758,7 @@ pub mod tests {
                 db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
 
                 assert_matches!(
-                    db.verify_accounts_hash_and_lamports(some_slot, 1, config.clone()),
+                    db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
                     Ok(_)
                 );
                 continue;
@@ -12740,12 +12776,12 @@ pub mod tests {
             db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
 
             assert_matches!(
-                db.verify_accounts_hash_and_lamports(some_slot, 2, config.clone()),
+                db.verify_accounts_hash_and_lamports(some_slot, 2, None, config.clone()),
                 Ok(_)
             );
 
             assert_matches!(
-                db.verify_accounts_hash_and_lamports(some_slot, 10, config),
+                db.verify_accounts_hash_and_lamports(some_slot, 10, None, config),
                 Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
             );
         }
@@ -12771,7 +12807,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 0, config),
+            db.verify_accounts_hash_and_lamports(some_slot, 0, None, config),
             Ok(_)
         );
     }
@@ -12811,7 +12847,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, config),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config),
             Err(MismatchedAccountsHash)
         );
     }
@@ -13351,12 +13387,12 @@ pub mod tests {
 
             accounts.update_accounts_hash_for_tests(current_slot, &no_ancestors, false, false);
             accounts
-                .verify_accounts_hash_and_lamports(current_slot, 22300, config.clone())
+                .verify_accounts_hash_and_lamports(current_slot, 22300, None, config.clone())
                 .unwrap();
 
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             accounts
-                .verify_accounts_hash_and_lamports(current_slot, 22300, config)
+                .verify_accounts_hash_and_lamports(current_slot, 22300, None, config)
                 .unwrap();
 
             // repeating should be no-op

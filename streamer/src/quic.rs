@@ -22,12 +22,11 @@ use {
         thread,
         time::SystemTime,
     },
-    tokio::runtime::{Builder, Runtime},
+    tokio::runtime::Runtime,
 };
 
 pub const MAX_STAKED_CONNECTIONS: usize = 2000;
 pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
-const NUM_QUIC_STREAMER_WORKER_THREADS: usize = 1;
 
 struct SkipClientVerification;
 
@@ -98,8 +97,7 @@ pub(crate) fn configure_server(
 }
 
 fn rt() -> Runtime {
-    Builder::new_multi_thread()
-        .worker_threads(NUM_QUIC_STREAMER_WORKER_THREADS)
+    tokio::runtime::Builder::new_multi_thread()
         .thread_name("quic-server")
         .enable_all()
         .build()
@@ -128,8 +126,11 @@ pub struct StreamStats {
     pub(crate) total_staked_chunks_received: AtomicUsize,
     pub(crate) total_unstaked_chunks_received: AtomicUsize,
     pub(crate) total_packet_batch_send_err: AtomicUsize,
+    pub(crate) total_handle_chunk_to_packet_batcher_send_err: AtomicUsize,
     pub(crate) total_packet_batches_sent: AtomicUsize,
     pub(crate) total_packet_batches_none: AtomicUsize,
+    pub(crate) total_packets_sent_for_batching: AtomicUsize,
+    pub(crate) total_packets_sent_to_consumer: AtomicUsize,
     pub(crate) total_stream_read_errors: AtomicUsize,
     pub(crate) total_stream_read_timeouts: AtomicUsize,
     pub(crate) num_evictions: AtomicUsize,
@@ -252,6 +253,18 @@ impl StreamStats {
                 i64
             ),
             (
+                "packets_sent_for_batching",
+                self.total_packets_sent_for_batching
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "packets_sent_to_consumer",
+                self.total_packets_sent_to_consumer
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
                 "chunks_received",
                 self.total_chunks_received.swap(0, Ordering::Relaxed),
                 i64
@@ -270,6 +283,12 @@ impl StreamStats {
             (
                 "packet_batch_send_error",
                 self.total_packet_batch_send_err.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "handle_chunk_to_packet_batcher_send_error",
+                self.total_handle_chunk_to_packet_batcher_send_err
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -309,6 +328,7 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout_ms: u64,
+    coalesce_ms: u64,
 ) -> Result<(Endpoint, thread::JoinHandle<()>), QuicServerError> {
     let runtime = rt();
     let (endpoint, task) = {
@@ -325,6 +345,7 @@ pub fn spawn_server(
             max_unstaked_connections,
             stats,
             wait_for_chunk_timeout_ms,
+            coalesce_ms,
         )
     }?;
     let handle = thread::Builder::new()
@@ -344,6 +365,7 @@ mod test {
         super::*,
         crate::nonblocking::quic::{test::*, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS},
         crossbeam_channel::unbounded,
+        solana_sdk::net::DEFAULT_TPU_COALESCE_MS,
         std::net::SocketAddr,
     };
 
@@ -373,6 +395,7 @@ mod test {
             MAX_UNSTAKED_CONNECTIONS,
             stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_TPU_COALESCE_MS,
         )
         .unwrap();
         (t, exit, receiver, server_address)
@@ -429,6 +452,7 @@ mod test {
             MAX_UNSTAKED_CONNECTIONS,
             stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_TPU_COALESCE_MS,
         )
         .unwrap();
 
@@ -472,6 +496,7 @@ mod test {
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_TPU_COALESCE_MS,
         )
         .unwrap();
 

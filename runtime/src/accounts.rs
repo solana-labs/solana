@@ -867,11 +867,12 @@ impl Accounts {
         &self,
         slot: Slot,
         total_lamports: u64,
+        base: Option<(Slot, /*capitalization*/ u64)>,
         config: VerifyAccountsHashAndLamportsConfig,
     ) -> bool {
         if let Err(err) =
             self.accounts_db
-                .verify_accounts_hash_and_lamports(slot, total_lamports, config)
+                .verify_accounts_hash_and_lamports(slot, total_lamports, base, config)
         {
             warn!("verify_accounts_hash failed: {err:?}, slot: {slot}");
             false
