@@ -5,7 +5,8 @@ use {
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_account_decoder::parse_token::spl_token_pubkey,
-    solana_clap_utils::input_parsers::pubkey_of,
+    solana_clap_utils::{input_parsers::pubkey_of, input_validators::is_url_or_moniker},
+    solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_client::transaction_executor::TransactionExecutor,
     solana_gossip::gossip_service::discover,
     solana_rpc_client::rpc_client::RpcClient,
@@ -16,7 +17,6 @@ use {
         instruction::{AccountMeta, Instruction},
         message::Message,
         pubkey::Pubkey,
-        rpc_port::DEFAULT_RPC_PORT,
         signature::{read_keypair_file, Keypair, Signer},
         system_instruction, system_program,
         transaction::Transaction,
@@ -25,7 +25,6 @@ use {
     solana_transaction_status::parse_token::spl_token_instruction,
     std::{
         cmp::min,
-        net::{Ipv4Addr, SocketAddr},
         process::exit,
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -491,11 +490,38 @@ fn main() {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
+        .arg({
+            let arg = Arg::with_name("config_file")
+                .short("C")
+                .long("config")
+                .value_name("FILEPATH")
+                .takes_value(true)
+                .help("Configuration file to use");
+            if let Some(ref config_file) = *CONFIG_FILE {
+                arg.default_value(config_file)
+            } else {
+                arg
+            }
+        })
+        .arg(
+            Arg::with_name("json_rpc_url")
+                .short("u")
+                .long("url")
+                .value_name("URL_OR_MONIKER")
+                .takes_value(true)
+                .validator(is_url_or_moniker)
+                .conflicts_with("entrypoint")
+                .help(
+                    "URL for Solana's JSON RPC or moniker (or their first letter): \
+                       [mainnet-beta, testnet, devnet, localhost]",
+                ),
+        )
         .arg(
             Arg::with_name("entrypoint")
                 .long("entrypoint")
                 .takes_value(true)
                 .value_name("HOST:PORT")
+                .conflicts_with("json_rpc_url")
                 .help("RPC entrypoint address. Usually <ip>:8899"),
         )
         .arg(
@@ -583,15 +609,6 @@ fn main() {
 
     let skip_gossip = !matches.is_present("check_gossip");
 
-    let port = if skip_gossip { DEFAULT_RPC_PORT } else { 8001 };
-    let mut entrypoint_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-    if let Some(addr) = matches.value_of("entrypoint") {
-        entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {e}");
-            exit(1)
-        });
-    }
-
     let space = value_t!(matches, "space", u64).ok();
     let lamports = value_t!(matches, "lamports", u64).ok();
     let batch_size = value_t!(matches, "batch_size", usize).unwrap_or(4);
@@ -617,35 +634,56 @@ fn main() {
         payer_keypair_refs.push(keypair);
     }
 
-    let rpc_addr = if !skip_gossip {
-        info!("Finding cluster entry: {:?}", entrypoint_addr);
-        let (gossip_nodes, _validators) = discover(
-            None, // keypair
-            Some(&entrypoint_addr),
-            None,                    // num_nodes
-            Duration::from_secs(60), // timeout
-            None,                    // find_node_by_pubkey
-            Some(&entrypoint_addr),  // find_node_by_gossip_addr
-            None,                    // my_gossip_addr
-            0,                       // my_shred_version
-            SocketAddrSpace::Unspecified,
-        )
-        .unwrap_or_else(|err| {
-            eprintln!("Failed to discover {entrypoint_addr} node: {err:?}");
-            exit(1);
+    let client = if let Some(addr) = matches.value_of("entrypoint") {
+        let entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
+            eprintln!("failed to parse entrypoint address: {e}");
+            exit(1)
         });
 
-        info!("done found {} nodes", gossip_nodes.len());
-        gossip_nodes[0].rpc
-    } else {
-        info!("Using {:?} as the RPC address", entrypoint_addr);
-        entrypoint_addr
-    };
+        let rpc_addr = if !skip_gossip {
+            info!("Finding cluster entry: {:?}", entrypoint_addr);
+            let (gossip_nodes, _validators) = discover(
+                None, // keypair
+                Some(&entrypoint_addr),
+                None,                    // num_nodes
+                Duration::from_secs(60), // timeout
+                None,                    // find_node_by_pubkey
+                Some(&entrypoint_addr),  // find_node_by_gossip_addr
+                None,                    // my_gossip_addr
+                0,                       // my_shred_version
+                SocketAddrSpace::Unspecified,
+            )
+            .unwrap_or_else(|err| {
+                eprintln!("Failed to discover {entrypoint_addr} node: {err:?}");
+                exit(1);
+            });
 
-    let client = Arc::new(RpcClient::new_socket_with_commitment(
-        rpc_addr,
-        CommitmentConfig::confirmed(),
-    ));
+            info!("done found {} nodes", gossip_nodes.len());
+            gossip_nodes[0].rpc
+        } else {
+            info!("Using {:?} as the RPC address", entrypoint_addr);
+            entrypoint_addr
+        };
+
+        Arc::new(RpcClient::new_socket_with_commitment(
+            rpc_addr,
+            CommitmentConfig::confirmed(),
+        ))
+    } else {
+        let config = if let Some(config_file) = matches.value_of("config_file") {
+            solana_cli_config::Config::load(config_file).unwrap_or_default()
+        } else {
+            solana_cli_config::Config::default()
+        };
+        let (_, json_rpc_url) = ConfigInput::compute_json_rpc_url_setting(
+            matches.value_of("json_rpc_url").unwrap_or(""),
+            &config.json_rpc_url,
+        );
+        Arc::new(RpcClient::new_with_commitment(
+            json_rpc_url,
+            CommitmentConfig::confirmed(),
+        ))
+    };
 
     run_accounts_bench(
         client,
