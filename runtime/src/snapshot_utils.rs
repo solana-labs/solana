@@ -1014,7 +1014,7 @@ pub fn create_all_accounts_run_and_snapshot_dirs(
 ) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
     Ok(account_paths
         .iter()
-        .map(|account_path| -> Result<(PathBuf, PathBuf)> {
+        .map(|account_path| {
             fs::create_dir_all(account_path)
                 .and_then(|_| fs::canonicalize(account_path))
                 .map_err(|err| {
