@@ -22,7 +22,9 @@ use {
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::{ForkProgress, ProgressMap, PropagatedStats, ReplaySlotStats},
-        repair_service::{DumpedSlotsSender, DuplicateSlotsResetReceiver},
+        repair_service::{
+            DumpedSlotsSender, DuplicateSlotsResetReceiver, PopularPrunedForksReceiver,
+        },
         rewards_recorder_service::{RewardsMessage, RewardsRecorderSender},
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
@@ -481,6 +483,7 @@ impl ReplayStage {
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
         dumped_slots_sender: DumpedSlotsSender,
         banking_tracer: Arc<BankingTracer>,
+        _pruned_duplicate_confirmed_slots_receiver: PopularPrunedForksReceiver,
     ) -> Result<Self, String> {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
             let tower = process_blockstore.process_to_create_tower()?;

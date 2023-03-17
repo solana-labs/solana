@@ -4,7 +4,9 @@ use {
         repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
         repair_service::{BestRepairsStats, RepairTiming},
         repair_weighted_traversal,
+        replay_stage::DUPLICATE_THRESHOLD,
         serve_repair::ShredRepairType,
+        tree_diff::TreeDiff,
     },
     solana_ledger::{
         ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_meta::SlotMeta,
@@ -33,6 +35,14 @@ impl TreeRoot {
     pub fn is_pruned(&self) -> bool {
         matches!(self, Self::PrunedRoot(_))
     }
+
+    #[cfg(test)]
+    pub fn slot(&self) -> Slot {
+        match self {
+            Self::Root(slot) => *slot,
+            Self::PrunedRoot(slot) => *slot,
+        }
+    }
 }
 
 impl From<TreeRoot> for Slot {
@@ -43,10 +53,16 @@ impl From<TreeRoot> for Slot {
         }
     }
 }
+
+#[derive(Clone)]
 pub struct RepairWeight {
     // Map from root -> a subtree rooted at that `root`
     trees: HashMap<Slot, HeaviestSubtreeForkChoice>,
     // Map from root -> pruned subtree
+    // In the case of duplicate blocks linking back to a slot which is pruned, it is important to
+    // hold onto pruned trees so that we can repair / ancestor hashes repair when necessary. Since
+    // the parent slot is pruned these blocks will never be replayed / marked dead, so the existing
+    // dead duplicate confirmed pathway will not catch this special case.
     // We manage the size by removing slots < root
     pruned_trees: HashMap<Slot, HeaviestSubtreeForkChoice>,
 
@@ -172,7 +188,7 @@ impl RepairWeight {
 
         for (tree_root, updates) in all_subtree_updates {
             let tree = self
-                .get_tree(&tree_root)
+                .get_tree_mut(tree_root)
                 .expect("Tree for `tree_root` must exist here");
             let updates: Vec<_> = updates.into_iter().collect();
             tree.add_votes(
@@ -297,17 +313,18 @@ impl RepairWeight {
     /// This function removes and destroys the original `ST`.
     ///
     /// Assumes that `slot` is greater than `self.root`.
-    pub fn split_off(&mut self, slot: Slot) {
+    /// Returns slots that were orphaned
+    pub fn split_off(&mut self, slot: Slot) -> HashSet<Slot> {
         assert!(slot >= self.root);
         if slot == self.root {
             error!("Trying to orphan root of repair tree {}", slot);
-            return;
+            return HashSet::new();
         }
         match self.slot_to_tree.get(&slot).copied() {
             Some(TreeRoot::Root(subtree_root)) => {
                 if subtree_root == slot {
                     info!("{} is already orphan, skipping", slot);
-                    return;
+                    return HashSet::new();
                 }
                 let subtree = self
                     .trees
@@ -316,6 +333,7 @@ impl RepairWeight {
                 let orphaned_tree = subtree.split_off(&(slot, Hash::default()));
                 self.rename_tree_root(&orphaned_tree, TreeRoot::Root(slot));
                 self.trees.insert(slot, orphaned_tree);
+                self.trees.get(&slot).unwrap().slots_iter().collect()
             }
             Some(TreeRoot::PrunedRoot(subtree_root)) => {
                 // Even if these orphaned slots were previously pruned, they should be added back to
@@ -341,11 +359,17 @@ impl RepairWeight {
                     // back into the main set of trees, self.trees
                     self.rename_tree_root(&subtree, TreeRoot::Root(subtree_root));
                     self.trees.insert(subtree_root, subtree);
+                    self.trees
+                        .get(&subtree_root)
+                        .unwrap()
+                        .slots_iter()
+                        .collect()
                 } else {
                     let orphaned_tree = subtree.split_off(&(slot, Hash::default()));
                     self.pruned_trees.insert(subtree_root, subtree);
                     self.rename_tree_root(&orphaned_tree, TreeRoot::Root(slot));
                     self.trees.insert(slot, orphaned_tree);
+                    self.trees.get(&slot).unwrap().slots_iter().collect()
                 }
             }
             None => {
@@ -353,6 +377,7 @@ impl RepairWeight {
                     "Trying to split off slot {} which doesn't currently exist in repair",
                     slot
                 );
+                HashSet::new()
             }
         }
     }
@@ -710,22 +735,132 @@ impl RepairWeight {
         Some(orphan_tree_root)
     }
 
-    fn get_tree(&mut self, tree_root: &TreeRoot) -> Option<&mut HeaviestSubtreeForkChoice> {
+    /// If any pruned trees reach the `DUPLICATE_THRESHOLD`, there is a high chance that they are
+    /// duplicate confirmed (can't say for sure because we don't differentiate by hash in
+    /// `repair_weight`).
+    /// For each such pruned tree, find the deepest child which has reached `DUPLICATE_THRESHOLD`
+    /// for handling in ancestor hashes repair
+    /// We refer to such trees as "popular" pruned forks, and the deepest child as the "popular" pruned
+    /// slot of the fork.
+    ///
+    /// `DUPLICATE_THRESHOLD` is expected to be > 50%.
+    /// It is expected that no two children of a parent could both reach `DUPLICATE_THRESHOLD`.
+    pub fn get_popular_pruned_forks(
+        &self,
+        epoch_stakes: &HashMap<Epoch, EpochStakes>,
+        epoch_schedule: &EpochSchedule,
+    ) -> Vec<Slot> {
+        #[cfg(test)]
+        static_assertions::const_assert!(DUPLICATE_THRESHOLD > 0.5);
+        let mut repairs = vec![];
+        for (pruned_root, pruned_tree) in self.pruned_trees.iter() {
+            let mut slot_to_start_repair = (*pruned_root, Hash::default());
+
+            // This pruned tree *could* span an epoch boundary. To be safe we use the
+            // minimum DUPLICATE_THRESHOLD across slots in case of stake modification. This
+            // *could* lead to a false positive.
+            //
+            // Additionally, we could have a case where a slot that reached `DUPLICATE_THRESHOLD`
+            // no longer reaches threshold post epoch boundary due to stake modifications.
+            //
+            // Post boundary, we have 2 cases:
+            //      1) The previously popular slot stays as the majority fork. In this
+            //         case it will eventually reach the new duplicate threshold and
+            //         validators missing the correct version will be able to trigger this pruned
+            //         repair pathway.
+            //      2) With the stake modifications, this previously popular slot no
+            //         longer holds the majority stake. The remaining stake is now expected to
+            //         reach consensus on a new fork post epoch boundary. Once this consensus is
+            //         reached, validators on the popular pruned fork will be able to switch
+            //         to the new majority fork.
+            //
+            // In either case, `HeaviestSubtreeForkChoice` updates the stake only when observing new
+            // votes leading to a potential mixed bag of stakes being observed. It is safest to use
+            // the minimum threshold from either side of the boundary.
+            let min_total_stake = pruned_tree
+                .slots_iter()
+                .map(|slot| {
+                    epoch_stakes
+                        .get(&epoch_schedule.get_epoch(slot))
+                        .expect("Pruned tree cannot contain slots more than an epoch behind")
+                        .total_stake()
+                })
+                .min()
+                .expect("Pruned tree cannot be empty");
+            let duplicate_confirmed_threshold =
+                ((min_total_stake as f64) * DUPLICATE_THRESHOLD) as u64;
+
+            // TODO: `HeaviestSubtreeForkChoice` subtracts and migrates stake as validators switch
+            // forks within the rooted subtree, however `repair_weight` does not migrate stake
+            // across subtrees. This could lead to an additional false positive if validators
+            // switch post prune as stake added to a pruned tree it is never removed.
+            // A further optimization could be to store an additional `latest_votes`
+            // in `repair_weight` to manage switching across subtrees.
+            if pruned_tree
+                .stake_voted_subtree(&slot_to_start_repair)
+                .expect("Root of tree must exist")
+                >= duplicate_confirmed_threshold
+            {
+                // Search to find the deepest node that still has >= duplicate_confirmed_threshold (could
+                // just use best slot but this is a slight optimization that will save us some iterations
+                // in ancestor repair)
+                while let Some(child) = pruned_tree
+                    .children(&slot_to_start_repair)
+                    .expect("Found earlier, this slot should exist")
+                    .find(|c| {
+                        pruned_tree
+                            .stake_voted_subtree(c)
+                            .expect("Found in children must exist")
+                            >= duplicate_confirmed_threshold
+                    })
+                {
+                    slot_to_start_repair = *child;
+                }
+                repairs.push(slot_to_start_repair.0);
+            }
+        }
+        repairs
+    }
+
+    fn get_tree(&self, tree_root: TreeRoot) -> Option<&HeaviestSubtreeForkChoice> {
         match tree_root {
-            TreeRoot::Root(r) => self.trees.get_mut(r),
-            TreeRoot::PrunedRoot(r) => self.pruned_trees.get_mut(r),
+            TreeRoot::Root(r) => self.trees.get(&r),
+            TreeRoot::PrunedRoot(r) => self.pruned_trees.get(&r),
         }
     }
 
-    fn remove_tree(&mut self, tree_root: &TreeRoot) -> Option<HeaviestSubtreeForkChoice> {
+    fn get_tree_mut(&mut self, tree_root: TreeRoot) -> Option<&mut HeaviestSubtreeForkChoice> {
         match tree_root {
-            TreeRoot::Root(r) => self.trees.remove(r),
-            TreeRoot::PrunedRoot(r) => self.pruned_trees.remove(r),
+            TreeRoot::Root(r) => self.trees.get_mut(&r),
+            TreeRoot::PrunedRoot(r) => self.pruned_trees.get_mut(&r),
+        }
+    }
+
+    fn remove_tree(&mut self, tree_root: TreeRoot) -> Option<HeaviestSubtreeForkChoice> {
+        match tree_root {
+            TreeRoot::Root(r) => self.trees.remove(&r),
+            TreeRoot::PrunedRoot(r) => self.pruned_trees.remove(&r),
         }
     }
 
     fn get_tree_root(&self, slot: Slot) -> Option<TreeRoot> {
         self.slot_to_tree.get(&slot).copied()
+    }
+
+    /// Returns true iff `slot` is currently tracked and in a pruned tree
+    pub fn is_pruned(&self, slot: Slot) -> bool {
+        self.get_tree_root(slot)
+            .as_ref()
+            .map(TreeRoot::is_pruned)
+            .unwrap_or(false)
+    }
+
+    /// Returns true iff `slot1` and `slot2` are both tracked and belong to the same tree
+    pub fn same_tree(&self, slot1: Slot, slot2: Slot) -> bool {
+        self.get_tree_root(slot1)
+            .and_then(|tree_root| self.get_tree(tree_root))
+            .map(|tree| tree.contains_block(&(slot2, Hash::default())))
+            .unwrap_or(false)
     }
 
     /// Assumes that `new_tree_root` does not already exist in `self.trees`
@@ -798,12 +933,12 @@ impl RepairWeight {
         epoch_schedule: &EpochSchedule,
     ) {
         // Update self.slot_to_tree to reflect the merge
-        let tree1 = self.remove_tree(&root1).expect("tree to merge must exist");
+        let tree1 = self.remove_tree(root1).expect("tree to merge must exist");
         self.rename_tree_root(&tree1, root2);
 
         // Merge trees
         let tree2 = self
-            .get_tree(&root2)
+            .get_tree_mut(root2)
             .expect("tree to be merged into must exist");
 
         tree2.merge(
@@ -1158,7 +1293,7 @@ mod test {
 
         // Add a vote to a slot chaining to pruned
         blockstore.add_tree(tr(6) / tr(20), true, true, 2, Hash::default());
-        let votes = vec![(23, vote_pubkeys.clone())];
+        let votes = vec![(23, vote_pubkeys.iter().take(1).copied().collect_vec())];
         repair_weight.add_votes(
             &blockstore,
             votes.into_iter(),
@@ -1182,6 +1317,55 @@ mod test {
         assert_eq!(
             *repair_weight.slot_to_tree.get(&23).unwrap(),
             TreeRoot::PrunedRoot(3)
+        );
+
+        // Pruned tree should now have 1 vote
+        assert_eq!(
+            repair_weight
+                .pruned_trees
+                .get(&3)
+                .unwrap()
+                .stake_voted_subtree(&(3, Hash::default()))
+                .unwrap(),
+            stake
+        );
+        assert_eq!(
+            repair_weight
+                .trees
+                .get(&2)
+                .unwrap()
+                .stake_voted_subtree(&(2, Hash::default()))
+                .unwrap(),
+            3 * stake
+        );
+
+        // Add the rest of the stake
+        let votes = vec![(23, vote_pubkeys.iter().skip(1).copied().collect_vec())];
+        repair_weight.add_votes(
+            &blockstore,
+            votes.into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+
+        // Pruned tree should have all the stake as well
+        assert_eq!(
+            repair_weight
+                .pruned_trees
+                .get(&3)
+                .unwrap()
+                .stake_voted_subtree(&(3, Hash::default()))
+                .unwrap(),
+            3 * stake
+        );
+        assert_eq!(
+            repair_weight
+                .trees
+                .get(&2)
+                .unwrap()
+                .stake_voted_subtree(&(2, Hash::default()))
+                .unwrap(),
+            3 * stake
         );
 
         // Update root and trim pruned tree
@@ -1610,11 +1794,7 @@ mod test {
 
     #[test]
     fn test_set_root_pruned_tree_trim_and_cleanup() {
-        // Connect orphans to main fork
-        let blockstore = setup_orphans();
-        blockstore.add_tree(tr(2) / tr(8), true, true, 2, Hash::default());
-        blockstore.add_tree(tr(3) / (tr(9) / tr(20)), true, true, 2, Hash::default());
-
+        let blockstore = setup_big_forks();
         let stake = 100;
         let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(3, stake);
         let votes = vec![
@@ -1717,11 +1897,7 @@ mod test {
 
     #[test]
     fn test_set_root_pruned_tree_split() {
-        // Connect orphans to main fork
-        let blockstore = setup_orphans();
-        blockstore.add_tree(tr(2) / tr(8), true, true, 2, Hash::default());
-        blockstore.add_tree(tr(3) / (tr(9) / tr(20)), true, true, 2, Hash::default());
-
+        let blockstore = setup_big_forks();
         let stake = 100;
         let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(3, stake);
         let votes = vec![
@@ -2045,7 +2221,7 @@ mod test {
 
         // Add 22 to `pruned_trees`, ancestor search should now
         // chain it back to 20
-        repair_weight.remove_tree(&TreeRoot::Root(20)).unwrap();
+        repair_weight.remove_tree(TreeRoot::Root(20)).unwrap();
         repair_weight.insert_new_pruned_tree(20);
         assert_eq!(
             repair_weight.find_ancestor_subtree_of_slot(&blockstore, 23),
@@ -2222,6 +2398,245 @@ mod test {
         assert_eq!(orphans, vec![0, 3]);
     }
 
+    #[test]
+    fn test_get_popular_pruned_forks() {
+        let blockstore = setup_big_forks();
+        let stake = 100;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(10, stake);
+        let epoch_stakes = bank.epoch_stakes_map();
+        let epoch_schedule = bank.epoch_schedule();
+
+        // Add a little stake for each fork
+        let votes = vec![
+            (4, vec![vote_pubkeys[0]]),
+            (11, vec![vote_pubkeys[1]]),
+            (6, vec![vote_pubkeys[2]]),
+            (23, vec![vote_pubkeys[3]]),
+        ];
+        let mut repair_weight = RepairWeight::new(0);
+        repair_weight.add_votes(
+            &blockstore,
+            votes.into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+
+        // Set root to 4, there should now be 3 pruned trees with `stake`
+        repair_weight.set_root(4);
+        assert_eq!(repair_weight.trees.len(), 1);
+        assert_eq!(repair_weight.pruned_trees.len(), 3);
+        assert!(repair_weight
+            .pruned_trees
+            .iter()
+            .all(
+                |(root, pruned_tree)| pruned_tree.stake_voted_subtree(&(*root, Hash::default()))
+                    == Some(stake)
+            ));
+
+        // No fork has DUPLICATE_THRESHOLD, should not be any popular forks
+        assert!(repair_weight
+            .get_popular_pruned_forks(epoch_stakes, epoch_schedule)
+            .is_empty());
+
+        // 500 stake, still less than DUPLICATE_THRESHOLD, should not be any popular forks
+        let five_votes = vote_pubkeys.iter().copied().take(5).collect_vec();
+        let votes = vec![(11, five_votes.clone()), (6, five_votes)];
+        repair_weight.add_votes(
+            &blockstore,
+            votes.into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        assert!(repair_weight
+            .get_popular_pruned_forks(epoch_stakes, epoch_schedule)
+            .is_empty());
+
+        // 600 stake, since we voted for leaf, leaf should be returned
+        let votes = vec![(11, vec![vote_pubkeys[5]]), (6, vec![vote_pubkeys[6]])];
+        repair_weight.add_votes(
+            &blockstore,
+            votes.into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        assert_eq!(
+            vec![6, 11],
+            repair_weight
+                .get_popular_pruned_forks(epoch_stakes, epoch_schedule)
+                .into_iter()
+                .sorted()
+                .collect_vec()
+        );
+
+        // For the last pruned tree we leave 100 stake on 23 and 22 and put 600 stake on 20. We
+        // should return 20 and not traverse the tree deeper
+        let six_votes = vote_pubkeys.iter().copied().take(6).collect_vec();
+        let votes = vec![(20, six_votes)];
+        repair_weight.add_votes(
+            &blockstore,
+            votes.into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        assert_eq!(
+            vec![6, 11, 20],
+            repair_weight
+                .get_popular_pruned_forks(epoch_stakes, epoch_schedule)
+                .into_iter()
+                .sorted()
+                .collect_vec()
+        );
+    }
+
+    #[test]
+    fn test_get_popular_pruned_forks_forks() {
+        let blockstore = setup_big_forks();
+        let stake = 100;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(10, stake);
+        let epoch_stakes = bank.epoch_stakes_map();
+        let epoch_schedule = bank.epoch_schedule();
+
+        // Add a little stake for each fork
+        let votes = vec![
+            (4, vec![vote_pubkeys[0]]),
+            (11, vec![vote_pubkeys[1]]),
+            (6, vec![vote_pubkeys[2]]),
+            (23, vec![vote_pubkeys[3]]),
+        ];
+        let mut repair_weight = RepairWeight::new(0);
+        repair_weight.add_votes(
+            &blockstore,
+            votes.into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+
+        // Prune the entire tree
+        std::mem::swap(&mut repair_weight.trees, &mut repair_weight.pruned_trees);
+        repair_weight
+            .slot_to_tree
+            .iter_mut()
+            .for_each(|(_, s)| *s = TreeRoot::PrunedRoot(s.slot()));
+
+        // Traverse to 20
+        let mut repair_weight_20 = repair_weight.clone();
+        repair_weight_20.add_votes(
+            &blockstore,
+            vec![(20, vote_pubkeys.clone())].into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        assert_eq!(
+            vec![20],
+            repair_weight_20.get_popular_pruned_forks(epoch_stakes, epoch_schedule)
+        );
+
+        // 4 and 8 individually do not have enough stake, but 2 is popular
+        let votes = vec![(10, vote_pubkeys.iter().copied().skip(6).collect_vec())];
+        repair_weight.add_votes(
+            &blockstore,
+            votes.into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        assert_eq!(
+            vec![2],
+            repair_weight.get_popular_pruned_forks(epoch_stakes, epoch_schedule)
+        );
+    }
+
+    #[test]
+    fn test_get_popular_pruned_forks_stake_change_across_epoch_boundary() {
+        let blockstore = setup_big_forks();
+        let stake = 100;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(10, stake);
+        let mut epoch_stakes = bank.epoch_stakes_map().clone();
+        let mut epoch_schedule = *bank.epoch_schedule();
+
+        // Simulate epoch boundary at slot 10, where half of the stake deactivates
+        // Additional epoch boundary at slot 20, where 30% of the stake reactivates
+        let initial_stakes = epoch_stakes
+            .get(&epoch_schedule.get_epoch(0))
+            .unwrap()
+            .clone();
+        let mut dec_stakes = epoch_stakes
+            .get(&epoch_schedule.get_epoch(0))
+            .unwrap()
+            .clone();
+        let mut inc_stakes = epoch_stakes
+            .get(&epoch_schedule.get_epoch(0))
+            .unwrap()
+            .clone();
+        epoch_schedule.first_normal_slot = 0;
+        epoch_schedule.slots_per_epoch = 10;
+        assert_eq!(
+            epoch_schedule.get_epoch(10),
+            epoch_schedule.get_epoch(9) + 1
+        );
+        assert_eq!(
+            epoch_schedule.get_epoch(20),
+            epoch_schedule.get_epoch(19) + 1
+        );
+        dec_stakes.set_total_stake(dec_stakes.total_stake() - 5 * stake);
+        inc_stakes.set_total_stake(dec_stakes.total_stake() + 3 * stake);
+        epoch_stakes.insert(epoch_schedule.get_epoch(0), initial_stakes);
+        epoch_stakes.insert(epoch_schedule.get_epoch(10), dec_stakes);
+        epoch_stakes.insert(epoch_schedule.get_epoch(20), inc_stakes);
+
+        // Add a little stake for each fork
+        let votes = vec![
+            (4, vec![vote_pubkeys[0]]),
+            (11, vec![vote_pubkeys[1]]),
+            (6, vec![vote_pubkeys[2]]),
+            (23, vec![vote_pubkeys[3]]),
+        ];
+        let mut repair_weight = RepairWeight::new(0);
+        repair_weight.add_votes(
+            &blockstore,
+            votes.into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+
+        // Set root to 4, there should now be 3 pruned trees with `stake`
+        repair_weight.set_root(4);
+        assert_eq!(repair_weight.trees.len(), 1);
+        assert_eq!(repair_weight.pruned_trees.len(), 3);
+        assert!(repair_weight
+            .pruned_trees
+            .iter()
+            .all(
+                |(root, pruned_tree)| pruned_tree.stake_voted_subtree(&(*root, Hash::default()))
+                    == Some(stake)
+            ));
+
+        // No fork hash `DUPLICATE_THRESHOLD`, should not be any popular forks
+        assert!(repair_weight
+            .get_popular_pruned_forks(&epoch_stakes, &epoch_schedule)
+            .is_empty());
+
+        // 400 stake, For the 6 tree it will be less than `DUPLICATE_THRESHOLD`, however 11
+        // has epoch modifications where at some point 400 stake is enough. For 22, although it
+        // does cross the second epoch where the stake requirement was less, because it doesn't
+        // have any blocks in that epoch the minimum total stake is still 800 which fails.
+        let four_votes = vote_pubkeys.iter().copied().take(4).collect_vec();
+        let votes = vec![
+            (11, four_votes.clone()),
+            (6, four_votes.clone()),
+            (22, four_votes),
+        ];
+        repair_weight.add_votes(
+            &blockstore,
+            votes.into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        assert_eq!(
+            vec![11],
+            repair_weight.get_popular_pruned_forks(&epoch_stakes, &epoch_schedule)
+        );
+    }
+
     fn setup_orphan_repair_weight() -> (Blockstore, Bank, RepairWeight) {
         let blockstore = setup_orphans();
         let stake = 100;
@@ -2313,6 +2728,32 @@ mod test {
         blockstore.add_tree(tr(8) / (tr(10) / (tr(11))), true, true, 2, Hash::default());
         blockstore.add_tree(tr(20) / (tr(22) / (tr(23))), true, true, 2, Hash::default());
         assert!(blockstore.orphan(8).unwrap().is_some());
+        blockstore
+    }
+
+    fn setup_big_forks() -> Blockstore {
+        /*
+            Build fork structure:
+                      slot 0
+                        |
+                      slot 1
+                      /    \
+                /----|      |----|
+            slot 2               |
+            /    \            slot 3
+        slot 4  slot 8      /        \
+                   |     slot 5    slot 9
+                slot 10     |         |
+                   |     slot 6    slot 20
+                slot 11               |
+                                   slot 22
+                                      |
+                                   slot 23
+        */
+        let blockstore = setup_orphans();
+        // Connect orphans to main fork
+        blockstore.add_tree(tr(2) / tr(8), true, true, 2, Hash::default());
+        blockstore.add_tree(tr(3) / (tr(9) / tr(20)), true, true, 2, Hash::default());
         blockstore
     }
 

@@ -56,6 +56,8 @@ pub type ConfirmedSlotsReceiver = CrossbeamReceiver<Vec<Slot>>;
 pub type DumpedSlotsSender = CrossbeamSender<Vec<(Slot, Hash)>>;
 pub type DumpedSlotsReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
 pub type OutstandingShredRepairs = OutstandingRequests<ShredRepairType>;
+pub type PopularPrunedForksSender = CrossbeamSender<Vec<Slot>>;
+pub type PopularPrunedForksReceiver = CrossbeamReceiver<Vec<Slot>>;
 
 #[derive(Default, Debug)]
 pub struct SlotRepairs {
@@ -224,6 +226,7 @@ pub struct RepairService {
 }
 
 impl RepairService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
@@ -234,6 +237,7 @@ impl RepairService {
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
         dumped_slots_receiver: DumpedSlotsReceiver,
+        popular_pruned_forks_sender: PopularPrunedForksSender,
     ) -> Self {
         let t_repair = {
             let blockstore = blockstore.clone();
@@ -250,6 +254,7 @@ impl RepairService {
                         verified_vote_receiver,
                         &outstanding_requests,
                         dumped_slots_receiver,
+                        popular_pruned_forks_sender,
                     )
                 })
                 .unwrap()
@@ -277,6 +282,7 @@ impl RepairService {
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
         dumped_slots_receiver: DumpedSlotsReceiver,
+        popular_pruned_forks_sender: PopularPrunedForksSender,
     ) {
         let mut repair_weight = RepairWeight::new(repair_info.bank_forks.read().unwrap().root());
         let serve_repair = ServeRepair::new(
@@ -290,6 +296,7 @@ impl RepairService {
         let mut best_repairs_stats = BestRepairsStats::default();
         let mut last_stats = Instant::now();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
+        let mut popular_pruned_forks_requests = HashSet::new();
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -329,7 +336,12 @@ impl RepairService {
                             // question would have already been purged in `repair_weight.set_root`
                             // and there is no chance of it being part of the rooted path.
                             if slot >= repair_weight.root() {
-                                repair_weight.split_off(slot);
+                                let dumped_slots = repair_weight.split_off(slot);
+                                // Remove from outstanding ancestor hashes requests. Also clean any
+                                // requests that might have been since fixed
+                                popular_pruned_forks_requests.retain(|slot| {
+                                    !dumped_slots.contains(slot) && repair_weight.is_pruned(*slot)
+                                });
                             }
                         }
                     });
@@ -370,6 +382,28 @@ impl RepairService {
                     &mut repair_timing,
                     &mut best_repairs_stats,
                 );
+
+                let mut popular_pruned_forks = repair_weight.get_popular_pruned_forks(
+                    root_bank.epoch_stakes_map(),
+                    root_bank.epoch_schedule(),
+                );
+                // Check if we've already sent a request along this pruned fork
+                popular_pruned_forks.retain(|slot| {
+                    if popular_pruned_forks_requests
+                        .iter()
+                        .any(|prev_req_slot| repair_weight.same_tree(*slot, *prev_req_slot))
+                    {
+                        false
+                    } else {
+                        popular_pruned_forks_requests.insert(*slot);
+                        true
+                    }
+                });
+                if !popular_pruned_forks.is_empty() {
+                    popular_pruned_forks_sender
+                        .send(popular_pruned_forks)
+                        .unwrap_or_else(|err| error!("failed to send popular pruned forks {err}"));
+                }
 
                 repairs
             };
