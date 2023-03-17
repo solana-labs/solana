@@ -68,8 +68,9 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, create_accounts_run_and_snapshot_dirs, move_and_async_delete_path, ArchiveFormat,
-            SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
+            self, clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
+            move_and_async_delete_path, ArchiveFormat, SnapshotVersion,
+            DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
@@ -1112,7 +1113,7 @@ fn load_bank_forks(
         Some(SnapshotConfig {
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
-            bank_snapshots_dir,
+            bank_snapshots_dir: bank_snapshots_dir.clone(),
             ..SnapshotConfig::new_load_only()
         })
     };
@@ -1179,18 +1180,11 @@ fn load_bank_forks(
         vec![non_primary_accounts_path]
     };
 
-    // For all account_paths, set up the run/ and snapshot/ sub directories.
-    // If the sub directories do not exist, the account_path will be cleaned because older version put account files there
-    let account_run_paths: Vec<PathBuf> = account_paths.into_iter().map(
-        |account_path| {
-            match create_accounts_run_and_snapshot_dirs(&account_path) {
-                Ok((account_run_path, _account_snapshot_path)) => account_run_path,
-                Err(err) => {
-                    eprintln!("Unable to create account run and snapshot sub directories: {}, err: {err:?}", account_path.display());
-                    exit(1);
-                }
-            }
-        }).collect();
+    let (account_run_paths, account_snapshot_paths) =
+        create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
+            eprintln!("Error: {err:?}");
+            exit(1);
+        });
 
     // From now on, use run/ paths in the same way as the previous account_paths.
     let account_paths = account_run_paths;
@@ -1204,6 +1198,17 @@ fn load_bank_forks(
     });
     measure.stop();
     info!("done. {}", measure);
+
+    info!(
+        "Cleaning contents of account snapshot paths: {:?}",
+        account_snapshot_paths
+    );
+    if let Err(e) =
+        clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths)
+    {
+        eprintln!("Failed to clean orphaned account snapshot dirs.  Error: {e:?}");
+        exit(1);
+    }
 
     let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
     let mut transaction_notifier = Option::<TransactionNotifierLock>::default();
