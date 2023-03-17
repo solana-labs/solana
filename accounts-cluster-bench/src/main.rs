@@ -7,7 +7,6 @@ use {
     solana_account_decoder::parse_token::spl_token_pubkey,
     solana_clap_utils::input_parsers::pubkey_of,
     solana_client::transaction_executor::TransactionExecutor,
-    solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT},
     solana_gossip::gossip_service::discover,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::inline_spl_token,
@@ -83,12 +82,7 @@ pub fn poll_get_fee_for_message(client: &RpcClient, message: &mut Message) -> (O
     }
 }
 
-fn airdrop_lamports(
-    client: &RpcClient,
-    faucet_addr: &SocketAddr,
-    id: &Keypair,
-    desired_balance: u64,
-) -> bool {
+fn airdrop_lamports(client: &RpcClient, id: &Keypair, desired_balance: u64) -> bool {
     let starting_balance = client.get_balance(&id.pubkey()).unwrap_or(0);
     info!("starting balance {}", starting_balance);
 
@@ -97,39 +91,19 @@ fn airdrop_lamports(
         info!(
             "Airdropping {:?} lamports from {} for {}",
             airdrop_amount,
-            faucet_addr,
+            client.url(),
             id.pubkey(),
         );
 
-        let blockhash = poll_get_latest_blockhash(client);
-        match request_airdrop_transaction(
-            faucet_addr,
-            &id.pubkey(),
-            airdrop_amount,
-            blockhash.unwrap(),
-        ) {
-            Ok(transaction) => {
-                let mut tries = 0;
-                loop {
-                    tries += 1;
-                    let result = client.send_and_confirm_transaction(&transaction);
-
-                    if result.is_ok() {
-                        break;
-                    }
-                    if tries >= 5 {
-                        panic!(
-                            "Error requesting airdrop: to addr: {faucet_addr:?} amount: {airdrop_amount} {result:?}"
-                        )
-                    }
-                }
-            }
-            Err(err) => {
-                panic!(
-                    "Error requesting airdrop: {err:?} to addr: {faucet_addr:?} amount: {airdrop_amount}"
-                );
-            }
-        };
+        let blockhash = client.get_latest_blockhash().unwrap();
+        if let Err(err) =
+            client.request_airdrop_with_blockhash(&id.pubkey(), airdrop_amount, &blockhash)
+        {
+            panic!(
+                "Error requesting airdrop: {err:?} to addr: {0:?} amount: {airdrop_amount}",
+                id.pubkey()
+            );
+        }
 
         let current_balance = client.get_balance(&id.pubkey()).unwrap_or_else(|e| {
             panic!("airdrop error {e}");
@@ -257,7 +231,6 @@ fn make_close_message(
 #[allow(clippy::too_many_arguments)]
 fn run_accounts_bench(
     entrypoint_addr: SocketAddr,
-    faucet_addr: SocketAddr,
     payer_keypairs: &[&Keypair],
     iterations: usize,
     maybe_space: Option<u64>,
@@ -344,12 +317,7 @@ fn run_accounts_bench(
                         "Balance {} is less than needed: {}, doing airdrop...",
                         balance, lamports
                     );
-                    if !airdrop_lamports(
-                        &client,
-                        &faucet_addr,
-                        payer_keypairs[i],
-                        lamports * 100_000,
-                    ) {
+                    if !airdrop_lamports(&client, payer_keypairs[i], lamports * 100_000) {
                         warn!("failed airdrop, exiting");
                         return;
                     }
@@ -538,6 +506,7 @@ fn main() {
                 .long("faucet")
                 .takes_value(true)
                 .value_name("HOST:PORT")
+                .hidden(true)
                 .help("Faucet entrypoint address. Usually <ip>:9900"),
         )
         .arg(
@@ -625,13 +594,6 @@ fn main() {
             exit(1)
         });
     }
-    let mut faucet_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, FAUCET_PORT));
-    if let Some(addr) = matches.value_of("faucet_addr") {
-        faucet_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {e}");
-            exit(1)
-        });
-    }
 
     let space = value_t!(matches, "space", u64).ok();
     let lamports = value_t!(matches, "lamports", u64).ok();
@@ -685,7 +647,6 @@ fn main() {
 
     run_accounts_bench(
         rpc_addr,
-        faucet_addr,
         &payer_keypair_refs,
         iterations,
         space,
@@ -730,7 +691,6 @@ pub mod test {
             ..ClusterConfig::default()
         };
 
-        let faucet_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 9900));
         let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
         let iterations = 10;
         let maybe_space = None;
@@ -741,7 +701,6 @@ pub mod test {
         let mut start = Measure::start("total accounts run");
         run_accounts_bench(
             cluster.entry_point_info.rpc().unwrap(),
-            faucet_addr,
             &[&cluster.funding_keypair],
             iterations,
             maybe_space,
@@ -842,7 +801,6 @@ pub mod test {
                 .replace("http://", "")
                 .parse()
                 .unwrap(),
-            faucet_addr,
             &[&keypair0, &keypair1, &keypair2],
             iterations,
             Some(account_len as u64),
