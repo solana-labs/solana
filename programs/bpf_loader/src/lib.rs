@@ -45,7 +45,8 @@ use {
             check_slice_translation_size, delay_visibility_of_program_deployment,
             disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
             enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, round_up_heap_size, FeatureSet,
+            limit_max_instruction_trace_length, remove_bpf_loader_incorrect_program_id,
+            round_up_heap_size, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -441,8 +442,10 @@ fn process_instruction_common(
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
 
-    // TODO: Feature gate
-    if true {
+    if !invoke_context
+        .feature_set
+        .is_active(&remove_bpf_loader_incorrect_program_id::id())
+    {
         fn get_index_in_transaction(
             instruction_context: &InstructionContext,
             index_in_instruction: IndexOfAccount,
