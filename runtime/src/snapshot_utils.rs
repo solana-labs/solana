@@ -1006,8 +1006,8 @@ pub fn create_accounts_run_and_snapshot_dirs(
     Ok((run_path, snapshot_path))
 }
 
-/// For all account_paths, set up the run/ and snapshot/ sub directories.
-/// If the sub directories do not exist, the account_path will be cleaned because older version put account files there.
+/// For all account_paths, create the run/ and snapshot/ sub directories.
+/// If an account_path directory does not exist, create it.
 /// It returns (account_run_paths, account_snapshot_paths) or error
 pub fn create_all_accounts_run_and_snapshot_dirs(
     account_paths: &[PathBuf],
