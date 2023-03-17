@@ -7063,7 +7063,8 @@ impl Bank {
     /// If a base slot is provided, return only the storages that are *higher* than this slot.
     pub fn get_snapshot_storages(&self, base_slot: Option<Slot>) -> Vec<Arc<AccountStorageEntry>> {
         // if a base slot is provided, request storages starting at the slot *after*
-        let start_slot = base_slot.map_or(0, |slot| slot.saturating_add(1));
+        let start_slot =
+            base_slot.map_or(0, |slot| slot.checked_add(1).expect("slot less than max"));
         // we want to *include* the storage at our slot
         let requested_slots = start_slot..=self.slot();
 
