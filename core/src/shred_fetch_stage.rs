@@ -34,11 +34,11 @@ const DEFAULT_LRU_SIZE: usize = 10_000;
 
 pub(crate) struct ShredFetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
-    /// The Quic ConnectonCache using the same Quic Endpoint of the Quic based
-    /// streamer receiving shreds. The connection cache can be used for sending
-    /// repair requests.
-    connection_cache: Option<Arc<ConnectionCache>>,
-    quic_repair_addr: Option<Arc<UdpSocket>>,
+
+    // /// The Quic ConnectonCache using the same Quic Endpoint of the Quic based
+    // /// streamer receiving shreds. The connection cache can be used for sending
+    // /// repair requests.
+    // connection_cache: Option<Arc<ConnectionCache>>,
 }
 
 impl ShredFetchStage {
@@ -256,7 +256,7 @@ impl ShredFetchStage {
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
         exit: &Arc<AtomicBool>,
-    ) -> Self {
+    ) -> (Option<Arc<ConnectionCache>>, Self) {
         let recycler = PacketBatchRecycler::warmed(100, 1024);
 
         let (mut tvu_threads, tvu_filter) = Self::packet_modifier(
@@ -333,17 +333,17 @@ impl ShredFetchStage {
             tvu_threads.push(quic_repair_modifier_t);
         }
 
-        Self {
-            thread_hdls: tvu_threads,
+        (
             connection_cache,
-            quic_repair_addr,
-        }
+            Self {
+                thread_hdls: tvu_threads,
+            },
+        )
     }
 
     pub(crate) fn join(self) -> thread::Result<()> {
         error!(
-            "Shutting down PacketModQ quic_repair_addr with {:?}",
-            self.quic_repair_addr
+            "Shutting down PacketModQ quic_repair_addr",
         );
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
@@ -351,11 +351,11 @@ impl ShredFetchStage {
         Ok(())
     }
 
-    /// Obtain the quic based ConnectionCache which used the same
-    /// Endpoint receiving the repair responses to send repair requests.
-    pub(crate) fn get_connection_cache(&self) -> Option<Arc<ConnectionCache>> {
-        self.connection_cache.clone()
-    }
+    // /// Obtain the quic based ConnectionCache which used the same
+    // /// Endpoint receiving the repair responses to send repair requests.
+    // pub(crate) fn get_connection_cache(&self) -> Option<Arc<ConnectionCache>> {
+    //     self.connection_cache.clone()
+    // }
 }
 
 // Returns true if the packet should be marked as discard.

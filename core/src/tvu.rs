@@ -172,7 +172,7 @@ impl Tvu {
         let fetch_sockets: Vec<Arc<UdpSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();
         let forward_sockets: Vec<Arc<UdpSocket>> =
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
-        let fetch_stage = ShredFetchStage::new(
+        let (quic_repair_connection_cache, fetch_stage) = ShredFetchStage::new(
             fetch_sockets,
             forward_sockets,
             repair_socket.clone(),
@@ -226,7 +226,7 @@ impl Tvu {
 
             let quic_repair_option = repair_quic_config
                 .as_ref()
-                .zip(fetch_stage.get_connection_cache());
+                .zip(quic_repair_connection_cache);
             WindowService::new(
                 blockstore.clone(),
                 verified_receiver,
