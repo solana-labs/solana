@@ -1649,7 +1649,12 @@ pub fn bank_from_snapshot_dir(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
-    let next_append_vec_id = Arc::new(AtomicAppendVecId::new(0));
+    // next_append_vec_id is not used when loading from a snapshot directory.  It is kept because the from_dir
+    // and from_archive paths share many function calls, and it is easier to keep the same function signatures.
+    // It is initialized to 1 to avoid substraction underflow in reconstruct_accountsdb_from_fields.  If it is
+    // initialized to 0, it is never incremented to non-zero, so the substraction underflow will occur, causing
+    // test_bank_from_snapshot_dir to fail.
+    let next_append_vec_id = Arc::new(AtomicAppendVecId::new(1));
     let (storage, measure_build_storage) =
         build_storage_from_snapshot_dir(bank_snapshot, account_paths, next_append_vec_id.clone())?;
     info!("{}", measure_build_storage);
