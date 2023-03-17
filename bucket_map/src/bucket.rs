@@ -308,7 +308,15 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             let cap_power = best_bucket.capacity_pow2;
             let cap = best_bucket.capacity();
             let pos = thread_rng().gen_range(0, cap);
-            for i in pos..pos + self.index.max_search() {
+            // max search is increased here by a lot for this search. The idea is that we just have to find an empty bucket somewhere.
+            // We don't mind waiting on a new write (by searching longer). Writing is done in the background only.
+            // Wasting space by doubling the bucket size is worse behavior. We expect more
+            // updates and fewer inserts, so we optimize for more compact data.
+            // We can accomplish this by increasing how many locations we're willing to search for an empty data cell.
+            // For the index bucket, it is more like a hash table and we have to exhaustively search 'max_search' to prove an item does not exist.
+            // And we do have to support the 'does not exist' case with good performance. So, it makes sense to grow the index bucket when it is too large.
+            // For data buckets, the offset is stored in the index, so it is directly looked up. So, the only search is on INSERT or update to a new sized value.
+            for i in pos..pos + (self.index.max_search() * 10).min(cap) {
                 let ix = i % cap;
                 if best_bucket.is_free(ix) {
                     let elem_loc = elem.data_loc(current_bucket);
