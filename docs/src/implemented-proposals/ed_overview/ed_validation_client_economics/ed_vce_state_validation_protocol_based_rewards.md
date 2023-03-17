@@ -2,7 +2,7 @@
 title: Inflation Schedule
 ---
 
-**Subject to change. Follow most recent economic discussions in the Solana forums: https://forums.solana.com**
+**Subject to change.**
 
 Validator-clients have two functional roles in the Solana network:
 

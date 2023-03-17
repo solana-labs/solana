@@ -170,8 +170,8 @@ module.exports = {
               href: "https://twitter.com/solana",
             },
             {
-              label: "Forums »",
-              href: "https://forums.solana.com",
+              label: "Forum »",
+              href: "https://forum.solana.com",
             },
           ],
         },
