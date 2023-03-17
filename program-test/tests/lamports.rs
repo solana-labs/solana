@@ -34,11 +34,12 @@ fn move_lamports_process_instruction(
 #[tokio::test]
 async fn move_lamports() {
     let move_lamports_program_id = Pubkey::new_unique();
-    let program_test = ProgramTest::new(
+    let mut program_test = ProgramTest::new(
         "move_lamports",
         move_lamports_program_id,
         processor!(move_lamports_process_instruction),
     );
+    program_test.deactivate_feature(solana_sdk::feature_set::native_programs_consume_cu::id());
 
     let lamports = 1_000_000_000;
     let source = Keypair::new();

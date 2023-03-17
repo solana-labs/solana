@@ -128,11 +128,12 @@ fn process_instruction(
 async fn clock_sysvar_updated_from_warp() {
     let program_id = Pubkey::new_unique();
     // Initialize and start the test network
-    let program_test = ProgramTest::new(
+    let mut program_test = ProgramTest::new(
         "program-test-warp",
         program_id,
         processor!(process_instruction),
     );
+    program_test.deactivate_feature(solana_sdk::feature_set::native_programs_consume_cu::id());
 
     let mut context = program_test.start_with_context().await;
     let mut expected_slot = 100_000;

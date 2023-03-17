@@ -30,11 +30,12 @@ fn simulate_fuzz() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let program_id = Pubkey::new_unique();
     // Initialize and start the test network
-    let program_test = ProgramTest::new(
+    let mut program_test = ProgramTest::new(
         "program-test-fuzz",
         program_id,
         processor!(process_instruction),
     );
+    program_test.deactivate_feature(solana_sdk::feature_set::native_programs_consume_cu::id());
 
     let (mut banks_client, payer, last_blockhash) =
         rt.block_on(async { program_test.start().await });
@@ -58,11 +59,12 @@ fn simulate_fuzz_with_context() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let program_id = Pubkey::new_unique();
     // Initialize and start the test network
-    let program_test = ProgramTest::new(
+    let mut program_test = ProgramTest::new(
         "program-test-fuzz",
         program_id,
         processor!(process_instruction),
     );
+    program_test.deactivate_feature(solana_sdk::feature_set::native_programs_consume_cu::id());
 
     let mut context = rt.block_on(async { program_test.start_with_context().await });
 

@@ -123,6 +123,7 @@ async fn cpi() {
         invoker_program_id,
         processor!(invoker_process_instruction),
     );
+    program_test.deactivate_feature(solana_sdk::feature_set::native_programs_consume_cu::id());
     let invoked_program_id = Pubkey::new_unique();
     program_test.add_program(
         "invoked",
@@ -159,6 +160,7 @@ async fn cpi_dupes() {
         invoker_program_id,
         processor!(invoker_dupes_process_instruction),
     );
+    program_test.deactivate_feature(solana_sdk::feature_set::native_programs_consume_cu::id());
     let invoked_program_id = Pubkey::new_unique();
     program_test.add_program(
         "invoked",
@@ -268,6 +270,7 @@ async fn stack_height() {
         invoker_stack_height_program_id,
         processor!(invoker_stack_height),
     );
+    program_test.deactivate_feature(solana_sdk::feature_set::native_programs_consume_cu::id());
     program_test.add_program(
         "invoked_stack_height",
         invoked_stack_height_program_id,

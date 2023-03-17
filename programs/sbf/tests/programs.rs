@@ -2181,10 +2181,17 @@ fn test_program_sbf_disguised_as_sbf_loader() {
 
     for program in programs.iter() {
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(50);
+        // disable native_programs_consume_cu feature to allow test program
+        // not consume units.
+        genesis_config
+            .accounts
+            .remove(&solana_sdk::feature_set::native_programs_consume_cu::id())
+            .unwrap();
+
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
         bank.add_builtin(&name, &id, entrypoint);
