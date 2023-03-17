@@ -1146,6 +1146,12 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                         } else if v.ref_count() != 1 {
                             continue;
                         }
+                        if is_random && v.dirty() {
+                            // Don't randomly evict dirty entries. Evicting dirty entries results in us writing entries with many slot list elements for example, unnecessarily.
+                            // So, only randomly evict entries that lru would say don't throw away and were just read (or were dirty and written, but could not be evicted).
+                            continue;
+                        }
+
                         // if we are evicting it, then we need to update disk if we're dirty
                         if v.clear_dirty() {
                             // step 1: clear the dirty flag
