@@ -70,14 +70,15 @@ mod tests {
     #[test]
     fn test_measure() {
         let mut measure = Measure::start("test");
-        sleep(Duration::from_secs(1));
+        sleep(Duration::from_millis(100));
         measure.stop();
-        assert!(measure.as_s() >= 0.99f32 && measure.as_s() <= 1.01f32);
-        assert!(measure.as_ms() >= 990 && measure.as_ms() <= 1_010);
-        assert!(measure.as_us() >= 999_000 && measure.as_us() <= 1_010_000);
+        assert!(measure.as_s() >= 0.09f32 && measure.as_s() <= 0.11f32);
+        assert!(measure.as_ms() >= 90 && measure.as_ms() <= 110);
+        assert!(measure.as_us() >= 99_000 && measure.as_us() <= 110_000);
+        assert!(measure.as_ns() >= 99_000_000 && measure.as_ns() <= 110_000_000);
         assert!(
-            measure.as_duration() >= Duration::from_millis(990)
-                && measure.as_duration() <= Duration::from_millis(1_010)
+            measure.as_duration() >= Duration::from_millis(90)
+                && measure.as_duration() <= Duration::from_millis(110)
         );
     }
 
