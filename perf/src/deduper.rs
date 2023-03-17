@@ -51,7 +51,7 @@ impl<const K: usize> Deduper<K> {
     // Returns true if the packet is duplicate.
     #[must_use]
     #[allow(clippy::integer_arithmetic)]
-    fn dedup_packet(&self, packet: &Packet) -> bool {
+    pub fn dedup_packet(&self, packet: &Packet) -> bool {
         // Should not dedup packet if already discarded.
         debug_assert!(!packet.meta().discard());
         let mut out = true;
