@@ -13,7 +13,7 @@ use {
     },
     solana_core::{
         banking_trace::{DirByteLimit, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
-        validator::{DEFAULT_BANKING_BACKEND, DEFAULT_REPLAYING_BACKEND},
+        validator::{BankingBackend, ReplayingBackend},
     },
     solana_faucet::faucet::{self, FAUCET_PORT},
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
@@ -1337,13 +1337,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("replaying_backend")
                 .long("replaying-backend")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .value_name("BACKEND")
                 .takes_value(true)
-                .possible_values(&[
-                    "blockstore-processor",
-                    "unified-scheduler",
-                    ])
+                .possible_values(ReplayingBackend::cli_names())
                 .default_value(&default_args.replaying_backend)
                 .help(
                     "Switch transaction scheduling backend for validating ledger entries"
@@ -1352,12 +1349,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("banking_backend")
                 .long("banking-backend")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .value_name("BACKEND")
                 .takes_value(true)
-                .possible_values(&[
-                    "multi-iterator",
-                    ])
+                .possible_values(BankingBackend::cli_names())
                 .default_value(&default_args.banking_backend)
                 .help(
                     "Switch transaction scheduling backend for generating ledger entries"
@@ -1873,8 +1868,8 @@ impl DefaultArgs {
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
-            replaying_backend: DEFAULT_REPLAYING_BACKEND.to_string(),
-            banking_backend: DEFAULT_BANKING_BACKEND.to_string(),
+            replaying_backend: ReplayingBackend::default().to_string(),
+            banking_backend: BankingBackend::default().to_string(),
         }
     }
 }

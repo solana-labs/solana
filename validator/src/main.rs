@@ -1524,14 +1524,9 @@ pub fn main() {
     }
 
     configure_banking_trace_dir_byte_limit(&mut validator_config, &matches);
-    validator_config.replaying_backend = matches
-        .value_of("replaying_backend")
-        .map(ReplayingBackend::from)
-        .unwrap();
-    validator_config.banking_backend = matches
-        .value_of("banking_backend")
-        .map(BankingBackend::from)
-        .unwrap();
+    validator_config.replaying_backend =
+        value_t_or_exit!(matches, "replaying_backend", ReplayingBackend);
+    validator_config.banking_backend = value_t_or_exit!(matches, "banking_backend", BankingBackend);
 
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {

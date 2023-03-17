@@ -27,9 +27,7 @@ use {
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
-        validator::{
-            BankingBackend, ReplayingBackend, DEFAULT_BANKING_BACKEND, DEFAULT_REPLAYING_BACKEND,
-        },
+        validator::{BankingBackend, ReplayingBackend},
     },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
@@ -1249,14 +1247,8 @@ fn load_bank_forks(
             accounts_update_notifier,
             &Arc::default(),
         );
-    let replaying_backend = arg_matches
-        .value_of("replaying_backend")
-        .map(ReplayingBackend::from)
-        .unwrap();
-    let banking_backend = arg_matches
-        .value_of("banking_backend")
-        .map(BankingBackend::from)
-        .unwrap();
+    let replaying_backend = value_t_or_exit!(arg_matches, "replaying_backend", ReplayingBackend);
+    let banking_backend = value_t_or_exit!(arg_matches, "banking_backend", BankingBackend);
     info!(
         "Chosen backends: replaying: {:?}, banking: {:?}",
         replaying_backend, banking_backend
@@ -1717,13 +1709,10 @@ fn main() {
                 .long("replaying-backend")
                 .value_name("BACKEND")
                 .takes_value(true)
-                .possible_values(&[
-                    "blockstore-processor",
-                    "unified-scheduler",
-                    ])
-                .default_value(DEFAULT_REPLAYING_BACKEND)
+                .possible_values(ReplayingBackend::cli_names())
+                .default_value(ReplayingBackend::default().into())
                 .global(true)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help(
                     "Switch transaction scheduling backend for validating ledger entries"
                 ),
@@ -1733,12 +1722,10 @@ fn main() {
                 .long("banking-backend")
                 .value_name("BACKEND")
                 .takes_value(true)
-                .possible_values(&[
-                    "multi-iterator",
-                    ])
-                .default_value(DEFAULT_BANKING_BACKEND)
+                .possible_values(BankingBackend::cli_names())
+                .default_value(BankingBackend::default().into())
                 .global(true)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help(
                     "Switch transaction scheduling backend for generating ledger entries"
                 ),

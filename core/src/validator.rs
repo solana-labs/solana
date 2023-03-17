@@ -116,53 +116,37 @@ use {
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    strum::VariantNames,
+    strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr},
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
-pub const DEFAULT_REPLAYING_BACKEND: &str = "blockstore-processor";
-pub const DEFAULT_BANKING_BACKEND: &str = "multi-iterator";
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[strum(serialize_all = "kebab-case")]
 pub enum ReplayingBackend {
+    #[default]
     BlockstoreProcessor,
     UnifiedScheduler,
 }
 
-impl Default for ReplayingBackend {
-    fn default() -> Self {
-        Self::from(DEFAULT_REPLAYING_BACKEND)
+impl ReplayingBackend {
+    pub fn cli_names() -> &'static [&'static str] {
+        Self::VARIANTS
     }
 }
 
-impl From<&str> for ReplayingBackend {
-    fn from(string: &str) -> Self {
-        match string {
-            "blockstore-processor" => Self::BlockstoreProcessor,
-            "unified-scheduler" => Self::UnifiedScheduler,
-            bad_backend => panic!("Invalid replaying backend: {bad_backend}"),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[strum(serialize_all = "kebab-case")]
 pub enum BankingBackend {
+    #[default]
     MultiIterator,
 }
 
-impl Default for BankingBackend {
-    fn default() -> Self {
-        Self::from(DEFAULT_BANKING_BACKEND)
-    }
-}
-
-impl From<&str> for BankingBackend {
-    fn from(string: &str) -> Self {
-        match string {
-            "multi-iterator" => Self::MultiIterator,
-            bad_backend => panic!("Invalid banking backend: {bad_backend}"),
-        }
+impl BankingBackend {
+    pub fn cli_names() -> &'static [&'static str] {
+        Self::VARIANTS
     }
 }
 
