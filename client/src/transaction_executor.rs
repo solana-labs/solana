@@ -32,13 +32,25 @@ pub struct TransactionExecutor {
 
 impl TransactionExecutor {
     pub fn new(entrypoint_addr: SocketAddr) -> Self {
-        let sigs = Arc::new(RwLock::new(Vec::new()));
-        let cleared = Arc::new(RwLock::new(Vec::new()));
-        let exit = Arc::new(AtomicBool::new(false));
         let client = Arc::new(RpcClient::new_socket_with_commitment(
             entrypoint_addr,
             CommitmentConfig::confirmed(),
         ));
+        Self::new_with_rpc_client(client)
+    }
+
+    pub fn new_with_url<U: ToString>(url: U) -> Self {
+        let client = Arc::new(RpcClient::new_with_commitment(
+            url,
+            CommitmentConfig::confirmed(),
+        ));
+        Self::new_with_rpc_client(client)
+    }
+
+    pub fn new_with_rpc_client(client: Arc<RpcClient>) -> Self {
+        let sigs = Arc::new(RwLock::new(Vec::new()));
+        let cleared = Arc::new(RwLock::new(Vec::new()));
+        let exit = Arc::new(AtomicBool::new(false));
         let sig_clear_t = Self::start_sig_clear_thread(&exit, &sigs, &cleared, &client);
         Self {
             sigs,
