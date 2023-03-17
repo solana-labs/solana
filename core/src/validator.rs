@@ -1150,6 +1150,7 @@ impl Validator {
 
     // Used for notifying many nodes in parallel to exit
     pub fn exit(&mut self) {
+        error!("Quit validator {:?}", self.cluster_info.id());
         self.validator_exit.write().unwrap().exit();
 
         // drop all signals in blockstore
@@ -1190,17 +1191,21 @@ impl Validator {
         drop(self.bank_forks);
         drop(self.cluster_info);
 
+        error!("stopping poh_service");
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
 
+        error!("stopping rpc_service");
         if let Some(json_rpc_service) = self.json_rpc_service {
             json_rpc_service.join().expect("rpc_service");
         }
 
+        error!("stopping pubsub_service");
         if let Some(pubsub_service) = self.pubsub_service {
             pubsub_service.join().expect("pubsub_service");
         }
 
+        error!("stopping rpc_completed_slots_service");
         self.rpc_completed_slots_service
             .join()
             .expect("rpc_completed_slots_service");
@@ -1208,77 +1213,97 @@ impl Validator {
         if let Some(optimistically_confirmed_bank_tracker) =
             self.optimistically_confirmed_bank_tracker
         {
+            error!("stopping optimistically_confirmed_bank_tracker");
             optimistically_confirmed_bank_tracker
                 .join()
                 .expect("optimistically_confirmed_bank_tracker");
         }
 
         if let Some(transaction_status_service) = self.transaction_status_service {
+            error!("stopping transaction_status_service");
             transaction_status_service
                 .join()
                 .expect("transaction_status_service");
         }
 
         if let Some(rewards_recorder_service) = self.rewards_recorder_service {
+            error!("stopping rewards_recorder_service");
             rewards_recorder_service
                 .join()
                 .expect("rewards_recorder_service");
         }
 
         if let Some(cache_block_meta_service) = self.cache_block_meta_service {
+            error!("stopping cache_block_meta_service");
             cache_block_meta_service
                 .join()
                 .expect("cache_block_meta_service");
         }
 
         if let Some(system_monitor_service) = self.system_monitor_service {
+            error!("stopping system_monitor_service");
             system_monitor_service
                 .join()
                 .expect("system_monitor_service");
         }
 
         if let Some(sample_performance_service) = self.sample_performance_service {
+            error!("stopping sample_performance_service");
             sample_performance_service
                 .join()
                 .expect("sample_performance_service");
         }
 
         if let Some(s) = self.snapshot_packager_service {
+            error!("stopping snapshot_packager_service");
             s.join().expect("snapshot_packager_service");
         }
 
+        error!("stopping gossip_service");
         self.gossip_service.join().expect("gossip_service");
+        error!("stopping serve_repair_service");
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
+        error!("stopping serve_repair_quic_service");
         self.serve_repair_quic_service
             .join()
             .expect("serve_repair_quic_service");
+        error!("stopping stats_reporter_service");
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
+        error!("stopping ledger_metric_report_service");
         self.ledger_metric_report_service
             .join()
             .expect("ledger_metric_report_service");
+        error!("stopping accounts_background_service");
         self.accounts_background_service
             .join()
             .expect("accounts_background_service");
+        error!("stopping accounts_hash_verifier");
         self.accounts_hash_verifier
             .join()
             .expect("accounts_hash_verifier");
+        error!("stopping tpu");
         self.tpu.join().expect("tpu");
+        error!("stopping tvu");
         self.tvu.join().expect("tvu");
+        error!("stopping completed_data_sets_service");
         self.completed_data_sets_service
             .join()
             .expect("completed_data_sets_service");
         if let Some(ip_echo_server) = self.ip_echo_server {
+            error!("stopping ip_echo_server");
             ip_echo_server.shutdown_background();
         }
 
+        error!("stopping geyser_plugin_service");
         if let Some(geyser_plugin_service) = self.geyser_plugin_service {
             geyser_plugin_service.join().expect("geyser_plugin_service");
         }
 
+        error!("stopping poh_timing_report_service");
         self.poh_timing_report_service
             .join()
             .expect("poh_timing_report_service");
