@@ -83,7 +83,7 @@ pub fn poll_get_fee_for_message(client: &RpcClient, message: &mut Message) -> (O
     }
 }
 
-pub fn airdrop_lamports(
+fn airdrop_lamports(
     client: &RpcClient,
     faucet_addr: &SocketAddr,
     id: &Keypair,
