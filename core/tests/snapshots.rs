@@ -17,7 +17,7 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
+        accounts_db::{self, CalcAccountsHashDataSource, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         bank::Bank,
@@ -255,7 +255,9 @@ fn run_bank_forks_snapshot_n<F>(
         None,
     )
     .unwrap();
-    let accounts_hash = last_bank.update_accounts_hash_for_tests();
+    last_bank.force_flush_accounts_cache();
+    let accounts_hash =
+        last_bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links_dir(),
         accounts_package.slot,
@@ -753,7 +755,8 @@ fn test_bank_forks_incremental_snapshot(
         // Since AccountsBackgroundService isn't running, manually make a full snapshot archive
         // at the right interval
         if snapshot_utils::should_take_full_snapshot(slot, FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS) {
-            bank.update_accounts_hash_for_tests();
+            bank.force_flush_accounts_cache();
+            bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
             make_full_snapshot_archive(&bank, &snapshot_test_config.snapshot_config).unwrap();
         }
         // Similarly, make an incremental snapshot archive at the right interval, but only if
@@ -767,7 +770,8 @@ fn test_bank_forks_incremental_snapshot(
             last_full_snapshot_slot,
         ) && slot != last_full_snapshot_slot.unwrap()
         {
-            bank.update_accounts_hash_for_tests();
+            bank.force_flush_accounts_cache();
+            bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
             make_incremental_snapshot_archive(
                 &bank,
                 last_full_snapshot_slot.unwrap(),
