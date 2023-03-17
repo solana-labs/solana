@@ -230,7 +230,7 @@ fn make_close_message(
 
 #[allow(clippy::too_many_arguments)]
 fn run_accounts_bench(
-    entrypoint_addr: SocketAddr,
+    client: Arc<RpcClient>,
     payer_keypairs: &[&Keypair],
     iterations: usize,
     maybe_space: Option<u64>,
@@ -242,10 +242,7 @@ fn run_accounts_bench(
     reclaim_accounts: bool,
 ) {
     assert!(num_instructions > 0);
-    let client =
-        RpcClient::new_socket_with_commitment(entrypoint_addr, CommitmentConfig::confirmed());
-
-    info!("Targeting {}", entrypoint_addr);
+    info!("Targeting {}", client.url());
 
     let mut latest_blockhash = Instant::now();
     let mut last_log = Instant::now();
@@ -276,7 +273,7 @@ fn run_accounts_bench(
 
     info!("Starting balance(s): {:?}", balances);
 
-    let executor = TransactionExecutor::new(entrypoint_addr);
+    let executor = TransactionExecutor::new_with_rpc_client(client.clone());
 
     // Create and close messages both require 2 signatures, fake a 2 signature message to calculate fees
     let mut message = Message::new(
@@ -413,7 +410,7 @@ fn run_accounts_bench(
     executor.close();
 
     if reclaim_accounts {
-        let executor = TransactionExecutor::new(entrypoint_addr);
+        let executor = TransactionExecutor::new_with_rpc_client(client.clone());
         loop {
             let max_closed_seed = seed_tracker.max_closed.load(Ordering::Relaxed);
             let max_created_seed = seed_tracker.max_created.load(Ordering::Relaxed);
@@ -645,8 +642,13 @@ fn main() {
         entrypoint_addr
     };
 
-    run_accounts_bench(
+    let client = Arc::new(RpcClient::new_socket_with_commitment(
         rpc_addr,
+        CommitmentConfig::confirmed(),
+    ));
+
+    run_accounts_bench(
+        client,
         &payer_keypair_refs,
         iterations,
         space,
@@ -699,8 +701,13 @@ pub mod test {
         let maybe_lamports = None;
         let num_instructions = 2;
         let mut start = Measure::start("total accounts run");
+        let rpc_addr = cluster.entry_point_info.rpc().unwrap();
+        let client = Arc::new(RpcClient::new_socket_with_commitment(
+            rpc_addr,
+            CommitmentConfig::confirmed(),
+        ));
         run_accounts_bench(
-            cluster.entry_point_info.rpc().unwrap(),
+            client,
             &[&cluster.funding_keypair],
             iterations,
             maybe_space,
@@ -727,8 +734,10 @@ pub mod test {
             Some(faucet_addr),
             SocketAddrSpace::Unspecified,
         );
-        let rpc_client =
-            RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+        let rpc_client = Arc::new(RpcClient::new_with_commitment(
+            test_validator.rpc_url(),
+            CommitmentConfig::processed(),
+        ));
 
         // Created funder
         let funder = Keypair::new();
@@ -796,11 +805,7 @@ pub mod test {
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         run_accounts_bench(
-            test_validator
-                .rpc_url()
-                .replace("http://", "")
-                .parse()
-                .unwrap(),
+            rpc_client,
             &[&keypair0, &keypair1, &keypair2],
             iterations,
             Some(account_len as u64),
