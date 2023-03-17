@@ -4657,6 +4657,8 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
+ "strum",
+ "strum_macros",
  "sys-info",
  "sysctl",
  "tempfile",
