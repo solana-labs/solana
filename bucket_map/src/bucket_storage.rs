@@ -333,8 +333,6 @@ impl BucketStorage {
         });
         m.stop();
         // resized so update total file size
-        self.stats
-            .resize_grow(old_bucket.capacity_bytes(), self.capacity_bytes());
         self.stats.resizes.fetch_add(1, Ordering::Relaxed);
         self.stats.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
     }

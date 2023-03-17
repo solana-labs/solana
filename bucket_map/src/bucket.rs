@@ -91,6 +91,8 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             Arc::clone(&stats.index),
             count,
         );
+        stats.index.resize_grow(0, index.capacity_bytes());
+
         Self {
             random: thread_rng().gen(),
             drives,
@@ -379,9 +381,6 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                     Arc::clone(&self.stats.index),
                     Arc::clone(&self.index.count),
                 );
-                self.stats
-                    .index
-                    .resize_grow(self.index.capacity(), index.capacity());
                 let random = thread_rng().gen();
                 let mut valid = true;
                 for ix in 0..self.index.capacity() {
@@ -424,6 +423,10 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     pub fn apply_grow_index(&mut self, random: u64, index: BucketStorage) {
+        self.stats
+            .index
+            .resize_grow(self.index.capacity_bytes(), index.capacity_bytes());
+
         self.random = random;
         self.index = index;
     }
@@ -453,6 +456,10 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             }
             self.add_data_bucket(bucket);
         } else {
+            let data_bucket = &mut self.data[ix];
+            self.stats
+                .data
+                .resize_grow(data_bucket.capacity_bytes(), bucket.capacity_bytes());
             self.data[ix] = bucket;
         }
     }
