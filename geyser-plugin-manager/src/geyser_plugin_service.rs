@@ -3,8 +3,10 @@ use {
         accounts_update_notifier::AccountsUpdateNotifierImpl,
         block_metadata_notifier::BlockMetadataNotifierImpl,
         block_metadata_notifier_interface::BlockMetadataNotifierLock,
-        geyser_plugin_manager::GeyserPluginManager, slot_status_notifier::SlotStatusNotifierImpl,
-        slot_status_observer::SlotStatusObserver, transaction_notifier::TransactionNotifierImpl,
+        geyser_plugin_manager::{GeyserPluginManager, GeyserPluginManagerRequest},
+        slot_status_notifier::SlotStatusNotifierImpl,
+        slot_status_observer::SlotStatusObserver,
+        transaction_notifier::TransactionNotifierImpl,
     },
     crossbeam_channel::Receiver,
     log::*,
@@ -14,35 +16,13 @@ use {
     },
     solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
     std::{
-        fs::File,
-        io::Read,
         path::{Path, PathBuf},
-        sync::{Arc, RwLock},
+        sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
+        time::Duration,
     },
     thiserror::Error,
 };
-
-#[derive(Error, Debug)]
-pub enum GeyserPluginServiceError {
-    #[error("Cannot open the the plugin config file")]
-    CannotOpenConfigFile(String),
-
-    #[error("Cannot read the the plugin config file")]
-    CannotReadConfigFile(String),
-
-    #[error("The config file is not in a valid Json format")]
-    InvalidConfigFileFormat(String),
-
-    #[error("Plugin library path is not specified in the config file")]
-    LibPathNotSet,
-
-    #[error("Invalid plugin path")]
-    InvalidPluginPath,
-
-    #[error("Cannot load plugin shared library")]
-    PluginLoadError(String),
-}
 
 /// The service managing the Geyser plugin workflow.
 pub struct GeyserPluginService {
@@ -66,10 +46,20 @@ impl GeyserPluginService {
     ///    shall create the implementation of `GeyserPlugin` and returns to the caller.
     ///    The rest of the JSON fields' definition is up to to the concrete plugin implementation
     ///    It is usually used to configure the connection information for the external data store.
-
     pub fn new(
         confirmed_bank_receiver: Receiver<BankNotification>,
         geyser_plugin_config_files: &[PathBuf],
+    ) -> Result<Self, GeyserPluginServiceError> {
+        Self::new_with_receiver(confirmed_bank_receiver, geyser_plugin_config_files, None)
+    }
+
+    pub fn new_with_receiver(
+        confirmed_bank_receiver: Receiver<BankNotification>,
+        geyser_plugin_config_files: &[PathBuf],
+        rpc_to_plugin_manager_receiver_and_exit: Option<(
+            Receiver<GeyserPluginManagerRequest>,
+            Arc<AtomicBool>,
+        )>,
     ) -> Result<Self, GeyserPluginServiceError> {
         info!(
             "Starting GeyserPluginService from config files: {:?}",
@@ -80,10 +70,10 @@ impl GeyserPluginService {
         for geyser_plugin_config_file in geyser_plugin_config_files {
             Self::load_plugin(&mut plugin_manager, geyser_plugin_config_file)?;
         }
+
         let account_data_notifications_enabled =
             plugin_manager.account_data_notifications_enabled();
         let transaction_notifications_enabled = plugin_manager.transaction_notifications_enabled();
-
         let plugin_manager = Arc::new(RwLock::new(plugin_manager));
 
         let accounts_update_notifier: Option<AccountsUpdateNotifier> =
@@ -122,6 +112,12 @@ impl GeyserPluginService {
             (None, None)
         };
 
+        // Initialize plugin manager rpc handler thread if needed
+        if let Some((request_receiver, exit)) = rpc_to_plugin_manager_receiver_and_exit {
+            let plugin_manager = plugin_manager.clone();
+            Self::start_manager_rpc_handler(plugin_manager, request_receiver, exit)
+        };
+
         info!("Started GeyserPluginService");
         Ok(GeyserPluginService {
             slot_status_observer,
@@ -136,56 +132,9 @@ impl GeyserPluginService {
         plugin_manager: &mut GeyserPluginManager,
         geyser_plugin_config_file: &Path,
     ) -> Result<(), GeyserPluginServiceError> {
-        let mut file = match File::open(geyser_plugin_config_file) {
-            Ok(file) => file,
-            Err(err) => {
-                return Err(GeyserPluginServiceError::CannotOpenConfigFile(format!(
-                    "Failed to open the plugin config file {geyser_plugin_config_file:?}, error: {err:?}"
-                )));
-            }
-        };
-
-        let mut contents = String::new();
-        if let Err(err) = file.read_to_string(&mut contents) {
-            return Err(GeyserPluginServiceError::CannotReadConfigFile(format!(
-                "Failed to read the plugin config file {geyser_plugin_config_file:?}, error: {err:?}"
-            )));
-        }
-
-        let result: serde_json::Value = match json5::from_str(&contents) {
-            Ok(value) => value,
-            Err(err) => {
-                return Err(GeyserPluginServiceError::InvalidConfigFileFormat(format!(
-                    "The config file {geyser_plugin_config_file:?} is not in a valid Json5 format, error: {err:?}"
-                )));
-            }
-        };
-
-        let libpath = result["libpath"]
-            .as_str()
-            .ok_or(GeyserPluginServiceError::LibPathNotSet)?;
-        let mut libpath = PathBuf::from(libpath);
-        if libpath.is_relative() {
-            let config_dir = geyser_plugin_config_file.parent().ok_or_else(|| {
-                GeyserPluginServiceError::CannotOpenConfigFile(format!(
-                    "Failed to resolve parent of {geyser_plugin_config_file:?}",
-                ))
-            })?;
-            libpath = config_dir.join(libpath);
-        }
-
-        let config_file = geyser_plugin_config_file
-            .as_os_str()
-            .to_str()
-            .ok_or(GeyserPluginServiceError::InvalidPluginPath)?;
-
-        unsafe {
-            let result = plugin_manager.load_plugin(libpath.to_str().unwrap(), config_file);
-            if let Err(err) = result {
-                let msg = format!("Failed to load the plugin library: {libpath:?}, error: {err:?}");
-                return Err(GeyserPluginServiceError::PluginLoadError(msg));
-            }
-        }
+        plugin_manager
+            .load_plugin(geyser_plugin_config_file)
+            .map_err(|e| GeyserPluginServiceError::FailedToLoadPlugin(e.into()))?;
         Ok(())
     }
 
@@ -208,4 +157,71 @@ impl GeyserPluginService {
         self.plugin_manager.write().unwrap().unload();
         Ok(())
     }
+
+    fn start_manager_rpc_handler(
+        plugin_manager: Arc<RwLock<GeyserPluginManager>>,
+        request_receiver: Receiver<GeyserPluginManagerRequest>,
+        exit: Arc<AtomicBool>,
+    ) {
+        thread::Builder::new()
+            .name("SolGeyserPluginRpc".to_string())
+            .spawn(move || loop {
+                if let Ok(request) = request_receiver.recv_timeout(Duration::from_secs(5)) {
+                    match request {
+                        GeyserPluginManagerRequest::ListPlugins { response_sender } => {
+                            let plugin_list = plugin_manager.read().unwrap().list_plugins();
+                            response_sender
+                                .send(plugin_list)
+                                .expect("Admin rpc service will be waiting for response");
+                        }
+
+                        GeyserPluginManagerRequest::ReloadPlugin {
+                            ref name,
+                            ref config_file,
+                            response_sender,
+                        } => {
+                            let reload_result = plugin_manager
+                                .write()
+                                .unwrap()
+                                .reload_plugin(name, config_file);
+                            response_sender
+                                .send(reload_result)
+                                .expect("Admin rpc service will be waiting for response");
+                        }
+
+                        GeyserPluginManagerRequest::LoadPlugin {
+                            ref config_file,
+                            response_sender,
+                        } => {
+                            let load_result =
+                                plugin_manager.write().unwrap().load_plugin(config_file);
+                            response_sender
+                                .send(load_result)
+                                .expect("Admin rpc service will be waiting for response");
+                        }
+
+                        GeyserPluginManagerRequest::UnloadPlugin {
+                            ref name,
+                            response_sender,
+                        } => {
+                            let unload_result = plugin_manager.write().unwrap().unload_plugin(name);
+                            response_sender
+                                .send(unload_result)
+                                .expect("Admin rpc service will be waiting for response");
+                        }
+                    }
+                }
+
+                if exit.load(std::sync::atomic::Ordering::Relaxed) {
+                    break;
+                }
+            })
+            .unwrap();
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum GeyserPluginServiceError {
+    #[error("Failed to load a geyser plugin")]
+    FailedToLoadPlugin(#[from] Box<dyn std::error::Error>),
 }

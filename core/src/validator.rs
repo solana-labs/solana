@@ -31,7 +31,9 @@ use {
     rand::{thread_rng, Rng},
     solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
-    solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
+    solana_geyser_plugin_manager::{
+        geyser_plugin_service::GeyserPluginService, GeyserPluginManagerRequest,
+    },
     solana_gossip::{
         cluster_info::{
             ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
@@ -128,7 +130,8 @@ pub struct ValidatorConfig {
     pub account_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
-    pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
+    /// Specifies which plugins to start up with
+    pub on_start_geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: SnapshotConfig,
@@ -192,7 +195,7 @@ impl Default for ValidatorConfig {
             account_paths: Vec::new(),
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
-            geyser_plugin_config_files: None,
+            on_start_geyser_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: SnapshotConfig::new_load_only(),
@@ -392,6 +395,7 @@ impl Validator {
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
         should_check_duplicate_instance: bool,
+        rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
@@ -413,12 +417,19 @@ impl Validator {
 
         let mut bank_notification_senders = Vec::new();
 
+        let exit = Arc::new(AtomicBool::new(false));
+
         let geyser_plugin_service =
-            if let Some(geyser_plugin_config_files) = &config.geyser_plugin_config_files {
+            if let Some(geyser_plugin_config_files) = &config.on_start_geyser_plugin_config_files {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
                 bank_notification_senders.push(confirmed_bank_sender);
-                let result =
-                    GeyserPluginService::new(confirmed_bank_receiver, geyser_plugin_config_files);
+                let rpc_to_plugin_manager_receiver_and_exit =
+                    rpc_to_plugin_manager_receiver.map(|receiver| (receiver, exit.clone()));
+                let result = GeyserPluginService::new_with_receiver(
+                    confirmed_bank_receiver,
+                    geyser_plugin_config_files,
+                    rpc_to_plugin_manager_receiver_and_exit,
+                );
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),
                     Err(err) => {
@@ -483,7 +494,6 @@ impl Validator {
         start.stop();
         info!("done. {}", start);
 
-        let exit = Arc::new(AtomicBool::new(false));
         {
             let exit = exit.clone();
             config
@@ -2176,6 +2186,7 @@ mod tests {
             vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
             &config,
             true, // should_check_duplicate_instance
+            None, // rpc_to_plugin_manager_receiver
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
             DEFAULT_TPU_USE_QUIC,
@@ -2273,7 +2284,8 @@ mod tests {
                     Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
                     vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
                     &config,
-                    true, // should_check_duplicate_instance
+                    true, // should_check_duplicate_instance.
+                    None, // rpc_to_plugin_manager_receiver
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
                     DEFAULT_TPU_USE_QUIC,

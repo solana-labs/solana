@@ -102,7 +102,7 @@ use {
         fs::File,
         io::{self, stdout, BufRead, BufReader, Write},
         path::{Path, PathBuf},
-        process::{exit, Command, Stdio},
+        process::{Command, Stdio},
         str::FromStr,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -312,7 +312,7 @@ fn output_ledger(
         .slot_meta_iterator(starting_slot)
         .unwrap_or_else(|err| {
             eprintln!("Failed to load entries starting from slot {starting_slot}: {err:?}");
-            exit(1);
+            std::process::exit(1);
         });
 
     if method == LedgerOutputMethod::Json {
@@ -929,7 +929,7 @@ fn open_blockstore(
             error!("Blockstore is incompatible with current software and requires updates");
             if !force_update_to_open {
                 error!("Use --force-update-to-open to allow blockstore to update");
-                exit(1);
+                std::process::exit(1);
             }
             open_blockstore_with_temporary_primary_access(
                 ledger_path,
@@ -941,12 +941,12 @@ fn open_blockstore(
                     "Failed to open blockstore (with --force-update-to-open) at {:?}: {:?}",
                     ledger_path, err
                 );
-                exit(1);
+                std::process::exit(1);
             })
         }
         Err(err) => {
             eprintln!("Failed to open blockstore at {ledger_path:?}: {err:?}");
-            exit(1);
+            std::process::exit(1);
         }
     }
 }
@@ -1128,14 +1128,14 @@ fn load_bank_forks(
                 "Unable to load bank forks at slot {halt_slot} because it is less than the starting slot {starting_slot}. \
                 The starting slot will be the latest snapshot slot, or genesis if --no-snapshot flag specified or no snapshots found."
             );
-                exit(1);
+                std::process::exit(1);
             }
             // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
             if !blockstore.slot_range_connected(starting_slot, halt_slot) {
                 eprintln!(
                     "Unable to load bank forks at slot {halt_slot} due to disconnected blocks.",
                 );
-                exit(1);
+                std::process::exit(1);
             }
         }
     }
@@ -1164,7 +1164,7 @@ fn load_bank_forks(
             {
                 // Couldn't get Primary access, error out to be defensive.
                 eprintln!("Error: custom accounts path is not supported under secondary access");
-                exit(1);
+                std::process::exit(1);
             }
         }
         account_paths.split(',').map(PathBuf::from).collect()
@@ -1187,7 +1187,7 @@ fn load_bank_forks(
                 Ok((account_run_path, _account_snapshot_path)) => account_run_path,
                 Err(err) => {
                     eprintln!("Unable to create account run and snapshot sub directories: {}, err: {err:?}", account_path.display());
-                    exit(1);
+                    std::process::exit(1);
                 }
             }
         }).collect();
@@ -1207,6 +1207,7 @@ fn load_bank_forks(
 
     let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
     let mut transaction_notifier = Option::<TransactionNotifierLock>::default();
+    let exit = Arc::new(AtomicBool::new(false));
     if arg_matches.is_present("geyser_plugin_config") {
         let geyser_config_files = values_t_or_exit!(arg_matches, "geyser_plugin_config", String)
             .into_iter()
@@ -1215,11 +1216,12 @@ fn load_bank_forks(
 
         let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
         drop(confirmed_bank_sender);
+
         let geyser_service =
             GeyserPluginService::new(confirmed_bank_receiver, &geyser_config_files).unwrap_or_else(
                 |err| {
                     eprintln!("Failed to setup Geyser service: {err:?}");
-                    exit(1);
+                    std::process::exit(1);
                 },
             );
         accounts_update_notifier = geyser_service.get_accounts_update_notifier();
@@ -1257,7 +1259,6 @@ fn load_bank_forks(
         snapshot_request_handler,
         pruned_banks_request_handler,
     };
-    let exit = Arc::new(AtomicBool::new(false));
     let accounts_background_service = AccountsBackgroundService::new(
         bank_forks.clone(),
         &exit,
@@ -2509,7 +2510,7 @@ fn main() {
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Failed to write genesis config: {err:?}");
-                    exit(1);
+                    std::process::exit(1);
                 });
 
                 println!("{}", open_genesis_config_by(&output_directory, arg_matches));
@@ -2555,7 +2556,7 @@ fn main() {
                     }
                     Err(err) => {
                         eprintln!("Failed to load ledger: {err:?}");
-                        exit(1);
+                        std::process::exit(1);
                     }
                 }
             }
@@ -2632,7 +2633,7 @@ fn main() {
                     }
                     Err(err) => {
                         eprintln!("Failed to load ledger: {err:?}");
-                        exit(1);
+                        std::process::exit(1);
                     }
                 }
             }
@@ -2864,7 +2865,7 @@ fn main() {
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Ledger verification failed: {err:?}");
-                    exit(1);
+                    std::process::exit(1);
                 });
                 if print_accounts_stats {
                     let working_bank = bank_forks.read().unwrap().working_bank();
@@ -2925,7 +2926,7 @@ fn main() {
                     }
                     Err(err) => {
                         eprintln!("Failed to load ledger: {err:?}");
-                        exit(1);
+                        std::process::exit(1);
                     }
                 }
             }
@@ -2968,7 +2969,7 @@ fn main() {
                         "Error: insufficient --bootstrap-validator-stake-lamports. \
                            Minimum amount is {minimum_stake_lamports}"
                     );
-                    exit(1);
+                    std::process::exit(1);
                 }
                 let bootstrap_validator_pubkeys = pubkeys_of(arg_matches, "bootstrap_validator");
                 let accounts_to_remove =
@@ -2985,7 +2986,7 @@ fn main() {
                     |s| {
                         s.parse::<SnapshotVersion>().unwrap_or_else(|e| {
                             eprintln!("Error: {e}");
-                            exit(1)
+                            std::process::exit(1)
                         })
                     },
                 );
@@ -3032,7 +3033,7 @@ fn main() {
                     eprintln!(
                         "Error: snapshot slot {snapshot_slot} does not exist in blockstore or is not full.",
                     );
-                    exit(1);
+                    std::process::exit(1);
                 }
 
                 let ending_slot = if is_minimized {
@@ -3041,7 +3042,7 @@ fn main() {
                         eprintln!(
                             "Error: ending_slot ({ending_slot}) must be greater than snapshot_slot ({snapshot_slot})"
                         );
-                        exit(1);
+                        std::process::exit(1);
                     }
 
                     Some(ending_slot)
@@ -3086,7 +3087,7 @@ fn main() {
                             .get(snapshot_slot)
                             .unwrap_or_else(|| {
                                 eprintln!("Error: Slot {snapshot_slot} is not available");
-                                exit(1);
+                                std::process::exit(1);
                             });
 
                         let child_bank_required = rent_burn_percentage.is_ok()
@@ -3141,7 +3142,7 @@ fn main() {
                                 eprintln!(
                                     "Error: Account does not exist, unable to remove it: {address}"
                                 );
-                                exit(1);
+                                std::process::exit(1);
                             });
 
                             account.set_lamports(0);
@@ -3209,7 +3210,7 @@ fn main() {
                                     eprintln!(
                                         "Error: --bootstrap-validator pubkeys cannot be duplicated"
                                     );
-                                    exit(1);
+                                    std::process::exit(1);
                                 }
                             }
 
@@ -3283,7 +3284,7 @@ fn main() {
                                     eprintln!(
                                         "Error: --warp-slot too close.  Must be >= {minimum_warp_slot}"
                                     );
-                                    exit(1);
+                                    std::process::exit(1);
                                 }
                             } else {
                                 warn!("Warping to slot {}", minimum_warp_slot);
@@ -3333,7 +3334,7 @@ fn main() {
                         if is_incremental {
                             if starting_snapshot_hashes.is_none() {
                                 eprintln!("Unable to create incremental snapshot without a base full snapshot");
-                                exit(1);
+                                std::process::exit(1);
                             }
                             let full_snapshot_slot = starting_snapshot_hashes.unwrap().full.hash.0;
                             if bank.slot() <= full_snapshot_slot {
@@ -3342,7 +3343,7 @@ fn main() {
                                     bank.slot(),
                                     full_snapshot_slot,
                                 );
-                                exit(1);
+                                std::process::exit(1);
                             }
 
                             let incremental_snapshot_archive_info =
@@ -3359,7 +3360,7 @@ fn main() {
                                 )
                                 .unwrap_or_else(|err| {
                                     eprintln!("Unable to create incremental snapshot: {err}");
-                                    exit(1);
+                                    std::process::exit(1);
                                 });
 
                             println!(
@@ -3383,7 +3384,7 @@ fn main() {
                                 )
                                 .unwrap_or_else(|err| {
                                     eprintln!("Unable to create snapshot: {err}");
-                                    exit(1);
+                                    std::process::exit(1);
                                 });
 
                             println!(
@@ -3414,7 +3415,7 @@ fn main() {
                     }
                     Err(err) => {
                         eprintln!("Failed to load ledger: {err:?}");
-                        exit(1);
+                        std::process::exit(1);
                     }
                 }
             }
@@ -3444,7 +3445,7 @@ fn main() {
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Failed to load ledger: {err:?}");
-                    exit(1);
+                    std::process::exit(1);
                 });
 
                 let bank = bank_forks.read().unwrap().working_bank();
@@ -3535,7 +3536,7 @@ fn main() {
                         let slot = bank_forks.working_bank().slot();
                         let bank = bank_forks.get(slot).unwrap_or_else(|| {
                             eprintln!("Error: Slot {slot} is not available");
-                            exit(1);
+                            std::process::exit(1);
                         });
 
                         if arg_matches.is_present("recalculate_capitalization") {
@@ -3566,7 +3567,7 @@ fn main() {
                                     base_bank.epoch(),
                                     warp_epoch
                                 );
-                                exit(1);
+                                std::process::exit(1);
                             }
 
                             if let Ok(raw_inflation) = value_t!(arg_matches, "inflation", String) {
@@ -4032,7 +4033,7 @@ fn main() {
                     }
                     Err(err) => {
                         eprintln!("Failed to load ledger: {err:?}");
-                        exit(1);
+                        std::process::exit(1);
                     }
                 }
             }
@@ -4061,20 +4062,20 @@ fn main() {
                             let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
                             if slots.is_empty() {
                                 eprintln!("Purge range is empty");
-                                exit(1);
+                                std::process::exit(1);
                             }
                             *slots.last().unwrap()
                         }
                         Err(err) => {
                             eprintln!("Unable to read the Ledger: {err:?}");
-                            exit(1);
+                            std::process::exit(1);
                         }
                     },
                 };
 
                 if end_slot < start_slot {
                     eprintln!("end slot {end_slot} is less than start slot {start_slot}");
-                    exit(1);
+                    std::process::exit(1);
                 }
                 info!(
                 "Purging data from slots {} to {} ({} slots) (skip compaction: {}) (dead slot only: {})",
@@ -4223,7 +4224,7 @@ fn main() {
                     Either adjust `--until` value, or pass a larger `--repair-limit` \
                     to override the limit",
                     );
-                    exit(1);
+                    std::process::exit(1);
                 }
                 let ancestor_iterator = AncestorIterator::new(start_root, &blockstore)
                     .take_while(|&slot| slot >= end_root);
@@ -4238,7 +4239,7 @@ fn main() {
                             .set_roots(roots_to_fix.iter())
                             .unwrap_or_else(|err| {
                                 eprintln!("Unable to set roots {roots_to_fix:?}: {err}");
-                                exit(1);
+                                std::process::exit(1);
                             });
                     }
                 } else {
@@ -4312,7 +4313,7 @@ fn main() {
                     }
                     Err(err) => {
                         eprintln!("Unable to read the Ledger: {err:?}");
-                        exit(1);
+                        std::process::exit(1);
                     }
                 };
             }
@@ -4364,7 +4365,7 @@ fn main() {
             }
             ("", _) => {
                 eprintln!("{}", matches.usage());
-                exit(1);
+                std::process::exit(1);
             }
             _ => unreachable!(),
         };
