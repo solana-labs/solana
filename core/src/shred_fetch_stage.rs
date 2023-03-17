@@ -1,12 +1,14 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use {
-    crate::{packet_hasher::PacketHasher, serve_repair::ServeRepair},
+    crate::serve_repair::ServeRepair,
     crossbeam_channel::{unbounded, Sender},
-    lru::LruCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats},
-    solana_perf::packet::{Packet, PacketBatch, PacketBatchRecycler, PacketFlags},
+    solana_perf::{
+        packet::{Packet, PacketBatch, PacketBatchRecycler, PacketFlags},
+        sigverify::Deduper,
+    },
     solana_runtime::bank_forks::BankForks,
     solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT},
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
@@ -18,8 +20,9 @@ use {
     },
 };
 
-const DEFAULT_LRU_SIZE: usize = 10_000;
-pub type ShredsReceived = LruCache<u64, ()>;
+const DEDUPER_FALSE_POSITIVE_RATE: f64 = 0.001;
+const DEDUPER_NUM_BITS: u64 = 637_534_199; // 76MB
+const DEDUPER_RESET_CYCLE: Duration = Duration::from_secs(5 * 60);
 
 pub struct ShredFetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -28,13 +31,12 @@ pub struct ShredFetchStage {
 impl ShredFetchStage {
     fn process_packet<F>(
         p: &mut Packet,
-        shreds_received: &mut ShredsReceived,
+        deduper: &Deduper<2>,
         stats: &mut ShredFetchStats,
         last_root: Slot,
         last_slot: Slot,
         slots_per_epoch: u64,
         modify: &F,
-        packet_hasher: &PacketHasher,
     ) where
         F: Fn(&mut Packet),
     {
@@ -43,11 +45,7 @@ impl ShredFetchStage {
             // Seems reasonable to limit shreds to 2 epochs away
             if slot > last_root && slot < (last_slot + 2 * slots_per_epoch) {
                 // Shred filter
-
-                let hash = packet_hasher.hash_packet(p);
-
-                if shreds_received.get(&hash).is_none() {
-                    shreds_received.put(hash, ());
+                if !deduper.dedup_packet(p) {
                     p.meta.set_discard(false);
                     modify(p);
                 } else {
@@ -71,7 +69,9 @@ impl ShredFetchStage {
         F: Fn(&mut Packet),
     {
         const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
-        let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
+        let mut rng = rand::thread_rng();
+        let mut deduper =
+            Deduper::<2>::new(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, DEDUPER_NUM_BITS);
         let mut last_updated = Instant::now();
         let mut keypair = repair_context
             .as_ref()
@@ -83,13 +83,11 @@ impl ShredFetchStage {
         let mut slots_per_epoch = 0;
 
         let mut stats = ShredFetchStats::default();
-        let mut packet_hasher = PacketHasher::default();
 
-        while let Some(mut packet_batch) = recvr.iter().next() {
+        for mut packet_batch in recvr {
+            deduper.maybe_reset(&mut rng, &DEDUPER_RESET_CYCLE);
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
-                packet_hasher.reset();
-                shreds_received.clear();
                 if let Some(bank_forks) = bank_forks.as_ref() {
                     let bank_forks_r = bank_forks.read().unwrap();
                     last_root = bank_forks_r.root();
@@ -119,13 +117,12 @@ impl ShredFetchStage {
             packet_batch.iter_mut().for_each(|packet| {
                 Self::process_packet(
                     packet,
-                    &mut shreds_received,
+                    &deduper,
                     &mut stats,
                     last_root,
                     last_slot,
                     slots_per_epoch,
                     &modify,
-                    &packet_hasher,
                 );
             });
             stats.maybe_submit(name, STATS_SUBMIT_CADENCE);
@@ -256,7 +253,8 @@ mod tests {
     #[test]
     fn test_data_code_same_index() {
         solana_logger::setup();
-        let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
+        let mut rng = rand::thread_rng();
+        let deduper = Deduper::<2>::new(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, 640_007);
         let mut packet = Packet::default();
         let mut stats = ShredFetchStats::default();
 
@@ -273,20 +271,17 @@ mod tests {
         );
         shred.copy_to_packet(&mut packet);
 
-        let hasher = PacketHasher::default();
-
         let last_root = 0;
         let last_slot = 100;
         let slots_per_epoch = 10;
         ShredFetchStage::process_packet(
             &mut packet,
-            &mut shreds_received,
+            &deduper,
             &mut stats,
             last_root,
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            &hasher,
         );
         assert!(!packet.meta.discard());
         let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
@@ -297,13 +292,12 @@ mod tests {
         coding[0].copy_to_packet(&mut packet);
         ShredFetchStage::process_packet(
             &mut packet,
-            &mut shreds_received,
+            &deduper,
             &mut stats,
             last_root,
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            &hasher,
         );
         assert!(!packet.meta.discard());
     }
@@ -311,25 +305,23 @@ mod tests {
     #[test]
     fn test_shred_filter() {
         solana_logger::setup();
-        let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
+        let mut rng = rand::thread_rng();
+        let deduper = Deduper::<2>::new(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, 640_007);
         let mut packet = Packet::default();
         let mut stats = ShredFetchStats::default();
         let last_root = 0;
         let last_slot = 100;
         let slots_per_epoch = 10;
 
-        let hasher = PacketHasher::default();
-
         // packet size is 0, so cannot get index
         ShredFetchStage::process_packet(
             &mut packet,
-            &mut shreds_received,
+            &deduper,
             &mut stats,
             last_root,
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            &hasher,
         );
         assert_eq!(stats.index_overrun, 1);
         assert!(packet.meta.discard());
@@ -339,39 +331,36 @@ mod tests {
         // rejected slot is 1, root is 3
         ShredFetchStage::process_packet(
             &mut packet,
-            &mut shreds_received,
+            &deduper,
             &mut stats,
             3,
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            &hasher,
         );
         assert!(packet.meta.discard());
 
         // Accepted for 1,3
         ShredFetchStage::process_packet(
             &mut packet,
-            &mut shreds_received,
+            &deduper,
             &mut stats,
             last_root,
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            &hasher,
         );
         assert!(!packet.meta.discard());
 
         // shreds_received should filter duplicate
         ShredFetchStage::process_packet(
             &mut packet,
-            &mut shreds_received,
+            &deduper,
             &mut stats,
             last_root,
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            &hasher,
         );
         assert!(packet.meta.discard());
 
@@ -381,13 +370,12 @@ mod tests {
         // Slot 1 million is too high
         ShredFetchStage::process_packet(
             &mut packet,
-            &mut shreds_received,
+            &deduper,
             &mut stats,
             last_root,
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            &hasher,
         );
         assert!(packet.meta.discard());
 
@@ -396,13 +384,12 @@ mod tests {
         shred.copy_to_packet(&mut packet);
         ShredFetchStage::process_packet(
             &mut packet,
-            &mut shreds_received,
+            &deduper,
             &mut stats,
             last_root,
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            &hasher,
         );
         assert!(packet.meta.discard());
     }

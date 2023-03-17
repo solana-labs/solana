@@ -526,9 +526,7 @@ impl<const K: usize> Deduper<K> {
     // Returns true if the packet is duplicate.
     #[must_use]
     #[allow(clippy::integer_arithmetic)]
-    fn dedup_packet(&self, packet: &Packet) -> bool {
-        // Should not dedup packet if already discarded.
-        debug_assert!(!packet.meta.discard());
+    pub fn dedup_packet(&self, packet: &Packet) -> bool {
         let mut out = true;
         for seed in self.seeds {
             let mut hasher = AHasher::new_with_keys(seed.0, seed.1);
