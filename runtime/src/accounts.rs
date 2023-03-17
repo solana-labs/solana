@@ -24,6 +24,7 @@ use {
         transaction_error_metrics::TransactionErrorMetrics,
     },
     dashmap::DashMap,
+    itertools::Itertools,
     log::*,
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::{
@@ -346,6 +347,13 @@ impl Accounts {
             Self::get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
         let mut accumulated_accounts_data_size: usize = 0;
 
+        let instruction_accounts = message
+            .instructions()
+            .iter()
+            .flat_map(|instruction| &instruction.accounts)
+            .unique()
+            .collect::<Vec<&u8>>();
+
         let mut accounts = account_keys
             .iter()
             .enumerate()
@@ -360,22 +368,23 @@ impl Accounts {
                             .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
                     )
                 } else {
-                    let upgradeable_program = program_accounts
-                        .get(key)
-                        .map_or(false, |owner| bpf_loader_upgradeable::check_id(owner));
+                    let instruction_account = u8::try_from(i)
+                        .map(|i| instruction_accounts.contains(&&i))
+                        .unwrap_or(false);
                     let (account_size, mut account, rent) = if let Some(account_override) =
                         account_overrides.and_then(|overrides| overrides.get(key))
                     {
                         (account_override.data().len(), account_override.clone(), 0)
-                    } else if let Some(program) = (!upgradeable_program && !message.is_writable(i))
+                    } else if let Some(program) = (!instruction_account && !message.is_writable(i))
                         .then_some(())
                         .and_then(|_| loaded_programs.get(key))
                     {
-                        // This condition block does special handling for upgradeable programs.
-                        // It's been noticed that some upgradeable programs fail if their account is
-                        // not loaded, even if the compiled program already exists in the cache.
-                        // So, for now, the code flow will go to the else clause for such accounts
-                        // and load them.
+                        // This condition block does special handling for accounts that are passed
+                        // as instruction account to any of the instructions in the transaction.
+                        // It's been noticed that some programs are reading other program accounts
+                        // (that are passed to the program as instruction accounts). So such accounts
+                        // are needed to be loaded even though corresponding compiled program may
+                        // already be present in the cache.
                         Self::account_shared_data_from_program(key, program, program_accounts)
                             .map(|program_account| (program.account_size, program_account, 0))?
                     } else {
