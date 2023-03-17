@@ -434,7 +434,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
     fn add_data_bucket(&mut self, bucket: BucketStorage) {
         self.stats.data.file_count.fetch_add(1, Ordering::Relaxed);
-        self.stats.data.resize_grow(0, bucket.capacity());
+        self.stats.data.resize_grow(0, bucket.capacity_bytes());
         self.data.push(bucket);
     }
 

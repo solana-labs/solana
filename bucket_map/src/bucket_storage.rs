@@ -334,10 +334,7 @@ impl BucketStorage {
         m.stop();
         // resized so update total file size
         self.stats
-            .total_file_size
-            .fetch_max(self.capacity(), Ordering::Relaxed);
-        self.stats
-            .resize_grow(old_bucket.capacity(), self.capacity());
+            .resize_grow(old_bucket.capacity_bytes(), self.capacity_bytes());
         self.stats.resizes.fetch_add(1, Ordering::Relaxed);
         self.stats.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
     }
@@ -372,6 +369,11 @@ impl BucketStorage {
         }
         new_bucket.update_max_size();
         new_bucket
+    }
+
+    /// Return the number of bytes currently allocated
+    pub(crate) fn capacity_bytes(&self) -> u64 {
+        self.capacity() * self.cell_size
     }
 
     /// Return the number of cells currently allocated
