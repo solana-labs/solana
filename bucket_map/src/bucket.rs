@@ -316,7 +316,7 @@ impl<'b, T: Clone + Copy + 'b> Bucket<T> {
             // For the index bucket, it is more like a hash table and we have to exhaustively search 'max_search' to prove an item does not exist.
             // And we do have to support the 'does not exist' case with good performance. So, it makes sense to grow the index bucket when it is too large.
             // For data buckets, the offset is stored in the index, so it is directly looked up. So, the only search is on INSERT or update to a new sized value.
-            for i in pos..pos + (self.index.max_search() * 10).max(cap) {
+            for i in pos..pos + (self.index.max_search() * 10).min(cap) {
                 let ix = i % cap;
                 if best_bucket.is_free(ix) {
                     let elem_loc = elem.data_loc(current_bucket);
