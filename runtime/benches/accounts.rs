@@ -99,7 +99,8 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let (_, total_lamports) = accounts
         .accounts_db
         .update_accounts_hash_for_tests(0, &ancestors, false, false);
-    let test_hash_calculation = false;
+    accounts.add_root(slot);
+    accounts.accounts_db.flush_accounts_cache(true, Some(slot));
     bencher.iter(|| {
         assert!(accounts.verify_accounts_hash_and_lamports(
             0,
@@ -107,7 +108,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             None,
             VerifyAccountsHashAndLamportsConfig {
                 ancestors: &ancestors,
-                test_hash_calculation,
+                test_hash_calculation: false,
                 epoch_schedule: &EpochSchedule::default(),
                 rent_collector: &RentCollector::default(),
                 ignore_mismatch: false,

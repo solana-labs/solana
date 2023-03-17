@@ -8660,7 +8660,8 @@ impl AccountsDb {
     pub fn get_snapshot_storages(
         &self,
         requested_slots: impl RangeBounds<Slot> + Sync,
-        ancestors: Option<&Ancestors>,
+        // ancestors is unused and will be removed from callers next
+        _ancestors: Option<&Ancestors>,
     ) -> (Vec<Arc<AccountStorageEntry>>, Vec<Slot>) {
         let mut m = Measure::start("get slots");
         let mut slots_and_storages = self
@@ -8682,12 +8683,7 @@ impl AccountsDb {
                 .map(|slots_and_storages| {
                     slots_and_storages
                         .iter_mut()
-                        .filter(|(slot, _)| {
-                            self.accounts_index.is_alive_root(*slot)
-                                || ancestors
-                                    .map(|ancestors| ancestors.contains_key(slot))
-                                    .unwrap_or_default()
-                        })
+                        .filter(|(slot, _)| self.accounts_index.is_alive_root(*slot))
                         .filter_map(|(slot, store)| {
                             let store = std::mem::take(store).unwrap();
                             store.has_accounts().then_some((store, *slot))
