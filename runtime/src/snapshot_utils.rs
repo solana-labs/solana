@@ -1015,16 +1015,6 @@ pub fn create_all_accounts_run_and_snapshot_dirs(
     let mut run_dirs = Vec::with_capacity(account_paths.len());
     let mut snapshot_dirs = Vec::with_capacity(account_paths.len());
     for account_path in account_paths {
-        fs::create_dir_all(account_path)
-            .and_then(|_| fs::canonicalize(account_path))
-            .map_err(|err| {
-                SnapshotError::IoWithSourceAndFile(
-                    err,
-                    "Unable to create account directory",
-                    account_path.to_path_buf(),
-                )
-            })?;
-
         // create the run/ and snapshot/ sub directories for each account_path
         let (run_dir, snapshot_dir) =
             create_accounts_run_and_snapshot_dirs(account_path).map_err(|err| {
@@ -1034,7 +1024,6 @@ pub fn create_all_accounts_run_and_snapshot_dirs(
                     account_path.to_path_buf(),
                 )
             })?;
-
         run_dirs.push(run_dir);
         snapshot_dirs.push(snapshot_dir);
     }
