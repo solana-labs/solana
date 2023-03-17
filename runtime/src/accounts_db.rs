@@ -7568,17 +7568,14 @@ impl AccountsDb {
     /// - Zero-lamport accounts are *included* in the hash because zero-lamport accounts are also
     ///   included in the incremental snapshot.  This ensures reconstructing the AccountsDb is
     ///   still correct when using this incremental accounts hash.
-    /// - `storages` must be *greater than* `base_slot`.  This follows the same requirements as
-    ///   incremental snapshots.
+    /// - `storages` must be the same as the ones going into the incremental snapshot.
     pub fn calculate_incremental_accounts_hash(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
-        base_slot: Slot,
         stats: HashStats,
     ) -> Result<(IncrementalAccountsHash, /* capitalization */ u64), AccountsHashVerificationError>
     {
-        assert!(storages.range().start > base_slot, "The storages for calculating an incremental accounts hash must all be higher than the base slot");
         let (accounts_hash, capitalization) = self._calculate_accounts_hash_from_storages(
             config,
             storages,
@@ -7732,7 +7729,6 @@ impl AccountsDb {
             let calculated_incremental_accounts_hash = self.calculate_incremental_accounts_hash(
                 &calc_config,
                 &sorted_storages,
-                base_slot,
                 HashStats::default(),
             )?;
             let found_incremental_accounts_hash = self
@@ -18218,7 +18214,6 @@ pub mod tests {
                 .calculate_incremental_accounts_hash(
                     &CalcAccountsHashConfig::default(),
                     &storages,
-                    full_accounts_hash_slot,
                     HashStats::default(),
                 )
                 .unwrap()
