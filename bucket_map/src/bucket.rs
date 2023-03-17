@@ -300,7 +300,7 @@ impl<'b, T: Clone + Copy + Debug + Default + 'static> Bucket<T> {
             // new data stored should be stored in elem.`first_element`
             // new data len is 0 or 1
             elem.num_slots = num_slots;
-            elem.first_element = data.next().cloned().unwrap_or_default();
+            elem.first_element = data.next().copied().unwrap_or_default();
             if old_slots > 1 {
                 // free old data location
                 let elem_loc = elem.data_loc(&self.data[bucket_ix as usize]);
