@@ -326,9 +326,7 @@ async fn test_verify_proof_without_context<T, U>(
     T: Pod + ZkProofData<U>,
     U: Pod,
 {
-    let mut program_test = ProgramTest::default();
-    program_test.deactivate_feature(solana_sdk::feature_set::native_programs_consume_cu::id());
-    let mut context = program_test.start_with_context().await;
+    let mut context = ProgramTest::default().start_with_context().await;
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
@@ -397,9 +395,7 @@ async fn test_verify_proof_with_context<T, U>(
     T: Pod + ZkProofData<U>,
     U: Pod,
 {
-    let mut program_test = ProgramTest::default();
-    program_test.deactivate_feature(solana_sdk::feature_set::native_programs_consume_cu::id());
-    let mut context = program_test.start_with_context().await;
+    let mut context = ProgramTest::default().start_with_context().await;
     let rent = context.banks_client.get_rent().await.unwrap();
 
     let client = &mut context.banks_client;
@@ -601,9 +597,7 @@ async fn test_close_context_state<T, U>(
     T: Pod + ZkProofData<U>,
     U: Pod,
 {
-    let mut program_test = ProgramTest::default();
-    program_test.deactivate_feature(solana_sdk::feature_set::native_programs_consume_cu::id());
-    let mut context = program_test.start_with_context().await;
+    let mut context = ProgramTest::default().start_with_context().await;
     let rent = context.banks_client.get_rent().await.unwrap();
 
     let client = &mut context.banks_client;

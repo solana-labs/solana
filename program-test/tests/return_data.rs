@@ -63,7 +63,6 @@ async fn return_data() {
         get_return_data_program_id,
         processor!(get_return_data_process_instruction),
     );
-    program_test.deactivate_feature(solana_sdk::feature_set::native_programs_consume_cu::id());
     let set_return_data_program_id = Pubkey::new_unique();
     program_test.add_program(
         "set_return_data",
