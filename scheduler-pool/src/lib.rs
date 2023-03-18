@@ -125,6 +125,7 @@ impl SchedulerPool {
             schedulers.len() + 1
         );
         assert!(scheduler.collected_results().lock().unwrap().is_empty());
+        use std::any::Any;
         let scheduler = scheduler.downcast::<usize>();
         scheduler.clear_stop();
 
