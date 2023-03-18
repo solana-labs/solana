@@ -1166,7 +1166,8 @@ pub struct Bank {
     scheduler: RwLock<Option<Box<dyn LikeScheduler>>>,
 }
 
-pub trait LikeScheduler: std::any::Any + Send + Sync + std::fmt::Debug {
+pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
+    fn clear_stop(&mut self);
     fn random_id(&self) -> u64;
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode);
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>>;

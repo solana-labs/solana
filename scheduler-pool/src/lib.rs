@@ -115,11 +115,8 @@ impl SchedulerPool {
         }
     }
 
-    fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn Any + LikeScheduler>) {
+    fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn LikeScheduler>) {
         let mut schedulers = self.schedulers.lock().unwrap();
-        use std::any::Any;
-        let scheduler = scheduler.downcast::<Scheduler>();
-        /*
 
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
@@ -131,7 +128,6 @@ impl SchedulerPool {
         scheduler.clear_stop();
 
         schedulers.push(scheduler);
-        */
     }
 }
 
