@@ -43,7 +43,7 @@ fn copy_append_vecs<P: AsRef<Path>>(
     accounts_db: &AccountsDb,
     output_dir: P,
 ) -> std::io::Result<StorageAndNextAppendVecId> {
-    let storage_entries = accounts_db.get_snapshot_storages(RangeFull, None).0;
+    let storage_entries = accounts_db.get_snapshot_storages(RangeFull).0;
     let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
     let mut next_append_vec_id = 0;
     for storage_entry in storage_entries.into_iter() {
@@ -196,7 +196,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         &mut writer,
         &accounts.accounts_db,
         slot,
-        &get_storages_to_serialize(&accounts.accounts_db.get_snapshot_storages(..=slot, None).0),
+        &get_storages_to_serialize(&accounts.accounts_db.get_snapshot_storages(..=slot).0),
     )
     .unwrap();
 
@@ -434,7 +434,7 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     slot: Slot,
 ) -> AccountsDb {
     let mut writer = Cursor::new(vec![]);
-    let snapshot_storages = accounts.get_snapshot_storages(..=slot, None).0;
+    let snapshot_storages = accounts.get_snapshot_storages(..=slot).0;
     accountsdb_to_stream(
         SerdeStyle::Newer,
         &mut writer,
@@ -738,12 +738,7 @@ mod test_bank_serialize {
             .accounts
             .accounts_db
             .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
-        let snapshot_storages = bank
-            .rc
-            .accounts
-            .accounts_db
-            .get_snapshot_storages(..=0, None)
-            .0;
+        let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(..=0).0;
         // ensure there is a single snapshot storage example for ABI digesting
         assert_eq!(snapshot_storages.len(), 1);
 

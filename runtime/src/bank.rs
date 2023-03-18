@@ -7070,7 +7070,7 @@ impl Bank {
         self.rc
             .accounts
             .accounts_db
-            .get_snapshot_storages(requested_slots, None)
+            .get_snapshot_storages(requested_slots)
             .0
     }
 
