@@ -848,7 +848,7 @@ impl LikeScheduler for Scheduler {
     }
 
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
-        &mut self.collected_results.lock().unwrap().as_mut().take()
+        (*self.collected_results.lock().unwrap()).take()
     }
 
     fn gracefully_stop(&mut self, from_internal: bool) -> Result<()> {
