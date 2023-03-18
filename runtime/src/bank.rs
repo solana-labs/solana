@@ -8157,7 +8157,7 @@ pub mod test_utils {
         solana_sdk::{hash::hashv, pubkey::Pubkey},
         solana_vote_program::vote_state::{self, BlockTimestamp, VoteStateVersions},
     };
-    pub fn goto_end_of_slot(&mut bank) {
+    pub fn goto_end_of_slot(bank: &mut Bank) {
         let mut tick_hash = bank.last_blockhash();
         loop {
             tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
