@@ -3644,7 +3644,7 @@ impl Bank {
     /// Register a new recent blockhash in the bank's recent blockhash queue. Called when a bank
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
-    pub fn register_recent_blockhash(self: &Arc<Self>, blockhash: &Hash) {
+    pub fn register_recent_blockhash(&self, blockhash: &Hash) {
         debug!(
             "register_recent_blockhash: slot: {} reinitializing the scheduler: start",
             self.slot()
