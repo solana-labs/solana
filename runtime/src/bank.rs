@@ -7578,7 +7578,7 @@ impl Bank {
         self.feature_set = Arc::new(feature_set);
     }
 
-    pub fn fill_bank_with_ticks_for_tests(self: &Arc<Self>) {
+    pub fn fill_bank_with_ticks_for_tests(&self) {
         if self.tick_height.load(Relaxed) < self.max_tick_height {
             let last_blockhash = self.last_blockhash();
             while self.last_blockhash() == last_blockhash {
@@ -8157,7 +8157,7 @@ pub mod test_utils {
         solana_sdk::{hash::hashv, pubkey::Pubkey},
         solana_vote_program::vote_state::{self, BlockTimestamp, VoteStateVersions},
     };
-    pub fn goto_end_of_slot(bank: &std::sync::Arc<Bank>) {
+    pub fn goto_end_of_slot(&mut bank) {
         let mut tick_hash = bank.last_blockhash();
         loop {
             tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
