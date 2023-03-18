@@ -119,6 +119,7 @@ impl SchedulerPool {
         let mut schedulers = self.schedulers.lock().unwrap();
         use std::any::Any;
         let scheduler = scheduler.downcast::<usize>();
+        /*
 
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
@@ -130,6 +131,7 @@ impl SchedulerPool {
         scheduler.clear_stop();
 
         schedulers.push(scheduler);
+        */
     }
 }
 
