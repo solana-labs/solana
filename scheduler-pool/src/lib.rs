@@ -118,7 +118,7 @@ impl SchedulerPool {
     fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn std::any::Any>) {
         let mut schedulers = self.schedulers.lock().unwrap();
         use std::any::Any;
-        let scheduler = scheduler.downcast::<usize>();
+        let scheduler = scheduler.downcast::<Scheduler>();
         /*
 
         trace!(
