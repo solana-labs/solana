@@ -17,6 +17,7 @@ use {
 // Data placement should be aligned at the next boundary. Without alignment accessing the memory may
 // crash on some architectures.
 pub const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
+#[macro_export]
 macro_rules! u64_align {
     ($addr: expr) => {
         ($addr + (ALIGN_BOUNDARY_OFFSET - 1)) & !(ALIGN_BOUNDARY_OFFSET - 1)

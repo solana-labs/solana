@@ -12,6 +12,7 @@ use {
         },
         accounts_file::ALIGN_BOUNDARY_OFFSET,
         storable_accounts::StorableAccounts,
+        u64_align,
     },
     log::*,
     memmap2::MmapMut,
