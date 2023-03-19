@@ -7832,7 +7832,7 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub fn do_wait_for_scheduler(&self, via_drop: bool, from_internal: bool) -> (bool, Result<ExecuteTimings>) {
+    pub fn do_wait_for_scheduler(&self, via_drop: bool, from_internal: bool) -> (bool, (ExecuteTimings, Result<()>)) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if via_drop {
@@ -7846,10 +7846,7 @@ impl Bank {
 
                 let () = scheduler.gracefully_stop(from_internal, false).unwrap();
                 let e = scheduler
-                    .handle_aborted_executions()
-                    .into_iter()
-                    .next()
-                    .unwrap();
+                    .handle_aborted_executions();
                 let scheduler = s.take().unwrap();
                 scheduler.scheduler_pool().return_to_pool(scheduler);
                 (true, e)
