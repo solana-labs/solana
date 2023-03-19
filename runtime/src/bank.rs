@@ -1170,7 +1170,6 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn random_id(&self) -> u64;
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
 
-    fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
 
     fn trigger_stop(&mut self);
@@ -3656,15 +3655,11 @@ impl Bank {
             self.blockhash_queue.write().unwrap()
         } else {
             let mut scheduler = self.scheduler.write().unwrap();
-            match scheduler.as_ref().unwrap().current_scheduler_mode() {
-                solana_scheduler::Mode::Replaying => {
-                    let () = scheduler.as_mut().unwrap().gracefully_stop(false, true).unwrap();
-                    // Only acquire the write lock for the blockhash queue on block boundaries because
-                    // readers can starve this write lock acquisition and ticks would be slowed down too
-                    // much if the write lock is acquired for each tick.
-                    self.blockhash_queue.write().unwrap()
-                },
-            }
+            let () = scheduler.as_mut().unwrap().gracefully_stop(false, true).unwrap();
+            // Only acquire the write lock for the blockhash queue on block boundaries because
+            // readers can starve this write lock acquisition and ticks would be slowed down too
+            // much if the write lock is acquired for each tick.
+            self.blockhash_queue.write().unwrap()
         };
 
         debug!(
@@ -7842,19 +7837,14 @@ impl Bank {
         }
 
         if let Some(scheduler) = s.as_mut() {
-            let scheduler_mode = scheduler.current_scheduler_mode();
-            if matches!(scheduler_mode, solana_scheduler::Mode::Replaying) || via_drop {
-                info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})... from_internal: {from_internal} by {current_thread_name}", self.slot());
+            info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})... from_internal: {from_internal} by {current_thread_name}", self.slot());
 
-                let () = scheduler.gracefully_stop(from_internal, false).unwrap();
-                let e = scheduler
-                    .handle_aborted_executions();
-                let scheduler = s.take().unwrap();
-                scheduler.scheduler_pool().return_to_pool(scheduler);
-                (true, e)
-            } else {
-                panic!();
-            }
+            let () = scheduler.gracefully_stop(from_internal, false).unwrap();
+            let e = scheduler
+                .handle_aborted_executions();
+            let scheduler = s.take().unwrap();
+            scheduler.scheduler_pool().return_to_pool(scheduler);
+            (true, e)
         } else {
             warn!(
                 "Bank::wait_for_scheduler(via_drop: {}) skipped from_internal: {from_internal} by {} ...",
