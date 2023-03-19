@@ -44,7 +44,7 @@ pub use solana_scheduler::Mode;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
-    schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler>>>,
+    schedulers: std::sync::Mutex<Vec<Box<Scheduler>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
