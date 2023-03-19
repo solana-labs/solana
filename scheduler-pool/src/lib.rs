@@ -788,7 +788,7 @@ impl Scheduler {
         }
     }
 
-    fn do_trigger_stop(&self, is_restart: bool) {
+    fn do_trigger_stop(&mut self, is_restart: bool) {
         if self.graceful_stop_initiated {
             return;
         }
