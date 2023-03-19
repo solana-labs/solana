@@ -7840,7 +7840,7 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub fn do_wait_for_scheduler(&self, via_drop: bool, take_next: bool, from_internal: bool) -> (Option<bool>, (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>)) {
+    pub fn do_wait_for_scheduler(&self, via_drop: bool, from_internal: bool) -> (Option<bool>, (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>)) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if via_drop {
