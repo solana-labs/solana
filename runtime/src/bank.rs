@@ -7832,7 +7832,7 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub fn do_wait_for_scheduler(&self, via_drop: bool, from_internal: bool) -> (Option<bool>, Result<ExecuteTimings>) {
+    pub fn do_wait_for_scheduler(&self, via_drop: bool, from_internal: bool) -> (bool, Result<ExecuteTimings>) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if via_drop {
@@ -7852,7 +7852,7 @@ impl Bank {
                     .unwrap();
                 let scheduler = s.take().unwrap();
                 scheduler.scheduler_pool().return_to_pool(scheduler);
-                (Some(true), e)
+                (true, e)
             } else {
                 panic!();
             }
@@ -7862,7 +7862,7 @@ impl Bank {
                 via_drop, current_thread_name
             );
 
-            (Some(false), Ok(Default::default()))
+            (false, Ok(Default::default()))
         }
     }
 
