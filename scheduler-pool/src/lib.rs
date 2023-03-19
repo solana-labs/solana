@@ -831,7 +831,7 @@ impl Scheduler {
                 true,
             );
         } else {
-            assert!(self.collected_results().lock().unwrap().is_none());
+            assert!(self.collected_results.lock().unwrap().is_none());
             drop(self.stopped_mode.take().unwrap());
             assert!(self.current_scheduler_context.write().unwrap().is_none());
         }
@@ -843,10 +843,6 @@ impl Scheduler {
 
     fn scheduler_context(&self) -> Option<SchedulerContext> {
         self.scheduler_context_inner()
-    }
-
-    fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
-        self.collected_results.clone()
     }
 }
 
