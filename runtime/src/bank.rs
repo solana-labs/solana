@@ -3656,30 +3656,30 @@ impl Bank {
         } else {
             match self.scheduler_mode() {
                 solana_scheduler::Mode::Replaying => {
-                    let (last_result, next_scheduler) = self.wait_for_scheduler(false, true);
-                    let next_scheduler = next_scheduler.unwrap();
-                    let mut s2 = self.scheduler.write().unwrap();
-                    *s2 = Some(next_scheduler);
+                    //let (last_result, next_scheduler) = self.wait_for_scheduler(false, true);
+                    //let next_scheduler = next_scheduler.unwrap();
+                    //let mut s2 = self.scheduler.write().unwrap();
+                    //*s2 = Some(next_scheduler);
 
                     // Only acquire the write lock for the blockhash queue on block boundaries because
                     // readers can starve this write lock acquisition and ticks would be slowed down too
                     // much if the write lock is acquired for each tick.
                     let w_blockhash_queue = self.blockhash_queue.write().unwrap();
                     //let new_scheduler = Scheduler::default();
-                    if last_result.is_err() {
-                        warn!(
-                            "register_recent_blockhash: carrying over this error: {:?}",
-                            last_result
-                        );
-                    }
+                    //if last_result.is_err() {
+                    //    warn!(
+                    //        "register_recent_blockhash: carrying over this error: {:?}",
+                    //        last_result
+                    //    );
+                    //}
                     //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
-                    s2.as_ref()
-                        .unwrap()
-                        .collected_results()
-                        .lock()
-                        .unwrap()
-                        .push(last_result);
-                    drop(s2);
+                    //s2.as_ref()
+                    //    .unwrap()
+                    //    .collected_results()
+                    //    .lock()
+                    //    .unwrap()
+                    //    .push(last_result);
+                    //drop(s2);
                     //*self.scheduler.write().unwrap() = new_scheduler;
                     w_blockhash_queue
                 },
