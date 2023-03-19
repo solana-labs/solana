@@ -838,6 +838,10 @@ impl Scheduler {
     fn scheduler_context(&self) -> Option<SchedulerContext> {
         self.scheduler_context_inner()
     }
+
+    fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
+        self.collected_results.clone()
+    }
 }
 
 impl Drop for Scheduler {
@@ -958,10 +962,6 @@ impl LikeScheduler for Scheduler {
         self.stopped_mode.unwrap_or_else(||
             self.scheduler_context().unwrap().mode
         )
-    }
-
-    fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
-        self.collected_results.clone()
     }
 
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool> {
