@@ -7840,7 +7840,7 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub fn do_wait_for_scheduler(&self, via_drop: bool, from_internal: bool) -> (Option<bool>, (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>)) {
+    pub fn do_wait_for_scheduler(&self, via_drop: bool, from_internal: bool) -> (Option<bool>, Result<ExecuteTimings>) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if via_drop {
@@ -7861,7 +7861,7 @@ impl Bank {
                 let scheduler = s.take().unwrap();
                 let pool = scheduler.scheduler_pool();
                 pool.return_to_pool(scheduler);
-                (Some(true), (e, None))
+                (Some(true), e)
             } else {
                 panic!();
             }
@@ -7871,11 +7871,11 @@ impl Bank {
                 via_drop, current_thread_name
             );
 
-            (Some(false), (Ok(Default::default()), None))
+            (Some(false), Ok(Default::default()))
         }
     }
 
-    pub fn wait_for_scheduler(&self, via_drop: bool) -> (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>) {
+    pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<ExecuteTimings> {
         self.do_wait_for_scheduler(via_drop, false).1
     }
 
@@ -8098,7 +8098,7 @@ impl TotalAccountsStats {
 impl Drop for Bank {
     fn drop(&mut self) {
         if self.scheduler.read().unwrap().is_some() {
-            let (r, _) = self.wait_for_scheduler(true);
+            let r = self.wait_for_scheduler(true);
             if let Err(err) = r {
                 warn!(
                     "Bank::drop(): slot: {} discarding error from scheduler: {:?}",
