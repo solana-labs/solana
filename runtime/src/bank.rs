@@ -1172,7 +1172,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
-    fn schedule_executions(&self, impl Iterator<Item = &'a usize>);
+    fn schedule_executions(&self, txes: impl Iterator<Item = &'a usize>);
 
     fn trigger_stop(&mut self);
     fn gracefully_stop(&mut self, from_internal: bool, is_restart: bool) -> Result<()>; // terminate_gracefully()? or just shutdown()?
