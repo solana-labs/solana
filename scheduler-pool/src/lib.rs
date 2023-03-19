@@ -920,7 +920,7 @@ impl LikeScheduler for Scheduler {
             self.checkpoint.ignore_external_thread();
         }
         self.checkpoint.wait_for_restart();
-        self.collected_results.lock().unwrap() = Some(self.checkpoint.take_restart_value());
+        *self.collected_results.lock().unwrap() = Some(self.checkpoint.take_restart_value());
 
         /*
         let executing_thread_duration_pairs: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
