@@ -2564,8 +2564,20 @@ impl ReplayStage {
                 let replay_stats = bank_progress.replay_stats.clone();
                 let mut r_replay_stats = replay_stats.write().unwrap();
 
-                let cumulative_timings = bank.wait_for_scheduler(false);
-                match cumulative_timings {
+                let (cumulative_timings, r) = bank.wait_for_scheduler(false);
+                {
+                    let cumulative_timings2 = solana_program_runtime::timings::ThreadExecuteTimings {
+                        execute_timings: cumulative_timings,
+                        ..Default::default()
+                    };
+                    let mut metrics =
+                        solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default();
+                    metrics
+                        .execution_timings_per_thread
+                        .insert(0, cumulative_timings2);
+                    r_replay_stats.process_execute_batches_internal_metrics(metrics);
+                }
+                match r {
                     Err(err) => {
                             // Error means the slot needs to be marked as dead
                             Self::mark_dead_slot(
@@ -2587,17 +2599,7 @@ impl ReplayStage {
                             // bank is completed
                             continue;
                     },
-                    Ok(cumulative_timings) => {
-                        let cumulative_timings2 = solana_program_runtime::timings::ThreadExecuteTimings {
-                            execute_timings: cumulative_timings,
-                            ..Default::default()
-                        };
-                        let mut metrics =
-                            solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default();
-                        metrics
-                            .execution_timings_per_thread
-                            .insert(0, cumulative_timings2);
-                        r_replay_stats.process_execute_batches_internal_metrics(metrics);
+                    Ok(()) => {
                     },
                 };
 
