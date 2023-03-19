@@ -1605,7 +1605,7 @@ fn process_single_slot(
         err
     })?;
 
-    bank.wait_for_scheduler(false)?;
+    bank.wait_for_scheduler(false).1?;
     bank.freeze(); // all banks handled by this routine are created from complete slots
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
