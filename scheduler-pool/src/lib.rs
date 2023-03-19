@@ -115,7 +115,7 @@ impl SchedulerPool {
         }
     }
 
-    fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn LikeScheduler>) {
+    fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<Scheduler>) {
         let mut schedulers = self.schedulers.lock().unwrap();
 
         trace!(
