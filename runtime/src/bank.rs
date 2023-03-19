@@ -7847,9 +7847,6 @@ impl Bank {
                 let () = scheduler.gracefully_stop(from_internal, false).unwrap();
                 let e = scheduler
                     .handle_aborted_executions()
-                    .into_iter()
-                    .next()
-                    .unwrap();
                 let scheduler = s.take().unwrap();
                 scheduler.scheduler_pool().return_to_pool(scheduler);
                 (true, e)
