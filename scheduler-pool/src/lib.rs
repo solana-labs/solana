@@ -151,7 +151,7 @@ pub(crate) struct Scheduler {
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: bool,
-    collected_results: Option<(ExecuteTimings, Result<()>)>,
+    timings_and_result: Option<(ExecuteTimings, Result<()>)>,
     commit_status: Arc<CommitStatus>,
     checkpoint: Arc<Checkpoint>,
     stopped_mode: Option<solana_scheduler::Mode>,
@@ -748,7 +748,7 @@ impl Scheduler {
             transaction_sender: Some(transaction_sender),
             preloader,
             graceful_stop_initiated: Default::default(),
-            collected_results: Default::default(),
+            timings_and_result: Default::default(),
             commit_status,
             checkpoint,
             stopped_mode: Default::default(),
@@ -828,7 +828,7 @@ impl Scheduler {
                 true,
             );
         } else {
-            assert!(self.collected_results.is_none());
+            assert!(self.timings_and_result.is_none());
             drop(self.stopped_mode.take().unwrap());
             assert!(self.current_scheduler_context.write().unwrap().is_none());
         }
@@ -907,8 +907,8 @@ impl LikeScheduler for Scheduler {
             .unwrap();
     }
 
-    fn handle_aborted_executions(&mut self) -> (ExecuteTimings, Result<()>) {
-        self.collected_results.take().unwrap()
+    fn take_timings_and_result(&mut self) -> (ExecuteTimings, Result<()>) {
+        self.timings_and_result.take().unwrap()
     }
 
     fn gracefully_stop(&mut self, from_internal: bool, is_restart: bool) -> Result<()> {
@@ -923,7 +923,7 @@ impl LikeScheduler for Scheduler {
             self.checkpoint.ignore_external_thread();
         }
         self.checkpoint.wait_for_restart();
-        self.collected_results = Some(self.checkpoint.take_restart_value());
+        self.timings_and_result = Some(self.checkpoint.take_restart_value());
 
         /*
         let executing_thread_duration_pairs: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {

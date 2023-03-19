@@ -1175,7 +1175,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn trigger_stop(&mut self);
     fn gracefully_stop(&mut self, from_internal: bool, is_restart: bool) -> Result<()>; // terminate_gracefully()? or just shutdown()?
     fn clear_stop(&mut self);
-    fn handle_aborted_executions(&mut self) -> (ExecuteTimings, Result<()>);
+    fn take_timings_and_result(&mut self) -> (ExecuteTimings, Result<()>);
 
     fn replace_scheduler_context(&self, context: SchedulerContext);
     // drop with exit atomicbool integration??
@@ -6093,7 +6093,7 @@ impl Bank {
     pub fn handle_aborted_transactions(&self) -> Vec<Result<Option<ExecuteTimings>>> {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.handle_aborted_executions()
+        scheduler.take_timings_and_result()
     }
     */
 
@@ -7840,7 +7840,7 @@ impl Bank {
             info!("wait_for_scheduler({via_drop}): gracefully stopping bank ({})... from_internal: {from_internal} by {current_thread_name}", self.slot());
 
             let () = scheduler.gracefully_stop(from_internal, false).unwrap();
-            let e = scheduler.handle_aborted_executions();
+            let e = scheduler.take_timings_and_result();
             let scheduler = s.take().unwrap();
             scheduler.scheduler_pool().return_to_pool(scheduler);
             (true, e)
