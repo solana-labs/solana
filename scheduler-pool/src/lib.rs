@@ -605,9 +605,6 @@ impl Scheduler {
             Ok((started.0.elapsed(), started.1.elapsed()))
         }).unwrap()}).collect();
 
-        let collected_results = Arc::new(std::sync::Mutex::new(None));
-        let collected_results_in_collector_thread = Arc::clone(&collected_results);
-
         let error_collector_thread_handle = std::thread::Builder::new()
             .name(format!("solScErrCol{:02}", 0))
             .spawn({
@@ -751,7 +748,7 @@ impl Scheduler {
             transaction_sender: Some(transaction_sender),
             preloader,
             graceful_stop_initiated: Default::default(),
-            collected_results,
+            collected_results: Arc::new(std::sync::Mutex::new(None)),
             commit_status,
             checkpoint,
             stopped_mode: Default::default(),
