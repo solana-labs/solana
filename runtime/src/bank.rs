@@ -6082,9 +6082,8 @@ impl Bank {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
 
-        let se = &scheduler.schedule_execution;
         for (st, &i) in transactions.iter().zip(transaction_indexes) {
-            se(st, i, mode);
+            scheduler.schedule_execution(st, i, mode);
         }
     }
 
