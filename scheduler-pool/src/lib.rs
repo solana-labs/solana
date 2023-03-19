@@ -683,10 +683,7 @@ impl Scheduler {
                                 solana_scheduler::Mode::Replaying => true, 
                             };
                             if !propagate_tx_error {
-                                collected_results_in_collector_thread
-                                    .lock()
-                                    .unwrap()
-                                    .clear()
+                                first_error = Ok(());
                             }
                             checkpoint.register_return_value(std::mem::take(&mut cumulative_timings));
                             checkpoint.wait_for_restart_from_internal_thread(latest_scheduler_context.take());
