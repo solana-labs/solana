@@ -151,7 +151,7 @@ pub(crate) struct Scheduler {
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: bool,
-    collected_results: Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>,
+    collected_results: Arc<std::sync::Mutex<Option<(ExecuteTimings, <Result<()>>)>>>,
     commit_status: Arc<CommitStatus>,
     checkpoint: Arc<Checkpoint>,
     stopped_mode: Option<solana_scheduler::Mode>,
@@ -218,7 +218,7 @@ impl CommitStatus {
 }
 
 #[derive(Debug)]
-pub struct Checkpoint(std::sync::Mutex<((usize, usize), Option<ExecuteTimings>, Option<SchedulerContext>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
+pub struct Checkpoint(std::sync::Mutex<((usize, usize), Option<(ExecuteTimings, Result<()>>, Option<SchedulerContext>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
 
 impl Checkpoint {
     pub fn wait_for_restart(&self) {
@@ -337,7 +337,7 @@ impl Checkpoint {
         (0, thread_count)
     }
 
-    pub fn register_return_value(&self, restart_value: ExecuteTimings) {
+    pub fn register_return_value(&self, restart_value: (ExecuteTimings, Result<()>)) {
         let mut g = self.0.lock().unwrap();
         let (_, self_return_value, ..) = &mut *g;
         assert!(self_return_value.is_none());
@@ -361,7 +361,7 @@ impl Checkpoint {
         assert!(*threads_before_checkpoint >= 1);
     }
 
-    pub fn take_restart_value(&self) -> ExecuteTimings {
+    pub fn take_restart_value(&self) -> (ExecuteTimings, Result<()>) {
         let mut g = self.0.lock().unwrap();
         let (_, self_return_value, ..) = &mut *g;
         self_return_value.take().unwrap()
@@ -605,7 +605,7 @@ impl Scheduler {
             Ok((started.0.elapsed(), started.1.elapsed()))
         }).unwrap()}).collect();
 
-        let collected_results = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let collected_results = Arc::new(std::sync::Mutex::new(None));
         let collected_results_in_collector_thread = Arc::clone(&collected_results);
 
         let error_collector_thread_handle = std::thread::Builder::new()
@@ -834,7 +834,7 @@ impl Scheduler {
                 true,
             );
         } else {
-            assert!(self.collected_results().lock().unwrap().is_empty());
+            assert!(self.collected_results().lock().unwrap().is_none());
             drop(self.stopped_mode.take().unwrap());
             assert!(self.current_scheduler_context.write().unwrap().is_none());
         }
@@ -911,7 +911,7 @@ impl LikeScheduler for Scheduler {
             .unwrap();
     }
 
-    fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
+    fn handle_aborted_executions(&self) -> (ExecuteTimings, Result<()>) {
         std::mem::take(&mut self.collected_results.lock().unwrap())
     }
 
@@ -927,8 +927,7 @@ impl LikeScheduler for Scheduler {
             self.checkpoint.ignore_external_thread();
         }
         self.checkpoint.wait_for_restart();
-        let r = self.checkpoint.take_restart_value();
-        self.collected_results.lock().unwrap().push(Ok(r));
+        self.collected_results.lock().unwrap() = Some(self.checkpoint.take_restart_value());
 
         /*
         let executing_thread_duration_pairs: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
