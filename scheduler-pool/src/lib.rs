@@ -680,7 +680,7 @@ impl Scheduler {
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
                             let propagate_tx_error = match latest_scheduler_context.as_ref().unwrap().mode {
-                                solana_scheduler::Mode::Replaying => true, 
+                                solana_scheduler::Mode::Replaying => true, // tx_error isn't acceptable only for replaying
                             };
                             if !propagate_tx_error {
                                 first_error = Ok(());
