@@ -8086,7 +8086,7 @@ impl TotalAccountsStats {
 impl Drop for Bank {
     fn drop(&mut self) {
         if self.scheduler.read().unwrap().is_some() {
-            let r = self.wait_for_scheduler(true);
+            let (_t, r) = self.wait_for_scheduler(true);
             if let Err(err) = r {
                 warn!(
                     "Bank::drop(): slot: {} discarding error from scheduler: {:?}",
