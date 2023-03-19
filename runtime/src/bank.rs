@@ -1175,7 +1175,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn trigger_stop(&mut self);
     fn gracefully_stop(&mut self, from_internal: bool, is_restart: bool) -> Result<()>; // terminate_gracefully()? or just shutdown()?
     fn clear_stop(&mut self);
-    fn handle_aborted_executions(&self) -> (ExecuteTimings, Result<()>);
+    fn handle_aborted_executions(&mut self) -> (ExecuteTimings, Result<()>);
 
     fn replace_scheduler_context(&self, context: SchedulerContext);
     // drop with exit atomicbool integration??

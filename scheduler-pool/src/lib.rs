@@ -907,7 +907,7 @@ impl LikeScheduler for Scheduler {
             .unwrap();
     }
 
-    fn handle_aborted_executions(&self) -> (ExecuteTimings, Result<()>) {
+    fn handle_aborted_executions(&mut self) -> (ExecuteTimings, Result<()>) {
         self.collected_results.lock().unwrap().take().unwrap()
     }
 
