@@ -627,6 +627,7 @@ impl Scheduler {
                 let mut transaction_error_counts = TransactionError::counter();
                 let (mut skipped, mut succeeded) = (0, 0);
                 let mut latest_scheduler_context = None;
+                let mut first_error = Ok(());
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
@@ -661,10 +662,9 @@ impl Scheduler {
                                                 );
                                             }
                                         };
-                                        collected_results_in_collector_thread
-                                            .lock()
-                                            .unwrap()
-                                            .push(Err(e));
+                                        if first_error.is_ok() {
+                                            first_error = Err(e);
+                                        }
                                     }
                                 }
                             } else {
