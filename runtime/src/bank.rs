@@ -6069,7 +6069,7 @@ impl Bank {
     }
 
     fn schedule_and_commit_transactions<'a>(
-        self: &Arc<Bank>,
+        &self,
         transactions: &[SanitizedTransaction],
         transaction_indexes: impl Iterator<Item = &'a usize>,
         mode: solana_scheduler::Mode,
