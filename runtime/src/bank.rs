@@ -7850,13 +7850,8 @@ impl Bank {
         if let Some(scheduler) = s.as_mut() {
             let scheduler_mode = scheduler.current_scheduler_mode();
             if matches!(scheduler_mode, solana_scheduler::Mode::Replaying) || via_drop {
-                info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})... take_next: {take_next} from_internal: {from_internal} by {current_thread_name}", self.slot());
+                info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})... from_internal: {from_internal} by {current_thread_name}", self.slot());
 
-                let next_context = if take_next {
-                    Some(scheduler.scheduler_context().unwrap())
-                } else {
-                    None
-                };
                 let () = scheduler.gracefully_stop(from_internal, false).unwrap();
                 let e = scheduler
                     .handle_aborted_executions()
@@ -7866,13 +7861,13 @@ impl Bank {
                 let scheduler = s.take().unwrap();
                 let pool = scheduler.scheduler_pool();
                 pool.return_to_pool(scheduler);
-                (Some(true), (e, next_context.map(|c| pool.take_from_pool(c))))
+                (Some(true), (e, None))
             } else {
                 panic!();
             }
         } else {
             warn!(
-                "Bank::wait_for_scheduler(via_drop: {}) skipped take_next: {take_next} from_internal: {from_internal} by {} ...",
+                "Bank::wait_for_scheduler(via_drop: {}) skipped from_internal: {from_internal} by {} ...",
                 via_drop, current_thread_name
             );
 
@@ -7880,8 +7875,8 @@ impl Bank {
         }
     }
 
-    pub fn wait_for_scheduler(&self, via_drop: bool, take_next: bool) -> (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>) {
-        self.do_wait_for_scheduler(via_drop, take_next, false).1
+    pub fn wait_for_scheduler(&self, via_drop: bool) -> (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>) {
+        self.do_wait_for_scheduler(via_drop, false).1
     }
 
     pub fn drop_from_scheduler_thread(self) -> bool {
