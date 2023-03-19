@@ -7859,8 +7859,7 @@ impl Bank {
                     .next()
                     .unwrap();
                 let scheduler = s.take().unwrap();
-                let pool = scheduler.scheduler_pool();
-                pool.return_to_pool(scheduler);
+                scheduler.scheduler_pool().return_to_pool(scheduler);
                 (Some(true), e)
             } else {
                 panic!();
