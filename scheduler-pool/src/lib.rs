@@ -42,6 +42,9 @@ use solana_scheduler::WithContext;
 
 pub use solana_scheduler::Mode;
 
+trait LikeScheduler22: LikeScheduler {
+}
+
 #[derive(Debug)]
 pub struct SchedulerPool {
     schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler>>>,
