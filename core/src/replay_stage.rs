@@ -2567,8 +2567,6 @@ impl ReplayStage {
                 let cumulative_timings = bank.wait_for_scheduler(false);
                 match cumulative_timings {
                     Err(err) => {
-                        match bank.scheduler_mode() {
-                        solana_scheduler_pool::Mode::Replaying => {
                             // Error means the slot needs to be marked as dead
                             Self::mark_dead_slot(
                                 blockstore,
@@ -2588,8 +2586,6 @@ impl ReplayStage {
                             // If the bank was corrupted, don't try to run the below logic to check if the
                             // bank is completed
                             continue;
-                        },
-                    }
                     },
                     Ok(cumulative_timings) => {
                         let cumulative_timings2 = solana_program_runtime::timings::ThreadExecuteTimings {
