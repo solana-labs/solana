@@ -154,6 +154,7 @@ pub(crate) struct Scheduler {
     collected_results: Arc<std::sync::Mutex<Option<(ExecuteTimings, Result<()>)>>>,
     commit_status: Arc<CommitStatus>,
     checkpoint: Arc<Checkpoint>,
+    stopped_mode: Option<solana_scheduler::Mode>,
     current_scheduler_context: RwLock<Option<SchedulerContext>>,
     thread_count: usize,
     scheduler_pool: Arc<SchedulerPool>, // use Weak to cut circuric dep.
@@ -753,6 +754,7 @@ impl Scheduler {
             collected_results,
             commit_status,
             checkpoint,
+            stopped_mode: Default::default(),
             current_scheduler_context: Default::default(),
             thread_count,
             scheduler_pool,
@@ -785,6 +787,7 @@ impl Scheduler {
         if let Some(sc) = &mut *sc {
             Some(sc.clone())
         } else {
+            assert!(self.stopped_mode.is_none());
             let ssc = self.checkpoint.use_context_value();
             assert!(ssc.is_some());
             *sc = ssc;
@@ -814,6 +817,7 @@ impl Scheduler {
             .unwrap();
 
         if !is_restart {
+            self.stopped_mode = Some(self.current_scheduler_mode());
             self.clear_current_scheduler_context_inner();
         }
     }
@@ -822,8 +826,13 @@ impl Scheduler {
         assert!(self.graceful_stop_initiated);
         self.graceful_stop_initiated = false;
         if is_restart {
+            assert_eq!(
+                self.stopped_mode.is_none(),
+                true,
+            );
         } else {
             assert!(self.collected_results.lock().unwrap().is_none());
+            drop(self.stopped_mode.take().unwrap());
             assert!(self.current_scheduler_context.write().unwrap().is_none());
         }
         self.checkpoint.wait_for_completed_restart();
@@ -834,6 +843,12 @@ impl Scheduler {
 
     fn scheduler_context(&self) -> Option<SchedulerContext> {
         self.scheduler_context_inner()
+    }
+
+    fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
+        self.stopped_mode.unwrap_or_else(||
+            self.scheduler_context().unwrap().mode
+        )
     }
 }
 
