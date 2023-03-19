@@ -3656,8 +3656,8 @@ impl Bank {
         } else {
             match self.scheduler_mode() {
                 solana_scheduler::Mode::Replaying => {
-                    let mut scheduler = self.scheduler.write().unwrap().unwrap();
-                    let () = scheduler.gracefully_stop(false, true).unwrap();
+                    let mut scheduler = self.scheduler.write().unwrap();
+                    let () = scheduler.unwrap().gracefully_stop(false, true).unwrap();
                     // Only acquire the write lock for the blockhash queue on block boundaries because
                     // readers can starve this write lock acquisition and ticks would be slowed down too
                     // much if the write lock is acquired for each tick.
