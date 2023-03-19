@@ -124,7 +124,6 @@ impl SchedulerPool {
             schedulers.len(),
             schedulers.len() + 1
         );
-        assert!(scheduler.collected_results().lock().unwrap().is_empty());
         scheduler.clear_stop();
 
         schedulers.push(scheduler);
@@ -826,6 +825,7 @@ impl Scheduler {
                 true,
             );
         } else {
+            assert!(self.collected_results().lock().unwrap().is_empty());
             drop(self.stopped_mode.take().unwrap());
             assert!(self.current_scheduler_context.write().unwrap().is_none());
         }
