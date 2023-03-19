@@ -685,7 +685,7 @@ impl Scheduler {
                             if !propagate_tx_error {
                                 first_error = Ok(());
                             }
-                            checkpoint.register_return_value((std::mem::take(&mut cumulative_timings), std::mem::swap(&mut first_error, Ok(()))));
+                            checkpoint.register_return_value((std::mem::take(&mut cumulative_timings), std::mem::replace(&mut first_error, Ok(()))));
                             checkpoint.wait_for_restart_from_internal_thread(latest_scheduler_context.take());
                         },
                     }
