@@ -385,11 +385,11 @@ impl Checkpoint {
         *b = Some(new);
     }
 
-    fn restore_context_count_before_restart(&self) {
+    fn restore_context_count_before_restart(&self, used_context: bool) {
         let mut g = self.0.lock().unwrap();
         let (_, self_return_value, b, context_count) = &mut *g;
         assert_eq!(*context_count, 0);
-        *context_count = self.thread_count().checked_sub(1).unwrap();
+        *context_count = self.thread_count().checked_sub(if used_context { 1 } else { 0 }).unwrap();
     }
 }
 
@@ -825,9 +825,10 @@ impl Scheduler {
     fn do_clear_stop(&mut self, is_restart: bool) {
         assert!(self.graceful_stop_initiated);
         self.graceful_stop_initiated = false;
+        let used_context = self.current_scheduler_context.write().unwrap().is_some();
         if is_restart {
             assert_eq!(
-                (self.stopped_mode.is_none(), self.current_scheduler_context.write().unwrap().is_some()),
+                (self.stopped_mode.is_none(), used_context),
                 (true, true),
             );
         } else {
@@ -836,7 +837,7 @@ impl Scheduler {
         }
         self.checkpoint.wait_for_completed_restart();
         if is_restart {
-            self.checkpoint.restore_context_count_before_restart();
+            self.checkpoint.restore_context_count_before_restart(used_context);
         }
     }
 }
