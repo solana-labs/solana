@@ -384,6 +384,13 @@ impl Checkpoint {
         *context_count = self.thread_count();
         *b = Some(new);
     }
+
+    fn restore_context_count(&self) {
+        let mut g = self.0.lock().unwrap();
+        let (_, self_return_value, b, context_count) = &mut *g;
+        assert_eq!(*context_count, 0);
+        *context_count = self.thread_count();
+    }
 }
 
 impl solana_scheduler::WithContext for Checkpoint {
@@ -828,6 +835,9 @@ impl Scheduler {
             assert!(self.current_scheduler_context.write().unwrap().is_none());
         }
         self.checkpoint.wait_for_completed_restart();
+        if is_restart {
+            self.checkpiont.restore_context_count();
+        }
     }
 }
 
