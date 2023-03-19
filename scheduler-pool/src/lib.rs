@@ -905,7 +905,7 @@ impl LikeScheduler for Scheduler {
     }
 
     fn handle_aborted_executions(&self) -> (ExecuteTimings, Result<()>) {
-        std::mem::take(&mut self.collected_results.lock().unwrap())
+        self.collected_results.lock().unwrap().take().unwrap()
     }
 
     fn gracefully_stop(&mut self, from_internal: bool, is_restart: bool) -> Result<()> {
