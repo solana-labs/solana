@@ -151,7 +151,7 @@ pub(crate) struct Scheduler {
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: bool,
-    collected_results: Arc<std::sync::Mutex<Option<(ExecuteTimings, <Result<()>>)>>>,
+    collected_results: Arc<std::sync::Mutex<Option<(ExecuteTimings, Result<()>)>>>,
     commit_status: Arc<CommitStatus>,
     checkpoint: Arc<Checkpoint>,
     stopped_mode: Option<solana_scheduler::Mode>,
