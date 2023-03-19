@@ -47,7 +47,7 @@ trait LikeScheduler22: LikeScheduler {
 
 #[derive(Debug)]
 pub struct SchedulerPool {
-    schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler>>>,
+    schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler22>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
