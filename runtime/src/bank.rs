@@ -7837,7 +7837,7 @@ impl Bank {
         }
 
         if let Some(scheduler) = s.as_mut() {
-            info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})... from_internal: {from_internal} by {current_thread_name}", self.slot());
+            info!("wait_for_scheduler({via_drop}): gracefully stopping bank ({})... from_internal: {from_internal} by {current_thread_name}", self.slot());
 
             let () = scheduler.gracefully_stop(from_internal, false).unwrap();
             let e = scheduler
