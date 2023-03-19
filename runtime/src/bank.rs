@@ -6100,12 +6100,6 @@ impl Bank {
     }
     */
 
-    pub fn scheduler_mode(&self) -> solana_scheduler::Mode {
-        let s = self.scheduler.read().unwrap();
-        let scheduler = s.as_ref().unwrap();
-        scheduler.current_scheduler_mode()
-    }
-
     pub fn not_schedulable(&self) {
         let mut s = self.scheduler.write().unwrap();
         if let Some(mut scheduler) = s.as_mut() {
