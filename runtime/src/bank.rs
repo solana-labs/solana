@@ -3661,7 +3661,7 @@ impl Bank {
                     // Only acquire the write lock for the blockhash queue on block boundaries because
                     // readers can starve this write lock acquisition and ticks would be slowed down too
                     // much if the write lock is acquired for each tick.
-                    self.blockhash_queue.write().unwrap();
+                    self.blockhash_queue.write().unwrap()
                 },
             }
         };
