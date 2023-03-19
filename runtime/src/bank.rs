@@ -1167,14 +1167,17 @@ pub struct Bank {
 }
 
 pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
-    fn clear_stop(&mut self);
     fn random_id(&self) -> u64;
+    fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
+
+    fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode);
-    fn handle_aborted_executions(&self) -> (ExecuteTimings, Result<()>);
+
     fn trigger_stop(&mut self);
     fn gracefully_stop(&mut self, from_internal: bool, is_restart: bool) -> Result<()>; // terminate_gracefully()? or just shutdown()?
-    fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
-    fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
+    fn clear_stop(&mut self);
+    fn handle_aborted_executions(&self) -> (ExecuteTimings, Result<()>);
+
     fn replace_scheduler_context(&self, context: SchedulerContext);
     // drop with exit atomicbool integration??
 }
