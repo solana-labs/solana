@@ -13,8 +13,6 @@ use {
         accounts_hash::{
             AccountsHashEnum, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
         },
-        bank::BankIncrementalSnapshotPersistence,
-        serde_snapshot::SerdeIncrementalAccountsHash,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
             self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
@@ -332,35 +330,12 @@ impl AccountsHashVerifier {
 
         measure_hash.stop();
 
-        let bank_incremental_snapshot_persistence = if let AccountsPackageType::Snapshot(
-            SnapshotType::IncrementalSnapshot(base_slot),
-        ) = accounts_package.package_type
-        {
-            let (full_accounts_hash, full_capitalization) = accounts_package
-                .accounts
-                .accounts_db
-                .get_accounts_hash(base_slot)
-                .expect("incremental snapshot requires accounts hash and capitalization from its full snapshot");
-            Some(BankIncrementalSnapshotPersistence {
-                full_slot: base_slot,
-                full_hash: full_accounts_hash.into(),
-                full_capitalization,
-                // NOTE: The value for the incremental accounts hash is actually a *full* accounts
-                // hash here.  Once an incremental accounts hash is calculated for incremental
-                // snapshots, this value will be corrected.
-                incremental_hash: SerdeIncrementalAccountsHash(accounts_hash.0),
-                incremental_capitalization: lamports,
-            })
-        } else {
-            None
-        };
-
         if let Some(snapshot_info) = &accounts_package.snapshot_info {
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
                 snapshot_info.snapshot_links.path(),
                 slot,
                 &accounts_hash,
-                bank_incremental_snapshot_persistence.as_ref(),
+                None,
             );
         }
 
