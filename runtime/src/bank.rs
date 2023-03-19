@@ -3664,7 +3664,7 @@ impl Bank {
                     // Only acquire the write lock for the blockhash queue on block boundaries because
                     // readers can starve this write lock acquisition and ticks would be slowed down too
                     // much if the write lock is acquired for each tick.
-                    let w_blockhash_queue = self.blockhash_queue.write().unwrap();
+                    
                     //let new_scheduler = Scheduler::default();
                     if last_result.is_err() {
                         warn!(
@@ -3681,7 +3681,7 @@ impl Bank {
                         .push(last_result);
                     drop(s2);
                     //*self.scheduler.write().unwrap() = new_scheduler;
-                    w_blockhash_queue
+                    self.blockhash_queue.write().unwrap()
                 },
             }
         };
