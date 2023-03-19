@@ -383,7 +383,7 @@ tempfile = "3.4.0"
 test-case = "2.2.2"
 thiserror = "1.0.31"
 tiny-bip39 = "0.8.2"
-tokio = "~1.14.1"
+tokio = "~1.26.0"
 
 #tokio = {git = "https://github.com/lijunwangs/tokio.git", rev = "b4077a5c27aaf5d07fc04635e9d6b224e3f5326f"}
 
