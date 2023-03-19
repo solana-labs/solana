@@ -834,6 +834,10 @@ impl Scheduler {
             self.checkpoint.replace_context_value(self.current_scheduler_context.write().unwrap().take().unwrap());
         }
     }
+
+    fn scheduler_context(&self) -> Option<SchedulerContext> {
+        self.scheduler_context_inner()
+    }
 }
 
 impl Drop for Scheduler {
@@ -962,10 +966,6 @@ impl LikeScheduler for Scheduler {
 
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool> {
         Box::new(SchedulerPoolWrapper(self.scheduler_pool.clone()))
-    }
-
-    fn scheduler_context(&self) -> Option<SchedulerContext> {
-        self.scheduler_context_inner()
     }
 
     fn replace_scheduler_context(&self, context: SchedulerContext) {
