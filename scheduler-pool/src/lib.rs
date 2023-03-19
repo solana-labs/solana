@@ -863,7 +863,7 @@ impl LikeScheduler for Scheduler {
         self.random_id
     }
 
-    fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
+    fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize) {
         trace!("Scheduler::schedule()");
         #[derive(Clone, Copy, Debug)]
         struct NotAtTopOfScheduleThread;
@@ -890,7 +890,7 @@ impl LikeScheduler for Scheduler {
         //assert_eq!(index, self.transaction_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
         use solana_scheduler::{Mode, UniqueWeight};
         use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
-        let uw = match mode {
+        let uw = match self.current_scheduler_mode() {
             Mode::Replaying => solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight,
         };
         let t =
