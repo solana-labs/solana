@@ -385,11 +385,11 @@ impl Checkpoint {
         *b = Some(new);
     }
 
-    fn restore_context_count(&self) {
+    fn restore_context_count_before_restart(&self) {
         let mut g = self.0.lock().unwrap();
         let (_, self_return_value, b, context_count) = &mut *g;
         assert_eq!(*context_count, 0);
-        *context_count = self.thread_count();
+        *context_count = self.thread_count().checked_sub(1).unwrap();
     }
 }
 
@@ -836,7 +836,7 @@ impl Scheduler {
         }
         self.checkpoint.wait_for_completed_restart();
         if is_restart {
-            self.checkpoint.restore_context_count();
+            self.checkpoint.restore_context_count_before_restart();
         }
     }
 }
@@ -905,9 +905,9 @@ impl LikeScheduler for Scheduler {
 
     fn gracefully_stop(&mut self, from_internal: bool, is_restart: bool) -> Result<()> {
         self.do_trigger_stop(is_restart);
-        let label = "???"; //SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
+        let label = format!("id_{:016x}", self.random_id); //SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
         info!(
-            "Scheduler::gracefully_stop(): {} {} waiting..", label, std::thread::current().name().unwrap().to_string()
+            "Scheduler::gracefully_stop(): {} {} waiting.. from_internal: {from_internal} is_restart: {is_restart}", label, std::thread::current().name().unwrap().to_string()
         );
 
         info!("just before wait for restart...");
@@ -942,7 +942,7 @@ impl LikeScheduler for Scheduler {
         }
 
         info!(
-            "Scheduler::gracefully_stop(): {} waiting done..", label,
+            "Scheduler::gracefully_stop(): {} waiting done.. from_internal: {from_internal} is_restart: {is_restart}", label,
         );
         Ok(())
     }
