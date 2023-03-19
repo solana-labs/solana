@@ -928,9 +928,9 @@ impl ConfirmationTiming {
         execute_batches_internal_metrics: ExecuteBatchesInternalMetrics,
     ) {
         let ConfirmationTiming {
-            execute_timings: ref mut cumulative_execute_timings,
-            execute_batches_us: ref mut cumulative_execute_batches_us,
-            ref mut end_to_end_execute_timings,
+            execute_timings: cumulative_execute_timings,
+            execute_batches_us: cumulative_execute_batches_us,
+            end_to_end_execute_timings,
             ..
         } = self;
 
@@ -1094,7 +1094,8 @@ fn confirm_slot_entries(
         let tick_hash_count = &mut progress.tick_hash_count;
         verify_ticks(bank, &entries, slot_full, tick_hash_count).map_err(|err| {
             warn!(
-                "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, last_blockhash: {}, shred_index: {}, slot_full: {}",
+                "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, \
+                last_blockhash: {}, shred_index: {}, slot_full: {}",
                 err,
                 slot,
                 num_entries,
@@ -1139,75 +1140,74 @@ fn confirm_slot_entries(
     );
     let transaction_cpu_duration_us = timing::duration_as_us(&check_start.elapsed());
 
-    match check_result {
-        Ok(mut check_result) => {
-            let entries = check_result.entries();
-            assert!(entries.is_some());
-
-            let mut replay_elapsed = Measure::start("replay_elapsed");
-            let mut replay_entries: Vec<_> = entries
-                .unwrap()
-                .into_iter()
-                .zip(entry_starting_indexes)
-                .map(|(entry, starting_index)| ReplayEntry {
-                    entry,
-                    starting_index,
-                })
-                .collect();
-            // Note: This will shuffle entries' transactions in-place.
-            let process_result = process_entries_with_callback(
-                bank,
-                &mut replay_entries,
-                true, // shuffle transactions.
-                transaction_status_sender,
-                replay_vote_sender,
-                timing,
-                log_messages_bytes_limit,
-                prioritization_fee_cache,
-            )
-            .map_err(BlockstoreProcessorError::from);
-            replay_elapsed.stop();
-            timing.replay_elapsed += replay_elapsed.as_us();
-
-            // If running signature verification on the GPU, wait for that
-            // computation to finish, and get the result of it. If we did the
-            // signature verification on the CPU, this just returns the
-            // already-computed result produced in start_verify_transactions.
-            // Either way, check the result of the signature verification.
-            if !check_result.finish_verify() {
-                warn!("Ledger proof of history failed at slot: {}", bank.slot());
-                return Err(TransactionError::SignatureFailure.into());
-            }
-
-            if let Some(mut verifier) = verifier {
-                let verified = verifier.finish_verify();
-                timing.poh_verify_elapsed += verifier.poh_duration_us();
-                // The GPU Entry verification (if any) is kicked off right when the CPU-side
-                // Entry verification finishes, so these times should be disjoint
-                timing.transaction_verify_elapsed +=
-                    transaction_cpu_duration_us + check_result.gpu_verify_duration();
-                if !verified {
-                    warn!("Ledger proof of history failed at slot: {}", bank.slot());
-                    return Err(BlockError::InvalidEntryHash.into());
-                }
-            }
-
-            process_result?;
-
-            progress.num_shreds += num_shreds;
-            progress.num_entries += num_entries;
-            progress.num_txs += num_txs;
-            if let Some(last_entry_hash) = last_entry_hash {
-                progress.last_entry = last_entry_hash;
-            }
-
-            Ok(())
-        }
+    let mut check_result = match check_result {
+        Ok(check_result) => check_result,
         Err(err) => {
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
-            Err(err.into())
+            return Err(err.into());
+        }
+    };
+
+    let entries = check_result.entries();
+    assert!(entries.is_some());
+
+    let mut replay_elapsed = Measure::start("replay_elapsed");
+    let mut replay_entries: Vec<_> = entries
+        .unwrap()
+        .into_iter()
+        .zip(entry_starting_indexes)
+        .map(|(entry, starting_index)| ReplayEntry {
+            entry,
+            starting_index,
+        })
+        .collect();
+    // Note: This will shuffle entries' transactions in-place.
+    let process_result = process_entries_with_callback(
+        bank,
+        &mut replay_entries,
+        true, // shuffle transactions.
+        transaction_status_sender,
+        replay_vote_sender,
+        timing,
+        log_messages_bytes_limit,
+        prioritization_fee_cache,
+    )
+    .map_err(BlockstoreProcessorError::from);
+    replay_elapsed.stop();
+    timing.replay_elapsed += replay_elapsed.as_us();
+
+    // If running signature verification on the GPU, wait for that computation to finish, and get
+    // the result of it. If we did the signature verification on the CPU, this just returns the
+    // already-computed result produced in start_verify_transactions.  Either way, check the result
+    // of the signature verification.
+    if !check_result.finish_verify() {
+        warn!("Ledger proof of history failed at slot: {}", bank.slot());
+        return Err(TransactionError::SignatureFailure.into());
+    }
+
+    if let Some(mut verifier) = verifier {
+        let verified = verifier.finish_verify();
+        timing.poh_verify_elapsed += verifier.poh_duration_us();
+        // The GPU Entry verification (if any) is kicked off right when the CPU-side Entry
+        // verification finishes, so these times should be disjoint
+        timing.transaction_verify_elapsed +=
+            transaction_cpu_duration_us + check_result.gpu_verify_duration();
+        if !verified {
+            warn!("Ledger proof of history failed at slot: {}", bank.slot());
+            return Err(BlockError::InvalidEntryHash.into());
         }
     }
+
+    process_result?;
+
+    progress.num_shreds += num_shreds;
+    progress.num_entries += num_entries;
+    progress.num_txs += num_txs;
+    if let Some(last_entry_hash) = last_entry_hash {
+        progress.last_entry = last_entry_hash;
+    }
+
+    Ok(())
 }
 
 // Special handling required for processing the entries in slot 0
