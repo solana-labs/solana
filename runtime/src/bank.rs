@@ -1171,7 +1171,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
-    fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode);
+    fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
 
     fn trigger_stop(&mut self);
     fn gracefully_stop(&mut self, from_internal: bool, is_restart: bool) -> Result<()>; // terminate_gracefully()? or just shutdown()?
@@ -6072,7 +6072,6 @@ impl Bank {
         &self,
         transactions: &[SanitizedTransaction],
         transaction_indexes: impl Iterator<Item = &'a usize>,
-        mode: solana_scheduler::Mode,
     ) {
         trace!(
             "schedule_and_commit_transactions(): {} txs",
@@ -6083,7 +6082,7 @@ impl Bank {
         let scheduler = s.as_ref().unwrap();
 
         for (st, &i) in transactions.iter().zip(transaction_indexes) {
-            scheduler.schedule_execution(st, i, mode);
+            scheduler.schedule_execution(st, i);
         }
     }
 
@@ -6092,7 +6091,7 @@ impl Bank {
         transactions: &[SanitizedTransaction],
         transaction_indexes: impl Iterator<Item = &'a usize>,
     ) {
-        self.schedule_and_commit_transactions(transactions, transaction_indexes, solana_scheduler::Mode::Replaying)
+        self.schedule_and_commit_transactions(transactions, transaction_indexes)
     }
 
     /*
