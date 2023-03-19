@@ -787,6 +787,30 @@ impl Scheduler {
             sc.clone()
         }
     }
+
+    fn do_trigger_stop(&self, is_restart: bool) {
+        if self.graceful_stop_initiated {
+            return;
+        }
+        self.graceful_stop_initiated = true;
+
+        info!(
+            "Scheduler::trigger_stop(): {} triggering stop..",
+            SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref()),
+        );
+        //let transaction_sender = self.transaction_sender.take().unwrap();
+
+        //drop(transaction_sender);
+        self.transaction_sender
+            .as_ref()
+            .unwrap()
+            .send(solana_scheduler::SchedulablePayload(
+                solana_scheduler::Flushable::Flush,
+            ))
+            .unwrap();
+        self.stopped_mode = Some(self.current_scheduler_mode());
+        self.clear_current_scheduler_context_inner();
+    }
 }
 
 impl Drop for Scheduler {
@@ -851,8 +875,8 @@ impl LikeScheduler for Scheduler {
         std::mem::take(&mut self.collected_results.lock().unwrap())
     }
 
-    fn gracefully_stop(&mut self, from_internal: bool) -> Result<()> {
-        self.trigger_stop();
+    fn gracefully_stop(&mut self, from_internal: bool, is_restart: bool) -> Result<()> {
+        self.do_trigger_stop(is_restart);
         let label = "???"; //SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
         info!(
             "Scheduler::gracefully_stop(): {} {} waiting..", label, std::thread::current().name().unwrap().to_string()
@@ -900,27 +924,7 @@ impl LikeScheduler for Scheduler {
     }
 
     fn trigger_stop(&mut self) {
-        if self.graceful_stop_initiated {
-            return;
-        }
-        self.graceful_stop_initiated = true;
-
-        info!(
-            "Scheduler::trigger_stop(): {} triggering stop..",
-            SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref()),
-        );
-        //let transaction_sender = self.transaction_sender.take().unwrap();
-
-        //drop(transaction_sender);
-        self.transaction_sender
-            .as_ref()
-            .unwrap()
-            .send(solana_scheduler::SchedulablePayload(
-                solana_scheduler::Flushable::Flush,
-            ))
-            .unwrap();
-        self.stopped_mode = Some(self.current_scheduler_mode());
-        self.clear_current_scheduler_context_inner();
+        self.do_trigger_stop(false);
     }
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {

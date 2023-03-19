@@ -1172,7 +1172,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode);
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>>;
     fn trigger_stop(&mut self);
-    fn gracefully_stop(&mut self, from_internal: bool) -> Result<()>; // terminate_gracefully()? or just shutdown()?
+    fn gracefully_stop(&mut self, from_internal: bool, is_restart: bool) -> Result<()>; // terminate_gracefully()? or just shutdown()?
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>;
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
@@ -3656,32 +3656,12 @@ impl Bank {
         } else {
             match self.scheduler_mode() {
                 solana_scheduler::Mode::Replaying => {
-                    let (last_result, next_scheduler) = self.wait_for_scheduler(false, true);
-                    let next_scheduler = next_scheduler.unwrap();
-                    let mut s2 = self.scheduler.write().unwrap();
-                    *s2 = Some(next_scheduler);
-
+                    let mut scheduler = self.scheduler.write().unwrap();
+                    let () = scheduler.gracefully_stop(false, true).unwrap();
                     // Only acquire the write lock for the blockhash queue on block boundaries because
                     // readers can starve this write lock acquisition and ticks would be slowed down too
                     // much if the write lock is acquired for each tick.
-                    let w_blockhash_queue = self.blockhash_queue.write().unwrap();
-                    //let new_scheduler = Scheduler::default();
-                    if last_result.is_err() {
-                        warn!(
-                            "register_recent_blockhash: carrying over this error: {:?}",
-                            last_result
-                        );
-                    }
-                    //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
-                    s2.as_ref()
-                        .unwrap()
-                        .collected_results()
-                        .lock()
-                        .unwrap()
-                        .push(last_result);
-                    drop(s2);
-                    //*self.scheduler.write().unwrap() = new_scheduler;
-                    w_blockhash_queue
+                    self.blockhash_queue.write().unwrap();
                 },
             }
         };
@@ -7877,7 +7857,7 @@ impl Bank {
                 } else {
                     None
                 };
-                let () = scheduler.gracefully_stop(from_internal).unwrap();
+                let () = scheduler.gracefully_stop(from_internal, false).unwrap();
                 let e = scheduler
                     .handle_aborted_executions()
                     .into_iter()
