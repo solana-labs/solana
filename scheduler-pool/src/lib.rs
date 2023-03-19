@@ -836,7 +836,7 @@ impl Scheduler {
         }
         self.checkpoint.wait_for_completed_restart();
         if is_restart {
-            self.checkpiont.restore_context_count();
+            self.checkpoint.restore_context_count();
         }
     }
 }
