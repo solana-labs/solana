@@ -808,8 +808,26 @@ impl Scheduler {
                 solana_scheduler::Flushable::Flush,
             ))
             .unwrap();
-        self.stopped_mode = Some(self.current_scheduler_mode());
-        self.clear_current_scheduler_context_inner();
+
+        if !is_restart {
+            self.stopped_mode = Some(self.current_scheduler_mode());
+            self.clear_current_scheduler_context_inner();
+        }
+    }
+
+    fn do_clear_stop(&mut self, is_restart: bool) {
+        assert!(self.graceful_stop_initiated);
+        self.graceful_stop_initiated = false;
+        if is_restart {
+            assert_eq!(
+                (self.stopped_mode.is_none(), self.current_scheduler_context.write().unwrap().is_some()),
+                (true, true),
+            );
+        } else {
+            drop(self.stopped_mode.take().unwrap());
+            assert!(self.current_scheduler_context.write().unwrap().is_none());
+        }
+        self.checkpoint.wait_for_completed_restart();
     }
 }
 
@@ -909,6 +927,10 @@ impl LikeScheduler for Scheduler {
         info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
         */
 
+        if is_restart {
+            self.do_clear_stop(true);
+        }
+
         info!(
             "Scheduler::gracefully_stop(): {} waiting done..", label,
         );
@@ -916,11 +938,7 @@ impl LikeScheduler for Scheduler {
     }
 
     fn clear_stop(&mut self) {
-        assert!(self.graceful_stop_initiated);
-        self.graceful_stop_initiated = false;
-        drop(self.stopped_mode.take().unwrap());
-        assert!(self.current_scheduler_context.write().unwrap().is_none());
-        self.checkpoint.wait_for_completed_restart();
+        self.do_clear_stop(false);
     }
 
     fn trigger_stop(&mut self) {
