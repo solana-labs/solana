@@ -2564,7 +2564,7 @@ impl ReplayStage {
                 let replay_stats = bank_progress.replay_stats.clone();
                 let mut r_replay_stats = replay_stats.write().unwrap();
 
-                let cumulative_timings = bank.wait_for_scheduler(false, false).0;
+                let cumulative_timings = bank.wait_for_scheduler(false).0;
                 match cumulative_timings {
                     Err(err) => {
                         match bank.scheduler_mode() {
