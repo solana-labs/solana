@@ -218,7 +218,7 @@ impl CommitStatus {
 }
 
 #[derive(Debug)]
-pub struct Checkpoint(std::sync::Mutex<((usize, usize), Option<(ExecuteTimings, Result<()>>, Option<SchedulerContext>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
+pub struct Checkpoint(std::sync::Mutex<((usize, usize), Option<(ExecuteTimings, Result<()>)>, Option<SchedulerContext>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
 
 impl Checkpoint {
     pub fn wait_for_restart(&self) {
