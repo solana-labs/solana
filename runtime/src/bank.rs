@@ -7845,8 +7845,7 @@ impl Bank {
                 info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})... from_internal: {from_internal} by {current_thread_name}", self.slot());
 
                 let () = scheduler.gracefully_stop(from_internal, false).unwrap();
-                let e = scheduler
-                    .handle_aborted_executions()
+                let e = scheduler.handle_aborted_executions();
                 let scheduler = s.take().unwrap();
                 scheduler.scheduler_pool().return_to_pool(scheduler);
                 (true, e)
