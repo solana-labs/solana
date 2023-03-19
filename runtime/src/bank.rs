@@ -3653,7 +3653,7 @@ impl Bank {
             self.blockhash_queue.write().unwrap()
         } else {
             let mut scheduler = self.scheduler.write().unwrap();
-            match scheduler.current_scheduler_mode() {
+            match scheduler.as_ref().unwrap().current_scheduler_mode() {
                 solana_scheduler::Mode::Replaying => {
                     let () = scheduler.as_mut().unwrap().gracefully_stop(false, true).unwrap();
                     // Only acquire the write lock for the blockhash queue on block boundaries because
