@@ -4043,6 +4043,7 @@ impl Bank {
     }
 
     /// Get any cached executors needed by the transaction
+    #[cfg(test)]
     fn get_tx_executor_cache(
         &self,
         accounts: &[TransactionAccount],
@@ -4197,15 +4198,8 @@ impl Bank {
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
+        tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
     ) -> TransactionExecutionResult {
-        let mut get_tx_executor_cache_time = Measure::start("get_tx_executor_cache_time");
-        let tx_executor_cache = self.get_tx_executor_cache(&loaded_transaction.accounts);
-        get_tx_executor_cache_time.stop();
-        saturating_add_assign!(
-            timings.execute_accessories.get_executors_us,
-            get_tx_executor_cache_time.as_us()
-        );
-
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
         let mut transaction_context = TransactionContext::new(
@@ -4593,6 +4587,10 @@ impl Bank {
         let (executable_programs_in_tx_batch, loaded_programs_map) =
             self.replenish_executor_cache(&program_owners_refs, sanitized_txs, &mut check_results);
 
+        let tx_executor_cache = Rc::new(RefCell::new(TransactionExecutorCache::new(
+            loaded_programs_map.clone().into_iter(),
+        )));
+
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = self.rc.accounts.load_accounts(
             &self.ancestors,
@@ -4662,6 +4660,7 @@ impl Bank {
                         timings,
                         &mut error_counters,
                         log_messages_bytes_limit,
+                        tx_executor_cache.clone(),
                     )
                 }
             })
