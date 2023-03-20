@@ -1304,6 +1304,7 @@ impl ServeRepair {
                 nonce,
             );
             if let Some(packet) = packet {
+                info!("Created response packet for Orphan repair from {:?}", from_addr);
                 res.push(packet);
             } else {
                 break;

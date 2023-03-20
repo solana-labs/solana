@@ -320,10 +320,14 @@ where
 
     match sock {
         ResponderOption::Socket(sock) => {
-            batch_send(sock, &packets.collect::<Vec<_>>())?;
+            let packets = packets.collect::<Vec<_>>();
+            info!("Sending response via udp socket to {:?}", packets[0].1);
+            batch_send(sock, &packets)?;
         }
         ResponderOption::ConnectionCache(connection_cache) => {
-            batch_send_with_connection_cache(&packets.collect::<Vec<_>>(), connection_cache)?;
+            let packets = packets.collect::<Vec<_>>();
+            info!("Sending response via connection cache to to {:?}",  packets[0].1);
+            batch_send_with_connection_cache(&packets, connection_cache)?;
         }
     }
 
