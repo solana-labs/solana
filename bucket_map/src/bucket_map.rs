@@ -204,6 +204,7 @@ mod tests {
             let config = BucketMapConfig::new(1 << 1);
             let index = BucketMap::new(config);
             let bucket = index.get_bucket(&key);
+            let value = [0];
             if pass == 0 {
                 index.insert(&key, (&[0], 0));
             } else {
@@ -220,7 +221,7 @@ mod tests {
                 let result = index.try_insert(&key, (&[0], 0));
                 assert!(result.is_ok());
             }
-            assert_eq!(index.read_value(&key), Some((vec![0], 0)));
+            assert_eq!(index.read_value(&key), Some((value.to_vec(), 0)));
         }
     }
 
@@ -379,7 +380,7 @@ mod tests {
             let v = (0..count)
                 .map(|x| (x as usize, x as usize /*thread_rng().gen::<usize>()*/))
                 .collect::<Vec<_>>();
-            let rc = thread_rng().gen::<RefCount>();
+            let rc = thread_rng().gen_range(0, RefCount::MAX >> 2);
             (v, rc)
         };
 
