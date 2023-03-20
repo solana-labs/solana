@@ -295,9 +295,8 @@ impl ShredFetchStage {
             Some((repair_socket, cluster_info.clone())),
         );
 
-        let (connection_cache, quic_repair_addr, repair_quic_t, quic_repair_modifier_t) =
+        let (connection_cache, repair_quic_t, quic_repair_modifier_t) =
             if let Some(repair_quic_config) = repair_quic_config {
-                let local_addr = repair_quic_config.repair_address.clone();
                 let (repair_quic_t, quic_repair_modifier_t, connection_cache) =
                     Self::packet_modifier_quic(
                         exit,
@@ -311,12 +310,11 @@ impl ShredFetchStage {
                     );
                 (
                     Some(connection_cache),
-                    Some(local_addr),
                     Some(repair_quic_t),
                     Some(quic_repair_modifier_t),
                 )
             } else {
-                (None, None, None, None)
+                (None, None, None)
             };
 
         tvu_threads.extend(tvu_forwards_threads.into_iter());
