@@ -17,7 +17,6 @@ use {
         recycler_cache::RecyclerCache,
         sigverify::{self, count_packets_in_batches, TxOffset},
     },
-    solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         clock::Slot,
         pubkey::Pubkey,
@@ -27,14 +26,6 @@ use {
 };
 
 pub const SIGN_SHRED_GPU_MIN: usize = 256;
-
-lazy_static! {
-    pub static ref SIGVERIFY_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_thread_count())
-        .thread_name(|ix| format!("sigverify_shreds_{}", ix))
-        .build()
-        .unwrap();
-}
 
 /// Assuming layout is
 /// signature: Signature
@@ -71,13 +62,14 @@ pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) 
 }
 
 fn verify_shreds_cpu(
+    thread_pool: &ThreadPool,
     batches: &[PacketBatch],
     slot_leaders: &HashMap<u64, [u8; 32]>,
 ) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let packet_count = count_packets_in_batches(batches);
     debug!("CPU SHRED ECDSA for {}", packet_count);
-    let rv = SIGVERIFY_THREAD_POOL.install(|| {
+    let rv = thread_pool.install(|| {
         batches
             .into_par_iter()
             .map(|batch| {
@@ -95,6 +87,7 @@ fn verify_shreds_cpu(
 fn slot_key_data_for_gpu<
     T: Sync + Sized + Default + std::fmt::Debug + Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>,
 >(
+    thread_pool: &ThreadPool,
     offset_start: usize,
     batches: &[PacketBatch],
     slot_keys: &HashMap<u64, T>,
@@ -102,7 +95,7 @@ fn slot_key_data_for_gpu<
 ) -> (PinnedVec<u8>, TxOffset, usize) {
     //TODO: mark Pubkey::default shreds as failed after the GPU returns
     assert_eq!(slot_keys.get(&std::u64::MAX), Some(&T::default()));
-    let slots: Vec<Vec<Slot>> = SIGVERIFY_THREAD_POOL.install(|| {
+    let slots: Vec<Vec<Slot>> = thread_pool.install(|| {
         batches
             .into_par_iter()
             .map(|batch| {
@@ -219,13 +212,14 @@ fn shred_gpu_offsets(
 }
 
 pub fn verify_shreds_gpu(
+    thread_pool: &ThreadPool,
     batches: &[PacketBatch],
     slot_leaders: &HashMap<u64, [u8; 32]>,
     recycler_cache: &RecyclerCache,
 ) -> Vec<Vec<u8>> {
     let api = perf_libs::api();
     if api.is_none() {
-        return verify_shreds_cpu(batches, slot_leaders);
+        return verify_shreds_cpu(thread_pool, batches, slot_leaders);
     }
     let api = api.unwrap();
 
@@ -233,7 +227,7 @@ pub fn verify_shreds_gpu(
     let mut rvs = Vec::new();
     let packet_count = count_packets_in_batches(batches);
     let (pubkeys, pubkey_offsets, mut num_packets) =
-        slot_key_data_for_gpu(0, batches, slot_leaders, recycler_cache);
+        slot_key_data_for_gpu(thread_pool, 0, batches, slot_leaders, recycler_cache);
     //HACK: Pubkeys vector is passed along as a `PacketBatch` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
     let pubkeys_len = num_packets * size_of::<Packet>();
@@ -309,11 +303,11 @@ fn sign_shred_cpu(keypair: &Keypair, packet: &mut Packet) {
     packet.buffer_mut()[..sig_end].copy_from_slice(signature.as_ref());
 }
 
-pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [PacketBatch]) {
+pub fn sign_shreds_cpu(thread_pool: &ThreadPool, keypair: &Keypair, batches: &mut [PacketBatch]) {
     use rayon::prelude::*;
     let packet_count = count_packets_in_batches(batches);
     debug!("CPU SHRED ECDSA for {}", packet_count);
-    SIGVERIFY_THREAD_POOL.install(|| {
+    thread_pool.install(|| {
         batches.par_iter_mut().for_each(|batch| {
             batch[..]
                 .par_iter_mut()
@@ -341,6 +335,7 @@ pub fn sign_shreds_gpu_pinned_keypair(keypair: &Keypair, cache: &RecyclerCache) 
 }
 
 pub fn sign_shreds_gpu(
+    thread_pool: &ThreadPool,
     keypair: &Keypair,
     pinned_keypair: &Option<Arc<PinnedVec<u8>>>,
     batches: &mut [PacketBatch],
@@ -351,7 +346,7 @@ pub fn sign_shreds_gpu(
     let api = perf_libs::api();
     let packet_count = count_packets_in_batches(batches);
     if api.is_none() || packet_count < SIGN_SHRED_GPU_MIN || pinned_keypair.is_none() {
-        return sign_shreds_cpu(keypair, batches);
+        return sign_shreds_cpu(thread_pool, keypair, batches);
     }
     let api = api.unwrap();
     let pinned_keypair = pinned_keypair.as_ref().unwrap();
@@ -422,7 +417,7 @@ pub fn sign_shreds_gpu(
         }
         sizes[i] += sizes[i - 1];
     }
-    SIGVERIFY_THREAD_POOL.install(|| {
+    thread_pool.install(|| {
         batches
             .par_iter_mut()
             .enumerate()
@@ -448,6 +443,7 @@ pub mod tests {
     use {
         super::*,
         crate::shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD},
+        rayon::ThreadPoolBuilder,
         solana_sdk::signature::{Keypair, Signer},
     };
 
@@ -497,7 +493,7 @@ pub mod tests {
         run_test_sigverify_shred_cpu(0xdead_c0de);
     }
 
-    fn run_test_sigverify_shreds_cpu(slot: Slot) {
+    fn run_test_sigverify_shreds_cpu(thread_pool: &ThreadPool, slot: Slot) {
         solana_logger::setup();
         let mut batches = [PacketBatch::default()];
         let mut shred = Shred::new_from_data(
@@ -521,7 +517,7 @@ pub mod tests {
             .iter()
             .cloned()
             .collect();
-        let rv = verify_shreds_cpu(&batches, &leader_slots);
+        let rv = verify_shreds_cpu(thread_pool, &batches, &leader_slots);
         assert_eq!(rv, vec![vec![1]]);
 
         let wrong_keypair = Keypair::new();
@@ -529,11 +525,11 @@ pub mod tests {
             .iter()
             .cloned()
             .collect();
-        let rv = verify_shreds_cpu(&batches, &leader_slots);
+        let rv = verify_shreds_cpu(thread_pool, &batches, &leader_slots);
         assert_eq!(rv, vec![vec![0]]);
 
         let leader_slots = HashMap::new();
-        let rv = verify_shreds_cpu(&batches, &leader_slots);
+        let rv = verify_shreds_cpu(thread_pool, &batches, &leader_slots);
         assert_eq!(rv, vec![vec![0]]);
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
@@ -541,16 +537,17 @@ pub mod tests {
             .cloned()
             .collect();
         batches[0][0].meta.size = 0;
-        let rv = verify_shreds_cpu(&batches, &leader_slots);
+        let rv = verify_shreds_cpu(thread_pool, &batches, &leader_slots);
         assert_eq!(rv, vec![vec![0]]);
     }
 
     #[test]
     fn test_sigverify_shreds_cpu() {
-        run_test_sigverify_shreds_cpu(0xdead_c0de);
+        let thread_pool = ThreadPoolBuilder::new().num_threads(3).build().unwrap();
+        run_test_sigverify_shreds_cpu(&thread_pool, 0xdead_c0de);
     }
 
-    fn run_test_sigverify_shreds_gpu(slot: Slot) {
+    fn run_test_sigverify_shreds_gpu(thread_pool: &ThreadPool, slot: Slot) {
         solana_logger::setup();
         let recycler_cache = RecyclerCache::default();
 
@@ -579,7 +576,7 @@ pub mod tests {
         .iter()
         .cloned()
         .collect();
-        let rv = verify_shreds_gpu(&batches, &leader_slots, &recycler_cache);
+        let rv = verify_shreds_gpu(thread_pool, &batches, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![1]]);
 
         let wrong_keypair = Keypair::new();
@@ -590,11 +587,11 @@ pub mod tests {
         .iter()
         .cloned()
         .collect();
-        let rv = verify_shreds_gpu(&batches, &leader_slots, &recycler_cache);
+        let rv = verify_shreds_gpu(thread_pool, &batches, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
 
         let leader_slots = [(std::u64::MAX, [0u8; 32])].iter().cloned().collect();
-        let rv = verify_shreds_gpu(&batches, &leader_slots, &recycler_cache);
+        let rv = verify_shreds_gpu(thread_pool, &batches, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
 
         batches[0][0].meta.size = 0;
@@ -605,16 +602,17 @@ pub mod tests {
         .iter()
         .cloned()
         .collect();
-        let rv = verify_shreds_gpu(&batches, &leader_slots, &recycler_cache);
+        let rv = verify_shreds_gpu(thread_pool, &batches, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
     }
 
     #[test]
     fn test_sigverify_shreds_gpu() {
-        run_test_sigverify_shreds_gpu(0xdead_c0de);
+        let thread_pool = ThreadPoolBuilder::new().num_threads(3).build().unwrap();
+        run_test_sigverify_shreds_gpu(&thread_pool, 0xdead_c0de);
     }
 
-    fn run_test_sigverify_shreds_sign_gpu(slot: Slot) {
+    fn run_test_sigverify_shreds_sign_gpu(thread_pool: &ThreadPool, slot: Slot) {
         solana_logger::setup();
         let recycler_cache = RecyclerCache::default();
 
@@ -649,23 +647,30 @@ pub mod tests {
         .cloned()
         .collect();
         //unsigned
-        let rv = verify_shreds_gpu(&batches, &pubkeys, &recycler_cache);
+        let rv = verify_shreds_gpu(thread_pool, &batches, &pubkeys, &recycler_cache);
         assert_eq!(rv, vec![vec![0; num_packets]; num_batches]);
         //signed
-        sign_shreds_gpu(&keypair, &pinned_keypair, &mut batches, &recycler_cache);
-        let rv = verify_shreds_cpu(&batches, &pubkeys);
+        sign_shreds_gpu(
+            thread_pool,
+            &keypair,
+            &pinned_keypair,
+            &mut batches,
+            &recycler_cache,
+        );
+        let rv = verify_shreds_cpu(thread_pool, &batches, &pubkeys);
         assert_eq!(rv, vec![vec![1; num_packets]; num_batches]);
 
-        let rv = verify_shreds_gpu(&batches, &pubkeys, &recycler_cache);
+        let rv = verify_shreds_gpu(thread_pool, &batches, &pubkeys, &recycler_cache);
         assert_eq!(rv, vec![vec![1; num_packets]; num_batches]);
     }
 
     #[test]
     fn test_sigverify_shreds_sign_gpu() {
-        run_test_sigverify_shreds_sign_gpu(0xdead_c0de);
+        let thread_pool = ThreadPoolBuilder::new().num_threads(3).build().unwrap();
+        run_test_sigverify_shreds_sign_gpu(&thread_pool, 0xdead_c0de);
     }
 
-    fn run_test_sigverify_shreds_sign_cpu(slot: Slot) {
+    fn run_test_sigverify_shreds_sign_cpu(thread_pool: &ThreadPool, slot: Slot) {
         solana_logger::setup();
 
         let mut batches = [PacketBatch::default()];
@@ -693,16 +698,17 @@ pub mod tests {
         .cloned()
         .collect();
         //unsigned
-        let rv = verify_shreds_cpu(&batches, &pubkeys);
+        let rv = verify_shreds_cpu(thread_pool, &batches, &pubkeys);
         assert_eq!(rv, vec![vec![0]]);
         //signed
-        sign_shreds_cpu(&keypair, &mut batches);
-        let rv = verify_shreds_cpu(&batches, &pubkeys);
+        sign_shreds_cpu(thread_pool, &keypair, &mut batches);
+        let rv = verify_shreds_cpu(thread_pool, &batches, &pubkeys);
         assert_eq!(rv, vec![vec![1]]);
     }
 
     #[test]
     fn test_sigverify_shreds_sign_cpu() {
-        run_test_sigverify_shreds_sign_cpu(0xdead_c0de);
+        let thread_pool = ThreadPoolBuilder::new().num_threads(3).build().unwrap();
+        run_test_sigverify_shreds_sign_cpu(&thread_pool, 0xdead_c0de);
     }
 }

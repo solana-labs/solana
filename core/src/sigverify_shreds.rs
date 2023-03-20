@@ -6,11 +6,13 @@ use {
         sigverify_stage::{SigVerifier, SigVerifyServiceError},
     },
     crossbeam_channel::Sender,
+    rayon::{ThreadPool, ThreadPoolBuilder},
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache, shred::Shred,
         sigverify_shreds::verify_shreds_gpu,
     },
     solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache},
+    solana_rayon_threadlimit::get_thread_count,
     solana_runtime::bank_forks::BankForks,
     std::{
         collections::{HashMap, HashSet},
@@ -18,8 +20,8 @@ use {
     },
 };
 
-#[derive(Clone)]
 pub struct ShredSigVerifier {
+    thread_pool: ThreadPool,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     recycler_cache: RecyclerCache,
@@ -32,8 +34,14 @@ impl ShredSigVerifier {
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         packet_sender: Sender<Vec<PacketBatch>>,
     ) -> Self {
+        let thread_pool = ThreadPoolBuilder::new()
+            .num_threads(get_thread_count())
+            .thread_name(|i| format!("solSvrfyShred{i:02}"))
+            .build()
+            .unwrap();
         sigverify::init();
         Self {
+            thread_pool,
             bank_forks,
             leader_schedule_cache,
             recycler_cache: RecyclerCache::warmed(),
@@ -77,7 +85,12 @@ impl SigVerifier for ShredSigVerifier {
             .collect();
         leader_slots.insert(std::u64::MAX, [0u8; 32]);
 
-        let r = verify_shreds_gpu(&batches, &leader_slots, &self.recycler_cache);
+        let r = verify_shreds_gpu(
+            &self.thread_pool,
+            &batches,
+            &leader_slots,
+            &self.recycler_cache,
+        );
         solana_perf::sigverify::mark_disabled(&mut batches, &r);
         batches
     }

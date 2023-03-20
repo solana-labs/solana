@@ -5432,7 +5432,6 @@ dependencies = [
  "fs_extra",
  "futures 0.3.21",
  "itertools",
- "lazy_static",
  "libc",
  "log",
  "lru",

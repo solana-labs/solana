@@ -234,7 +234,7 @@ impl SigVerifier for DisabledSigVerifier {
 
 impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new<T: SigVerifier + 'static + Send + Clone>(
+    pub fn new<T: SigVerifier + 'static + Send>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: T,
         name: &'static str,
@@ -405,7 +405,7 @@ impl SigVerifyStage {
         Ok(())
     }
 
-    fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
+    fn verifier_service<T: SigVerifier + 'static + Send>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         mut verifier: T,
         name: &'static str,
@@ -449,7 +449,7 @@ impl SigVerifyStage {
             .unwrap()
     }
 
-    fn verifier_services<T: SigVerifier + 'static + Send + Clone>(
+    fn verifier_services<T: SigVerifier + 'static + Send>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: T,
         name: &'static str,

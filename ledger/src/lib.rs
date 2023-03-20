@@ -36,7 +36,4 @@ extern crate solana_metrics;
 extern crate log;
 
 #[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
 extern crate solana_frozen_abi_macro;
