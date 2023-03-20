@@ -2463,6 +2463,21 @@ fn bank_fields_from_snapshots(
     })
 }
 
+fn deserialize_status_cache(status_cache_path: &Path) -> Result<Vec<BankSlotDelta>> {
+    deserialize_snapshot_data_file(&status_cache_path, |stream| {
+        info!(
+            "Rebuilding status cache from {}",
+            status_cache_path.display()
+        );
+        let slot_delta: Vec<BankSlotDelta> = bincode::options()
+            .with_limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
+            .deserialize_from(stream)?;
+        Ok(slot_delta)
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn rebuild_bank_from_unarchived_snapshots(
     full_snapshot_unpacked_snapshots_dir_and_version: &UnpackedSnapshotsDirAndVersion,
@@ -2552,18 +2567,7 @@ fn rebuild_bank_from_unarchived_snapshots(
             },
         )
         .join(SNAPSHOT_STATUS_CACHE_FILENAME);
-    let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
-        info!(
-            "Rebuilding status cache from {}",
-            status_cache_path.display()
-        );
-        let slot_deltas: Vec<BankSlotDelta> = bincode::options()
-            .with_limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
-            .with_fixint_encoding()
-            .allow_trailing_bytes()
-            .deserialize_from(stream)?;
-        Ok(slot_deltas)
-    })?;
+    let slot_deltas = deserialize_status_cache(&status_cache_path)?;
 
     verify_slot_deltas(slot_deltas.as_slice(), &bank)?;
 
@@ -2623,18 +2627,7 @@ fn rebuild_bank_from_snapshot(
     let status_cache_path = bank_snapshot
         .snapshot_dir
         .join(SNAPSHOT_STATUS_CACHE_FILENAME);
-    let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
-        info!(
-            "Rebuilding status cache from {}",
-            status_cache_path.display()
-        );
-        let slot_deltas: Vec<BankSlotDelta> = bincode::options()
-            .with_limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
-            .with_fixint_encoding()
-            .allow_trailing_bytes()
-            .deserialize_from(stream)?;
-        Ok(slot_deltas)
-    })?;
+    let slot_deltas = deserialize_status_cache(&status_cache_path)?;
 
     verify_slot_deltas(slot_deltas.as_slice(), &bank)?;
 
