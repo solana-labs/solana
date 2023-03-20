@@ -39,7 +39,7 @@ use {
     std::{
         collections::HashSet,
         io::{Cursor, Read},
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -458,7 +458,14 @@ impl AncestorHashesService {
                     let pong = RepairProtocol::Pong(pong);
                     if let Ok(pong_bytes) = serialize(&pong) {
                         if let Some(connection_cache) = ancestore_connection_cache {
-                            let connection = connection_cache.get_connection(&from_addr);
+                            // This is a little hacky, the same connection cache is used for sending requests and responding to ping which is this case.
+                            // We do not want to offset based on the address as it is already Quic address -- but the cache is already configured so to do
+                            // the "+" offset, so we first decrease it by the same amount. Get connection should have an overload to do this.
+                            let fix_from_addr = SocketAddr::new(
+                                from_addr.ip(),
+                                from_addr.port() - solana_sdk::quic::QUIC_PORT_OFFSET,
+                            );
+                            let connection = connection_cache.get_connection(&fix_from_addr);
                             let _ignore = connection.send_data(&pong_bytes[..]);
                         } else {
                             let _ignore = ancestor_socket.send_to(&pong_bytes[..], from_addr);
