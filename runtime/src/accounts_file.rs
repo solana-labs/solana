@@ -9,10 +9,20 @@ use {
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
         borrow::Borrow,
-        io,
+        io, mem,
         path::{Path, PathBuf},
     },
 };
+
+// Data placement should be aligned at the next boundary. Without alignment accessing the memory may
+// crash on some architectures.
+pub const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
+#[macro_export]
+macro_rules! u64_align {
+    ($addr: expr) => {
+        ($addr + (ALIGN_BOUNDARY_OFFSET - 1)) & !(ALIGN_BOUNDARY_OFFSET - 1)
+    };
+}
 
 #[derive(Debug)]
 /// An enum for accessing an accounts file which can be implemented
