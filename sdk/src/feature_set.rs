@@ -634,6 +634,10 @@ pub mod vote_state_add_vote_latency {
     solana_sdk::declare_id!("7axKe5BTYBDD87ftzWbk5DfzWMGyRvqmWTduuo22Yaqy");
 }
 
+pub mod timely_vote_credits {
+    solana_sdk::declare_id!("TiBF8ncXacGRE4c3DgF24fE5ETpLG75zYjTHfj9qTv2");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -787,6 +791,7 @@ lazy_static! {
         (switch_to_new_elf_parser::id(), "switch to new ELF parser #30497"),
         (round_up_heap_size::id(), "round up heap size when calculating heap cost #30679"),
         (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state"),
+        (timely_vote_credits::id(), "use timeliness of votes in determining credits to award"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
