@@ -7353,6 +7353,25 @@ impl AccountsDb {
         (accounts_hash, total_lamports)
     }
 
+    /// Calculate the incremental accounts hash for `storages` and save the results at `slot`
+    pub fn update_incremental_accounts_hash(
+        &self,
+        config: &CalcAccountsHashConfig<'_>,
+        storages: &SortedStorages<'_>,
+        slot: Slot,
+        stats: HashStats,
+    ) -> Result<(IncrementalAccountsHash, /*capitalization*/ u64), AccountsHashVerificationError>
+    {
+        let incremental_accounts_hash =
+            self.calculate_incremental_accounts_hash(config, storages, stats)?;
+        let old_incremental_accounts_hash =
+            self.set_incremental_accounts_hash(slot, incremental_accounts_hash);
+        if let Some(old_incremental_accounts_hash) = old_incremental_accounts_hash {
+            warn!("Incremental accounts hash was already set for slot {slot}! old: {old_incremental_accounts_hash:?}, new: {incremental_accounts_hash:?}");
+        }
+        Ok(incremental_accounts_hash)
+    }
+
     /// Set the accounts hash for `slot`
     ///
     /// returns the previous accounts hash for `slot`

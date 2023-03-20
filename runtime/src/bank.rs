@@ -49,7 +49,7 @@ use {
             CalcAccountsHashDataSource, IncludeSlotInHash, VerifyAccountsHashAndLamportsConfig,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
-        accounts_hash::{AccountsHash, IncrementalAccountsHash},
+        accounts_hash::{AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash},
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
@@ -65,6 +65,7 @@ use {
         runtime_config::RuntimeConfig,
         serde_snapshot::{SerdeAccountsHash, SerdeIncrementalAccountsHash},
         snapshot_hash::SnapshotHash,
+        sorted_storages::SortedStorages,
         stake_account::{self, StakeAccount},
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
@@ -6943,7 +6944,11 @@ impl Bank {
     /// return true if all is good
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_accounts_hash(&self, config: VerifyAccountsHashConfig) -> bool {
+    pub fn verify_accounts_hash(
+        &self,
+        base: Option<(Slot, /*capitalization*/ u64)>,
+        config: VerifyAccountsHashConfig,
+    ) -> bool {
         let accounts = &self.rc.accounts;
         // Wait until initial hash calc is complete before starting a new hash calc.
         // This should only occur when we halt at a slot in ledger-tool.
@@ -6960,7 +6965,7 @@ impl Bank {
         {
             if let Some(parent) = self.parent() {
                 info!("{} is not a root, so attempting to verify bank hash on parent bank at slot: {}", self.slot(), parent.slot());
-                return parent.verify_accounts_hash(config);
+                return parent.verify_accounts_hash(base, config);
             } else {
                 // this will result in mismatch errors
                 // accounts hash calc doesn't include unrooted slots
@@ -6988,7 +6993,7 @@ impl Bank {
                         let result = accounts_.verify_accounts_hash_and_lamports(
                             slot,
                             cap,
-                            None,
+                            base,
                             VerifyAccountsHashAndLamportsConfig {
                                 ancestors: &ancestors,
                                 test_hash_calculation: config.test_hash_calculation,
@@ -7012,7 +7017,7 @@ impl Bank {
             let result = accounts.verify_accounts_hash_and_lamports(
                 slot,
                 cap,
-                None,
+                base,
                 VerifyAccountsHashAndLamportsConfig {
                     ancestors,
                     test_hash_calculation: config.test_hash_calculation,
@@ -7285,6 +7290,31 @@ impl Bank {
         self.update_accounts_hash(CalcAccountsHashDataSource::IndexForTests, false, false)
     }
 
+    /// Calculate the incremental accounts hash from `base_slot` to `self`
+    pub fn update_incremental_accounts_hash(&self, base_slot: Slot) -> IncrementalAccountsHash {
+        let config = CalcAccountsHashConfig {
+            use_bg_thread_pool: true,
+            check_hash: false,
+            ancestors: None, // does not matter, will not be used
+            epoch_schedule: &self.epoch_schedule,
+            rent_collector: &self.rent_collector,
+            store_detailed_debug_info_on_failure: false,
+        };
+        let storages = self.get_snapshot_storages(Some(base_slot));
+        let sorted_storages = SortedStorages::new(&storages);
+        self.rc
+            .accounts
+            .accounts_db
+            .update_incremental_accounts_hash(
+                &config,
+                &sorted_storages,
+                self.slot(),
+                HashStats::default(),
+            )
+            .unwrap() // unwrap here will never fail since check_hash = false
+            .0
+    }
+
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(
@@ -7292,6 +7322,7 @@ impl Bank {
         test_hash_calculation: bool,
         accounts_db_skip_shrink: bool,
         last_full_snapshot_slot: Slot,
+        base: Option<(Slot, /*capitalization*/ u64)>,
     ) -> bool {
         let (_, clean_time_us) = measure_us!({
             let should_clean = !accounts_db_skip_shrink && self.slot() > 0;
@@ -7326,13 +7357,16 @@ impl Bank {
             let should_verify_accounts = !self.rc.accounts.accounts_db.skip_initial_hash_calc;
             if should_verify_accounts {
                 info!("Verifying accounts...");
-                let verified = self.verify_accounts_hash(VerifyAccountsHashConfig {
-                    test_hash_calculation,
-                    ignore_mismatch: false,
-                    require_rooted_bank: false,
-                    run_in_background: true,
-                    store_hash_raw_data_for_debug: false,
-                });
+                let verified = self.verify_accounts_hash(
+                    base,
+                    VerifyAccountsHashConfig {
+                        test_hash_calculation,
+                        ignore_mismatch: false,
+                        require_rooted_bank: false,
+                        run_in_background: true,
+                        store_hash_raw_data_for_debug: false,
+                    },
+                );
                 info!("Verifying accounts... In background.");
                 verified
             } else {

@@ -1515,13 +1515,16 @@ fn load_frozen_forks(
 fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
     bank.force_flush_accounts_cache();
     // note that this slot may not be a root
-    let _ = bank.verify_accounts_hash(VerifyAccountsHashConfig {
-        test_hash_calculation: false,
-        ignore_mismatch: true,
-        require_rooted_bank: false,
-        run_in_background: false,
-        store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
-    });
+    let _ = bank.verify_accounts_hash(
+        None,
+        VerifyAccountsHashConfig {
+            test_hash_calculation: false,
+            ignore_mismatch: true,
+            require_rooted_bank: false,
+            run_in_background: false,
+            store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
+        },
+    );
 }
 
 // `roots` is sorted largest to smallest by root slot
