@@ -41,6 +41,7 @@ use {
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
             self, create_all_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
+            MIN_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
     },
     solana_sdk::{
@@ -1391,6 +1392,13 @@ pub fn main() {
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let maximum_full_snapshot_archives_to_retain =
         value_t_or_exit!(matches, "maximum_full_snapshots_to_retain", usize);
+    if maximum_full_snapshot_archives_to_retain < MIN_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN {
+        eprintln!(
+            "The provided --maximum-full-snapshots-to-retain value is too small, \
+            the minimum value is {MIN_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN}"
+        );
+        exit(1);
+    }
     let maximum_incremental_snapshot_archives_to_retain =
         value_t_or_exit!(matches, "maximum_incremental_snapshots_to_retain", usize);
     let snapshot_packager_niceness_adj =
