@@ -38,7 +38,11 @@ pub mod ledger_metric_report_service;
 pub mod multi_iterator_scanner;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
+<<<<<<< HEAD
 mod packet_hasher;
+=======
+pub mod packet_deserializer;
+>>>>>>> 5d9aba554 (increases retransmit-stage deduper capacity and reset-cycle (#30758))
 pub mod packet_threshold;
 pub mod poh_timing_report_service;
 pub mod poh_timing_reporter;
