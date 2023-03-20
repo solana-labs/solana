@@ -7,7 +7,7 @@ if [[ -n $CI && -z $NO_INTERCEPT ]]; then
   echo "$0: Intercepting stderr into $console_log, along side tee-d stdout."
 
   if [[ -n $SOLANA_IN_DOCKER_RUN ]]; then
-    (set -x && sudo apt install expect)
+    (set -x && apt install expect)
   fi
   # we don't care about being racy here as was before; so disable shellcheck
   # shellcheck disable=SC2094
