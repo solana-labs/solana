@@ -1655,7 +1655,9 @@ pub fn bank_from_snapshot_dir(
     // initialized to 0, it is never incremented to non-zero, so the substraction underflow will occur, causing
     // test_bank_from_snapshot_dir to fail.
     let next_append_vec_id = Arc::new(AtomicAppendVecId::new(1));
-    let (storage, measure_build_storage) =
+
+    let measure_build_storage = Measure::start("build storage");
+    let storage =
         build_storage_from_snapshot_dir(bank_snapshot, account_paths, next_append_vec_id.clone())?;
     info!("{}", measure_build_storage);
 
@@ -1910,7 +1912,7 @@ fn build_storage_from_snapshot_dir(
     snapshot_info: &BankSnapshotInfo,
     account_paths: &[PathBuf],
     next_append_vec_id: Arc<AtomicAppendVecId>,
-) -> Result<(AccountStorageMap, Measure)> {
+) -> Result<AccountStorageMap> {
     let bank_snapshot_dir = &snapshot_info.snapshot_dir;
     let snapshot_file_path = &snapshot_info.snapshot_path();
     let snapshot_version_path = bank_snapshot_dir.join("version");
@@ -1967,21 +1969,18 @@ fn build_storage_from_snapshot_dir(
     );
 
     let num_rebuilder_threads = num_cpus::get_physical().saturating_sub(1).max(1);
-    let (version_and_storages, measure_storage) = measure!(
-        SnapshotStorageRebuilder::rebuild_storage(
-            file_receiver,
-            num_rebuilder_threads,
-            next_append_vec_id,
-            SnapshotFrom::Dir,
-        )?,
-        "build storage from snapshot dir"
-    );
+    let version_and_storages = SnapshotStorageRebuilder::rebuild_storage(
+        file_receiver,
+        num_rebuilder_threads,
+        next_append_vec_id,
+        SnapshotFrom::Dir,
+    )?;
 
     let RebuiltSnapshotStorage {
         snapshot_version: _,
         storage,
     } = version_and_storages;
-    Ok((storage, measure_storage))
+    Ok(storage)
 }
 
 /// Reads the `snapshot_version` from a file. Before opening the file, its size
