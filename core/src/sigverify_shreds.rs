@@ -9,10 +9,7 @@ use {
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signer},
     std::{
         collections::HashMap,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
-        },
+        sync::{Arc, RwLock},
         thread::{Builder, JoinHandle},
         time::{Duration, Instant},
     },
@@ -32,7 +29,6 @@ pub(crate) fn spawn_shred_sigverify(
     shred_fetch_receiver: Receiver<PacketBatch>,
     retransmit_sender: Sender<Vec</*shred:*/ Vec<u8>>>,
     verified_sender: Sender<Vec<PacketBatch>>,
-    turbine_disabled: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     let recycler_cache = RecyclerCache::warmed();
     let mut stats = ShredSigVerifyStats::new(Instant::now());
@@ -50,7 +46,6 @@ pub(crate) fn spawn_shred_sigverify(
                 &shred_fetch_receiver,
                 &retransmit_sender,
                 &verified_sender,
-                &turbine_disabled,
                 &mut stats,
             ) {
                 Ok(()) => (),
@@ -71,7 +66,6 @@ fn run_shred_sigverify(
     shred_fetch_receiver: &Receiver<PacketBatch>,
     retransmit_sender: &Sender<Vec</*shred:*/ Vec<u8>>>,
     verified_sender: &Sender<Vec<PacketBatch>>,
-    turbine_disabled: &AtomicBool,
     stats: &mut ShredSigVerifyStats,
 ) -> Result<(), Error> {
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
@@ -100,10 +94,8 @@ fn run_shred_sigverify(
         .map(<[u8]>::to_vec)
         .collect();
     stats.num_retransmit_shreds += shreds.len();
-    if !turbine_disabled.load(Ordering::Relaxed) {
-        retransmit_sender.send(shreds)?;
-        verified_sender.send(packets)?;
-    }
+    retransmit_sender.send(shreds)?;
+    verified_sender.send(packets)?;
     stats.elapsed_micros += now.elapsed().as_micros() as u64;
     Ok(())
 }

@@ -18,7 +18,10 @@ use {
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
     std::{
         net::UdpSocket,
-        sync::{atomic::AtomicBool, Arc, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
@@ -40,6 +43,7 @@ impl ShredFetchStage {
         name: &'static str,
         flags: PacketFlags,
         repair_context: Option<(&UdpSocket, &ClusterInfo)>,
+        turbine_disabled: Arc<AtomicBool>,
     ) {
         const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
         let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
@@ -93,7 +97,9 @@ impl ShredFetchStage {
             let max_slot = last_slot + 2 * slots_per_epoch;
             let should_drop_merkle_shreds =
                 |shred_slot| should_drop_merkle_shreds(shred_slot, &root_bank);
+            let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut() {
+<<<<<<< HEAD
                 if should_discard_packet(
                     packet,
                     last_root,
@@ -105,6 +111,20 @@ impl ShredFetchStage {
                     &mut stats,
                 ) {
                     packet.meta.set_discard(true);
+=======
+                if turbine_disabled
+                    || should_discard_packet(
+                        packet,
+                        last_root,
+                        max_slot,
+                        shred_version,
+                        &deduper,
+                        should_drop_merkle_shreds,
+                        &mut stats,
+                    )
+                {
+                    packet.meta_mut().set_discard(true);
+>>>>>>> e66edeb18 (moves turbine-disabled check to shred-fetch-stage (#30799))
                 } else {
                     packet.meta.flags.insert(flags);
                 }
@@ -116,6 +136,7 @@ impl ShredFetchStage {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn packet_modifier(
         sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
@@ -126,6 +147,7 @@ impl ShredFetchStage {
         name: &'static str,
         flags: PacketFlags,
         repair_context: Option<(Arc<UdpSocket>, Arc<ClusterInfo>)>,
+        turbine_disabled: Arc<AtomicBool>,
     ) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
         let (packet_sender, packet_receiver) = unbounded();
         let streamers = sockets
@@ -157,6 +179,7 @@ impl ShredFetchStage {
                     name,
                     flags,
                     repair_context,
+                    turbine_disabled,
                 )
             })
             .unwrap();
@@ -171,6 +194,7 @@ impl ShredFetchStage {
         shred_version: u16,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
+        turbine_disabled: Arc<AtomicBool>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let recycler = PacketBatchRecycler::warmed(100, 1024);
@@ -185,6 +209,7 @@ impl ShredFetchStage {
             "shred_fetch",
             PacketFlags::empty(),
             None, // repair_context
+            turbine_disabled.clone(),
         );
 
         let (tvu_forwards_threads, fwd_thread_hdl) = Self::packet_modifier(
@@ -197,6 +222,7 @@ impl ShredFetchStage {
             "shred_fetch_tvu_forwards",
             PacketFlags::FORWARDED,
             None, // repair_context
+            turbine_disabled.clone(),
         );
 
         let (repair_receiver, repair_handler) = Self::packet_modifier(
@@ -209,6 +235,7 @@ impl ShredFetchStage {
             "shred_fetch_repair",
             PacketFlags::REPAIR,
             Some((repair_socket, cluster_info)),
+            turbine_disabled,
         );
 
         tvu_threads.extend(tvu_forwards_threads.into_iter());
