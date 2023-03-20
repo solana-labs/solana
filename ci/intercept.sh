@@ -8,7 +8,7 @@ if [[ -n $CI && -z $NO_INTERCEPT ]]; then
 
   # we don't care about being racy here as was before; so disable shellcheck
   # shellcheck disable=SC2094
-  if "$@" 2>> "$console_log" 1>> >(tee -a "$console_log"); then
+  if unbuffer "$@" 2>> "$console_log" 1>> >(tee -a "$console_log"); then
     exit_code=0
   else
     exit_code=$?
