@@ -416,10 +416,9 @@ impl SigVerifyStage {
             .name("solSigVerifier".to_string())
             .spawn(move || {
                 let mut rng = rand::thread_rng();
-                let mut deduper =
-                    Deduper::<2>::new(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, DEDUPER_NUM_BITS);
+                let mut deduper = Deduper::<2>::new(&mut rng, DEDUPER_NUM_BITS);
                 loop {
-                    deduper.maybe_reset(&mut rng, &MAX_DEDUPER_AGE);
+                    deduper.maybe_reset(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, MAX_DEDUPER_AGE);
                     if let Err(e) =
                         Self::verifier(&deduper, &packet_receiver, &mut verifier, &mut stats)
                     {
