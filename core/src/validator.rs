@@ -89,7 +89,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_utils::{self, move_and_async_delete_path},
+        snapshot_utils::{self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path},
     },
     solana_sdk::{
         clock::Slot,
@@ -128,6 +128,7 @@ pub struct ValidatorConfig {
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
+    pub account_snapshot_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
     /// Specifies which plugins to start up with
@@ -193,6 +194,7 @@ impl Default for ValidatorConfig {
             voting_disabled: false,
             max_ledger_shreds: None,
             account_paths: Vec::new(),
+            account_snapshot_paths: Vec::new(),
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
             on_start_geyser_plugin_config_files: None,
@@ -494,6 +496,17 @@ impl Validator {
         start.stop();
         info!("done. {}", start);
 
+        info!("Cleaning orphaned account snapshot directories..");
+        if let Err(e) = clean_orphaned_account_snapshot_dirs(
+            &config.snapshot_config.bank_snapshots_dir,
+            &config.account_snapshot_paths,
+        ) {
+            return Err(format!(
+                "Failed to clean orphaned account snapshot directories: {e:?}"
+            ));
+        }
+
+        let exit = Arc::new(AtomicBool::new(false));
         {
             let exit = exit.clone();
             config

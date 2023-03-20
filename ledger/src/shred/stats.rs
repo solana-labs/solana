@@ -32,6 +32,7 @@ pub struct ProcessShredsStats {
 pub struct ShredFetchStats {
     pub index_overrun: usize,
     pub shred_count: usize,
+    pub num_deduper_saturations: usize,
     pub(crate) num_shreds_merkle_code: usize,
     pub(crate) num_shreds_merkle_data: usize,
     pub ping_count: usize,
@@ -117,6 +118,7 @@ impl ShredFetchStats {
             name,
             ("index_overrun", self.index_overrun, i64),
             ("shred_count", self.shred_count, i64),
+            ("num_deduper_saturations", self.num_deduper_saturations, i64),
             ("num_shreds_merkle_code", self.num_shreds_merkle_code, i64),
             ("num_shreds_merkle_data", self.num_shreds_merkle_data, i64),
             ("ping_count", self.ping_count, i64),

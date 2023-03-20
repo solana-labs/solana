@@ -4813,6 +4813,7 @@ dependencies = [
  "rayon",
  "solana-account-decoder",
  "solana-clap-utils",
+ "solana-cli-config",
  "solana-client",
  "solana-core",
  "solana-faucet",
