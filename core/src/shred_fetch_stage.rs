@@ -86,7 +86,8 @@ impl ShredFetchStage {
             }
             stats.shred_count += packet_batch.len();
 
-            if let Some((udp_socket, _)) = &repair_context {
+            if let Some((udp_socket, cluster_info)) = &repair_context {
+                info!("Got some repair response at {:?} use quic{}", cluster_info.id(), matches!(udp_socket, RepairTransportConfig::Quic(_)));
                 debug_assert_eq!(flags, PacketFlags::REPAIR);
                 debug_assert!(keypair.is_some());
                 if let Some(ref keypair) = keypair {
