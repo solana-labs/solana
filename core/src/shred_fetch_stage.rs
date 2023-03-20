@@ -231,6 +231,7 @@ impl ShredFetchStage {
                     RepairTransportConfig::Quic(connection_cache_clone),
                     cluster_info.as_ref(),
                 ));
+                info!("Calling modify_packets for quic repair results at {:?}.", cluster_info.id());
                 Self::modify_packets(
                     packet_receiver,
                     sender,
