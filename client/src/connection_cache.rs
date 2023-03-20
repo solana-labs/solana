@@ -300,7 +300,6 @@ mod tests {
         let conn = connection_cache.get_connection(&addr);
         assert_eq!(conn.server_addr().port(), port2 + QUIC_PORT_OFFSET);
 
-
         response_recv_exit.store(true, Ordering::Relaxed);
         response_recv_thread.join().unwrap();
     }
