@@ -909,16 +909,43 @@ fn confirm_full_slot(
     }
 }
 
+/// Measures different parts of the slot confirmation processing pipeline.
 #[derive(Debug)]
 pub struct ConfirmationTiming {
+    /// Moment when the `ConfirmationTiming` instance was created.  Used to track the total wall
+    /// clock time from the moment the first shard for the slot is received and to the moment the
+    /// slot is complete.
     pub started: Instant,
+
+    /// Wall clock time used by the entry replay code.  Does not include the PoH or the transaction
+    /// signature/precompiles verification, but can overlap with the PoH and signature verification.
+    /// In microseconds.
     pub replay_elapsed: u64,
+
+    /// Wall clock time used by the transaction execution part of pipeline.  `replay_elapsed`
+    /// includes this time.  In microseconds.
     pub execute_batches_us: u64,
+
+    /// Wall clock times, used for the PoH verification of entries.  In microseconds.
     pub poh_verify_elapsed: u64,
+
+    /// Wall clock time, used for the signature verification as well as precompiles verification.
+    /// In microseconds.
     pub transaction_verify_elapsed: u64,
+
+    /// Wall clock time spent loading data sets (and entries) from the blockstore.  This does not
+    /// include the case when the blockstore load failed.  In microseconds.
     pub fetch_elapsed: u64,
+
+    /// Same as `fetch_elapsed` above, but for the case when the blockstore load fails.  In
+    /// microseconds.
     pub fetch_fail_elapsed: u64,
+
+    /// Time used in transaction execution.  Across multiple threads, running `execute_batch()`.
     pub execute_timings: ExecuteTimings,
+
+    /// Time used to execute transactions, via `execute_batch()`, in the thread that consumed the
+    /// most time.
     pub end_to_end_execute_timings: ThreadExecuteTimings,
 }
 
