@@ -1656,7 +1656,7 @@ pub fn bank_from_snapshot_dir(
     // test_bank_from_snapshot_dir to fail.
     let next_append_vec_id = Arc::new(AtomicAppendVecId::new(1));
 
-    let measure_build_storage = Measure::start("build storage");
+    let measure_build_storage = Measure::start("build storage from snapshot dir");
     let storage =
         build_storage_from_snapshot_dir(bank_snapshot, account_paths, next_append_vec_id.clone())?;
     info!("{}", measure_build_storage);
