@@ -353,6 +353,7 @@ pub fn check_for_new_roots(
                 .get_slot_with_commitment(CommitmentConfig::finalized())
                 .unwrap_or(0);
             roots[i].insert(root_slot);
+            info!("Node {:?} roots {:?}", ingress_node.pubkey(), roots[i]);
             num_roots_map.insert(*ingress_node.pubkey(), roots[i].len());
             let num_roots = roots.iter().map(|r| r.len()).min().unwrap();
             done = num_roots >= num_new_roots;
