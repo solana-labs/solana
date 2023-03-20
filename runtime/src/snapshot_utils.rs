@@ -995,7 +995,7 @@ pub fn create_accounts_run_and_snapshot_dirs(
         // This will be done only once when transitioning from an old image without run directory
         // to this new version using run and snapshot directories.
         // The run/ content cleanup will be done at a later point.  The snapshot/ content persists
-        // accross the process boot, and will be purged by the account_background_service.
+        // across the process boot, and will be purged by the account_background_service.
         if fs::remove_dir_all(&account_dir).is_err() {
             delete_contents_of_path(&account_dir);
         }
@@ -1183,7 +1183,7 @@ pub fn add_bank_snapshot(
         bank_snapshot_path.display(),
     );
 
-    // We are contructing the snapshot directory to contain the full snapshot state information to allow
+    // We are constructing the snapshot directory to contain the full snapshot state information to allow
     // constructing a bank from this directory.  It acts like an archive to include the full state.
     // The set of the account appendvec files is the necessary part of this snapshot state.  Hard-link them
     // from the operational accounts/ directory to here.
