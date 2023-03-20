@@ -933,6 +933,7 @@ impl ServeRepair {
                 let (check, ping_pkt) =
                     Self::check_ping_cache(ping_cache, &request, &from_addr, &identity_keypair);
                 if let Some(ping_pkt) = ping_pkt {
+                    info!("Got ping packet from {:?} backtrace {:?}", from_addr, backtrace::Backtrace::new());
                     pending_pings.push(ping_pkt);
                 }
                 if !check {

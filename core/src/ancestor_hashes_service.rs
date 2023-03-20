@@ -784,8 +784,9 @@ impl AncestorHashesService {
                     {
                         let connection = conenection_cache.get_connection(socket_addr);
                         let _ = connection.send_data(&request_bytes);
+                    } else {
+                        let _ = ancestor_hashes_request_socket.send_to(&request_bytes, socket_addr);
                     }
-                    let _ = ancestor_hashes_request_socket.send_to(&request_bytes, socket_addr);
                 }
             }
 
