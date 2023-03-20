@@ -265,11 +265,11 @@ fn should_discard_packet(
 #[must_use]
 fn should_drop_merkle_shreds(shred_slot: Slot, root_bank: &Bank) -> bool {
     check_feature_activation(
-        &feature_set::drop_merkle_shreds::id(),
+        &feature_set::keep_merkle_shreds::id(),
         shred_slot,
         root_bank,
     ) && !check_feature_activation(
-        &feature_set::keep_merkle_shreds::id(),
+        &feature_set::drop_merkle_shreds::id(),
         shred_slot,
         root_bank,
     )
