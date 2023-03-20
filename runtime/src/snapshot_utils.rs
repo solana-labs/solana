@@ -2464,7 +2464,7 @@ fn bank_fields_from_snapshots(
 }
 
 fn deserialize_status_cache(status_cache_path: &Path) -> Result<Vec<BankSlotDelta>> {
-    deserialize_snapshot_data_file(&status_cache_path, |stream| {
+    deserialize_snapshot_data_file(status_cache_path, |stream| {
         info!(
             "Rebuilding status cache from {}",
             status_cache_path.display()
