@@ -232,8 +232,8 @@ impl SlotMetaWorkingSetEntry {
 }
 
 impl Blockstore {
-    pub fn db(self) -> Arc<Database> {
-        self.db
+    pub fn db(&self) -> Arc<Database> {
+        self.db.clone()
     }
 
     pub fn ledger_path(&self) -> &PathBuf {

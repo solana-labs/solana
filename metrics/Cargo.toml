@@ -22,6 +22,13 @@ env_logger = { workspace = true }
 rand = { workspace = true }
 serial_test = { workspace = true }
 
+[dependencies.rocksdb]
+# Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
+# when also using the bzip2 crate
+version = "0.19.0"
+default-features = false
+features = ["lz4"]
+
 [lib]
 name = "solana_metrics"
 

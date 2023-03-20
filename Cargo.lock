@@ -5966,6 +5966,7 @@ dependencies = [
  "log",
  "rand 0.7.3",
  "reqwest",
+ "rocksdb",
  "serial_test",
  "solana-sdk 1.16.0",
 ]

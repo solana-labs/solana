@@ -438,12 +438,19 @@ pub fn flush() {
 }
 
 /// Hook the panic handler to generate a data point on each panic
-pub fn set_panic_hook(program: &'static str, version: Option<String>) {
+pub fn set_panic_hook(
+    program: &'static str,
+    version: Option<String>,
+    db: Option<Arc<rocksdb::DB>>,
+) {
     static SET_HOOK: Once = Once::new();
     SET_HOOK.call_once(|| {
         let default_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |ono| {
             default_hook(ono);
+            if let Some(db) = &db {
+                db.cancel_all_background_work(true);
+            }
             let location = match ono.location() {
                 Some(location) => location.to_string(),
                 None => "?".to_string(),

@@ -212,7 +212,11 @@ fn create_client(
 
 fn main() {
     solana_logger::setup_with_default("solana=info");
-    solana_metrics::set_panic_hook("bench-tps", /*version:*/ None);
+    solana_metrics::set_panic_hook(
+        "bench-tps",
+        /*version:*/ None,
+        /*rocksdb::DB*/ None,
+    );
 
     let matches = cli::build_args(solana_version::version!()).get_matches();
     let cli_config = match cli::parse_args(&matches) {

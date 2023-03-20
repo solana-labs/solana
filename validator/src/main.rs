@@ -1713,7 +1713,6 @@ pub fn main() {
     }
 
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
-    solana_metrics::set_panic_hook("validator", Some(String::from(solana_version)));
     solana_entry::entry::init_poh();
     snapshot_utils::remove_tmp_snapshot_archives(&full_snapshot_archives_dir);
     snapshot_utils::remove_tmp_snapshot_archives(&incremental_snapshot_archives_dir);
@@ -1771,6 +1770,12 @@ pub fn main() {
         error!("Failed to start validator: {:?}", e);
         exit(1);
     });
+
+    solana_metrics::set_panic_hook(
+        "validator",
+        Some(String::from(solana_version)),
+        Some(validator.blockstore.db().backend()),
+    );
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {

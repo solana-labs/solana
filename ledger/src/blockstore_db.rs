@@ -346,7 +346,7 @@ impl OldestSlot {
 
 #[derive(Debug)]
 struct Rocks {
-    db: rocksdb::DB,
+    db: Arc<rocksdb::DB>,
     access_type: AccessType,
     oldest_slot: OldestSlot,
     column_options: LedgerColumnOptions,
@@ -374,11 +374,11 @@ impl Rocks {
         // Open the database
         let db = match access_type {
             AccessType::Primary | AccessType::PrimaryForMaintenance => Rocks {
-                db: DB::open_cf_descriptors(
+                db: Arc::new(DB::open_cf_descriptors(
                     &db_options,
                     path,
                     Self::cf_descriptors(&options, &oldest_slot),
-                )?,
+                )?),
                 access_type,
                 oldest_slot,
                 column_options,
@@ -394,12 +394,12 @@ impl Rocks {
                 info!("This secondary access could temporarily degrade other accesses, such as by solana-validator");
 
                 Rocks {
-                    db: DB::open_cf_descriptors_as_secondary(
+                    db: Arc::new(DB::open_cf_descriptors_as_secondary(
                         &db_options,
                         path,
                         &secondary_path,
                         Self::cf_descriptors(&options, &oldest_slot),
-                    )?,
+                    )?),
                     access_type,
                     oldest_slot,
                     column_options,
@@ -1115,6 +1115,10 @@ impl Database {
         Rocks::destroy(path)?;
 
         Ok(())
+    }
+
+    pub fn backend(&self) -> Arc<rocksdb::DB> {
+        self.backend.db.clone()
     }
 
     pub fn get<C>(&self, key: C::Index) -> Result<Option<C::Type>>
