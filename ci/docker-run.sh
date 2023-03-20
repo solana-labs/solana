@@ -114,7 +114,7 @@ ARGS+=(
 CODECOV_ENVS=$(CI=true bash <(while ! curl -sS --retry 5 --retry-delay 2 --retry-connrefused https://codecov.io/env; do sleep 10; done))
 
 (
-  SOLANA_IN_DOCKER_RUN=1
+  export SOLANA_IN_DOCKER_RUN=1
   if $INTERACTIVE; then
     if [[ -n $1 ]]; then
       echo
