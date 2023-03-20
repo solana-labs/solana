@@ -91,6 +91,8 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             Arc::clone(&stats.index),
             count,
         );
+        stats.index.resize_grow(0, index.capacity_bytes());
+
         Self {
             random: thread_rng().gen(),
             drives,
@@ -421,6 +423,10 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     pub fn apply_grow_index(&mut self, random: u64, index: BucketStorage) {
+        self.stats
+            .index
+            .resize_grow(self.index.capacity_bytes(), index.capacity_bytes());
+
         self.random = random;
         self.index = index;
     }
@@ -429,21 +435,31 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         std::mem::size_of::<T>() as u64
     }
 
+    fn add_data_bucket(&mut self, bucket: BucketStorage) {
+        self.stats.data.file_count.fetch_add(1, Ordering::Relaxed);
+        self.stats.data.resize_grow(0, bucket.capacity_bytes());
+        self.data.push(bucket);
+    }
+
     pub fn apply_grow_data(&mut self, ix: usize, bucket: BucketStorage) {
         if self.data.get(ix).is_none() {
             for i in self.data.len()..ix {
                 // insert empty data buckets
-                self.data.push(BucketStorage::new(
+                self.add_data_bucket(BucketStorage::new(
                     Arc::clone(&self.drives),
                     1 << i,
                     Self::elem_size(),
                     self.index.max_search,
                     Arc::clone(&self.stats.data),
                     Arc::default(),
-                ))
+                ));
             }
-            self.data.push(bucket);
+            self.add_data_bucket(bucket);
         } else {
+            let data_bucket = &mut self.data[ix];
+            self.stats
+                .data
+                .resize_grow(data_bucket.capacity_bytes(), bucket.capacity_bytes());
             self.data[ix] = bucket;
         }
     }
