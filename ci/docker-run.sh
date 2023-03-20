@@ -90,6 +90,7 @@ fi
 
 # Environment variables to propagate into the container
 ARGS+=(
+  --env SOLANA_IN_DOCKER_RUN
   --env BUILDKITE
   --env BUILDKITE_AGENT_ACCESS_TOKEN
   --env BUILDKITE_JOB_ID
@@ -112,17 +113,20 @@ ARGS+=(
 #   curl: (7) Failed to connect to codecov.io port 443: Connection timed out
 CODECOV_ENVS=$(CI=true bash <(while ! curl -sS --retry 5 --retry-delay 2 --retry-connrefused https://codecov.io/env; do sleep 10; done))
 
-if $INTERACTIVE; then
-  if [[ -n $1 ]]; then
-    echo
-    echo "Note: '$*' ignored due to --shell argument"
-    echo
+(
+  SOLANA_IN_DOCKER_RUN=1
+  if $INTERACTIVE; then
+    if [[ -n $1 ]]; then
+      echo
+      echo "Note: '$*' ignored due to --shell argument"
+      echo
+    fi
+    set -x
+    # shellcheck disable=SC2086
+    exec docker run --interactive --tty "${ARGS[@]}" $CODECOV_ENVS "$IMAGE" bash
   fi
+
   set -x
   # shellcheck disable=SC2086
-  exec docker run --interactive --tty "${ARGS[@]}" $CODECOV_ENVS "$IMAGE" bash
-fi
-
-set -x
-# shellcheck disable=SC2086
-exec docker run "${ARGS[@]}" $CODECOV_ENVS -t "$IMAGE" "$@"
+  exec docker run "${ARGS[@]}" $CODECOV_ENVS -t "$IMAGE" "$@"
+)
