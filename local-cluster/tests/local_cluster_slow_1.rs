@@ -536,6 +536,7 @@ fn test_duplicate_shreds_broadcast_leader() {
         voter_thread_sleep_ms as u64,
     );
 
+    info!("4. check_for_new_roots");
     // 4) Check that the cluster is making progress
     cluster.check_for_new_roots(
         16,
