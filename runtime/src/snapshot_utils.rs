@@ -5,10 +5,11 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig, AtomicAppendVecId,
             CalcAccountsHashDataSource,
         },
+        accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         append_vec::AppendVec,
-        bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
+        bank::{Bank, BankFieldsToDeserialize, BankIncrementalSnapshotPersistence, BankSlotDelta},
         builtins::Builtins,
         hardened_unpack::{
             streaming_unpack_snapshot, unpack_snapshot, ParallelSelector, UnpackError,
@@ -40,6 +41,7 @@ use {
     solana_measure::{measure, measure::Measure},
     solana_sdk::{
         clock::Slot,
+        feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
@@ -1477,12 +1479,28 @@ pub fn bank_from_snapshot_archives(
         snapshot_archive_info.hash,
     )?;
 
+    let base = (incremental_snapshot_archive_info.is_some()
+        && bank
+            .feature_set
+            .is_active(&feature_set::incremental_snapshot_only_incremental_hash_calculation::id()))
+    .then(|| {
+        let base_slot = full_snapshot_archive_info.slot();
+        let base_capitalization = bank
+            .rc
+            .accounts
+            .accounts_db
+            .get_accounts_hash(base_slot)
+            .expect("accounts hash must exist at full snapshot's slot")
+            .1;
+        (base_slot, base_capitalization)
+    });
+
     let mut measure_verify = Measure::start("verify");
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
         accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote(),
         full_snapshot_archive_info.slot(),
-        None,
+        base,
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
@@ -2697,7 +2715,14 @@ pub fn bank_to_incremental_snapshot_archive(
     bank.squash(); // Bank may not be a root
     bank.force_flush_accounts_cache();
     bank.clean_accounts(Some(full_snapshot_slot));
-    bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
+    if bank
+        .feature_set
+        .is_active(&feature_set::incremental_snapshot_only_incremental_hash_calculation::id())
+    {
+        bank.update_incremental_accounts_hash(full_snapshot_slot);
+    } else {
+        bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
+    }
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
@@ -2807,17 +2832,50 @@ pub fn package_and_archive_incremental_snapshot(
         None,
     )?;
 
-    let accounts_hash = bank
-        .get_accounts_hash()
-        .expect("accounts hash is required for snapshot");
+    let (accounts_hash_enum, accounts_hash_for_reserialize, bank_incremental_snapshot_persistence) =
+        if bank
+            .feature_set
+            .is_active(&feature_set::incremental_snapshot_only_incremental_hash_calculation::id())
+        {
+            let (base_accounts_hash, base_capitalization) = bank
+                .rc
+                .accounts
+                .accounts_db
+                .get_accounts_hash(incremental_snapshot_base_slot)
+                .expect("base accounts hash is required for incremental snapshot");
+            let (incremental_accounts_hash, incremental_capitalization) = bank
+                .rc
+                .accounts
+                .accounts_db
+                .get_incremental_accounts_hash(bank.slot())
+                .expect("incremental accounts hash is required for incremental snapshot");
+            let bank_incremental_snapshot_persistence = BankIncrementalSnapshotPersistence {
+                full_slot: incremental_snapshot_base_slot,
+                full_hash: base_accounts_hash.into(),
+                full_capitalization: base_capitalization,
+                incremental_hash: incremental_accounts_hash.into(),
+                incremental_capitalization,
+            };
+            (
+                incremental_accounts_hash.into(),
+                AccountsHash(Hash::default()), // value does not matter; not used for incremental snapshots
+                Some(bank_incremental_snapshot_persistence),
+            )
+        } else {
+            let accounts_hash = bank
+                .get_accounts_hash()
+                .expect("accounts hash is required for snapshot");
+            (accounts_hash.into(), accounts_hash, None)
+        };
+
     crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links_dir(),
         accounts_package.slot,
-        &accounts_hash,
-        None,
+        &accounts_hash_for_reserialize,
+        bank_incremental_snapshot_persistence.as_ref(),
     );
 
-    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash_enum);
     archive_snapshot_package(
         &snapshot_package,
         full_snapshot_archives_dir,
@@ -2858,12 +2916,18 @@ pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
 mod tests {
     use {
         super::*,
-        crate::{accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, status_cache::Status},
+        crate::{
+            accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            accounts_hash::{CalcAccountsHashConfig, HashStats},
+            genesis_utils,
+            sorted_storages::SortedStorages,
+            status_cache::Status,
+        },
         assert_matches::assert_matches,
         bincode::{deserialize_from, serialize_into},
         solana_sdk::{
             genesis_config::create_genesis_config,
-            native_token::sol_to_lamports,
+            native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
             signature::{Keypair, Signer},
             slot_history::SlotHistory,
             system_transaction,
@@ -4868,5 +4932,175 @@ mod tests {
         assert!(hardlink_dirs_slot_2
             .iter()
             .all(|dir| fs::metadata(dir).is_err()));
+    }
+
+    /// Test that snapshots with the Incremental Accounts Hash feature enabled can roundtrip.
+    ///
+    /// This test generates banks with zero and non-zero lamport accounts then takes full and
+    /// incremental snapshots.  A bank is deserialized from the snapshots, its incremental
+    /// accounts hash is recalculated, and then compared with the original.
+    #[test]
+    fn test_incremental_snapshot_with_incremental_accounts_hash() {
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+        let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
+        let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
+
+        let genesis_config_info = genesis_utils::create_genesis_config_with_leader(
+            1_000_000 * LAMPORTS_PER_SOL,
+            &Pubkey::new_unique(),
+            100 * LAMPORTS_PER_SOL,
+        );
+        let mint = &genesis_config_info.mint_keypair;
+
+        let do_transfers = |bank: &Bank| {
+            let key1 = Keypair::new(); // lamports from mint
+            let key2 = Keypair::new(); // will end with ZERO lamports
+            let key3 = Keypair::new(); // lamports from key2
+
+            let amount = 123_456_789;
+            let fee = {
+                let blockhash = bank.last_blockhash();
+                let transaction = SanitizedTransaction::from_transaction_for_tests(
+                    system_transaction::transfer(&key2, &key3.pubkey(), amount, blockhash),
+                );
+                bank.get_fee_for_message(transaction.message()).unwrap()
+            };
+            bank.transfer(amount + fee, mint, &key1.pubkey()).unwrap();
+            bank.transfer(amount + fee, mint, &key2.pubkey()).unwrap();
+            bank.transfer(amount + fee, &key2, &key3.pubkey()).unwrap();
+            assert_eq!(bank.get_balance(&key2.pubkey()), 0);
+
+            bank.fill_bank_with_ticks_for_tests();
+        };
+
+        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
+
+        // make some banks, do some transactions, ensure there's some zero-lamport accounts
+        for _ in 0..5 {
+            bank = Arc::new(Bank::new_from_parent(
+                &bank,
+                &Pubkey::new_unique(),
+                bank.slot() + 1,
+            ));
+            do_transfers(&bank);
+        }
+
+        // take full snapshot, save off the calculated accounts hash
+        let full_snapshot_archive = bank_to_full_snapshot_archive(
+            &bank_snapshots_dir,
+            &bank,
+            None,
+            &full_snapshot_archives_dir,
+            &incremental_snapshot_archives_dir,
+            ArchiveFormat::Tar,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        )
+        .unwrap();
+        let full_accounts_hash = bank
+            .rc
+            .accounts
+            .accounts_db
+            .get_accounts_hash(bank.slot())
+            .unwrap();
+
+        // make more banks, do more transactions, ensure there's more zero-lamport accounts
+        for _ in 0..5 {
+            bank = Arc::new(Bank::new_from_parent(
+                &bank,
+                &Pubkey::new_unique(),
+                bank.slot() + 1,
+            ));
+            do_transfers(&bank);
+        }
+
+        // take incremental snapshot, save off the calculated incremental accounts hash
+        let incremental_snapshot_archive = bank_to_incremental_snapshot_archive(
+            &bank_snapshots_dir,
+            &bank,
+            full_snapshot_archive.slot(),
+            None,
+            &full_snapshot_archives_dir,
+            &incremental_snapshot_archives_dir,
+            ArchiveFormat::Tar,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        )
+        .unwrap();
+        let incremental_accounts_hash = bank
+            .rc
+            .accounts
+            .accounts_db
+            .get_incremental_accounts_hash(bank.slot())
+            .unwrap();
+
+        // reconstruct a bank from the snapshots
+        let other_accounts_dir = tempfile::TempDir::new().unwrap();
+        let other_bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+        let (deserialized_bank, _) = bank_from_snapshot_archives(
+            &[other_accounts_dir.path().to_path_buf()],
+            &other_bank_snapshots_dir,
+            &full_snapshot_archive,
+            Some(&incremental_snapshot_archive),
+            &genesis_config_info.genesis_config,
+            &RuntimeConfig::default(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            None,
+            AccountShrinkThreshold::default(),
+            false,
+            false,
+            false,
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
+            &Arc::default(),
+        )
+        .unwrap();
+        deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
+        assert_eq!(&deserialized_bank, bank.as_ref());
+
+        // ensure the accounts hash stored in the deserialized bank matches
+        let deserialized_accounts_hash = deserialized_bank
+            .rc
+            .accounts
+            .accounts_db
+            .get_accounts_hash(full_snapshot_archive.slot())
+            .unwrap();
+        assert_eq!(deserialized_accounts_hash, full_accounts_hash);
+
+        // ensure the incremental accounts hash stored in the deserialized bank matches
+        let deserialized_incrmental_accounts_hash = deserialized_bank
+            .rc
+            .accounts
+            .accounts_db
+            .get_incremental_accounts_hash(incremental_snapshot_archive.slot())
+            .unwrap();
+        assert_eq!(
+            deserialized_incrmental_accounts_hash,
+            incremental_accounts_hash
+        );
+
+        // recalculate the incremental accounts hash on the desserialized bank and ensure it matches
+        let other_incremental_snapshot_storages =
+            deserialized_bank.get_snapshot_storages(Some(full_snapshot_archive.slot()));
+        let other_incremental_accounts_hash = bank
+            .rc
+            .accounts
+            .accounts_db
+            .calculate_incremental_accounts_hash(
+                &CalcAccountsHashConfig {
+                    use_bg_thread_pool: false,
+                    check_hash: false,
+                    ancestors: None,
+                    epoch_schedule: deserialized_bank.epoch_schedule(),
+                    rent_collector: deserialized_bank.rent_collector(),
+                    store_detailed_debug_info_on_failure: false,
+                },
+                &SortedStorages::new(&other_incremental_snapshot_storages),
+                HashStats::default(),
+            )
+            .unwrap();
+        assert_eq!(other_incremental_accounts_hash, incremental_accounts_hash);
     }
 }
