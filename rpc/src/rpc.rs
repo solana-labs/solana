@@ -218,7 +218,7 @@ impl JsonRpcRequestProcessor {
                 .into());
             }
         }
-        info!("Got bank {:?} {:p}", bank, &bank);
+        info!("Got bank {:?} {:p}", bank.slot(), &bank);
         Ok(bank)
     }
 
