@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use {
     crate::{serve_repair::ServeRepair, tpu::MAX_QUIC_CONNECTIONS_PER_PEER, tvu::RepairQuicConfig},
     crossbeam_channel::{unbounded, Sender},
@@ -13,6 +11,7 @@ use {
         streamer::{self, ResponderOption},
     },
     std::{
+        net::SocketAddr,
         sync::{atomic::AtomicBool, Arc},
         thread::{self, JoinHandle},
     },

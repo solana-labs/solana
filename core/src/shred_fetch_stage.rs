@@ -34,7 +34,6 @@ const DEFAULT_LRU_SIZE: usize = 10_000;
 
 pub(crate) struct ShredFetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
-
     // /// The Quic ConnectonCache using the same Quic Endpoint of the Quic based
     // /// streamer receiving shreds. The connection cache can be used for sending
     // /// repair requests.
@@ -343,9 +342,7 @@ impl ShredFetchStage {
     }
 
     pub(crate) fn join(self) -> thread::Result<()> {
-        error!(
-            "Shutting down PacketModQ quic_repair_addr",
-        );
+        error!("Shutting down PacketModQ quic_repair_addr",);
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }

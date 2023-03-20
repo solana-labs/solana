@@ -49,13 +49,13 @@ impl WarmQuicCacheService {
                             if let Some(addr) = cluster_info
                                 .lookup_contact_info(&leader_pubkey, |leader| leader.tpu)
                             {
-                                // let conn = connection_cache.get_connection(&addr);
-                                // if let Err(err) = conn.send_data(&[0u8]) {
-                                //     warn!(
-                                //         "Failed to warmup QUIC connection to the leader {:?}, Error {:?}",
-                                //         leader_pubkey, err
-                                //     );
-                                // }
+                                let conn = connection_cache.get_connection(&addr);
+                                if let Err(err) = conn.send_data(&[0u8]) {
+                                    warn!(
+                                        "Failed to warmup QUIC connection to the leader {:?}, Error {:?}",
+                                        leader_pubkey, err
+                                    );
+                                }
                             }
                         }
                     }
