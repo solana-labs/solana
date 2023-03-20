@@ -221,7 +221,7 @@ mod tests {
         super::*,
         crate::connection_cache::ConnectionCache,
         crossbeam_channel::unbounded,
-        solana_sdk::{net::DEFAULT_TPU_COALESCE_MS, quic::QUIC_PORT_OFFSET, signature::Keypair},
+        solana_sdk::{quic::QUIC_PORT_OFFSET, signature::Keypair},
         solana_streamer::{
             nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
             streamer::StakedNodes,
@@ -269,6 +269,7 @@ mod tests {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
 
         let (response_recv_endpoint, response_recv_thread) = solana_streamer::quic::spawn_server(
+            "test_quic_server".into(),
             response_recv_socket,
             &keypair2,
             response_recv_ip,
@@ -280,7 +281,7 @@ mod tests {
             10,
             response_recv_stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            DEFAULT_TPU_COALESCE_MS,
+            5,
         )
         .unwrap();
 
@@ -298,6 +299,7 @@ mod tests {
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port2);
         let conn = connection_cache.get_connection(&addr);
         assert_eq!(conn.server_addr().port(), port2 + QUIC_PORT_OFFSET);
+
 
         response_recv_exit.store(true, Ordering::Relaxed);
         response_recv_thread.join().unwrap();

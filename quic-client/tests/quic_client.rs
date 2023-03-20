@@ -76,6 +76,7 @@ mod tests {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (s, exit, keypair, ip, stats) = server_args();
         let (_, t) = solana_streamer::quic::spawn_server(
+            "test_quic_server".into(),
             s.try_clone().unwrap(),
             &keypair,
             ip,
@@ -213,6 +214,7 @@ mod tests {
         let (request_recv_socket, request_recv_exit, keypair, request_recv_ip, request_recv_stats) =
             server_args();
         let (request_recv_endpoint, request_recv_thread) = solana_streamer::quic::spawn_server(
+            "test_quic_server".into(),
             request_recv_socket.try_clone().unwrap(),
             &keypair,
             request_recv_ip,
@@ -243,6 +245,7 @@ mod tests {
         let port = response_recv_socket.local_addr().unwrap().port();
         let server_addr = SocketAddr::new(addr, port);
         let (response_recv_endpoint, response_recv_thread) = solana_streamer::quic::spawn_server(
+            "test_quic_server".into(),
             response_recv_socket,
             &keypair2,
             response_recv_ip,

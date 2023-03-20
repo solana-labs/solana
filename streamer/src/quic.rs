@@ -390,6 +390,7 @@ mod test {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
         let (_, t) = spawn_server(
+            "test_quic_server".into(),
             s,
             &keypair,
             ip,
@@ -447,6 +448,7 @@ mod test {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
         let (_, t) = spawn_server(
+            "test_quic_server".into(),
             s,
             &keypair,
             ip,
@@ -491,6 +493,7 @@ mod test {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
         let (_, t) = spawn_server(
+            "test_quic_server".into(),
             s,
             &keypair,
             ip,
