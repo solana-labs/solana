@@ -38,6 +38,7 @@ pub(crate) struct ShredFetchStage {
     // /// streamer receiving shreds. The connection cache can be used for sending
     // /// repair requests.
     // connection_cache: Option<Arc<ConnectionCache>>,
+    quic_repair_addr: Option<Arc<UdpSocket>>,
 }
 
 impl ShredFetchStage {
@@ -87,7 +88,7 @@ impl ShredFetchStage {
             stats.shred_count += packet_batch.len();
 
             if let Some((udp_socket, cluster_info)) = &repair_context {
-                info!("Got some repair response at {:?} use quic{}", cluster_info.id(), matches!(udp_socket, RepairTransportConfig::Quic(_)));
+                info!("Got some repair response at {:?} use quic {}", cluster_info.id(), matches!(udp_socket, RepairTransportConfig::Quic(_)));
                 debug_assert_eq!(flags, PacketFlags::REPAIR);
                 debug_assert!(keypair.is_some());
                 if let Some(ref keypair) = keypair {
@@ -297,8 +298,9 @@ impl ShredFetchStage {
             Some((repair_socket, cluster_info.clone())),
         );
 
-        let (connection_cache, repair_quic_t, quic_repair_modifier_t) =
+        let (connection_cache, quic_repair_addr, repair_quic_t, quic_repair_modifier_t) =
             if let Some(repair_quic_config) = repair_quic_config {
+                let local_addr = repair_quic_config.repair_address.clone();
                 let (repair_quic_t, quic_repair_modifier_t, connection_cache) =
                     Self::packet_modifier_quic(
                         exit,
@@ -312,11 +314,12 @@ impl ShredFetchStage {
                     );
                 (
                     Some(connection_cache),
+                    Some(local_addr),
                     Some(repair_quic_t),
                     Some(quic_repair_modifier_t),
                 )
             } else {
-                (None, None, None)
+                (None, None, None, None)
             };
 
         tvu_threads.extend(tvu_forwards_threads.into_iter());
@@ -337,12 +340,13 @@ impl ShredFetchStage {
             connection_cache,
             Self {
                 thread_hdls: tvu_threads,
+                quic_repair_addr
             },
         )
     }
 
     pub(crate) fn join(self) -> thread::Result<()> {
-        error!("Shutting down PacketModQ quic_repair_addr",);
+        error!("Shutting down PacketModQ quic_repair_add {:?}", self.quic_repair_addr);
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
