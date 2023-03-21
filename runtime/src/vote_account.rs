@@ -125,6 +125,7 @@ impl VoteAccounts {
             .map(|(vote_pubkey, (_stake, vote_account))| (vote_pubkey, vote_account))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn delegated_stakes(&self) -> impl Iterator<Item = (&Pubkey, u64)> {
         self.vote_accounts
             .iter()
