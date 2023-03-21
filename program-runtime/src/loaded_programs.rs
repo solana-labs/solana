@@ -379,11 +379,10 @@ impl LoadedPrograms {
 
 #[cfg(test)]
 mod tests {
-    use crate::loaded_programs::InvalidProgramReason;
     use {
         crate::loaded_programs::{
-            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramEntry, LoadedProgramType,
-            LoadedPrograms, WorkingSlot,
+            BlockRelation, ForkGraph, InvalidProgramReason, LoadedProgram, LoadedProgramEntry,
+            LoadedProgramType, LoadedPrograms, WorkingSlot,
         },
         solana_rbpf::vm::BuiltInProgram,
         solana_sdk::{clock::Slot, pubkey::Pubkey},
