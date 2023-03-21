@@ -188,6 +188,7 @@ struct ServeRepairStats {
     orphan: usize,
     pong: usize,
     ancestor_hashes: usize,
+    blockstore_misses: usize,
     ping_cache_check_failed: usize,
     pings_sent: usize,
     decode_time_us: u64,
@@ -381,17 +382,18 @@ impl ServeRepair {
                 }
                 | RepairProtocol::LegacyWindowIndexWithNonce(_, slot, shred_index, nonce) => {
                     stats.window_index += 1;
-                    (
-                        Self::run_window_request(
-                            recycler,
-                            from_addr,
-                            blockstore,
-                            *slot,
-                            *shred_index,
-                            *nonce,
-                        ),
-                        "WindowIndexWithNonce",
-                    )
+                    let batch = Self::run_window_request(
+                        recycler,
+                        from_addr,
+                        blockstore,
+                        *slot,
+                        *shred_index,
+                        *nonce,
+                    );
+                    if batch.is_none() {
+                        stats.blockstore_misses += 1;
+                    }
+                    (batch, "WindowIndexWithNonce")
                 }
                 RepairProtocol::HighestWindowIndex {
                     header: RepairRequestHeader { nonce, .. },
@@ -405,17 +407,18 @@ impl ServeRepair {
                     nonce,
                 ) => {
                     stats.highest_window_index += 1;
-                    (
-                        Self::run_highest_window_request(
-                            recycler,
-                            from_addr,
-                            blockstore,
-                            *slot,
-                            *highest_index,
-                            *nonce,
-                        ),
-                        "HighestWindowIndexWithNonce",
-                    )
+                    let batch = Self::run_highest_window_request(
+                        recycler,
+                        from_addr,
+                        blockstore,
+                        *slot,
+                        *highest_index,
+                        *nonce,
+                    );
+                    if batch.is_none() {
+                        stats.blockstore_misses += 1;
+                    }
+                    (batch, "HighestWindowIndexWithNonce")
                 }
                 RepairProtocol::Orphan {
                     header: RepairRequestHeader { nonce, .. },
@@ -423,17 +426,18 @@ impl ServeRepair {
                 }
                 | RepairProtocol::LegacyOrphanWithNonce(_, slot, nonce) => {
                     stats.orphan += 1;
-                    (
-                        Self::run_orphan(
-                            recycler,
-                            from_addr,
-                            blockstore,
-                            *slot,
-                            MAX_ORPHAN_REPAIR_RESPONSES,
-                            *nonce,
-                        ),
-                        "OrphanWithNonce",
-                    )
+                    let batch = Self::run_orphan(
+                        recycler,
+                        from_addr,
+                        blockstore,
+                        *slot,
+                        MAX_ORPHAN_REPAIR_RESPONSES,
+                        *nonce,
+                    );
+                    if batch.is_none() {
+                        stats.blockstore_misses += 1;
+                    }
+                    (batch, "OrphanWithNonce")
                 }
                 RepairProtocol::AncestorHashes {
                     header: RepairRequestHeader { nonce, .. },
@@ -726,6 +730,7 @@ impl ServeRepair {
                 i64
             ),
             ("pong", stats.pong, i64),
+            ("blockstore_misses", stats.blockstore_misses, i64),
             (
                 "ping_cache_check_failed",
                 stats.ping_cache_check_failed,
