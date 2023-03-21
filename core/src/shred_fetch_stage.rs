@@ -53,7 +53,7 @@ impl ShredFetchStage {
         repair_context: Option<(RepairTransportConfig, &ClusterInfo)>,
     ) {
         const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
-        let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
+        let mut shreds_received = LruCache::<u64, ()>::new(DEFAULT_LRU_SIZE);
         let mut last_updated = Instant::now();
         let mut keypair = repair_context
             .as_ref()
@@ -108,19 +108,20 @@ impl ShredFetchStage {
             let should_drop_merkle_shreds =
                 |shred_slot| should_drop_merkle_shreds(shred_slot, &root_bank);
             for packet in packet_batch.iter_mut() {
-                if should_discard_packet(
-                    packet,
-                    last_root,
-                    max_slot,
-                    shred_version,
-                    &packet_hasher,
-                    &mut shreds_received,
-                    should_drop_merkle_shreds,
-                    &mut stats,
-                ) {
-                    info!("Discard packet at {:?}.", id);
-                    packet.meta_mut().set_discard(true);
-                } else {
+                // if should_discard_packet(
+                //     packet,
+                //     last_root,
+                //     max_slot,
+                //     shred_version,
+                //     &packet_hasher,
+                //     &mut shreds_received,
+                //     should_drop_merkle_shreds,
+                //     &mut stats,
+                // ) {
+                //     info!("Discard packet at {:?}.", id);
+                //     packet.meta_mut().set_discard(true);
+                // } else
+                {
                     info!("Do not discard packet at {:?} {:?}", id, flags);
                     packet.meta_mut().flags.insert(flags);
                 }
