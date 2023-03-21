@@ -5,7 +5,6 @@ use {
     ahash::AHasher,
     rand::{thread_rng, Rng},
     solana_ledger::shred::Shred,
-    solana_perf::packet::Packet,
     std::hash::Hasher,
 };
 
@@ -25,10 +24,6 @@ impl Default for PacketHasher {
 }
 
 impl PacketHasher {
-    pub(crate) fn hash_packet(&self, packet: &Packet) -> u64 {
-        self.hash_data(packet.data(..).unwrap_or_default())
-    }
-
     pub(crate) fn hash_shred(&self, shred: &Shred) -> u64 {
         self.hash_data(&shred.payload)
     }
