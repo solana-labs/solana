@@ -1930,7 +1930,16 @@ fn main() {
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
                     .takes_value(false)
-                    .help("Skip ledger PoH verification"),
+                    .help(
+                        "Deprecated, please use --skip-verification.\n\
+                         Skip ledger PoH and transaction verification."
+                    ),
+            )
+            .arg(
+                Arg::with_name("skip_verification")
+                    .long("skip-verification")
+                    .takes_value(false)
+                    .help("Skip ledger PoH and transaction verification."),
             )
             .arg(
                 Arg::with_name("print_accounts_stats")
@@ -2528,7 +2537,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: Some(0),
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2619,7 +2628,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2827,9 +2836,16 @@ fn main() {
                 let debug_keys = pubkeys_of(arg_matches, "debug_key")
                     .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
 
+                if arg_matches.is_present("skip_poh_verify") {
+                    eprintln!(
+                        "--skip-poh-verify is deprecated.  Replace with --skip-verification."
+                    );
+                }
+
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                    poh_verify: !arg_matches.is_present("skip_poh_verify"),
+                    run_verification: !(arg_matches.is_present("skip_poh_verify")
+                        || arg_matches.is_present("skip_verification")),
                     on_halt_store_hash_raw_data_for_debug: arg_matches
                         .is_present("halt_at_slot_store_hash_raw_data"),
                     // ledger tool verify always runs the accounts hash calc at the end of processing the blockstore
@@ -2897,7 +2913,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
 
@@ -3081,7 +3097,7 @@ fn main() {
                     ProcessOptions {
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
-                        poh_verify: false,
+                        run_verification: false,
                         accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                         accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                         ..ProcessOptions::default()
@@ -3433,7 +3449,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -3522,7 +3538,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);

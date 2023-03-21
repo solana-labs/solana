@@ -595,7 +595,8 @@ pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 
 #[derive(Default, Clone)]
 pub struct ProcessOptions {
-    pub poh_verify: bool,
+    /// Run PoH, transaction signature and other transaction verifications on the entries.
+    pub run_verification: bool,
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
     pub new_hard_forks: Option<Vec<Slot>>,
@@ -881,7 +882,7 @@ fn confirm_full_slot(
     timing: &mut ExecuteTimings,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
-    let skip_verification = !opts.poh_verify;
+    let skip_verification = !opts.run_verification;
     let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
 
     confirm_slot(
@@ -1892,7 +1893,7 @@ pub mod tests {
             &genesis_config,
             &blockstore,
             &ProcessOptions {
-                poh_verify: true,
+                run_verification: true,
                 ..ProcessOptions::default()
             },
             blockstore_access_type.clone(),
@@ -1947,7 +1948,7 @@ pub mod tests {
             &genesis_config,
             &blockstore,
             &ProcessOptions {
-                poh_verify: true,
+                run_verification: true,
                 ..ProcessOptions::default()
             },
             &Arc::default(),
@@ -1962,7 +1963,7 @@ pub mod tests {
             &genesis_config,
             &blockstore,
             &ProcessOptions {
-                poh_verify: true,
+                run_verification: true,
                 ..ProcessOptions::default()
             },
             &Arc::default(),
@@ -2016,7 +2017,7 @@ pub mod tests {
         );
 
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2081,7 +2082,7 @@ pub mod tests {
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 1, blockhash);
 
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2099,7 +2100,7 @@ pub mod tests {
                slot 2 (all ticks)
         */
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2168,7 +2169,7 @@ pub mod tests {
         blockstore.set_roots(vec![0, 1, 4].iter()).unwrap();
 
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2248,7 +2249,7 @@ pub mod tests {
         blockstore.set_roots(vec![0, 1].iter()).unwrap();
 
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2462,7 +2463,7 @@ pub mod tests {
 
         // Check that we can properly restart the ledger / leader scheduler doesn't fail
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2607,7 +2608,7 @@ pub mod tests {
             )
             .unwrap();
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2638,7 +2639,7 @@ pub mod tests {
 
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -3312,7 +3313,7 @@ pub mod tests {
 
         // Specify halting at slot 0
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             halt_at_slot: Some(0),
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
@@ -3366,7 +3367,7 @@ pub mod tests {
         let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
         let bank0 = bank_forks.get(0).unwrap();
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -3830,7 +3831,7 @@ pub mod tests {
         }
 
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };

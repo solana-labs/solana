@@ -152,7 +152,9 @@ pub struct ValidatorConfig {
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-    pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
+    /// Run PoH, transaction signature and other transaction verifications during blockstore
+    /// processing.
+    pub run_verification: bool,
     pub require_tower: bool,
     pub tower_storage: Arc<dyn TowerStorage>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -216,7 +218,7 @@ impl Default for ValidatorConfig {
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
-            poh_verify: true,
+            run_verification: true,
             require_tower: false,
             tower_storage: Arc::new(crate::tower_storage::NullTowerStorage::default()),
             debug_keys: None,
@@ -1483,7 +1485,7 @@ fn load_blockstore(
         .or_else(|| blockstore.highest_slot().unwrap_or(None));
 
     let process_options = blockstore_processor::ProcessOptions {
-        poh_verify: config.poh_verify,
+        run_verification: config.run_verification,
         halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
         debug_keys: config.debug_keys.clone(),
