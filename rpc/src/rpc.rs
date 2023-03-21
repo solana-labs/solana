@@ -3505,6 +3505,10 @@ pub mod rpc_full {
                     Err(err) => return Box::pin(future::err(err)),
                 }
             }
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move { meta.get_signature_statuses(signatures, config).await })
         }
 
@@ -3805,6 +3809,10 @@ pub mod rpc_full {
             config: Option<RpcEncodingConfigWrapper<RpcBlockConfig>>,
         ) -> BoxFuture<Result<Option<UiConfirmedBlock>>> {
             debug!("get_block rpc request received: {:?}", slot);
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move { meta.get_block(slot, config).await })
         }
 
@@ -3821,6 +3829,10 @@ pub mod rpc_full {
                 "get_blocks rpc request received: {}-{:?}",
                 start_slot, end_slot
             );
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move {
                 meta.get_blocks(start_slot, end_slot, commitment.or(maybe_commitment))
                     .await
@@ -3838,6 +3850,10 @@ pub mod rpc_full {
                 "get_blocks_with_limit rpc request received: {}-{}",
                 start_slot, limit,
             );
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move {
                 meta.get_blocks_with_limit(start_slot, limit, commitment)
                     .await
@@ -3849,6 +3865,10 @@ pub mod rpc_full {
             meta: Self::Metadata,
             slot: Slot,
         ) -> BoxFuture<Result<Option<UnixTimestamp>>> {
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move { meta.get_block_time(slot).await })
         }
 
@@ -3863,6 +3883,10 @@ pub mod rpc_full {
             if let Err(err) = signature {
                 return Box::pin(future::err(err));
             }
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move { meta.get_transaction(signature.unwrap(), config).await })
         }
 
@@ -3884,24 +3908,34 @@ pub mod rpc_full {
 
             match verification {
                 Err(err) => Box::pin(future::err(err)),
-                Ok((address, before, until, limit)) => Box::pin(async move {
-                    meta.get_signatures_for_address(
-                        address,
-                        before,
-                        until,
-                        limit,
-                        RpcContextConfig {
-                            commitment,
-                            min_context_slot,
-                        },
-                    )
-                    .await
-                }),
+                Ok((address, before, until, limit)) => {
+                    // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this
+                    // `async move` block.  But it captures `meta`, so it is necessary.
+                    // TODO Enable after upgrade to Rust 1.69.
+                    // #[allow(clippy::redundant_async_block)]
+                    Box::pin(async move {
+                        meta.get_signatures_for_address(
+                            address,
+                            before,
+                            until,
+                            limit,
+                            RpcContextConfig {
+                                commitment,
+                                min_context_slot,
+                            },
+                        )
+                        .await
+                    })
+                }
             }
         }
 
         fn get_first_available_block(&self, meta: Self::Metadata) -> BoxFuture<Result<Slot>> {
             debug!("get_first_available_block rpc request received");
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move { Ok(meta.get_first_available_block().await) })
         }
 
@@ -3926,6 +3960,10 @@ pub mod rpc_full {
                 }
             }
 
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move { meta.get_inflation_reward(addresses, config).await })
         }
 
@@ -4197,6 +4235,10 @@ pub mod rpc_deprecated_v1_7 {
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
         ) -> BoxFuture<Result<Option<UiConfirmedBlock>>> {
             debug!("get_confirmed_block rpc request received: {:?}", slot);
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move {
                 meta.get_block(slot, config.map(|config| config.convert()))
                     .await
@@ -4216,6 +4258,10 @@ pub mod rpc_deprecated_v1_7 {
                 "get_confirmed_blocks rpc request received: {}-{:?}",
                 start_slot, end_slot
             );
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move {
                 meta.get_blocks(start_slot, end_slot, commitment.or(maybe_commitment))
                     .await
@@ -4233,6 +4279,10 @@ pub mod rpc_deprecated_v1_7 {
                 "get_confirmed_blocks_with_limit rpc request received: {}-{}",
                 start_slot, limit,
             );
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move {
                 meta.get_blocks_with_limit(start_slot, limit, commitment)
                     .await
@@ -4253,6 +4303,10 @@ pub mod rpc_deprecated_v1_7 {
             if let Err(err) = signature {
                 return Box::pin(future::err(err));
             }
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `meta`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             Box::pin(async move {
                 meta.get_transaction(signature.unwrap(), config.map(|config| config.convert()))
                     .await
@@ -4276,19 +4330,25 @@ pub mod rpc_deprecated_v1_7 {
 
             match verification {
                 Err(err) => Box::pin(future::err(err)),
-                Ok((address, before, until, limit)) => Box::pin(async move {
-                    meta.get_signatures_for_address(
-                        address,
-                        before,
-                        until,
-                        limit,
-                        RpcContextConfig {
-                            commitment,
-                            min_context_slot: None,
-                        },
-                    )
-                    .await
-                }),
+                Ok((address, before, until, limit)) => {
+                    // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this
+                    // `async move` block.  But it captures `meta`, so it is necessary.
+                    // TODO Enable after upgrade to Rust 1.69.
+                    // #[allow(clippy::redundant_async_block)]
+                    Box::pin(async move {
+                        meta.get_signatures_for_address(
+                            address,
+                            before,
+                            until,
+                            limit,
+                            RpcContextConfig {
+                                commitment,
+                                min_context_slot: None,
+                            },
+                        )
+                        .await
+                    })
+                }
             }
         }
     }
