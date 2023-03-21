@@ -654,6 +654,10 @@ pub mod clean_up_delegation_errors {
     solana_sdk::declare_id!("Bj2jmUsM2iRhfdLLDSTkhM5UQRQvQHm57HSmPibPtEyu");
 }
 
+pub mod vote_state_add_vote_latency {
+    solana_sdk::declare_id!("7axKe5BTYBDD87ftzWbk5DfzWMGyRvqmWTduuo22Yaqy");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -812,6 +816,7 @@ lazy_static! {
         (simplify_writable_program_account_check::id(), "Simplify checks performed for writable upgradeable program accounts #30559"),
         (stop_truncating_strings_in_syscalls::id(), "Stop truncating strings in syscalls #31029"),
         (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
+        (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
