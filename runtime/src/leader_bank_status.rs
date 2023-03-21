@@ -8,8 +8,8 @@ use {
 };
 
 /// Tracks leader status of the validator node and notifies when:
-///     1. A leader slot begins
-///     2. A leader slot completes
+///     1. A leader bank initiates (=PoH-initiated)
+///     2. A leader slot completes (=PoH-completed)
 #[derive(Debug, Default)]
 pub struct LeaderBankStatus {
     /// Current state of the system
@@ -20,18 +20,14 @@ pub struct LeaderBankStatus {
     condvar: Condvar,
 }
 
-/// Leader status state machine for the validator:
-/// [Unininitialized] -> [InProgress] -> [Completed] --|
-///                          ^-------------------------|
+/// Leader status state machine for the validator.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 enum Status {
-    /// Initial state, no bank, but also not completed yet
+    /// The leader bank is not currently available. Either not initialized, or PoH-completed bank.
     #[default]
-    Uninitialized,
-    /// Slot is in progress as leader
+    StandBy,
+    /// PoH-initiated bank is available.
     InProgress,
-    /// PoH has reached the end of the slot, and the next bank as leader is not available yet
-    Completed,
 }
 
 impl LeaderBankStatus {
@@ -50,12 +46,12 @@ impl LeaderBankStatus {
         self.condvar.notify_all();
     }
 
-    /// Set the status to `Completed` and notify any waiting threads
-    /// if the status was not already `Completed`
+    /// Set the status to `StandBy` and notify any waiting threads
+    /// if the status was not already `StandBy`
     /// and the slot is higher than the current slot (sanity check).
     pub fn set_completed(&self, slot: Slot) {
         let mut status = self.status.lock().unwrap();
-        if matches!(*status, Status::Completed) {
+        if matches!(*status, Status::StandBy) {
             return;
         }
 
@@ -65,7 +61,7 @@ impl LeaderBankStatus {
             }
         }
 
-        *status = Status::Completed;
+        *status = Status::StandBy;
         drop(status);
 
         self.condvar.notify_all();
@@ -80,9 +76,7 @@ impl LeaderBankStatus {
         // Hold status lock until after the weak bank reference is cloned.
         let (_status, wait_timeout_result) = self
             .condvar
-            .wait_timeout_while(status, timeout, |status| {
-                matches!(*status, Status::Uninitialized | Status::Completed)
-            })
+            .wait_timeout_while(status, timeout, |status| matches!(*status, Status::StandBy))
             .unwrap();
 
         (!wait_timeout_result.timed_out())
@@ -100,7 +94,7 @@ impl LeaderBankStatus {
                 return None;
             }
 
-            if matches!(*status, Status::Completed) {
+            if matches!(*status, Status::StandBy) {
                 let slot = self.bank.read().unwrap().as_ref().unwrap().0;
                 return Some(slot);
             }
