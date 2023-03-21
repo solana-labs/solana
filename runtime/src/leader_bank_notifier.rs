@@ -2,7 +2,7 @@ use {
     crate::bank::Bank,
     solana_sdk::slot_history::Slot,
     std::{
-        sync::{Arc, Condvar, Mutex, RwLock, Weak},
+        sync::{Arc, Condvar, Mutex, Weak},
         time::{Duration, Instant},
     },
 };
@@ -12,10 +12,8 @@ use {
 ///     2. A leader slot completes (=PoH-completed)
 #[derive(Debug, Default)]
 pub struct LeaderBankNotifier {
-    /// Current state of the system
-    status: Mutex<Status>,
-    /// Weak reference to the current bank
-    bank: RwLock<Option<(Slot, Weak<Bank>)>>,
+    /// Current state (slot, bank, and status) of the system
+    state: Mutex<SlotAndBankWithStatus>,
     /// CondVar to notify status changes and waiting
     condvar: Condvar,
 }
@@ -30,18 +28,28 @@ enum Status {
     InProgress,
 }
 
+#[derive(Debug, Default)]
+struct SlotAndBankWithStatus {
+    status: Status,
+    slot: Slot,
+    bank: Weak<Bank>,
+}
+
 impl LeaderBankNotifier {
     /// Set the status to `InProgress` and notify any waiting threads
     /// if the status was not already `InProgress`.
     pub fn set_in_progress(&self, bank: &Arc<Bank>) {
-        let mut status = self.status.lock().unwrap();
-        if matches!(*status, Status::InProgress) {
+        let mut state = self.state.lock().unwrap();
+        if matches!(state.status, Status::InProgress) {
             return;
         }
 
-        *status = Status::InProgress;
-        *self.bank.write().unwrap() = Some((bank.slot(), Arc::downgrade(bank)));
-        drop(status);
+        *state = SlotAndBankWithStatus {
+            status: Status::InProgress,
+            slot: bank.slot(),
+            bank: Arc::downgrade(bank),
+        };
+        drop(state);
 
         self.condvar.notify_all();
     }
@@ -50,19 +58,13 @@ impl LeaderBankNotifier {
     ///     1. the status was not already `StandBy` and
     ///     2. the slot is higher than the current slot (sanity check).
     pub fn set_completed(&self, slot: Slot) {
-        let mut status = self.status.lock().unwrap();
-        if matches!(*status, Status::StandBy) {
+        let mut state = self.state.lock().unwrap();
+        if matches!(state.status, Status::StandBy) || slot < state.slot {
             return;
         }
 
-        if let Some((current_slot, _)) = *self.bank.read().unwrap() {
-            if slot < current_slot {
-                return;
-            }
-        }
-
-        *status = Status::StandBy;
-        drop(status);
+        state.status = Status::StandBy;
+        drop(state);
 
         self.condvar.notify_all();
     }
@@ -71,16 +73,15 @@ impl LeaderBankNotifier {
     /// Otherwise, wait up to the `timeout` for the status to become `InProgress`.
     /// Returns `None` if the timeout is reached.
     pub fn wait_for_in_progress(&self, timeout: Duration) -> Option<Weak<Bank>> {
-        let status = self.status.lock().unwrap();
-
-        // Hold status lock until after the weak bank reference is cloned.
-        let (_status, wait_timeout_result) = self
+        let state = self.state.lock().unwrap();
+        let (state, wait_timeout_result) = self
             .condvar
-            .wait_timeout_while(status, timeout, |status| matches!(*status, Status::StandBy))
+            .wait_timeout_while(state, timeout, |state| {
+                matches!(state.status, Status::StandBy)
+            })
             .unwrap();
 
-        (!wait_timeout_result.timed_out())
-            .then(|| self.bank.read().unwrap().as_ref().unwrap().1.clone())
+        (!wait_timeout_result.timed_out()).then(|| state.bank.clone())
     }
 
     /// Wait for next notification for a completed leader slot.
@@ -88,18 +89,14 @@ impl LeaderBankNotifier {
     pub fn wait_for_next_completed(&self, mut remaining_timeout: Duration) -> Option<Slot> {
         loop {
             let start = Instant::now();
-            let status = self.status.lock().unwrap();
-            let (status, result) = self
-                .condvar
-                .wait_timeout(status, remaining_timeout)
-                .unwrap();
+            let state = self.state.lock().unwrap();
+            let (state, result) = self.condvar.wait_timeout(state, remaining_timeout).unwrap();
             if result.timed_out() {
                 return None;
             }
 
-            if matches!(*status, Status::StandBy) {
-                let slot = self.bank.read().unwrap().as_ref().unwrap().0;
-                return Some(slot);
+            if matches!(state.status, Status::StandBy) {
+                return Some(state.slot);
             }
 
             remaining_timeout = remaining_timeout.saturating_sub(start.elapsed());
