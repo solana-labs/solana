@@ -124,6 +124,7 @@ where
         &Arc::default(),
         None,
         (u64::default(), None),
+        None,
     )
     .map(|(accounts_db, _)| accounts_db)
 }

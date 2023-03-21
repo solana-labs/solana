@@ -577,6 +577,7 @@ where
         exit,
         bank_fields.epoch_accounts_hash,
         capitalizations,
+        bank_fields.incremental_snapshot_persistence.as_ref(),
     )?;
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
@@ -699,6 +700,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     exit: &Arc<AtomicBool>,
     epoch_accounts_hash: Option<Hash>,
     capitalizations: (u64, Option<u64>),
+    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> Result<(AccountsDb, ReconstructedAccountsDbInfo), Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -741,17 +743,53 @@ where
                 .incremental_snapshot_accounts_db_fields
                 .as_ref()
         {
-            let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
-                *slot,
-                bank_hash_info.accounts_hash.clone(),
-                capitalizations
-                    .1
-                    .expect("capitalization from incremental snapshot"),
-            );
-            assert!(
-                old_accounts_hash.is_none(),
-                "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
-            );
+            if let Some(incremental_snapshot_persistence) = incremental_snapshot_persistence {
+                // Use the presence of a BankIncrementalSnapshotPersistence to indicate the
+                // Incremental Accounts Hash feature is enabled, and use its accounts hashes
+                // instead of `BankHashInfo`'s.
+                let AccountsDbFields(_, _, full_slot, full_bank_hash_info, _, _) =
+                    &snapshot_accounts_db_fields.full_snapshot_accounts_db_fields;
+                let full_accounts_hash = &full_bank_hash_info.accounts_hash;
+                assert_eq!(
+                    incremental_snapshot_persistence.full_slot, *full_slot,
+                    "The incremental snapshot's base slot ({}) must match the full snapshot's slot ({full_slot})!",
+                    incremental_snapshot_persistence.full_slot,
+                );
+                assert_eq!(
+                    &incremental_snapshot_persistence.full_hash, full_accounts_hash,
+                    "The incremental snapshot's base accounts hash ({}) must match the full snapshot's accounts hash ({})!",
+                    &incremental_snapshot_persistence.full_hash.0, full_accounts_hash.0,
+                );
+                assert_eq!(
+                    incremental_snapshot_persistence.full_capitalization, capitalizations.0,
+                    "The incremental snapshot's base capitalization ({}) must match the full snapshot's capitalization ({})!",
+                    incremental_snapshot_persistence.full_capitalization, capitalizations.0,
+                );
+                let old_incremental_accounts_hash = accounts_db
+                    .set_incremental_accounts_hash_from_snapshot(
+                        *slot,
+                        incremental_snapshot_persistence.incremental_hash.clone(),
+                        incremental_snapshot_persistence.incremental_capitalization,
+                    );
+                assert!(
+                    old_incremental_accounts_hash.is_none(),
+                    "There should not already be an IncrementalAccountsHash at slot {slot}: {old_incremental_accounts_hash:?}",
+                );
+            } else {
+                // ..and without a BankIncrementalSnapshotPersistence then the Incremental Accounts
+                // Hash feature is disabled; the accounts hash in `BankHashInfo` is valid.
+                let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+                    *slot,
+                    bank_hash_info.accounts_hash.clone(),
+                    capitalizations
+                        .1
+                        .expect("capitalization from incremental snapshot"),
+                );
+                assert!(
+                    old_accounts_hash.is_none(),
+                    "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+                );
+            };
         }
     }
 
