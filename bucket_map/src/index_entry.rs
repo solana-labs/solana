@@ -6,6 +6,7 @@ use {
         bucket_storage::{BucketOccupied, BucketStorage},
         RefCount,
     },
+    bv::BitVec,
     modular_bitfield::prelude::*,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::fmt::Debug,
@@ -20,34 +21,33 @@ struct OccupiedHeader {
 
 /// allocated in `contents` in a BucketStorage
 #[derive(Debug, Default)]
-pub struct BucketWithHeader {}
+pub struct BucketWithBitVec {
+    pub occupied: BitVec,
+}
 
-impl BucketOccupied for BucketWithHeader {
-    fn occupy(&mut self, element: &mut [u8], _ix: usize) {
-        let entry: &mut OccupiedHeader =
-            BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
-        assert_eq!(entry.occupied, 0);
-        entry.occupied = 1;
+impl BucketOccupied for BucketWithBitVec {
+    fn occupy(&mut self, _element: &mut [u8], ix: usize) {
+        self.occupied.set(ix as u64, true);
     }
-    fn free(&mut self, element: &mut [u8], _ix: usize) {
-        let entry: &mut OccupiedHeader =
-            BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
-        assert_eq!(entry.occupied, 1);
-        entry.occupied = 0;
+    fn free(&mut self, _element: &mut [u8], ix: usize) {
+        self.occupied.set(ix as u64, false);
     }
-    fn is_free(&self, element: &[u8], _ix: usize) -> bool {
-        let entry: &OccupiedHeader = BucketStorage::<BucketWithHeader>::get_from_parts(element);
-        let free = entry.occupied == 0;
-        assert!(free || entry.occupied == 1);
-        entry.occupied == 0
+    fn is_free(&self, _element: &[u8], ix: usize) -> bool {
+        !self.occupied.get(ix as u64)
     }
     fn offset_to_first_data() -> usize {
-        std::mem::size_of::<OccupiedHeader>()
+        // no header, nothing stored in data stream
+        0
+    }
+    fn new(num_elements: usize) -> Self {
+        Self {
+            occupied: BitVec::new_fill(false, num_elements as u64),
+        }
     }
 }
 
-pub type DataBucket = BucketWithHeader;
-pub type IndexBucket = BucketWithHeader;
+pub type DataBucket = BucketWithBitVec;
+pub type IndexBucket = BucketWithBitVec;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

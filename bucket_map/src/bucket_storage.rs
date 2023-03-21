@@ -44,6 +44,7 @@ pub trait BucketOccupied {
     /// # of bytes prior to first data held in the element.
     /// This is the header size, if a header exists per element in the data.
     fn offset_to_first_data() -> usize;
+    fn new(num_elements: usize) -> Self;
 }
 
 pub struct BucketStorage<T: BucketOccupied> {
@@ -68,7 +69,7 @@ impl<O: BucketOccupied> Drop for BucketStorage<O> {
     }
 }
 
-impl<O: BucketOccupied + Default> BucketStorage<O> {
+impl<O: BucketOccupied> BucketStorage<O> {
     pub fn new_with_capacity(
         drives: Arc<Vec<PathBuf>>,
         num_elems: u64,
@@ -88,7 +89,7 @@ impl<O: BucketOccupied + Default> BucketStorage<O> {
             capacity_pow2,
             stats,
             max_search,
-            contents: O::default(),
+            contents: O::new(1 << capacity_pow2),
         }
     }
 
@@ -190,13 +191,6 @@ impl<O: BucketOccupied + Default> BucketStorage<O> {
         unsafe {
             let item = item_slice.as_ptr() as *mut T;
             &mut *item
-        }
-    }
-
-    pub fn get_from_parts<T: Sized>(item_slice: &[u8]) -> &T {
-        unsafe {
-            let item = item_slice.as_ptr() as *const T;
-            &*item
         }
     }
 
