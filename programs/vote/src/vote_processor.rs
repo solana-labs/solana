@@ -76,13 +76,7 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
             }
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-            vote_state::initialize_account(
-                &mut me,
-                &vote_init,
-                &signers,
-                &clock,
-                &invoke_context.feature_set,
-            )
+            vote_state::initialize_account(&mut me, &vote_init, &signers, &clock)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
             let clock =
@@ -133,12 +127,7 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
             let node_pubkey = transaction_context.get_key_of_account_at_index(
                 instruction_context.get_index_of_instruction_account_in_transaction(1)?,
             )?;
-            vote_state::update_validator_identity(
-                &mut me,
-                node_pubkey,
-                &signers,
-                &invoke_context.feature_set,
-            )
+            vote_state::update_validator_identity(&mut me, node_pubkey, &signers)
         }
         VoteInstruction::UpdateCommission(commission) => {
             if invoke_context.feature_set.is_active(
@@ -151,12 +140,7 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
                     return Err(VoteError::CommissionUpdateTooLate.into());
                 }
             }
-            vote_state::update_commission(
-                &mut me,
-                commission,
-                &signers,
-                &invoke_context.feature_set,
-            )
+            vote_state::update_commission(&mut me, commission, &signers)
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             let slot_hashes =
@@ -241,7 +225,6 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
                 &signers,
                 &rent_sysvar,
                 clock_if_feature_active.as_deref(),
-                &invoke_context.feature_set,
             )
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
@@ -810,9 +793,7 @@ mod tests {
             .convert_to_current();
         assert_eq!(
             vote_state.votes,
-            vec![vote_state::LandedVote::from(Lockout::new(
-                *vote.slots.last().unwrap()
-            ))]
+            vec![Lockout::new(*vote.slots.last().unwrap())]
         );
         assert_eq!(vote_state.credits(), 0);
 
