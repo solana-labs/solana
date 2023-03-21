@@ -51,9 +51,9 @@ struct Header {
 impl Header {
     /// try to lock this entry with 'uid'
     /// return true if it could be locked
-    fn try_lock(&mut self, uid: Uid) -> bool {
+    fn try_lock(&mut self) -> bool {
         if self.lock == UID_UNLOCKED {
-            self.lock = uid;
+            self.lock = UID_LOCKED;
             true
         } else {
             false
@@ -173,7 +173,7 @@ impl BucketStorage {
         assert!(ix < self.capacity(), "allocate: bad index size");
         let mut e = Err(BucketStorageError::AlreadyAllocated);
         //debug!("ALLOC {} {}", ix, uid);
-        if self.header_mut_ptr(ix).try_lock(UID_LOCKED) {
+        if self.header_mut_ptr(ix).try_lock() {
             e = Ok(());
             if !is_resizing {
                 self.count.fetch_add(1, Ordering::Relaxed);
