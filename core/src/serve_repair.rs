@@ -47,7 +47,7 @@ use {
     },
     std::{
         cmp::Reverse,
-        collections::{HashMap, HashSet},
+        collections::{hash_map::Entry, HashMap, HashSet},
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -177,6 +177,7 @@ struct ServeRepairStats {
     dropped_requests_outbound_bandwidth: usize,
     dropped_requests_load_shed: usize,
     dropped_requests_low_stake: usize,
+    dropped_requests_peer_outbound_bandwidth: usize,
     whitelisted_requests: usize,
     total_dropped_response_packets: usize,
     total_response_packets: usize,
@@ -299,6 +300,63 @@ impl RepairProtocol {
     }
 }
 
+struct RepairPeerDataBudget {
+    update_interval: Duration,
+    peer_limit: u64,
+    update_time: Instant,
+    consumed: HashMap<Pubkey, u64>,
+}
+
+impl RepairPeerDataBudget {
+    fn new(update_interval: Duration, peer_limit: u64) -> Self {
+        Self {
+            update_interval,
+            peer_limit,
+            update_time: Instant::now(),
+            consumed: HashMap::default(),
+        }
+    }
+
+    fn update(&mut self) -> bool {
+        if self.update_time.elapsed() > self.update_interval {
+            self.consumed.clear();
+            self.update_time = Instant::now();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn _check(&self, peer: &Pubkey, bytes: u64) -> bool {
+        match self.consumed.get(peer) {
+            Some(entry) => entry.saturating_add(bytes) <= self.peer_limit,
+            None => bytes <= self.peer_limit,
+        }
+    }
+
+    fn take(&mut self, peer: &Pubkey, bytes: u64) -> bool {
+        match self.consumed.entry(*peer) {
+            Entry::Occupied(mut entry) => {
+                let would_consume = entry.get().saturating_add(bytes);
+                if would_consume <= self.peer_limit {
+                    *entry.get_mut() = would_consume;
+                    true
+                } else {
+                    false
+                }
+            }
+            Entry::Vacant(entry) => {
+                if bytes <= self.peer_limit {
+                    entry.insert(bytes);
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ServeRepair {
     cluster_info: Arc<ClusterInfo>,
@@ -367,7 +425,7 @@ impl ServeRepair {
         recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: &Blockstore,
-        request: RepairProtocol,
+        request: &RepairProtocol,
         stats: &mut ServeRepairStats,
         ping_cache: &mut PingCache,
     ) -> Option<PacketBatch> {
@@ -588,6 +646,7 @@ impl ServeRepair {
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
+        staked_peer_budget: &mut RepairPeerDataBudget,
     ) -> Result<()> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
@@ -653,6 +712,7 @@ impl ServeRepair {
             response_sender,
             stats,
             data_budget,
+            staked_peer_budget,
             cluster_type,
         );
         stats.handle_requests_time_us += handle_requests_start.elapsed().as_micros() as u64;
@@ -686,6 +746,11 @@ impl ServeRepair {
             (
                 "dropped_requests_low_stake",
                 stats.dropped_requests_low_stake,
+                i64
+            ),
+            (
+                "dropped_requests_peer_outbound_bandwidth",
+                stats.dropped_requests_peer_outbound_bandwidth,
                 i64
             ),
             ("whitelisted_requests", stats.whitelisted_requests, i64),
@@ -775,6 +840,8 @@ impl ServeRepair {
                 let mut last_print = Instant::now();
                 let mut stats = ServeRepairStats::default();
                 let data_budget = DataBudget::default();
+                let mut staked_peer_budget =
+                    RepairPeerDataBudget::new(Duration::from_millis(INTERVAL_MS), 4_000_000);
                 loop {
                     let result = self.run_listen(
                         &mut ping_cache,
@@ -784,6 +851,7 @@ impl ServeRepair {
                         &response_sender,
                         &mut stats,
                         &data_budget,
+                        &mut staked_peer_budget,
                     );
                     match result {
                         Err(Error::RecvTimeout(_)) | Ok(_) => {}
@@ -796,6 +864,7 @@ impl ServeRepair {
                         self.report_reset_stats(&mut stats);
                         last_print = Instant::now();
                     }
+                    staked_peer_budget.update();
                     data_budget.update(INTERVAL_MS, |_bytes| MAX_BYTES_PER_INTERVAL);
                 }
             })
@@ -900,6 +969,7 @@ impl ServeRepair {
         (check, ping_pkt)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn handle_requests(
         &self,
         ping_cache: &mut PingCache,
@@ -909,6 +979,7 @@ impl ServeRepair {
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
+        staked_peer_budget: &mut RepairPeerDataBudget,
         cluster_type: ClusterType,
     ) {
         let identity_keypair = self.cluster_info.keypair().clone();
@@ -921,7 +992,7 @@ impl ServeRepair {
                 request,
                 from_addr,
                 stake,
-                ..
+                whitelisted,
             },
         ) in requests.into_iter().enumerate()
         {
@@ -940,15 +1011,31 @@ impl ServeRepair {
                 }
             }
             stats.processed += 1;
+
+            // TODO check if overflow per peer limit
+            // if !staked_peer_budget.check(request.response_bytes()) { ... }
+
             let rsp = match Self::handle_repair(
-                recycler, &from_addr, blockstore, request, stats, ping_cache,
+                recycler, &from_addr, blockstore, &request, stats, ping_cache,
             ) {
                 None => continue,
                 Some(rsp) => rsp,
             };
             let num_response_packets = rsp.len();
-            let num_response_bytes = rsp.iter().map(|p| p.meta().size).sum();
-            if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
+            let num_response_bytes: usize = rsp.iter().map(|p| p.meta().size).sum();
+
+            if !whitelisted
+                && stake > 0
+                && !staked_peer_budget.take(request.sender(), num_response_bytes as u64)
+            {
+                stats.dropped_requests_peer_outbound_bandwidth += 1;
+                stats.total_dropped_response_packets += num_response_packets;
+                continue;
+            }
+
+            if (whitelisted || data_budget.take(num_response_bytes))
+                && response_sender.send(rsp).is_ok()
+            {
                 stats.total_response_packets += num_response_packets;
                 match stake > 0 {
                     true => stats.total_response_bytes_staked += num_response_bytes,
