@@ -1051,12 +1051,19 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             disk.update(&k, |current| {
                 match current {
                     Some((current_slot_list, mut ref_count)) => {
-                        // merge this in, mark as conflict
+                        // merge this in, mark as duplicate
+                        duplicates.push((slot, k));
+                        if current_slot_list.len() == 1 {
+                            // accurately account for there being a duplicate for the first entry that was previously added to the disk index.
+                            // That entry could not have known yet that it was a duplicate.
+                            // It is important to capture each slot with a duplicate because of slot limits applied to clean.
+                            let first_entry_slot = current_slot_list[0].0;
+                            duplicates.push((first_entry_slot, k));
+                        }
                         let mut slot_list = Vec::with_capacity(current_slot_list.len() + 1);
                         slot_list.extend_from_slice(current_slot_list);
                         slot_list.push((entry.0, entry.1.into())); // will never be from the same slot that already exists in the list
                         ref_count += new_ref_count;
-                        duplicates.push((slot, k));
                         Some((slot_list, ref_count))
                     }
                     None => {
