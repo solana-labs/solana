@@ -3169,6 +3169,7 @@ mod tests {
             accounts_hash::{CalcAccountsHashConfig, HashStats},
             genesis_utils,
             sorted_storages::SortedStorages,
+            snapshot_utils::snapshot_storage_rebuilder::get_slot_and_append_vec_id,
             status_cache::Status,
         },
         assert_matches::assert_matches,
@@ -3181,10 +3182,14 @@ mod tests {
             system_transaction,
             transaction::SanitizedTransaction,
         },
-        std::{convert::TryFrom, mem::size_of, os::unix::fs::PermissionsExt, sync::Arc},
+        std::{
+            convert::TryFrom,
+            mem::size_of,
+            os::unix::fs::PermissionsExt,
+            sync::{atomic::Ordering, Arc},
+        },
         tempfile::NamedTempFile,
     };
-
     #[test]
     fn test_serialize_snapshot_data_file_under_limit() {
         let temp_dir = tempfile::TempDir::new().unwrap();
@@ -5409,5 +5414,18 @@ mod tests {
 
         bank_constructed.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(bank_constructed, bank);
+
+        // Verify that the next_append_vec_id tracking is correct
+        let mut max_id = 0;
+        for path in account_paths {
+            fs::read_dir(path).unwrap().for_each(|entry| {
+                let path = entry.unwrap().path();
+                let filename = path.file_name().unwrap();
+                let (_slot, append_vec_id) = get_slot_and_append_vec_id(filename.to_str().unwrap());
+                max_id = std::cmp::max(max_id, append_vec_id);
+            });
+        }
+        let next_id: usize = bank.accounts().accounts_db.next_id.load(Ordering::Relaxed) as usize;
+        assert_eq!(max_id, next_id - 1);
     }
 }
