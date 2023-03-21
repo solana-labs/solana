@@ -2206,6 +2206,34 @@ fn test_program_sbf_disguised_as_sbf_loader() {
 
 #[test]
 #[cfg(feature = "sbf_c")]
+fn test_program_reads_from_program_account() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, &id, entrypoint);
+    let bank_client = BankClient::new(bank);
+
+    let program_id = load_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "read_program",
+    );
+    let account_metas = vec![AccountMeta::new_readonly(program_id, false)];
+    let instruction = Instruction::new_with_bytes(program_id, &[], account_metas);
+    bank_client
+        .send_and_confirm_instruction(&mint_keypair, instruction)
+        .unwrap();
+}
+
+#[test]
+#[cfg(feature = "sbf_c")]
 fn test_program_sbf_c_dup() {
     solana_logger::setup();
 
