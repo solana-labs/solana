@@ -311,8 +311,7 @@ pub struct PohRecorder {
 
 impl PohRecorder {
     fn clear_bank(&mut self) {
-        if let Some(working_bank) = self.working_bank.take() {
-            let bank = working_bank.bank;
+        if let Some(WorkingBank { bank, start, .. }) = self.working_bank.take() {
             self.leader_bank_status.set_completed(bank.slot());
             let next_leader_slot = self.leader_schedule_cache.next_leader_slot(
                 &self.id,
@@ -335,7 +334,7 @@ impl PohRecorder {
             datapoint_info!(
                 "leader-slot-start-to-cleared-elapsed-ms",
                 ("slot", bank.slot(), i64),
-                ("elapsed", working_bank.start.elapsed().as_millis(), i64),
+                ("elapsed", start.elapsed().as_millis(), i64),
             );
         }
 
