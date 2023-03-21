@@ -336,7 +336,7 @@ impl Accounts {
         let mut tx_rent: TransactionRent = 0;
         let message = tx.message();
         let account_keys = message.account_keys();
-        let mut account_found_and_dep_index = Vec::with_capacity(account_keys.len());
+        let mut accounts_found = Vec::with_capacity(account_keys.len());
         let mut account_deps = Vec::with_capacity(account_keys.len());
         let mut rent_debits = RentDebits::default();
 
@@ -359,7 +359,6 @@ impl Accounts {
             .enumerate()
             .map(|(i, key)| {
                 let mut account_found = true;
-                let account_dep_index = None;
                 #[allow(clippy::collapsible_else_if)]
                 let account = if solana_sdk::sysvar::instructions::check_id(key) {
                     Self::construct_instructions_account(
@@ -458,7 +457,7 @@ impl Accounts {
                     account
                 };
 
-                account_found_and_dep_index.push((account_found, account_dep_index));
+                accounts_found.push(account_found);
                 Ok((*key, account))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -488,9 +487,7 @@ impl Accounts {
                     let (program_id, program_account) = accounts
                         .get(program_index)
                         .ok_or(TransactionError::ProgramAccountNotFound)?;
-                    let (account_found, account_dep_index) = account_found_and_dep_index
-                        .get(program_index)
-                        .unwrap_or(&(true, None));
+                    let account_found = accounts_found.get(program_index).unwrap_or(&true);
                     if native_loader::check_id(program_id) {
                         return Ok(account_indices);
                     }
@@ -503,9 +500,6 @@ impl Accounts {
                         return Err(TransactionError::InvalidProgramForExecution);
                     }
                     account_indices.insert(0, program_index as IndexOfAccount);
-                    if let Some(account_index) = account_dep_index {
-                        account_indices.insert(0, *account_index);
-                    }
                     let owner_id = program_account.owner();
                     if native_loader::check_id(owner_id) {
                         return Ok(account_indices);
