@@ -263,7 +263,7 @@ pub enum InstructionError {
 
     /// Builtin programs must consume compute units
     #[error("Builtin programs must consume compute units")]
-    BuiltinProgramsMustConsumeUnits,
+    BuiltinProgramsMustConsumeComputeUnits,
     // Note: For any new error added here an equivalent ProgramError and its
     // conversions must also be added
 }

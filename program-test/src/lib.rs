@@ -465,8 +465,8 @@ impl Default for ProgramTest {
 
         // deactivate feature `native_program_consume_cu` to continue support existing mock/test
         // programs that do not consume units.
-        let mut deactivate_feature_set = HashSet::default();
-        deactivate_feature_set.insert(solana_sdk::feature_set::native_programs_consume_cu::id());
+        let deactivate_feature_set =
+            HashSet::from([solana_sdk::feature_set::native_programs_consume_cu::id()]);
 
         Self {
             accounts: vec![],

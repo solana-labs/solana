@@ -773,15 +773,13 @@ impl<'a> InvokeContext<'a> {
                 let post_remaining_units = self.get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
 
-                // startign from feature `native_programs_consume_cu`, all builtin programs should consume
-                // compute unitsi, otherwise will result to InstructionError.
                 if is_builtin_program
                     && *compute_units_consumed == 0
                     && self
                         .feature_set
                         .is_active(&native_programs_consume_cu::id())
                 {
-                    return Err(InstructionError::BuiltinProgramsMustConsumeUnits);
+                    return Err(InstructionError::BuiltinProgramsMustConsumeComputeUnits);
                 }
 
                 process_executable_chain_time.stop();
