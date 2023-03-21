@@ -34,6 +34,7 @@ use {
         clock::{BankId, Slot},
         feature_set::{
             self, add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
+            include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             use_default_units_in_fee_calculation, FeatureSet,
         },
@@ -661,6 +662,7 @@ impl Accounts {
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                             feature_set.is_active(&enable_request_heap_frame_ix::id()) || self.accounts_db.expected_cluster_type() != ClusterType::MainnetBeta,
                             feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+                            feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -1690,6 +1692,7 @@ mod tests {
             true,
             true,
             true,
+            false,
         );
         assert_eq!(fee, lamports_per_signature);
 

@@ -121,6 +121,7 @@ use {
         feature_set::{
             self, add_set_tx_loaded_accounts_data_size_instruction, disable_fee_calculator,
             enable_early_verification_of_account_modifications, enable_request_heap_frame_ix,
+            include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             use_default_units_in_fee_calculation, FeatureSet,
         },
@@ -3505,6 +3506,8 @@ impl Bank {
             self.enable_request_heap_frame_ix(),
             self.feature_set
                 .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+            self.feature_set
+                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
         ))
     }
 
@@ -3554,6 +3557,8 @@ impl Bank {
             self.enable_request_heap_frame_ix(),
             self.feature_set
                 .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+            self.feature_set
+                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
         )
     }
 
@@ -4894,6 +4899,7 @@ impl Bank {
         remove_congestion_multiplier: bool,
         enable_request_heap_frame_ix: bool,
         support_set_accounts_data_size_limit_ix: bool,
+        include_loaded_account_data_size_in_fee: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
         let congestion_multiplier = if lamports_per_signature == 0 {
@@ -4921,10 +4927,20 @@ impl Bank {
             .saturating_mul(fee_structure.lamports_per_signature);
         let write_lock_fee = Self::get_num_write_locks_in_message(message)
             .saturating_mul(fee_structure.lamports_per_write_lock);
+
+        // `compute_fee` covers costs for both requested_compute_units and
+        // requested_loaded_account_data_size
+        let loaded_accounts_data_size_cost = if include_loaded_account_data_size_in_fee {
+            Self::calculate_loaded_accounts_data_size_cost(&compute_budget)
+        } else {
+            0_u64
+        };
+        let total_compute_units =
+            loaded_accounts_data_size_cost.saturating_add(compute_budget.compute_unit_limit);
         let compute_fee = fee_structure
             .compute_fee_bins
             .iter()
-            .find(|bin| compute_budget.compute_unit_limit <= bin.limit)
+            .find(|bin| total_compute_units <= bin.limit)
             .map(|bin| bin.fee)
             .unwrap_or_else(|| {
                 fee_structure
@@ -4940,6 +4956,23 @@ impl Bank {
             .saturating_add(compute_fee) as f64)
             * congestion_multiplier)
             .round() as u64
+    }
+
+    // Calculate cost of loaded accounts size in the same way heap cost is charged at
+    // rate of 8cu per 32K. Citing `program_runtime\src\compute_budget.rs`: "(cost of
+    // heap is about) 0.5us per 32k at 15 units/us rounded up"
+    //
+    // Before feature `support_set_loaded_accounts_data_size_limit_ix` is enabled, or
+    // if user doesn't use compute budget ix `set_loaded_accounts_data_size_limit_ix`
+    // to set limit, `compute_budget.loaded_accounts_data_size_limit` is set to default
+    // limit of 64MB; which will convert to (64M/32K)*8CU = 16_000 CUs
+    //
+    fn calculate_loaded_accounts_data_size_cost(compute_budget: &ComputeBudget) -> u64 {
+        const ACCOUNT_DATA_COST_PAGE_SIZE: u64 = 32_u64.saturating_mul(1024);
+        (compute_budget.loaded_accounts_data_size_limit as u64)
+            .saturating_add(ACCOUNT_DATA_COST_PAGE_SIZE.saturating_sub(1))
+            .saturating_div(ACCOUNT_DATA_COST_PAGE_SIZE)
+            .saturating_mul(compute_budget.heap_cost)
     }
 
     fn filter_program_errors_and_collect_fee(
@@ -4987,6 +5020,8 @@ impl Bank {
                     self.enable_request_heap_frame_ix(),
                     self.feature_set
                         .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+                    self.feature_set
+                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                 );
 
                 // In case of instruction error, even though no accounts
