@@ -1035,7 +1035,7 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
 fn get_accounts_db_config(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> AccountsDbConfig {
     let accounts_index_bins = value_t!(arg_matches, "accounts_index_bins", usize).ok();
     let accounts_index_index_limit_mb =
-        if let Some(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok() {
+        if let Ok(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize) {
             IndexLimitMb::Limit(limit)
         } else if arg_matches.is_present("disable_accounts_disk_index") {
             IndexLimitMb::InMemOnly
