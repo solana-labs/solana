@@ -102,6 +102,7 @@ fn run_shred_sigverify(
     if !turbine_disabled.load(Ordering::Relaxed) {
         retransmit_sender.send(shreds)?;
         verified_sender.send(packets)?;
+        info!("sent verified packets at {:?}", self_pubkey);
     }
     stats.elapsed_micros += now.elapsed().as_micros() as u64;
     Ok(())
