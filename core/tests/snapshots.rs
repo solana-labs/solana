@@ -37,6 +37,7 @@ use {
     },
     solana_sdk::{
         clock::Slot,
+        feature_set,
         genesis_config::{
             ClusterType::{self, Development, Devnet, MainnetBeta, Testnet},
             GenesisConfig,
@@ -81,6 +82,7 @@ impl SnapshotTestConfig {
         accounts_hash_interval_slots: Slot,
         full_snapshot_archive_interval_slots: Slot,
         incremental_snapshot_archive_interval_slots: Slot,
+        is_incremental_snapshot_only_incremental_hash_calculation_enabled: bool,
     ) -> SnapshotTestConfig {
         let (_accounts_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = TempDir::new().unwrap();
@@ -96,6 +98,12 @@ impl SnapshotTestConfig {
             1,                               // validator_stake_lamports
         );
         genesis_config_info.genesis_config.cluster_type = cluster_type;
+        if !is_incremental_snapshot_only_incremental_hash_calculation_enabled {
+            genesis_config_info
+                .genesis_config
+                .accounts
+                .remove(&feature_set::incremental_snapshot_only_incremental_hash_calculation::id());
+        }
         let bank0 = Bank::new_with_paths_for_tests(
             &genesis_config_info.genesis_config,
             Arc::<RuntimeConfig>::default(),
@@ -208,6 +216,7 @@ fn run_bank_forks_snapshot_n<F>(
         set_root_interval,
         set_root_interval,
         Slot::MAX,
+        true,
     );
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
@@ -331,7 +340,7 @@ fn test_concurrent_snapshot_packaging(
 
     // Set up snapshotting config
     let mut snapshot_test_config =
-        SnapshotTestConfig::new(snapshot_version, cluster_type, 1, 1, Slot::MAX);
+        SnapshotTestConfig::new(snapshot_version, cluster_type, 1, 1, Slot::MAX, true);
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
     let snapshot_config = &snapshot_test_config.snapshot_config;
@@ -583,6 +592,7 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
             (*add_root_interval * num_set_roots * 2) as Slot,
             (*add_root_interval * num_set_roots * 2) as Slot,
             Slot::MAX,
+            true,
         );
         let mut current_bank = snapshot_test_config.bank_forks[0].clone();
         let request_sender = AbsRequestSender::new(snapshot_sender);
@@ -701,6 +711,7 @@ fn test_bank_forks_incremental_snapshot(
         SET_ROOT_INTERVAL,
         FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
         INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+        true,
     );
     trace!("SnapshotTestConfig:\naccounts_dir: {}\nbank_snapshots_dir: {}\nfull_snapshot_archives_dir: {}\nincremental_snapshot_archives_dir: {}",
             snapshot_test_config.accounts_dir.display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
@@ -755,8 +766,6 @@ fn test_bank_forks_incremental_snapshot(
         // Since AccountsBackgroundService isn't running, manually make a full snapshot archive
         // at the right interval
         if snapshot_utils::should_take_full_snapshot(slot, FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS) {
-            bank.force_flush_accounts_cache();
-            bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
             make_full_snapshot_archive(&bank, &snapshot_test_config.snapshot_config).unwrap();
         }
         // Similarly, make an incremental snapshot archive at the right interval, but only if
@@ -770,8 +779,6 @@ fn test_bank_forks_incremental_snapshot(
             last_full_snapshot_slot,
         ) && slot != last_full_snapshot_slot.unwrap()
         {
-            bank.force_flush_accounts_cache();
-            bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
             make_incremental_snapshot_archive(
                 &bank,
                 last_full_snapshot_slot.unwrap(),
@@ -800,6 +807,8 @@ fn make_full_snapshot_archive(
 ) -> snapshot_utils::Result<()> {
     let slot = bank.slot();
     info!("Making full snapshot archive from bank at slot: {}", slot);
+    bank.force_flush_accounts_cache();
+    bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
     let bank_snapshot_info =
         snapshot_utils::get_bank_snapshots_pre(&snapshot_config.bank_snapshots_dir)
             .into_iter()
@@ -836,6 +845,8 @@ fn make_incremental_snapshot_archive(
         "Making incremental snapshot archive from bank at slot: {}, and base slot: {}",
         slot, incremental_snapshot_base_slot,
     );
+    bank.force_flush_accounts_cache();
+    bank.update_incremental_accounts_hash(incremental_snapshot_base_slot);
     let bank_snapshot_info =
         snapshot_utils::get_bank_snapshots_pre(&snapshot_config.bank_snapshots_dir)
             .into_iter()
@@ -940,6 +951,8 @@ fn test_snapshots_with_background_services(
         BANK_SNAPSHOT_INTERVAL_SLOTS,
         FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
         INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+        // disable incremental accounts hash feature since AccountsHashVerifier does not support it yet
+        false,
     );
 
     let node_keypair = Arc::new(Keypair::new());
