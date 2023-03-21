@@ -6500,6 +6500,7 @@ version = "1.16.0"
 dependencies = [
  "arrayref",
  "assert_matches",
+ "backtrace",
  "bincode",
  "blake3",
  "bv",

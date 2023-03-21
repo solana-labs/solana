@@ -11,6 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 arrayref = { workspace = true }
+backtrace = "0.3.60"
 bincode = { workspace = true }
 blake3 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
