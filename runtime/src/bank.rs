@@ -2278,21 +2278,11 @@ impl Bank {
             let stakes = self.stakes_cache.stakes().clone();
             let stakes = Arc::new(StakesEnum::from(stakes));
             let new_epoch_stakes = EpochStakes::new(stakes, leader_schedule_epoch);
-            {
-                let vote_stakes: HashMap<_, _> = self
-                    .stakes_cache
-                    .stakes()
-                    .vote_accounts()
-                    .delegated_stakes()
-                    .map(|(pubkey, stake)| (*pubkey, stake))
-                    .collect();
-                info!(
-                    "new epoch stakes, epoch: {}, stakes: {:#?}, total_stake: {}",
-                    leader_schedule_epoch,
-                    vote_stakes,
-                    new_epoch_stakes.total_stake(),
-                );
-            }
+            info!(
+                "new epoch stakes, epoch: {}, total_stake: {}",
+                leader_schedule_epoch,
+                new_epoch_stakes.total_stake(),
+            );
             self.epoch_stakes
                 .insert(leader_schedule_epoch, new_epoch_stakes);
         }
