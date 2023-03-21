@@ -45,7 +45,8 @@ use {
             check_slice_translation_size, delay_visibility_of_program_deployment,
             disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
             enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, round_up_heap_size, FeatureSet,
+            limit_max_instruction_trace_length, remove_bpf_loader_incorrect_program_id,
+            round_up_heap_size, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -440,20 +441,88 @@ fn process_instruction_common(
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
+
+    if !invoke_context
+        .feature_set
+        .is_active(&remove_bpf_loader_incorrect_program_id::id())
+    {
+        fn get_index_in_transaction(
+            instruction_context: &InstructionContext,
+            index_in_instruction: IndexOfAccount,
+        ) -> Result<IndexOfAccount, InstructionError> {
+            if index_in_instruction < instruction_context.get_number_of_program_accounts() {
+                instruction_context
+                    .get_index_of_program_account_in_transaction(index_in_instruction)
+            } else {
+                instruction_context.get_index_of_instruction_account_in_transaction(
+                    index_in_instruction
+                        .saturating_sub(instruction_context.get_number_of_program_accounts()),
+                )
+            }
+        }
+
+        fn try_borrow_account<'a>(
+            transaction_context: &'a TransactionContext,
+            instruction_context: &'a InstructionContext,
+            index_in_instruction: IndexOfAccount,
+        ) -> Result<BorrowedAccount<'a>, InstructionError> {
+            if index_in_instruction < instruction_context.get_number_of_program_accounts() {
+                instruction_context
+                    .try_borrow_program_account(transaction_context, index_in_instruction)
+            } else {
+                instruction_context.try_borrow_instruction_account(
+                    transaction_context,
+                    index_in_instruction
+                        .saturating_sub(instruction_context.get_number_of_program_accounts()),
+                )
+            }
+        }
+
+        let first_instruction_account = {
+            let borrowed_root_account =
+                instruction_context.try_borrow_program_account(transaction_context, 0)?;
+            let owner_id = borrowed_root_account.get_owner();
+            if native_loader::check_id(owner_id) {
+                1
+            } else {
+                0
+            }
+        };
+        let first_account_key = transaction_context.get_key_of_account_at_index(
+            get_index_in_transaction(instruction_context, first_instruction_account)?,
+        )?;
+        let second_account_key = get_index_in_transaction(
+            instruction_context,
+            first_instruction_account.saturating_add(1),
+        )
+        .and_then(|index_in_transaction| {
+            transaction_context.get_key_of_account_at_index(index_in_transaction)
+        });
+        let program_id = instruction_context.get_last_program_key(transaction_context)?;
+        if first_account_key == program_id
+            || second_account_key
+                .map(|key| key == program_id)
+                .unwrap_or(false)
+        {
+        } else {
+            let first_account = try_borrow_account(
+                transaction_context,
+                instruction_context,
+                first_instruction_account,
+            )?;
+            if first_account.is_executable() {
+                ic_logger_msg!(log_collector, "BPF loader is executable");
+                return Err(InstructionError::IncorrectProgramId);
+            }
+        }
+    }
+
     let program_account =
         instruction_context.try_borrow_last_program_account(transaction_context)?;
 
     // Program Management Instruction
     if native_loader::check_id(program_account.get_owner()) {
         drop(program_account);
-        if instruction_context
-            .try_borrow_instruction_account(transaction_context, 0)
-            .map(|account| account.is_executable())
-            .unwrap_or(false)
-        {
-            ic_logger_msg!(log_collector, "BPF loader is executable");
-            return Err(InstructionError::IncorrectProgramId);
-        }
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
         return if bpf_loader_upgradeable::check_id(program_id) {
             process_loader_upgradeable_instruction(invoke_context, use_jit)

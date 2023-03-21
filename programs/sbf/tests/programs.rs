@@ -2188,6 +2188,9 @@ fn test_program_sbf_disguised_as_sbf_loader() {
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
         bank.add_builtin(&name, &id, entrypoint);
+        bank.deactivate_feature(
+            &solana_sdk::feature_set::remove_bpf_loader_incorrect_program_id::id(),
+        );
         let bank_client = BankClient::new(bank);
 
         let program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
