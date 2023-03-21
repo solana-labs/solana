@@ -272,24 +272,23 @@ impl SnapshotStorageRebuilder {
     fn process_append_vec_file(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let filename = path.file_name().unwrap().to_str().unwrap().to_owned();
         if let Some(SnapshotFileKind::Storage) = get_snapshot_file_kind(&filename) {
-            let (slot, slot_complete) = self.insert_slot_storage_file(path, filename);
-            if slot_complete {
+            let (slot, append_vec_id) = get_slot_and_append_vec_id(&filename);
+            if self.snapshot_from == SnapshotFrom::Dir {
+                // Keep track of the highest append_vec_id in the system, so the future append_vecs
+                // can be assigned a unique id.  This is only needed when loading from a snapshot
+                // dir.  When loading from a snapshot archive, the max of the appendvec IDs is
+                // updated in remap_append_vec_file()
+                self.next_append_vec_id
+                    .fetch_max((append_vec_id + 1) as AppendVecId, Ordering::Relaxed);
+            }
+            let slot_storage_count = self.insert_storage_file(&slot, path);
+            if slot_storage_count == self.snapshot_storage_lengths.get(&slot).unwrap().len() {
+                // slot_complete
                 self.process_complete_slot(slot)?;
                 self.processed_slot_count.fetch_add(1, Ordering::AcqRel);
             }
         }
         Ok(())
-    }
-
-    /// Inserts single storage file, returns the slot and if the slot has all of its storage entries
-    fn insert_slot_storage_file(&self, path: PathBuf, filename: String) -> (Slot, bool) {
-        let (slot, _) = get_slot_and_append_vec_id(&filename);
-        let slot_storage_count = self.insert_storage_file(&slot, path);
-
-        (
-            slot,
-            slot_storage_count == self.snapshot_storage_lengths.get(&slot).unwrap().len(),
-        )
     }
 
     /// Insert storage path into slot and return the number of storage files for the slot
