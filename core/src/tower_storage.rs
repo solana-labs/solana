@@ -1,7 +1,6 @@
 use {
     crate::{
         consensus::{Result, Tower, TowerError, TowerVersions},
-        tower1_14_11::Tower1_14_11,
         tower1_7_14::SavedTower1_7_14,
     },
     solana_sdk::{
@@ -37,7 +36,7 @@ impl SavedTowerVersions {
                 if !t.signature.verify(node_pubkey.as_ref(), &t.data) {
                     return Err(TowerError::InvalidSignature);
                 }
-                bincode::deserialize(&t.data).map(TowerVersions::V1_14_11)
+                bincode::deserialize(&t.data).map(TowerVersions::Current)
             }
         };
         tv.map_err(|e| e.into()).and_then(|tv: TowerVersions| {
@@ -95,10 +94,7 @@ impl SavedTower {
             )));
         }
 
-        // SavedTower always stores its data in 1_14_11 format
-        let tower: Tower1_14_11 = tower.clone().into();
-
-        let data = bincode::serialize(&tower)?;
+        let data = bincode::serialize(tower)?;
         let signature = keypair.sign_message(&data);
         Ok(Self {
             signature,
@@ -380,8 +376,7 @@ pub mod test {
         },
         solana_sdk::{hash::Hash, signature::Keypair},
         solana_vote_program::vote_state::{
-            BlockTimestamp, LandedVote, Vote, VoteState, VoteState1_14_11, VoteTransaction,
-            MAX_LOCKOUT_HISTORY,
+            BlockTimestamp, Lockout, Vote, VoteState, VoteTransaction, MAX_LOCKOUT_HISTORY,
         },
         tempfile::TempDir,
     };
@@ -394,7 +389,7 @@ pub mod test {
         let mut vote_state = VoteState::default();
         vote_state
             .votes
-            .resize(MAX_LOCKOUT_HISTORY, LandedVote::default());
+            .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
         vote_state.root_slot = Some(1);
 
         let vote = Vote::new(vec![1, 2, 3, 4], Hash::default());
@@ -404,7 +399,7 @@ pub mod test {
             node_pubkey,
             threshold_depth: 10,
             threshold_size: 0.9,
-            vote_state: VoteState1_14_11::from(vote_state),
+            vote_state,
             last_vote: vote.clone(),
             last_timestamp: BlockTimestamp::default(),
             last_vote_tx_blockhash: Hash::default(),

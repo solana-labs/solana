@@ -874,16 +874,6 @@ impl<'a> BorrowedAccount<'a> {
         Ok(())
     }
 
-    // Returns whether or the lamports currently in the account is sufficient for rent exemption should the
-    // data be resized to the given size
-    #[cfg(not(target_os = "solana"))]
-    pub fn is_rent_exempt_at_data_length(&self, data_length: usize) -> bool {
-        self.transaction_context
-            .rent
-            .unwrap_or_default()
-            .is_exempt(self.get_lamports(), data_length)
-    }
-
     /// Returns whether this account is executable (transaction wide)
     #[inline]
     pub fn is_executable(&self) -> bool {
