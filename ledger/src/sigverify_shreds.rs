@@ -26,17 +26,6 @@ const SIGN_SHRED_GPU_MIN: usize = 256;
 const_assert_eq!(SIZE_OF_MERKLE_ROOT, 32);
 const SIZE_OF_MERKLE_ROOT: usize = std::mem::size_of::<Hash>();
 
-<<<<<<< HEAD
-lazy_static! {
-    static ref SIGVERIFY_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_thread_count())
-        .thread_name(|ix| format!("solSvrfyShred{:02}", ix))
-        .build()
-        .unwrap();
-}
-
-=======
->>>>>>> c6e7aaf96 (removes lazy-static thread-pool from sigverify-shreds (#30787))
 #[must_use]
 pub fn verify_shred_cpu(
     packet: &Packet,
@@ -588,13 +577,8 @@ mod tests {
             .iter()
             .cloned()
             .collect();
-<<<<<<< HEAD
         batches[0][0].meta.size = 0;
-        let rv = verify_shreds_cpu(&batches, &leader_slots);
-=======
-        batches[0][0].meta_mut().size = 0;
         let rv = verify_shreds_cpu(thread_pool, &batches, &leader_slots);
->>>>>>> c6e7aaf96 (removes lazy-static thread-pool from sigverify-shreds (#30787))
         assert_eq!(rv, vec![vec![0]]);
     }
 

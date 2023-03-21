@@ -38,16 +38,6 @@ pub(crate) fn spawn_shred_sigverify(
 ) -> JoinHandle<()> {
     let recycler_cache = RecyclerCache::warmed();
     let mut stats = ShredSigVerifyStats::new(Instant::now());
-<<<<<<< HEAD
-    Builder::new()
-        .name("solShredVerifr".to_string())
-        .spawn(move || loop {
-            // We can't store the pubkey outside the loop
-            // because the identity might be hot swapped.
-            let self_pubkey = cluster_info.keypair().pubkey();
-            match run_shred_sigverify(
-                &self_pubkey,
-=======
     let thread_pool = ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
         .thread_name(|i| format!("solSvrfyShred{i:02}"))
@@ -55,12 +45,12 @@ pub(crate) fn spawn_shred_sigverify(
         .unwrap();
     let run_shred_sigverify = move || {
         loop {
+            // We can't store the pubkey outside the loop
+            // because the identity might be hot swapped.
+            let self_pubkey = cluster_info.keypair().pubkey();
             match run_shred_sigverify(
                 &thread_pool,
-                // We can't store the pubkey outside the loop
-                // because the identity might be hot swapped.
-                &cluster_info.id(),
->>>>>>> c6e7aaf96 (removes lazy-static thread-pool from sigverify-shreds (#30787))
+                &self_pubkey,
                 &bank_forks,
                 &leader_schedule_cache,
                 &recycler_cache,
