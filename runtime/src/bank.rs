@@ -2283,6 +2283,19 @@ impl Bank {
                 leader_schedule_epoch,
                 new_epoch_stakes.total_stake(),
             );
+
+            // It is expensive to log the details of epoch stakes. Only log them at "trace"
+            // level for debugging purpose.
+            if log::log_enabled!(log::Level::Trace) {
+                let vote_stakes: HashMap<_, _> = self
+                    .stakes_cache
+                    .stakes()
+                    .vote_accounts()
+                    .delegated_stakes()
+                    .map(|(pubkey, stake)| (*pubkey, stake))
+                    .collect();
+                trace!("new epoch stakes, stakes: {:#?}", vote_stakes,);
+            }
             self.epoch_stakes
                 .insert(leader_schedule_epoch, new_epoch_stakes);
         }
