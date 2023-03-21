@@ -239,21 +239,17 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     pub fn addref(&mut self, key: &Pubkey) -> Option<RefCount> {
-        if let Ok((elem, _)) = self.find_entry_mut(key) {
-            if let Some(elem) = elem {
-                elem.ref_count += 1;
-                return Some(elem.ref_count);
-            }
+        if let Ok((Some(elem), _)) = self.find_entry_mut(key) {
+            elem.ref_count += 1;
+            return Some(elem.ref_count);
         }
         None
     }
 
     pub fn unref(&mut self, key: &Pubkey) -> Option<RefCount> {
-        if let Ok((elem, _)) = self.find_entry_mut(key) {
-            if let Some(elem) = elem {
-                elem.ref_count -= 1;
-                return Some(elem.ref_count);
-            }
+        if let Ok((Some(elem), _)) = self.find_entry_mut(key) {
+            elem.ref_count -= 1;
+            return Some(elem.ref_count);
         }
         None
     }
