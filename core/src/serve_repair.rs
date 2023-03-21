@@ -1180,6 +1180,8 @@ impl ServeRepair {
                             pending_pongs.len(),
                             err
                         );
+                    } else {
+                        info!("Sent pong via udp for repair response ping at {:?}", keypair.pubkey());
                     }
                 }
                 RepairTransportConfig::Quic(connection_cache) => {
@@ -1192,6 +1194,8 @@ impl ServeRepair {
                             pending_pongs.len(),
                             err
                         );
+                    } else {
+                        info!("Sent pong via quic for repair response ping at {:?}", keypair.pubkey());
                     }
                 }
             }
