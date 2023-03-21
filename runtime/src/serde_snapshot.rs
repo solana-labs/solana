@@ -59,7 +59,7 @@ mod utils;
 // a number of test cases in accounts_db use this
 #[cfg(test)]
 pub(crate) use tests::reconstruct_accounts_db_via_serialization;
-// NOTE: AHV currently needs `SerdeIncrmentalAccountsHash`, which is why this `use` is not
+// NOTE: AHV currently needs `SerdeIncrementalAccountsHash`, which is why this `use` is not
 // `pub(crate)`.  Once AHV calculates incremental accounts hashes, this can be reverted.
 pub use types::SerdeIncrementalAccountsHash;
 pub(crate) use {
