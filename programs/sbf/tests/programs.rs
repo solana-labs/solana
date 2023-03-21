@@ -443,7 +443,7 @@ fn test_program_sbf_sanity() {
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
         bank.add_builtin(&name, &id, entrypoint);
-        let bank_client = BankClient::new(bank);
+        let mut bank_client = BankClient::new(bank);
 
         // Call user program
         let program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.0);
@@ -451,6 +451,11 @@ fn test_program_sbf_sanity() {
             AccountMeta::new(mint_keypair.pubkey(), true),
             AccountMeta::new(Keypair::new().pubkey(), false),
         ];
+
+        bank_client
+            .advance_slot(1, &Pubkey::default())
+            .expect("Failed to advance the slot");
+
         let instruction = Instruction::new_with_bytes(program_id, &[1], account_metas);
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
         if program.1 {
@@ -518,6 +523,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
 
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
+    let bank = Arc::new(bank);
 
     // Populate loader account with elf that depends on _sol_alloc_free syscall
     let elf = load_program_from_file("solana_sbf_rust_deprecated_loader");
@@ -541,6 +547,8 @@ fn test_sol_alloc_free_no_longer_deployable() {
         bank.last_blockhash(),
     );
 
+    let mut bank = Bank::new_from_parent(&bank, &Pubkey::default(), bank.slot() + 1);
+
     let invoke_tx = Transaction::new(
         &[&mint_keypair],
         Message::new(
@@ -563,7 +571,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
     // Enable _sol_alloc_free syscall
     bank.deactivate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
     bank.clear_signatures();
-    bank.clear_executors();
+    bank.clear_loaded_programs_cache();
 
     // Try and finalize the program now that sol_alloc_free is re-enabled
     assert!(bank.process_transaction(&finalize_tx).is_ok());
@@ -579,7 +587,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
     assert!(bank.process_transaction(&invoke_tx).is_ok());
 
     bank.clear_signatures();
-    bank.clear_executors();
+    bank.clear_loaded_programs_cache();
 
     // invoke should still succeed on execute because the program is already deployed
     assert!(bank.process_transaction(&invoke_tx).is_ok());
@@ -612,7 +620,7 @@ fn test_program_sbf_duplicate_accounts() {
         let (name, id, entrypoint) = solana_bpf_loader_program!();
         bank.add_builtin(&name, &id, entrypoint);
         let bank = Arc::new(bank);
-        let bank_client = BankClient::new_shared(&bank);
+        let mut bank_client = BankClient::new_shared(&bank);
         let program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
         let payee_account = AccountSharedData::new(10, 1, &program_id);
         let payee_pubkey = Pubkey::new_unique();
@@ -626,6 +634,10 @@ fn test_program_sbf_duplicate_accounts() {
             AccountMeta::new(pubkey, false),
             AccountMeta::new(pubkey, false),
         ];
+
+        let bank = bank_client
+            .advance_slot(1, &Pubkey::default())
+            .expect("Failed to advance the slot");
 
         bank.store_account(&pubkey, &account);
         let instruction = Instruction::new_with_bytes(program_id, &[1], account_metas.clone());
@@ -712,9 +724,13 @@ fn test_program_sbf_error_handling() {
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
         bank.add_builtin(&name, &id, entrypoint);
-        let bank_client = BankClient::new(bank);
+        let mut bank_client = BankClient::new(bank);
         let program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
         let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
+
+        bank_client
+            .advance_slot(1, &Pubkey::default())
+            .expect("Failed to advance the slot");
 
         let instruction = Instruction::new_with_bytes(program_id, &[1], account_metas.clone());
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
@@ -815,10 +831,15 @@ fn test_return_data_and_log_data_syscall() {
         let (name, id, entrypoint) = solana_bpf_loader_program!();
         bank.add_builtin(&name, &id, entrypoint);
         let bank = Arc::new(bank);
-        let bank_client = BankClient::new_shared(&bank);
+        let mut bank_client = BankClient::new_shared(&bank);
 
         let program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
 
+        bank.freeze();
+
+        let bank = bank_client
+            .advance_slot(1, &Pubkey::default())
+            .expect("Failed to advance the slot");
         bank.freeze();
 
         let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
@@ -888,6 +909,8 @@ fn test_program_sbf_invoke_sanity() {
             load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.2);
         let noop_program_id =
             load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.3);
+
+        let bank = Bank::new_from_parent(&bank, &Pubkey::default(), bank.slot() + 1);
 
         let argument_keypair = Keypair::new();
         let account = AccountSharedData::new(42, 100, &invoke_program_id);
@@ -1277,7 +1300,7 @@ fn test_program_sbf_program_id_spoofing() {
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     let malicious_swap_pubkey = load_program(
         &bank_client,
@@ -1309,6 +1332,11 @@ fn test_program_sbf_program_id_spoofing() {
 
     let instruction =
         Instruction::new_with_bytes(malicious_swap_pubkey, &[], account_metas.clone());
+
+    let bank = bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1330,7 +1358,7 @@ fn test_program_sbf_caller_has_access_to_cpi_program() {
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     let caller_pubkey = load_program(
         &bank_client,
@@ -1349,6 +1377,11 @@ fn test_program_sbf_caller_has_access_to_cpi_program() {
         AccountMeta::new_readonly(caller2_pubkey, false),
     ];
     let instruction = Instruction::new_with_bytes(caller_pubkey, &[1], account_metas.clone());
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1370,7 +1403,7 @@ fn test_program_sbf_ro_modify() {
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     let program_pubkey = load_program(
         &bank_client,
@@ -1387,6 +1420,10 @@ fn test_program_sbf_ro_modify() {
         AccountMeta::new_readonly(system_program::id(), false),
         AccountMeta::new(test_keypair.pubkey(), true),
     ];
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     let instruction = Instruction::new_with_bytes(program_pubkey, &[1], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
@@ -1426,13 +1463,17 @@ fn test_program_sbf_call_depth() {
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
     let program_id = load_program(
         &bank_client,
         &bpf_loader::id(),
         &mint_keypair,
         "solana_sbf_rust_call_depth",
     );
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     let instruction = Instruction::new_with_bincode(
         program_id,
@@ -1461,7 +1502,7 @@ fn test_program_sbf_compute_budget() {
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
     let program_id = load_program(
         &bank_client,
         &bpf_loader::id(),
@@ -1475,6 +1516,11 @@ fn test_program_sbf_compute_budget() {
         ],
         Some(&mint_keypair.pubkey()),
     );
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1561,7 +1607,7 @@ fn test_program_sbf_instruction_introspection() {
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     let program_id = load_program(
         &bank_client,
@@ -1582,6 +1628,11 @@ fn test_program_sbf_instruction_introspection() {
         &[instruction0, instruction1, instruction2],
         Some(&mint_keypair.pubkey()),
     );
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
     assert!(result.is_ok());
 
@@ -1620,7 +1671,7 @@ fn test_program_sbf_test_use_latest_executor() {
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
     let panic_id = load_program(
         &bank_client,
         &bpf_loader::id(),
@@ -1649,6 +1700,10 @@ fn test_program_sbf_test_use_latest_executor() {
         .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
         .is_err());
 
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     // Write the noop program into the same program account
     let (program_keypair, instruction) = load_and_finalize_program(
         &bank_client,
@@ -1661,6 +1716,10 @@ fn test_program_sbf_test_use_latest_executor() {
     bank_client
         .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
         .unwrap();
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     // Call the noop program, should get noop not panic
     let message = Message::new(
@@ -1689,7 +1748,7 @@ fn test_program_sbf_upgrade() {
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, &id, entrypoint);
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
 
     // Deploy upgrade program
     let buffer_keypair = Keypair::new();
@@ -1704,6 +1763,10 @@ fn test_program_sbf_upgrade() {
         &authority_keypair,
         "solana_sbf_rust_upgradeable",
     );
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     let mut instruction =
         Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
@@ -1725,10 +1788,10 @@ fn test_program_sbf_upgrade() {
         &authority_keypair,
         "solana_sbf_rust_upgraded",
     );
-    bank_client.set_sysvar_for_tests(&clock::Clock {
-        slot: 2,
-        ..clock::Clock::default()
-    });
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     // Call upgraded program
     instruction.data[0] += 1;
@@ -1759,6 +1822,10 @@ fn test_program_sbf_upgrade() {
         "solana_sbf_rust_upgradeable",
     );
 
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     // Call original program
     instruction.data[0] += 1;
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
@@ -1782,7 +1849,7 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     // Deploy upgradeable program
     let buffer_keypair = Keypair::new();
@@ -1811,6 +1878,10 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
             AccountMeta::new_readonly(clock::id(), false),
         ],
     );
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     // Prepare deployment
     let program = load_upgradeable_buffer(
@@ -1841,6 +1912,10 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
         .into_iter()
         .enumerate()
     {
+        let bank = bank_client
+            .advance_slot(1, &Pubkey::default())
+            .expect("Failed to advance the slot");
+
         let mut instructions = deployment_instructions.clone();
         instructions.push(invoke_instruction);
         let tx = Transaction::new(
@@ -1878,7 +1953,7 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     // Deploy upgradeable program
     let buffer_keypair = Keypair::new();
@@ -1916,6 +1991,10 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
         "solana_sbf_rust_panic",
     );
 
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     let invoke_instruction =
         Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
     let indirect_invoke_instruction = Instruction::new_with_bytes(
@@ -1945,6 +2024,10 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
 
     // Redeployment causes programs to be unavailable to both top-level-instructions and CPI instructions
     for invoke_instruction in [invoke_instruction, indirect_invoke_instruction] {
+        let bank = bank_client
+            .advance_slot(1, &Pubkey::default())
+            .expect("Failed to advance the slot");
+
         // Call upgradeable program
         let result =
             bank_client.send_and_confirm_instruction(&mint_keypair, invoke_instruction.clone());
@@ -1982,7 +2065,7 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     // Deploy upgradeable program
     let buffer_keypair = Keypair::new();
@@ -2009,6 +2092,10 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
         "solana_sbf_rust_invoke_and_return",
     );
 
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     let invoke_instruction =
         Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
     let indirect_invoke_instruction = Instruction::new_with_bytes(
@@ -2034,6 +2121,10 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
 
     // Undeployment is visible to both top-level-instructions and CPI instructions
     for invoke_instruction in [invoke_instruction, indirect_invoke_instruction] {
+        let bank = bank_client
+            .advance_slot(1, &Pubkey::default())
+            .expect("Failed to advance the slot");
+
         // Call upgradeable program
         let result =
             bank_client.send_and_confirm_instruction(&mint_keypair, invoke_instruction.clone());
@@ -2072,7 +2163,7 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
     bank.add_builtin(&name, &id, entrypoint);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, &id, entrypoint);
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
     let invoke_and_return = load_program(
         &bank_client,
         &bpf_loader::id(),
@@ -2093,6 +2184,10 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
         &authority_keypair,
         "solana_sbf_rust_upgradeable",
     );
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     let mut instruction = Instruction::new_with_bytes(
         invoke_and_return,
@@ -2121,10 +2216,10 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
         &authority_keypair,
         "solana_sbf_rust_upgraded",
     );
-    bank_client.set_sysvar_for_tests(&clock::Clock {
-        slot: 2,
-        ..clock::Clock::default()
-    });
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     // Call the upgraded program
     instruction.data[0] += 1;
@@ -2154,6 +2249,10 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
         &new_authority_keypair,
         "solana_sbf_rust_upgradeable",
     );
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     // Call original program
     instruction.data[0] += 1;
@@ -2223,7 +2322,7 @@ fn test_program_reads_from_program_account() {
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
 
     let program_id = load_program(
         &bank_client,
@@ -2233,6 +2332,11 @@ fn test_program_reads_from_program_account() {
     );
     let account_metas = vec![AccountMeta::new_readonly(program_id, false)];
     let instruction = Instruction::new_with_bytes(program_id, &[], account_metas);
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     bank_client
         .send_and_confirm_instruction(&mint_keypair, instruction)
         .unwrap();
@@ -2256,7 +2360,7 @@ fn test_program_sbf_c_dup() {
     let account = AccountSharedData::new_data(42, &[1_u8, 2, 3], &system_program::id()).unwrap();
     bank.store_account(&account_address, &account);
 
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
 
     let program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "ser");
     let account_metas = vec![
@@ -2264,6 +2368,11 @@ fn test_program_sbf_c_dup() {
         AccountMeta::new_readonly(account_address, false),
     ];
     let instruction = Instruction::new_with_bytes(program_id, &[4, 5, 6, 7], account_metas);
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     bank_client
         .send_and_confirm_instruction(&mint_keypair, instruction)
         .unwrap();
@@ -2284,7 +2393,7 @@ fn test_program_sbf_upgrade_via_cpi() {
     bank.add_builtin(&name, &id, entrypoint);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, &id, entrypoint);
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
     let invoke_and_return = load_program(
         &bank_client,
         &bpf_loader::id(),
@@ -2326,6 +2435,10 @@ fn test_program_sbf_upgrade_via_cpi() {
         ],
     );
 
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     // Call the upgradable program
     instruction.data[0] += 1;
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
@@ -2344,6 +2457,10 @@ fn test_program_sbf_upgrade_via_cpi() {
         "solana_sbf_rust_upgraded",
     );
 
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     // Upgrade program via CPI
     let mut upgrade_instruction = bpf_loader_upgradeable::upgrade(
         &program_id,
@@ -2359,6 +2476,10 @@ fn test_program_sbf_upgrade_via_cpi() {
     bank_client
         .send_and_confirm_message(&[&mint_keypair, &authority_keypair], message)
         .unwrap();
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     // Call the upgraded program
     instruction.data[0] += 1;
@@ -2391,7 +2512,7 @@ fn test_program_sbf_set_upgrade_authority_via_cpi() {
     bank.add_builtin(&name, &id, entrypoint);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, &id, entrypoint);
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
 
     // Deploy CPI invoker program
     let invoke_and_return = load_program(
@@ -2414,6 +2535,10 @@ fn test_program_sbf_set_upgrade_authority_via_cpi() {
         &authority_keypair,
         "solana_sbf_rust_upgradeable",
     );
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     // Set program upgrade authority instruction to invoke via CPI
     let new_upgrade_authority_key = Keypair::new().pubkey();
@@ -2483,7 +2608,7 @@ fn test_program_upgradeable_locks() {
         let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
         bank.add_builtin(&name, &id, entrypoint);
         let bank = Arc::new(bank);
-        let bank_client = BankClient::new_shared(&bank);
+        let mut bank_client = BankClient::new_shared(&bank);
 
         load_upgradeable_program(
             &bank_client,
@@ -2502,6 +2627,10 @@ fn test_program_upgradeable_locks() {
             &payer_keypair,
             "solana_sbf_rust_noop",
         );
+
+        let bank = bank_client
+            .advance_slot(1, &Pubkey::default())
+            .expect("Failed to advance the slot");
 
         bank_client
             .send_and_confirm_instruction(
@@ -2604,7 +2733,7 @@ fn test_program_sbf_finalize() {
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     let program_pubkey = load_program(
         &bank_client,
@@ -2629,6 +2758,11 @@ fn test_program_sbf_finalize() {
     ];
     let instruction = Instruction::new_with_bytes(program_pubkey, &[], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
     let result = bank_client.send_and_confirm_message(&[&mint_keypair, &program_keypair], message);
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -2650,7 +2784,7 @@ fn test_program_sbf_ro_account_modify() {
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     let program_id = load_program(
         &bank_client,
@@ -2672,6 +2806,10 @@ fn test_program_sbf_ro_account_modify() {
         AccountMeta::new_readonly(argument_keypair.pubkey(), false),
         AccountMeta::new_readonly(program_id, false),
     ];
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     let instruction = Instruction::new_with_bytes(program_id, &[0], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_pubkey));
@@ -2717,7 +2855,7 @@ fn test_program_sbf_realloc() {
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     let program_id = load_program(
         &bank_client,
@@ -2731,6 +2869,10 @@ fn test_program_sbf_realloc() {
     let pubkey = keypair.pubkey();
     let account = AccountSharedData::new(START_BALANCE, 5, &program_id);
     bank.store_account(&pubkey, &account);
+
+    let bank = bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     // Realloc RO account
     let mut instruction = realloc(&program_id, &pubkey, 0, &mut bump);
@@ -3014,7 +3156,7 @@ fn test_program_sbf_realloc_invoke() {
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     let realloc_program_id = load_program(
         &bank_client,
@@ -3037,6 +3179,10 @@ fn test_program_sbf_realloc_invoke() {
     bank.store_account(&pubkey, &account);
     let invoke_keypair = Keypair::new();
     let invoke_pubkey = invoke_keypair.pubkey().clone();
+
+    let bank = bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     // Realloc RO account
     assert_eq!(
@@ -3589,6 +3735,14 @@ fn test_program_sbf_processed_inner_instruction() {
         &[instruction2, instruction1, instruction0],
         Some(&mint_keypair.pubkey()),
     );
+
+    let bank1 = Arc::new(Bank::new_from_parent(
+        &bank,
+        &Pubkey::default(),
+        bank.slot() + 1,
+    ));
+    let bank_client = BankClient::new_shared(&bank1);
+
     assert!(bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
         .is_ok());
@@ -3615,7 +3769,7 @@ fn test_program_fees() {
 
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
 
     let program_id = load_program(
         &bank_client,
@@ -3623,6 +3777,10 @@ fn test_program_fees() {
         &mint_keypair,
         "solana_sbf_rust_noop",
     );
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     let pre_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
     let message = Message::new(
@@ -3691,7 +3849,7 @@ fn test_get_minimum_delegation() {
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     let program_id = load_program(
         &bank_client,
@@ -3699,6 +3857,10 @@ fn test_get_minimum_delegation() {
         &mint_keypair,
         "solana_sbf_rust_get_minimum_delegation",
     );
+
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     let account_metas = vec![AccountMeta::new_readonly(stake::program::id(), false)];
     let instruction = Instruction::new_with_bytes(program_id, &[], account_metas);

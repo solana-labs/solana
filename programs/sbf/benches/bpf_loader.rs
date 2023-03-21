@@ -39,6 +39,7 @@ use {
         feature_set::FeatureSet,
         instruction::{AccountMeta, Instruction},
         message::Message,
+        pubkey::Pubkey,
         signature::Signer,
     },
     std::{mem, sync::Arc},
@@ -164,7 +165,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+    let mut bank_client = BankClient::new_shared(&bank);
 
     let invoke_program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
 
@@ -174,6 +175,10 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     let instruction =
         Instruction::new_with_bincode(invoke_program_id, &[u8::MAX, 0, 0, 0], account_metas);
     let message = Message::new(&[instruction], Some(&mint_pubkey));
+
+    let bank = bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
 
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message.clone())

@@ -2,8 +2,8 @@ use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
-        executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
+        loaded_programs::LoadedPrograms,
         log_collector::LogCollector,
         pre_account::PreAccount,
         stable_log,
@@ -123,7 +123,8 @@ pub struct InvokeContext<'a> {
     current_compute_budget: ComputeBudget,
     compute_meter: RefCell<u64>,
     accounts_data_meter: AccountsDataMeter,
-    pub tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
+    pub programs_in_tx_batch: Rc<RefCell<LoadedPrograms>>,
+    pub updated_programs: Rc<RefCell<LoadedPrograms>>,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
@@ -141,7 +142,8 @@ impl<'a> InvokeContext<'a> {
         sysvar_cache: Cow<'a, SysvarCache>,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
-        tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
+        programs_in_tx_batch: Rc<RefCell<LoadedPrograms>>,
+        updated_programs: Rc<RefCell<LoadedPrograms>>,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
@@ -159,7 +161,8 @@ impl<'a> InvokeContext<'a> {
             compute_budget,
             compute_meter: RefCell::new(compute_budget.compute_unit_limit),
             accounts_data_meter: AccountsDataMeter::new(prev_accounts_data_len),
-            tx_executor_cache,
+            programs_in_tx_batch,
+            updated_programs,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             blockhash,
@@ -172,6 +175,20 @@ impl<'a> InvokeContext<'a> {
     pub fn new_mock(
         transaction_context: &'a mut TransactionContext,
         builtin_programs: &'a [BuiltinProgram],
+    ) -> Self {
+        Self::new_mock_with_loaded_programs(
+            transaction_context,
+            builtin_programs,
+            Rc::new(RefCell::new(LoadedPrograms::default())),
+            Rc::new(RefCell::new(LoadedPrograms::default())),
+        )
+    }
+
+    pub fn new_mock_with_loaded_programs(
+        transaction_context: &'a mut TransactionContext,
+        builtin_programs: &'a [BuiltinProgram],
+        programs_in_tx_batch: Rc<RefCell<LoadedPrograms>>,
+        updated_programs: Rc<RefCell<LoadedPrograms>>,
     ) -> Self {
         let mut sysvar_cache = SysvarCache::default();
         sysvar_cache.fill_missing_entries(|pubkey, callback| {
@@ -198,7 +215,8 @@ impl<'a> InvokeContext<'a> {
             Cow::Owned(sysvar_cache),
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
-            Rc::new(RefCell::new(TransactionExecutorCache::default())),
+            programs_in_tx_batch,
+            updated_programs,
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
             0,
@@ -967,6 +985,33 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
 
 pub fn mock_process_instruction(
     loader_id: &Pubkey,
+    program_indices: Vec<IndexOfAccount>,
+    instruction_data: &[u8],
+    transaction_accounts: Vec<TransactionAccount>,
+    instruction_accounts: Vec<AccountMeta>,
+    sysvar_cache_override: Option<&SysvarCache>,
+    feature_set_override: Option<Arc<FeatureSet>>,
+    expected_result: Result<(), InstructionError>,
+    process_instruction: ProcessInstructionWithContext,
+) -> Vec<AccountSharedData> {
+    mock_process_instruction_with_loaded_programs(
+        loader_id,
+        program_indices,
+        instruction_data,
+        transaction_accounts,
+        instruction_accounts,
+        sysvar_cache_override,
+        feature_set_override,
+        expected_result,
+        process_instruction,
+        Rc::new(RefCell::new(LoadedPrograms::default())),
+        Rc::new(RefCell::new(LoadedPrograms::default())),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn mock_process_instruction_with_loaded_programs(
+    loader_id: &Pubkey,
     mut program_indices: Vec<IndexOfAccount>,
     instruction_data: &[u8],
     transaction_accounts: Vec<TransactionAccount>,
@@ -975,6 +1020,8 @@ pub fn mock_process_instruction(
     feature_set_override: Option<Arc<FeatureSet>>,
     expected_result: Result<(), InstructionError>,
     process_instruction: ProcessInstructionWithContext,
+    programs_in_tx_batch: Rc<RefCell<LoadedPrograms>>,
+    updated_programs: Rc<RefCell<LoadedPrograms>>,
 ) -> Vec<AccountSharedData> {
     program_indices.insert(0, transaction_accounts.len() as IndexOfAccount);
     let mut preparation =
@@ -991,7 +1038,12 @@ pub fn mock_process_instruction(
         compute_budget.max_instruction_trace_length,
     );
     transaction_context.enable_cap_accounts_data_allocations_per_transaction();
-    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+    let mut invoke_context = InvokeContext::new_mock_with_loaded_programs(
+        &mut transaction_context,
+        &[],
+        programs_in_tx_batch,
+        updated_programs,
+    );
     if let Some(sysvar_cache) = sysvar_cache_override {
         invoke_context.sysvar_cache = Cow::Borrowed(sysvar_cache);
     }

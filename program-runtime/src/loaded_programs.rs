@@ -13,6 +13,7 @@ use {
         pubkey::Pubkey, saturating_add_assign,
     },
     std::{
+        cell::RefCell,
         collections::HashMap,
         fmt::{Debug, Formatter},
         sync::{
@@ -22,7 +23,7 @@ use {
     },
 };
 
-const MAX_CACHE_ENTRIES: usize = 100; // TODO: Tune to size
+const MAX_CACHE_ENTRIES: usize = 256; // TODO: Tune to size
 
 /// Relationship between two fork IDs
 #[derive(Copy, Clone, PartialEq)]
@@ -219,7 +220,7 @@ impl LoadedProgram {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct LoadedPrograms {
     /// A two level index:
     ///
@@ -296,9 +297,9 @@ impl LoadedPrograms {
         });
     }
 
-    /// Extracts a subset of the programs relevant to a transaction batch
+    /// Extracts a snapshot/subset of the programs relevant to a transaction batch
     /// and returns which program accounts the accounts DB needs to load.
-    pub fn extract<S: WorkingSlot>(
+    pub fn extract_snapshot<S: WorkingSlot>(
         &self,
         working_slot: &S,
         keys: impl Iterator<Item = Pubkey>,
@@ -309,7 +310,8 @@ impl LoadedPrograms {
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
                         if working_slot.current_slot() >= entry.effective_slot
-                            && working_slot.is_ancestor(entry.deployment_slot)
+                            && (working_slot.current_slot() == entry.deployment_slot
+                                || working_slot.is_ancestor(entry.deployment_slot))
                         {
                             return Some((key, entry.clone()));
                         }
@@ -320,6 +322,66 @@ impl LoadedPrograms {
             })
             .collect();
         (found, missing)
+    }
+
+    /// Extend the cache with the entries from the `snapshot` instance.
+    /// This function will insert all the entries from the `snapshot` cache, following the
+    /// conditions and checks of the regular program loading.
+    pub fn merge_snapshot(&mut self, snapshot: &RefCell<LoadedPrograms>) {
+        snapshot.borrow().entries.iter().for_each(|(key, updated)| {
+            let second_level = self.entries.entry(*key).or_insert_with(Vec::new);
+            if second_level.is_empty() {
+                second_level.extend_from_slice(updated);
+            } else {
+                updated.iter().for_each(|program| {
+                    if program.is_tombstone() {
+                        self.assign_program(*key, program.clone());
+                    } else {
+                        self.replenish(*key, program.clone());
+                    }
+                })
+            }
+        })
+    }
+
+    /// Update the snapshot with programs from `other` instance that have the same effective slot
+    /// as the provided `effective_slot`.
+    /// This is typically used by the transaction processing code. It has a snapshot view
+    /// of the cache object that only contains programs relevant to the given slot and
+    /// the transaction batch.
+    /// This function is called after successful execution of a transaction, to update the
+    /// snapshot instance of the cache with any modified programs.
+    pub fn update_snapshot(&mut self, other: &RefCell<LoadedPrograms>, effective_slot: Slot) {
+        other.borrow().entries.iter().for_each(|(key, updated)| {
+            updated.iter().for_each(|program| {
+                if program.effective_slot == effective_slot {
+                    self.entries
+                        .entry(*key)
+                        .and_modify(|second_level| {
+                            debug_assert!(second_level.len() == 1);
+                            second_level.remove(0);
+                            second_level.insert(0, program.clone());
+                        })
+                        .or_insert(vec![program.clone()]);
+                }
+            });
+        });
+    }
+
+    /// Return the loaded program entry for the given pubkey, if and only if there's only one
+    /// entry for that program in the cache.
+    /// This is typically used by the transaction processing code. It has a filtered out
+    /// instance of the cache object that only contains programs relevant to the given slot
+    /// and transaction batch.
+    pub fn find_in_snapshot(&self, key: &Pubkey) -> Option<Arc<LoadedProgram>> {
+        self.entries.get(key).and_then(|second_level| {
+            (second_level.len() == 1).then_some(
+                second_level
+                    .get(0)
+                    .expect("No entry on index 0 even though the length is 1")
+                    .clone(),
+            )
+        })
     }
 
     /// Evicts programs which were used infrequently
@@ -359,6 +421,10 @@ impl LoadedPrograms {
             self.entries.remove(&k);
         }
     }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
 }
 
 #[cfg(test)]
@@ -370,6 +436,7 @@ mod tests {
         solana_rbpf::vm::BuiltInProgram,
         solana_sdk::{clock::Slot, pubkey::Pubkey},
         std::{
+            cell::RefCell,
             collections::HashMap,
             ops::ControlFlow,
             sync::{
@@ -921,7 +988,7 @@ mod tests {
 
         // Testing fork 0 - 10 - 12 - 22 with current slot at 22
         let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
-        let (found, missing) = cache.extract(
+        let (found, missing) = cache.extract_snapshot(
             &working_slot,
             vec![program1, program2, program3, program4].into_iter(),
         );
@@ -934,7 +1001,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 16
         let mut working_slot = TestWorkingSlot::new(16, &[0, 5, 11, 15, 16, 19, 23]);
-        let (found, missing) = cache.extract(
+        let (found, missing) = cache.extract_snapshot(
             &working_slot,
             vec![program1, program2, program3, program4].into_iter(),
         );
@@ -949,7 +1016,7 @@ mod tests {
 
         // Testing the same fork above, but current slot is now 19 (equal to effective slot of program4).
         working_slot.update_slot(19);
-        let (found, missing) = cache.extract(
+        let (found, missing) = cache.extract_snapshot(
             &working_slot,
             vec![program1, program2, program3, program4].into_iter(),
         );
@@ -964,7 +1031,7 @@ mod tests {
 
         // Testing the same fork above, but current slot is now 23 (future slot than effective slot of program4).
         working_slot.update_slot(23);
-        let (found, missing) = cache.extract(
+        let (found, missing) = cache.extract_snapshot(
             &working_slot,
             vec![program1, program2, program3, program4].into_iter(),
         );
@@ -979,7 +1046,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 11
         let working_slot = TestWorkingSlot::new(11, &[0, 5, 11, 15, 16]);
-        let (found, missing) = cache.extract(
+        let (found, missing) = cache.extract_snapshot(
             &working_slot,
             vec![program1, program2, program3, program4].into_iter(),
         );
@@ -1009,7 +1076,7 @@ mod tests {
 
         // Testing fork 0 - 10 - 12 - 22 (which was pruned) with current slot at 22
         let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
-        let (found, missing) = cache.extract(
+        let (found, missing) = cache.extract_snapshot(
             &working_slot,
             vec![program1, program2, program3, program4].into_iter(),
         );
@@ -1023,7 +1090,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 25 - 27 with current slot at 27
         let working_slot = TestWorkingSlot::new(27, &[0, 5, 11, 25, 27]);
-        let (found, _missing) = cache.extract(
+        let (found, _missing) = cache.extract_snapshot(
             &working_slot,
             vec![program1, program2, program3, program4].into_iter(),
         );
@@ -1052,7 +1119,7 @@ mod tests {
 
         // Testing fork 0 - 5 - 11 - 25 - 27 (with root at 15, slot 25, 27 are pruned) with current slot at 27
         let working_slot = TestWorkingSlot::new(27, &[0, 5, 11, 25, 27]);
-        let (found, missing) = cache.extract(
+        let (found, missing) = cache.extract_snapshot(
             &working_slot,
             vec![program1, program2, program3, program4].into_iter(),
         );
@@ -1063,5 +1130,259 @@ mod tests {
 
         // program3 was deployed on slot 25, which has been pruned
         assert!(missing.contains(&program3));
+    }
+
+    #[test]
+    fn test_cache_merge_snapshot() {
+        let mut cache = LoadedPrograms::default();
+
+        // Fork graph created for the test
+        //                   0
+        //                 /   \
+        //                10    5
+        //                |     |
+        //                20    11
+        //                |     | \
+        //                22   15  25
+        //                      |   |
+        //                     16  27
+        //                      |
+        //                     19
+        //                      |
+        //                     23
+
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 10, 20, 22]);
+        fork_graph.insert_fork(&[0, 5, 11, 15, 16]);
+        fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
+
+        let program1 = Pubkey::new_unique();
+        assert!(!cache.replenish(program1, new_test_builtin_program(0, 1)).0);
+        assert!(
+            !cache
+                .replenish(program1, new_test_builtin_program(10, 11))
+                .0
+        );
+
+        let program2 = Pubkey::new_unique();
+        assert!(!cache.replenish(program2, new_test_builtin_program(5, 6)).0);
+
+        let program3 = Pubkey::new_unique();
+        assert!(
+            !cache
+                .replenish(program3, new_test_builtin_program(25, 26))
+                .0
+        );
+
+        let program4 = Pubkey::new_unique();
+        assert!(!cache.replenish(program4, new_test_builtin_program(0, 1)).0);
+
+        // Build the updates to the cache
+        let mut cache_updates = LoadedPrograms::default();
+        assert!(
+            !cache_updates
+                .replenish(program1, new_test_builtin_program(20, 21))
+                .0
+        );
+
+        assert!(
+            !cache_updates
+                .replenish(program2, new_test_builtin_program(11, 12))
+                .0
+        );
+
+        assert!(
+            !cache_updates
+                .replenish(program4, new_test_builtin_program(5, 6))
+                .0
+        );
+        // The following is a special case, where effective slot is 4 slots in the future
+        assert!(
+            !cache_updates
+                .replenish(program4, new_test_builtin_program(15, 19))
+                .0
+        );
+
+        cache.merge_snapshot(&RefCell::new(cache_updates));
+
+        // Testing fork 0 - 10 - 12 - 22 with current slot at 22
+        let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
+        let (found, missing) = cache.extract_snapshot(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 20));
+        assert!(match_slot(&found, &program4, 0));
+
+        assert!(missing.contains(&program2));
+        assert!(missing.contains(&program3));
+
+        // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 16
+        let mut working_slot = TestWorkingSlot::new(16, &[0, 5, 11, 15, 16, 19, 23]);
+        let (found, missing) = cache.extract_snapshot(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 11));
+
+        // The effective slot of program4 deployed in slot 15 is 19. So it should not be usable in slot 16.
+        assert!(match_slot(&found, &program4, 5));
+
+        assert!(missing.contains(&program3));
+
+        // Testing the same fork above, but current slot is now 19 (equal to effective slot of program4).
+        working_slot.update_slot(19);
+        let (found, missing) = cache.extract_snapshot(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 11));
+
+        // The effective slot of program4 deployed in slot 15 is 19. So it should be usable in slot 19.
+        assert!(match_slot(&found, &program4, 15));
+
+        assert!(missing.contains(&program3));
+
+        // Testing the same fork above, but current slot is now 23 (future slot than effective slot of program4).
+        working_slot.update_slot(23);
+        let (found, missing) = cache.extract_snapshot(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 11));
+
+        // The effective slot of program4 deployed in slot 15 is 19. So it should be usable in slot 23.
+        assert!(match_slot(&found, &program4, 15));
+
+        assert!(missing.contains(&program3));
+
+        // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 11
+        let working_slot = TestWorkingSlot::new(11, &[0, 5, 11, 15, 16]);
+        let (found, missing) = cache.extract_snapshot(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 5));
+        assert!(match_slot(&found, &program4, 5));
+
+        assert!(missing.contains(&program3));
+    }
+
+    #[test]
+    fn test_cache_update_snapshot() {
+        let mut cache = LoadedPrograms::default();
+
+        // The slot history for the snapshot
+        //                   0
+        //                   |
+        //                   5
+        //                   |
+        //                  11
+        //                   |
+        //                  15
+        //                   |
+        //                  16
+        //                   |
+        //                  19
+        //                   |
+        //                  23
+
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 5, 11, 15, 16, 19, 23]);
+
+        let program1 = Pubkey::new_unique();
+        assert!(!cache.replenish(program1, new_test_builtin_program(0, 1)).0);
+
+        let program2 = Pubkey::new_unique();
+        assert!(!cache.replenish(program2, new_test_builtin_program(5, 6)).0);
+
+        let program3 = Pubkey::new_unique();
+        assert!(
+            !cache
+                .replenish(program3, new_test_builtin_program(15, 16))
+                .0
+        );
+
+        let program4 = Pubkey::new_unique();
+        assert!(!cache.replenish(program4, new_test_builtin_program(0, 1)).0);
+
+        let program5 = Pubkey::new_unique();
+
+        // Current slot: 19
+        let working_slot = TestWorkingSlot::new(19, &[0, 5, 11, 15, 16, 19, 23]);
+        let (found, missing) = cache.extract_snapshot(
+            &working_slot,
+            vec![program1, program2, program3, program4, program5].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 5));
+        assert!(match_slot(&found, &program3, 15));
+        assert!(match_slot(&found, &program4, 0));
+
+        assert!(missing.contains(&program5));
+
+        // Build the updates to the snapshot
+        let mut cache_updates = LoadedPrograms::default();
+        assert!(
+            !cache_updates
+                .replenish(program2, new_test_loaded_program(16, 19))
+                .0
+        );
+
+        // The following update has effective slot 20. So snapshot should not be updated
+        // with it.
+        assert!(
+            !cache_updates
+                .replenish(program4, new_test_loaded_program(19, 20))
+                .0
+        );
+
+        // Insert a new program. Add two entries, with same deployment slot but different
+        // effective slots. This is to test the scenario where a program gets deployed,
+        // and effective slot 19 has tombstone (for delay visibility) and slot 20 has
+        // the actual progam.
+        assert!(
+            !cache_updates
+                .replenish(program5, new_test_loaded_program(19, 19))
+                .0
+        );
+
+        assert!(
+            !cache_updates
+                .replenish(program5, new_test_builtin_program(19, 20))
+                .0
+        );
+
+        cache.update_snapshot(&RefCell::new(cache_updates), 19);
+
+        // Current slot: 19
+        let working_slot = TestWorkingSlot::new(19, &[0, 5, 11, 15, 16, 19, 23]);
+        let (found, _missing) = cache.extract_snapshot(
+            &working_slot,
+            vec![program1, program2, program3, program4, program5].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 16));
+        assert!(match_slot(&found, &program3, 15));
+        assert!(match_slot(&found, &program4, 0));
+        assert!(match_slot(&found, &program5, 19));
+        assert_eq!(
+            found
+                .get(&program5)
+                .expect("failed to find the program")
+                .effective_slot,
+            19
+        );
     }
 }

@@ -34,9 +34,8 @@ use {
     solana_logger,
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget, MAX_COMPUTE_UNIT_LIMIT},
-        executor_cache::TransactionExecutorCache,
-        invoke_context::{mock_process_instruction, InvokeContext},
-        loaded_programs::{LoadedProgram, LoadedProgramType},
+        invoke_context::{mock_process_instruction_with_loaded_programs, InvokeContext},
+        loaded_programs::LoadedProgramType,
         prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         timings::ExecuteTimings,
     },
@@ -46,7 +45,6 @@ use {
             AccountSharedData, ReadableAccount, WritableAccount,
         },
         account_utils::StateMut,
-        bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         client::SyncClient,
         clock::{
@@ -101,12 +99,10 @@ use {
         },
     },
     std::{
-        cell::RefCell,
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fs::File,
         io::Read,
-        rc::Rc,
         result,
         str::FromStr,
         sync::{
@@ -175,7 +171,7 @@ fn new_execution_result(
             executed_units: 0,
             accounts_data_len_delta: 0,
         },
-        tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
+        updated_programs: Rc::new(RefCell::new(LoadedPrograms::default())),
     }
 }
 
@@ -7673,118 +7669,6 @@ fn test_reconfigure_token2_native_mint() {
 }
 
 #[test]
-fn test_bank_executor_cache() {
-    solana_logger::setup();
-
-    let (genesis_config, _) = create_genesis_config(1);
-    let bank = Bank::new_for_tests(&genesis_config);
-
-    let key1 = solana_sdk::pubkey::new_rand();
-    let key2 = solana_sdk::pubkey::new_rand();
-    let key3 = solana_sdk::pubkey::new_rand();
-    let key4 = solana_sdk::pubkey::new_rand();
-    let key5 = solana_sdk::pubkey::new_rand();
-    let executor = Arc::new(LoadedProgram::default());
-
-    fn new_executable_account(owner: Pubkey) -> AccountSharedData {
-        AccountSharedData::from(Account {
-            owner,
-            executable: true,
-            ..Account::default()
-        })
-    }
-
-    let accounts = &[
-        (key1, new_executable_account(bpf_loader_upgradeable::id())),
-        (key2, new_executable_account(bpf_loader::id())),
-        (key3, new_executable_account(bpf_loader_deprecated::id())),
-        (key4, new_executable_account(native_loader::id())),
-        (key5, AccountSharedData::default()),
-    ];
-
-    // don't do any work if not dirty
-    let executors =
-        TransactionExecutorCache::new((0..4).map(|i| (accounts[i].0, executor.clone())));
-    let executors = Rc::new(RefCell::new(executors));
-    bank.store_executors_which_added_to_the_cache(&executors);
-    bank.store_executors_which_were_deployed(&executors);
-    let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().visible.len(), 0);
-
-    // do work
-    let mut executors =
-        TransactionExecutorCache::new((2..3).map(|i| (accounts[i].0, executor.clone())));
-    executors.set(key1, executor.clone(), false, true, bank.slot());
-    executors.set(key2, executor.clone(), false, true, bank.slot());
-    executors.set(key3, executor.clone(), true, true, bank.slot());
-    executors.set(key4, executor, false, true, bank.slot());
-    let executors = Rc::new(RefCell::new(executors));
-
-    // store Missing
-    bank.store_executors_which_added_to_the_cache(&executors);
-    let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().visible.len(), 2);
-    assert!(stored_executors.borrow().visible.contains_key(&key1));
-    assert!(stored_executors.borrow().visible.contains_key(&key2));
-
-    // store Updated
-    bank.store_executors_which_were_deployed(&executors);
-    let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().visible.len(), 3);
-    assert!(stored_executors.borrow().visible.contains_key(&key1));
-    assert!(stored_executors.borrow().visible.contains_key(&key2));
-    assert!(stored_executors.borrow().visible.contains_key(&key3));
-
-    // Check inheritance
-    let bank = Bank::new_from_parent(&Arc::new(bank), &solana_sdk::pubkey::new_rand(), 1);
-    let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().visible.len(), 3);
-    assert!(stored_executors.borrow().visible.contains_key(&key1));
-    assert!(stored_executors.borrow().visible.contains_key(&key2));
-    assert!(stored_executors.borrow().visible.contains_key(&key3));
-
-    // Force compilation of an executor
-    let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so").unwrap();
-    let mut elf = Vec::new();
-    file.read_to_end(&mut elf).unwrap();
-    let programdata_key = solana_sdk::pubkey::new_rand();
-    let mut program_account = AccountSharedData::new_data(
-        40,
-        &UpgradeableLoaderState::Program {
-            programdata_address: programdata_key,
-        },
-        &bpf_loader_upgradeable::id(),
-    )
-    .unwrap();
-    program_account.set_executable(true);
-    program_account.set_rent_epoch(1);
-    let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
-    let mut programdata_account = AccountSharedData::new(
-        40,
-        programdata_data_offset + elf.len(),
-        &bpf_loader_upgradeable::id(),
-    );
-    programdata_account
-        .set_state(&UpgradeableLoaderState::ProgramData {
-            slot: 42,
-            upgrade_authority_address: None,
-        })
-        .unwrap();
-    programdata_account.data_mut()[programdata_data_offset..].copy_from_slice(&elf);
-    programdata_account.set_rent_epoch(1);
-    bank.store_account_and_update_capitalization(&key1, &program_account);
-    bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-
-    // Remove all
-    bank.remove_executor(&key1);
-    bank.remove_executor(&key2);
-    bank.remove_executor(&key3);
-    bank.remove_executor(&key4);
-    let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().visible.len(), 0);
-}
-
-#[test]
 fn test_bank_load_program() {
     solana_logger::setup();
 
@@ -7831,61 +7715,6 @@ fn test_bank_load_program() {
         program.account_size,
         program_account.data().len() + programdata_account.data().len()
     );
-}
-
-#[test]
-fn test_bank_executor_cow() {
-    solana_logger::setup();
-
-    let (genesis_config, _) = create_genesis_config(1);
-    let root = Arc::new(Bank::new_for_tests(&genesis_config));
-
-    let key1 = solana_sdk::pubkey::new_rand();
-    let key2 = solana_sdk::pubkey::new_rand();
-    let executor = Arc::new(LoadedProgram::default());
-    let executable_account = AccountSharedData::from(Account {
-        owner: bpf_loader_upgradeable::id(),
-        executable: true,
-        ..Account::default()
-    });
-
-    let accounts = &[
-        (key1, executable_account.clone()),
-        (key2, executable_account),
-    ];
-
-    // add one to root bank
-    let mut executors = TransactionExecutorCache::default();
-    executors.set(key1, executor.clone(), false, true, root.slot());
-    let executors = Rc::new(RefCell::new(executors));
-    root.store_executors_which_added_to_the_cache(&executors);
-    let executors = root.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().visible.len(), 1);
-
-    let fork1 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
-    let fork2 = Bank::new_from_parent(&root, &Pubkey::default(), 2);
-
-    let executors = fork1.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().visible.len(), 1);
-    let executors = fork2.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().visible.len(), 1);
-
-    let mut executors = TransactionExecutorCache::default();
-    executors.set(key2, executor, false, true, fork1.slot());
-    let executors = Rc::new(RefCell::new(executors));
-    fork1.store_executors_which_added_to_the_cache(&executors);
-
-    let executors = fork1.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().visible.len(), 2);
-    let executors = fork2.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().visible.len(), 1);
-
-    fork1.remove_executor(&key1);
-
-    let executors = fork1.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().visible.len(), 1);
-    let executors = fork2.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().visible.len(), 1);
 }
 
 #[test]
@@ -8040,8 +7869,16 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(*elf.get(i).unwrap(), *byte);
     }
 
+    let loaded_program = bank
+        .load_program(&program_keypair.pubkey())
+        .expect("Failed to load the test program");
+
+    let mut programs_in_tx_batch = LoadedPrograms::default();
+    programs_in_tx_batch.assign_program(program_keypair.pubkey(), loaded_program);
+    let programs_in_tx_batch = Rc::new(RefCell::new(programs_in_tx_batch));
+
     // Invoke deployed program
-    mock_process_instruction(
+    mock_process_instruction_with_loaded_programs(
         &bpf_loader_upgradeable::id(),
         vec![0, 1],
         &[],
@@ -8054,6 +7891,8 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         None,
         Ok(()),
         solana_bpf_loader_program::process_instruction,
+        programs_in_tx_batch,
+        Rc::new(RefCell::new(LoadedPrograms::default())),
     );
 
     // Test initialized program account

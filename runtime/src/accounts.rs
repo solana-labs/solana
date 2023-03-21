@@ -1451,7 +1451,7 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::executor_cache::TransactionExecutorCache,
+        solana_program_runtime::loaded_programs::LoadedPrograms,
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             bpf_loader_upgradeable::UpgradeableLoaderState,
@@ -1502,7 +1502,7 @@ mod tests {
                 executed_units: 0,
                 accounts_data_len_delta: 0,
             },
-            tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
+            updated_programs: Rc::new(RefCell::new(LoadedPrograms::default())),
         }
     }
 
