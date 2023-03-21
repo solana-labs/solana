@@ -301,6 +301,9 @@ pub enum SnapshotError {
     #[error("serialization error: {0}")]
     Serialize(#[from] bincode::Error),
 
+    #[error("crossbeam send error: {0}")]
+    CrossbeamSend(#[from] crossbeam_channel::SendError<PathBuf>),
+
     #[error("archive generation failure {0}")]
     ArchiveGenerationFailure(ExitStatus),
 
@@ -1885,20 +1888,17 @@ fn streaming_snapshot_dir_files(
     snapshot_file_path: impl Into<PathBuf>,
     snapshot_version_path: impl Into<PathBuf>,
     account_paths: &[PathBuf],
-) {
-    file_sender
-        .send(snapshot_file_path.into())
-        .expect("send snapshot file path");
-    file_sender
-        .send(snapshot_version_path.into())
-        .expect("send snapshot version path");
+) -> Result<()> {
+    file_sender.send(snapshot_file_path.into())?;
+    file_sender.send(snapshot_version_path.into())?;
 
     for account_path in account_paths {
-        for file in fs::read_dir(account_path).expect("read account path dir") {
-            let file_path = file.unwrap().path().to_path_buf();
-            file_sender.send(file_path).expect("send account file path");
+        for file in fs::read_dir(account_path)? {
+            file_sender.send(file?.path())?;
         }
     }
+
+    Ok(())
 }
 
 /// Perform the common tasks when deserialize a snapshot.  Handles reading snapshot file, reading the version file,
@@ -1957,7 +1957,7 @@ fn build_storage_from_snapshot_dir(
         snapshot_file_path,
         snapshot_version_path,
         account_paths,
-    );
+    )?;
 
     let num_rebuilder_threads = num_cpus::get_physical().saturating_sub(1).max(1);
     let version_and_storages = SnapshotStorageRebuilder::rebuild_storage(
