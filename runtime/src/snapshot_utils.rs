@@ -1649,12 +1649,7 @@ pub fn bank_from_snapshot_dir(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
-    // next_append_vec_id is not used when loading from a snapshot directory.  It is kept because the from_dir
-    // and from_archive paths share many function calls, and it is easier to keep the same function signatures.
-    // It is initialized to 1 to avoid substraction underflow in reconstruct_accountsdb_from_fields.  If it is
-    // initialized to 0, it is never incremented to non-zero, so the substraction underflow will occur, causing
-    // test_bank_from_snapshot_dir to fail.
-    let next_append_vec_id = Arc::new(AtomicAppendVecId::new(1));
+    let next_append_vec_id = Arc::new(AtomicAppendVecId::new(0));
 
     let measure_build_storage = Measure::start("build storage from snapshot dir");
     let storage =
@@ -5356,34 +5351,38 @@ mod tests {
     #[test]
     fn test_bank_from_snapshot_dir() {
         solana_logger::setup();
-
         let genesis_config = GenesisConfig::default();
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-        let account_paths = &bank0.rc.accounts.accounts_db.paths;
+        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let bank_snapshots_dir = tmp_dir.path();
         let collecter_id = Pubkey::new_unique();
         let snapshot_version = SnapshotVersion::default();
 
-        let bank = Bank::new_from_parent(&bank0, &collecter_id, 1);
-        bank.fill_bank_with_ticks_for_tests();
-        bank.squash();
-        bank.force_flush_accounts_cache();
+        for _ in 0..3 {
+            // prepare the bank
+            bank = Arc::new(Bank::new_from_parent(&bank, &collecter_id, bank.slot() + 1));
+            bank.fill_bank_with_ticks_for_tests();
+            bank.squash();
+            bank.force_flush_accounts_cache();
 
-        // generate the bank snapshot directory for slot 1
-        let snapshot_storages = bank.get_snapshot_storages(None);
-        let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
-        add_bank_snapshot(
-            bank_snapshots_dir,
-            &bank,
-            &snapshot_storages,
-            snapshot_version,
-            slot_deltas,
-        )
-        .unwrap();
+            // generate the bank snapshot directory for slot+1
+            let snapshot_storages = bank.get_snapshot_storages(None);
+            let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+            add_bank_snapshot(
+                bank_snapshots_dir,
+                &bank,
+                &snapshot_storages,
+                snapshot_version,
+                slot_deltas,
+            )
+            .unwrap();
+        }
+
+        let highest_bank = Arc::try_unwrap(bank).unwrap();
 
         let bank_snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
+        let account_paths = &highest_bank.rc.accounts.accounts_db.paths;
 
         // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
         // files will be extracted from the snapshot hardlink directories into these run/ directories.
@@ -5409,7 +5408,7 @@ mod tests {
         .unwrap();
 
         bank_constructed.wait_for_initial_accounts_hash_verification_completed_for_tests();
-        assert_eq!(bank_constructed, bank);
+        assert_eq!(bank_constructed, highest_bank);
 
         // Verify that the next_append_vec_id tracking is correct
         let mut max_id = 0;
@@ -5421,7 +5420,11 @@ mod tests {
                 max_id = std::cmp::max(max_id, append_vec_id);
             });
         }
-        let next_id = bank.accounts().accounts_db.next_id.load(Ordering::Relaxed) as usize;
+        let next_id = highest_bank
+            .accounts()
+            .accounts_db
+            .next_id
+            .load(Ordering::Relaxed) as usize;
         assert_eq!(max_id, next_id - 1);
     }
 }

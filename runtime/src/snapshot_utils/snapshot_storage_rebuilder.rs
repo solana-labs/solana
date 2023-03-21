@@ -275,9 +275,9 @@ impl SnapshotStorageRebuilder {
             let (slot, append_vec_id) = get_slot_and_append_vec_id(&filename);
             if self.snapshot_from == SnapshotFrom::Dir {
                 // Keep track of the highest append_vec_id in the system, so the future append_vecs
-                // can be assigned a unique id.  This is only needed when loading from a snapshot
+                // can be assigned to unique IDs.  This is only needed when loading from a snapshot
                 // dir.  When loading from a snapshot archive, the max of the appendvec IDs is
-                // updated in remap_append_vec_file()
+                // updated in remap_append_vec_file(), which is not in the from_dir route.
                 self.next_append_vec_id
                     .fetch_max((append_vec_id + 1) as AppendVecId, Ordering::Relaxed);
             }
