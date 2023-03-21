@@ -389,7 +389,7 @@ pub fn test_faulty_node(
     faulty_node_type: BroadcastStageType,
     node_stakes: Vec<u64>,
 ) -> (LocalCluster, Vec<Arc<Keypair>>) {
-    solana_logger::setup_with_default("solana_local_cluster=info");
+    // solana_logger::setup_with_default("solana_local_cluster=info");
     let num_nodes = node_stakes.len();
     let mut validator_keys = Vec::with_capacity(num_nodes);
     validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
@@ -408,6 +408,7 @@ pub fn test_faulty_node(
 
     let error_validator_config = ValidatorConfig {
         broadcast_stage_type: faulty_node_type,
+
         fixed_leader_schedule: fixed_leader_schedule.clone(),
         ..ValidatorConfig::default_for_test()
     };
