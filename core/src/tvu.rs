@@ -154,6 +154,7 @@ impl Tvu {
             tvu_config.shred_version,
             bank_forks.clone(),
             cluster_info.clone(),
+            turbine_disabled,
             exit,
         );
 
@@ -166,7 +167,6 @@ impl Tvu {
             fetch_receiver,
             retransmit_sender.clone(),
             verified_sender,
-            turbine_disabled,
         );
 
         let retransmit_stage = RetransmitStage::new(
