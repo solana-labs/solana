@@ -6,8 +6,8 @@ use {
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
     solana_perf::{
-        deduper::Deduper,
         packet::{Packet, PacketBatch, PacketBatchRecycler, PacketFlags},
+        sigverify::Deduper,
     },
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
