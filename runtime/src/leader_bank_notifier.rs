@@ -85,11 +85,14 @@ impl LeaderBankNotifier {
 
     /// Wait for next notification for a completed leader slot.
     /// Returns `None` if the timeout is reached
-    pub fn wait_for_next_completed(&self, mut timeout: Duration) -> Option<Slot> {
+    pub fn wait_for_next_completed(&self, mut remaining_timeout: Duration) -> Option<Slot> {
         loop {
             let start = Instant::now();
             let status = self.status.lock().unwrap();
-            let (status, result) = self.condvar.wait_timeout(status, timeout).unwrap();
+            let (status, result) = self
+                .condvar
+                .wait_timeout(status, remaining_timeout)
+                .unwrap();
             if result.timed_out() {
                 return None;
             }
@@ -99,7 +102,7 @@ impl LeaderBankNotifier {
                 return Some(slot);
             }
 
-            timeout = timeout.saturating_sub(start.elapsed());
+            remaining_timeout = remaining_timeout.saturating_sub(start.elapsed());
         }
     }
 }
