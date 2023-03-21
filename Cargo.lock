@@ -5676,6 +5676,7 @@ dependencies = [
  "matches",
  "nix",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rayon",
  "serde",
  "solana-logger 1.13.7",
@@ -5683,6 +5684,7 @@ dependencies = [
  "solana-rayon-threadlimit",
  "solana-sdk 1.13.7",
  "solana-vote-program",
+ "test-case",
 ]
 
 [[package]]
@@ -7029,6 +7031,28 @@ name = "termtree"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13a4ec180a2de59b57434704ccfad967f789b12737738798fa08798cd5824c16"
+
+[[package]]
+name = "test-case"
+version = "2.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21d6cf5a7dffb3f9dceec8e6b8ca528d9bd71d36c9f074defb548ce161f598c0"
+dependencies = [
+ "test-case-macros",
+]
+
+[[package]]
+name = "test-case-macros"
+version = "2.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e45b7bf6e19353ddd832745c8fcf77a17a93171df7151187f26623f2b75b5b26"
+dependencies = [
+ "cfg-if 1.0.0",
+ "proc-macro-error",
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.91",
+]
 
 [[package]]
 name = "textwrap"
