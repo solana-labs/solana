@@ -101,8 +101,9 @@ fn run_shred_sigverify(
     stats.num_retransmit_shreds += shreds.len();
     if !turbine_disabled.load(Ordering::Relaxed) {
         retransmit_sender.send(shreds)?;
+        let len = packets.len();
         verified_sender.send(packets)?;
-        info!("sent verified packets at {:?}", self_pubkey);
+        info!("sent verified packets at {:?} len {len}", self_pubkey);
     }
     stats.elapsed_micros += now.elapsed().as_micros() as u64;
     Ok(())
