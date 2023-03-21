@@ -226,6 +226,10 @@ pub async fn upload_confirmed_blocks(
             }
             Some(confirmed_block) => {
                 let bt = bigtable.clone();
+                // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async
+                // move` block.  But it captures `bt`, so it is necessary.
+                // TODO Enable after upgrade to Rust 1.69.
+                // #[allow(clippy::redundant_async_block)]
                 Some(tokio::spawn(async move {
                     bt.upload_confirmed_block(slot, confirmed_block).await
                 }))
