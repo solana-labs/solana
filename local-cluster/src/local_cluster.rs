@@ -31,7 +31,6 @@ use {
         clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
-        feature_set,
         genesis_config::{ClusterType, GenesisConfig},
         message::Message,
         poh_config::PohConfig,
@@ -263,11 +262,6 @@ impl LocalCluster {
                 },
             ),
         );
-
-        // disable incremental accounts hash feature since AccountsHashVerifier does not support it yet
-        genesis_config
-            .accounts
-            .remove(&feature_set::incremental_snapshot_only_incremental_hash_calculation::id());
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();
