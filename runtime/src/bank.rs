@@ -2278,7 +2278,15 @@ impl Bank {
             let stakes = self.stakes_cache.stakes().clone();
             let stakes = Arc::new(StakesEnum::from(stakes));
             let new_epoch_stakes = EpochStakes::new(stakes, leader_schedule_epoch);
-            {
+            info!(
+                "new epoch stakes, epoch: {}, total_stake: {}",
+                leader_schedule_epoch,
+                new_epoch_stakes.total_stake(),
+            );
+
+            // It is expensive to log the details of epoch stakes. Only log them at "trace"
+            // level for debugging purpose.
+            if log::log_enabled!(log::Level::Trace) {
                 let vote_stakes: HashMap<_, _> = self
                     .stakes_cache
                     .stakes()
@@ -2286,12 +2294,7 @@ impl Bank {
                     .delegated_stakes()
                     .map(|(pubkey, stake)| (*pubkey, stake))
                     .collect();
-                info!(
-                    "new epoch stakes, epoch: {}, stakes: {:#?}, total_stake: {}",
-                    leader_schedule_epoch,
-                    vote_stakes,
-                    new_epoch_stakes.total_stake(),
-                );
+                trace!("new epoch stakes, stakes: {vote_stakes:#?}");
             }
             self.epoch_stakes
                 .insert(leader_schedule_epoch, new_epoch_stakes);
