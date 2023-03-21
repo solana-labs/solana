@@ -142,19 +142,19 @@ pub struct TransactionRecorder {
     // shared by all users of PohRecorder
     pub record_sender: Sender<Record>,
     pub is_exited: Arc<AtomicBool>,
-    leader_bank_status: Arc<LeaderBankNotifier>,
+    leader_bank_notifier: Arc<LeaderBankNotifier>,
 }
 
 impl TransactionRecorder {
     pub fn new(
         record_sender: Sender<Record>,
         is_exited: Arc<AtomicBool>,
-        leader_bank_status: Arc<LeaderBankNotifier>,
+        leader_bank_notifier: Arc<LeaderBankNotifier>,
     ) -> Self {
         Self {
             record_sender,
             is_exited,
-            leader_bank_status,
+            leader_bank_notifier,
         }
     }
 
@@ -180,7 +180,7 @@ impl TransactionRecorder {
                     starting_transaction_index = starting_index;
                 }
                 Err(PohRecorderError::MaxHeightReached) => {
-                    self.leader_bank_status.set_completed(bank_slot);
+                    self.leader_bank_notifier.set_completed(bank_slot);
                     return RecordTransactionsSummary {
                         record_transactions_timings,
                         result: Err(PohRecorderError::MaxHeightReached),
@@ -305,14 +305,14 @@ pub struct PohRecorder {
     ticks_from_record: u64,
     last_metric: Instant,
     record_sender: Sender<Record>,
-    pub leader_bank_status: Arc<LeaderBankNotifier>,
+    pub leader_bank_notifier: Arc<LeaderBankNotifier>,
     pub is_exited: Arc<AtomicBool>,
 }
 
 impl PohRecorder {
     fn clear_bank(&mut self) {
         if let Some(WorkingBank { bank, start, .. }) = self.working_bank.take() {
-            self.leader_bank_status.set_completed(bank.slot());
+            self.leader_bank_notifier.set_completed(bank.slot());
             let next_leader_slot = self.leader_schedule_cache.next_leader_slot(
                 &self.id,
                 bank.slot(),
@@ -423,7 +423,7 @@ impl PohRecorder {
         TransactionRecorder::new(
             self.record_sender.clone(),
             self.is_exited.clone(),
-            self.leader_bank_status.clone(),
+            self.leader_bank_notifier.clone(),
         )
     }
 
@@ -966,7 +966,7 @@ impl PohRecorder {
                 ticks_from_record: 0,
                 last_metric: Instant::now(),
                 record_sender,
-                leader_bank_status: Arc::default(),
+                leader_bank_notifier: Arc::default(),
                 is_exited,
             },
             receiver,
