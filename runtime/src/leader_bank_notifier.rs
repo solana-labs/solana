@@ -46,9 +46,9 @@ impl LeaderBankNotifier {
         self.condvar.notify_all();
     }
 
-    /// Set the status to `StandBy` and notify any waiting threads
-    /// if the status was not already `StandBy`
-    /// and the slot is higher than the current slot (sanity check).
+    /// Set the status to `StandBy` and notify any waiting threads if
+    ///     1. the status was not already `StandBy` and
+    ///     2. the slot is higher than the current slot (sanity check).
     pub fn set_completed(&self, slot: Slot) {
         let mut status = self.status.lock().unwrap();
         if matches!(*status, Status::StandBy) {
