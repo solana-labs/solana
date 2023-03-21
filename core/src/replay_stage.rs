@@ -482,7 +482,7 @@ impl ReplayStage {
                     r_bank_forks.get_vote_only_mode_signal(),
                 )
             };
-            let leader_bank_notifier = poh_recorder.read().unwrap().leader_bank_notifier.clone();
+            let leader_bank_notifier = poh_recorder.read().unwrap().new_leader_bank_notifier();
 
             Self::reset_poh_recorder(
                 &my_pubkey,

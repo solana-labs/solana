@@ -305,7 +305,7 @@ pub struct PohRecorder {
     ticks_from_record: u64,
     last_metric: Instant,
     record_sender: Sender<Record>,
-    pub leader_bank_notifier: Arc<LeaderBankNotifier>,
+    leader_bank_notifier: Arc<LeaderBankNotifier>,
     pub is_exited: Arc<AtomicBool>,
 }
 
@@ -425,6 +425,10 @@ impl PohRecorder {
             self.is_exited.clone(),
             self.leader_bank_notifier.clone(),
         )
+    }
+
+    pub fn new_leader_bank_notifier(&self) -> Arc<LeaderBankNotifier> {
+        self.leader_bank_notifier.clone()
     }
 
     fn is_same_fork_as_previous_leader(&self, slot: Slot) -> bool {
