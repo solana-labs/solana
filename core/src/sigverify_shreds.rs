@@ -114,6 +114,7 @@ fn verify_packets(
     recycler_cache: &RecyclerCache,
     packets: &mut [PacketBatch],
 ) {
+    info!("Verify packets at {:?}", self_pubkey);
     let working_bank = bank_forks.read().unwrap().working_bank();
     let leader_slots: HashMap<Slot, [u8; 32]> =
         get_slot_leaders(self_pubkey, packets, leader_schedule_cache, &working_bank)
