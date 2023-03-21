@@ -205,12 +205,6 @@ impl<O: BucketOccupied> BucketStorage<O> {
         unsafe { &mut *item }
     }
 
-    pub(crate) fn get_from_parts<T: Sized>(item_slice: &[u8]) -> &T {
-        assert!(std::mem::size_of::<T>() <= item_slice.len());
-        let item = item_slice.as_ptr() as *const T;
-        unsafe { &*item }
-    }
-
     pub fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
         let start = self.get_start_offset_no_header(ix);
         let item_slice = &mut self.mmap[start..];
