@@ -118,9 +118,10 @@ impl ShredFetchStage {
                     should_drop_merkle_shreds,
                     &mut stats,
                 ) {
-                    info!("Discard packet set at {:?}.", id);
+                    info!("Discard packet at {:?}.", id);
                     packet.meta_mut().set_discard(true);
                 } else {
+                    info!("Do not discard packet at {:?} {:?}", id, flags);
                     packet.meta_mut().flags.insert(flags);
                 }
             }
