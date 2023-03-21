@@ -966,7 +966,7 @@ impl PohRecorder {
                 ticks_from_record: 0,
                 last_metric: Instant::now(),
                 record_sender,
-                leader_bank_status: Arc::new(LeaderBankStatus::default()),
+                leader_bank_status: Arc::default(),
                 is_exited,
             },
             receiver,
