@@ -241,25 +241,22 @@ impl EtcdTowerStorage {
             .unwrap();
 
         let client = runtime
-            .block_on(async {
-                etcd_client::Client::connect(
-                    endpoints,
-                    tls_config.map(|tls_config| {
-                        etcd_client::ConnectOptions::default().with_tls(
-                            etcd_client::TlsOptions::new()
-                                .domain_name(tls_config.domain_name)
-                                .ca_certificate(etcd_client::Certificate::from_pem(
-                                    tls_config.ca_certificate,
-                                ))
-                                .identity(etcd_client::Identity::from_pem(
-                                    tls_config.identity_certificate,
-                                    tls_config.identity_private_key,
-                                )),
-                        )
-                    }),
-                )
-                .await
-            })
+            .block_on(etcd_client::Client::connect(
+                endpoints,
+                tls_config.map(|tls_config| {
+                    etcd_client::ConnectOptions::default().with_tls(
+                        etcd_client::TlsOptions::new()
+                            .domain_name(tls_config.domain_name)
+                            .ca_certificate(etcd_client::Certificate::from_pem(
+                                tls_config.ca_certificate,
+                            ))
+                            .identity(etcd_client::Identity::from_pem(
+                                tls_config.identity_certificate,
+                                tls_config.identity_private_key,
+                            )),
+                    )
+                }),
+            ))
             .map_err(Self::etdc_to_tower_error)?;
 
         Ok(Self {
