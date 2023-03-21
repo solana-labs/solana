@@ -5425,7 +5425,7 @@ mod tests {
                 max_id = std::cmp::max(max_id, append_vec_id);
             });
         }
-        let next_id: usize = bank.accounts().accounts_db.next_id.load(Ordering::Relaxed) as usize;
+        let next_id = bank.accounts().accounts_db.next_id.load(Ordering::Relaxed) as usize;
         assert_eq!(max_id, next_id - 1);
     }
 }
