@@ -1134,6 +1134,7 @@ impl ServeRepair {
     ) {
         let mut pending_pongs = Vec::default();
         for packet in packet_batch.iter_mut() {
+            info!("Got repair response: {:?} at {:?}", packet.meta(), keypair.pubkey());
             if packet.meta().size != REPAIR_RESPONSE_SERIALIZED_PING_BYTES {
                 continue;
             }
