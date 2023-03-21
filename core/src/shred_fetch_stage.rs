@@ -116,6 +116,7 @@ impl ShredFetchStage {
                     should_drop_merkle_shreds,
                     &mut stats,
                 ) {
+                    info!("Discard packet set.");
                     packet.meta_mut().set_discard(true);
                 } else {
                     packet.meta_mut().flags.insert(flags);
@@ -123,6 +124,7 @@ impl ShredFetchStage {
             }
             stats.maybe_submit(name, STATS_SUBMIT_CADENCE);
             if sendr.send(packet_batch).is_err() {
+                info!("Cannot send packet batch!");
                 break;
             }
         }
