@@ -408,7 +408,13 @@ mod tests {
     }
 
     fn set_tombstone(cache: &mut LoadedPrograms, key: Pubkey, slot: Slot) -> Arc<LoadedProgram> {
-        cache.assign_program(key, Arc::new(LoadedProgram::new_tombstone(slot)))
+        cache.assign_program(
+            key,
+            Arc::new(LoadedProgram::new_tombstone(
+                slot,
+                InvalidProgramReason::FailedToCompile,
+            )),
+        )
     }
 
     #[test]
