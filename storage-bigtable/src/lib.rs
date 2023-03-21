@@ -896,6 +896,10 @@ impl LedgerStorage {
 
         if !tx_cells.is_empty() {
             let conn = self.connection.clone();
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `tx_cells`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             tasks.push(tokio::spawn(async move {
                 conn.put_bincode_cells_with_retry::<TransactionInfo>("tx", &tx_cells)
                     .await
@@ -904,6 +908,10 @@ impl LedgerStorage {
 
         if !tx_by_addr_cells.is_empty() {
             let conn = self.connection.clone();
+            // clippy 0.1.70 (4a04d08 2023-03-18) incorrectly suggests removal of this `async move`
+            // block.  But it captures `tx_by_addr_cells`, so it is necessary.
+            // TODO Enable after upgrade to Rust 1.69.
+            // #[allow(clippy::redundant_async_block)]
             tasks.push(tokio::spawn(async move {
                 conn.put_protobuf_cells_with_retry::<tx_by_addr::TransactionByAddr>(
                     "tx-by-addr",
