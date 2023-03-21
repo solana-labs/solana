@@ -593,7 +593,7 @@ fn process_instruction_common(
 
     executor.usage_counter.fetch_add(1, Ordering::Relaxed);
     match &executor.program {
-        LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
+        LoadedProgramType::Invalid(_) => Err(InstructionError::InvalidAccountData),
         LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
         LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
         _ => Err(InstructionError::IncorrectProgramId),

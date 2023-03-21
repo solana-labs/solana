@@ -55,20 +55,32 @@ pub trait WorkingSlot {
 }
 
 #[derive(Default)]
+pub enum InvalidProgramReason {
+    #[default]
+    FailedToCompile,
+    Closed,
+    DelayVisibility,
+}
+
 pub enum LoadedProgramType {
     /// Tombstone for undeployed, closed or unloadable programs
-    #[default]
-    Invalid,
+    Invalid(InvalidProgramReason),
     LegacyV0(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     LegacyV1(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     Typed(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     BuiltIn(BuiltInProgram<InvokeContext<'static>>),
 }
 
+impl Default for LoadedProgramType {
+    fn default() -> Self {
+        LoadedProgramType::Invalid(InvalidProgramReason::FailedToCompile)
+    }
+}
+
 impl Debug for LoadedProgramType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LoadedProgramType::Invalid => write!(f, "LoadedProgramType::Invalid"),
+            LoadedProgramType::Invalid(_) => write!(f, "LoadedProgramType::Invalid"),
             LoadedProgramType::LegacyV0(_) => write!(f, "LoadedProgramType::LegacyV0"),
             LoadedProgramType::LegacyV1(_) => write!(f, "LoadedProgramType::LegacyV1"),
             LoadedProgramType::Typed(_) => write!(f, "LoadedProgramType::Typed"),
@@ -190,9 +202,9 @@ impl LoadedProgram {
         }
     }
 
-    pub fn new_tombstone(slot: Slot) -> Self {
+    pub fn new_tombstone(slot: Slot, reason: InvalidProgramReason) -> Self {
         Self {
-            program: LoadedProgramType::Invalid,
+            program: LoadedProgramType::Invalid(reason),
             account_size: 0,
             deployment_slot: slot,
             effective_slot: slot,
@@ -201,7 +213,7 @@ impl LoadedProgram {
     }
 
     pub fn is_tombstone(&self) -> bool {
-        matches!(self.program, LoadedProgramType::Invalid)
+        matches!(self.program, LoadedProgramType::Invalid(_))
     }
 }
 
@@ -367,6 +379,7 @@ impl LoadedPrograms {
 
 #[cfg(test)]
 mod tests {
+    use crate::loaded_programs::InvalidProgramReason;
     use {
         crate::loaded_programs::{
             BlockRelation, ForkGraph, LoadedProgram, LoadedProgramEntry, LoadedProgramType,
@@ -637,14 +650,20 @@ mod tests {
 
     #[test]
     fn test_tombstone() {
-        let tombstone = LoadedProgram::new_tombstone(0);
-        assert!(matches!(tombstone.program, LoadedProgramType::Invalid));
+        let tombstone = LoadedProgram::new_tombstone(0, InvalidProgramReason::FailedToCompile);
+        assert!(matches!(
+            tombstone.program,
+            LoadedProgramType::Invalid(InvalidProgramReason::FailedToCompile)
+        ));
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 0);
         assert_eq!(tombstone.effective_slot, 0);
 
-        let tombstone = LoadedProgram::new_tombstone(100);
-        assert!(matches!(tombstone.program, LoadedProgramType::Invalid));
+        let tombstone = LoadedProgram::new_tombstone(100, InvalidProgramReason::Closed);
+        assert!(matches!(
+            tombstone.program,
+            LoadedProgramType::Invalid(InvalidProgramReason::Closed)
+        ));
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 100);
         assert_eq!(tombstone.effective_slot, 100);
@@ -835,7 +854,7 @@ mod tests {
         usage_counter: AtomicU64,
     ) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
-            program: LoadedProgramType::Invalid,
+            program: LoadedProgramType::Invalid(InvalidProgramReason::FailedToCompile),
             account_size: 0,
             deployment_slot,
             effective_slot,

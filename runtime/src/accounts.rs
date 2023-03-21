@@ -29,7 +29,7 @@ use {
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget},
-        loaded_programs::LoadedProgram,
+        loaded_programs::{InvalidProgramReason, LoadedProgram, LoadedProgramType},
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -37,13 +37,15 @@ use {
         bpf_loader_upgradeable,
         clock::{BankId, Slot},
         feature_set::{
-            self, add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
+            self, add_set_tx_loaded_accounts_data_size_instruction,
+            delay_visibility_of_program_deployment, enable_request_heap_frame_ix,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
+        instruction::InstructionError::InvalidAccountData,
         message::{
             v0::{LoadedAddresses, MessageAddressTableLookup},
             SanitizedMessage,
@@ -293,12 +295,24 @@ impl Accounts {
 
     fn account_shared_data_from_program(
         key: &Pubkey,
+        feature_set: &FeatureSet,
         program: &LoadedProgram,
         program_accounts: &HashMap<Pubkey, &Pubkey>,
     ) -> Result<AccountSharedData> {
         // Check for tombstone
-        if program.is_tombstone() {
-            return Err(TransactionError::InvalidProgramForExecution);
+        if let LoadedProgramType::Invalid(reason) = &program.program {
+            match reason {
+                InvalidProgramReason::FailedToCompile => {
+                    Err(TransactionError::InstructionError(0, InvalidAccountData))
+                }
+                InvalidProgramReason::Closed => Err(TransactionError::InvalidProgramForExecution),
+                InvalidProgramReason::DelayVisibility => {
+                    debug_assert!(
+                        feature_set.is_active(&delay_visibility_of_program_deployment::id())
+                    );
+                    Err(TransactionError::InstructionError(0, InvalidAccountData))
+                }
+            }?;
         }
         // It's an executable program account. The program is already loaded in the cache.
         // So the account data is not needed. Return a dummy AccountSharedData with meta
@@ -384,8 +398,13 @@ impl Accounts {
                         // (that are passed to the program as instruction accounts). So such accounts
                         // are needed to be loaded even though corresponding compiled program may
                         // already be present in the cache.
-                        Self::account_shared_data_from_program(key, program, program_accounts)
-                            .map(|program_account| (program.account_size, program_account, 0))?
+                        Self::account_shared_data_from_program(
+                            key,
+                            feature_set,
+                            program,
+                            program_accounts,
+                        )
+                        .map(|program_account| (program.account_size, program_account, 0))?
                     } else {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
