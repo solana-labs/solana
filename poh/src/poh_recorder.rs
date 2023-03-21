@@ -26,7 +26,7 @@ use {
     },
     solana_measure::{measure, measure_us},
     solana_metrics::poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
-    solana_runtime::{bank::Bank, leader_bank_status::LeaderBankStatus},
+    solana_runtime::{bank::Bank, leader_bank_notifier::LeaderBankNotifier},
     solana_sdk::{
         clock::NUM_CONSECUTIVE_LEADER_SLOTS, hash::Hash, poh_config::PohConfig, pubkey::Pubkey,
         saturating_add_assign, transaction::VersionedTransaction,
@@ -142,14 +142,14 @@ pub struct TransactionRecorder {
     // shared by all users of PohRecorder
     pub record_sender: Sender<Record>,
     pub is_exited: Arc<AtomicBool>,
-    leader_bank_status: Arc<LeaderBankStatus>,
+    leader_bank_status: Arc<LeaderBankNotifier>,
 }
 
 impl TransactionRecorder {
     pub fn new(
         record_sender: Sender<Record>,
         is_exited: Arc<AtomicBool>,
-        leader_bank_status: Arc<LeaderBankStatus>,
+        leader_bank_status: Arc<LeaderBankNotifier>,
     ) -> Self {
         Self {
             record_sender,
@@ -305,7 +305,7 @@ pub struct PohRecorder {
     ticks_from_record: u64,
     last_metric: Instant,
     record_sender: Sender<Record>,
-    pub leader_bank_status: Arc<LeaderBankStatus>,
+    pub leader_bank_status: Arc<LeaderBankNotifier>,
     pub is_exited: Arc<AtomicBool>,
 }
 

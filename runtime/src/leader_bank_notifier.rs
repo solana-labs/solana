@@ -11,7 +11,7 @@ use {
 ///     1. A leader bank initiates (=PoH-initiated)
 ///     2. A leader slot completes (=PoH-completed)
 #[derive(Debug, Default)]
-pub struct LeaderBankStatus {
+pub struct LeaderBankNotifier {
     /// Current state of the system
     status: Mutex<Status>,
     /// Weak reference to the current bank
@@ -30,7 +30,7 @@ enum Status {
     InProgress,
 }
 
-impl LeaderBankStatus {
+impl LeaderBankNotifier {
     /// Set the status to `InProgress` and notify any waiting threads
     /// if the status was not already `InProgress`.
     pub fn set_in_progress(&self, bank: &Arc<Bank>) {
@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn test_leader_bank_status_wait_for_in_progress() {
-        let leader_bank_status = Arc::new(LeaderBankStatus::default());
+        let leader_bank_status = Arc::new(LeaderBankNotifier::default());
         let leader_bank_status2 = leader_bank_status.clone();
 
         let jh = std::thread::spawn(move || {
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn test_leader_bank_status_wait_for_in_progress_timeout() {
-        let leader_bank_status = Arc::new(LeaderBankStatus::default());
+        let leader_bank_status = Arc::new(LeaderBankNotifier::default());
         leader_bank_status.set_in_progress(&Arc::new(Bank::default_for_tests()));
         leader_bank_status.set_completed(1);
 
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn test_leader_bank_status_wait_for_next_completed() {
-        let leader_bank_status = Arc::new(LeaderBankStatus::default());
+        let leader_bank_status = Arc::new(LeaderBankNotifier::default());
         let leader_bank_status2 = leader_bank_status.clone();
 
         let jh = std::thread::spawn(move || {
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_leader_bank_status_wait_for_next_completed_timeout() {
-        let leader_bank_status = Arc::new(LeaderBankStatus::default());
+        let leader_bank_status = Arc::new(LeaderBankNotifier::default());
 
         leader_bank_status.set_in_progress(&Arc::new(Bank::default_for_tests()));
         assert_eq!(

@@ -58,7 +58,7 @@ use {
         bank::{Bank, NewBankOptions},
         bank_forks::{BankForks, MAX_ROOT_DISTANCE_FOR_VOTE_ONLY},
         commitment::BlockCommitmentCache,
-        leader_bank_status::LeaderBankStatus,
+        leader_bank_notifier::LeaderBankNotifier,
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
     },
@@ -1680,7 +1680,7 @@ impl ReplayStage {
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
         banking_tracer: &Arc<BankingTracer>,
-        leader_bank_status: &LeaderBankStatus,
+        leader_bank_status: &LeaderBankNotifier,
         has_new_vote_been_rooted: bool,
         track_transaction_indexes: bool,
     ) {
