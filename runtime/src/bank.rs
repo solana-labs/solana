@@ -7328,8 +7328,12 @@ impl Bank {
             let should_clean = !accounts_db_skip_shrink && self.slot() > 0;
             if should_clean {
                 info!("Cleaning...");
+                // We cannot clean past the last full snapshot's slot because we are about to
+                // perform an accounts hash calculation *up to that slot*.  If we cleaned *past*
+                // that slot, then accounts could be removed from older storages, which would
+                // change the accounts hash.
                 self.rc.accounts.accounts_db.clean_accounts(
-                    None,
+                    Some(last_full_snapshot_slot),
                     true,
                     Some(last_full_snapshot_slot),
                 );
