@@ -192,6 +192,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
             let ii = i % index.capacity();
+            assert!(ii < index.capacity(), "{}, {}", ii, index.capacity());
             if index.is_free(ii) {
                 continue;
             }
