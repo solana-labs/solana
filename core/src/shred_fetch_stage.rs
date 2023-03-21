@@ -101,6 +101,8 @@ impl ShredFetchStage {
                 }
             }
 
+            let id = repair_context.as_ref().map(|(_, cluset_info)| cluset_info.id());
+
             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
             let should_drop_merkle_shreds =
@@ -116,7 +118,7 @@ impl ShredFetchStage {
                     should_drop_merkle_shreds,
                     &mut stats,
                 ) {
-                    info!("Discard packet set.");
+                    info!("Discard packet set at {:?}.", id);
                     packet.meta_mut().set_discard(true);
                 } else {
                     packet.meta_mut().flags.insert(flags);
@@ -124,7 +126,7 @@ impl ShredFetchStage {
             }
             stats.maybe_submit(name, STATS_SUBMIT_CADENCE);
             if sendr.send(packet_batch).is_err() {
-                info!("Cannot send packet batch!");
+                info!("Cannot send packet batch at {:?}!", id);
                 break;
             }
         }
