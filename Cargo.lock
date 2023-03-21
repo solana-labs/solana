@@ -5652,6 +5652,7 @@ dependencies = [
  "matches",
  "nix",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rayon",
  "serde",
  "solana-logger 1.14.17",
@@ -5659,6 +5660,7 @@ dependencies = [
  "solana-rayon-threadlimit",
  "solana-sdk 1.14.17",
  "solana-vote-program",
+ "test-case",
 ]
 
 [[package]]
