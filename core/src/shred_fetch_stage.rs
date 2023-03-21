@@ -99,32 +99,19 @@ impl ShredFetchStage {
                 |shred_slot| should_drop_merkle_shreds(shred_slot, &root_bank);
             let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut() {
-<<<<<<< HEAD
-                if should_discard_packet(
-                    packet,
-                    last_root,
-                    max_slot,
-                    shred_version,
-                    &packet_hasher,
-                    &mut shreds_received,
-                    should_drop_merkle_shreds,
-                    &mut stats,
-                ) {
-                    packet.meta.set_discard(true);
-=======
                 if turbine_disabled
                     || should_discard_packet(
                         packet,
                         last_root,
                         max_slot,
                         shred_version,
-                        &deduper,
+                        &packet_hasher,
+                        &mut shreds_received,
                         should_drop_merkle_shreds,
                         &mut stats,
                     )
                 {
-                    packet.meta_mut().set_discard(true);
->>>>>>> e66edeb18 (moves turbine-disabled check to shred-fetch-stage (#30799))
+                    packet.meta.set_discard(true);
                 } else {
                     packet.meta.flags.insert(flags);
                 }
