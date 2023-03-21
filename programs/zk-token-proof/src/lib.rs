@@ -191,5 +191,9 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
             ic_msg!(invoke_context, "VerifyPubkeyValidity");
             process_verify_proof::<PubkeyValidityData, PubkeyValidityProofContext>(invoke_context)
         }
+        ProofInstruction::VerifyValidityProof => {
+            ic_msg!(invoke_context, "VerifyValidityProof");
+            process_verify_proof::<ValidityProofData, ValidityProofContext>(invoke_context)
+        }
     }
 });

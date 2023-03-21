@@ -22,6 +22,7 @@ const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 6] = [
     ProofInstruction::VerifyTransfer,
     ProofInstruction::VerifyTransferWithFee,
     ProofInstruction::VerifyPubkeyValidity,
+    ProofInstruction::VerifyValidityProof,
 ];
 
 #[tokio::test]

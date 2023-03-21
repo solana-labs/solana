@@ -2,6 +2,7 @@ pub mod close_account;
 pub mod pubkey_validity;
 pub mod transfer;
 pub mod transfer_with_fee;
+pub mod validity_proof;
 pub mod withdraw;
 pub mod withdraw_withheld;
 
@@ -23,6 +24,7 @@ pub use {
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
     transfer::{TransferData, TransferProofContext},
     transfer_with_fee::{FeeParameters, TransferWithFeeData, TransferWithFeeProofContext},
+    validity_proof::{ValidityProofContext, ValidityProofData},
     withdraw::{WithdrawData, WithdrawProofContext},
     withdraw_withheld::{WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext},
 };
@@ -38,6 +40,7 @@ pub enum ProofType {
     Transfer,
     TransferWithFee,
     PubkeyValidity,
+    ValidityProof,
 }
 
 pub trait ZkProofData<T: Pod> {
