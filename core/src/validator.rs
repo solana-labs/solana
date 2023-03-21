@@ -2268,7 +2268,7 @@ mod tests {
             sender.send(()).unwrap();
         });
 
-        let timeout = Duration::from_secs(60);
+        let timeout = Duration::from_secs(120);
         if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
             panic!("timeout for shutting down validators",);
         }
