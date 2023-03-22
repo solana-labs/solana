@@ -13,7 +13,7 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
-        collections::{hash_map::Entry, HashMap, HashSet},
+        collections::{hash_map::Entry, HashMap},
         fmt::Debug,
         ops::{Bound, RangeBounds, RangeInclusive},
         sync::{
@@ -128,11 +128,8 @@ pub enum InsertNewEntryResults {
 struct StartupInfo<T: IndexValue> {
     /// entries to add next time we are flushing to disk
     insert: Vec<(Slot, Pubkey, T)>,
-    /// entries that were found to have duplicate index entries.
-    /// When all entries have been inserted, these can be resolved and held in memory.
-    duplicates: Vec<(Slot, Pubkey, T)>,
-    /// pubkeys that were already added to disk and later found to be duplicates,
-    duplicates_put_on_disk: HashSet<(Slot, Pubkey)>,
+    /// pubkeys that were found to have duplicate index entries
+    duplicates: Vec<(Slot, Pubkey)>,
 }
 
 #[derive(Default, Debug)]
@@ -1043,8 +1040,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         );
         drop(map_internal);
 
-        // this fn should only be called from a single thread, so holding the lock is fine
-        let mut startup_info = self.startup_info.lock().unwrap();
+        let mut duplicates = vec![];
 
         // merge all items into the disk index now
         let disk = self.bucket.as_ref().unwrap();
@@ -1054,16 +1050,21 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             let new_ref_count = u64::from(!v.is_cached());
             disk.update(&k, |current| {
                 match current {
-                    Some((current_slot_list, ref_count)) => {
-                        // already on disk, so remember the new (slot, info) for later
-                        startup_info.duplicates.push((slot, k, entry.1));
-                        if let Some((slot, _)) = current_slot_list.first() {
+                    Some((current_slot_list, mut ref_count)) => {
+                        // merge this in, mark as duplicate
+                        duplicates.push((slot, k));
+                        if current_slot_list.len() == 1 {
                             // accurately account for there being a duplicate for the first entry that was previously added to the disk index.
                             // That entry could not have known yet that it was a duplicate.
                             // It is important to capture each slot with a duplicate because of slot limits applied to clean.
-                            startup_info.duplicates_put_on_disk.insert((*slot, k));
+                            let first_entry_slot = current_slot_list[0].0;
+                            duplicates.push((first_entry_slot, k));
                         }
-                        Some((current_slot_list.to_vec(), ref_count))
+                        let mut slot_list = Vec::with_capacity(current_slot_list.len() + 1);
+                        slot_list.extend_from_slice(current_slot_list);
+                        slot_list.push((entry.0, entry.1.into())); // will never be from the same slot that already exists in the list
+                        ref_count += new_ref_count;
+                        Some((slot_list, ref_count))
                     }
                     None => {
                         count += 1;
@@ -1074,28 +1075,22 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             });
         });
         self.stats().inc_insert_count(count);
+        self.startup_info
+            .lock()
+            .unwrap()
+            .duplicates
+            .append(&mut duplicates);
     }
 
     /// pull out all duplicate pubkeys from 'startup_info'
     /// duplicate pubkeys have a slot list with len > 1
     /// These were collected for this bin when we did batch inserts in the bg flush threads.
-    /// Insert these into the in-mem index, then return the duplicate (Slot, Pubkey)
-    pub(crate) fn populate_and_retrieve_duplicate_keys_from_startup(&self) -> Vec<(Slot, Pubkey)> {
+    pub fn retrieve_duplicate_keys_from_startup(&self) -> Vec<(Slot, Pubkey)> {
         let mut write = self.startup_info.lock().unwrap();
         // in order to return accurate and complete duplicates, we must have nothing left remaining to insert
         assert!(write.insert.is_empty());
 
-        let duplicates = std::mem::take(&mut write.duplicates);
-        let duplicates_put_on_disk = std::mem::take(&mut write.duplicates_put_on_disk);
-        drop(write);
-        duplicates_put_on_disk
-            .into_iter()
-            .chain(duplicates.into_iter().map(|(slot, key, info)| {
-                let entry = PreAllocatedAccountMapEntry::new(slot, info, &self.storage, true);
-                self.insert_new_entry_if_missing_with_lock(key, entry);
-                (slot, key)
-            }))
-            .collect()
+        std::mem::take(&mut write.duplicates)
     }
 
     /// synchronize the in-mem index with the disk index
