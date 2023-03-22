@@ -613,7 +613,16 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("skip_poh_verify")
                 .long("skip-poh-verify")
                 .takes_value(false)
-                .help("Skip ledger verification at validator bootup"),
+                .help(
+                    "Deprecated, please use --skip-verification.\n\
+                     Skip ledger verification at validator bootup."
+                ),
+        )
+        .arg(
+            Arg::with_name("skip_verification")
+                .long("skip-verification")
+                .takes_value(false)
+                .help("Skip ledger verification at validator bootup."),
         )
         .arg(
             Arg::with_name("cuda")
