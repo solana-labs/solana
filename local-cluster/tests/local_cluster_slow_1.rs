@@ -506,7 +506,7 @@ fn restart_dup_validator(
 #[serial]
 #[allow(unused_attributes)]
 fn test_duplicate_shreds_switch_failure() {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
+    solana_logger::setup_logging_with_thread_id(RUST_LOG_FILTER);
     let validator_keypairs = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
         "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
