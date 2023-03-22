@@ -7,7 +7,7 @@
 use {
     crossbeam_channel::{Receiver, Sender},
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
-    solana_measure::{measure::Measure, measure_us},
+    solana_measure::measure_us,
     solana_runtime::{
         accounts_db::CalcAccountsHashFlavor,
         accounts_hash::{
