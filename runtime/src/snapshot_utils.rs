@@ -1654,9 +1654,10 @@ pub fn bank_from_snapshot_dir(
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let next_append_vec_id = Arc::new(AtomicAppendVecId::new(0));
 
-    let measure_build_storage = Measure::start("build storage from snapshot dir");
-    let storage =
-        build_storage_from_snapshot_dir(bank_snapshot, account_paths, next_append_vec_id.clone())?;
+    let (storage, measure_build_storage) = measure!(
+        build_storage_from_snapshot_dir(bank_snapshot, account_paths, next_append_vec_id.clone())?,
+        "build storage from snapshot dir"
+    );
     info!("{}", measure_build_storage);
 
     let next_append_vec_id =
