@@ -743,7 +743,7 @@ mod tests {
             &PohConfig::default(),
             Arc::new(AtomicBool::default()),
         );
-        let recorder = poh_recorder.recorder();
+        let recorder = poh_recorder.new_recorder();
         let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
         poh_recorder.write().unwrap().set_bank(&bank, false);
@@ -884,7 +884,7 @@ mod tests {
                 &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
-            let recorder = poh_recorder.recorder();
+            let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
@@ -1007,7 +1007,7 @@ mod tests {
                 &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
-            let recorder = poh_recorder.recorder();
+            let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
@@ -1075,7 +1075,7 @@ mod tests {
                 &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
-            let recorder = poh_recorder.recorder();
+            let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
@@ -1192,7 +1192,7 @@ mod tests {
                 &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
-            let recorder = poh_recorder.recorder();
+            let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             poh_recorder.write().unwrap().set_bank(&bank, false);
@@ -1388,7 +1388,7 @@ mod tests {
 
             // Poh Recorder has no working bank, so should throw MaxHeightReached error on
             // record
-            let recorder = poh_recorder.recorder();
+            let recorder = poh_recorder.new_recorder();
 
             let poh_simulator = simulate_poh(record_receiver, &Arc::new(RwLock::new(poh_recorder)));
 
@@ -1482,7 +1482,7 @@ mod tests {
                 &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
-            let recorder = poh_recorder.recorder();
+            let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
@@ -1619,7 +1619,7 @@ mod tests {
                 &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
-            let recorder = poh_recorder.recorder();
+            let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
@@ -1696,7 +1696,7 @@ mod tests {
         {
             let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator) =
                 setup_conflicting_transactions(ledger_path.path());
-            let recorder = poh_recorder.read().unwrap().recorder();
+            let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
                 unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
@@ -1772,7 +1772,7 @@ mod tests {
                 .message
                 .account_keys
                 .push(duplicate_account_key); // corrupt transaction
-            let recorder = poh_recorder.read().unwrap().recorder();
+            let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
                 unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
@@ -1821,7 +1821,7 @@ mod tests {
         {
             let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator) =
                 setup_conflicting_transactions(ledger_path.path());
-            let recorder = poh_recorder.read().unwrap().recorder();
+            let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
                 unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)

@@ -421,7 +421,7 @@ impl PohRecorder {
         self.ticks_per_slot
     }
 
-    pub fn recorder(&self) -> TransactionRecorder {
+    pub fn new_recorder(&self) -> TransactionRecorder {
         TransactionRecorder::new(self.record_sender.clone(), self.is_exited.clone())
     }
 
