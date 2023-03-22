@@ -842,6 +842,7 @@ impl Blockstore {
         let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
         for (shred, is_repaired) in shreds.into_iter().zip(is_repaired) {
             let shred_source = if is_repaired {
+                info!("Shred is from repair");
                 ShredSource::Repaired
             } else {
                 ShredSource::Turbine
