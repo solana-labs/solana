@@ -265,7 +265,6 @@ impl AccountsHashVerifier {
     fn _calculate_full_accounts_hash(
         accounts_package: &AccountsPackage,
     ) -> (AccountsHash, /*capitalization*/ u64) {
-        let slot = accounts_package.slot;
         let (sorted_storages, storage_sort_us) =
             measure_us!(SortedStorages::new(&accounts_package.snapshot_storages));
 
@@ -294,6 +293,7 @@ impl AccountsHashVerifier {
             )
             .unwrap()); // unwrap here will never fail since check_hash = false
 
+        let slot = accounts_package.slot;
         let old_accounts_hash = accounts_package
             .accounts
             .accounts_db
