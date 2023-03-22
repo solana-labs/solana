@@ -42,10 +42,7 @@ use {
         },
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
-        snapshot_utils::{
-            self, ArchiveFormat, SnapshotFrom,
-            SnapshotVersion,
-        },
+        snapshot_utils::{self, ArchiveFormat, SnapshotFrom, SnapshotVersion},
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},
@@ -1402,10 +1399,12 @@ pub fn main() {
     });
 
     let (account_run_paths, account_snapshot_paths) =
-        snapshot_utils::create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
-            eprintln!("Error: {err:?}");
-            exit(1);
-        });
+        snapshot_utils::create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(
+            |err| {
+                eprintln!("Error: {err:?}");
+                exit(1);
+            },
+        );
 
     // From now on, use run/ paths in the same way as the previous account_paths.
     validator_config.account_paths = account_run_paths;
