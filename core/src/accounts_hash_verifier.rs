@@ -271,16 +271,7 @@ impl AccountsHashVerifier {
                 }
             }
             CalcAccountsHashFlavor::Incremental => {
-                // Once we calculate incremental accounts hashes, we can use the calculation result
-                // directly.  Until then, convert the full accounts hash into an incremental.
-                let incremental_accounts_hash = IncrementalAccountsHash(accounts_hash.0);
-                let old_incremental_accounts_hash = accounts_package
-                    .accounts
-                    .accounts_db
-                    .set_incremental_accounts_hash(slot, (incremental_accounts_hash, lamports));
-                if let Some(old_incremental_accounts_hash) = old_incremental_accounts_hash {
-                    warn!("Incremental accounts hash was already set for slot {slot}! old: {old_incremental_accounts_hash:?}, new: {incremental_accounts_hash:?}");
-                }
+                todo!();
             }
         }
 
