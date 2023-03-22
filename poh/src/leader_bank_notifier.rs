@@ -84,17 +84,27 @@ impl LeaderBankNotifier {
     /// Wait for next notification for a completed leader slot.
     /// Returns `None` if the timeout is reached
     pub fn wait_for_completed(&self, mut remaining_timeout: Duration) -> Option<Slot> {
-        loop {
-            let start = Instant::now();
-            let state = self.state.lock().unwrap();
-            let (state, result) = self.condvar.wait_timeout(state, remaining_timeout).unwrap();
-            if result.timed_out() {
-                return None;
-            } else if matches!(state.status, Status::StandBy) {
-                return state.slot;
-            }
+        let state = self.state.lock().unwrap();
 
-            remaining_timeout = remaining_timeout.saturating_sub(start.elapsed());
+        // If currently `StandBy`, need to wait for `InProgress` to begin.
+        let now = Instant::now();
+        let state = self.get_or_wait_for_in_progress_state(remaining_timeout, state);
+
+        let Some(state) = state else { return None; };
+        remaining_timeout = remaining_timeout.saturating_sub(now.elapsed());
+
+        // Wait for `StandBy` to be set.
+        let (state, wait_timeout_result) = self
+            .condvar
+            .wait_timeout_while(state, remaining_timeout, |state| {
+                matches!(state.status, Status::InProgress)
+            })
+            .unwrap();
+
+        if !wait_timeout_result.timed_out() {
+            state.slot
+        } else {
+            None
         }
     }
 
