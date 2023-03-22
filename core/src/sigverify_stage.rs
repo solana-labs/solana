@@ -12,14 +12,10 @@ use {
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
-<<<<<<< HEAD
-=======
-        deduper::{self, Deduper},
->>>>>>> 9ad77485c (generalizes deduper to work with any hashable type (#30753))
         packet::{Packet, PacketBatch},
         sigverify::{
-            count_discarded_packets, count_packets_in_batches, count_valid_packets, shrink_batches,
-            Deduper,
+            count_discarded_packets, count_packets_in_batches, count_valid_packets,
+            dedup_packets_and_count_discards, shrink_batches, Deduper,
         },
     },
     solana_sdk::timing,
@@ -295,15 +291,9 @@ impl SigVerifyStage {
         (shrink_time.as_us(), shrink_total)
     }
 
-<<<<<<< HEAD
-    fn verifier<T: SigVerifier>(
-        deduper: &Deduper<2>,
-        recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-=======
     fn verifier<const K: usize, T: SigVerifier>(
         deduper: &Deduper<K, [u8]>,
-        recvr: &FindPacketSenderStakeReceiver,
->>>>>>> 9ad77485c (generalizes deduper to work with any hashable type (#30753))
+        recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: &mut T,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
@@ -326,7 +316,7 @@ impl SigVerifyStage {
         discard_random_time.stop();
 
         let mut dedup_time = Measure::start("sigverify_dedup_time");
-        let discard_or_dedup_fail = deduper::dedup_packets_and_count_discards(
+        let discard_or_dedup_fail = dedup_packets_and_count_discards(
             deduper,
             &mut batches,
             #[inline(always)]

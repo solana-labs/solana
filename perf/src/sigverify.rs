@@ -24,8 +24,9 @@ use {
     },
     std::{
         convert::TryFrom,
-        hash::{Hash as _, Hasher},
+        hash::Hasher,
         iter::repeat_with,
+        marker::PhantomData,
         mem::size_of,
         sync::atomic::{AtomicU64, Ordering},
         time::{Duration, Instant},
@@ -495,15 +496,16 @@ pub fn generate_offsets(
     )
 }
 
-pub struct Deduper<const K: usize> {
+pub struct Deduper<const K: usize, T: ?Sized> {
     num_bits: u64,
     bits: Vec<AtomicU64>,
     seeds: [(u128, u128); K],
     clock: Instant,
     popcount: AtomicU64, // Number of one bits in self.bits.
+    _phantom: PhantomData<T>,
 }
 
-impl<const K: usize> Deduper<K> {
+impl<const K: usize, T: ?Sized + std::hash::Hash> Deduper<K, T> {
     pub fn new<R: Rng>(rng: &mut R, num_bits: u64) -> Self {
         let size = num_bits.checked_add(63).unwrap() / 64;
         let size = usize::try_from(size).unwrap();
@@ -513,6 +515,7 @@ impl<const K: usize> Deduper<K> {
             clock: Instant::now(),
             bits: repeat_with(AtomicU64::default).take(size).collect(),
             popcount: AtomicU64::default(),
+            _phantom: PhantomData::<T>::default(),
         }
     }
 
@@ -542,16 +545,14 @@ impl<const K: usize> Deduper<K> {
         saturated
     }
 
-    // Returns true if the packet is duplicate.
+    // Returns true if the data is duplicate.
     #[must_use]
     #[allow(clippy::integer_arithmetic)]
-    pub fn dedup_packet(&self, packet: &Packet) -> bool {
-        // Should not dedup packet if already discarded.
-        debug_assert!(!packet.meta.discard());
+    pub fn dedup(&self, data: &T) -> bool {
         let mut out = true;
         for seed in self.seeds {
             let mut hasher = AHasher::new_with_keys(seed.0, seed.1);
-            packet.data(..).unwrap_or_default().hash(&mut hasher);
+            data.hash(&mut hasher);
             let hash: u64 = hasher.finish() % self.num_bits;
             let index = (hash >> 6) as usize;
             let mask: u64 = 1u64 << (hash & 63);
@@ -563,28 +564,32 @@ impl<const K: usize> Deduper<K> {
         }
         out
     }
+}
 
-    pub fn dedup_packets_and_count_discards(
-        &self,
-        batches: &mut [PacketBatch],
-        mut process_received_packet: impl FnMut(&mut Packet, bool, bool),
-    ) -> u64 {
-        batches
-            .iter_mut()
-            .flat_map(PacketBatch::iter_mut)
-            .map(|packet| {
-                if packet.meta.discard() {
-                    process_received_packet(packet, true, false);
-                } else if self.dedup_packet(packet) {
-                    packet.meta.set_discard(true);
-                    process_received_packet(packet, false, true);
-                } else {
-                    process_received_packet(packet, false, false);
-                }
-                u64::from(packet.meta.discard())
-            })
-            .sum()
-    }
+pub fn dedup_packets_and_count_discards<const K: usize>(
+    deduper: &Deduper<K, [u8]>,
+    batches: &mut [PacketBatch],
+    mut process_received_packet: impl FnMut(&mut Packet, bool, bool),
+) -> u64 {
+    batches
+        .iter_mut()
+        .flat_map(PacketBatch::iter_mut)
+        .map(|packet| {
+            if packet.meta.discard() {
+                process_received_packet(packet, true, false);
+            } else if packet
+                .data(..)
+                .map(|data| deduper.dedup(data))
+                .unwrap_or(true)
+            {
+                packet.meta.set_discard(true);
+                process_received_packet(packet, false, true);
+            } else {
+                process_received_packet(packet, false, false);
+            }
+            u64::from(packet.meta.discard())
+        })
+        .sum()
 }
 
 //inplace shrink a batch of packets
@@ -1606,9 +1611,10 @@ mod tests {
             to_packet_batches(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 128);
         let packet_count = sigverify::count_packets_in_batches(&batches);
         let mut rng = rand::thread_rng();
-        let filter = Deduper::<2>::new(&mut rng, /*num_bits:*/ 63_999_979);
+        let filter = Deduper::<2, [u8]>::new(&mut rng, /*num_bits:*/ 63_999_979);
         let mut num_deduped = 0;
-        let discard = filter.dedup_packets_and_count_discards(
+        let discard = dedup_packets_and_count_discards(
+            &filter,
             &mut batches,
             |_deduped_packet, _removed_before_sigverify_stage, _is_dup| {
                 num_deduped += 1;
@@ -1621,9 +1627,10 @@ mod tests {
     #[test]
     fn test_dedup_diff() {
         let mut rng = rand::thread_rng();
-        let mut filter = Deduper::<2>::new(&mut rng, /*num_bits:*/ 63_999_979);
+        let mut filter = Deduper::<2, [u8]>::new(&mut rng, /*num_bits:*/ 63_999_979);
         let mut batches = to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-        let discard = filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
+        let discard =
+            dedup_packets_and_count_discards(&filter, &mut batches, |_, _, _| ()) as usize;
         // because dedup uses a threadpool, there maybe up to N threads of txs that go through
         assert_eq!(discard, 0);
         assert!(!filter.maybe_reset(
@@ -1646,14 +1653,15 @@ mod tests {
         const NUM_BITS: u64 = 63_999_979;
         const FALSE_POSITIVE_RATE: f64 = 0.001;
         let mut rng = rand::thread_rng();
-        let mut filter = Deduper::<2>::new(&mut rng, NUM_BITS);
+        let mut filter = Deduper::<2, [u8]>::new(&mut rng, NUM_BITS);
         let capacity = get_capacity::<2>(NUM_BITS, FALSE_POSITIVE_RATE);
         let mut discard = 0;
         assert!(filter.popcount.load(Ordering::Relaxed) < capacity);
         for i in 0..1000 {
             let mut batches =
                 to_packet_batches(&(0..1000).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-            discard += filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
+            discard +=
+                dedup_packets_and_count_discards(&filter, &mut batches, |_, _, _| ()) as usize;
             trace!("{} {}", i, discard);
             if filter.popcount.load(Ordering::Relaxed) > capacity {
                 break;
@@ -1671,12 +1679,13 @@ mod tests {
     #[test]
     fn test_dedup_false_positive() {
         let mut rng = rand::thread_rng();
-        let filter = Deduper::<2>::new(&mut rng, /*num_bits:*/ 63_999_979);
+        let filter = Deduper::<2, [u8]>::new(&mut rng, /*num_bits:*/ 63_999_979);
         let mut discard = 0;
         for i in 0..10 {
             let mut batches =
                 to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-            discard += filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
+            discard +=
+                dedup_packets_and_count_discards(&filter, &mut batches, |_, _, _| ()) as usize;
             debug!("false positive rate: {}/{}", discard, i * 1024);
         }
         //allow for 1 false positive even if extremely unlikely
@@ -1697,7 +1706,7 @@ mod tests {
     fn test_dedup_capacity(num_bits: u64, false_positive_rate: f64, capacity: u64) {
         let mut rng = rand::thread_rng();
         assert_eq!(get_capacity::<2>(num_bits, false_positive_rate), capacity);
-        let mut deduper = Deduper::<2>::new(&mut rng, num_bits);
+        let mut deduper = Deduper::<2, [u8]>::new(&mut rng, num_bits);
         assert_eq!(deduper.false_positive_rate(), 0.0);
         deduper.popcount.store(capacity, Ordering::Relaxed);
         assert!(deduper.false_positive_rate() < false_positive_rate);
@@ -1726,7 +1735,7 @@ mod tests {
     ) {
         const FALSE_POSITIVE_RATE: f64 = 0.001;
         let mut rng = ChaChaRng::from_seed(seed);
-        let mut deduper = Deduper::<2>::new(&mut rng, num_bits);
+        let mut deduper = Deduper::<2, [u8]>::new(&mut rng, num_bits);
         assert_eq!(get_capacity::<2>(num_bits, FALSE_POSITIVE_RATE), capacity);
         let mut packet = Packet::new([0u8; PACKET_DATA_SIZE], Meta::default());
         let mut dup_count = 0usize;
@@ -1734,10 +1743,10 @@ mod tests {
             let size = rng.gen_range(0, PACKET_DATA_SIZE);
             packet.meta.size = size;
             rng.fill(&mut packet.buffer_mut()[0..size]);
-            if deduper.dedup_packet(&packet) {
+            if deduper.dedup(packet.data(..).unwrap()) {
                 dup_count += 1;
             }
-            assert!(deduper.dedup_packet(&packet));
+            assert!(deduper.dedup(packet.data(..).unwrap()));
         }
         assert_eq!(dup_count, num_dups);
         assert_eq!(deduper.popcount.load(Ordering::Relaxed), popcount);
