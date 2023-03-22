@@ -230,7 +230,6 @@ impl AccountsHashVerifier {
             },
         };
 
-        let mut measure_hash = Measure::start("hash");
         let mut sort_time = Measure::start("sort_storages");
         let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
         sort_time.stop();
@@ -250,6 +249,7 @@ impl AccountsHashVerifier {
             store_detailed_debug_info_on_failure: false,
         };
 
+        let mut measure_hash = Measure::start("hash");
         let (accounts_hash, lamports) = accounts_package
             .accounts
             .accounts_db
@@ -259,6 +259,7 @@ impl AccountsHashVerifier {
                 timings,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
+        measure_hash.stop();
 
         match accounts_hash_calculation_flavor {
             CalcAccountsHashFlavor::Full => {
@@ -318,8 +319,6 @@ impl AccountsHashVerifier {
                 sorted_storages.max_slot_inclusive(),
                 &accounts_package.epoch_schedule,
             );
-
-        measure_hash.stop();
 
         if let Some(snapshot_info) = &accounts_package.snapshot_info {
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
