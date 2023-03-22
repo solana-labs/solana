@@ -1,18 +1,10 @@
 #![allow(dead_code)]
 
 use {
-    crate::{
-        bucket::Bucket,
-        bucket_storage::{BucketStorage, Uid},
-        RefCount,
-    },
+    crate::{bucket::Bucket, bucket_storage::BucketStorage, RefCount},
     modular_bitfield::prelude::*,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
-    std::{
-        collections::hash_map::DefaultHasher,
-        fmt::Debug,
-        hash::{Hash, Hasher},
-    },
+    std::fmt::Debug,
 };
 
 #[repr(C)]
@@ -99,20 +91,13 @@ impl IndexEntry {
             let data_bucket_ix = self.data_bucket_ix();
             let data_bucket = &bucket.data[data_bucket_ix as usize];
             let loc = self.data_loc(data_bucket);
-            let uid = Self::key_uid(&self.key);
-            assert_eq!(Some(uid), data_bucket.uid(loc));
+            assert!(!data_bucket.is_free(loc));
             data_bucket.get_cell_slice(loc, self.num_slots)
         } else {
             // num_slots is 0. This means we don't have an actual allocation.
             BucketStorage::get_empty_cell_slice()
         };
         Some((slice, self.ref_count))
-    }
-
-    pub fn key_uid(key: &Pubkey) -> Uid {
-        let mut s = DefaultHasher::new();
-        key.hash(&mut s);
-        s.finish().max(1u64)
     }
 }
 
