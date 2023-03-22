@@ -1,11 +1,11 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
-    rayon::{ThreadPool, ThreadPoolBuilder},
+    rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache, shred, sigverify_shreds::verify_shreds_gpu,
     },
-    solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache},
+    solana_perf::{self, deduper::Deduper, packet::PacketBatch, recycler_cache::RecyclerCache},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
@@ -16,6 +16,10 @@ use {
         time::{Duration, Instant},
     },
 };
+
+const DEDUPER_FALSE_POSITIVE_RATE: f64 = 0.001;
+const DEDUPER_NUM_BITS: u64 = 637_534_199; // 76MB
+const DEDUPER_RESET_CYCLE: Duration = Duration::from_secs(5 * 60);
 
 #[allow(clippy::enum_variant_names)]
 enum Error {
@@ -40,7 +44,12 @@ pub(crate) fn spawn_shred_sigverify(
         .build()
         .unwrap();
     let run_shred_sigverify = move || {
+        let mut rng = rand::thread_rng();
+        let mut deduper = Deduper::<2, [u8]>::new(&mut rng, DEDUPER_NUM_BITS);
         loop {
+            if deduper.maybe_reset(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, DEDUPER_RESET_CYCLE) {
+                stats.num_deduper_saturations += 1;
+            }
             match run_shred_sigverify(
                 &thread_pool,
                 // We can't store the pubkey outside the loop
@@ -49,6 +58,7 @@ pub(crate) fn spawn_shred_sigverify(
                 &bank_forks,
                 &leader_schedule_cache,
                 &recycler_cache,
+                &deduper,
                 &shred_fetch_receiver,
                 &retransmit_sender,
                 &verified_sender,
@@ -69,12 +79,13 @@ pub(crate) fn spawn_shred_sigverify(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_shred_sigverify(
+fn run_shred_sigverify<const K: usize>(
     thread_pool: &ThreadPool,
     self_pubkey: &Pubkey,
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     recycler_cache: &RecyclerCache,
+    deduper: &Deduper<K, [u8]>,
     shred_fetch_receiver: &Receiver<PacketBatch>,
     retransmit_sender: &Sender<Vec</*shred:*/ Vec<u8>>>,
     verified_sender: &Sender<Vec<PacketBatch>>,
@@ -89,6 +100,20 @@ fn run_shred_sigverify(
     stats.num_iters += 1;
     stats.num_packets += packets.iter().map(PacketBatch::len).sum::<usize>();
     stats.num_discards_pre += count_discards(&packets);
+    stats.num_duplicates += thread_pool.install(|| {
+        packets
+            .par_iter_mut()
+            .flatten()
+            .filter(|packet| {
+                !packet.meta().discard()
+                    && packet
+                        .data(..)
+                        .map(|data| deduper.dedup(data))
+                        .unwrap_or(true)
+            })
+            .map(|packet| packet.meta_mut().set_discard(true))
+            .count()
+    });
     verify_packets(
         thread_pool,
         self_pubkey,
@@ -197,8 +222,10 @@ struct ShredSigVerifyStats {
     since: Instant,
     num_iters: usize,
     num_packets: usize,
-    num_discards_pre: usize,
+    num_deduper_saturations: usize,
     num_discards_post: usize,
+    num_discards_pre: usize,
+    num_duplicates: usize,
     num_retransmit_shreds: usize,
     elapsed_micros: u64,
 }
@@ -212,7 +239,9 @@ impl ShredSigVerifyStats {
             num_iters: 0usize,
             num_packets: 0usize,
             num_discards_pre: 0usize,
+            num_deduper_saturations: 0usize,
             num_discards_post: 0usize,
+            num_duplicates: 0usize,
             num_retransmit_shreds: 0usize,
             elapsed_micros: 0u64,
         }
@@ -227,7 +256,9 @@ impl ShredSigVerifyStats {
             ("num_iters", self.num_iters, i64),
             ("num_packets", self.num_packets, i64),
             ("num_discards_pre", self.num_discards_pre, i64),
+            ("num_deduper_saturations", self.num_deduper_saturations, i64),
             ("num_discards_post", self.num_discards_post, i64),
+            ("num_duplicates", self.num_duplicates, i64),
             ("num_retransmit_shreds", self.num_retransmit_shreds, i64),
             ("elapsed_micros", self.elapsed_micros, i64),
         );
