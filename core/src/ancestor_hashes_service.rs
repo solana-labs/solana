@@ -285,6 +285,8 @@ impl AncestorHashesService {
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let mut packet_batches = vec![response_receiver.recv_timeout(timeout)?];
+
+        info!("Got ancestor hash response at {:?} use connection_cache {:?}", keypair.pubkey(), ancestore_connection_cache.is_some());
         let mut total_packets = packet_batches[0].len();
 
         let mut dropped_packets = 0;
