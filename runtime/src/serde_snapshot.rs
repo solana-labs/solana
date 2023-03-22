@@ -598,7 +598,7 @@ where
     Ok(bank)
 }
 
-fn reconstruct_single_storage(
+pub(crate) fn reconstruct_single_storage(
     slot: &Slot,
     append_vec_path: &Path,
     current_len: usize,
