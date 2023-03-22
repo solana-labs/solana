@@ -1647,6 +1647,11 @@ fn main() {
         .to_string();
     let default_graph_vote_account_mode = GraphVoteAccountMode::default();
 
+    let (replaying_backend_help, banking_backend_help) = (
+        &ReplayingBackend::cli_message(),
+        &BankingBackend::cli_message(),
+    );
+
     let mut measure_total_execution_time = Measure::start("ledger tool");
 
     let matches = App::new(crate_name!())
@@ -1710,12 +1715,9 @@ fn main() {
                 .value_name("BACKEND")
                 .takes_value(true)
                 .possible_values(ReplayingBackend::cli_names())
-                .default_value(ReplayingBackend::default().into())
                 .global(true)
                 .hidden(hidden_unless_forced())
-                .help(
-                    "Switch transaction scheduling backend for validating ledger entries"
-                ),
+                .help(replaying_backend_help),
         )
         .arg(
             Arg::with_name("banking_backend")
@@ -1723,12 +1725,9 @@ fn main() {
                 .value_name("BACKEND")
                 .takes_value(true)
                 .possible_values(BankingBackend::cli_names())
-                .default_value(BankingBackend::default().into())
                 .global(true)
                 .hidden(hidden_unless_forced())
-                .help(
-                    "Switch transaction scheduling backend for generating ledger entries"
-                ),
+                .help(banking_backend_help),
         )
         .arg(
             Arg::with_name("output_format")

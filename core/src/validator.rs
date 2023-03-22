@@ -135,6 +135,13 @@ impl ReplayingBackend {
     pub const fn cli_names() -> &'static [&'static str] {
         Self::VARIANTS
     }
+
+    pub fn cli_message() -> String {
+        format!(
+            "Switch transaction scheduling backend for validating ledger entries [default: {}]",
+            Self::default()
+        )
+    }
 }
 
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
@@ -147,6 +154,13 @@ pub enum BankingBackend {
 impl BankingBackend {
     pub const fn cli_names() -> &'static [&'static str] {
         Self::VARIANTS
+    }
+
+    pub fn cli_message() -> String {
+        format!(
+            "Switch transaction scheduling backend for generating ledger entries [default: {}]",
+            Self::default()
+        )
     }
 }
 

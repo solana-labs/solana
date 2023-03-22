@@ -1341,10 +1341,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("BACKEND")
                 .takes_value(true)
                 .possible_values(ReplayingBackend::cli_names())
-                .default_value(&default_args.replaying_backend)
-                .help(
-                    "Switch transaction scheduling backend for validating ledger entries"
-                ),
+                .help(&default_args.replaying_backend_help),
         )
         .arg(
             Arg::with_name("banking_backend")
@@ -1353,10 +1350,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("BACKEND")
                 .takes_value(true)
                 .possible_values(BankingBackend::cli_names())
-                .default_value(&default_args.banking_backend)
-                .help(
-                    "Switch transaction scheduling backend for generating ledger entries"
-                ),
+                .help(&default_args.banking_backend_help),
         )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
@@ -1787,8 +1781,8 @@ pub struct DefaultArgs {
     pub wait_for_restart_window_max_delinquent_stake: String,
 
     pub banking_trace_dir_byte_limit: String,
-    pub replaying_backend: String,
-    pub banking_backend: String,
+    pub replaying_backend_help: String,
+    pub banking_backend_help: String,
 }
 
 impl DefaultArgs {
@@ -1868,8 +1862,8 @@ impl DefaultArgs {
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
-            replaying_backend: ReplayingBackend::default().to_string(),
-            banking_backend: BankingBackend::default().to_string(),
+            replaying_backend_help: ReplayingBackend::cli_message(),
+            banking_backend_help: BankingBackend::cli_message(),
         }
     }
 }
