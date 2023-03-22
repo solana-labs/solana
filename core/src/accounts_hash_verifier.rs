@@ -231,11 +231,15 @@ impl AccountsHashVerifier {
             },
         };
 
-        let accounts_hash = match accounts_hash_calculation_flavor {
+        let (
+            accounts_hash_enum,
+            accounts_hash_for_reserialize,
+            bank_incremental_snapshot_persistence,
+        ) = match accounts_hash_calculation_flavor {
             CalcAccountsHashFlavor::Full => {
                 let (accounts_hash, _capitalization) =
                     Self::_calculate_full_accounts_hash(accounts_package);
-                accounts_hash
+                (accounts_hash.into(), accounts_hash, None)
             }
             CalcAccountsHashFlavor::Incremental => {
                 todo!()
@@ -246,8 +250,8 @@ impl AccountsHashVerifier {
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
                 snapshot_info.snapshot_links.path(),
                 slot,
-                &accounts_hash,
-                None,
+                &accounts_hash_for_reserialize,
+                bank_incremental_snapshot_persistence,
             );
         }
 
@@ -259,7 +263,7 @@ impl AccountsHashVerifier {
                 .accounts_db
                 .purge_old_accounts_hashes(slot);
         }
-        accounts_hash.into()
+        accounts_hash_enum
     }
 
     fn _calculate_full_accounts_hash(
