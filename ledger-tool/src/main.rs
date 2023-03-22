@@ -27,7 +27,7 @@ use {
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
-        validator::{BlockProductionMethod, BlockVerificationMethod},
+        validator::BlockVerificationMethod,
     },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
@@ -1253,15 +1253,9 @@ fn load_bank_forks(
         BlockVerificationMethod
     )
     .unwrap_or_default();
-    let block_production_method = value_t!(
-        arg_matches,
-        "block_production_method",
-        BlockProductionMethod
-    )
-    .unwrap_or_default();
     info!(
-        "Using: block-verification-method: {}, block-production-method: {}",
-        block_verification_method, block_production_method
+        "Using: block-verification-method: {}",
+        block_verification_method,
     );
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
@@ -1657,10 +1651,7 @@ fn main() {
         .to_string();
     let default_graph_vote_account_mode = GraphVoteAccountMode::default();
 
-    let (block_verification_method_help, block_production_method_help) = (
-        &BlockVerificationMethod::cli_message(),
-        &BlockProductionMethod::cli_message(),
-    );
+    let block_verification_method_help = &BlockVerificationMethod::cli_message();
 
     let mut measure_total_execution_time = Measure::start("ledger tool");
 
@@ -1728,16 +1719,6 @@ fn main() {
                 .global(true)
                 .hidden(hidden_unless_forced())
                 .help(block_verification_method_help),
-        )
-        .arg(
-            Arg::with_name("block_production_method")
-                .long("block-production-method")
-                .value_name("METHOD")
-                .takes_value(true)
-                .possible_values(BlockProductionMethod::cli_names())
-                .global(true)
-                .hidden(hidden_unless_forced())
-                .help(block_production_method_help),
         )
         .arg(
             Arg::with_name("output_format")

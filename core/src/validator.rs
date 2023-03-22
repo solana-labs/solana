@@ -128,7 +128,6 @@ const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 pub enum BlockVerificationMethod {
     #[default]
     BlockstoreProcessor,
-    UnifiedScheduler,
 }
 
 impl BlockVerificationMethod {
