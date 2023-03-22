@@ -380,10 +380,47 @@ impl AccountsHashVerifier {
     }
 
     fn _calculate_incremental_accounts_hash(
-        _accounts_package: &AccountsPackage,
-        _base_slot: Slot,
+        accounts_package: &AccountsPackage,
+        base_slot: Slot,
     ) -> (IncrementalAccountsHash, /*capitalization*/ u64) {
-        todo!()
+        let incremental_storages =
+            accounts_package
+                .snapshot_storages
+                .iter()
+                .filter_map(|storage| {
+                    let storage_slot = storage.slot();
+                    (storage_slot > base_slot).then_some((storage, storage_slot))
+                });
+        let sorted_storages = SortedStorages::new_with_slots(incremental_storages, None, None);
+
+        let calculate_accounts_hash_config = CalcAccountsHashConfig {
+            use_bg_thread_pool: true,
+            check_hash: false,
+            ancestors: None,
+            epoch_schedule: &accounts_package.epoch_schedule,
+            rent_collector: &accounts_package.rent_collector,
+            store_detailed_debug_info_on_failure: false,
+        };
+
+        let (incremental_accounts_hash, measure_hash_us) = measure_us!(
+            accounts_package
+                .accounts
+                .accounts_db
+                .update_incremental_accounts_hash(
+                    &calculate_accounts_hash_config,
+                    &sorted_storages,
+                    accounts_package.slot,
+                    HashStats::default(),
+                )
+                .unwrap() // unwrap here will never fail since check_hash = false
+        );
+
+        datapoint_info!(
+            "accounts_hash_verifier",
+            ("calculate_incremental_accounts_hash", measure_hash_us, i64),
+        );
+
+        incremental_accounts_hash
     }
 
     fn save_epoch_accounts_hash(
