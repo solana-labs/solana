@@ -452,7 +452,9 @@ fn test_duplicate_shreds_broadcast_leader() {
     let bad_leader_ledger_path = cluster.validators[&bad_leader_id].info.ledger_path.clone();
     info!("our node id: {}", node_keypair.pubkey());
 
-    info!("Cluster Info: {:?}", cluster.validators);
+    for (k, v) in &cluster.validators {
+        info!("Cluster Info: {:?} ledger: {:?}", k, v.info.ledger_path);
+    }
 
     // 3) Start up a gossip instance to listen for and push votes
     let voter_thread_sleep_ms = 100;
