@@ -5380,10 +5380,8 @@ mod tests {
             .unwrap();
         }
 
-        let highest_bank = Arc::try_unwrap(bank).unwrap();
-
         let bank_snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
-        let account_paths = &highest_bank.rc.accounts.accounts_db.paths;
+        let account_paths = &bank.rc.accounts.accounts_db.paths;
 
         // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
         // files will be extracted from the snapshot hardlink directories into these run/ directories.
@@ -5409,7 +5407,7 @@ mod tests {
         .unwrap();
 
         bank_constructed.wait_for_initial_accounts_hash_verification_completed_for_tests();
-        assert_eq!(bank_constructed, highest_bank);
+        assert_eq!(bank_constructed, *bank);
 
         // Verify that the next_append_vec_id tracking is correct
         let mut max_id = 0;
@@ -5421,11 +5419,7 @@ mod tests {
                 max_id = std::cmp::max(max_id, append_vec_id);
             });
         }
-        let next_id = highest_bank
-            .accounts()
-            .accounts_db
-            .next_id
-            .load(Ordering::Relaxed) as usize;
+        let next_id = bank.accounts().accounts_db.next_id.load(Ordering::Relaxed) as usize;
         assert_eq!(max_id, next_id - 1);
     }
 }
