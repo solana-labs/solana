@@ -248,8 +248,7 @@ impl AccountsHashVerifier {
             store_detailed_debug_info_on_failure: false,
         };
 
-        let mut measure_hash = Measure::start("hash");
-        let (accounts_hash, lamports) = accounts_package
+        let ((accounts_hash, lamports), measure_hash_us) = measure_us!(accounts_package
             .accounts
             .accounts_db
             .calculate_accounts_hash_from_storages(
@@ -257,8 +256,7 @@ impl AccountsHashVerifier {
                 &sorted_storages,
                 timings,
             )
-            .unwrap(); // unwrap here will never fail since check_hash = false
-        measure_hash.stop();
+            .unwrap()); // unwrap here will never fail since check_hash = false
 
         match accounts_hash_calculation_flavor {
             CalcAccountsHashFlavor::Full => {
@@ -339,7 +337,7 @@ impl AccountsHashVerifier {
 
         datapoint_info!(
             "accounts_hash_verifier",
-            ("calculate_hash", measure_hash.as_us(), i64),
+            ("calculate_hash", measure_hash_us, i64),
         );
         accounts_hash.into()
     }
