@@ -7,12 +7,14 @@
 use {
     crossbeam_channel::{Receiver, Sender},
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
-    solana_measure::{measure::Measure, measure_us},
+    solana_measure::measure_us,
     solana_runtime::{
         accounts_db::CalcAccountsHashFlavor,
         accounts_hash::{
-            AccountsHashEnum, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
+            AccountsHash, AccountsHashEnum, CalcAccountsHashConfig, HashStats,
+            IncrementalAccountsHash,
         },
+        bank::BankIncrementalSnapshotPersistence,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
             self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
@@ -214,7 +216,6 @@ impl AccountsHashVerifier {
 
     /// returns calculated accounts hash
     fn calculate_and_verify_accounts_hash(accounts_package: &AccountsPackage) -> AccountsHashEnum {
-        let slot = accounts_package.slot;
         let accounts_hash_calculation_flavor = match accounts_package.package_type {
             AccountsPackageType::AccountsHashVerifier => CalcAccountsHashFlavor::Full,
             AccountsPackageType::EpochAccountsHash => CalcAccountsHashFlavor::Full,
@@ -230,13 +231,70 @@ impl AccountsHashVerifier {
             },
         };
 
-        let mut measure_hash = Measure::start("hash");
-        let mut sort_time = Measure::start("sort_storages");
-        let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
-        sort_time.stop();
+        let (
+            accounts_hash_enum,
+            accounts_hash_for_reserialize,
+            bank_incremental_snapshot_persistence,
+        ) = match accounts_hash_calculation_flavor {
+            CalcAccountsHashFlavor::Full => {
+                let (accounts_hash, _capitalization) =
+                    Self::_calculate_full_accounts_hash(accounts_package);
+                (accounts_hash.into(), accounts_hash, None)
+            }
+            CalcAccountsHashFlavor::Incremental => {
+                let AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(base_slot)) = accounts_package.package_type else {
+                    panic!("Calculating incremental accounts hash requires a base slot");
+                };
+                let (base_accounts_hash, base_capitalization) = accounts_package
+                    .accounts
+                    .accounts_db
+                    .get_accounts_hash(base_slot)
+                    .expect("incremental snapshot requires accounts hash and capitalization from the full snapshot it is based on");
+                let (incremental_accounts_hash, incremental_capitalization) =
+                    Self::_calculate_incremental_accounts_hash(accounts_package, base_slot);
+                let bank_incremental_snapshot_persistence = BankIncrementalSnapshotPersistence {
+                    full_slot: base_slot,
+                    full_hash: base_accounts_hash.into(),
+                    full_capitalization: base_capitalization,
+                    incremental_hash: incremental_accounts_hash.into(),
+                    incremental_capitalization,
+                };
+                (
+                    incremental_accounts_hash.into(),
+                    AccountsHash(Hash::default()), // value does not matter; not used for incremental snapshots
+                    Some(bank_incremental_snapshot_persistence),
+                )
+            }
+        };
+
+        if let Some(snapshot_info) = &accounts_package.snapshot_info {
+            solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+                snapshot_info.snapshot_links.path(),
+                accounts_package.slot,
+                &accounts_hash_for_reserialize,
+                bank_incremental_snapshot_persistence.as_ref(),
+            );
+        }
+
+        if accounts_package.package_type
+            == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+        {
+            accounts_package
+                .accounts
+                .accounts_db
+                .purge_old_accounts_hashes(accounts_package.slot);
+        }
+        accounts_hash_enum
+    }
+
+    fn _calculate_full_accounts_hash(
+        accounts_package: &AccountsPackage,
+    ) -> (AccountsHash, /*capitalization*/ u64) {
+        let (sorted_storages, storage_sort_us) =
+            measure_us!(SortedStorages::new(&accounts_package.snapshot_storages));
 
         let mut timings = HashStats {
-            storage_sort_us: sort_time.as_us(),
+            storage_sort_us,
             ..HashStats::default()
         };
         timings.calc_storage_size_quartiles(&accounts_package.snapshot_storages);
@@ -250,7 +308,7 @@ impl AccountsHashVerifier {
             store_detailed_debug_info_on_failure: false,
         };
 
-        let (accounts_hash, lamports) = accounts_package
+        let ((accounts_hash, lamports), measure_hash_us) = measure_us!(accounts_package
             .accounts
             .accounts_db
             .calculate_accounts_hash_from_storages(
@@ -258,30 +316,15 @@ impl AccountsHashVerifier {
                 &sorted_storages,
                 timings,
             )
-            .unwrap(); // unwrap here will never fail since check_hash = false
+            .unwrap()); // unwrap here will never fail since check_hash = false
 
-        match accounts_hash_calculation_flavor {
-            CalcAccountsHashFlavor::Full => {
-                let old_accounts_hash = accounts_package
-                    .accounts
-                    .accounts_db
-                    .set_accounts_hash(slot, (accounts_hash, lamports));
-                if let Some(old_accounts_hash) = old_accounts_hash {
-                    warn!("Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: {accounts_hash:?}");
-                }
-            }
-            CalcAccountsHashFlavor::Incremental => {
-                // Once we calculate incremental accounts hashes, we can use the calculation result
-                // directly.  Until then, convert the full accounts hash into an incremental.
-                let incremental_accounts_hash = IncrementalAccountsHash(accounts_hash.0);
-                let old_incremental_accounts_hash = accounts_package
-                    .accounts
-                    .accounts_db
-                    .set_incremental_accounts_hash(slot, (incremental_accounts_hash, lamports));
-                if let Some(old_incremental_accounts_hash) = old_incremental_accounts_hash {
-                    warn!("Incremental accounts hash was already set for slot {slot}! old: {old_incremental_accounts_hash:?}, new: {incremental_accounts_hash:?}");
-                }
-            }
+        let slot = accounts_package.slot;
+        let old_accounts_hash = accounts_package
+            .accounts
+            .accounts_db
+            .set_accounts_hash(slot, (accounts_hash, lamports));
+        if let Some(old_accounts_hash) = old_accounts_hash {
+            warn!("Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: {accounts_hash:?}");
         }
 
         if accounts_package.expected_capitalization != lamports {
@@ -328,31 +371,56 @@ impl AccountsHashVerifier {
                 &accounts_package.epoch_schedule,
             );
 
-        measure_hash.stop();
+        datapoint_info!(
+            "accounts_hash_verifier",
+            ("calculate_hash", measure_hash_us, i64),
+        );
 
-        if let Some(snapshot_info) = &accounts_package.snapshot_info {
-            solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                snapshot_info.snapshot_links.path(),
-                slot,
-                &accounts_hash,
-                None,
-            );
-        }
+        (accounts_hash, lamports)
+    }
 
-        if accounts_package.package_type
-            == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
-        {
+    fn _calculate_incremental_accounts_hash(
+        accounts_package: &AccountsPackage,
+        base_slot: Slot,
+    ) -> (IncrementalAccountsHash, /*capitalization*/ u64) {
+        let incremental_storages =
+            accounts_package
+                .snapshot_storages
+                .iter()
+                .filter_map(|storage| {
+                    let storage_slot = storage.slot();
+                    (storage_slot > base_slot).then_some((storage, storage_slot))
+                });
+        let sorted_storages = SortedStorages::new_with_slots(incremental_storages, None, None);
+
+        let calculate_accounts_hash_config = CalcAccountsHashConfig {
+            use_bg_thread_pool: true,
+            check_hash: false,
+            ancestors: None,
+            epoch_schedule: &accounts_package.epoch_schedule,
+            rent_collector: &accounts_package.rent_collector,
+            store_detailed_debug_info_on_failure: false,
+        };
+
+        let (incremental_accounts_hash, measure_hash_us) = measure_us!(
             accounts_package
                 .accounts
                 .accounts_db
-                .purge_old_accounts_hashes(slot);
-        }
+                .update_incremental_accounts_hash(
+                    &calculate_accounts_hash_config,
+                    &sorted_storages,
+                    accounts_package.slot,
+                    HashStats::default(),
+                )
+                .unwrap() // unwrap here will never fail since check_hash = false
+        );
 
         datapoint_info!(
             "accounts_hash_verifier",
-            ("calculate_hash", measure_hash.as_us(), i64),
+            ("calculate_incremental_accounts_hash", measure_hash_us, i64),
         );
-        accounts_hash.into()
+
+        incremental_accounts_hash
     }
 
     fn save_epoch_accounts_hash(
