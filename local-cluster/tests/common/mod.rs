@@ -397,8 +397,12 @@ pub fn test_faulty_node(
     custom_leader_schedule: Option<FixedSchedule>,
 ) -> (LocalCluster, Vec<Arc<Keypair>>) {
     let num_nodes = node_stakes.len();
-    let mut validator_keys = Vec::with_capacity(num_nodes);
-    validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
+    let validator_keys = validator_keys.unwrap_or_else(|| {
+        let mut validator_keys = Vec::with_capacity(num_nodes);
+        validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
+        validator_keys
+    });
+
     assert_eq!(node_stakes.len(), num_nodes);
     assert_eq!(validator_keys.len(), num_nodes);
 
@@ -426,20 +430,11 @@ pub fn test_faulty_node(
         ..ValidatorConfig::default_for_test()
     });
 
-    if let custom_leader_schedule.is_some() {
+    if custom_leader_schedule.is_some() {
         for validator_config in &mut validator_configs {
             validator_config.fixed_leader_schedule = custom_leader_schedule.clone();
         }
     }
-
-    let validator_keys = validator_keys.unwrap_or_else(|| {
-        let mut validator_keys = Vec::with_capacity(num_nodes);
-        validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
-        validator_keys
-    });
-
-    assert_eq!(node_stakes.len(), num_nodes);
-    assert_eq!(validator_keys.len(), num_nodes);
 
     let mut cluster_config = ClusterConfig {
         cluster_lamports: 10_000,

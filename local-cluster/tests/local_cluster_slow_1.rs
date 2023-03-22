@@ -39,6 +39,10 @@ use {
         collections::{BTreeSet, HashSet},
         net::UdpSocket,
         path::Path,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
         thread::sleep,
         time::Duration,
     },
@@ -464,7 +468,7 @@ fn restart_dup_validator(
     // Send the node the other version of the shred so they realize it's duplicate
     info!("Resending duplicate shreds to duplicate fork validator");
     let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let duplicate_fork_validator_tvu = cluster.get_contact_info(pubkey).unwrap().tvu;
+    let duplicate_fork_validator_tvu = cluster.get_contact_info(pubkey).unwrap().tvu().unwrap();
     send_socket
         .send_to(dup_shred1.payload().as_ref(), duplicate_fork_validator_tvu)
         .unwrap();
