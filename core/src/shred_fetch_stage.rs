@@ -5,14 +5,7 @@ use {
     crossbeam_channel::{unbounded, Sender},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
-<<<<<<< HEAD
-    solana_perf::{
-        packet::{Packet, PacketBatch, PacketBatchRecycler, PacketFlags},
-        sigverify::Deduper,
-    },
-=======
     solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags},
->>>>>>> 25b781186 (moves shreds deduper to shred-sigverify stage (#30786))
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},

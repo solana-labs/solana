@@ -5,7 +5,7 @@ use {
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache, shred, sigverify_shreds::verify_shreds_gpu,
     },
-    solana_perf::{self, deduper::Deduper, packet::PacketBatch, recycler_cache::RecyclerCache},
+    solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache, sigverify::Deduper},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signer},
@@ -47,15 +47,12 @@ pub(crate) fn spawn_shred_sigverify(
         let mut rng = rand::thread_rng();
         let mut deduper = Deduper::<2, [u8]>::new(&mut rng, DEDUPER_NUM_BITS);
         loop {
-<<<<<<< HEAD
-            // We can't store the pubkey outside the loop
-            // because the identity might be hot swapped.
-            let self_pubkey = cluster_info.keypair().pubkey();
-=======
             if deduper.maybe_reset(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, DEDUPER_RESET_CYCLE) {
                 stats.num_deduper_saturations += 1;
             }
->>>>>>> 25b781186 (moves shreds deduper to shred-sigverify stage (#30786))
+            // We can't store the pubkey outside the loop
+            // because the identity might be hot swapped.
+            let self_pubkey = cluster_info.keypair().pubkey();
             match run_shred_sigverify(
                 &thread_pool,
                 &self_pubkey,
@@ -109,13 +106,13 @@ fn run_shred_sigverify<const K: usize>(
             .par_iter_mut()
             .flatten()
             .filter(|packet| {
-                !packet.meta().discard()
+                !packet.meta.discard()
                     && packet
                         .data(..)
                         .map(|data| deduper.dedup(data))
                         .unwrap_or(true)
             })
-            .map(|packet| packet.meta_mut().set_discard(true))
+            .map(|packet| packet.meta.set_discard(true))
             .count()
     });
     verify_packets(
