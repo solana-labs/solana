@@ -72,7 +72,7 @@ impl LeaderBankNotifier {
     /// If the status is `InProgress`, immediately return a weak reference to the bank.
     /// Otherwise, wait up to the `timeout` for the status to become `InProgress`.
     /// Returns `None` if the timeout is reached.
-    pub fn wait_for_in_progress(&self, timeout: Duration) -> Option<Weak<Bank>> {
+    pub fn get_or_wait_for_in_progress(&self, timeout: Duration) -> Option<Weak<Bank>> {
         let state = self.state.lock().unwrap();
         let (state, wait_timeout_result) = self
             .condvar
@@ -86,7 +86,7 @@ impl LeaderBankNotifier {
 
     /// Wait for next notification for a completed leader slot.
     /// Returns `None` if the timeout is reached
-    pub fn wait_for_next_completed(&self, mut remaining_timeout: Duration) -> Option<Slot> {
+    pub fn wait_for_completed(&self, mut remaining_timeout: Duration) -> Option<Slot> {
         loop {
             let start = Instant::now();
             let state = self.state.lock().unwrap();
@@ -109,12 +109,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_leader_bank_notifier_wait_for_in_progress() {
+    fn test_leader_bank_notifier_get_or_wait_for_in_progress() {
         let leader_bank_notifier = Arc::new(LeaderBankNotifier::default());
         let leader_bank_notifier2 = leader_bank_notifier.clone();
 
         let jh = std::thread::spawn(move || {
-            let _weak_bank = leader_bank_notifier2.wait_for_in_progress(Duration::from_secs(1));
+            let _weak_bank =
+                leader_bank_notifier2.get_or_wait_for_in_progress(Duration::from_secs(1));
         });
         std::thread::sleep(Duration::from_millis(10));
         leader_bank_notifier.set_in_progress(&Arc::new(Bank::default_for_tests()));
@@ -123,23 +124,23 @@ mod tests {
     }
 
     #[test]
-    fn test_leader_bank_notifier_wait_for_in_progress_timeout() {
+    fn test_leader_bank_notifier_get_or_wait_for_in_progress_timeout() {
         let leader_bank_notifier = Arc::new(LeaderBankNotifier::default());
         leader_bank_notifier.set_in_progress(&Arc::new(Bank::default_for_tests()));
         leader_bank_notifier.set_completed(1);
 
         assert!(leader_bank_notifier
-            .wait_for_in_progress(Duration::from_millis(1))
+            .get_or_wait_for_in_progress(Duration::from_millis(1))
             .is_none());
     }
 
     #[test]
-    fn test_leader_bank_notifier_wait_for_next_completed() {
+    fn test_leader_bank_notifier_wait_for_completed() {
         let leader_bank_notifier = Arc::new(LeaderBankNotifier::default());
         let leader_bank_notifier2 = leader_bank_notifier.clone();
 
         let jh = std::thread::spawn(move || {
-            let _slot = leader_bank_notifier2.wait_for_next_completed(Duration::from_secs(1));
+            let _slot = leader_bank_notifier2.wait_for_completed(Duration::from_secs(1));
         });
         leader_bank_notifier.set_in_progress(&Arc::new(Bank::default_for_tests()));
         std::thread::sleep(Duration::from_millis(10));
@@ -149,12 +150,12 @@ mod tests {
     }
 
     #[test]
-    fn test_leader_bank_notifier_wait_for_next_completed_timeout() {
+    fn test_leader_bank_notifier_wait_for_completed_timeout() {
         let leader_bank_notifier = Arc::new(LeaderBankNotifier::default());
 
         leader_bank_notifier.set_in_progress(&Arc::new(Bank::default_for_tests()));
         assert_eq!(
-            leader_bank_notifier.wait_for_next_completed(Duration::from_millis(1)),
+            leader_bank_notifier.wait_for_completed(Duration::from_millis(1)),
             None
         );
     }
