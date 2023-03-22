@@ -11,7 +11,8 @@ use {
     solana_runtime::{
         accounts_db::CalcAccountsHashFlavor,
         accounts_hash::{
-            AccountsHashEnum, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
+            AccountsHash, AccountsHashEnum, CalcAccountsHashConfig, HashStats,
+            IncrementalAccountsHash,
         },
         snapshot_config::SnapshotConfig,
         snapshot_package::{
@@ -232,91 +233,8 @@ impl AccountsHashVerifier {
 
         let accounts_hash = match accounts_hash_calculation_flavor {
             CalcAccountsHashFlavor::Full => {
-                let (sorted_storages, storage_sort_us) =
-                    measure_us!(SortedStorages::new(&accounts_package.snapshot_storages));
-
-                let mut timings = HashStats {
-                    storage_sort_us,
-                    ..HashStats::default()
-                };
-                timings.calc_storage_size_quartiles(&accounts_package.snapshot_storages);
-
-                let calculate_accounts_hash_config = CalcAccountsHashConfig {
-                    use_bg_thread_pool: true,
-                    check_hash: false,
-                    ancestors: None,
-                    epoch_schedule: &accounts_package.epoch_schedule,
-                    rent_collector: &accounts_package.rent_collector,
-                    store_detailed_debug_info_on_failure: false,
-                };
-
-                let ((accounts_hash, lamports), measure_hash_us) = measure_us!(accounts_package
-                    .accounts
-                    .accounts_db
-                    .calculate_accounts_hash_from_storages(
-                        &calculate_accounts_hash_config,
-                        &sorted_storages,
-                        timings,
-                    )
-                    .unwrap()); // unwrap here will never fail since check_hash = false
-
-                let old_accounts_hash = accounts_package
-                    .accounts
-                    .accounts_db
-                    .set_accounts_hash(slot, (accounts_hash, lamports));
-                if let Some(old_accounts_hash) = old_accounts_hash {
-                    warn!("Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: {accounts_hash:?}");
-                }
-
-                if accounts_package.expected_capitalization != lamports {
-                    // before we assert, run the hash calc again. This helps track down whether it could have been a failure in a race condition possibly with shrink.
-                    // We could add diagnostics to the hash calc here to produce a per bin cap or something to help narrow down how many pubkeys are different.
-                    let calculate_accounts_hash_config = CalcAccountsHashConfig {
-                        // since we're going to assert, use the fg thread pool to go faster
-                        use_bg_thread_pool: false,
-                        ..calculate_accounts_hash_config
-                    };
-                    let result_with_index = accounts_package
-                        .accounts
-                        .accounts_db
-                        .calculate_accounts_hash_from_index(slot, &calculate_accounts_hash_config);
-                    info!("hash calc with index: {slot}, {result_with_index:?}",);
-                    let calculate_accounts_hash_config = CalcAccountsHashConfig {
-                        // now that we've failed, store off the failing contents that produced a bad capitalization
-                        store_detailed_debug_info_on_failure: true,
-                        ..calculate_accounts_hash_config
-                    };
-                    _ = accounts_package
-                        .accounts
-                        .accounts_db
-                        .calculate_accounts_hash_from_storages(
-                            &calculate_accounts_hash_config,
-                            &sorted_storages,
-                            HashStats::default(),
-                        );
-                }
-
-                assert_eq!(
-                    accounts_package.expected_capitalization, lamports,
-                    "accounts hash capitalization mismatch"
-                );
-                if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
-                    assert_eq!(expected_hash, accounts_hash);
-                };
-
-                accounts_package
-                    .accounts
-                    .accounts_db
-                    .notify_accounts_hash_calculated_complete(
-                        sorted_storages.max_slot_inclusive(),
-                        &accounts_package.epoch_schedule,
-                    );
-
-                datapoint_info!(
-                    "accounts_hash_verifier",
-                    ("calculate_hash", measure_hash_us, i64),
-                );
-
+                let (accounts_hash, _capitalization) =
+                    Self::_calculate_full_accounts_hash(accounts_package);
                 accounts_hash
             }
             CalcAccountsHashFlavor::Incremental => {
@@ -342,6 +260,98 @@ impl AccountsHashVerifier {
                 .purge_old_accounts_hashes(slot);
         }
         accounts_hash.into()
+    }
+
+    fn _calculate_full_accounts_hash(
+        accounts_package: &AccountsPackage,
+    ) -> (AccountsHash, /*capitalization*/ u64) {
+        let slot = accounts_package.slot;
+        let (sorted_storages, storage_sort_us) =
+            measure_us!(SortedStorages::new(&accounts_package.snapshot_storages));
+
+        let mut timings = HashStats {
+            storage_sort_us,
+            ..HashStats::default()
+        };
+        timings.calc_storage_size_quartiles(&accounts_package.snapshot_storages);
+
+        let calculate_accounts_hash_config = CalcAccountsHashConfig {
+            use_bg_thread_pool: true,
+            check_hash: false,
+            ancestors: None,
+            epoch_schedule: &accounts_package.epoch_schedule,
+            rent_collector: &accounts_package.rent_collector,
+            store_detailed_debug_info_on_failure: false,
+        };
+
+        let ((accounts_hash, lamports), measure_hash_us) = measure_us!(accounts_package
+            .accounts
+            .accounts_db
+            .calculate_accounts_hash_from_storages(
+                &calculate_accounts_hash_config,
+                &sorted_storages,
+                timings,
+            )
+            .unwrap()); // unwrap here will never fail since check_hash = false
+
+        let old_accounts_hash = accounts_package
+            .accounts
+            .accounts_db
+            .set_accounts_hash(slot, (accounts_hash, lamports));
+        if let Some(old_accounts_hash) = old_accounts_hash {
+            warn!("Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: {accounts_hash:?}");
+        }
+
+        if accounts_package.expected_capitalization != lamports {
+            // before we assert, run the hash calc again. This helps track down whether it could have been a failure in a race condition possibly with shrink.
+            // We could add diagnostics to the hash calc here to produce a per bin cap or something to help narrow down how many pubkeys are different.
+            let calculate_accounts_hash_config = CalcAccountsHashConfig {
+                // since we're going to assert, use the fg thread pool to go faster
+                use_bg_thread_pool: false,
+                ..calculate_accounts_hash_config
+            };
+            let result_with_index = accounts_package
+                .accounts
+                .accounts_db
+                .calculate_accounts_hash_from_index(slot, &calculate_accounts_hash_config);
+            info!("hash calc with index: {slot}, {result_with_index:?}",);
+            let calculate_accounts_hash_config = CalcAccountsHashConfig {
+                // now that we've failed, store off the failing contents that produced a bad capitalization
+                store_detailed_debug_info_on_failure: true,
+                ..calculate_accounts_hash_config
+            };
+            _ = accounts_package
+                .accounts
+                .accounts_db
+                .calculate_accounts_hash_from_storages(
+                    &calculate_accounts_hash_config,
+                    &sorted_storages,
+                    HashStats::default(),
+                );
+        }
+
+        assert_eq!(
+            accounts_package.expected_capitalization, lamports,
+            "accounts hash capitalization mismatch"
+        );
+        if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
+            assert_eq!(expected_hash, accounts_hash);
+        };
+
+        accounts_package
+            .accounts
+            .accounts_db
+            .notify_accounts_hash_calculated_complete(
+                sorted_storages.max_slot_inclusive(),
+                &accounts_package.epoch_schedule,
+            );
+
+        datapoint_info!(
+            "accounts_hash_verifier",
+            ("calculate_hash", measure_hash_us, i64),
+        );
+
+        (accounts_hash, lamports)
     }
 
     fn save_epoch_accounts_hash(
