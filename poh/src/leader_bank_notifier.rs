@@ -31,7 +31,7 @@ enum Status {
 #[derive(Debug, Default)]
 struct SlotAndBankWithStatus {
     status: Status,
-    slot: Slot,
+    slot: Option<Slot>,
     bank: Weak<Bank>,
 }
 
@@ -45,7 +45,7 @@ impl LeaderBankNotifier {
 
         *state = SlotAndBankWithStatus {
             status: Status::InProgress,
-            slot: bank.slot(),
+            slot: Some(bank.slot()),
             bank: Arc::downgrade(bank),
         };
         drop(state);
@@ -57,7 +57,7 @@ impl LeaderBankNotifier {
     /// Panics if the stored slot does not match the given slot.
     pub fn set_completed(&self, slot: Slot) {
         let mut state = self.state.lock().unwrap();
-        assert_eq!(state.slot, slot);
+        assert_eq!(state.slot, Some(slot));
 
         // `set_completed` can be called multiple times for the same slot because it
         // may be called from multiple threads.
@@ -98,7 +98,7 @@ impl LeaderBankNotifier {
             if result.timed_out() {
                 return None;
             } else if matches!(state.status, Status::StandBy) {
-                return Some(state.slot);
+                return state.slot;
             }
 
             remaining_timeout = remaining_timeout.saturating_sub(start.elapsed());
