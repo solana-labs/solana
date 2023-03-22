@@ -2,7 +2,7 @@ use {
     solana_runtime::bank::Bank,
     solana_sdk::slot_history::Slot,
     std::{
-        sync::{Arc, Condvar, Mutex, Weak},
+        sync::{Arc, Condvar, Mutex, MutexGuard, Weak},
         time::{Duration, Instant},
     },
 };
@@ -76,21 +76,8 @@ impl LeaderBankNotifier {
     /// If the timeout is reached, the weak reference is unupgradable.
     pub fn get_or_wait_for_in_progress(&self, timeout: Duration) -> Weak<Bank> {
         let state = self.state.lock().unwrap();
-
-        // Immediately return if the status is `InProgress`
-        if matches!(state.status, Status::InProgress) {
-            return state.bank.clone();
-        }
-
-        let (state, wait_timeout_result) = self
-            .condvar
-            .wait_timeout_while(state, timeout, |state| {
-                matches!(state.status, Status::StandBy)
-            })
-            .unwrap();
-
-        (!wait_timeout_result.timed_out())
-            .then(|| state.bank.clone())
+        self.get_or_wait_for_in_progress_state(timeout, state)
+            .map(|state| state.bank.clone())
             .unwrap_or_else(Weak::new)
     }
 
@@ -109,6 +96,27 @@ impl LeaderBankNotifier {
 
             remaining_timeout = remaining_timeout.saturating_sub(start.elapsed());
         }
+    }
+
+    // Helper function to get or wait for the `InProgress` status with a given `MutexGuard`.
+    fn get_or_wait_for_in_progress_state<'a>(
+        &self,
+        timeout: Duration,
+        state: MutexGuard<'a, SlotAndBankWithStatus>,
+    ) -> Option<MutexGuard<'a, SlotAndBankWithStatus>> {
+        // Immediately return if the status is `InProgress`
+        if matches!(state.status, Status::InProgress) {
+            return Some(state);
+        }
+
+        let (state, wait_timeout_result) = self
+            .condvar
+            .wait_timeout_while(state, timeout, |state| {
+                matches!(state.status, Status::StandBy)
+            })
+            .unwrap();
+
+        (!wait_timeout_result.timed_out()).then_some(state)
     }
 }
 
