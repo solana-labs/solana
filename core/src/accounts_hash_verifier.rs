@@ -230,12 +230,11 @@ impl AccountsHashVerifier {
             },
         };
 
-        let mut sort_time = Measure::start("sort_storages");
-        let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
-        sort_time.stop();
+        let (sorted_storages, storage_sort_us) =
+            measure_us!(SortedStorages::new(&accounts_package.snapshot_storages));
 
         let mut timings = HashStats {
-            storage_sort_us: sort_time.as_us(),
+            storage_sort_us,
             ..HashStats::default()
         };
         timings.calc_storage_size_quartiles(&accounts_package.snapshot_storages);
