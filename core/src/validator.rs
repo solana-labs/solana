@@ -132,7 +132,7 @@ pub enum ReplayingBackend {
 }
 
 impl ReplayingBackend {
-    pub fn cli_names() -> &'static [&'static str] {
+    pub const fn cli_names() -> &'static [&'static str] {
         Self::VARIANTS
     }
 }
@@ -145,7 +145,7 @@ pub enum BankingBackend {
 }
 
 impl BankingBackend {
-    pub fn cli_names() -> &'static [&'static str] {
+    pub const fn cli_names() -> &'static [&'static str] {
         Self::VARIANTS
     }
 }
