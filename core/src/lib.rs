@@ -37,7 +37,6 @@ pub mod ledger_metric_report_service;
 pub mod multi_iterator_scanner;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
-pub mod packet_hasher;
 pub mod packet_threshold;
 pub mod progress_map;
 pub mod qos_service;

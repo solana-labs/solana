@@ -205,7 +205,7 @@ impl ShredId {
         ShredId(slot, index, shred_type)
     }
 
-    pub(crate) fn unwrap(&self) -> (Slot, /*shred index:*/ u32, ShredType) {
+    pub(crate) fn unpack(&self) -> (Slot, /*shred index:*/ u32, ShredType) {
         (self.0, self.1, self.2)
     }
 }
