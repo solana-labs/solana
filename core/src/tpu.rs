@@ -28,6 +28,7 @@ use {
     },
     solana_runtime::{
         bank_forks::BankForks,
+        prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
@@ -102,6 +103,7 @@ impl Tpu {
         banking_tracer: Arc<BankingTracer>,
         tracer_thread_hdl: TracerThread,
         tpu_enable_udp: bool,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -245,6 +247,7 @@ impl Tpu {
             log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),
+            prioritization_fee_cache,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
