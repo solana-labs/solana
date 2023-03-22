@@ -5,7 +5,9 @@ use {
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_account_decoder::parse_token::spl_token_pubkey,
-    solana_clap_utils::{input_parsers::pubkey_of, input_validators::is_url_or_moniker},
+    solana_clap_utils::{
+        hidden_unless_forced, input_parsers::pubkey_of, input_validators::is_url_or_moniker,
+    },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_client::transaction_executor::TransactionExecutor,
     solana_gossip::gossip_service::discover,
@@ -529,7 +531,7 @@ fn main() {
                 .long("faucet")
                 .takes_value(true)
                 .value_name("HOST:PORT")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Faucet entrypoint address. Usually <ip>:9900"),
         )
         .arg(
