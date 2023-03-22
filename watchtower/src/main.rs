@@ -5,6 +5,7 @@ use {
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},
     log::*,
     solana_clap_utils::{
+        hidden_unless_forced,
         input_parsers::pubkeys_of,
         input_validators::{is_parsable, is_pubkey_or_keypair, is_url},
     },
@@ -132,7 +133,7 @@ fn get_config() -> Config {
             // Deprecated parameter, now always enabled
             Arg::with_name("no_duplicate_notifications")
                 .long("no-duplicate-notifications")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
         )
         .arg(
             Arg::with_name("monitor_active_stake")
