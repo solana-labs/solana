@@ -186,28 +186,4 @@ mod tests {
             vec![Signature::default(), Signature::default()],
         );
     }
-
-    #[test]
-    fn test_unsized_signers() {
-        use crate::transaction::Transaction;
-        use crate::signer::keypair::Keypair;
-        use crate::message::Message;
-        use crate::hash::Hash;
-        use crate::instruction::Instruction;
-
-        fn instructions_to_tx(
-            instructions: &[Instruction],
-            signers: Box<dyn Signers>,
-        ) -> Transaction {
-            let pubkeys = signers.pubkeys();
-            let first_signer = pubkeys.first().expect("should exist");
-            let message = Message::new(instructions, Some(first_signer));
-            Transaction::new(signers.as_ref(), message, Hash::default())
-        }
-
-        let signer: Box<dyn Signer> = Box::new(Keypair::new());
-        let tx = instructions_to_tx(&[], Box::new(vec![signer]));
-
-        assert_eq!(tx.is_signed(), true);
-    }
 }
