@@ -188,7 +188,7 @@ struct ServeRepairStats {
     orphan: usize,
     pong: usize,
     ancestor_hashes: usize,
-    blockstore_misses: usize,
+    window_index_misses: usize,
     ping_cache_check_failed: usize,
     pings_sent: usize,
     decode_time_us: u64,
@@ -391,7 +391,7 @@ impl ServeRepair {
                         *nonce,
                     );
                     if batch.is_none() {
-                        stats.blockstore_misses += 1;
+                        stats.window_index_misses += 1;
                     }
                     (batch, "WindowIndexWithNonce")
                 }
@@ -407,18 +407,17 @@ impl ServeRepair {
                     nonce,
                 ) => {
                     stats.highest_window_index += 1;
-                    let batch = Self::run_highest_window_request(
-                        recycler,
-                        from_addr,
-                        blockstore,
-                        *slot,
-                        *highest_index,
-                        *nonce,
-                    );
-                    if batch.is_none() {
-                        stats.blockstore_misses += 1;
-                    }
-                    (batch, "HighestWindowIndexWithNonce")
+                    (
+                        Self::run_highest_window_request(
+                            recycler,
+                            from_addr,
+                            blockstore,
+                            *slot,
+                            *highest_index,
+                            *nonce,
+                        ),
+                        "HighestWindowIndexWithNonce",
+                    )
                 }
                 RepairProtocol::Orphan {
                     header: RepairRequestHeader { nonce, .. },
@@ -426,18 +425,17 @@ impl ServeRepair {
                 }
                 | RepairProtocol::LegacyOrphanWithNonce(_, slot, nonce) => {
                     stats.orphan += 1;
-                    let batch = Self::run_orphan(
-                        recycler,
-                        from_addr,
-                        blockstore,
-                        *slot,
-                        MAX_ORPHAN_REPAIR_RESPONSES,
-                        *nonce,
-                    );
-                    if batch.is_none() {
-                        stats.blockstore_misses += 1;
-                    }
-                    (batch, "OrphanWithNonce")
+                    (
+                        Self::run_orphan(
+                            recycler,
+                            from_addr,
+                            blockstore,
+                            *slot,
+                            MAX_ORPHAN_REPAIR_RESPONSES,
+                            *nonce,
+                        ),
+                        "OrphanWithNonce",
+                    )
                 }
                 RepairProtocol::AncestorHashes {
                     header: RepairRequestHeader { nonce, .. },
@@ -730,7 +728,7 @@ impl ServeRepair {
                 i64
             ),
             ("pong", stats.pong, i64),
-            ("blockstore_misses", stats.blockstore_misses, i64),
+            ("window_index_misses", stats.window_index_misses, i64),
             (
                 "ping_cache_check_failed",
                 stats.ping_cache_check_failed,
@@ -1219,8 +1217,6 @@ impl ServeRepair {
             from_addr,
             nonce,
         )?;
-
-        inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
         Some(PacketBatch::new_unpinned_with_recycler_data(
             recycler,
             "run_window_request",
