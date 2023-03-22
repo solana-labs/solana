@@ -208,7 +208,6 @@ struct ExecuteBatchesInternalMetrics {
 fn execute_batches_internal(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
-    entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
@@ -228,18 +227,14 @@ fn execute_batches_internal(
                 let mut timings = ExecuteTimings::default();
                 let (result, execute_batches_time): (Result<()>, Measure) = measure!(
                     {
-                        let result = execute_batch(
+                        execute_batch(
                             transaction_batch,
                             bank,
                             transaction_status_sender,
                             replay_vote_sender,
                             &mut timings,
                             log_messages_bytes_limit,
-                        );
-                        if let Some(entry_callback) = entry_callback {
-                            entry_callback(bank);
-                        }
-                        result
+                        )
                     },
                     "execute_batch",
                 );
@@ -304,7 +299,6 @@ fn rebatch_transactions<'a>(
 fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
-    entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
@@ -387,7 +381,6 @@ fn execute_batches(
     let execute_batches_internal_metrics = execute_batches_internal(
         bank,
         rebatched_txs,
-        entry_callback,
         transaction_status_sender,
         replay_vote_sender,
         log_messages_bytes_limit,
@@ -441,7 +434,6 @@ pub fn process_entries_for_tests(
         bank,
         &mut replay_entries,
         randomize,
-        None,
         transaction_status_sender,
         replay_vote_sender,
         &mut confirmation_timing,
@@ -459,7 +451,6 @@ fn process_entries_with_callback(
     bank: &Arc<Bank>,
     entries: &mut [ReplayEntry],
     randomize: bool,
-    entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
@@ -486,7 +477,6 @@ fn process_entries_with_callback(
                     execute_batches(
                         bank,
                         &batches,
-                        entry_callback,
                         transaction_status_sender,
                         replay_vote_sender,
                         confirmation_timing,
@@ -552,7 +542,6 @@ fn process_entries_with_callback(
                         execute_batches(
                             bank,
                             &batches,
-                            entry_callback,
                             transaction_status_sender,
                             replay_vote_sender,
                             confirmation_timing,
@@ -567,7 +556,6 @@ fn process_entries_with_callback(
     execute_batches(
         bank,
         &batches,
-        entry_callback,
         transaction_status_sender,
         replay_vote_sender,
         confirmation_timing,
@@ -611,7 +599,6 @@ pub struct ProcessOptions {
     pub poh_verify: bool,
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
-    pub entry_callback: Option<ProcessCallback>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
@@ -909,7 +896,6 @@ fn confirm_full_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        opts.entry_callback.as_ref(),
         recyclers,
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
@@ -927,16 +913,43 @@ fn confirm_full_slot(
     }
 }
 
+/// Measures different parts of the slot confirmation processing pipeline.
 #[derive(Debug)]
 pub struct ConfirmationTiming {
+    /// Moment when the `ConfirmationTiming` instance was created.  Used to track the total wall
+    /// clock time from the moment the first shard for the slot is received and to the moment the
+    /// slot is complete.
     pub started: Instant,
+
+    /// Wall clock time used by the entry replay code.  Does not include the PoH or the transaction
+    /// signature/precompiles verification, but can overlap with the PoH and signature verification.
+    /// In microseconds.
     pub replay_elapsed: u64,
+
+    /// Wall clock time used by the transaction execution part of pipeline.  `replay_elapsed`
+    /// includes this time.  In microseconds.
     pub execute_batches_us: u64,
+
+    /// Wall clock times, used for the PoH verification of entries.  In microseconds.
     pub poh_verify_elapsed: u64,
+
+    /// Wall clock time, used for the signature verification as well as precompiles verification.
+    /// In microseconds.
     pub transaction_verify_elapsed: u64,
+
+    /// Wall clock time spent loading data sets (and entries) from the blockstore.  This does not
+    /// include the case when the blockstore load failed.  In microseconds.
     pub fetch_elapsed: u64,
+
+    /// Same as `fetch_elapsed` above, but for the case when the blockstore load fails.  In
+    /// microseconds.
     pub fetch_fail_elapsed: u64,
+
+    /// Time used in transaction execution.  Across multiple threads, running `execute_batch()`.
     pub execute_timings: ExecuteTimings,
+
+    /// Time used to execute transactions, via `execute_batch()`, in the thread that consumed the
+    /// most time.
     pub end_to_end_execute_timings: ThreadExecuteTimings,
 }
 
@@ -946,9 +959,9 @@ impl ConfirmationTiming {
         execute_batches_internal_metrics: ExecuteBatchesInternalMetrics,
     ) {
         let ConfirmationTiming {
-            execute_timings: ref mut cumulative_execute_timings,
-            execute_batches_us: ref mut cumulative_execute_batches_us,
-            ref mut end_to_end_execute_timings,
+            execute_timings: cumulative_execute_timings,
+            execute_batches_us: cumulative_execute_batches_us,
+            end_to_end_execute_timings,
             ..
         } = self;
 
@@ -1036,7 +1049,6 @@ pub fn confirm_slot(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
@@ -1066,7 +1078,6 @@ pub fn confirm_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        entry_callback,
         recyclers,
         log_messages_bytes_limit,
         prioritization_fee_cache,
@@ -1082,7 +1093,6 @@ fn confirm_slot_entries(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
@@ -1115,7 +1125,8 @@ fn confirm_slot_entries(
         let tick_hash_count = &mut progress.tick_hash_count;
         verify_ticks(bank, &entries, slot_full, tick_hash_count).map_err(|err| {
             warn!(
-                "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, last_blockhash: {}, shred_index: {}, slot_full: {}",
+                "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, \
+                last_blockhash: {}, shred_index: {}, slot_full: {}",
                 err,
                 slot,
                 num_entries,
@@ -1160,76 +1171,74 @@ fn confirm_slot_entries(
     );
     let transaction_cpu_duration_us = timing::duration_as_us(&check_start.elapsed());
 
-    match check_result {
-        Ok(mut check_result) => {
-            let entries = check_result.entries();
-            assert!(entries.is_some());
-
-            let mut replay_elapsed = Measure::start("replay_elapsed");
-            let mut replay_entries: Vec<_> = entries
-                .unwrap()
-                .into_iter()
-                .zip(entry_starting_indexes)
-                .map(|(entry, starting_index)| ReplayEntry {
-                    entry,
-                    starting_index,
-                })
-                .collect();
-            // Note: This will shuffle entries' transactions in-place.
-            let process_result = process_entries_with_callback(
-                bank,
-                &mut replay_entries,
-                true, // shuffle transactions.
-                entry_callback,
-                transaction_status_sender,
-                replay_vote_sender,
-                timing,
-                log_messages_bytes_limit,
-                prioritization_fee_cache,
-            )
-            .map_err(BlockstoreProcessorError::from);
-            replay_elapsed.stop();
-            timing.replay_elapsed += replay_elapsed.as_us();
-
-            // If running signature verification on the GPU, wait for that
-            // computation to finish, and get the result of it. If we did the
-            // signature verification on the CPU, this just returns the
-            // already-computed result produced in start_verify_transactions.
-            // Either way, check the result of the signature verification.
-            if !check_result.finish_verify() {
-                warn!("Ledger proof of history failed at slot: {}", bank.slot());
-                return Err(TransactionError::SignatureFailure.into());
-            }
-
-            if let Some(mut verifier) = verifier {
-                let verified = verifier.finish_verify();
-                timing.poh_verify_elapsed += verifier.poh_duration_us();
-                // The GPU Entry verification (if any) is kicked off right when the CPU-side
-                // Entry verification finishes, so these times should be disjoint
-                timing.transaction_verify_elapsed +=
-                    transaction_cpu_duration_us + check_result.gpu_verify_duration();
-                if !verified {
-                    warn!("Ledger proof of history failed at slot: {}", bank.slot());
-                    return Err(BlockError::InvalidEntryHash.into());
-                }
-            }
-
-            process_result?;
-
-            progress.num_shreds += num_shreds;
-            progress.num_entries += num_entries;
-            progress.num_txs += num_txs;
-            if let Some(last_entry_hash) = last_entry_hash {
-                progress.last_entry = last_entry_hash;
-            }
-
-            Ok(())
-        }
+    let mut check_result = match check_result {
+        Ok(check_result) => check_result,
         Err(err) => {
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
-            Err(err.into())
+            return Err(err.into());
+        }
+    };
+
+    let entries = check_result.entries();
+    assert!(entries.is_some());
+
+    let mut replay_elapsed = Measure::start("replay_elapsed");
+    let mut replay_entries: Vec<_> = entries
+        .unwrap()
+        .into_iter()
+        .zip(entry_starting_indexes)
+        .map(|(entry, starting_index)| ReplayEntry {
+            entry,
+            starting_index,
+        })
+        .collect();
+    // Note: This will shuffle entries' transactions in-place.
+    let process_result = process_entries_with_callback(
+        bank,
+        &mut replay_entries,
+        true, // shuffle transactions.
+        transaction_status_sender,
+        replay_vote_sender,
+        timing,
+        log_messages_bytes_limit,
+        prioritization_fee_cache,
+    )
+    .map_err(BlockstoreProcessorError::from);
+    replay_elapsed.stop();
+    timing.replay_elapsed += replay_elapsed.as_us();
+
+    // If running signature verification on the GPU, wait for that computation to finish, and get
+    // the result of it. If we did the signature verification on the CPU, this just returns the
+    // already-computed result produced in start_verify_transactions.  Either way, check the result
+    // of the signature verification.
+    if !check_result.finish_verify() {
+        warn!("Ledger proof of history failed at slot: {}", bank.slot());
+        return Err(TransactionError::SignatureFailure.into());
+    }
+
+    if let Some(mut verifier) = verifier {
+        let verified = verifier.finish_verify();
+        timing.poh_verify_elapsed += verifier.poh_duration_us();
+        // The GPU Entry verification (if any) is kicked off right when the CPU-side Entry
+        // verification finishes, so these times should be disjoint
+        timing.transaction_verify_elapsed +=
+            transaction_cpu_duration_us + check_result.gpu_verify_duration();
+        if !verified {
+            warn!("Ledger proof of history failed at slot: {}", bank.slot());
+            return Err(BlockError::InvalidEntryHash.into());
         }
     }
+
+    process_result?;
+
+    progress.num_shreds += num_shreds;
+    progress.num_entries += num_entries;
+    progress.num_txs += num_txs;
+    if let Some(last_entry_hash) = last_entry_hash {
+        progress.last_entry = last_entry_hash;
+    }
+
+    Ok(())
 }
 
 // Special handling required for processing the entries in slot 0
@@ -1537,13 +1546,16 @@ fn load_frozen_forks(
 fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
     bank.force_flush_accounts_cache();
     // note that this slot may not be a root
-    let _ = bank.verify_accounts_hash(VerifyAccountsHashConfig {
-        test_hash_calculation: false,
-        ignore_mismatch: true,
-        require_rooted_bank: false,
-        run_in_background: false,
-        store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
-    });
+    let _ = bank.verify_accounts_hash(
+        None,
+        VerifyAccountsHashConfig {
+            test_hash_calculation: false,
+            ignore_mismatch: true,
+            require_rooted_bank: false,
+            run_in_background: false,
+            store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
+        },
+    );
 }
 
 // `roots` is sorted largest to smallest by root slot
@@ -2657,65 +2669,6 @@ pub mod tests {
         let (_bank_forks, leader_schedule) =
             test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         assert_eq!(leader_schedule.max_schedules(), std::usize::MAX);
-    }
-
-    #[test]
-    fn test_process_ledger_options_entry_callback() {
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config(100);
-        let (ledger_path, last_entry_hash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let blockhash = genesis_config.hash();
-        let keypairs = [Keypair::new(), Keypair::new(), Keypair::new()];
-
-        let tx = system_transaction::transfer(&mint_keypair, &keypairs[0].pubkey(), 1, blockhash);
-        let entry_1 = next_entry(&last_entry_hash, 1, vec![tx]);
-
-        let tx = system_transaction::transfer(&mint_keypair, &keypairs[1].pubkey(), 1, blockhash);
-        let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
-
-        let mut entries = vec![entry_1, entry_2];
-        entries.extend(create_ticks(
-            genesis_config.ticks_per_slot,
-            0,
-            last_entry_hash,
-        ));
-        blockstore
-            .write_entries(
-                1,
-                0,
-                0,
-                genesis_config.ticks_per_slot,
-                None,
-                true,
-                &Arc::new(Keypair::new()),
-                entries,
-                0,
-            )
-            .unwrap();
-
-        let callback_counter: Arc<RwLock<usize>> = Arc::default();
-        let entry_callback = {
-            let counter = callback_counter.clone();
-            let pubkeys: Vec<Pubkey> = keypairs.iter().map(|k| k.pubkey()).collect();
-            Arc::new(move |bank: &Bank| {
-                let mut counter = counter.write().unwrap();
-                assert_eq!(bank.get_balance(&pubkeys[*counter]), 1);
-                assert_eq!(bank.get_balance(&pubkeys[*counter + 1]), 0);
-                *counter += 1;
-            })
-        };
-
-        let opts = ProcessOptions {
-            entry_callback: Some(entry_callback),
-            accounts_db_test_hash_calculation: true,
-            ..ProcessOptions::default()
-        };
-        test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
-        assert_eq!(*callback_counter.write().unwrap(), 2);
     }
 
     #[test]
@@ -4074,7 +4027,6 @@ pub mod tests {
             false,
             None,
             None,
-            None,
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
@@ -4218,7 +4170,6 @@ pub mod tests {
             false,
             Some(&transaction_status_sender),
             None,
-            None,
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
@@ -4263,7 +4214,6 @@ pub mod tests {
             &mut progress,
             false,
             Some(&transaction_status_sender),
-            None,
             None,
             &VerifyRecyclers::default(),
             None,

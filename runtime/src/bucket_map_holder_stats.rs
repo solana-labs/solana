@@ -423,6 +423,24 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
+                    "disk_index_index_file_size",
+                    disk.map(|disk| disk.stats.index.total_file_size.load(Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
+                    "disk_index_data_file_size",
+                    disk.map(|disk| disk.stats.data.total_file_size.load(Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
+                    "disk_index_data_file_count",
+                    disk.map(|disk| disk.stats.data.file_count.load(Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
                     "disk_index_find_entry_mut_us",
                     disk.map(|disk| disk
                         .stats

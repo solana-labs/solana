@@ -4,7 +4,7 @@ use {
         ancestors::Ancestors,
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
-        in_mem_accounts_index::InMemAccountsIndex,
+        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
@@ -1637,7 +1637,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                 (pubkey_bin, Vec::with_capacity(expected_items_per_bin))
             })
             .collect::<Vec<_>>();
-        let dirty_pubkeys = items
+        let mut dirty_pubkeys = items
             .filter_map(|(pubkey, account_info)| {
                 let pubkey_bin = self.bin_calculator.bin_from_pubkey(&pubkey);
                 let binned_index = (pubkey_bin + random_offset) % bins;
@@ -1668,7 +1668,13 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                         &self.storage.storage,
                         use_disk,
                     );
-                    r_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_entry);
+                    match r_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_entry) {
+                        InsertNewEntryResults::DidNotExist => {}
+                        InsertNewEntryResults::ExistedNewEntryZeroLamports => {}
+                        InsertNewEntryResults::ExistedNewEntryNonZeroLamports => {
+                            dirty_pubkeys.push(pubkey);
+                        }
+                    }
                 });
             }
             insert_time.stop();

@@ -12,11 +12,19 @@ pub struct BucketStats {
     pub flush_file_us: AtomicU64,
     pub mmap_us: AtomicU64,
     pub find_entry_mut_us: AtomicU64,
+    pub file_count: AtomicU64,
+    pub total_file_size: AtomicU64,
 }
 
 impl BucketStats {
     pub fn update_max_size(&self, size: u64) {
         self.max_size.fetch_max(size, Ordering::Relaxed);
+    }
+
+    pub fn resize_grow(&self, old_size: u64, new_size: u64) {
+        let size_change = new_size.saturating_sub(old_size);
+        self.total_file_size
+            .fetch_add(size_change, Ordering::Relaxed);
     }
 }
 

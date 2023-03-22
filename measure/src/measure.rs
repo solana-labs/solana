@@ -1,5 +1,5 @@
 use {
-    solana_sdk::timing::duration_as_ns,
+    solana_sdk::timing::{duration_as_ms, duration_as_ns, duration_as_s, duration_as_us},
     std::{
         fmt,
         time::{Duration, Instant},
@@ -45,6 +45,26 @@ impl Measure {
     pub fn as_duration(&self) -> Duration {
         Duration::from_nanos(self.as_ns())
     }
+
+    pub fn end_as_ns(self) -> u64 {
+        duration_as_ns(&self.start.elapsed())
+    }
+
+    pub fn end_as_us(self) -> u64 {
+        duration_as_us(&self.start.elapsed())
+    }
+
+    pub fn end_as_ms(self) -> u64 {
+        duration_as_ms(&self.start.elapsed())
+    }
+
+    pub fn end_as_s(self) -> f32 {
+        duration_as_s(&self.start.elapsed())
+    }
+
+    pub fn end_as_duration(self) -> Duration {
+        self.start.elapsed()
+    }
 }
 
 impl fmt::Display for Measure {
@@ -65,19 +85,59 @@ impl fmt::Display for Measure {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, std::thread::sleep};
+    use {
+        super::*,
+        std::{fmt::Debug, thread::sleep},
+    };
 
     #[test]
     fn test_measure() {
         let mut measure = Measure::start("test");
-        sleep(Duration::from_secs(1));
+        sleep(Duration::from_millis(100));
         measure.stop();
-        assert!(measure.as_s() >= 0.99f32 && measure.as_s() <= 1.01f32);
-        assert!(measure.as_ms() >= 990 && measure.as_ms() <= 1_010);
-        assert!(measure.as_us() >= 999_000 && measure.as_us() <= 1_010_000);
+        assert!(measure.as_s() >= 0.09f32 && measure.as_s() <= 0.11f32);
+        assert!(measure.as_ms() >= 90 && measure.as_ms() <= 110);
+        assert!(measure.as_us() >= 99_000 && measure.as_us() <= 110_000);
+        assert!(measure.as_ns() >= 99_000_000 && measure.as_ns() <= 110_000_000);
         assert!(
-            measure.as_duration() >= Duration::from_millis(990)
-                && measure.as_duration() <= Duration::from_millis(1_010)
+            measure.as_duration() >= Duration::from_millis(90)
+                && measure.as_duration() <= Duration::from_millis(110)
+        );
+    }
+
+    #[test]
+    fn test_measure_end_as() {
+        #[track_caller]
+        fn test_end_as<Res>(method: fn(Measure) -> Res, sleep_ms: u64, lower: Res, upper: Res)
+        where
+            Res: PartialOrd + Debug,
+        {
+            let measure = Measure::start("test");
+            sleep(Duration::from_millis(sleep_ms));
+            let result = method(measure);
+            assert!(
+                result >= lower,
+                "Result below the expected bound.\n\
+                 Lower bound: {lower:?}\n\
+                 Result: {result:?}"
+            );
+            assert!(
+                result <= upper,
+                "Result above the expected bound.\n\
+                 Upper bound: {upper:?}\n\
+                 Result: {result:?}"
+            );
+        }
+
+        test_end_as(Measure::end_as_s, 100, 0.09f32, 0.11f32);
+        test_end_as(Measure::end_as_ms, 100, 90, 110);
+        test_end_as(Measure::end_as_us, 100, 90_000, 110_000);
+        test_end_as(Measure::end_as_ns, 100, 90_000_000, 110_000_000);
+        test_end_as(
+            Measure::end_as_duration,
+            100,
+            Duration::from_millis(90),
+            Duration::from_millis(110),
         );
     }
 

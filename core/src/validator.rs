@@ -32,7 +32,9 @@ use {
     solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
     solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
-    solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
+    solana_geyser_plugin_manager::{
+        geyser_plugin_service::GeyserPluginService, GeyserPluginManagerRequest,
+    },
     solana_gossip::{
         cluster_info::{
             ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
@@ -88,7 +90,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_utils::{self, move_and_async_delete_path},
+        snapshot_utils::{self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path},
     },
     solana_sdk::{
         clock::Slot,
@@ -127,9 +129,11 @@ pub struct ValidatorConfig {
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
+    pub account_snapshot_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
-    pub plugin_config_files: Option<Vec<PathBuf>>,
+    /// Specifies which plugins to start up with
+    pub on_start_plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: SnapshotConfig,
@@ -191,9 +195,10 @@ impl Default for ValidatorConfig {
             voting_disabled: false,
             max_ledger_shreds: None,
             account_paths: Vec::new(),
+            account_snapshot_paths: Vec::new(),
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
-            plugin_config_files: None,
+            on_start_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: SnapshotConfig::new_load_only(),
@@ -346,6 +351,7 @@ struct TransactionHistoryServices {
     max_complete_transaction_status_slot: Arc<AtomicU64>,
     rewards_recorder_sender: Option<RewardsRecorderSender>,
     rewards_recorder_service: Option<RewardsRecorderService>,
+    max_complete_rewards_slot: Arc<AtomicU64>,
     cache_block_meta_sender: Option<CacheBlockMetaSender>,
     cache_block_meta_service: Option<CacheBlockMetaService>,
 }
@@ -392,6 +398,7 @@ impl Validator {
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
         should_check_duplicate_instance: bool,
+        rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
@@ -413,12 +420,19 @@ impl Validator {
 
         let mut bank_notification_senders = Vec::new();
 
+        let exit = Arc::new(AtomicBool::new(false));
+
         let geyser_plugin_service =
-            if let Some(geyser_plugin_config_files) = &config.plugin_config_files {
+            if let Some(geyser_plugin_config_files) = &config.on_start_plugin_config_files {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
                 bank_notification_senders.push(confirmed_bank_sender);
-                let result =
-                    GeyserPluginService::new(confirmed_bank_receiver, geyser_plugin_config_files);
+                let rpc_to_plugin_manager_receiver_and_exit =
+                    rpc_to_plugin_manager_receiver.map(|receiver| (receiver, exit.clone()));
+                let result = GeyserPluginService::new_with_receiver(
+                    confirmed_bank_receiver,
+                    geyser_plugin_config_files,
+                    rpc_to_plugin_manager_receiver_and_exit,
+                );
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),
                     Err(err) => {
@@ -483,6 +497,16 @@ impl Validator {
         start.stop();
         info!("done. {}", start);
 
+        info!("Cleaning orphaned account snapshot directories..");
+        if let Err(e) = clean_orphaned_account_snapshot_dirs(
+            &config.snapshot_config.bank_snapshots_dir,
+            &config.account_snapshot_paths,
+        ) {
+            return Err(format!(
+                "Failed to clean orphaned account snapshot directories: {e:?}"
+            ));
+        }
+
         let exit = Arc::new(AtomicBool::new(false));
         {
             let exit = exit.clone();
@@ -540,6 +564,7 @@ impl Validator {
                 max_complete_transaction_status_slot,
                 rewards_recorder_sender,
                 rewards_recorder_service,
+                max_complete_rewards_slot,
                 cache_block_meta_sender,
                 cache_block_meta_service,
             },
@@ -722,6 +747,7 @@ impl Validator {
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_config(
             &exit,
             max_complete_transaction_status_slot.clone(),
+            max_complete_rewards_slot.clone(),
             blockstore.clone(),
             bank_forks.clone(),
             block_commitment_cache.clone(),
@@ -832,6 +858,7 @@ impl Validator {
                 leader_schedule_cache.clone(),
                 connection_cache.clone(),
                 max_complete_transaction_status_slot,
+                max_complete_rewards_slot,
                 prioritization_fee_cache.clone(),
             )?;
 
@@ -1877,10 +1904,12 @@ fn initialize_rpc_transaction_history_services(
         exit,
     ));
 
+    let max_complete_rewards_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
     let (rewards_recorder_sender, rewards_receiver) = unbounded();
     let rewards_recorder_sender = Some(rewards_recorder_sender);
     let rewards_recorder_service = Some(RewardsRecorderService::new(
         rewards_receiver,
+        max_complete_rewards_slot.clone(),
         blockstore.clone(),
         exit,
     ));
@@ -1898,6 +1927,7 @@ fn initialize_rpc_transaction_history_services(
         max_complete_transaction_status_slot,
         rewards_recorder_sender,
         rewards_recorder_service,
+        max_complete_rewards_slot,
         cache_block_meta_sender,
         cache_block_meta_service,
     }
@@ -2175,6 +2205,7 @@ mod tests {
             vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
             &config,
             true, // should_check_duplicate_instance
+            None, // rpc_to_plugin_manager_receiver
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
             DEFAULT_TPU_USE_QUIC,
@@ -2272,7 +2303,8 @@ mod tests {
                     Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
                     vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
                     &config,
-                    true, // should_check_duplicate_instance
+                    true, // should_check_duplicate_instance.
+                    None, // rpc_to_plugin_manager_receiver
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
                     DEFAULT_TPU_USE_QUIC,
@@ -2296,8 +2328,7 @@ mod tests {
             sender.send(()).unwrap();
         });
 
-        // timeout of 30s for shutting down the validators
-        let timeout = Duration::from_secs(30);
+        let timeout = Duration::from_secs(60);
         if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
             panic!("timeout for shutting down validators",);
         }

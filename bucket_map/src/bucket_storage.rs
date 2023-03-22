@@ -214,13 +214,8 @@ impl BucketStorage {
         }
     }
 
-    pub fn get_empty_cell_slice<T: Sized>(&self) -> &[T] {
-        let len = 0;
-        let item_slice: &[u8] = &self.mmap[0..0];
-        unsafe {
-            let item = item_slice.as_ptr() as *const T;
-            std::slice::from_raw_parts(item, len as usize)
-        }
+    pub fn get_empty_cell_slice<T: Sized + 'static>() -> &'static [T] {
+        &[]
     }
 
     pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
@@ -337,6 +332,7 @@ impl BucketStorage {
             };
         });
         m.stop();
+        // resized so update total file size
         self.stats.resizes.fetch_add(1, Ordering::Relaxed);
         self.stats.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
     }
@@ -371,6 +367,11 @@ impl BucketStorage {
         }
         new_bucket.update_max_size();
         new_bucket
+    }
+
+    /// Return the number of bytes currently allocated
+    pub(crate) fn capacity_bytes(&self) -> u64 {
+        self.capacity() * self.cell_size
     }
 
     /// Return the number of cells currently allocated

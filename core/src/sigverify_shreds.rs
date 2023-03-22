@@ -1,18 +1,17 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
+    rayon::{ThreadPool, ThreadPoolBuilder},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache, shred, sigverify_shreds::verify_shreds_gpu,
     },
     solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache},
+    solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::HashMap,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
-        },
+        sync::{Arc, RwLock},
         thread::{Builder, JoinHandle},
         time::{Duration, Instant},
     },
@@ -32,14 +31,18 @@ pub(crate) fn spawn_shred_sigverify(
     shred_fetch_receiver: Receiver<PacketBatch>,
     retransmit_sender: Sender<Vec</*shred:*/ Vec<u8>>>,
     verified_sender: Sender<Vec<PacketBatch>>,
-    turbine_disabled: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     let recycler_cache = RecyclerCache::warmed();
     let mut stats = ShredSigVerifyStats::new(Instant::now());
-    Builder::new()
-        .name("solShredVerifr".to_string())
-        .spawn(move || loop {
+    let thread_pool = ThreadPoolBuilder::new()
+        .num_threads(get_thread_count())
+        .thread_name(|i| format!("solSvrfyShred{i:02}"))
+        .build()
+        .unwrap();
+    let run_shred_sigverify = move || {
+        loop {
             match run_shred_sigverify(
+                &thread_pool,
                 // We can't store the pubkey outside the loop
                 // because the identity might be hot swapped.
                 &cluster_info.id(),
@@ -49,7 +52,6 @@ pub(crate) fn spawn_shred_sigverify(
                 &shred_fetch_receiver,
                 &retransmit_sender,
                 &verified_sender,
-                &turbine_disabled,
                 &mut stats,
             ) {
                 Ok(()) => (),
@@ -58,11 +60,17 @@ pub(crate) fn spawn_shred_sigverify(
                 Err(Error::SendError) => break,
             }
             stats.maybe_submit();
-        })
+        }
+    };
+    Builder::new()
+        .name("solShredVerifr".to_string())
+        .spawn(run_shred_sigverify)
         .unwrap()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_shred_sigverify(
+    thread_pool: &ThreadPool,
     self_pubkey: &Pubkey,
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
@@ -70,7 +78,6 @@ fn run_shred_sigverify(
     shred_fetch_receiver: &Receiver<PacketBatch>,
     retransmit_sender: &Sender<Vec</*shred:*/ Vec<u8>>>,
     verified_sender: &Sender<Vec<PacketBatch>>,
-    turbine_disabled: &AtomicBool,
     stats: &mut ShredSigVerifyStats,
 ) -> Result<(), Error> {
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
@@ -83,6 +90,7 @@ fn run_shred_sigverify(
     stats.num_packets += packets.iter().map(PacketBatch::len).sum::<usize>();
     stats.num_discards_pre += count_discards(&packets);
     verify_packets(
+        thread_pool,
         self_pubkey,
         bank_forks,
         leader_schedule_cache,
@@ -99,15 +107,14 @@ fn run_shred_sigverify(
         .map(<[u8]>::to_vec)
         .collect();
     stats.num_retransmit_shreds += shreds.len();
-    if !turbine_disabled.load(Ordering::Relaxed) {
-        retransmit_sender.send(shreds)?;
-        verified_sender.send(packets)?;
-    }
+    retransmit_sender.send(shreds)?;
+    verified_sender.send(packets)?;
     stats.elapsed_micros += now.elapsed().as_micros() as u64;
     Ok(())
 }
 
 fn verify_packets(
+    thread_pool: &ThreadPool,
     self_pubkey: &Pubkey,
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
@@ -121,7 +128,7 @@ fn verify_packets(
             .filter_map(|(slot, pubkey)| Some((slot, pubkey?.to_bytes())))
             .chain(std::iter::once((Slot::MAX, [0u8; 32])))
             .collect();
-    let out = verify_shreds_gpu(packets, &leader_slots, recycler_cache);
+    let out = verify_shreds_gpu(thread_pool, packets, &leader_slots, recycler_cache);
     solana_perf::sigverify::mark_disabled(packets, &out);
 }
 
@@ -284,7 +291,9 @@ mod tests {
         batches[0][1].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0][1].meta_mut().size = shred.payload().len();
 
+        let thread_pool = ThreadPoolBuilder::new().num_threads(3).build().unwrap();
         verify_packets(
+            &thread_pool,
             &Pubkey::new_unique(), // self_pubkey
             &bank_forks,
             &leader_schedule_cache,

@@ -1187,12 +1187,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .hidden(true)
         )
         .arg(
-            Arg::with_name("accounts_db_skip_shrink")
-                .long("accounts-db-skip-shrink")
-                .help("Enables faster starting of validators by skipping shrink. \
-                      This option is for use during testing."),
-        )
-        .arg(
             Arg::with_name("accounts_db_create_ancient_storage_packed")
                 .long("accounts-db-create-ancient-storage-packed")
                 .help("Create ancient storages in one shot instead of appending.")
@@ -1473,6 +1467,48 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .about("Run the validator")
         )
         .subcommand(
+            SubCommand::with_name("plugin")
+                .about("Manage and view geyser plugins")
+                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .setting(AppSettings::InferSubcommands)
+                .subcommand(
+                    SubCommand::with_name("list")
+                        .about("List all current running gesyer plugins")
+                )
+                .subcommand(
+                    SubCommand::with_name("unload")
+                        .about("Unload a particular gesyer plugin. You must specify the gesyer plugin name")
+                        .arg(
+                            Arg::with_name("name")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                )
+                .subcommand(
+                    SubCommand::with_name("reload")
+                        .about("Reload a particular gesyer plugin. You must specify the gesyer plugin name and the new config path")
+                        .arg(
+                            Arg::with_name("name")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                        .arg(
+                            Arg::with_name("config")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                )
+                .subcommand(
+                    SubCommand::with_name("load")
+                        .about("Load a new gesyer plugin. You must specify the config path. Fails if overwriting (use reload)")
+                        .arg(
+                            Arg::with_name("config")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                )
+        )
+        .subcommand(
             SubCommand::with_name("set-identity")
                 .about("Set the validator identity")
                 .arg(
@@ -1561,6 +1597,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
 // avoid breaking validator startup commands
 fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
     vec![
+        Arg::with_name("accounts_db_skip_shrink")
+            .long("accounts-db-skip-shrink")
+            .help("This is obsolete since it is now enabled by default. Enables faster starting of validators by skipping startup clean and shrink.")
+            .hidden(true),
         Arg::with_name("accounts_db_caching_enabled")
             .long("accounts-db-caching-enabled")
             .hidden(true),

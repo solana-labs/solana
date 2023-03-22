@@ -42,7 +42,9 @@ use {
     },
     solana_vote_program::{
         authorized_voters::AuthorizedVoters,
-        vote_state::{BlockTimestamp, Lockout, MAX_EPOCH_CREDITS_HISTORY, MAX_LOCKOUT_HISTORY},
+        vote_state::{
+            BlockTimestamp, LandedVote, Lockout, MAX_EPOCH_CREDITS_HISTORY, MAX_LOCKOUT_HISTORY,
+        },
     },
     std::{
         collections::{BTreeMap, HashMap},
@@ -1639,6 +1641,15 @@ impl From<&Lockout> for CliLockout {
         Self {
             slot: lockout.slot(),
             confirmation_count: lockout.confirmation_count(),
+        }
+    }
+}
+
+impl From<&LandedVote> for CliLockout {
+    fn from(vote: &LandedVote) -> Self {
+        Self {
+            slot: vote.slot(),
+            confirmation_count: vote.confirmation_count(),
         }
     }
 }
