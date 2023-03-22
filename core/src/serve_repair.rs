@@ -933,7 +933,11 @@ impl ServeRepair {
                 let (check, ping_pkt) =
                     Self::check_ping_cache(ping_cache, &request, &from_addr, &identity_keypair);
                 if let Some(ping_pkt) = ping_pkt {
-                    info!("Got ping packet from {:?} backtrace {:?}", from_addr, backtrace::Backtrace::new());
+                    info!(
+                        "Got ping packet from {:?} backtrace {:?}",
+                        from_addr,
+                        backtrace::Backtrace::new()
+                    );
                     pending_pings.push(ping_pkt);
                 }
                 if !check {
@@ -1134,7 +1138,11 @@ impl ServeRepair {
     ) {
         let mut pending_pongs = Vec::default();
         for packet in packet_batch.iter_mut() {
-            info!("Got repair response: {:?} at {:?}", packet.meta(), keypair.pubkey());
+            info!(
+                "Got repair response: {:?} at {:?}",
+                packet.meta(),
+                keypair.pubkey()
+            );
             if packet.meta().size != REPAIR_RESPONSE_SERIALIZED_PING_BYTES {
                 continue;
             }
@@ -1182,7 +1190,10 @@ impl ServeRepair {
                             err
                         );
                     } else {
-                        info!("Sent pong via udp for repair response ping at {:?}", keypair.pubkey());
+                        info!(
+                            "Sent pong via udp for repair response ping at {:?}",
+                            keypair.pubkey()
+                        );
                     }
                 }
                 RepairTransportConfig::Quic(connection_cache) => {
@@ -1196,7 +1207,10 @@ impl ServeRepair {
                             err
                         );
                     } else {
-                        info!("Sent pong via quic for repair response ping at {:?}", keypair.pubkey());
+                        info!(
+                            "Sent pong via quic for repair response ping at {:?}",
+                            keypair.pubkey()
+                        );
                     }
                 }
             }
@@ -1309,7 +1323,10 @@ impl ServeRepair {
                 nonce,
             );
             if let Some(packet) = packet {
-                info!("Created response packet for Orphan repair from {:?}", from_addr);
+                info!(
+                    "Created response packet for Orphan repair from {:?}",
+                    from_addr
+                );
                 res.push(packet);
             } else {
                 break;

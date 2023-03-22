@@ -173,7 +173,10 @@ where
     let mut num_failed = 0;
     let mut erropt = None;
     for (p, a) in packets {
-        info!("Sending response back to batch_send_with_connection_cache {:?} via quic", a.borrow());
+        info!(
+            "Sending response back to batch_send_with_connection_cache {:?} via quic",
+            a.borrow()
+        );
         let connection = connection_cache.get_connection(a.borrow());
         let e = connection.send_data(p.as_ref());
         if let Err(e) = e {

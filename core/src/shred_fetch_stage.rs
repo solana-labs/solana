@@ -88,7 +88,11 @@ impl ShredFetchStage {
             stats.shred_count += packet_batch.len();
 
             if let Some((udp_socket, cluster_info)) = &repair_context {
-                info!("Got some repair response at {:?} use quic {}", cluster_info.id(), matches!(udp_socket, RepairTransportConfig::Quic(_)));
+                info!(
+                    "Got some repair response at {:?} use quic {}",
+                    cluster_info.id(),
+                    matches!(udp_socket, RepairTransportConfig::Quic(_))
+                );
                 debug_assert_eq!(flags, PacketFlags::REPAIR);
                 debug_assert!(keypair.is_some());
                 if let Some(ref keypair) = keypair {
@@ -101,7 +105,9 @@ impl ShredFetchStage {
                 }
             }
 
-            let id = repair_context.as_ref().map(|(_, cluset_info)| cluset_info.id());
+            let id = repair_context
+                .as_ref()
+                .map(|(_, cluset_info)| cluset_info.id());
 
             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
@@ -238,7 +244,10 @@ impl ShredFetchStage {
                     RepairTransportConfig::Quic(connection_cache_clone),
                     cluster_info.as_ref(),
                 ));
-                info!("Calling modify_packets for quic repair results at {:?}.", cluster_info.id());
+                info!(
+                    "Calling modify_packets for quic repair results at {:?}.",
+                    cluster_info.id()
+                );
                 Self::modify_packets(
                     packet_receiver,
                     sender,
@@ -345,13 +354,16 @@ impl ShredFetchStage {
             connection_cache,
             Self {
                 thread_hdls: tvu_threads,
-                quic_repair_addr
+                quic_repair_addr,
             },
         )
     }
 
     pub(crate) fn join(self) -> thread::Result<()> {
-        error!("Shutting down PacketModQ quic_repair_add {:?}", self.quic_repair_addr);
+        error!(
+            "Shutting down PacketModQ quic_repair_add {:?}",
+            self.quic_repair_addr
+        );
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }

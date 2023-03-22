@@ -465,7 +465,10 @@ impl AncestorHashesService {
                                 from_addr.ip(),
                                 from_addr.port() - solana_sdk::quic::QUIC_PORT_OFFSET,
                             );
-                            info!("zzzzz received ping from {:?} and send pong to {:?} via quic.", from_addr, fixed_from_addr);
+                            info!(
+                                "zzzzz received ping from {:?} and send pong to {:?} via quic.",
+                                from_addr, fixed_from_addr
+                            );
                             let connection = connection_cache.get_connection(&fixed_from_addr);
                             let _ignore = connection.send_data(&pong_bytes[..]);
                         } else {

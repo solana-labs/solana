@@ -422,7 +422,10 @@ impl RepairService {
             let mut batch_send_repairs_elapsed = Measure::start("batch_send_repairs_elapsed");
             if !batch.is_empty() {
                 if let Some(connection_cache) = &quic_repair_option {
-                    info!("Sending repair request to {:?} from {:?}", batch[0].1, identity_keypair);
+                    info!(
+                        "Sending repair request to {:?} from {:?}",
+                        batch[0].1, identity_keypair
+                    );
                     let result = quic_sendmmsg::batch_send(connection_cache, &batch);
                     if let Err(QuicSendPktsError::TransportError(err, num_failed)) = result {
                         error!(

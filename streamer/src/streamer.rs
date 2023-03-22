@@ -326,7 +326,10 @@ where
         }
         ResponderOption::ConnectionCache(connection_cache) => {
             let packets = packets.collect::<Vec<_>>();
-            info!("Sending response via connection cache to to {:?}",  packets[0].1);
+            info!(
+                "Sending response via connection cache to to {:?}",
+                packets[0].1
+            );
             batch_send_with_connection_cache(&packets, connection_cache)?;
         }
     }
