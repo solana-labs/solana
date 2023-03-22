@@ -108,31 +108,31 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
   touch criterion-$version.md
 fi
 
-# Install Rust-SBF
-version=v1.35
-if [[ ! -e sbf-tools-$version.md || ! -e sbf-tools ]]; then
+# Install platform tools
+version=v1.36
+if [[ ! -e platform-tools-$version.md || ! -e platform-tools ]]; then
   (
     set -e
-    rm -rf sbf-tools*
+    rm -rf platform-tools*
     job="download \
-           https://github.com/solana-labs/sbf-tools/releases/download \
+           https://github.com/solana-labs/platform-tools/releases/download \
            $version \
-           solana-sbf-tools-${machine}-${arch}.tar.bz2 \
-           sbf-tools"
-    get $version sbf-tools "$job"
+           platform-tools-${machine}-${arch}.tar.bz2 \
+           platform-tools"
+    get $version platform-tools "$job"
   )
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
     exit 1
   fi
-  touch sbf-tools-$version.md
+  touch platform-tools-$version.md
   set -ex
-  ./sbf-tools/rust/bin/rustc --version
-  ./sbf-tools/rust/bin/rustc --print sysroot
+  ./platform-tools/rust/bin/rustc --version
+  ./platform-tools/rust/bin/rustc --print sysroot
   set +e
-  rustup toolchain uninstall sbf
+  rustup toolchain uninstall solana
   set -e
-  rustup toolchain link sbf sbf-tools/rust
+  rustup toolchain link solana platform-tools/rust
 fi
 
 exit 0

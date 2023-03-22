@@ -46,7 +46,7 @@ fn main() {
     if sbf_c {
         let install_dir = "OUT_DIR=../target/".to_string() + &env::var("PROFILE").unwrap() + "/sbf";
 
-        println!("cargo:warning=(not a warning) Building C-based SBF programs");
+        println!("cargo:warning=(not a warning) Building C-based on-chain programs");
         assert!(Command::new("make")
             .current_dir("c")
             .arg("programs")
@@ -110,7 +110,7 @@ fn main() {
             "upgraded",
         ];
         for program in rust_programs.iter() {
-            println!("cargo:warning=(not a warning) Building Rust-based SBF programs: solana_sbf_rust_{program}");
+            println!("cargo:warning=(not a warning) Building Rust-based on-chain programs: solana_sbf_rust_{program}");
             assert!(Command::new("../../cargo-build-sbf")
                 .args([
                     "--manifest-path",
