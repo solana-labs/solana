@@ -34,6 +34,14 @@ use {
 */
 pub const DEFAULT_CAPACITY_POW2: u8 = 5;
 
+#[derive(Debug, PartialEq, Eq)]
+enum IsAllocatedFlagLocation {
+    /// 'allocated' flag per entry is stored in a u64 header per entry
+    InHeader,
+}
+
+const IS_ALLOCATED_FLAG_LOCATION: IsAllocatedFlagLocation = IsAllocatedFlagLocation::InHeader;
+
 /// A Header UID of 0 indicates that the header is unlocked
 const UID_UNLOCKED: Uid = 0;
 /// uid in maps is 1 or 0, where 0 is empty, 1 is in-use
@@ -103,7 +111,7 @@ impl BucketStorage {
         stats: Arc<BucketStats>,
         count: Arc<AtomicU64>,
     ) -> Self {
-        let cell_size = elem_size * num_elems + std::mem::size_of::<Header>() as u64;
+        let cell_size = elem_size * num_elems + Self::header_size() as u64;
         let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &stats);
         Self {
             path,
@@ -113,6 +121,13 @@ impl BucketStorage {
             capacity_pow2,
             stats,
             max_search,
+        }
+    }
+
+    /// non-zero if there is a header allocated prior to each element to store the 'allocated' bit
+    fn header_size() -> usize {
+        match IS_ALLOCATED_FLAG_LOCATION {
+            IsAllocatedFlagLocation::InHeader => std::mem::size_of::<Header>(),
         }
     }
 
@@ -141,17 +156,16 @@ impl BucketStorage {
 
     /// return ref to header of item 'ix' in mmapped file
     fn header_ptr(&self, ix: u64) -> &Header {
-        let ix = (ix * self.cell_size) as usize;
-        let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
-        unsafe {
-            let hdr = hdr_slice.as_ptr() as *const Header;
-            hdr.as_ref().unwrap()
-        }
+        self.header_mut_ptr(ix)
     }
 
     /// return ref to header of item 'ix' in mmapped file
     #[allow(clippy::mut_from_ref)]
     fn header_mut_ptr(&self, ix: u64) -> &mut Header {
+        assert_eq!(
+            IS_ALLOCATED_FLAG_LOCATION,
+            IsAllocatedFlagLocation::InHeader
+        );
         let ix = (ix * self.cell_size) as usize;
         let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         unsafe {
@@ -164,16 +178,24 @@ impl BucketStorage {
     pub fn is_free(&self, ix: u64) -> bool {
         // note that the terminology in the implementation is locked or unlocked.
         // but our api is allocate/free
-        self.header_ptr(ix).is_unlocked()
+        match IS_ALLOCATED_FLAG_LOCATION {
+            IsAllocatedFlagLocation::InHeader => self.header_ptr(ix).is_unlocked(),
+        }
+    }
+
+    fn try_lock(&mut self, ix: u64) -> bool {
+        match IS_ALLOCATED_FLAG_LOCATION {
+            IsAllocatedFlagLocation::InHeader => self.header_mut_ptr(ix).try_lock(),
+        }
     }
 
     /// 'is_resizing' true if caller is resizing the index (so don't increment count)
     /// 'is_resizing' false if caller is adding an item to the index (so increment count)
-    pub fn allocate(&self, ix: u64, is_resizing: bool) -> Result<(), BucketStorageError> {
+    pub fn allocate(&mut self, ix: u64, is_resizing: bool) -> Result<(), BucketStorageError> {
         assert!(ix < self.capacity(), "allocate: bad index size");
         let mut e = Err(BucketStorageError::AlreadyAllocated);
         //debug!("ALLOC {} {}", ix, uid);
-        if self.header_mut_ptr(ix).try_lock() {
+        if self.try_lock(ix) {
             e = Ok(());
             if !is_resizing {
                 self.count.fetch_add(1, Ordering::Relaxed);
@@ -184,13 +206,16 @@ impl BucketStorage {
 
     pub fn free(&mut self, ix: u64) {
         assert!(ix < self.capacity(), "bad index size");
-        self.header_mut_ptr(ix).unlock();
+        match IS_ALLOCATED_FLAG_LOCATION {
+            IsAllocatedFlagLocation::InHeader => {
+                self.header_mut_ptr(ix).unlock();
+            }
+        }
         self.count.fetch_sub(1, Ordering::Relaxed);
     }
 
     pub fn get<T: Sized>(&self, ix: u64) -> &T {
-        assert!(ix < self.capacity(), "bad index size");
-        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
+        let start = self.get_start_offset(ix);
         let end = start + std::mem::size_of::<T>();
         let item_slice: &[u8] = &self.mmap[start..end];
         unsafe {
@@ -203,10 +228,14 @@ impl BucketStorage {
         &[]
     }
 
-    pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
+    fn get_start_offset(&self, ix: u64) -> usize {
         assert!(ix < self.capacity(), "bad index size");
         let ix = self.cell_size * ix;
-        let start = ix as usize + std::mem::size_of::<Header>();
+        ix as usize + Self::header_size()
+    }
+
+    pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
+        let start = self.get_start_offset(ix);
         let end = start + std::mem::size_of::<T>() * len as usize;
         //debug!("GET slice {} {}", start, end);
         let item_slice: &[u8] = &self.mmap[start..end];
@@ -218,8 +247,7 @@ impl BucketStorage {
 
     #[allow(clippy::mut_from_ref)]
     pub fn get_mut<T: Sized>(&self, ix: u64) -> &mut T {
-        assert!(ix < self.capacity(), "bad index size");
-        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
+        let start = self.get_start_offset(ix);
         let end = start + std::mem::size_of::<T>();
         let item_slice: &[u8] = &self.mmap[start..end];
         unsafe {
@@ -230,9 +258,7 @@ impl BucketStorage {
 
     #[allow(clippy::mut_from_ref)]
     pub fn get_mut_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &mut [T] {
-        assert!(ix < self.capacity(), "bad index size");
-        let ix = self.cell_size * ix;
-        let start = ix as usize + std::mem::size_of::<Header>();
+        let start = self.get_start_offset(ix);
         let end = start + std::mem::size_of::<T>() * len as usize;
         //debug!("GET mut slice {} {}", start, end);
         let item_slice: &[u8] = &self.mmap[start..end];
@@ -306,16 +332,23 @@ impl BucketStorage {
         let increment = self.capacity_pow2 - old_bucket.capacity_pow2;
         let index_grow = 1 << increment;
         (0..old_cap as usize).for_each(|i| {
-            let old_ix = i * old_bucket.cell_size as usize;
-            let new_ix = old_ix * index_grow;
-            let dst_slice: &[u8] = &self.mmap[new_ix..new_ix + old_bucket.cell_size as usize];
-            let src_slice: &[u8] = &old_map[old_ix..old_ix + old_bucket.cell_size as usize];
+            if !old_bucket.is_free(i as u64) {
+                match IS_ALLOCATED_FLAG_LOCATION {
+                    IsAllocatedFlagLocation::InHeader => {
+                        // nothing to do when bit is in header
+                    }
+                }
+                let old_ix = i * old_bucket.cell_size as usize;
+                let new_ix = old_ix * index_grow;
+                let dst_slice: &[u8] = &self.mmap[new_ix..new_ix + old_bucket.cell_size as usize];
+                let src_slice: &[u8] = &old_map[old_ix..old_ix + old_bucket.cell_size as usize];
 
-            unsafe {
-                let dst = dst_slice.as_ptr() as *mut u8;
-                let src = src_slice.as_ptr() as *const u8;
-                std::ptr::copy_nonoverlapping(src, dst, old_bucket.cell_size as usize);
-            };
+                unsafe {
+                    let dst = dst_slice.as_ptr() as *mut u8;
+                    let src = src_slice.as_ptr() as *const u8;
+                    std::ptr::copy_nonoverlapping(src, dst, old_bucket.cell_size as usize);
+                };
+            }
         });
         m.stop();
         // resized so update total file size
