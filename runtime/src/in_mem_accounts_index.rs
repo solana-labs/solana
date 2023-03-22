@@ -1109,6 +1109,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
             return;
         }
 
+        Self::update_stat(&self.stats().buckets_scanned, 1);
         // scan in-mem map for items that we may evict
         let FlushScanResult {
             mut evictions_age_possible,
