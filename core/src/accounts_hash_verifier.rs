@@ -242,7 +242,13 @@ impl AccountsHashVerifier {
                 (accounts_hash.into(), accounts_hash, None)
             }
             CalcAccountsHashFlavor::Incremental => {
-                todo!()
+                let (incremental_accounts_hash, _capitalization) =
+                    Self::_calculate_incremental_accounts_hash(accounts_package, 0); // <-- TEMPORARY base_slot
+                (
+                    incremental_accounts_hash.into(),
+                    AccountsHash(Hash::default()), // value does not matter; not used for incremental snapshots
+                    None,                          //<-- TEMPORARY
+                )
             }
         };
 
@@ -356,6 +362,13 @@ impl AccountsHashVerifier {
         );
 
         (accounts_hash, lamports)
+    }
+
+    fn _calculate_incremental_accounts_hash(
+        _accounts_package: &AccountsPackage,
+        _base_slot: Slot,
+    ) -> (IncrementalAccountsHash, /*capitalization*/ u64) {
+        todo!()
     }
 
     fn save_epoch_accounts_hash(
