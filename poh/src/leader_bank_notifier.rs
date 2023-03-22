@@ -71,8 +71,8 @@ impl LeaderBankNotifier {
 
     /// If the status is `InProgress`, immediately return a weak reference to the bank.
     /// Otherwise, wait up to the `timeout` for the status to become `InProgress`.
-    /// Returns `None` if the timeout is reached.
-    pub fn get_or_wait_for_in_progress(&self, timeout: Duration) -> Option<Weak<Bank>> {
+    /// If the timeout is reached, the weak reference is unupgradable.
+    pub fn get_or_wait_for_in_progress(&self, timeout: Duration) -> Weak<Bank> {
         let state = self.state.lock().unwrap();
         let (state, wait_timeout_result) = self
             .condvar
@@ -81,7 +81,9 @@ impl LeaderBankNotifier {
             })
             .unwrap();
 
-        (!wait_timeout_result.timed_out()).then(|| state.bank.clone())
+        (!wait_timeout_result.timed_out())
+            .then(|| state.bank.clone())
+            .unwrap_or_else(Weak::new)
     }
 
     /// Wait for next notification for a completed leader slot.
@@ -131,6 +133,7 @@ mod tests {
 
         assert!(leader_bank_notifier
             .get_or_wait_for_in_progress(Duration::from_millis(1))
+            .upgrade()
             .is_none());
     }
 
