@@ -14,6 +14,7 @@ use {
             AccountsHash, AccountsHashEnum, CalcAccountsHashConfig, HashStats,
             IncrementalAccountsHash,
         },
+        bank::BankIncrementalSnapshotPersistence,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
             self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
@@ -242,12 +243,27 @@ impl AccountsHashVerifier {
                 (accounts_hash.into(), accounts_hash, None)
             }
             CalcAccountsHashFlavor::Incremental => {
-                let (incremental_accounts_hash, _capitalization) =
-                    Self::_calculate_incremental_accounts_hash(accounts_package, 0); // <-- TEMPORARY base_slot
+                let AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(base_slot)) = accounts_package.package_type else {
+                    panic!("Calculating incremental accounts hash requires a base slot");
+                };
+                let (base_accounts_hash, base_capitalization) = accounts_package
+                    .accounts
+                    .accounts_db
+                    .get_accounts_hash(base_slot)
+                    .expect("incremental snapshot requires accounts hash and capitalization from the full snapshot it is based on");
+                let (incremental_accounts_hash, incremental_capitalization) =
+                    Self::_calculate_incremental_accounts_hash(accounts_package, base_slot);
+                let bank_incremental_snapshot_persistence = BankIncrementalSnapshotPersistence {
+                    full_slot: base_slot,
+                    full_hash: base_accounts_hash.into(),
+                    full_capitalization: base_capitalization,
+                    incremental_hash: incremental_accounts_hash.into(),
+                    incremental_capitalization,
+                };
                 (
                     incremental_accounts_hash.into(),
                     AccountsHash(Hash::default()), // value does not matter; not used for incremental snapshots
-                    None,                          //<-- TEMPORARY
+                    Some(bank_incremental_snapshot_persistence),
                 )
             }
         };
@@ -257,7 +273,7 @@ impl AccountsHashVerifier {
                 snapshot_info.snapshot_links.path(),
                 slot,
                 &accounts_hash_for_reserialize,
-                bank_incremental_snapshot_persistence,
+                bank_incremental_snapshot_persistence.as_ref(),
             );
         }
 
