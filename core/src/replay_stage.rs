@@ -46,7 +46,10 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
-    solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+    solana_poh::{
+        leader_bank_notifier::LeaderBankNotifier,
+        poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+    },
     solana_program_runtime::timings::ExecuteTimings,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
@@ -58,7 +61,6 @@ use {
         bank::{Bank, NewBankOptions},
         bank_forks::{BankForks, MAX_ROOT_DISTANCE_FOR_VOTE_ONLY},
         commitment::BlockCommitmentCache,
-        leader_bank_notifier::LeaderBankNotifier,
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
     },

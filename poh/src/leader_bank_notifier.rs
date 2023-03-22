@@ -1,5 +1,5 @@
 use {
-    crate::bank::Bank,
+    solana_runtime::bank::Bank,
     solana_sdk::slot_history::Slot,
     std::{
         sync::{Arc, Condvar, Mutex, Weak},
