@@ -123,7 +123,7 @@ use {
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
-#[derive(Clone, Debug, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
 pub enum ReplayingBackend {
     #[default]
@@ -137,7 +137,7 @@ impl ReplayingBackend {
     }
 }
 
-#[derive(Clone, Debug, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
 pub enum BankingBackend {
     #[default]
@@ -719,7 +719,7 @@ impl Validator {
             last_full_snapshot_slot,
         );
         info!(
-            "Chosen backends: replaying: {:?}, banking: {:?}",
+            "Chosen backends: replaying: {}, banking: {}",
             config.replaying_backend, config.banking_backend
         );
 

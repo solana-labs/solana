@@ -1250,7 +1250,7 @@ fn load_bank_forks(
     let replaying_backend = value_t_or_exit!(arg_matches, "replaying_backend", ReplayingBackend);
     let banking_backend = value_t_or_exit!(arg_matches, "banking_backend", BankingBackend);
     info!(
-        "Chosen backends: replaying: {:?}, banking: {:?}",
+        "Chosen backends: replaying: {}, banking: {}",
         replaying_backend, banking_backend
     );
 
