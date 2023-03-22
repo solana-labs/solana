@@ -156,6 +156,8 @@ impl AncestorHashesService {
         repair_info: RepairInfo,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
+
+        info!("Start AncestorHashesService repair_quic_config {}", repair_quic_config.is_some());
         let outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>> =
             Arc::new(RwLock::new(OutstandingAncestorHashesRepairs::default()));
         let (response_sender, response_receiver) = unbounded();
