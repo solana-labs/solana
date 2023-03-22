@@ -188,6 +188,7 @@ struct ServeRepairStats {
     orphan: usize,
     pong: usize,
     ancestor_hashes: usize,
+    window_index_misses: usize,
     ping_cache_check_failed: usize,
     pings_sent: usize,
     decode_time_us: u64,
@@ -381,17 +382,18 @@ impl ServeRepair {
                 }
                 | RepairProtocol::LegacyWindowIndexWithNonce(_, slot, shred_index, nonce) => {
                     stats.window_index += 1;
-                    (
-                        Self::run_window_request(
-                            recycler,
-                            from_addr,
-                            blockstore,
-                            *slot,
-                            *shred_index,
-                            *nonce,
-                        ),
-                        "WindowIndexWithNonce",
-                    )
+                    let batch = Self::run_window_request(
+                        recycler,
+                        from_addr,
+                        blockstore,
+                        *slot,
+                        *shred_index,
+                        *nonce,
+                    );
+                    if batch.is_none() {
+                        stats.window_index_misses += 1;
+                    }
+                    (batch, "WindowIndexWithNonce")
                 }
                 RepairProtocol::HighestWindowIndex {
                     header: RepairRequestHeader { nonce, .. },
@@ -726,6 +728,7 @@ impl ServeRepair {
                 i64
             ),
             ("pong", stats.pong, i64),
+            ("window_index_misses", stats.window_index_misses, i64),
             (
                 "ping_cache_check_failed",
                 stats.ping_cache_check_failed,
@@ -1214,8 +1217,6 @@ impl ServeRepair {
             from_addr,
             nonce,
         )?;
-
-        inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
         Some(PacketBatch::new_unpinned_with_recycler_data(
             recycler,
             "run_window_request",
