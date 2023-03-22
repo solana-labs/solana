@@ -128,9 +128,18 @@ mod tests {
     #[test]
     fn test_leader_bank_notifier_get_or_wait_for_in_progress_timeout() {
         let leader_bank_notifier = Arc::new(LeaderBankNotifier::default());
-        leader_bank_notifier.set_in_progress(&Arc::new(Bank::default_for_tests()));
-        leader_bank_notifier.set_completed(1);
 
+        // Uninitialized
+        assert!(leader_bank_notifier
+            .get_or_wait_for_in_progress(Duration::from_millis(1))
+            .upgrade()
+            .is_none());
+
+        let bank = Arc::new(Bank::default_for_tests());
+        leader_bank_notifier.set_in_progress(&bank);
+        leader_bank_notifier.set_completed(bank.slot());
+
+        // Completed
         assert!(leader_bank_notifier
             .get_or_wait_for_in_progress(Duration::from_millis(1))
             .upgrade()
@@ -145,9 +154,10 @@ mod tests {
         let jh = std::thread::spawn(move || {
             let _slot = leader_bank_notifier2.wait_for_completed(Duration::from_secs(1));
         });
-        leader_bank_notifier.set_in_progress(&Arc::new(Bank::default_for_tests()));
+        let bank = Arc::new(Bank::default_for_tests());
+        leader_bank_notifier.set_in_progress(&bank);
         std::thread::sleep(Duration::from_millis(10));
-        leader_bank_notifier.set_completed(1);
+        leader_bank_notifier.set_completed(bank.slot());
 
         jh.join().unwrap();
     }
