@@ -17,7 +17,7 @@ use {
         shred::{self, ShredId},
     },
     solana_measure::measure::Measure,
-    solana_perf::deduper::Deduper,
+    solana_perf::sigverify::Deduper,
     solana_rayon_threadlimit::get_thread_count,
     solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -374,12 +374,6 @@ pub fn retransmitter(
     let mut rng = rand::thread_rng();
     let mut shred_deduper = ShredDeduper::<2>::new(&mut rng, DEDUPER_NUM_BITS);
     let mut stats = RetransmitStats::new(Instant::now());
-<<<<<<< HEAD
-    let mut shreds_received = LruCache::<ShredId, _>::new(DEFAULT_LRU_SIZE);
-    let mut packet_hasher = PacketHasher::default();
-=======
-    #[allow(clippy::manual_clamp)]
->>>>>>> 5d9aba554 (increases retransmit-stage deduper capacity and reset-cycle (#30758))
     let num_threads = get_thread_count().min(8).max(sockets.len());
     let thread_pool = ThreadPoolBuilder::new()
         .num_threads(num_threads)
