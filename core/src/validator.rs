@@ -148,7 +148,7 @@ impl BlockVerificationMethod {
 #[strum(serialize_all = "kebab-case")]
 pub enum BlockProductionMethod {
     #[default]
-    MultiIterator,
+    ThreadLocalMultiIterator,
 }
 
 impl BlockProductionMethod {
