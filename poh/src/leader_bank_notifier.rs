@@ -36,13 +36,12 @@ struct SlotAndBankWithStatus {
 }
 
 impl LeaderBankNotifier {
-    /// Set the status to `InProgress` and notify any waiting threads
-    /// if the status was not already `InProgress`.
+    /// Set the status to `InProgress` and notify any waiting threads.
+    /// Panics if the status is not `StandBy` - cannot have multiple
+    /// leader banks in progress.
     pub fn set_in_progress(&self, bank: &Arc<Bank>) {
         let mut state = self.state.lock().unwrap();
-        if matches!(state.status, Status::InProgress) {
-            return;
-        }
+        assert_eq!(state.status, Status::StandBy);
 
         *state = SlotAndBankWithStatus {
             status: Status::InProgress,
