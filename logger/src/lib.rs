@@ -2,7 +2,10 @@
 
 use {
     lazy_static::lazy_static,
-    std::sync::{Arc, RwLock},
+    std::{
+        io::Write,
+        sync::{Arc, RwLock},
+    },
 };
 
 lazy_static! {
@@ -52,6 +55,28 @@ pub fn setup_with_default(filter: &str) {
 // Configures logging with the default filter "error" if RUST_LOG is not set
 pub fn setup() {
     setup_with_default("error");
+}
+
+// When we have multi-threading tests like local-clusters, it's nice to print
+ // the thread id at the beginning, so you can filter out logs belonging to
+ // different threads.
+ pub fn setup_logging_with_thread_id(filter: &str) {
+    let logger = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or(filter))
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{:?} [{} {} {}:{}] {}",
+                std::thread::current().id(),
+                buf.timestamp_nanos(),
+                buf.default_level_style(record.level())
+                    .value(record.level()),
+                record.target(),
+                record.line().unwrap_or(0),
+                record.args()
+            )
+        })
+        .build();
+    replace_logger(logger);
 }
 
 // Configures file logging with a default filter if RUST_LOG is not set
