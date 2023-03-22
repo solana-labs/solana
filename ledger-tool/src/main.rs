@@ -27,7 +27,7 @@ use {
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
-        validator::{BankingBackend, ReplayingBackend},
+        validator::{BlockProductionMethod, BlockVerificationMethod},
     },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
@@ -1247,11 +1247,19 @@ fn load_bank_forks(
             accounts_update_notifier,
             &Arc::default(),
         );
-    let replaying_backend = value_t_or_exit!(arg_matches, "replaying_backend", ReplayingBackend);
-    let banking_backend = value_t_or_exit!(arg_matches, "banking_backend", BankingBackend);
+    let block_verification_method = value_t_or_exit!(
+        arg_matches,
+        "block_verification_method",
+        BlockVerificationMethod
+    );
+    let block_production_method = value_t_or_exit!(
+        arg_matches,
+        "block_production_method",
+        BlockProductionMethod
+    );
     info!(
-        "Chosen backends: replaying: {}, banking: {}",
-        replaying_backend, banking_backend
+        "Using: block-verification-method: {}, block-production-method: {}",
+        block_verification_method, block_production_method
     );
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
@@ -1647,9 +1655,9 @@ fn main() {
         .to_string();
     let default_graph_vote_account_mode = GraphVoteAccountMode::default();
 
-    let (replaying_backend_help, banking_backend_help) = (
-        &ReplayingBackend::cli_message(),
-        &BankingBackend::cli_message(),
+    let (block_verification_method_help, block_production_method_help) = (
+        &BlockVerificationMethod::cli_message(),
+        &BlockProductionMethod::cli_message(),
     );
 
     let mut measure_total_execution_time = Measure::start("ledger tool");
@@ -1710,24 +1718,24 @@ fn main() {
                 .help("Use DIR for separate incremental snapshot location"),
         )
         .arg(
-            Arg::with_name("replaying_backend")
-                .long("replaying-backend")
-                .value_name("BACKEND")
+            Arg::with_name("block_verification_method")
+                .long("block-verification-method")
+                .value_name("METHOD")
                 .takes_value(true)
-                .possible_values(ReplayingBackend::cli_names())
+                .possible_values(BlockVerificationMethod::cli_names())
                 .global(true)
                 .hidden(hidden_unless_forced())
-                .help(replaying_backend_help),
+                .help(block_verification_method_help),
         )
         .arg(
-            Arg::with_name("banking_backend")
-                .long("banking-backend")
-                .value_name("BACKEND")
+            Arg::with_name("block_production_method")
+                .long("block-production-method")
+                .value_name("METHOD")
                 .takes_value(true)
-                .possible_values(BankingBackend::cli_names())
+                .possible_values(BlockProductionMethod::cli_names())
                 .global(true)
                 .hidden(hidden_unless_forced())
-                .help(banking_backend_help),
+                .help(block_production_method_help),
         )
         .arg(
             Arg::with_name("output_format")

@@ -125,20 +125,20 @@ const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
-pub enum ReplayingBackend {
+pub enum BlockVerificationMethod {
     #[default]
     BlockstoreProcessor,
     UnifiedScheduler,
 }
 
-impl ReplayingBackend {
+impl BlockVerificationMethod {
     pub const fn cli_names() -> &'static [&'static str] {
         Self::VARIANTS
     }
 
     pub fn cli_message() -> String {
         format!(
-            "Switch transaction scheduling backend for validating ledger entries [default: {}]",
+            "Switch transaction scheduling method for verifying ledger entries [default: {}]",
             Self::default()
         )
     }
@@ -146,19 +146,19 @@ impl ReplayingBackend {
 
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
-pub enum BankingBackend {
+pub enum BlockProductionMethod {
     #[default]
     MultiIterator,
 }
 
-impl BankingBackend {
+impl BlockProductionMethod {
     pub const fn cli_names() -> &'static [&'static str] {
         Self::VARIANTS
     }
 
     pub fn cli_message() -> String {
         format!(
-            "Switch transaction scheduling backend for generating ledger entries [default: {}]",
+            "Switch transaction scheduling method for producing ledger entries [default: {}]",
             Self::default()
         )
     }
@@ -225,8 +225,8 @@ pub struct ValidatorConfig {
     pub runtime_config: RuntimeConfig,
     pub replay_slots_concurrently: bool,
     pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
-    pub replaying_backend: ReplayingBackend,
-    pub banking_backend: BankingBackend,
+    pub block_verification_method: BlockVerificationMethod,
+    pub block_production_method: BlockProductionMethod,
 }
 
 impl Default for ValidatorConfig {
@@ -291,8 +291,8 @@ impl Default for ValidatorConfig {
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
             banking_trace_dir_byte_limit: 0,
-            replaying_backend: ReplayingBackend::default(),
-            banking_backend: BankingBackend::default(),
+            block_verification_method: BlockVerificationMethod::default(),
+            block_production_method: BlockProductionMethod::default(),
         }
     }
 }
@@ -733,8 +733,8 @@ impl Validator {
             last_full_snapshot_slot,
         );
         info!(
-            "Chosen backends: replaying: {}, banking: {}",
-            config.replaying_backend, config.banking_backend
+            "Using: block-verification-method: {}, block-production-method: {}",
+            config.block_verification_method, config.block_production_method
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);

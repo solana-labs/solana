@@ -15,8 +15,8 @@ use {
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{
-            is_snapshot_config_valid, BankingBackend, ReplayingBackend, Validator, ValidatorConfig,
-            ValidatorStartProgress,
+            is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod, Validator,
+            ValidatorConfig, ValidatorStartProgress,
         },
     },
     solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},
@@ -1524,9 +1524,16 @@ pub fn main() {
     }
 
     configure_banking_trace_dir_byte_limit(&mut validator_config, &matches);
-    validator_config.replaying_backend =
-        value_t_or_exit!(matches, "replaying_backend", ReplayingBackend);
-    validator_config.banking_backend = value_t_or_exit!(matches, "banking_backend", BankingBackend);
+    validator_config.block_verification_method = value_t_or_exit!(
+        matches,
+        "block_verification_method",
+        BlockVerificationMethod
+    );
+    validator_config.block_production_method = value_t_or_exit!(
+        matches, // comment to align formatting...
+        "block_production_method",
+        BlockProductionMethod
+    );
 
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {
