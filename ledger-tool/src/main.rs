@@ -1247,16 +1247,18 @@ fn load_bank_forks(
             accounts_update_notifier,
             &Arc::default(),
         );
-    let block_verification_method = value_t_or_exit!(
+    let block_verification_method = value_t!(
         arg_matches,
         "block_verification_method",
         BlockVerificationMethod
-    );
-    let block_production_method = value_t_or_exit!(
+    )
+    .unwrap_or_default();
+    let block_production_method = value_t!(
         arg_matches,
         "block_production_method",
         BlockProductionMethod
-    );
+    )
+    .unwrap_or_default();
     info!(
         "Using: block-verification-method: {}, block-production-method: {}",
         block_verification_method, block_production_method

@@ -1524,16 +1524,18 @@ pub fn main() {
     }
 
     configure_banking_trace_dir_byte_limit(&mut validator_config, &matches);
-    validator_config.block_verification_method = value_t_or_exit!(
+    validator_config.block_verification_method = value_t!(
         matches,
         "block_verification_method",
         BlockVerificationMethod
-    );
-    validator_config.block_production_method = value_t_or_exit!(
+    )
+    .unwrap_or_default();
+    validator_config.block_production_method = value_t!(
         matches, // comment to align formatting...
         "block_production_method",
         BlockProductionMethod
-    );
+    )
+    .unwrap_or_default();
 
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {
