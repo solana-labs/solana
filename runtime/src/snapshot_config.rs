@@ -1,5 +1,5 @@
 use {
-    crate::snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+    crate::snapshot_utils::{self, ArchiveFormat, SnapshotFrom, SnapshotVersion},
     solana_sdk::clock::Slot,
     std::{num::NonZeroUsize, path::PathBuf},
 };
@@ -43,6 +43,9 @@ pub struct SnapshotConfig {
 
     // Thread niceness adjustment for snapshot packager service
     pub packager_thread_niceness_adj: i8,
+
+    /// The snapshot source
+    pub snapshot_from: SnapshotFrom,
 }
 
 impl Default for SnapshotConfig {
@@ -64,6 +67,7 @@ impl Default for SnapshotConfig {
                 snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             accounts_hash_debug_verify: false,
             packager_thread_niceness_adj: 0,
+            snapshot_from: SnapshotFrom::Archive,
         }
     }
 }

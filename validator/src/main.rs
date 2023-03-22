@@ -43,7 +43,8 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
-            self, create_all_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
+            self, ArchiveFormat, SnapshotFrom,
+            SnapshotVersion,
         },
     },
     solana_sdk::{
@@ -1401,7 +1402,7 @@ pub fn main() {
     });
 
     let (account_run_paths, account_snapshot_paths) =
-        create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
+        snapshot_utils::create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
             eprintln!("Error: {err:?}");
             exit(1);
         });
@@ -1509,6 +1510,11 @@ pub fn main() {
             (Slot::MAX, Slot::MAX)
         };
 
+    let snapshot_from = match matches.is_present("snapshot_from_dir") {
+        true => SnapshotFrom::Dir,
+        false => SnapshotFrom::Archive,
+    };
+
     validator_config.snapshot_config = SnapshotConfig {
         usage: if full_snapshot_archive_interval_slots == Slot::MAX {
             SnapshotUsage::LoadOnly
@@ -1526,6 +1532,7 @@ pub fn main() {
         maximum_incremental_snapshot_archives_to_retain,
         accounts_hash_debug_verify: validator_config.accounts_db_test_hash_calculation,
         packager_thread_niceness_adj: snapshot_packager_niceness_adj,
+        snapshot_from,
     };
 
     validator_config.accounts_hash_interval_slots =

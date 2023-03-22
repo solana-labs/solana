@@ -15,8 +15,9 @@ use {
     solana_metrics::datapoint_info,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
-        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::SnapshotType,
-        snapshot_utils,
+        snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_package::SnapshotType,
+        snapshot_utils::{self, SnapshotFrom},
     },
     solana_sdk::{
         clock::Slot,
@@ -416,20 +417,22 @@ pub fn attempt_download_genesis_and_snapshot(
         .map_err(|err| format!("Failed to get RPC node slot: {err}"))?;
     info!("RPC node root slot: {rpc_client_slot}");
 
-    download_snapshots(
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
-        validator_config,
-        bootstrap_config,
-        use_progress_bar,
-        maximum_local_snapshot_age,
-        start_progress,
-        minimal_snapshot_download_speed,
-        maximum_snapshot_download_abort,
-        download_abort_count,
-        snapshot_hash,
-        rpc_contact_info,
-    )?;
+    if validator_config.snapshot_config.snapshot_from != SnapshotFrom::Dir {
+        download_snapshots(
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
+            validator_config,
+            bootstrap_config,
+            use_progress_bar,
+            maximum_local_snapshot_age,
+            start_progress,
+            minimal_snapshot_download_speed,
+            maximum_snapshot_download_abort,
+            download_abort_count,
+            snapshot_hash,
+            rpc_contact_info,
+        )?;
+    }
 
     if let Some(url) = bootstrap_config.check_vote_account.as_ref() {
         let rpc_client = RpcClient::new(url);
