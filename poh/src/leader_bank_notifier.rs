@@ -95,9 +95,7 @@ impl LeaderBankNotifier {
             let (state, result) = self.condvar.wait_timeout(state, remaining_timeout).unwrap();
             if result.timed_out() {
                 return None;
-            }
-
-            if matches!(state.status, Status::StandBy) {
+            } else if matches!(state.status, Status::StandBy) {
                 return Some(state.slot);
             }
 
