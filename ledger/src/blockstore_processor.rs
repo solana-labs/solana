@@ -132,6 +132,7 @@ fn execute_batch(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     let TransactionBatchWithIndexes {
         batch,
@@ -171,6 +172,18 @@ fn execute_batch(
         ..
     } = tx_results;
 
+    let executed_transactions = execution_results
+        .iter()
+        .zip(batch.sanitized_transactions())
+        .filter_map(|(execution_result, tx)| {
+            if execution_result.was_executed() {
+                Some(tx)
+            } else {
+                None
+            }
+        })
+        .collect_vec();
+
     if let Some(transaction_status_sender) = transaction_status_sender {
         let transactions = batch.sanitized_transactions().to_vec();
         let post_token_balances = if record_token_balances {
@@ -193,6 +206,8 @@ fn execute_batch(
         );
     }
 
+    prioritization_fee_cache.update(bank.clone(), executed_transactions.into_iter());
+
     let first_err = get_first_error(batch, fee_collection_results);
     first_err.map(|(result, _)| result).unwrap_or(Ok(()))
 }
@@ -210,6 +225,7 @@ fn execute_batches_internal(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<ExecuteBatchesInternalMetrics> {
     assert!(!batches.is_empty());
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
@@ -233,6 +249,7 @@ fn execute_batches_internal(
                             replay_vote_sender,
                             &mut timings,
                             log_messages_bytes_limit,
+                            prioritization_fee_cache,
                         )
                     },
                     "execute_batch",
@@ -302,6 +319,7 @@ fn execute_batches(
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     if batches.is_empty() {
         return Ok(());
@@ -383,6 +401,7 @@ fn execute_batches(
         transaction_status_sender,
         replay_vote_sender,
         log_messages_bytes_limit,
+        prioritization_fee_cache,
     )?;
 
     confirmation_timing.process_execute_batches_internal_metrics(execute_batches_internal_metrics);
@@ -480,6 +499,7 @@ fn process_entries_with_callback(
                         replay_vote_sender,
                         confirmation_timing,
                         log_messages_bytes_limit,
+                        prioritization_fee_cache,
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
@@ -513,9 +533,6 @@ fn process_entries_with_callback(
                             batch,
                             transaction_indexes,
                         });
-                        // entry is scheduled to be processed, transactions in it can be used to
-                        // update prioritization fee cache asynchronously.
-                        prioritization_fee_cache.update(bank.clone(), transactions.iter());
                         // done with this entry
                         break;
                     }
@@ -545,6 +562,7 @@ fn process_entries_with_callback(
                             replay_vote_sender,
                             confirmation_timing,
                             log_messages_bytes_limit,
+                            prioritization_fee_cache,
                         )?;
                         batches.clear();
                     }
@@ -559,6 +577,7 @@ fn process_entries_with_callback(
         replay_vote_sender,
         confirmation_timing,
         log_messages_bytes_limit,
+        prioritization_fee_cache,
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
