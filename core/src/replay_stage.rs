@@ -2731,10 +2731,12 @@ impl ReplayStage {
     ) -> bool /* completed a bank */ {
         let active_bank_slots = bank_forks.read().unwrap().active_bank_slots();
         let num_active_banks = active_bank_slots.len();
-        trace!(
-            "{} active bank(s) to replay: {:?}",
+        debug!(
+            "{} active bank(s) to replay: {:?} at {:?} {:?}",
             num_active_banks,
-            active_bank_slots
+            active_bank_slots,
+            my_pubkey,
+            blockstore.ledger_path(),
         );
         if num_active_banks > 0 {
             let replay_result_vec = if num_active_banks > 1 && replay_slots_concurrently {
