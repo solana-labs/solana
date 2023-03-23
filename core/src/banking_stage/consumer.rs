@@ -1623,7 +1623,7 @@ mod tests {
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
-
+            error!("bank tick height: {}", bank.tick_height());
             poh_recorder.write().unwrap().set_bank(&bank, false);
 
             let shreds = entries_to_test_shreds(

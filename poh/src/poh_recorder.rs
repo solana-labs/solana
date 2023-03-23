@@ -854,12 +854,18 @@ impl PohRecorder {
             self.flush_cache_no_tick_us += flush_cache_time.as_us();
             flush_cache_res?;
 
-            let working_bank = self
-                .working_bank
-                .as_mut()
-                .ok_or(PohRecorderError::MaxHeightReached)?;
-            if bank_slot != working_bank.bank.slot() {
-                return Err(PohRecorderError::MaxHeightReached);
+            let Some(working_bank) = self.working_bank.as_mut() else {
+                if bank_slot > self.start_slot() {
+                    return Err(PohRecorderError::MinHeightNotReached);
+                } else {
+                    return Err(PohRecorderError::MaxHeightReached);
+                }
+            };
+
+            match bank_slot.cmp(&working_bank.bank.slot()) {
+                std::cmp::Ordering::Less => return Err(PohRecorderError::MaxHeightReached),
+                std::cmp::Ordering::Greater => return Err(PohRecorderError::MinHeightNotReached),
+                std::cmp::Ordering::Equal => (),
             }
 
             let (mut poh_lock, poh_lock_time) = measure!(self.poh.lock().unwrap(), "poh_lock");
@@ -1367,7 +1373,13 @@ mod tests {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
-            let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+            let parent = Arc::new(Bank::new_for_tests(&genesis_config));
+            let bank = Arc::new(Bank::new_from_parent(
+                &parent,
+                &Pubkey::default(),
+                parent.slot() + 1,
+            ));
+
             let prev_hash = bank.last_blockhash();
             let (mut poh_recorder, _entry_receiver, _record_receiver) = PohRecorder::new(
                 0,
@@ -1393,10 +1405,17 @@ mod tests {
             );
 
             // However we hand over a bad slot so record fails
-            let bad_slot = bank.slot() + 1;
+            assert!(bank.slot() > 0);
+            let expired_slot = bank.slot() - 1;
             assert_matches!(
-                poh_recorder.record(bad_slot, h1, vec![tx.into()]),
+                poh_recorder.record(expired_slot, h1, vec![tx.clone().into()]),
                 Err(PohRecorderError::MaxHeightReached)
+            );
+
+            let future_slot = bank.slot() + 1;
+            assert_matches!(
+                poh_recorder.record(future_slot, h1, vec![tx.into()]),
+                Err(PohRecorderError::MinHeightNotReached)
             );
         }
         Blockstore::destroy(&ledger_path).unwrap();

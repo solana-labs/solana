@@ -571,9 +571,7 @@ mod tests {
         },
         solana_perf::packet::{to_packet_batches, PacketBatch},
         solana_poh::{
-            poh_recorder::{
-                create_test_recorder, PohRecorderError, Record, RecordTransactionsSummary,
-            },
+            poh_recorder::{create_test_recorder, Record},
             poh_service::PohService,
         },
         solana_runtime::{
@@ -973,6 +971,7 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn test_bank_record_transactions() {
         solana_logger::setup();
 
@@ -1002,7 +1001,7 @@ mod tests {
             let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
-            let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
+            let _poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
             poh_recorder.write().unwrap().set_bank(&bank, false);
             let pubkey = solana_sdk::pubkey::new_rand();
@@ -1019,21 +1018,10 @@ mod tests {
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
             assert_eq!(entry.transactions, txs);
 
-            // Once bank is set to a new bank (setting bank.slot() + 1 in record_transactions),
-            // record_transactions should throw MaxHeightReached
+            // Trying to record to a future slot should fail with MinHeightNotReached,
+            // which results in a panic in record_transactions.
             let next_slot = bank.slot() + 1;
-            let RecordTransactionsSummary { result, .. } =
-                recorder.record_transactions(next_slot, txs);
-            assert_matches!(result, Err(PohRecorderError::MaxHeightReached));
-            // Should receive nothing from PohRecorder b/c record failed
-            assert!(entry_receiver.try_recv().is_err());
-
-            poh_recorder
-                .read()
-                .unwrap()
-                .is_exited
-                .store(true, Ordering::Relaxed);
-            let _ = poh_simulator.join();
+            let _ = recorder.record_transactions(next_slot, txs);
         }
         Blockstore::destroy(ledger_path.path()).unwrap();
     }
