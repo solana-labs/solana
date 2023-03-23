@@ -23,7 +23,6 @@ fn nonce_arg<'a>() -> Arg<'a> {
         .long(NONCE_ARG.long)
         .takes_value(true)
         .value_name("PUBKEY")
-        .requires(NONCE_AUTHORITY_ARG.name)
         .validator(|s| is_valid_pubkey(s))
         .help(NONCE_ARG.help)
 }
