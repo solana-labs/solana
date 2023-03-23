@@ -163,6 +163,28 @@ pub enum ReplicaTransactionInfoVersions<'a> {
 }
 
 #[derive(Clone, Debug)]
+pub struct ReplicaEntryInfo<'a> {
+    /// The slot number of the block containing this Entry
+    pub slot: Slot,
+    /// The Entry's index in the block
+    pub index: usize,
+    /// The number of hashes since the previous Entry
+    pub num_hashes: u64,
+    /// The Entry's SHA-256 hash, generated from the previous Entry's hash with
+    /// `solana_entry::entry::next_hash()`
+    pub hash: &'a [u8],
+    /// The number of executed transactions in the Entry
+    pub executed_transaction_count: u64,
+}
+
+/// A wrapper to future-proof ReplicaEntryInfo handling. To make a change to the structure of
+/// ReplicaEntryInfo, add an new enum variant wrapping a newer version, which will force plugin
+/// implementations to handle the change.
+pub enum ReplicaEntryInfoVersions<'a> {
+    V0_0_1(&'a ReplicaEntryInfo<'a>),
+}
+
+#[derive(Clone, Debug)]
 pub struct ReplicaBlockInfo<'a> {
     pub slot: Slot,
     pub blockhash: &'a str,
@@ -303,6 +325,12 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
         transaction: ReplicaTransactionInfoVersions,
         slot: Slot,
     ) -> Result<()> {
+        Ok(())
+    }
+
+    /// Called when an entry is executed.
+    #[allow(unused_variables)]
+    fn notify_entry(&self, entry: ReplicaEntryInfoVersions) -> Result<()> {
         Ok(())
     }
 
