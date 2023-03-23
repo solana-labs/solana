@@ -69,11 +69,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
 
     fn notify_end_of_restore_from_snapshot(&self) {
         let plugin_manager = self.plugin_manager.read().unwrap();
-        if plugin_manager.geyser_plugins.is_empty() {
-            return;
-        }
-
-        for plugin in plugin_manager.geyser_plugins.iter() {
+        for plugin in plugin_manager.geyser_plugins() {
             let mut measure = Measure::start("geyser-plugin-end-of-restore-from-snapshot");
             match plugin.notify_end_of_startup() {
                 Err(err) => {
@@ -147,11 +143,9 @@ impl AccountsUpdateNotifierImpl {
     ) {
         let mut measure2 = Measure::start("geyser-plugin-notify_plugins_of_account_update");
         let plugin_manager = self.plugin_manager.read().unwrap();
-
-        if plugin_manager.geyser_plugins.is_empty() {
-            return;
-        }
-        for plugin in plugin_manager.geyser_plugins.iter() {
+        let mut count = 0;
+        for plugin in plugin_manager.geyser_plugins() {
+            count += 1;
             let mut measure = Measure::start("geyser-plugin-update-account");
             match plugin.update_account(
                 ReplicaAccountInfoVersions::V0_0_3(&account),
@@ -183,6 +177,9 @@ impl AccountsUpdateNotifierImpl {
                 100000,
                 100000
             );
+        }
+        if count == 0 {
+            return;
         }
         measure2.stop();
         inc_new_counter_debug!(

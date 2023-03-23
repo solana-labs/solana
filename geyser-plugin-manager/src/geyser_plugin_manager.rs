@@ -7,21 +7,49 @@ use {
         bpf_tracer_plugin_interface::BpfTracerPlugin, BpfTracerPluginManager,
     },
     solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin,
-    std::path::Path,
+    std::{error::Error, path::Path},
 };
+
+#[derive(Debug)]
+pub enum Plugin {
+    Geyser(Box<dyn GeyserPlugin>),
+    BpfTracer(Box<dyn BpfTracerPlugin>),
+}
+
+impl Plugin {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Plugin::Geyser(plugin) => plugin.name(),
+            Plugin::BpfTracer(plugin) => plugin.name(),
+        }
+    }
+
+    pub fn on_load(&mut self, config_file: &str) -> Result<(), Box<dyn Error>> {
+        match self {
+            Plugin::Geyser(plugin) => plugin.on_load(config_file)?,
+            Plugin::BpfTracer(plugin) => plugin.on_load(config_file)?,
+        }
+        Ok(())
+    }
+
+    pub fn on_unload(&mut self) {
+        match self {
+            Plugin::Geyser(plugin) => plugin.on_unload(),
+            Plugin::BpfTracer(plugin) => plugin.on_unload(),
+        }
+    }
+}
 
 #[derive(Default, Debug)]
 pub struct GeyserPluginManager {
-    pub geyser_plugins: Vec<Box<dyn GeyserPlugin>>,
-    pub bpf_tracer_plugins: Vec<Box<dyn BpfTracerPlugin>>,
+    pub plugins: Vec<Plugin>,
     libs: Vec<Library>,
 }
 
 impl GeyserPluginManager {
     pub fn new() -> Self {
         GeyserPluginManager {
-            geyser_plugins: Vec::default(),
-            bpf_tracer_plugins: Vec::default(),
+            plugins: Vec::default(),
             libs: Vec::default(),
         }
     }
@@ -29,13 +57,8 @@ impl GeyserPluginManager {
     /// Unload all plugins and loaded plugin libraries, making sure to fire
     /// their `on_plugin_unload()` methods so they can do any necessary cleanup.
     pub fn unload(&mut self) {
-        for mut plugin in self.geyser_plugins.drain(..) {
-            info!("Unloading Geyser plugin for {:?}", plugin.name());
-            plugin.on_unload();
-        }
-
-        for mut plugin in self.bpf_tracer_plugins.drain(..) {
-            info!("Unloading BPF Tracer plugin for {:?}", plugin.name());
+        for mut plugin in self.plugins.drain(..) {
+            info!("Unloading plugin for {:?}", plugin.name());
             plugin.on_unload();
         }
 
@@ -46,7 +69,7 @@ impl GeyserPluginManager {
 
     /// Check if there is any plugin interested in account data
     pub fn account_data_notifications_enabled(&self) -> bool {
-        for plugin in &self.geyser_plugins {
+        for plugin in self.geyser_plugins() {
             if plugin.account_data_notifications_enabled() {
                 return true;
             }
@@ -56,7 +79,7 @@ impl GeyserPluginManager {
 
     /// Check if there is any plugin interested in transaction data
     pub fn transaction_notifications_enabled(&self) -> bool {
-        for plugin in &self.geyser_plugins {
+        for plugin in self.geyser_plugins() {
             if plugin.transaction_notifications_enabled() {
                 return true;
             }
@@ -69,74 +92,6 @@ impl GeyserPluginManager {
         Ok(self.plugins.iter().map(|p| p.name().to_owned()).collect())
     }
 
-    /// # Safety
-    ///
-    /// This function loads the dynamically linked library specified in the path. The library
-    /// must do necessary initializations.
-    pub unsafe fn load_plugin(
-        &mut self,
-        libpath: &str,
-        config_file: &str,
-    ) -> Result<(), Box<dyn Error>> {
-        let lib = Library::new(libpath)?;
-
-        let mut loaded = false;
-        let mut resolving_errors = vec![];
-        for symbol in ["_create_geyser_plugin", "_create_plugin"] {
-            match Self::get_plugin::<dyn GeyserPlugin>(&lib, symbol) {
-                Ok(mut plugin) => {
-                    info!(
-                        "Loading Geyser plugin for {:?} from {:?}...",
-                        plugin.name(),
-                        libpath
-                    );
-                    plugin.on_load(config_file)?;
-                    self.geyser_plugins.push(plugin);
-                    loaded = true;
-                }
-                Err(error) => resolving_errors.push(error),
-            }
-        }
-
-        match Self::get_plugin::<dyn BpfTracerPlugin>(&lib, "_create_bpf_tracer_plugin") {
-            Ok(mut plugin) => {
-                info!(
-                    "Loading BPF Tracer plugin for {:?} from {:?}...",
-                    plugin.name(),
-                    libpath
-                );
-                plugin.on_load(config_file)?;
-                self.bpf_tracer_plugins.push(plugin);
-                loaded = true;
-            }
-            Err(error) => resolving_errors.push(error),
-        }
-
-        if !loaded {
-            error!("Failed to load plugins from the library: {:?}", libpath);
-            return Err(resolving_errors
-                .into_iter()
-                .map(|err| err.to_string())
-                .collect::<Vec<_>>()
-                .join("; ")
-                .into());
-        }
-
-        self.libs.push(lib);
-        Ok(())
-    }
-
-    unsafe fn get_plugin<T: ?Sized>(
-        lib: &Library,
-        symbol: &'static str,
-    ) -> Result<Box<T>, Box<dyn Error>> {
-        type PluginConstructor<T> = unsafe fn() -> *mut T;
-        let constructor: Symbol<PluginConstructor<T>> = lib.get(symbol.as_bytes())?;
-        let plugin_raw = constructor();
-        let plugin = Box::from_raw(plugin_raw);
-        Ok(plugin)
-    }
-
     /// Admin RPC request handler
     /// # Safety
     ///
@@ -147,11 +102,11 @@ impl GeyserPluginManager {
     /// the plugin has been loaded and calling the name method.
     pub(crate) fn load_plugin(
         &mut self,
-        geyser_plugin_config_file: impl AsRef<Path>,
+        plugin_config_file: impl AsRef<Path>,
     ) -> JsonRpcResult<String> {
         // First load plugin
         let (mut new_plugin, new_lib, new_config_file) =
-            load_plugin_from_config(geyser_plugin_config_file.as_ref()).map_err(|e| {
+            load_plugin_from_config(plugin_config_file.as_ref()).map_err(|e| {
                 jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
                     message: format!("Failed to load plugin: {e}"),
@@ -264,6 +219,13 @@ impl GeyserPluginManager {
         Ok(())
     }
 
+    pub fn geyser_plugins(&self) -> impl Iterator<Item = &Box<dyn GeyserPlugin>> {
+        self.plugins.iter().filter_map(|plugin| match plugin {
+            Plugin::Geyser(geyser_plugin) => Some(geyser_plugin),
+            _ => None,
+        })
+    }
+
     fn _drop_plugin(&mut self, idx: usize) {
         let mut current_plugin = self.plugins.remove(idx);
         let _current_lib = self.libs.remove(idx);
@@ -323,21 +285,19 @@ pub enum GeyserPluginManagerError {
 /// This function loads the dynamically linked library specified in the path. The library
 /// must do necessary initializations.
 ///
-/// This returns the geyser plugin, the dynamic library, and the parsed config file as a &str.
-/// (The geyser plugin interface requires a &str for the on_load method).
+/// This returns the plugin, the dynamic library, and the parsed config file as a &str.
+/// (The geyser or BPF tracer plugin interface requires a &str for the on_load method).
 #[cfg(not(test))]
 pub(crate) fn load_plugin_from_config(
-    geyser_plugin_config_file: &Path,
-) -> Result<(Box<dyn GeyserPlugin>, Library, &str), GeyserPluginManagerError> {
+    plugin_config_file: &Path,
+) -> Result<(Plugin, Library, &str), GeyserPluginManagerError> {
     use std::{fs::File, io::Read, path::PathBuf};
-    type PluginConstructor = unsafe fn() -> *mut dyn GeyserPlugin;
-    use libloading::Symbol;
 
-    let mut file = match File::open(geyser_plugin_config_file) {
+    let mut file = match File::open(plugin_config_file) {
         Ok(file) => file,
         Err(err) => {
             return Err(GeyserPluginManagerError::CannotOpenConfigFile(format!(
-                "Failed to open the plugin config file {geyser_plugin_config_file:?}, error: {err:?}"
+                "Failed to open the plugin config file {plugin_config_file:?}, error: {err:?}"
             )));
         }
     };
@@ -345,7 +305,7 @@ pub(crate) fn load_plugin_from_config(
     let mut contents = String::new();
     if let Err(err) = file.read_to_string(&mut contents) {
         return Err(GeyserPluginManagerError::CannotReadConfigFile(format!(
-            "Failed to read the plugin config file {geyser_plugin_config_file:?}, error: {err:?}"
+            "Failed to read the plugin config file {plugin_config_file:?}, error: {err:?}"
         )));
     }
 
@@ -353,7 +313,7 @@ pub(crate) fn load_plugin_from_config(
         Ok(value) => value,
         Err(err) => {
             return Err(GeyserPluginManagerError::InvalidConfigFileFormat(format!(
-                "The config file {geyser_plugin_config_file:?} is not in a valid Json5 format, error: {err:?}"
+                "The config file {plugin_config_file:?} is not in a valid Json5 format, error: {err:?}"
             )));
         }
     };
@@ -363,29 +323,59 @@ pub(crate) fn load_plugin_from_config(
         .ok_or(GeyserPluginManagerError::LibPathNotSet)?;
     let mut libpath = PathBuf::from(libpath);
     if libpath.is_relative() {
-        let config_dir = geyser_plugin_config_file.parent().ok_or_else(|| {
+        let config_dir = plugin_config_file.parent().ok_or_else(|| {
             GeyserPluginManagerError::CannotOpenConfigFile(format!(
-                "Failed to resolve parent of {geyser_plugin_config_file:?}",
+                "Failed to resolve parent of {plugin_config_file:?}",
             ))
         })?;
         libpath = config_dir.join(libpath);
     }
 
-    let config_file = geyser_plugin_config_file
+    let config_file = plugin_config_file
         .as_os_str()
         .to_str()
         .ok_or(GeyserPluginManagerError::InvalidPluginPath)?;
 
-    let (plugin, lib) = unsafe {
+    let mut resolving_errors = vec![];
+    unsafe {
         let lib = Library::new(libpath)
             .map_err(|e| GeyserPluginManagerError::PluginLoadError(e.to_string()))?;
-        let constructor: Symbol<PluginConstructor> = lib
-            .get(b"_create_plugin")
-            .map_err(|e| GeyserPluginManagerError::PluginLoadError(e.to_string()))?;
-        let plugin_raw = constructor();
-        (Box::from_raw(plugin_raw), lib)
-    };
-    Ok((plugin, lib, config_file))
+
+        for symbol in ["_create_geyser_plugin", "_create_plugin"] {
+            match get_plugin::<dyn GeyserPlugin>(&lib, symbol) {
+                Ok(plugin) => return Ok((Plugin::Geyser(plugin), lib, config_file)),
+                Err(error) => resolving_errors.push(error),
+            }
+        }
+
+        match get_plugin::<dyn BpfTracerPlugin>(&lib, "_create_bpf_tracer_plugin") {
+            Ok(plugin) => return Ok((Plugin::BpfTracer(plugin), lib, config_file)),
+            Err(error) => resolving_errors.push(error),
+        }
+    }
+
+    Err(GeyserPluginManagerError::PluginLoadError(
+        resolving_errors
+            .into_iter()
+            .map(|err| err.to_string())
+            .collect::<Vec<_>>()
+            .join("; "),
+    ))
+}
+
+/// # Safety
+///
+/// The function which name provided by `symbol` must return object with expected interface <T>.
+#[cfg(not(test))]
+unsafe fn get_plugin<T: ?Sized>(
+    lib: &Library,
+    symbol: &'static str,
+) -> Result<Box<T>, libloading::Error> {
+    type PluginConstructor<T> = unsafe fn() -> *mut T;
+    let constructor: libloading::Symbol<PluginConstructor<T>> = lib.get(symbol.as_bytes())?;
+    let plugin_raw = constructor();
+    let plugin = Box::from_raw(plugin_raw);
+    Ok(plugin)
 }
 
 // This is mocked for tests to avoid having to do IO with a dynamically linked library
@@ -396,12 +386,13 @@ pub(crate) fn load_plugin_from_config(
 #[cfg(test)]
 pub(crate) fn load_plugin_from_config(
     _geyser_plugin_config_file: &Path,
-) -> Result<(Box<dyn GeyserPlugin>, Library, &str), GeyserPluginManagerError> {
+) -> Result<(Plugin, Library, &str), GeyserPluginManagerError> {
     Ok(tests::dummy_plugin_and_library())
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::geyser_plugin_manager::Plugin;
     use {
         crate::geyser_plugin_manager::GeyserPluginManager,
         libloading::Library,
@@ -409,7 +400,7 @@ mod tests {
         std::sync::{Arc, RwLock},
     };
 
-    pub(super) fn dummy_plugin_and_library() -> (Box<dyn GeyserPlugin>, Library, &'static str) {
+    pub(super) fn dummy_plugin_and_library() -> (super::Plugin, Library, &'static str) {
         let plugin = Box::new(TestPlugin);
         let lib = {
             let handle: *mut std::os::raw::c_void = &mut () as *mut _ as *mut std::os::raw::c_void;
@@ -417,10 +408,10 @@ mod tests {
             let inner_lib = unsafe { libloading::os::unix::Library::from_raw(handle) };
             Library::from(inner_lib)
         };
-        (plugin, lib, DUMMY_CONFIG)
+        (Plugin::Geyser(plugin), lib, DUMMY_CONFIG)
     }
 
-    pub(super) fn dummy_plugin_and_library2() -> (Box<dyn GeyserPlugin>, Library, &'static str) {
+    pub(super) fn dummy_plugin_and_library2() -> (Plugin, Library, &'static str) {
         let plugin = Box::new(TestPlugin2);
         let lib = {
             let handle: *mut std::os::raw::c_void = &mut () as *mut _ as *mut std::os::raw::c_void;
@@ -428,7 +419,7 @@ mod tests {
             let inner_lib = unsafe { libloading::os::unix::Library::from_raw(handle) };
             Library::from(inner_lib)
         };
-        (plugin, lib, DUMMY_CONFIG)
+        (Plugin::Geyser(plugin), lib, DUMMY_CONFIG)
     }
 
     const DUMMY_NAME: &str = "dummy";
@@ -531,11 +522,21 @@ mod tests {
 }
 
 impl BpfTracerPluginManager for GeyserPluginManager {
-    fn bpf_tracer_plugins(&self) -> &[Box<dyn BpfTracerPlugin>] {
-        &self.bpf_tracer_plugins
+    fn bpf_tracer_plugins(&self) -> Box<dyn Iterator<Item = &Box<dyn BpfTracerPlugin>> + '_> {
+        Box::new(self.plugins.iter().filter_map(|plugin| match plugin {
+            Plugin::BpfTracer(bpf_tracer_plugin) => Some(bpf_tracer_plugin),
+            _ => None,
+        }))
     }
 
-    fn bpf_tracer_plugins_mut(&mut self) -> &mut [Box<dyn BpfTracerPlugin>] {
-        &mut self.bpf_tracer_plugins
+    fn active_bpf_tracer_plugins_mut(
+        &mut self,
+    ) -> Box<dyn Iterator<Item = &mut Box<dyn BpfTracerPlugin>> + '_> {
+        Box::new(self.plugins.iter_mut().filter_map(|plugin| match plugin {
+            Plugin::BpfTracer(bpf_tracer_plugin) if bpf_tracer_plugin.bpf_tracing_enabled() => {
+                Some(bpf_tracer_plugin)
+            }
+            _ => None,
+        }))
     }
 }

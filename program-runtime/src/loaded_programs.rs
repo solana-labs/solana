@@ -227,7 +227,10 @@ impl bpf_tracer_plugin_interface::ExecutorAdditional for LoadedProgram {
 
     fn get_text_section_offset(&self) -> u64 {
         let executable = self.get_executable();
-        executable.get_text_bytes().0 - executable.get_ro_region().vm_addr
+        executable
+            .get_text_bytes()
+            .0
+            .saturating_sub(executable.get_ro_region().vm_addr)
     }
 
     fn lookup_internal_function(&self, hash: u32) -> Option<usize> {

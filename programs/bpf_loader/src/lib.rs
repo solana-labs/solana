@@ -1447,11 +1447,7 @@ fn trace_bpf(
 
     let bpf_tracing_plugins = match bpf_tracer_plugins_guard_opt {
         None => vec![],
-        Some(ref mut guard) => guard
-            .bpf_tracer_plugins_mut()
-            .iter_mut()
-            .filter(|plugin| plugin.bpf_tracing_enabled())
-            .collect(),
+        Some(ref mut guard) => guard.active_bpf_tracer_plugins_mut().collect(),
     };
 
     if bpf_tracing_plugins.is_empty() {

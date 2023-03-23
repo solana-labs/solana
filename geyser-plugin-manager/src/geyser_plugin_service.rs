@@ -130,10 +130,10 @@ impl GeyserPluginService {
 
     fn load_plugin(
         plugin_manager: &mut GeyserPluginManager,
-        geyser_plugin_config_file: &Path,
+        plugin_config_file: &Path,
     ) -> Result<(), GeyserPluginServiceError> {
         plugin_manager
-            .load_plugin(geyser_plugin_config_file)
+            .load_plugin(plugin_config_file)
             .map_err(|e| GeyserPluginServiceError::FailedToLoadPlugin(e.into()))?;
         Ok(())
     }

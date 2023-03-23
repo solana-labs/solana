@@ -1142,7 +1142,7 @@ pub fn main() {
     } else {
         None
     };
-    let starting_with_geyser_plugins: bool = on_start_geyser_plugin_config_files.is_some();
+    let starting_with_geyser_plugins: bool = on_start_plugin_config_files.is_some();
 
     let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
         || matches.is_present("enable_bigtable_ledger_upload")
