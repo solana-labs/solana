@@ -353,4 +353,11 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     fn transaction_notifications_enabled(&self) -> bool {
         false
     }
+
+    /// Check if the plugin is interested in entry data
+    /// Default is false -- if the plugin is interested in
+    /// entry data, return true.
+    fn entry_notifications_enabled(&self) -> bool {
+        false
+    }
 }
