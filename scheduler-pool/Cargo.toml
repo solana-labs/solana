@@ -1,34 +1,33 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-edition = "2021"
 name = "solana-scheduler-pool"
 description = "The solana scheduler pool"
-version = "1.16.0"
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-scheduler-pool"
-publish = true
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-assert_matches = "1.5.0"
-cpu-time = "1.0.0"
-crossbeam-channel = "0.5"
-log = "0.4.17"
-rand = "0.7.0"
-serde_json = "1.0.81"
-solana-entry = { path = "../entry", version = "=1.16.0" }
-solana-ledger = { path = "../ledger", version = "=1.16.0" }
-solana-measure = { path = "../measure", version = "=1.16.0" }
-solana-metrics = { path = "../metrics", version = "=1.16.0" }
-solana-poh = { path = "../poh", version = "=1.16.0" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.16.0" }
-solana-runtime = { path = "../runtime", version = "=1.16.0" }
-solana-scheduler = { path = "../scheduler", version = "=1.16.0" }
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.16.0" }
-thread-priority = "0.9.2"
-variant_counter = "0.4.0"
+assert_matches = { workspace = true }
+cpu-time = { workspace = true }
+crossbeam-channel = { workspace = true }
+log = { workspace = true }
+rand = { workspace = true }
+serde_json = { workspace = true }
+solana-entry = { workspace = true }
+solana-ledger = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-poh = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-runtime = { workspace = true }
+solana-scheduler = { workspace = true }
+solana-sdk = { workspace = true }
+solana-transaction-status = { workspace = true }
+thread-priority = { workspace = true }
+variant_counter = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
