@@ -269,9 +269,8 @@ enum ConnectionHandlerError {
 }
 
 struct NewConnectionHandlerParams {
-    // In principle, the code should work as-is if we replaced this with a crossbeam channel
-    // as the server code never does a blocking send (as the channel's unbounded)
-    // or a blocking recv (as we always use try_recv)
+    // In principle, the code can be made to work with a crossbeam channel
+    // as long as we're careful never to use a blocking recv or send call
     // but I've found that it's simply too easy to accidentally block
     // in async code when using the crossbeam channel, so for the sake of maintainability,
     // we're sticking with an async channel
@@ -621,6 +620,8 @@ async fn packet_batch_sender(
                     packet_batch.set_len(packet_batch.len() + 1);
                 }
 
+                // Start the timeout from when we first put a packet in the batch,
+                // making it non-empty
                 if packet_batch.len() == 1 {
                     batch_start_time = Instant::now();
                 }
