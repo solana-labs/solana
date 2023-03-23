@@ -111,6 +111,7 @@ use {
         fs::create_dir_all,
         net::SocketAddr,
         path::{Path, PathBuf},
+        process::exit,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, RwLock,
@@ -2186,11 +2187,12 @@ fn cleanup_accounts_paths(config: &ValidatorConfig) {
         if !accounts_path.exists() {
             // Keep the empty directory
             create_dir_all(accounts_path).unwrap_or_else(|err| {
-                panic!(
+                eprintln!(
                     "Failed to create accounts directory {}: {}",
                     accounts_path.display(),
                     err
                 );
+                exit(1);
             });
         }
     }
@@ -2238,11 +2240,7 @@ mod tests {
         solana_tpu_client::tpu_client::{
             DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
         },
-        std::{
-            fs::{create_dir_all, remove_dir_all},
-            thread,
-            time::Duration,
-        },
+        std::{fs::remove_dir_all, thread, time::Duration},
     };
 
     #[test]

@@ -1078,7 +1078,11 @@ fn load_bank_forks(
         if !path.exists() {
             // Keep the empty directory
             create_dir_all(path).unwrap_or_else(|err| {
-                eprintln!("Error: {err:?}");
+                eprintln!(
+                    "Failed to create accounts directory {}: {}",
+                    path.display(),
+                    err
+                );
                 exit(1);
             });
         }
@@ -2855,7 +2859,7 @@ fn main() {
 
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Primary,
+                    AccessType::Secondary,
                     wal_recovery_mode,
                     force_update_to_open,
                 );
