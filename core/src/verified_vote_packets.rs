@@ -1,5 +1,6 @@
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
+    itertools::Itertools,
     solana_perf::packet::PacketBatch,
     solana_runtime::{
         bank::Bank,
@@ -59,22 +60,14 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
 
         // TODO: my_leader_bank.vote_accounts() may not contain zero-staked validators
         // in this epoch, but those validators may have stake warming up in the next epoch
-        let mut vote_account_keys: Vec<Pubkey> =
-            my_leader_bank.vote_accounts().keys().copied().collect();
         // Sort by stake weight so heavier validators' votes are sent first
-        vote_account_keys.sort_by(|a, b| {
-            my_leader_bank
-                .vote_accounts()
-                .get(b)
-                .map_or(0, |(stake, _)| *stake)
-                .cmp(
-                    &my_leader_bank
-                        .vote_accounts()
-                        .get(a)
-                        .map_or(0, |(stake, _)| *stake),
-                )
-        });
-
+        let vote_account_keys: Vec<Pubkey> = my_leader_bank
+            .vote_accounts()
+            .iter()
+            .map(|(pubkey, &(stake, _))| (pubkey, stake))
+            .sorted_unstable_by_key(|&(_, stake)| std::cmp::Reverse(stake))
+            .map(|(&pubkey, _)| pubkey)
+            .collect();
         Self {
             my_leader_bank,
             slot_hashes,
