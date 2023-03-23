@@ -950,6 +950,11 @@ pub fn parse_stake_authorize(
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
     let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
+    if new_authorizations.is_empty() {
+        return Err(CliError::BadParameter(
+            "New authorization list must include at least one authority".to_string(),
+        ));
+    }
     let new_authorizations = new_authorizations
         .into_iter()
         .map(
