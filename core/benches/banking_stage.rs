@@ -292,7 +292,6 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             bank_forks,
             &Arc::new(PrioritizationFeeCache::new(0u64)),
         );
-        poh_recorder.write().unwrap().set_bank(&bank, false);
 
         let chunk_len = verified.len() / CHUNKS;
         let mut start = 0;
