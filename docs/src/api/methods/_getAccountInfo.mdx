@@ -56,13 +56,15 @@ Encoding format for Account data
 
 </Field>
 
-<Field name="dataSlice" type="string" optional={true}>
-  limit the returned account data using the provided "offset: &lt;usize&gt;" and
-  "length: &lt;usize&gt;" fields
-  <li>
-    only available for <code>base58</code>, <code>base64</code> or{" "}
-    <code>base64+zstd</code> encodings.
-  </li>
+<Field name="dataSlice" type="object" optional={true}>
+  Request a slice of the account&apos;s data.
+
+  - `length: <usize>` - number of bytes to return
+  - `offset: <usize>` - byte offset from which to start reading
+
+:::info
+Data slicing is only available for <code>base58</code>, <code>base64</code>, or <code>base64+zstd</code> encodings.
+:::
 </Field>
 
 <Field name="minContextSlot" type="number" optional={true}>

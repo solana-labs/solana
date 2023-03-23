@@ -88,7 +88,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
 
     let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
-    // To work reliably with higher values, this needs larger udp rmem size
+    // To work reliably with higher values, this needs larger udp mem size
     let entries: Vec<_> = (0..5)
         .map(|_| {
             let keypair0 = Keypair::new();

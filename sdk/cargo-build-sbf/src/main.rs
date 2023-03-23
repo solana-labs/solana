@@ -699,7 +699,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     let target_rustflags = env::var(cargo_target).ok();
     let mut target_rustflags = Cow::Borrowed(target_rustflags.as_deref().unwrap_or_default());
     target_rustflags = Cow::Owned(format!("{} {}", &rustflags, &target_rustflags));
-    if config.remap_cwd {
+    if config.remap_cwd && !config.debug {
         target_rustflags = Cow::Owned(format!("{} -Zremap-cwd-prefix=", &target_rustflags));
     }
     if config.debug {
@@ -941,7 +941,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of sbf-tools.
-    let sbf_tools_version = String::from("v1.34");
+    let sbf_tools_version = String::from("v1.35");
     let version = format!("{}\nsbf-tools {}", crate_version!(), sbf_tools_version);
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())

@@ -3,7 +3,7 @@
 #[rustversion::since(1.46.0)]
 #[macro_export]
 macro_rules! declare_builtin_name {
-    ($name:ident, $id:path, $entrypoint:expr) => {
+    ($name:ident, $id:path, $entrypoint:expr, $default_cost:expr) => {
         #[macro_export]
         macro_rules! $name {
             () => {
@@ -39,6 +39,7 @@ macro_rules! declare_builtin_name {
                     stringify!($name).to_string(),
                     ::solana_sdk::respan!($crate::$id, $name)(),
                     $entrypoint,
+                    $default_cost,
                 )
             };
         }
@@ -48,11 +49,16 @@ macro_rules! declare_builtin_name {
 #[rustversion::not(since(1.46.0))]
 #[macro_export]
 macro_rules! declare_builtin_name {
-    ($name:ident, $id:path, $entrypoint:expr) => {
+    ($name:ident, $id:path, $entrypoint:expr, $default_cost:expr) => {
         #[macro_export]
         macro_rules! $name {
             () => {
-                (stringify!($name).to_string(), $crate::$id(), $entrypoint)
+                (
+                    stringify!($name).to_string(),
+                    $crate::$id(),
+                    $entrypoint,
+                    $default_cost,
+                )
             };
         }
     };
@@ -63,15 +69,16 @@ macro_rules! declare_builtin_name {
 /// bs58_string: bs58 string representation the program's id
 /// name: Name of the program
 /// entrypoint: Program's entrypoint, must be of `type Entrypoint`
+/// default_cost: Program's default compute units
 /// id: Path to the program id access function, used if this macro is not
 ///     called in `src/lib`
 #[macro_export]
 macro_rules! declare_builtin {
-    ($bs58_string:expr, $name:ident, $entrypoint:expr) => {
-        $crate::declare_builtin!($bs58_string, $name, $entrypoint, id);
+    ($bs58_string:expr, $name:ident, $entrypoint:expr, $default_cost:expr) => {
+        $crate::declare_builtin!($bs58_string, $name, $entrypoint, $default_cost, id);
     };
-    ($bs58_string:expr, $name:ident, $entrypoint:expr, $id:path) => {
+    ($bs58_string:expr, $name:ident, $entrypoint:expr, $default_cost:expr, $id:path) => {
         $crate::declare_id!($bs58_string);
-        $crate::declare_builtin_name!($name, $id, $entrypoint);
+        $crate::declare_builtin_name!($name, $id, $entrypoint, $default_cost);
     };
 }

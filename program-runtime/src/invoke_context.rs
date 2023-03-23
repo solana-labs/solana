@@ -43,6 +43,7 @@ pub type ProcessInstructionWithContext = fn(&mut InvokeContext) -> Result<(), In
 pub struct BuiltinProgram {
     pub program_id: Pubkey,
     pub process_instruction: ProcessInstructionWithContext,
+    pub default_compute_unit_cost: u64,
 }
 
 impl std::fmt::Debug for BuiltinProgram {
@@ -55,7 +56,11 @@ impl std::fmt::Debug for BuiltinProgram {
         // https://github.com/rust-lang/rust/issues/50280
         // https://users.rust-lang.org/t/display-function-pointer/17073/2
         let erased_instruction: ErasedProcessInstructionWithContext = self.process_instruction;
-        write!(f, "{}: {:p}", self.program_id, erased_instruction)
+        write!(
+            f,
+            "{}: {:p} CUs: {}",
+            self.program_id, erased_instruction, self.default_compute_unit_cost
+        )
     }
 }
 
@@ -1073,10 +1078,12 @@ mod tests {
             BuiltinProgram {
                 program_id: solana_sdk::pubkey::new_rand(),
                 process_instruction: mock_process_instruction,
+                default_compute_unit_cost: 0,
             },
             BuiltinProgram {
                 program_id: solana_sdk::pubkey::new_rand(),
                 process_instruction: mock_ix_processor,
+                default_compute_unit_cost: 0,
             },
         ];
         assert!(!format!("{builtin_programs:?}").is_empty());
@@ -1262,6 +1269,7 @@ mod tests {
         let builtin_programs = &[BuiltinProgram {
             program_id: callee_program_id,
             process_instruction: mock_process_instruction,
+            default_compute_unit_cost: 0,
         }];
 
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
@@ -1420,6 +1428,7 @@ mod tests {
         let builtin_programs = [BuiltinProgram {
             program_id: program_key,
             process_instruction: mock_process_instruction,
+            default_compute_unit_cost: 0,
         }];
 
         let mut transaction_context =

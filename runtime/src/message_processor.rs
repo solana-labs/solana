@@ -255,6 +255,7 @@ mod tests {
         let builtin_programs = &[BuiltinProgram {
             program_id: mock_system_program_id,
             process_instruction: mock_system_process_instruction,
+            default_compute_unit_cost: 0,
         }];
 
         let accounts = vec![
@@ -484,6 +485,7 @@ mod tests {
         let builtin_programs = &[BuiltinProgram {
             program_id: mock_program_id,
             process_instruction: mock_system_process_instruction,
+            default_compute_unit_cost: 0,
         }];
 
         let accounts = vec![
@@ -649,6 +651,7 @@ mod tests {
         let builtin_programs = &[BuiltinProgram {
             program_id: mock_program_id,
             process_instruction: mock_process_instruction,
+            default_compute_unit_cost: 0,
         }];
 
         let mut secp256k1_account = AccountSharedData::new(1, 0, &native_loader::id());

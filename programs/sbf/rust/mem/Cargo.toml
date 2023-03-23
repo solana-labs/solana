@@ -11,6 +11,8 @@ edition = { workspace = true }
 
 [features]
 no-entrypoint = []
+test-bpf = []
+dummy-for-ci-check = ["test-bpf"]
 
 [dependencies]
 solana-program = { workspace = true }

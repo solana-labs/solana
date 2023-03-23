@@ -24,7 +24,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
             Bank, RentDebits, TransactionBalancesSet, TransactionExecutionDetails,
-            TransactionExecutionResult, TransactionResults, VerifyBankHash,
+            TransactionExecutionResult, TransactionResults, VerifyAccountsHashConfig,
         },
         bank_forks::BankForks,
         bank_utils,
@@ -224,14 +224,16 @@ fn execute_batches_internal(
                     transaction_batch.batch.sanitized_transactions().len() as u64;
                 let mut timings = ExecuteTimings::default();
                 let (result, execute_batches_time): (Result<()>, Measure) = measure!(
-                    execute_batch(
-                        transaction_batch,
-                        bank,
-                        transaction_status_sender,
-                        replay_vote_sender,
-                        &mut timings,
-                        log_messages_bytes_limit,
-                    ),
+                    {
+                        execute_batch(
+                            transaction_batch,
+                            bank,
+                            transaction_status_sender,
+                            replay_vote_sender,
+                            &mut timings,
+                            log_messages_bytes_limit,
+                        )
+                    },
                     "execute_batch",
                 );
 
@@ -1515,7 +1517,7 @@ fn load_frozen_forks(
 fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
     bank.force_flush_accounts_cache();
     // note that this slot may not be a root
-    let _ = bank.verify_bank_hash(VerifyBankHash {
+    let _ = bank.verify_accounts_hash(VerifyAccountsHashConfig {
         test_hash_calculation: false,
         ignore_mismatch: true,
         require_rooted_bank: false,
@@ -2636,65 +2638,6 @@ pub mod tests {
         let (_bank_forks, leader_schedule) =
             test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         assert_eq!(leader_schedule.max_schedules(), std::usize::MAX);
-    }
-
-    #[test]
-    fn test_process_ledger_options_entry_callback() {
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config(100);
-        let (ledger_path, last_entry_hash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let blockhash = genesis_config.hash();
-        let keypairs = [Keypair::new(), Keypair::new(), Keypair::new()];
-
-        let tx = system_transaction::transfer(&mint_keypair, &keypairs[0].pubkey(), 1, blockhash);
-        let entry_1 = next_entry(&last_entry_hash, 1, vec![tx]);
-
-        let tx = system_transaction::transfer(&mint_keypair, &keypairs[1].pubkey(), 1, blockhash);
-        let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
-
-        let mut entries = vec![entry_1, entry_2];
-        entries.extend(create_ticks(
-            genesis_config.ticks_per_slot,
-            0,
-            last_entry_hash,
-        ));
-        blockstore
-            .write_entries(
-                1,
-                0,
-                0,
-                genesis_config.ticks_per_slot,
-                None,
-                true,
-                &Arc::new(Keypair::new()),
-                entries,
-                0,
-            )
-            .unwrap();
-
-        let callback_counter: Arc<RwLock<usize>> = Arc::default();
-        let entry_callback = {
-            let counter = callback_counter.clone();
-            let pubkeys: Vec<Pubkey> = keypairs.iter().map(|k| k.pubkey()).collect();
-            Arc::new(move |bank: &Bank| {
-                let mut counter = counter.write().unwrap();
-                assert_eq!(bank.get_balance(&pubkeys[*counter]), 1);
-                assert_eq!(bank.get_balance(&pubkeys[*counter + 1]), 0);
-                *counter += 1;
-            })
-        };
-
-        let opts = ProcessOptions {
-            entry_callback: Some(entry_callback),
-            accounts_db_test_hash_calculation: true,
-            ..ProcessOptions::default()
-        };
-        test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
-        assert_eq!(*callback_counter.write().unwrap(), 2);
     }
 
     #[test]
@@ -4053,7 +3996,6 @@ pub mod tests {
             false,
             None,
             None,
-            None,
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
@@ -4197,7 +4139,6 @@ pub mod tests {
             false,
             Some(&transaction_status_sender),
             None,
-            None,
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
@@ -4242,7 +4183,6 @@ pub mod tests {
             &mut progress,
             false,
             Some(&transaction_status_sender),
-            None,
             None,
             &VerifyRecyclers::default(),
             None,
