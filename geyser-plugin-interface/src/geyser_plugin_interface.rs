@@ -348,8 +348,8 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     }
 
     /// Check if the plugin is interested in transaction data
-    /// Default is false -- if the plugin is not interested in
-    /// transaction data, please return false.
+    /// Default is false -- if the plugin is interested in
+    /// transaction data, please return true.
     fn transaction_notifications_enabled(&self) -> bool {
         false
     }
