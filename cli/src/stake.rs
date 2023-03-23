@@ -392,6 +392,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .validator(is_valid_signer)
+                        .required_unless("new_withdraw_authority")
                         .help("New authorized staker")
                 )
                 .arg(
@@ -400,6 +401,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .validator(is_valid_signer)
+                        .required_unless("new_stake_authority")
                         .help("New authorized withdrawer")
                 )
                 .arg(stake_authority_arg())
