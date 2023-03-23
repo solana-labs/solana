@@ -500,6 +500,8 @@ pub mod keccak;
 pub mod lamports;
 pub mod loader_instruction;
 pub mod loader_upgradeable_instruction;
+pub mod loader_v3;
+pub mod loader_v3_instruction;
 pub mod log;
 pub mod message;
 pub mod native_token;

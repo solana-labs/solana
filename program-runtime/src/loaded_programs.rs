@@ -9,8 +9,8 @@ use {
         vm::{BuiltInProgram, VerifiedExecutable},
     },
     solana_sdk::{
-        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot, pubkey::Pubkey,
-        saturating_add_assign,
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot, loader_v3,
+        pubkey::Pubkey, saturating_add_assign,
     },
     std::{
         collections::HashMap,
@@ -61,7 +61,7 @@ pub enum LoadedProgramType {
     Invalid,
     LegacyV0(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     LegacyV1(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
-    // Typed(TypedProgram<InvokeContext<'static>>),
+    Typed(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     BuiltIn(BuiltInProgram<InvokeContext<'static>>),
 }
 
@@ -71,6 +71,7 @@ impl Debug for LoadedProgramType {
             LoadedProgramType::Invalid => write!(f, "LoadedProgramType::Invalid"),
             LoadedProgramType::LegacyV0(_) => write!(f, "LoadedProgramType::LegacyV0"),
             LoadedProgramType::LegacyV1(_) => write!(f, "LoadedProgramType::LegacyV1"),
+            LoadedProgramType::Typed(_) => write!(f, "LoadedProgramType::Typed"),
             LoadedProgramType::BuiltIn(_) => write!(f, "LoadedProgramType::BuiltIn"),
         }
     }
@@ -143,6 +144,8 @@ impl LoadedProgram {
             LoadedProgramType::LegacyV0(VerifiedExecutable::from_executable(executable)?)
         } else if bpf_loader::check_id(loader_key) || bpf_loader_upgradeable::check_id(loader_key) {
             LoadedProgramType::LegacyV1(VerifiedExecutable::from_executable(executable)?)
+        } else if loader_v3::check_id(loader_key) {
+            LoadedProgramType::Typed(VerifiedExecutable::from_executable(executable)?)
         } else {
             panic!();
         };
@@ -156,6 +159,7 @@ impl LoadedProgram {
                 match &mut program {
                     LoadedProgramType::LegacyV0(executable) => executable.jit_compile(),
                     LoadedProgramType::LegacyV1(executable) => executable.jit_compile(),
+                    LoadedProgramType::Typed(executable) => executable.jit_compile(),
                     _ => Err(EbpfError::JitNotCompiled),
                 }?;
                 jit_compile_time.stop();

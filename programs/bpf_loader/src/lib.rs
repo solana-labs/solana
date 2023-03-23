@@ -578,7 +578,7 @@ fn process_instruction_common(
         LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
         LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
         LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
-        LoadedProgramType::BuiltIn(_) => Err(InstructionError::IncorrectProgramId),
+        _ => Err(InstructionError::IncorrectProgramId),
     }
 }
 
