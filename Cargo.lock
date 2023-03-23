@@ -6511,7 +6511,7 @@ dependencies = [
  "enum_dispatch",
  "log",
  "rand 0.7.3",
- "sha2 0.10.5",
+ "sha2 0.10.6",
  "solana-logger 1.16.0",
  "solana-sdk 1.16.0",
  "triomphe",

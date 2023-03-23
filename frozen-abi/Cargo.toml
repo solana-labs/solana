@@ -1,49 +1,46 @@
 [package]
 name = "solana-frozen-abi"
-version = "1.16.0"
 description = "Solana Frozen ABI"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-frozen-abi"
-license = "Apache-2.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-bs58 = "0.4.0"
-bv = { version = "0.11.1", features = ["serde"] }
-lazy_static = "1.4.0"
-log = { version = "0.4.17", features = ["std"] }
-once_cell = "1.13.0"
-serde = { version = "1.0", features = ["derive", "rc"] }
-serde_bytes = "0.11"
-serde_derive = "1.0"
-serde_json = "1.0"
-sha2 = "0.10.6"
-solana-frozen-abi-macro = { path = "macro", version = "=1.16.0" }
-thiserror = "1.0"
+bs58 = { workspace = true }
+bv = { workspace = true, features = ["serde"] }
+lazy_static = { workspace = true }
+log = { workspace = true, features = ["std"] }
+once_cell = { workspace = true }
+serde = { workspace = true, features = ["derive", "rc"] }
+serde_bytes = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+solana-frozen-abi-macro = { workspace = true }
+thiserror = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
-ahash = { version = "0.7.6", features = ["default", "std"] }
-blake3 = { version = "1.3.1", features = ["digest", "traits-preview"] }
-block-buffer = { version = "0.9.0", features = ["block-padding"] }
-byteorder = { version = "1.4.3", features = ["default", "i128", "std"] }
-cc = { version = "1.0.79", features = ["jobserver", "parallel"] }
-either = { version = "1.8.0", features = ["use_std"] }
-generic-array = { version = "0.14.6", default-features = false, features = [
-	"serde",
-	"more_lengths"
-] }
-getrandom = { version = "0.1", features = ["dummy"] }
-hashbrown = { version = "0.12", features = ["raw"] }
-im = { version = "15.1.0", features = ["rayon", "serde"] }
-memmap2 = "0.5.8"
-once_cell = { version = "1.13", features = ["alloc", "default", "race", "std"] }
-rand_core = { version = "0.6.4", features = ["alloc", "getrandom", "std"] }
-subtle = { version = "2.4.1", features = ["default", "i128", "std"] }
+ahash = { workspace = true }
+blake3 = { workspace = true, features = ["digest", "traits-preview"] }
+block-buffer = { workspace = true, features = ["block-padding"] }
+byteorder = { workspace = true, features = ["i128"] }
+cc = { workspace = true, features = ["jobserver", "parallel"] }
+either = { workspace = true, features = ["use_std"] }
+generic-array = { workspace = true, features = ["serde", "more_lengths"] }
+getrandom = { workspace = true, features = ["dummy"] }
+hashbrown = { workspace = true, features = ["raw"] }
+im = { workspace = true, features = ["rayon", "serde"] }
+memmap2 = { workspace = true }
+once_cell = { workspace = true, features = ["alloc", "race"] }
+rand_core = { workspace = true, features = ["std"] }
+subtle = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
-solana-logger = { path = "../logger", version = "=1.16.0" }
+solana-logger = { workspace = true }
 
 [build-dependencies]
-rustc_version = "0.4"
+rustc_version = { workspace = true }

@@ -1,28 +1,28 @@
 [package]
 name = "solana-clap-v3-utils"
-version = "1.16.0"
 description = "Solana utilities for the clap v3"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-clap-utils"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-chrono = "0.4"
+chrono = { workspace = true, features = ["default"] }
 clap = { version = "3.1.5", features = ["cargo"] }
-rpassword = "7.0"
-solana-perf = { path = "../perf", version = "=1.16.0" }
-solana-remote-wallet = { path = "../remote-wallet", version = "=1.16.0", default-features = false }
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
-thiserror = "1.0.31"
-tiny-bip39 = "0.8.2"
-uriparse = "0.6.4"
-url = "2.2.2"
+rpassword = { workspace = true }
+solana-perf = { workspace = true }
+solana-remote-wallet = { workspace = true }
+solana-sdk = { workspace = true }
+thiserror = { workspace = true }
+tiny-bip39 = { workspace = true }
+uriparse = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.3.0"
+tempfile = { workspace = true }
 
 [lib]
 name = "solana_clap_v3_utils"

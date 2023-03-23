@@ -1,18 +1,18 @@
 [package]
 name = "solana-rayon-threadlimit"
-version = "1.16.0"
 description = "solana-rayon-threadlimit"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-rayon-threadlimit"
 readme = "../README.md"
-repository = "https://github.com/solana-labs/solana"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-license = "Apache-2.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-lazy_static = "1.4.0"
-num_cpus = "1.13.1"
+lazy_static = { workspace = true }
+num_cpus = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

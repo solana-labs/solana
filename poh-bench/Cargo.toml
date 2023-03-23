@@ -1,25 +1,25 @@
 [package]
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-edition = "2021"
 name = "solana-poh-bench"
-version = "1.16.0"
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-poh-bench"
 publish = false
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
 clap = { version = "3.1.5", features = ["cargo"] }
-log = "0.4.17"
-rand = "0.7.0"
-rayon = "1.5.3"
-solana-entry = { path = "../entry", version = "=1.16.0" }
-solana-logger = { path = "../logger", version = "=1.16.0" }
-solana-measure = { path = "../measure", version = "=1.16.0" }
-solana-perf = { path = "../perf", version = "=1.16.0" }
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
-solana-version = { path = "../version", version = "=1.16.0" }
+log = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+solana-entry = { workspace = true }
+solana-logger = { workspace = true }
+solana-measure = { workspace = true }
+solana-perf = { workspace = true }
+solana-sdk = { workspace = true }
+solana-version = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

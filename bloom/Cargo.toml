@@ -1,25 +1,25 @@
 [package]
 name = "solana-bloom"
-version = "1.16.0"
 description = "Solana bloom filter"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-bloom"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-bv = { version = "0.11.1", features = ["serde"] }
-fnv = "1.0.7"
-log = "0.4.17"
-rand = "0.7.0"
-rayon = "1.5.3"
-serde = { version = "1.0.152", features = ["rc"] }
-serde_derive = "1.0.103"
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.16.0" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.16.0" }
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
+bv = { workspace = true, features = ["serde"] }
+fnv = { workspace = true }
+log = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
+serde_derive = { workspace = true }
+solana-frozen-abi = { workspace = true }
+solana-frozen-abi-macro = { workspace = true }
+solana-sdk = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
@@ -29,4 +29,4 @@ name = "solana_bloom"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-rustc_version = "0.4"
+rustc_version = { workspace = true }

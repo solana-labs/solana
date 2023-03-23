@@ -1,18 +1,18 @@
 [package]
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 description = "Blockchain, Rebuilt for Scale"
-edition = "2021"
-homepage = "https://solanalabs.com/"
-license = "Apache-2.0"
 name = "proto"
 publish = false
-repository = "https://github.com/solana-labs/solana"
-version = "1.16.0"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-tonic-build = "0.8.4"
+tonic-build = { workspace = true }
 
 # windows users should install the protobuf compiler manually and set the PROTOC
 # envar to point to the installed binary
 [target."cfg(not(windows))".dependencies]
-protobuf-src = "1.0.5"
+protobuf-src = { workspace = true }
