@@ -429,7 +429,7 @@ pub fn process_entries_for_tests(
             .collect();
 
     let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
-    let result = process_entries_with_callback(
+    let result = process_entries(
         bank,
         &mut replay_entries,
         randomize,
@@ -445,8 +445,7 @@ pub fn process_entries_for_tests(
 }
 
 // Note: If randomize is true this will shuffle entries' transactions in-place.
-#[allow(clippy::too_many_arguments)]
-fn process_entries_with_callback(
+fn process_entries(
     bank: &Arc<Bank>,
     entries: &mut [ReplayEntry],
     randomize: bool,
@@ -1194,7 +1193,7 @@ fn confirm_slot_entries(
         })
         .collect();
     // Note: This will shuffle entries' transactions in-place.
-    let process_result = process_entries_with_callback(
+    let process_result = process_entries(
         bank,
         &mut replay_entries,
         true, // shuffle transactions.
