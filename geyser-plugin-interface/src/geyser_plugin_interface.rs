@@ -3,7 +3,11 @@
 /// In addition, the dynamic library must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
 use {
-    solana_sdk::{clock::UnixTimestamp, signature::Signature, transaction::SanitizedTransaction},
+    solana_sdk::{
+        clock::{Slot, UnixTimestamp},
+        signature::Signature,
+        transaction::SanitizedTransaction,
+    },
     solana_transaction_status::{Reward, TransactionStatusMeta},
     std::{any::Any, error, io},
     thiserror::Error,
@@ -160,7 +164,7 @@ pub enum ReplicaTransactionInfoVersions<'a> {
 
 #[derive(Clone, Debug)]
 pub struct ReplicaBlockInfo<'a> {
-    pub slot: u64,
+    pub slot: Slot,
     pub blockhash: &'a str,
     pub rewards: &'a [Reward],
     pub block_time: Option<UnixTimestamp>,
@@ -170,9 +174,9 @@ pub struct ReplicaBlockInfo<'a> {
 /// Extending ReplicaBlockInfo by sending the transaction_entries_count.
 #[derive(Clone, Debug)]
 pub struct ReplicaBlockInfoV2<'a> {
-    pub parent_slot: u64,
+    pub parent_slot: Slot,
     pub parent_blockhash: &'a str,
-    pub slot: u64,
+    pub slot: Slot,
     pub blockhash: &'a str,
     pub rewards: &'a [Reward],
     pub block_time: Option<UnixTimestamp>,
@@ -270,7 +274,7 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     fn update_account(
         &self,
         account: ReplicaAccountInfoVersions,
-        slot: u64,
+        slot: Slot,
         is_startup: bool,
     ) -> Result<()> {
         Ok(())
@@ -283,7 +287,12 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
 
     /// Called when a slot status is updated
     #[allow(unused_variables)]
-    fn update_slot_status(&self, slot: u64, parent: Option<u64>, status: SlotStatus) -> Result<()> {
+    fn update_slot_status(
+        &self,
+        slot: Slot,
+        parent: Option<u64>,
+        status: SlotStatus,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -292,7 +301,7 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     fn notify_transaction(
         &self,
         transaction: ReplicaTransactionInfoVersions,
-        slot: u64,
+        slot: Slot,
     ) -> Result<()> {
         Ok(())
     }
