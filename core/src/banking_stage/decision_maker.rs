@@ -45,17 +45,13 @@ impl DecisionMaker {
         let poh_recorder = self.poh_recorder.read().unwrap();
         Self::consume_or_forward_packets(
             &self.my_pubkey,
-            #[inline]
             || {
                 poh_recorder
                     .bank_start()
                     .filter(|bank_start| bank_start.should_working_bank_still_be_processing_txs())
             },
-            #[inline]
             || poh_recorder.would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT),
-            #[inline]
             || poh_recorder.would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT),
-            #[inline]
             || poh_recorder.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
         )
     }
