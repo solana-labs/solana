@@ -7,7 +7,7 @@ use {
     lru::LruCache,
     rayon::{prelude::*, ThreadPool},
     reed_solomon_erasure::{
-        galois_8::Field,
+        galois_8::ReedSolomon,
         Error::{InvalidIndex, TooFewDataShards, TooFewShardsPresent},
     },
     solana_entry::entry::Entry,
@@ -24,7 +24,7 @@ use {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
-        .thread_name(|ix| format!("solShredder{ix:02}"))
+        .thread_name(|i| format!("solShredder{i:02}"))
         .build()
         .unwrap();
 }
@@ -37,8 +37,6 @@ pub(crate) const ERASURE_BATCH_SIZE: [usize; 33] = [
     43, 45, 46, 48, 49, 51, 52, 53, // 24
     55, 56, 58, 59, 60, 62, 63, 64, // 32
 ];
-
-type ReedSolomon = reed_solomon_erasure::ReedSolomon<Field>;
 
 pub struct ReedSolomonCache(
     Mutex<LruCache<(/*data_shards:*/ usize, /*parity_shards:*/ usize), Arc<ReedSolomon>>>,

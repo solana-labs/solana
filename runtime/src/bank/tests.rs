@@ -33,9 +33,9 @@ use {
     solana_logger,
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget, MAX_COMPUTE_UNIT_LIMIT},
-        executor::Executor,
         executor_cache::TransactionExecutorCache,
         invoke_context::{mock_process_instruction, InvokeContext},
+        loaded_programs::{LoadedProgram, LoadedProgramType},
         prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         timings::ExecuteTimings,
     },
@@ -1112,6 +1112,189 @@ fn test_distribute_rent_to_validators_overflow() {
         );
     } else {
         info!("NOT-asserting overflowing incorrect rent distribution");
+    }
+}
+
+#[test]
+fn test_distribute_rent_to_validators_rent_paying() {
+    solana_logger::setup();
+
+    const RENT_PER_VALIDATOR: u64 = 55;
+    const TOTAL_RENT: u64 = RENT_PER_VALIDATOR * 4;
+
+    let empty_validator = ValidatorVoteKeypairs::new_rand();
+    let rent_paying_validator = ValidatorVoteKeypairs::new_rand();
+    let becomes_rent_exempt_validator = ValidatorVoteKeypairs::new_rand();
+    let rent_exempt_validator = ValidatorVoteKeypairs::new_rand();
+    let keypairs = vec![
+        &empty_validator,
+        &rent_paying_validator,
+        &becomes_rent_exempt_validator,
+        &rent_exempt_validator,
+    ];
+    let genesis_config_info = create_genesis_config_with_vote_accounts(
+        sol_to_lamports(1000.),
+        &keypairs,
+        vec![sol_to_lamports(1000.); 4],
+    );
+    let mut genesis_config = genesis_config_info.genesis_config;
+    genesis_config.rent = Rent::default(); // Ensure rent is non-zero, as genesis_utils sets Rent::free by default
+
+    for deactivate_feature in [false, true] {
+        if deactivate_feature {
+            genesis_config
+                .accounts
+                .remove(&feature_set::prevent_rent_paying_rent_recipients::id())
+                .unwrap();
+        }
+        let bank = Bank::new_for_tests(&genesis_config);
+        let rent = bank.rent_collector().rent;
+        let rent_exempt_minimum = rent.minimum_balance(0);
+
+        // Make one validator have an empty identity account
+        let mut empty_validator_account = bank
+            .get_account_with_fixed_root(&empty_validator.node_keypair.pubkey())
+            .unwrap();
+        empty_validator_account.set_lamports(0);
+        bank.store_account(
+            &empty_validator.node_keypair.pubkey(),
+            &empty_validator_account,
+        );
+
+        // Make one validator almost rent-exempt, less RENT_PER_VALIDATOR
+        let mut becomes_rent_exempt_validator_account = bank
+            .get_account_with_fixed_root(&becomes_rent_exempt_validator.node_keypair.pubkey())
+            .unwrap();
+        becomes_rent_exempt_validator_account
+            .set_lamports(rent_exempt_minimum - RENT_PER_VALIDATOR);
+        bank.store_account(
+            &becomes_rent_exempt_validator.node_keypair.pubkey(),
+            &becomes_rent_exempt_validator_account,
+        );
+
+        // Make one validator rent-exempt
+        let mut rent_exempt_validator_account = bank
+            .get_account_with_fixed_root(&rent_exempt_validator.node_keypair.pubkey())
+            .unwrap();
+        rent_exempt_validator_account.set_lamports(rent_exempt_minimum);
+        bank.store_account(
+            &rent_exempt_validator.node_keypair.pubkey(),
+            &rent_exempt_validator_account,
+        );
+
+        let get_rent_state = |bank: &Bank, address: &Pubkey| -> RentState {
+            let account = bank
+                .get_account_with_fixed_root(address)
+                .unwrap_or_default();
+            RentState::from_account(&account, &rent)
+        };
+
+        // Assert starting RentStates
+        assert_eq!(
+            get_rent_state(&bank, &empty_validator.node_keypair.pubkey()),
+            RentState::Uninitialized
+        );
+        assert_eq!(
+            get_rent_state(&bank, &rent_paying_validator.node_keypair.pubkey()),
+            RentState::RentPaying {
+                lamports: 42,
+                data_size: 0,
+            }
+        );
+        assert_eq!(
+            get_rent_state(&bank, &becomes_rent_exempt_validator.node_keypair.pubkey()),
+            RentState::RentPaying {
+                lamports: rent_exempt_minimum - RENT_PER_VALIDATOR,
+                data_size: 0,
+            }
+        );
+        assert_eq!(
+            get_rent_state(&bank, &rent_exempt_validator.node_keypair.pubkey()),
+            RentState::RentExempt
+        );
+
+        let old_empty_validator_lamports = bank.get_balance(&empty_validator.node_keypair.pubkey());
+        let old_rent_paying_validator_lamports =
+            bank.get_balance(&rent_paying_validator.node_keypair.pubkey());
+        let old_becomes_rent_exempt_validator_lamports =
+            bank.get_balance(&becomes_rent_exempt_validator.node_keypair.pubkey());
+        let old_rent_exempt_validator_lamports =
+            bank.get_balance(&rent_exempt_validator.node_keypair.pubkey());
+
+        bank.distribute_rent_to_validators(&bank.vote_accounts(), TOTAL_RENT);
+
+        let new_empty_validator_lamports = bank.get_balance(&empty_validator.node_keypair.pubkey());
+        let new_rent_paying_validator_lamports =
+            bank.get_balance(&rent_paying_validator.node_keypair.pubkey());
+        let new_becomes_rent_exempt_validator_lamports =
+            bank.get_balance(&becomes_rent_exempt_validator.node_keypair.pubkey());
+        let new_rent_exempt_validator_lamports =
+            bank.get_balance(&rent_exempt_validator.node_keypair.pubkey());
+
+        // Assert ending balances; rent should be withheld if test is active and ending RentState
+        // is RentPaying, ie. empty_validator and rent_paying_validator
+        assert_eq!(
+            if deactivate_feature {
+                old_empty_validator_lamports + RENT_PER_VALIDATOR
+            } else {
+                old_empty_validator_lamports
+            },
+            new_empty_validator_lamports
+        );
+
+        assert_eq!(
+            if deactivate_feature {
+                old_rent_paying_validator_lamports + RENT_PER_VALIDATOR
+            } else {
+                old_rent_paying_validator_lamports
+            },
+            new_rent_paying_validator_lamports
+        );
+
+        assert_eq!(
+            old_becomes_rent_exempt_validator_lamports + RENT_PER_VALIDATOR,
+            new_becomes_rent_exempt_validator_lamports
+        );
+
+        assert_eq!(
+            old_rent_exempt_validator_lamports + RENT_PER_VALIDATOR,
+            new_rent_exempt_validator_lamports
+        );
+
+        // Assert ending RentStates
+        assert_eq!(
+            if deactivate_feature {
+                RentState::RentPaying {
+                    lamports: RENT_PER_VALIDATOR,
+                    data_size: 0,
+                }
+            } else {
+                RentState::Uninitialized
+            },
+            get_rent_state(&bank, &empty_validator.node_keypair.pubkey()),
+        );
+        assert_eq!(
+            if deactivate_feature {
+                RentState::RentPaying {
+                    lamports: old_rent_paying_validator_lamports + RENT_PER_VALIDATOR,
+                    data_size: 0,
+                }
+            } else {
+                RentState::RentPaying {
+                    lamports: old_rent_paying_validator_lamports,
+                    data_size: 0,
+                }
+            },
+            get_rent_state(&bank, &rent_paying_validator.node_keypair.pubkey()),
+        );
+        assert_eq!(
+            RentState::RentExempt,
+            get_rent_state(&bank, &becomes_rent_exempt_validator.node_keypair.pubkey()),
+        );
+        assert_eq!(
+            RentState::RentExempt,
+            get_rent_state(&bank, &rent_exempt_validator.node_keypair.pubkey()),
+        );
     }
 }
 
@@ -7480,17 +7663,6 @@ fn test_reconfigure_token2_native_mint() {
     assert_eq!(native_mint_account.owner(), &inline_spl_token::id());
 }
 
-#[derive(Debug)]
-struct TestExecutor {}
-impl Executor for TestExecutor {
-    fn execute(
-        &self,
-        _invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), InstructionError> {
-        Ok(())
-    }
-}
-
 #[test]
 fn test_bank_executor_cache() {
     solana_logger::setup();
@@ -7503,7 +7675,7 @@ fn test_bank_executor_cache() {
     let key3 = solana_sdk::pubkey::new_rand();
     let key4 = solana_sdk::pubkey::new_rand();
     let key5 = solana_sdk::pubkey::new_rand();
-    let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+    let executor = Arc::new(LoadedProgram::default());
 
     fn new_executable_account(owner: Pubkey) -> AccountSharedData {
         AccountSharedData::from(Account {
@@ -7525,42 +7697,42 @@ fn test_bank_executor_cache() {
     let executors =
         TransactionExecutorCache::new((0..4).map(|i| (accounts[i].0, executor.clone())));
     let executors = Rc::new(RefCell::new(executors));
-    bank.store_missing_executors(&executors);
-    bank.store_updated_executors(&executors);
+    bank.store_executors_which_added_to_the_cache(&executors);
+    bank.store_executors_which_were_deployed(&executors);
     let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().executors.len(), 0);
+    assert_eq!(stored_executors.borrow().visible.len(), 0);
 
     // do work
     let mut executors =
         TransactionExecutorCache::new((2..3).map(|i| (accounts[i].0, executor.clone())));
-    executors.set(key1, executor.clone(), false);
-    executors.set(key2, executor.clone(), false);
-    executors.set(key3, executor.clone(), true);
-    executors.set(key4, executor.clone(), false);
+    executors.set(key1, executor.clone(), false, true, bank.slot());
+    executors.set(key2, executor.clone(), false, true, bank.slot());
+    executors.set(key3, executor.clone(), true, true, bank.slot());
+    executors.set(key4, executor, false, true, bank.slot());
     let executors = Rc::new(RefCell::new(executors));
 
     // store Missing
-    bank.store_missing_executors(&executors);
+    bank.store_executors_which_added_to_the_cache(&executors);
     let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().executors.len(), 2);
-    assert!(stored_executors.borrow().executors.contains_key(&key1));
-    assert!(stored_executors.borrow().executors.contains_key(&key2));
+    assert_eq!(stored_executors.borrow().visible.len(), 2);
+    assert!(stored_executors.borrow().visible.contains_key(&key1));
+    assert!(stored_executors.borrow().visible.contains_key(&key2));
 
     // store Updated
-    bank.store_updated_executors(&executors);
+    bank.store_executors_which_were_deployed(&executors);
     let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().executors.len(), 3);
-    assert!(stored_executors.borrow().executors.contains_key(&key1));
-    assert!(stored_executors.borrow().executors.contains_key(&key2));
-    assert!(stored_executors.borrow().executors.contains_key(&key3));
+    assert_eq!(stored_executors.borrow().visible.len(), 3);
+    assert!(stored_executors.borrow().visible.contains_key(&key1));
+    assert!(stored_executors.borrow().visible.contains_key(&key2));
+    assert!(stored_executors.borrow().visible.contains_key(&key3));
 
     // Check inheritance
     let bank = Bank::new_from_parent(&Arc::new(bank), &solana_sdk::pubkey::new_rand(), 1);
     let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().executors.len(), 3);
-    assert!(stored_executors.borrow().executors.contains_key(&key1));
-    assert!(stored_executors.borrow().executors.contains_key(&key2));
-    assert!(stored_executors.borrow().executors.contains_key(&key3));
+    assert_eq!(stored_executors.borrow().visible.len(), 3);
+    assert!(stored_executors.borrow().visible.contains_key(&key1));
+    assert!(stored_executors.borrow().visible.contains_key(&key2));
+    assert!(stored_executors.borrow().visible.contains_key(&key3));
 
     // Force compilation of an executor
     let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so").unwrap();
@@ -7593,7 +7765,6 @@ fn test_bank_executor_cache() {
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-    bank.create_executor(&key1).unwrap();
 
     // Remove all
     bank.remove_executor(&key1);
@@ -7601,7 +7772,56 @@ fn test_bank_executor_cache() {
     bank.remove_executor(&key3);
     bank.remove_executor(&key4);
     let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().executors.len(), 0);
+    assert_eq!(stored_executors.borrow().visible.len(), 0);
+}
+
+#[test]
+fn test_bank_load_program() {
+    solana_logger::setup();
+
+    let (genesis_config, _) = create_genesis_config(1);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let key1 = solana_sdk::pubkey::new_rand();
+
+    let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so").unwrap();
+    let mut elf = Vec::new();
+    file.read_to_end(&mut elf).unwrap();
+    let programdata_key = solana_sdk::pubkey::new_rand();
+    let mut program_account = AccountSharedData::new_data(
+        40,
+        &UpgradeableLoaderState::Program {
+            programdata_address: programdata_key,
+        },
+        &bpf_loader_upgradeable::id(),
+    )
+    .unwrap();
+    program_account.set_executable(true);
+    program_account.set_rent_epoch(1);
+    let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+    let mut programdata_account = AccountSharedData::new(
+        40,
+        programdata_data_offset + elf.len(),
+        &bpf_loader_upgradeable::id(),
+    );
+    programdata_account
+        .set_state(&UpgradeableLoaderState::ProgramData {
+            slot: 42,
+            upgrade_authority_address: None,
+        })
+        .unwrap();
+    programdata_account.data_mut()[programdata_data_offset..].copy_from_slice(&elf);
+    programdata_account.set_rent_epoch(1);
+    bank.store_account_and_update_capitalization(&key1, &program_account);
+    bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
+    let program = bank.load_program(&key1);
+    assert!(program.is_ok());
+    let program = program.unwrap();
+    assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
+    assert_eq!(
+        program.account_size,
+        program_account.data().len() + programdata_account.data().len()
+    );
 }
 
 #[test]
@@ -7613,7 +7833,7 @@ fn test_bank_executor_cow() {
 
     let key1 = solana_sdk::pubkey::new_rand();
     let key2 = solana_sdk::pubkey::new_rand();
-    let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+    let executor = Arc::new(LoadedProgram::default());
     let executable_account = AccountSharedData::from(Account {
         owner: bpf_loader_upgradeable::id(),
         executable: true,
@@ -7627,36 +7847,36 @@ fn test_bank_executor_cow() {
 
     // add one to root bank
     let mut executors = TransactionExecutorCache::default();
-    executors.set(key1, executor.clone(), false);
+    executors.set(key1, executor.clone(), false, true, root.slot());
     let executors = Rc::new(RefCell::new(executors));
-    root.store_missing_executors(&executors);
+    root.store_executors_which_added_to_the_cache(&executors);
     let executors = root.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
 
     let fork1 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
     let fork2 = Bank::new_from_parent(&root, &Pubkey::default(), 2);
 
     let executors = fork1.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
     let executors = fork2.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
 
     let mut executors = TransactionExecutorCache::default();
-    executors.set(key2, executor.clone(), false);
+    executors.set(key2, executor, false, true, fork1.slot());
     let executors = Rc::new(RefCell::new(executors));
-    fork1.store_missing_executors(&executors);
+    fork1.store_executors_which_added_to_the_cache(&executors);
 
     let executors = fork1.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 2);
+    assert_eq!(executors.borrow().visible.len(), 2);
     let executors = fork2.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
 
     fork1.remove_executor(&key1);
 
     let executors = fork1.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
     let executors = fork2.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
 }
 
 #[test]

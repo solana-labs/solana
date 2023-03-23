@@ -9,7 +9,7 @@ use {
         crds::GossipRoute,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         crds_value::{CrdsData, CrdsValue},
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
+        legacy_contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
         weighted_shuffle::WeightedShuffle,
     },
     solana_ledger::shred::ShredId,
@@ -316,7 +316,9 @@ fn get_nodes(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Vec<N
     // The local node itself.
     std::iter::once({
         let stake = stakes.get(&self_pubkey).copied().unwrap_or_default();
-        let node = NodeId::from(cluster_info.my_contact_info());
+        let node = LegacyContactInfo::try_from(&cluster_info.my_contact_info())
+            .map(NodeId::from)
+            .expect("Operator must spin up node with valid contact-info");
         Node { node, stake }
     })
     // All known tvu-peers from gossip.
@@ -458,13 +460,17 @@ pub fn make_test_cluster<R: Rng>(
     HashMap<Pubkey, u64>, // stakes
     ClusterInfo,
 ) {
+    use solana_gossip::contact_info::ContactInfo;
     let (unstaked_numerator, unstaked_denominator) = unstaked_ratio.unwrap_or((1, 7));
-    let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(rng, None))
-        .take(num_nodes)
-        .collect();
+    let mut nodes: Vec<_> = repeat_with(|| {
+        let pubkey = solana_sdk::pubkey::new_rand();
+        ContactInfo::new_localhost(&pubkey, /*wallclock:*/ timestamp())
+    })
+    .take(num_nodes)
+    .collect();
     nodes.shuffle(rng);
     let keypair = Arc::new(Keypair::new());
-    nodes[0].id = keypair.pubkey();
+    nodes[0].set_pubkey(keypair.pubkey());
     let this_node = nodes[0].clone();
     let mut stakes: HashMap<Pubkey, u64> = nodes
         .iter()
@@ -472,13 +478,18 @@ pub fn make_test_cluster<R: Rng>(
             if rng.gen_ratio(unstaked_numerator, unstaked_denominator) {
                 None // No stake for some of the nodes.
             } else {
-                Some((node.id, rng.gen_range(0, 20)))
+                Some((*node.pubkey(), rng.gen_range(0, 20)))
             }
         })
         .collect();
     // Add some staked nodes with no contact-info.
     stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0, 20))).take(100));
     let cluster_info = ClusterInfo::new(this_node, keypair, SocketAddrSpace::Unspecified);
+    let nodes: Vec<_> = nodes
+        .iter()
+        .map(LegacyContactInfo::try_from)
+        .collect::<Result<_, _>>()
+        .unwrap();
     {
         let now = timestamp();
         let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();

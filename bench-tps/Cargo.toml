@@ -5,7 +5,7 @@ name = "solana-bench-tps"
 version = "1.16.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://solanalabs.com/"
 publish = false
 
 [dependencies]
@@ -19,6 +19,7 @@ serde_yaml = "0.9.13"
 solana-clap-utils = { path = "../clap-utils", version = "=1.16.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.16.0" }
 solana-client = { path = "../client", version = "=1.16.0" }
+solana-connection-cache = { path = "../connection-cache", version = "=1.16.0" }
 solana-core = { path = "../core", version = "=1.16.0" }
 solana-faucet = { path = "../faucet", version = "=1.16.0" }
 solana-genesis = { path = "../genesis", version = "=1.16.0" }

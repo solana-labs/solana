@@ -19,11 +19,11 @@ Expect a response as fast as possible in the advisory, typically within 72 hours
 --
 
 If you do not receive a response in the advisory, send an email to
-security@solana.com with the full URL of the advisory you have created.  DO NOT
+security@solanalabs.com with the full URL of the advisory you have created.  DO NOT
 include attachments or provide detail sufficient for exploitation regarding the
 security issue in this email. **Only provide such details in the advisory**.
 
-If you do not receive a response from security@solana.com please followup with
+If you do not receive a response from security@solanalabs.com please followup with
 the team directly. You can do this in the `#core-technology` channel of the
 [Solana Tech discord server](https://solana.com/discord), by pinging the admins
 in the channel and referencing the fact that you submitted a security problem.
@@ -124,7 +124,6 @@ $5,000 USD in locked SOL tokens (locked for 12 months)
 ### Out of Scope:
 The following components are out of scope for the bounty program
 * Metrics: `/metrics` in the monorepo as well as https://metrics.solana.com
-* Explorer: `/explorer` in the monorepo as well as https://explorer.solana.com
 * Any encrypted credentials, auth tokens, etc. checked into the repo
 * Bugs in dependencies. Please take them upstream!
 * Attacks that require social engineering

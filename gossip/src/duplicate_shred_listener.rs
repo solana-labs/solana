@@ -85,7 +85,7 @@ mod tests {
     }
 
     impl FakeHandler {
-        pub fn new(count: Arc<AtomicU32>) -> Self {
+        fn new(count: Arc<AtomicU32>) -> Self {
             Self { count }
         }
     }

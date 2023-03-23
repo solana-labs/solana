@@ -1,7 +1,16 @@
 use {
-    super::{AccountsPackage, AccountsPackageType, SnapshotType},
+    super::{
+        AccountsPackage, AccountsPackageType, SnapshotArchiveInfoGetter, SnapshotPackage,
+        SnapshotType,
+    },
     std::cmp::Ordering::{self, Equal, Greater, Less},
 };
+
+/// Compare snapshot packages by priority; first by type, then by slot
+#[must_use]
+pub fn cmp_snapshot_packages_by_priority(a: &SnapshotPackage, b: &SnapshotPackage) -> Ordering {
+    cmp_snapshot_types_by_priority(&a.snapshot_type, &b.snapshot_type).then(a.slot().cmp(&b.slot()))
+}
 
 /// Compare accounts packages by priority; first by type, then by slot
 #[must_use]
@@ -62,7 +71,94 @@ pub fn cmp_snapshot_types_by_priority(a: &SnapshotType, b: &SnapshotType) -> Ord
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_sdk::clock::Slot};
+    use {
+        super::*,
+        crate::{
+            snapshot_archive_info::SnapshotArchiveInfo,
+            snapshot_hash::SnapshotHash,
+            snapshot_utils::{ArchiveFormat, SnapshotVersion},
+        },
+        solana_sdk::{clock::Slot, hash::Hash},
+        std::{path::PathBuf, time::Instant},
+        tempfile::TempDir,
+    };
+
+    #[test]
+    fn test_cmp_snapshot_packages_by_priority() {
+        fn new(snapshot_type: SnapshotType, slot: Slot) -> SnapshotPackage {
+            SnapshotPackage {
+                snapshot_archive_info: SnapshotArchiveInfo {
+                    path: PathBuf::default(),
+                    slot,
+                    hash: SnapshotHash(Hash::default()),
+                    archive_format: ArchiveFormat::Tar,
+                },
+                block_height: slot,
+                snapshot_links: TempDir::new().unwrap(),
+                snapshot_storages: Vec::default(),
+                snapshot_version: SnapshotVersion::default(),
+                snapshot_type,
+                enqueued: Instant::now(),
+            }
+        }
+
+        for (snapshot_package_a, snapshot_package_b, expected_result) in [
+            (
+                new(SnapshotType::FullSnapshot, 11),
+                new(SnapshotType::FullSnapshot, 22),
+                Less,
+            ),
+            (
+                new(SnapshotType::FullSnapshot, 22),
+                new(SnapshotType::FullSnapshot, 22),
+                Equal,
+            ),
+            (
+                new(SnapshotType::FullSnapshot, 33),
+                new(SnapshotType::FullSnapshot, 22),
+                Greater,
+            ),
+            (
+                new(SnapshotType::FullSnapshot, 22),
+                new(SnapshotType::IncrementalSnapshot(88), 99),
+                Greater,
+            ),
+            (
+                new(SnapshotType::IncrementalSnapshot(11), 55),
+                new(SnapshotType::IncrementalSnapshot(22), 55),
+                Less,
+            ),
+            (
+                new(SnapshotType::IncrementalSnapshot(22), 55),
+                new(SnapshotType::IncrementalSnapshot(22), 55),
+                Equal,
+            ),
+            (
+                new(SnapshotType::IncrementalSnapshot(33), 55),
+                new(SnapshotType::IncrementalSnapshot(22), 55),
+                Greater,
+            ),
+            (
+                new(SnapshotType::IncrementalSnapshot(22), 44),
+                new(SnapshotType::IncrementalSnapshot(22), 55),
+                Less,
+            ),
+            (
+                new(SnapshotType::IncrementalSnapshot(22), 55),
+                new(SnapshotType::IncrementalSnapshot(22), 55),
+                Equal,
+            ),
+            (
+                new(SnapshotType::IncrementalSnapshot(22), 66),
+                new(SnapshotType::IncrementalSnapshot(22), 55),
+                Greater,
+            ),
+        ] {
+            let actual_result =
+                cmp_snapshot_packages_by_priority(&snapshot_package_a, &snapshot_package_b);
+            assert_eq!(expected_result, actual_result);
+        }
+    }
 
     #[test]
     fn test_cmp_accounts_packages_by_priority() {

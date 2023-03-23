@@ -29,6 +29,7 @@ use {
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
+        bpf_loader_upgradeable::UpgradeableLoaderState,
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
@@ -312,6 +313,38 @@ impl TestValidatorGenesis {
         Ok(self)
     }
 
+    pub fn clone_upgradeable_programs<T>(
+        &mut self,
+        addresses: T,
+        rpc_client: &RpcClient,
+    ) -> Result<&mut Self, String>
+    where
+        T: IntoIterator<Item = Pubkey>,
+    {
+        let addresses: Vec<Pubkey> = addresses.into_iter().collect();
+        self.clone_accounts(addresses.clone(), rpc_client, false)?;
+
+        let mut programdata_addresses: HashSet<Pubkey> = HashSet::new();
+        for address in addresses {
+            let account = self.accounts.get(&address).unwrap();
+
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = account.deserialize_data()
+            {
+                programdata_addresses.insert(programdata_address);
+            } else {
+                return Err(format!(
+                    "Failed to read upgradeable program account {address}",
+                ));
+            }
+        }
+
+        self.clone_accounts(programdata_addresses, rpc_client, false)?;
+
+        Ok(self)
+    }
+
     pub fn add_accounts_from_json_files(
         &mut self,
         accounts: &[AccountInfo],
@@ -448,7 +481,6 @@ impl TestValidatorGenesis {
     }
 
     /// Add a list of programs to the test environment.
-    ///pub fn add_programs_with_path<'a>(&'a mut self, programs: &[ProgramInfo]) -> &'a mut Self {
     pub fn add_programs_with_path(&mut self, programs: &[ProgramInfo]) -> &mut Self {
         for program in programs {
             self.programs.push(program.clone());
@@ -632,7 +664,7 @@ impl TestValidator {
             accounts.insert(
                 program.program_id,
                 AccountSharedData::from(Account {
-                    lamports: Rent::default().minimum_balance(data.len()).min(1),
+                    lamports: Rent::default().minimum_balance(data.len()).max(1),
                     data,
                     owner: program.loader,
                     executable: true,
@@ -750,15 +782,16 @@ impl TestValidator {
             config.node_config.bind_ip_addr,
         );
         if let Some((rpc, rpc_pubsub)) = config.rpc_ports {
-            node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc);
-            node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub);
+            let addr = node.info.gossip().unwrap().ip();
+            node.info.set_rpc((addr, rpc)).unwrap();
+            node.info.set_rpc_pubsub((addr, rpc_pubsub)).unwrap();
         }
 
         let vote_account_address = validator_vote_account.pubkey();
-        let rpc_url = format!("http://{}", node.info.rpc);
-        let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub);
-        let tpu = node.info.tpu;
-        let gossip = node.info.gossip;
+        let rpc_url = format!("http://{}", node.info.rpc().unwrap());
+        let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub().unwrap());
+        let tpu = node.info.tpu().unwrap();
+        let gossip = node.info.gossip().unwrap();
 
         {
             let mut authorized_voter_keypairs = config.authorized_voter_keypairs.write().unwrap();
@@ -793,10 +826,13 @@ impl TestValidator {
         let mut validator_config = ValidatorConfig {
             geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             rpc_addrs: Some((
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), node.info.rpc.port()),
                 SocketAddr::new(
                     IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                    node.info.rpc_pubsub.port(),
+                    node.info.rpc().unwrap().port(),
+                ),
+                SocketAddr::new(
+                    IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                    node.info.rpc_pubsub().unwrap().port(),
                 ),
             )),
             rpc_config: config.rpc_config.clone(),

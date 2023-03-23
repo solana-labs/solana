@@ -86,7 +86,6 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_package::PendingSnapshotPackage,
         snapshot_utils::{self, move_and_async_delete_path},
     },
     solana_sdk::{
@@ -445,16 +444,14 @@ impl Validator {
         tpu_enable_udp: bool,
     ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
-        assert_eq!(id, node.info.id);
+        assert_eq!(&id, node.info.pubkey());
 
         warn!("identity: {}", id);
         warn!("vote account: {}", vote_account);
 
         if !config.no_os_network_stats_reporting {
             if let Err(e) = verify_net_stats_access() {
-                return Err(format!(
-                    "Failed to access Network stats: {e}. Bypass check with --no-os-network-stats-reporting.",
-                ));
+                return Err(format!("Failed to access Network stats: {e}",));
             }
         }
 
@@ -490,7 +487,7 @@ impl Validator {
         }
 
         if rayon::ThreadPoolBuilder::new()
-            .thread_name(|ix| format!("solRayonGlob{ix:02}"))
+            .thread_name(|i| format!("solRayonGlob{i:02}"))
             .build_global()
             .is_err()
         {
@@ -602,8 +599,8 @@ impl Validator {
             Some(poh_timing_point_sender.clone()),
         )?;
 
-        node.info.wallclock = timestamp();
-        node.info.shred_version = compute_shred_version(
+        node.info.set_wallclock(timestamp());
+        node.info.set_shred_version(compute_shred_version(
             &genesis_config.hash(),
             Some(
                 &bank_forks
@@ -614,15 +611,16 @@ impl Validator {
                     .read()
                     .unwrap(),
             ),
-        );
+        ));
 
         Self::print_node_info(&node);
 
         if let Some(expected_shred_version) = config.expected_shred_version {
-            if expected_shred_version != node.info.shred_version {
+            if expected_shred_version != node.info.shred_version() {
                 return Err(format!(
                     "shred version mismatch: expected {} found: {}",
-                    expected_shred_version, node.info.shred_version,
+                    expected_shred_version,
+                    node.info.shred_version(),
                 ));
             }
         }
@@ -642,7 +640,7 @@ impl Validator {
             config.accounts_hash_interval_slots,
         ));
 
-        let (pending_snapshot_package, snapshot_packager_service) =
+        let (snapshot_package_sender, snapshot_packager_service) =
             if config.snapshot_config.should_generate_snapshots() {
                 // filler accounts make snapshots invalid for use
                 // so, do not publish that we have snapshots
@@ -651,9 +649,11 @@ impl Validator {
                     .as_ref()
                     .map(|config| config.filler_accounts_config.count == 0)
                     .unwrap_or(true);
-                let pending_snapshot_package = PendingSnapshotPackage::default();
+                let (snapshot_package_sender, snapshot_package_receiver) =
+                    crossbeam_channel::unbounded();
                 let snapshot_packager_service = SnapshotPackagerService::new(
-                    pending_snapshot_package.clone(),
+                    snapshot_package_sender.clone(),
+                    snapshot_package_receiver,
                     starting_snapshot_hashes,
                     &exit,
                     &cluster_info,
@@ -661,7 +661,7 @@ impl Validator {
                     enable_gossip_push,
                 );
                 (
-                    Some(pending_snapshot_package),
+                    Some(snapshot_package_sender),
                     Some(snapshot_packager_service),
                 )
             } else {
@@ -672,7 +672,7 @@ impl Validator {
         let accounts_hash_verifier = AccountsHashVerifier::new(
             accounts_package_sender.clone(),
             accounts_package_receiver,
-            pending_snapshot_package,
+            snapshot_package_sender,
             &exit,
             &cluster_info,
             config.known_validators.clone(),
@@ -820,7 +820,13 @@ impl Validator {
                 let connection_cache = ConnectionCache::new_with_client_options(
                     tpu_connection_pool_size,
                     None,
-                    Some((&identity_keypair, node.info.tpu.ip())),
+                    Some((
+                        &identity_keypair,
+                        node.info
+                            .tpu()
+                            .expect("Operator must spin up node with valid TPU address")
+                            .ip(),
+                    )),
                     Some((&staked_nodes, &identity_keypair.pubkey())),
                 );
                 Arc::new(connection_cache)
@@ -839,18 +845,16 @@ impl Validator {
             optimistically_confirmed_bank_tracker,
             bank_notification_sender,
         ) = if let Some((rpc_addr, rpc_pubsub_addr)) = config.rpc_addrs {
-            if ContactInfo::is_valid_address(&node.info.rpc, &socket_addr_space) {
-                assert!(ContactInfo::is_valid_address(
-                    &node.info.rpc_pubsub,
-                    &socket_addr_space
-                ));
-            } else {
-                assert!(!ContactInfo::is_valid_address(
-                    &node.info.rpc_pubsub,
-                    &socket_addr_space
-                ));
-            }
-
+            assert_eq!(
+                node.info
+                    .rpc()
+                    .map(|addr| socket_addr_space.check(&addr))
+                    .ok(),
+                node.info
+                    .rpc_pubsub()
+                    .map(|addr| socket_addr_space.check(&addr))
+                    .ok()
+            );
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
             let confirmed_bank_subscribers = if !bank_notification_senders.is_empty() {
                 Some(Arc::new(RwLock::new(bank_notification_senders)))
@@ -931,7 +935,7 @@ impl Validator {
             None => None,
             Some(tcp_listener) => Some(solana_net_utils::ip_echo_server(
                 tcp_listener,
-                Some(node.info.shred_version),
+                Some(node.info.shred_version()),
             )),
         };
 
@@ -1059,7 +1063,7 @@ impl Validator {
             cluster_confirmed_slot_receiver,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
-                shred_version: node.info.shred_version,
+                shred_version: node.info.shred_version(),
                 repair_validators: config.repair_validators.clone(),
                 repair_whitelist: config.repair_whitelist.clone(),
                 wait_for_vote_to_start_leader,
@@ -1093,7 +1097,7 @@ impl Validator {
             &blockstore,
             &config.broadcast_stage_type,
             &exit,
-            node.info.shred_version,
+            node.info.shred_version(),
             vote_tracker,
             bank_forks.clone(),
             verified_vote_sender,
@@ -1319,8 +1323,7 @@ fn check_poh_speed(
             info!("PoH speed check: Will sleep {}ns per slot.", extra_ns);
         } else {
             return Err(format!(
-                "PoH is slower than cluster target tick rate! mine: {my_ns_per_slot} cluster: {target_ns_per_slot}. \
-                If you wish to continue, try --no-poh-speed-test",
+                "PoH is slower than cluster target tick rate! mine: {my_ns_per_slot} cluster: {target_ns_per_slot}.",
             ));
         }
     }
@@ -1763,6 +1766,13 @@ fn maybe_warp_slot(
         info!("warping to slot {}", warp_slot);
 
         let root_bank = bank_forks.root_bank();
+
+        // An accounts hash calculation from storages will occur in warp_from_parent() below.  This
+        // requires that the accounts cache has been flushed, which requires the parent slot to be
+        // rooted.
+        root_bank.squash();
+        root_bank.force_flush_accounts_cache();
+
         bank_forks.add_new_bank_for_replaying(Bank::warp_from_parent(
             &root_bank,
             &Pubkey::default(),
@@ -2145,6 +2155,7 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
+        solana_gossip::contact_info::{ContactInfo, LegacyContactInfo},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         solana_tpu_client::tpu_client::{
@@ -2168,7 +2179,10 @@ mod tests {
 
         let voting_keypair = Arc::new(Keypair::new());
         let config = ValidatorConfig {
-            rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
+            rpc_addrs: Some((
+                validator_node.info.rpc().unwrap(),
+                validator_node.info.rpc_pubsub().unwrap(),
+            )),
             ..ValidatorConfig::default_for_test()
         };
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
@@ -2178,7 +2192,7 @@ mod tests {
             &validator_ledger_path,
             &voting_keypair.pubkey(),
             Arc::new(RwLock::new(vec![voting_keypair.clone()])),
-            vec![leader_node.info],
+            vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
             &config,
             true, // should_check_duplicate_instance
             start_progress.clone(),
@@ -2261,7 +2275,10 @@ mod tests {
                 ledger_paths.push(validator_ledger_path.clone());
                 let vote_account_keypair = Keypair::new();
                 let config = ValidatorConfig {
-                    rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
+                    rpc_addrs: Some((
+                        validator_node.info.rpc().unwrap(),
+                        validator_node.info.rpc_pubsub().unwrap(),
+                    )),
                     ..ValidatorConfig::default_for_test()
                 };
                 Validator::new(
@@ -2270,7 +2287,7 @@ mod tests {
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
                     Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
-                    vec![leader_node.info.clone()],
+                    vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
                     &config,
                     true, // should_check_duplicate_instance
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),

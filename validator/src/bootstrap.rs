@@ -36,11 +36,21 @@ use {
         },
         time::{Duration, Instant},
     },
+    thiserror::Error,
 };
 
-/// When downloading snapshots, wait at most this long for snapshot hashes from _all_ known
-/// validators.  Afterwards, wait for snapshot hashes from _any_ know validator.
+/// When downloading snapshots, wait at most this long for snapshot hashes from
+/// _all_ known validators.  Afterwards, wait for snapshot hashes from _any_
+/// known validator.
 const WAIT_FOR_ALL_KNOWN_VALIDATORS: Duration = Duration::from_secs(60);
+/// If we don't have any alternative peers after this long, better off trying
+/// blacklisted peers again.
+const BLACKLIST_CLEAR_THRESHOLD: Duration = Duration::from_secs(60);
+/// If we can't find a good snapshot download candidate after this time, just
+/// give up.
+const NEWER_SNAPSHOT_THRESHOLD: Duration = Duration::from_secs(180);
+/// If we haven't found any RPC peers after this time, just give up.
+const GET_RPC_PEERS_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
 
@@ -60,38 +70,43 @@ fn verify_reachable_ports(
     validator_config: &ValidatorConfig,
     socket_addr_space: &SocketAddrSpace,
 ) -> bool {
+    let verify_address = |addr: &Option<SocketAddr>| -> bool {
+        addr.as_ref()
+            .map(|addr| socket_addr_space.check(addr))
+            .unwrap_or_default()
+    };
     let mut udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
 
-    if ContactInfo::is_valid_address(&node.info.serve_repair, socket_addr_space) {
+    if verify_address(&node.info.serve_repair().ok()) {
         udp_sockets.push(&node.sockets.serve_repair);
     }
-    if ContactInfo::is_valid_address(&node.info.tpu, socket_addr_space) {
+    if verify_address(&node.info.tpu().ok()) {
         udp_sockets.extend(node.sockets.tpu.iter());
         udp_sockets.push(&node.sockets.tpu_quic);
     }
-    if ContactInfo::is_valid_address(&node.info.tpu_forwards, socket_addr_space) {
+    if verify_address(&node.info.tpu_forwards().ok()) {
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
         udp_sockets.push(&node.sockets.tpu_forwards_quic);
     }
-    if ContactInfo::is_valid_address(&node.info.tpu_vote, socket_addr_space) {
+    if verify_address(&node.info.tpu_vote().ok()) {
         udp_sockets.extend(node.sockets.tpu_vote.iter());
     }
-    if ContactInfo::is_valid_address(&node.info.tvu, socket_addr_space) {
+    if verify_address(&node.info.tvu().ok()) {
         udp_sockets.extend(node.sockets.tvu.iter());
         udp_sockets.extend(node.sockets.broadcast.iter());
         udp_sockets.extend(node.sockets.retransmit_sockets.iter());
     }
-    if ContactInfo::is_valid_address(&node.info.tvu_forwards, socket_addr_space) {
+    if verify_address(&node.info.tvu_forwards().ok()) {
         udp_sockets.extend(node.sockets.tvu_forwards.iter());
     }
 
     let mut tcp_listeners = vec![];
     if let Some((rpc_addr, rpc_pubsub_addr)) = validator_config.rpc_addrs {
         for (purpose, bind_addr, public_addr) in &[
-            ("RPC", rpc_addr, &node.info.rpc),
-            ("RPC pubsub", rpc_pubsub_addr, &node.info.rpc_pubsub),
+            ("RPC", rpc_addr, node.info.rpc()),
+            ("RPC pubsub", rpc_pubsub_addr, node.info.rpc_pubsub()),
         ] {
-            if ContactInfo::is_valid_address(public_addr, socket_addr_space) {
+            if verify_address(&public_addr.as_ref().ok().copied()) {
                 tcp_listeners.push((
                     bind_addr.port(),
                     TcpListener::bind(bind_addr).unwrap_or_else(|err| {
@@ -168,7 +183,7 @@ fn get_rpc_peers(
     blacklist_timeout: &Instant,
     retry_reason: &mut Option<String>,
     bootstrap_config: &RpcBootstrapConfig,
-) -> Option<Vec<ContactInfo>> {
+) -> Vec<ContactInfo> {
     let shred_version = validator_config
         .expected_shred_version
         .unwrap_or_else(|| cluster_info.my_shred_version());
@@ -184,7 +199,7 @@ fn get_rpc_peers(
             exit(1);
         }
         info!("Waiting to adopt entrypoint shred version...");
-        return None;
+        return vec![];
     }
 
     info!(
@@ -227,19 +242,19 @@ fn get_rpc_peers(
     );
 
     if rpc_peers_blacklisted == rpc_peers_total {
-        *retry_reason =
-            if !blacklisted_rpc_nodes.is_empty() && blacklist_timeout.elapsed().as_secs() > 60 {
-                // If all nodes are blacklisted and no additional nodes are discovered after 60 seconds,
-                // remove the blacklist and try them all again
-                blacklisted_rpc_nodes.clear();
-                Some("Blacklist timeout expired".to_owned())
-            } else {
-                Some("Wait for known rpc peers".to_owned())
-            };
-        return None;
+        *retry_reason = if !blacklisted_rpc_nodes.is_empty()
+            && blacklist_timeout.elapsed() > BLACKLIST_CLEAR_THRESHOLD
+        {
+            // All nodes are blacklisted and no additional nodes recently discovered.
+            // Remove all nodes from the blacklist and try them again.
+            blacklisted_rpc_nodes.clear();
+            Some("Blacklist timeout expired".to_owned())
+        } else {
+            Some("Wait for known rpc peers".to_owned())
+        };
+        return vec![];
     }
-
-    Some(rpc_peers)
+    rpc_peers
 }
 
 fn check_vote_account(
@@ -302,6 +317,15 @@ fn check_vote_account(
     }
 
     Ok(())
+}
+
+#[derive(Error, Debug)]
+pub enum GetRpcNodeError {
+    #[error("Unable to find any RPC peers")]
+    NoRpcPeersFound,
+
+    #[error("Giving up, did not get newer snapshots from the cluster")]
+    NoNewerSnapshots,
 }
 
 /// Struct to wrap the return value from get_rpc_nodes().  The `rpc_contact_info` is the peer to
@@ -501,7 +525,10 @@ pub fn rpc_bootstrap(
                 identity_keypair.clone(),
                 cluster_entrypoints,
                 ledger_path,
-                &node.info.gossip,
+                &node
+                    .info
+                    .gossip()
+                    .expect("Operator must spin up node with valid gossip address"),
                 node.sockets.gossip.try_clone().unwrap(),
                 validator_config.expected_shred_version,
                 validator_config.gossip_validators.clone(),
@@ -511,18 +538,25 @@ pub fn rpc_bootstrap(
         }
 
         while vetted_rpc_nodes.is_empty() {
-            let rpc_node_details_vec = get_rpc_nodes(
+            let rpc_node_details = match get_rpc_nodes(
                 &gossip.as_ref().unwrap().0,
                 cluster_entrypoints,
                 validator_config,
                 &mut blacklisted_rpc_nodes.write().unwrap(),
                 &bootstrap_config,
-            );
-            if rpc_node_details_vec.is_empty() {
-                return;
-            }
+            ) {
+                Ok(rpc_node_details) => rpc_node_details,
+                Err(err) => {
+                    error!(
+                        "Failed to get RPC nodes: {err}. Consider checking system \
+                        clock, removing `--no-port-check`, or adjusting \
+                        `--known-validator ...` arguments as applicable"
+                    );
+                    exit(1);
+                }
+            };
 
-            vetted_rpc_nodes = rpc_node_details_vec
+            vetted_rpc_nodes = rpc_node_details
                 .into_par_iter()
                 .map(|rpc_node_details| {
                     let GetRpcNodeResult {
@@ -611,8 +645,9 @@ fn get_rpc_nodes(
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     bootstrap_config: &RpcBootstrapConfig,
-) -> Vec<GetRpcNodeResult> {
+) -> Result<Vec<GetRpcNodeResult>, GetRpcNodeError> {
     let mut blacklist_timeout = Instant::now();
+    let mut get_rpc_peers_timout = Instant::now();
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
     loop {
@@ -629,22 +664,22 @@ fn get_rpc_nodes(
             &mut retry_reason,
             bootstrap_config,
         );
-        if rpc_peers.is_none() {
+        if rpc_peers.is_empty() {
+            if get_rpc_peers_timout.elapsed() > GET_RPC_PEERS_TIMEOUT {
+                return Err(GetRpcNodeError::NoRpcPeersFound);
+            }
             continue;
         }
-        let rpc_peers = rpc_peers.unwrap();
+
+        // Reset timeouts if we found any viable RPC peers.
         blacklist_timeout = Instant::now();
+        get_rpc_peers_timout = Instant::now();
         if bootstrap_config.no_snapshot_fetch {
-            if rpc_peers.is_empty() {
-                retry_reason = Some("No RPC peers available.".to_owned());
-                continue;
-            } else {
-                let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
-                return vec![GetRpcNodeResult {
-                    rpc_contact_info: random_peer.clone(),
-                    snapshot_hash: None,
-                }];
-            }
+            let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
+            return Ok(vec![GetRpcNodeResult {
+                rpc_contact_info: random_peer.clone(),
+                snapshot_hash: None,
+            }]);
         }
 
         let known_validators_to_wait_for = if newer_cluster_snapshot_timeout
@@ -667,9 +702,8 @@ fn get_rpc_nodes(
             match newer_cluster_snapshot_timeout {
                 None => newer_cluster_snapshot_timeout = Some(Instant::now()),
                 Some(newer_cluster_snapshot_timeout) => {
-                    if newer_cluster_snapshot_timeout.elapsed().as_secs() > 180 {
-                        warn!("Giving up, did not get newer snapshots from the cluster.");
-                        return vec![];
+                    if newer_cluster_snapshot_timeout.elapsed() > NEWER_SNAPSHOT_THRESHOLD {
+                        return Err(GetRpcNodeError::NoNewerSnapshots);
                     }
                 }
             }
@@ -699,7 +733,7 @@ fn get_rpc_nodes(
                 })
                 .take(MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION)
                 .collect();
-            return rpc_node_results;
+            return Ok(rpc_node_results);
         }
     }
 }

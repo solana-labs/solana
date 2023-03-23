@@ -2,7 +2,9 @@ pub use crate::nonblocking::tpu_client::TpuSenderError;
 use {
     crate::nonblocking::tpu_client::TpuClient as NonblockingTpuClient,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
-    solana_connection_cache::connection_cache::{ConnectionCache, ConnectionManager},
+    solana_connection_cache::connection_cache::{
+        ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig,
+    },
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{clock::Slot, transaction::Transaction, transport::Result as TransportResult},
     std::{
@@ -21,19 +23,14 @@ pub const DEFAULT_TPU_ENABLE_UDP: bool = false;
 pub const DEFAULT_TPU_USE_QUIC: bool = true;
 pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
 
-pub mod temporary_pub {
-    use super::*;
+pub type Result<T> = std::result::Result<T, TpuSenderError>;
 
-    pub type Result<T> = std::result::Result<T, TpuSenderError>;
-
-    /// Send at ~100 TPS
-    #[cfg(feature = "spinner")]
-    pub const SEND_TRANSACTION_INTERVAL: Duration = Duration::from_millis(10);
-    /// Retry batch send after 4 seconds
-    #[cfg(feature = "spinner")]
-    pub const TRANSACTION_RESEND_INTERVAL: Duration = Duration::from_secs(4);
-}
-use temporary_pub::*;
+/// Send at ~100 TPS
+#[cfg(feature = "spinner")]
+pub(crate) const SEND_TRANSACTION_INTERVAL: Duration = Duration::from_millis(10);
+/// Retry batch send after 4 seconds
+#[cfg(feature = "spinner")]
+pub(crate) const TRANSACTION_RESEND_INTERVAL: Duration = Duration::from_secs(4);
 
 /// Default number of slots used to build TPU socket fanout set
 pub const DEFAULT_FANOUT_SLOTS: u64 = 12;
@@ -59,14 +56,23 @@ impl Default for TpuClientConfig {
 
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
 /// The client uses RPC to determine the current leader and fetch node contact info
-pub struct TpuClient {
+pub struct TpuClient<
+    P, // ConnectionPool
+    M, // ConnectionManager
+    C, // NewConnectionConfig
+> {
     _deprecated: UdpSocket, // TpuClient now uses the connection_cache to choose a send_socket
     //todo: get rid of this field
     rpc_client: Arc<RpcClient>,
-    tpu_client: Arc<NonblockingTpuClient>,
+    tpu_client: Arc<NonblockingTpuClient<P, M, C>>,
 }
 
-impl TpuClient {
+impl<P, M, C> TpuClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
     pub fn send_transaction(&self, transaction: &Transaction) -> bool {
@@ -110,7 +116,7 @@ impl TpuClient {
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_manager: Box<dyn ConnectionManager>,
+        connection_manager: M,
     ) -> Result<Self> {
         let create_tpu_client = NonblockingTpuClient::new(
             rpc_client.get_inner_client().clone(),
@@ -133,7 +139,7 @@ impl TpuClient {
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_cache: Arc<ConnectionCache>,
+        connection_cache: Arc<ConnectionCache<P, M, C>>,
     ) -> Result<Self> {
         let create_tpu_client = NonblockingTpuClient::new_with_connection_cache(
             rpc_client.get_inner_client().clone(),

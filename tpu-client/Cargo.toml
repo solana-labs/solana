@@ -5,14 +5,14 @@ description = "Solana TPU Client"
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-tpu-client"
 edition = "2021"
 
 [dependencies]
 async-trait = "0.1.57"
 bincode = "1.3.3"
-futures-util = "0.3.25"
+futures-util = "0.3.26"
 indexmap = "1.9.1"
 indicatif = { version = "0.17.1", optional = true }
 log = "0.4.17"

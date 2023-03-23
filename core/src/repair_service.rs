@@ -1,11 +1,15 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
+#[cfg(test)]
+use {
+    crate::duplicate_repair_status::DuplicateSlotRepairStatus, solana_ledger::shred::Nonce,
+    solana_sdk::clock::DEFAULT_MS_PER_SLOT,
+};
 use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
         cluster_info_vote_listener::VerifiedVoteReceiver,
         cluster_slots::ClusterSlots,
-        duplicate_repair_status::DuplicateSlotRepairStatus,
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,
         serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
@@ -13,12 +17,19 @@ use {
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
     solana_gossip::cluster_info::ClusterInfo,
-    solana_ledger::blockstore::{Blockstore, SlotMeta},
+    solana_ledger::{
+        blockstore::{Blockstore, SlotMeta},
+        shred,
+    },
     solana_measure::measure::Measure,
-    solana_runtime::{bank_forks::BankForks, contains::Contains},
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{
-        clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,
+        clock::{Slot, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
+        epoch_schedule::EpochSchedule,
+        hash::Hash,
+        pubkey::Pubkey,
         signer::keypair::Keypair,
+        timing::timestamp,
     },
     solana_streamer::sendmmsg::{batch_send, SendPktsError},
     std::{
@@ -33,8 +44,10 @@ use {
         time::{Duration, Instant},
     },
 };
-#[cfg(test)]
-use {solana_ledger::shred::Nonce, solana_sdk::timing::timestamp};
+
+// Time to defer repair requests to allow for turbine propagation
+const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
+const DEFER_REPAIR_THRESHOLD_TICKS: u64 = DEFER_REPAIR_THRESHOLD.as_millis() as u64 / MS_PER_TICK;
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
@@ -136,10 +149,13 @@ pub struct BestRepairsStats {
     pub num_unknown_last_index_slots: u64,
     pub num_unknown_last_index_repairs: u64,
     pub num_closest_completion_slots: u64,
+    pub num_closest_completion_slots_path: u64,
     pub num_closest_completion_repairs: u64,
+    pub num_repair_trees: u64,
 }
 
 impl BestRepairsStats {
+    #[allow(clippy::too_many_arguments)]
     pub fn update(
         &mut self,
         num_orphan_slots: u64,
@@ -149,7 +165,9 @@ impl BestRepairsStats {
         num_unknown_last_index_slots: u64,
         num_unknown_last_index_repairs: u64,
         num_closest_completion_slots: u64,
+        num_closest_completion_slots_path: u64,
         num_closest_completion_repairs: u64,
+        num_repair_trees: u64,
     ) {
         self.call_count += 1;
         self.num_orphan_slots += num_orphan_slots;
@@ -159,7 +177,9 @@ impl BestRepairsStats {
         self.num_unknown_last_index_slots += num_unknown_last_index_slots;
         self.num_unknown_last_index_repairs += num_unknown_last_index_repairs;
         self.num_closest_completion_slots += num_closest_completion_slots;
+        self.num_closest_completion_slots_path += num_closest_completion_slots_path;
         self.num_closest_completion_repairs += num_closest_completion_repairs;
+        self.num_repair_trees += num_repair_trees;
     }
 }
 
@@ -269,8 +289,6 @@ impl RepairService {
         let mut repair_timing = RepairTiming::default();
         let mut best_repairs_stats = BestRepairsStats::default();
         let mut last_stats = Instant::now();
-        let duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
-            HashMap::new();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
 
         loop {
@@ -341,7 +359,6 @@ impl RepairService {
                     MAX_REPAIR_LENGTH,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &duplicate_slot_repair_statuses,
                     &mut repair_timing,
                     &mut best_repairs_stats,
                 );
@@ -498,10 +515,16 @@ impl RepairService {
                         i64
                     ),
                     (
+                        "closest-completion-slots-path",
+                        best_repairs_stats.num_closest_completion_slots_path,
+                        i64
+                    ),
+                    (
                         "closest-completion-repairs",
                         best_repairs_stats.num_closest_completion_repairs,
                         i64
                     ),
+                    ("repair-trees", best_repairs_stats.num_repair_trees, i64),
                 );
                 repair_stats = RepairStats::default();
                 repair_timing = RepairTiming::default();
@@ -522,36 +545,51 @@ impl RepairService {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
+            // check delay time of last shred
+            if let Some(reference_tick) = slot_meta
+                .received
+                .checked_sub(1)
+                .and_then(|index| blockstore.get_data_shred(slot, index).ok()?)
+                .and_then(|shred| shred::layout::get_reference_tick(&shred).ok())
+                .map(u64::from)
+            {
+                // System time is not monotonic
+                let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
+                    * timestamp().saturating_sub(slot_meta.first_shred_timestamp)
+                    / 1_000;
+                if ticks_since_first_insert
+                    < reference_tick.saturating_add(DEFER_REPAIR_THRESHOLD_TICKS)
+                {
+                    return vec![];
+                }
+            }
             vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
         } else {
-            let reqs = blockstore.find_missing_data_indexes(
-                slot,
-                slot_meta.first_shred_timestamp,
-                slot_meta.consumed,
-                slot_meta.received,
-                max_repairs,
-            );
-            reqs.into_iter()
+            blockstore
+                .find_missing_data_indexes(
+                    slot,
+                    slot_meta.first_shred_timestamp,
+                    DEFER_REPAIR_THRESHOLD_TICKS,
+                    slot_meta.consumed,
+                    slot_meta.received,
+                    max_repairs,
+                )
+                .into_iter()
                 .map(|i| ShredRepairType::Shred(slot, i))
                 .collect()
         }
     }
 
     /// Repairs any fork starting at the input slot (uses blockstore for fork info)
-    pub fn generate_repairs_for_fork<'a>(
+    pub fn generate_repairs_for_fork(
         blockstore: &Blockstore,
         repairs: &mut Vec<ShredRepairType>,
         max_repairs: usize,
         slot: Slot,
-        duplicate_slot_repair_statuses: &impl Contains<'a, Slot>,
     ) {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
             let slot = pending_slots.pop().unwrap();
-            if duplicate_slot_repair_statuses.contains(&slot) {
-                // These are repaired through a different path
-                continue;
-            }
             if let Some(slot_meta) = blockstore.meta(slot).unwrap() {
                 let new_repairs = Self::generate_repairs_for_slot(
                     blockstore,
@@ -757,12 +795,18 @@ impl RepairService {
 }
 
 #[cfg(test)]
+pub(crate) fn sleep_shred_deferment_period() {
+    // sleep to bypass shred deferment window
+    sleep(Duration::from_millis(
+        DEFAULT_MS_PER_SLOT + DEFER_REPAIR_THRESHOLD.as_millis() as u64,
+    ));
+}
+
+#[cfg(test)]
 mod test {
     use {
         super::*,
-        solana_gossip::{
-            cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo,
-        },
+        solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
         solana_ledger::{
             blockstore::{
                 make_chaining_slot_entries, make_many_slot_entries, make_slot_entries, Blockstore,
@@ -807,7 +851,6 @@ mod test {
                     MAX_REPAIR_LENGTH,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &HashSet::default(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -844,7 +887,6 @@ mod test {
                     MAX_REPAIR_LENGTH,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &HashSet::default(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -886,8 +928,6 @@ mod test {
             blockstore
                 .insert_shreds(shreds_to_write, None, false)
                 .unwrap();
-            // sleep so that the holes are ready for repair
-            sleep(Duration::from_secs(1));
             let expected: Vec<ShredRepairType> = (0..num_slots)
                 .flat_map(|slot| {
                     missing_indexes_per_slot
@@ -897,6 +937,7 @@ mod test {
                 .collect();
 
             let mut repair_weight = RepairWeight::new(0);
+            sleep_shred_deferment_period();
             assert_eq!(
                 repair_weight.get_best_weighted_repairs(
                     &blockstore,
@@ -906,7 +947,6 @@ mod test {
                     MAX_REPAIR_LENGTH,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &HashSet::default(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -922,7 +962,6 @@ mod test {
                     expected.len() - 2,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &HashSet::default(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 )[..],
@@ -958,6 +997,7 @@ mod test {
             let expected: Vec<ShredRepairType> =
                 vec![ShredRepairType::HighestShred(0, num_shreds_per_slot - 1)];
 
+            sleep_shred_deferment_period();
             let mut repair_weight = RepairWeight::new(0);
             assert_eq!(
                 repair_weight.get_best_weighted_repairs(
@@ -968,7 +1008,6 @@ mod test {
                     MAX_REPAIR_LENGTH,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &HashSet::default(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -992,8 +1031,7 @@ mod test {
                 slot_shreds.remove(0);
                 blockstore.insert_shreds(slot_shreds, None, false).unwrap();
             }
-            // sleep to make slot eligible for repair
-            sleep(Duration::from_secs(1));
+
             // Iterate through all possible combinations of start..end (inclusive on both
             // sides of the range)
             for start in 0..slots.len() {
@@ -1013,6 +1051,7 @@ mod test {
                         })
                         .collect();
 
+                    sleep_shred_deferment_period();
                     assert_eq!(
                         RepairService::generate_repairs_in_range(
                             &blockstore,
@@ -1229,7 +1268,7 @@ mod test {
         // a valid target for repair
         let dead_slot = 9;
         let cluster_slots = ClusterSlots::default();
-        cluster_slots.insert_node_id(dead_slot, valid_repair_peer.id);
+        cluster_slots.insert_node_id(dead_slot, *valid_repair_peer.pubkey());
         cluster_info.insert_info(valid_repair_peer);
 
         // Not enough time has passed, should not update the

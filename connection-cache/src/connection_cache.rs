@@ -9,7 +9,6 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::timing::AtomicInterval,
     std::{
-        any::Any,
         net::SocketAddr,
         sync::{atomic::Ordering, Arc, RwLock},
     },
@@ -17,38 +16,40 @@ use {
 };
 
 // Should be non-zero
-pub static MAX_CONNECTIONS: usize = 1024;
+const MAX_CONNECTIONS: usize = 1024;
 
 /// Default connection pool size per remote address
 pub const DEFAULT_CONNECTION_POOL_SIZE: usize = 4;
 
-/// Defines the protocol types of an implementation supports.
-pub enum ProtocolType {
-    UDP,
-    QUIC,
-}
+pub trait ConnectionManager {
+    type ConnectionPool: ConnectionPool;
+    type NewConnectionConfig: NewConnectionConfig;
 
-pub trait ConnectionManager: Sync + Send {
-    fn new_connection_pool(&self) -> Box<dyn ConnectionPool>;
-    fn new_connection_config(&self) -> Box<dyn NewConnectionConfig>;
+    fn new_connection_pool(&self) -> Self::ConnectionPool;
+    fn new_connection_config(&self) -> Self::NewConnectionConfig;
     fn get_port_offset(&self) -> u16;
-    fn get_protocol_type(&self) -> ProtocolType;
 }
 
-pub struct ConnectionCache {
-    pub map: RwLock<IndexMap<SocketAddr, Box<dyn ConnectionPool>>>,
-    pub connection_manager: Box<dyn ConnectionManager>,
-    pub stats: Arc<ConnectionCacheStats>,
-    pub last_stats: AtomicInterval,
-    pub connection_pool_size: usize,
-    pub connection_config: Box<dyn NewConnectionConfig>,
+pub struct ConnectionCache<
+    R, // ConnectionPool
+    S, // ConnectionManager
+    T, // NewConnectionConfig
+> {
+    map: RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ R>>,
+    connection_manager: S,
+    stats: Arc<ConnectionCacheStats>,
+    last_stats: AtomicInterval,
+    connection_pool_size: usize,
+    connection_config: T,
 }
 
-impl ConnectionCache {
-    pub fn new(
-        connection_manager: Box<dyn ConnectionManager>,
-        connection_pool_size: usize,
-    ) -> Result<Self, ClientError> {
+impl<P, M, C> ConnectionCache<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
+    pub fn new(connection_manager: M, connection_pool_size: usize) -> Result<Self, ClientError> {
         let config = connection_manager.new_connection_config();
         Ok(Self::new_with_config(
             connection_pool_size,
@@ -59,8 +60,8 @@ impl ConnectionCache {
 
     pub fn new_with_config(
         connection_pool_size: usize,
-        connection_config: Box<dyn NewConnectionConfig>,
-        connection_manager: Box<dyn ConnectionManager>,
+        connection_config: C,
+        connection_manager: M,
     ) -> Self {
         Self {
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
@@ -79,7 +80,7 @@ impl ConnectionCache {
         &self,
         lock_timing_ms: &mut u64,
         addr: &SocketAddr,
-    ) -> CreateConnectionResult {
+    ) -> CreateConnectionResult<<P as ConnectionPool>::BaseClientConnection> {
         let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
         let mut map = self.map.write().unwrap();
         get_connection_map_lock_measure.stop();
@@ -113,11 +114,11 @@ impl ConnectionCache {
 
             map.entry(*addr)
                 .and_modify(|pool| {
-                    pool.add_connection(&*self.connection_config, addr);
+                    pool.add_connection(&self.connection_config, addr);
                 })
                 .or_insert_with(|| {
                     let mut pool = self.connection_manager.new_connection_pool();
-                    pool.add_connection(&*self.connection_config, addr);
+                    pool.add_connection(&self.connection_config, addr);
                     pool
                 });
             (
@@ -141,7 +142,10 @@ impl ConnectionCache {
         }
     }
 
-    fn get_or_add_connection(&self, addr: &SocketAddr) -> GetConnectionResult {
+    fn get_or_add_connection(
+        &self,
+        addr: &SocketAddr,
+    ) -> GetConnectionResult<<P as ConnectionPool>::BaseClientConnection> {
         let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
         let map = self.map.read().unwrap();
         get_connection_map_lock_measure.stop();
@@ -207,7 +211,10 @@ impl ConnectionCache {
     fn get_connection_and_log_stats(
         &self,
         addr: &SocketAddr,
-    ) -> (Arc<dyn BaseClientConnection>, Arc<ConnectionCacheStats>) {
+    ) -> (
+        Arc<<P as ConnectionPool>::BaseClientConnection>,
+        Arc<ConnectionCacheStats>,
+    ) {
         let mut get_connection_measure = Measure::start("get_connection_measure");
         let GetConnectionResult {
             connection,
@@ -257,7 +264,7 @@ impl ConnectionCache {
         (connection, connection_cache_stats)
     }
 
-    pub fn get_connection(&self, addr: &SocketAddr) -> Arc<dyn BlockingClientConnection> {
+    pub fn get_connection(&self, addr: &SocketAddr) -> Arc<<<P as ConnectionPool>::BaseClientConnection as BaseClientConnection>::BlockingClientConnection>{
         let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
         connection.new_blocking_connection(*addr, connection_cache_stats)
     }
@@ -265,13 +272,9 @@ impl ConnectionCache {
     pub fn get_nonblocking_connection(
         &self,
         addr: &SocketAddr,
-    ) -> Arc<dyn NonblockingClientConnection> {
+    ) -> Arc<<<P as ConnectionPool>::BaseClientConnection as BaseClientConnection>::NonblockingClientConnection>{
         let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
         connection.new_nonblocking_connection(*addr, connection_cache_stats)
-    }
-
-    pub fn get_protocol_type(&self) -> ProtocolType {
-        self.connection_manager.get_protocol_type()
     }
 }
 
@@ -290,28 +293,26 @@ pub enum ClientError {
     IoError(#[from] std::io::Error),
 }
 
-pub trait NewConnectionConfig: Sync + Send {
-    fn new() -> Result<Self, ClientError>
-    where
-        Self: Sized;
-    fn as_any(&self) -> &dyn Any;
-
-    fn as_mut_any(&mut self) -> &mut dyn Any;
+pub trait NewConnectionConfig: Sized {
+    fn new() -> Result<Self, ClientError>;
 }
 
-pub trait ConnectionPool: Sync + Send {
+pub trait ConnectionPool {
+    type NewConnectionConfig: NewConnectionConfig;
+    type BaseClientConnection: BaseClientConnection;
+
     /// Add a connection to the pool
-    fn add_connection(&mut self, config: &dyn NewConnectionConfig, addr: &SocketAddr);
+    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr);
 
     /// Get the number of current connections in the pool
     fn num_connections(&self) -> usize;
 
     /// Get a connection based on its index in the pool, without checking if the
-    fn get(&self, index: usize) -> Result<Arc<dyn BaseClientConnection>, ConnectionPoolError>;
+    fn get(&self, index: usize) -> Result<Arc<Self::BaseClientConnection>, ConnectionPoolError>;
 
     /// Get a connection from the pool. It must have at least one connection in the pool.
     /// This randomly picks a connection in the pool.
-    fn borrow_connection(&self) -> Arc<dyn BaseClientConnection> {
+    fn borrow_connection(&self) -> Arc<Self::BaseClientConnection> {
         let mut rng = thread_rng();
         let n = rng.gen_range(0, self.num_connections());
         self.get(n).expect("index is within num_connections")
@@ -324,27 +325,30 @@ pub trait ConnectionPool: Sync + Send {
 
     fn create_pool_entry(
         &self,
-        config: &dyn NewConnectionConfig,
+        config: &Self::NewConnectionConfig,
         addr: &SocketAddr,
-    ) -> Arc<dyn BaseClientConnection>;
+    ) -> Arc<Self::BaseClientConnection>;
 }
 
-pub trait BaseClientConnection: Sync + Send {
+pub trait BaseClientConnection {
+    type BlockingClientConnection: BlockingClientConnection;
+    type NonblockingClientConnection: NonblockingClientConnection;
+
     fn new_blocking_connection(
         &self,
         addr: SocketAddr,
         stats: Arc<ConnectionCacheStats>,
-    ) -> Arc<dyn BlockingClientConnection>;
+    ) -> Arc<Self::BlockingClientConnection>;
 
     fn new_nonblocking_connection(
         &self,
         addr: SocketAddr,
         stats: Arc<ConnectionCacheStats>,
-    ) -> Arc<dyn NonblockingClientConnection>;
+    ) -> Arc<Self::NonblockingClientConnection>;
 }
 
-struct GetConnectionResult {
-    connection: Arc<dyn BaseClientConnection>,
+struct GetConnectionResult<T> {
+    connection: Arc</*BaseClientConnection:*/ T>,
     cache_hit: bool,
     report_stats: bool,
     map_timing_ms: u64,
@@ -354,8 +358,8 @@ struct GetConnectionResult {
     eviction_timing_ms: u64,
 }
 
-struct CreateConnectionResult {
-    connection: Arc<dyn BaseClientConnection>,
+struct CreateConnectionResult<T> {
+    connection: Arc</*BaseClientConnection:*/ T>,
     cache_hit: bool,
     connection_cache_stats: Arc<ConnectionCacheStats>,
     num_evictions: u64,
@@ -382,11 +386,14 @@ mod tests {
 
     const MOCK_PORT_OFFSET: u16 = 42;
 
-    pub struct MockUdpPool {
-        connections: Vec<Arc<dyn BaseClientConnection>>,
+    struct MockUdpPool {
+        connections: Vec<Arc<MockUdp>>,
     }
     impl ConnectionPool for MockUdpPool {
-        fn add_connection(&mut self, config: &dyn NewConnectionConfig, addr: &SocketAddr) {
+        type NewConnectionConfig = MockUdpConfig;
+        type BaseClientConnection = MockUdp;
+
+        fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) {
             let connection = self.create_pool_entry(config, addr);
             self.connections.push(connection);
         }
@@ -395,7 +402,10 @@ mod tests {
             self.connections.len()
         }
 
-        fn get(&self, index: usize) -> Result<Arc<dyn BaseClientConnection>, ConnectionPoolError> {
+        fn get(
+            &self,
+            index: usize,
+        ) -> Result<Arc<Self::BaseClientConnection>, ConnectionPoolError> {
             self.connections
                 .get(index)
                 .cloned()
@@ -404,19 +414,14 @@ mod tests {
 
         fn create_pool_entry(
             &self,
-            config: &dyn NewConnectionConfig,
+            config: &Self::NewConnectionConfig,
             _addr: &SocketAddr,
-        ) -> Arc<dyn BaseClientConnection> {
-            let config: &MockUdpConfig = match config.as_any().downcast_ref::<MockUdpConfig>() {
-                Some(b) => b,
-                None => panic!("Expecting a MockUdpConfig!"),
-            };
-
+        ) -> Arc<Self::BaseClientConnection> {
             Arc::new(MockUdp(config.udp_socket.clone()))
         }
     }
 
-    pub struct MockUdpConfig {
+    struct MockUdpConfig {
         udp_socket: Arc<UdpSocket>,
     }
 
@@ -440,23 +445,18 @@ mod tests {
                 ),
             })
         }
-
-        fn as_any(&self) -> &dyn Any {
-            self
-        }
-
-        fn as_mut_any(&mut self) -> &mut dyn Any {
-            self
-        }
     }
 
-    pub struct MockUdp(Arc<UdpSocket>);
+    struct MockUdp(Arc<UdpSocket>);
     impl BaseClientConnection for MockUdp {
+        type BlockingClientConnection = MockUdpConnection;
+        type NonblockingClientConnection = MockUdpConnection;
+
         fn new_blocking_connection(
             &self,
             addr: SocketAddr,
             _stats: Arc<ConnectionCacheStats>,
-        ) -> Arc<dyn BlockingClientConnection> {
+        ) -> Arc<Self::BlockingClientConnection> {
             Arc::new(MockUdpConnection {
                 _socket: self.0.clone(),
                 addr,
@@ -467,7 +467,7 @@ mod tests {
             &self,
             addr: SocketAddr,
             _stats: Arc<ConnectionCacheStats>,
-        ) -> Arc<dyn NonblockingClientConnection> {
+        ) -> Arc<Self::NonblockingClientConnection> {
             Arc::new(MockUdpConnection {
                 _socket: self.0.clone(),
                 addr,
@@ -475,31 +475,30 @@ mod tests {
         }
     }
 
-    pub struct MockUdpConnection {
+    struct MockUdpConnection {
         _socket: Arc<UdpSocket>,
         addr: SocketAddr,
     }
 
     #[derive(Default)]
-    pub struct MockConnectionManager {}
+    struct MockConnectionManager {}
 
     impl ConnectionManager for MockConnectionManager {
-        fn new_connection_pool(&self) -> Box<dyn ConnectionPool> {
-            Box::new(MockUdpPool {
+        type ConnectionPool = MockUdpPool;
+        type NewConnectionConfig = MockUdpConfig;
+
+        fn new_connection_pool(&self) -> Self::ConnectionPool {
+            MockUdpPool {
                 connections: Vec::default(),
-            })
+            }
         }
 
-        fn new_connection_config(&self) -> Box<dyn NewConnectionConfig> {
-            Box::new(MockUdpConfig::new().unwrap())
+        fn new_connection_config(&self) -> Self::NewConnectionConfig {
+            MockUdpConfig::new().unwrap()
         }
 
         fn get_port_offset(&self) -> u16 {
             MOCK_PORT_OFFSET
-        }
-
-        fn get_protocol_type(&self) -> ProtocolType {
-            ProtocolType::UDP
         }
     }
 
@@ -560,7 +559,7 @@ mod tests {
         // we can actually connect to those addresses - ClientConnection implementations should either
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
-        let connection_manager = Box::<MockConnectionManager>::default();
+        let connection_manager = MockConnectionManager::default();
         let connection_cache =
             ConnectionCache::new(connection_manager, DEFAULT_CONNECTION_POOL_SIZE).unwrap();
         let port_offset = MOCK_PORT_OFFSET;
@@ -583,7 +582,14 @@ mod tests {
 
                 let conn = &map.get(addr).expect("Address not found").get(0).unwrap();
                 let conn = conn.new_blocking_connection(*addr, connection_cache.stats.clone());
-                assert!(addr.ip() == conn.server_addr().ip());
+                assert_eq!(
+                    BlockingClientConnection::server_addr(&*conn).ip(),
+                    addr.ip(),
+                );
+                assert_eq!(
+                    NonblockingClientConnection::server_addr(&*conn).ip(),
+                    addr.ip(),
+                );
             });
         }
 
@@ -608,14 +614,18 @@ mod tests {
         let port = u16::MAX - MOCK_PORT_OFFSET + 1;
         assert!(port.checked_add(MOCK_PORT_OFFSET).is_none());
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-        let connection_manager = Box::<MockConnectionManager>::default();
+        let connection_manager = MockConnectionManager::default();
         let connection_cache = ConnectionCache::new(connection_manager, 1).unwrap();
 
         let conn = connection_cache.get_connection(&addr);
         // We (intentionally) don't have an interface that allows us to distinguish between
         // UDP and Quic connections, so check instead that the port is valid (non-zero)
         // and is the same as the input port (falling back on UDP)
-        assert!(conn.server_addr().port() != 0);
-        assert!(conn.server_addr().port() == port);
+        assert_ne!(port, 0u16);
+        assert_eq!(BlockingClientConnection::server_addr(&*conn).port(), port);
+        assert_eq!(
+            NonblockingClientConnection::server_addr(&*conn).port(),
+            port
+        );
     }
 }

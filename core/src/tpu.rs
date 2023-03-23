@@ -164,7 +164,11 @@ impl Tpu {
         let (_, tpu_quic_t) = spawn_server(
             transactions_quic_sockets,
             keypair,
-            cluster_info.my_contact_info().tpu.ip(),
+            cluster_info
+                .my_contact_info()
+                .tpu_quic()
+                .expect("Operator must spin up node with valid (QUIC) TPU address")
+                .ip(),
             packet_sender,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_PEER,
@@ -179,7 +183,11 @@ impl Tpu {
         let (_, tpu_forwards_quic_t) = spawn_server(
             transactions_forwards_quic_sockets,
             keypair,
-            cluster_info.my_contact_info().tpu_forwards.ip(),
+            cluster_info
+                .my_contact_info()
+                .tpu_forwards_quic()
+                .expect("Operator must spin up node with valid (QUIC) TPU-forwards address")
+                .ip(),
             forwarded_packet_sender,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_PEER,

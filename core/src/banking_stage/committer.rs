@@ -1,10 +1,9 @@
 use {
-    super::PreBalanceInfo,
     crate::leader_slot_banking_stage_timing_metrics::LeaderExecuteAndCommitTimings,
     solana_ledger::{
         blockstore_processor::TransactionStatusSender, token_balances::collect_token_balances,
     },
-    solana_measure::{measure, measure_us},
+    solana_measure::measure_us,
     solana_runtime::{
         accounts::TransactionLoadResult,
         bank::{
@@ -15,9 +14,11 @@ use {
         transaction_batch::TransactionBatch,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::saturating_add_assign,
-    solana_transaction_status::token_balances::TransactionTokenBalancesSet,
-    std::sync::Arc,
+    solana_sdk::{pubkey::Pubkey, saturating_add_assign},
+    solana_transaction_status::{
+        token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
+    },
+    std::{collections::HashMap, sync::Arc},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,11 +27,36 @@ pub enum CommitTransactionDetails {
     NotCommitted,
 }
 
-pub struct Committer;
+#[derive(Default)]
+pub(super) struct PreBalanceInfo {
+    pub native: Vec<Vec<u64>>,
+    pub token: Vec<Vec<TransactionTokenBalance>>,
+    pub mint_decimals: HashMap<Pubkey, u8>,
+}
+
+pub struct Committer {
+    transaction_status_sender: Option<TransactionStatusSender>,
+    replay_vote_sender: ReplayVoteSender,
+}
 
 impl Committer {
+    pub fn new(
+        transaction_status_sender: Option<TransactionStatusSender>,
+        replay_vote_sender: ReplayVoteSender,
+    ) -> Self {
+        Self {
+            transaction_status_sender,
+            replay_vote_sender,
+        }
+    }
+
+    pub(super) fn transaction_status_sender_enabled(&self) -> bool {
+        self.transaction_status_sender.is_some()
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn commit_transactions(
+        &self,
         batch: &TransactionBatch,
         loaded_transactions: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
@@ -38,8 +64,6 @@ impl Committer {
         bank: &Arc<Bank>,
         pre_balance_info: &mut PreBalanceInfo,
         execute_and_commit_timings: &mut LeaderExecuteAndCommitTimings,
-        transaction_status_sender: &Option<TransactionStatusSender>,
-        replay_vote_sender: &ReplayVoteSender,
         signature_count: u64,
         executed_transactions_count: usize,
         executed_non_vote_transactions_count: usize,
@@ -86,10 +110,9 @@ impl Committer {
             bank_utils::find_and_send_votes(
                 batch.sanitized_transactions(),
                 &tx_results,
-                Some(replay_vote_sender),
+                Some(&self.replay_vote_sender),
             );
-            Self::collect_balances_and_send_status_batch(
-                transaction_status_sender,
+            self.collect_balances_and_send_status_batch(
                 tx_results,
                 bank,
                 batch,
@@ -102,14 +125,14 @@ impl Committer {
     }
 
     fn collect_balances_and_send_status_batch(
-        transaction_status_sender: &Option<TransactionStatusSender>,
+        &self,
         tx_results: TransactionResults,
         bank: &Arc<Bank>,
         batch: &TransactionBatch,
         pre_balance_info: &mut PreBalanceInfo,
         starting_transaction_index: Option<usize>,
     ) {
-        if let Some(transaction_status_sender) = transaction_status_sender {
+        if let Some(transaction_status_sender) = &self.transaction_status_sender {
             let txs = batch.sanitized_transactions().to_vec();
             let post_balances = bank.collect_balances(batch);
             let post_token_balances =

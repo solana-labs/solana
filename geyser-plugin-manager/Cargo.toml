@@ -6,14 +6,14 @@ description = "The Solana Geyser plugin manager."
 version = "1.16.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-geyser-plugin-manager"
 
 [dependencies]
 bs58 = "0.4.0"
 crossbeam-channel = "0.5"
 json5 = "0.4.1"
-libloading = "0.7.3"
+libloading = "0.7.4"
 log = "0.4.17"
 serde_json = "1.0.83"
 solana-geyser-plugin-interface = { path = "../geyser-plugin-interface", version = "=1.16.0" }

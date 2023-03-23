@@ -6,7 +6,12 @@
 use {
     log::*,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
-    solana_connection_cache::connection_cache::ConnectionCache,
+    solana_connection_cache::{
+        client_connection::ClientConnection,
+        connection_cache::{
+            ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig,
+        },
+    },
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{config::RpcProgramAccountsConfig, response::Response},
     solana_sdk::{
@@ -38,94 +43,98 @@ use {
     },
 };
 
-pub mod temporary_pub {
-    use super::*;
+struct ClientOptimizer {
+    cur_index: AtomicUsize,
+    experiment_index: AtomicUsize,
+    experiment_done: AtomicBool,
+    times: RwLock<Vec<u64>>,
+    num_clients: usize,
+}
 
-    pub struct ClientOptimizer {
-        cur_index: AtomicUsize,
-        experiment_index: AtomicUsize,
-        experiment_done: AtomicBool,
-        times: RwLock<Vec<u64>>,
-        num_clients: usize,
+impl ClientOptimizer {
+    fn new(num_clients: usize) -> Self {
+        Self {
+            cur_index: AtomicUsize::new(0),
+            experiment_index: AtomicUsize::new(0),
+            experiment_done: AtomicBool::new(false),
+            times: RwLock::new(vec![std::u64::MAX; num_clients]),
+            num_clients,
+        }
     }
 
-    impl ClientOptimizer {
-        pub fn new(num_clients: usize) -> Self {
-            Self {
-                cur_index: AtomicUsize::new(0),
-                experiment_index: AtomicUsize::new(0),
-                experiment_done: AtomicBool::new(false),
-                times: RwLock::new(vec![std::u64::MAX; num_clients]),
-                num_clients,
-            }
-        }
-
-        pub fn experiment(&self) -> usize {
-            if self.experiment_index.load(Ordering::Relaxed) < self.num_clients {
-                let old = self.experiment_index.fetch_add(1, Ordering::Relaxed);
-                if old < self.num_clients {
-                    old
-                } else {
-                    self.best()
-                }
+    fn experiment(&self) -> usize {
+        if self.experiment_index.load(Ordering::Relaxed) < self.num_clients {
+            let old = self.experiment_index.fetch_add(1, Ordering::Relaxed);
+            if old < self.num_clients {
+                old
             } else {
                 self.best()
             }
-        }
-
-        pub fn report(&self, index: usize, time_ms: u64) {
-            if self.num_clients > 1
-                && (!self.experiment_done.load(Ordering::Relaxed) || time_ms == std::u64::MAX)
-            {
-                trace!(
-                    "report {} with {} exp: {}",
-                    index,
-                    time_ms,
-                    self.experiment_index.load(Ordering::Relaxed)
-                );
-
-                self.times.write().unwrap()[index] = time_ms;
-
-                if index == (self.num_clients - 1) || time_ms == std::u64::MAX {
-                    let times = self.times.read().unwrap();
-                    let (min_time, min_index) = min_index(&times);
-                    trace!(
-                        "done experimenting min: {} time: {} times: {:?}",
-                        min_index,
-                        min_time,
-                        times
-                    );
-
-                    // Only 1 thread should grab the num_clients-1 index, so this should be ok.
-                    self.cur_index.store(min_index, Ordering::Relaxed);
-                    self.experiment_done.store(true, Ordering::Relaxed);
-                }
-            }
-        }
-
-        pub fn best(&self) -> usize {
-            self.cur_index.load(Ordering::Relaxed)
+        } else {
+            self.best()
         }
     }
+
+    fn report(&self, index: usize, time_ms: u64) {
+        if self.num_clients > 1
+            && (!self.experiment_done.load(Ordering::Relaxed) || time_ms == std::u64::MAX)
+        {
+            trace!(
+                "report {} with {} exp: {}",
+                index,
+                time_ms,
+                self.experiment_index.load(Ordering::Relaxed)
+            );
+
+            self.times.write().unwrap()[index] = time_ms;
+
+            if index == (self.num_clients - 1) || time_ms == std::u64::MAX {
+                let times = self.times.read().unwrap();
+                let (min_time, min_index) = min_index(&times);
+                trace!(
+                    "done experimenting min: {} time: {} times: {:?}",
+                    min_index,
+                    min_time,
+                    times
+                );
+
+                // Only 1 thread should grab the num_clients-1 index, so this should be ok.
+                self.cur_index.store(min_index, Ordering::Relaxed);
+                self.experiment_done.store(true, Ordering::Relaxed);
+            }
+        }
+    }
+
+    fn best(&self) -> usize {
+        self.cur_index.load(Ordering::Relaxed)
+    }
 }
-use temporary_pub::*;
 
 /// An object for querying and sending transactions to the network.
-pub struct ThinClient {
+pub struct ThinClient<
+    P, // ConnectionPool
+    M, // ConnectionManager
+    C, // NewConnectionConfig
+> {
     rpc_clients: Vec<RpcClient>,
     tpu_addrs: Vec<SocketAddr>,
     optimizer: ClientOptimizer,
-    connection_cache: Arc<ConnectionCache>,
+    connection_cache: Arc<ConnectionCache<P, M, C>>,
 }
 
-impl ThinClient {
+impl<P, M, C> ThinClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
     /// and the Tpu at `tpu_addr` over `transactions_socket` using Quic or UDP
     /// (currently hardcoded to UDP)
     pub fn new(
         rpc_addr: SocketAddr,
         tpu_addr: SocketAddr,
-        connection_cache: Arc<ConnectionCache>,
+        connection_cache: Arc<ConnectionCache<P, M, C>>,
     ) -> Self {
         Self::new_from_client(RpcClient::new_socket(rpc_addr), tpu_addr, connection_cache)
     }
@@ -134,7 +143,7 @@ impl ThinClient {
         rpc_addr: SocketAddr,
         tpu_addr: SocketAddr,
         timeout: Duration,
-        connection_cache: Arc<ConnectionCache>,
+        connection_cache: Arc<ConnectionCache<P, M, C>>,
     ) -> Self {
         let rpc_client = RpcClient::new_socket_with_timeout(rpc_addr, timeout);
         Self::new_from_client(rpc_client, tpu_addr, connection_cache)
@@ -143,7 +152,7 @@ impl ThinClient {
     fn new_from_client(
         rpc_client: RpcClient,
         tpu_addr: SocketAddr,
-        connection_cache: Arc<ConnectionCache>,
+        connection_cache: Arc<ConnectionCache<P, M, C>>,
     ) -> Self {
         Self {
             rpc_clients: vec![rpc_client],
@@ -156,7 +165,7 @@ impl ThinClient {
     pub fn new_from_addrs(
         rpc_addrs: Vec<SocketAddr>,
         tpu_addrs: Vec<SocketAddr>,
-        connection_cache: Arc<ConnectionCache>,
+        connection_cache: Arc<ConnectionCache<P, M, C>>,
     ) -> Self {
         assert!(!rpc_addrs.is_empty());
         assert_eq!(rpc_addrs.len(), tpu_addrs.len());
@@ -314,13 +323,23 @@ impl ThinClient {
     }
 }
 
-impl Client for ThinClient {
+impl<P, M, C> Client for ThinClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
     fn tpu_addr(&self) -> String {
         self.tpu_addr().to_string()
     }
 }
 
-impl SyncClient for ThinClient {
+impl<P, M, C> SyncClient for ThinClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
     fn send_and_confirm_message<T: Signers>(
         &self,
         keypairs: &T,
@@ -600,7 +619,12 @@ impl SyncClient for ThinClient {
     }
 }
 
-impl AsyncClient for ThinClient {
+impl<P, M, C> AsyncClient for ThinClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
     fn async_send_versioned_transaction(
         &self,
         transaction: VersionedTransaction,

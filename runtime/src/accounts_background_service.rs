@@ -5,7 +5,7 @@
 mod stats;
 use {
     crate::{
-        accounts_db::CalcAccountsHashDataSource,
+        accounts_db::{AccountStorageEntry, CalcAccountsHashDataSource},
         accounts_hash::CalcAccountsHashConfig,
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
@@ -16,6 +16,7 @@ use {
     crossbeam_channel::{Receiver, SendError, Sender},
     log::*,
     rand::{thread_rng, Rng},
+    snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN,
     solana_measure::measure::Measure,
     solana_sdk::clock::{BankId, Slot},
     stats::StatsManager,
@@ -142,13 +143,14 @@ pub struct SnapshotRequestHandler {
 }
 
 impl SnapshotRequestHandler {
-    // Returns the latest requested snapshot slot, if one exists
+    // Returns the latest requested snapshot block height and storages
+    #[allow(clippy::type_complexity)]
     pub fn handle_snapshot_requests(
         &self,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<u64, SnapshotError>> {
+    ) -> Option<Result<(u64, Vec<Arc<AccountStorageEntry>>), SnapshotError>> {
         let (
             snapshot_request,
             accounts_package_type,
@@ -265,7 +267,7 @@ impl SnapshotRequestHandler {
         last_full_snapshot_slot: &mut Option<Slot>,
         snapshot_request: SnapshotRequest,
         accounts_package_type: AccountsPackageType,
-    ) -> Result<u64, SnapshotError> {
+    ) -> Result<(u64, Vec<Arc<AccountStorageEntry>>), SnapshotError> {
         debug!(
             "handling snapshot request: {:?}, {:?}",
             snapshot_request, accounts_package_type
@@ -367,7 +369,7 @@ impl SnapshotRequestHandler {
                     &self.snapshot_config.bank_snapshots_dir,
                     &self.snapshot_config.full_snapshot_archives_dir,
                     &self.snapshot_config.incremental_snapshot_archives_dir,
-                    snapshot_storages,
+                    snapshot_storages.clone(),
                     self.snapshot_config.archive_format,
                     self.snapshot_config.snapshot_version,
                     accounts_hash_for_testing,
@@ -379,7 +381,7 @@ impl SnapshotRequestHandler {
                 AccountsPackage::new_for_epoch_accounts_hash(
                     accounts_package_type,
                     &snapshot_root_bank,
-                    snapshot_storages,
+                    snapshot_storages.clone(),
                     accounts_hash_for_testing,
                 )
             }
@@ -397,7 +399,10 @@ impl SnapshotRequestHandler {
 
         // Cleanup outdated snapshots
         let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
-        snapshot_utils::purge_old_bank_snapshots(&self.snapshot_config.bank_snapshots_dir);
+        snapshot_utils::purge_old_bank_snapshots(
+            &self.snapshot_config.bank_snapshots_dir,
+            MAX_BANK_SNAPSHOTS_TO_RETAIN,
+        );
         purge_old_snapshots_time.stop();
         total_time.stop();
 
@@ -419,7 +424,7 @@ impl SnapshotRequestHandler {
             ("total_us", total_time.as_us(), i64),
             ("non_snapshot_time_us", non_snapshot_time_us, i64),
         );
-        Ok(snapshot_root_bank.block_height())
+        Ok((snapshot_root_bank.block_height(), snapshot_storages))
     }
 }
 
@@ -501,12 +506,13 @@ pub struct AbsRequestHandlers {
 
 impl AbsRequestHandlers {
     // Returns the latest requested snapshot block height, if one exists
+    #[allow(clippy::type_complexity)]
     pub fn handle_snapshot_requests(
         &self,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<u64, SnapshotError>> {
+    ) -> Option<Result<(u64, Vec<Arc<AccountStorageEntry>>), SnapshotError>> {
         self.snapshot_request_handler.handle_snapshot_requests(
             test_hash_calculation,
             non_snapshot_time_us,
@@ -538,6 +544,11 @@ impl AccountsBackgroundService {
             .spawn(move || {
                 let mut stats = StatsManager::new();
                 let mut last_snapshot_end_time = None;
+
+                // To support fastboot, we must ensure the storages used in the latest bank snapshot are
+                // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
+                // expiring.
+                let mut last_snapshot_storages: Option<Vec<Arc<AccountStorageEntry>>> = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -586,7 +597,7 @@ impl AccountsBackgroundService {
                     // snapshot requests.  This is because startup verification and snapshot
                     // request handling can both kick off accounts hash calculations in background
                     // threads, and these must not happen concurrently.
-                    let snapshot_block_height_option_result = bank
+                    let snapshot_handle_result = bank
                         .is_startup_verification_complete()
                         .then(|| {
                             request_handlers.handle_snapshot_requests(
@@ -596,7 +607,7 @@ impl AccountsBackgroundService {
                             )
                         })
                         .flatten();
-                    if snapshot_block_height_option_result.is_some() {
+                    if snapshot_handle_result.is_some() {
                         last_snapshot_end_time = Some(Instant::now());
                     }
 
@@ -606,12 +617,24 @@ impl AccountsBackgroundService {
                     // slots >= bank.slot()
                     bank.flush_accounts_cache_if_needed();
 
-                    if let Some(snapshot_block_height_result) = snapshot_block_height_option_result
-                    {
+                    if let Some(snapshot_handle_result) = snapshot_handle_result {
                         // Safe, see proof above
-                        if let Ok(snapshot_block_height) = snapshot_block_height_result {
+
+                        if let Ok((snapshot_block_height, snapshot_storages)) =
+                            snapshot_handle_result
+                        {
                             assert!(last_cleaned_block_height <= snapshot_block_height);
                             last_cleaned_block_height = snapshot_block_height;
+                            // Update the option, so the older one is released, causing the release of
+                            // its reference counts of the appendvecs
+                            last_snapshot_storages = Some(snapshot_storages);
+                            debug!(
+                                "Number of snapshot storages kept alive for fastboot: {}",
+                                last_snapshot_storages
+                                    .as_ref()
+                                    .map(|storages| storages.len())
+                                    .unwrap_or(0)
+                            );
                         } else {
                             exit.store(true, Ordering::Relaxed);
                             return;
@@ -633,8 +656,15 @@ impl AccountsBackgroundService {
                     stats.record_and_maybe_submit(start_time.elapsed());
                     sleep(Duration::from_millis(INTERVAL_MS));
                 }
+                info!(
+                    "ABS loop done.  Number of snapshot storages kept alive for fastboot: {}",
+                    last_snapshot_storages
+                        .map(|storages| storages.len())
+                        .unwrap_or(0)
+                );
             })
             .unwrap();
+
         Self { t_background }
     }
 

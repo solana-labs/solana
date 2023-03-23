@@ -5,13 +5,13 @@ description = "Solana Streamer"
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-streamer"
 edition = "2021"
 
 [dependencies]
 crossbeam-channel = "0.5"
-futures-util = "0.3.25"
+futures-util = "0.3.26"
 histogram = "0.6.9"
 indexmap = "1.9.1"
 itertools = "0.10.5"

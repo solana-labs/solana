@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   release-artifacts:
+    if: github.repository == 'solana-labs/solana'
     uses: ./.github/workflows/release-artifacts.yml
     with:
       commit: ${{ github.sha }}

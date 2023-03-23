@@ -16,13 +16,11 @@ use {
     },
     quinn::Endpoint,
     solana_connection_cache::{
-        client_connection::ClientConnection as BlockingClientConnection,
         connection_cache::{
             BaseClientConnection, ClientError, ConnectionManager, ConnectionPool,
-            ConnectionPoolError, NewConnectionConfig, ProtocolType,
+            ConnectionPoolError, NewConnectionConfig,
         },
         connection_cache_stats::ConnectionCacheStats,
-        nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
     },
     solana_sdk::{pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Keypair},
     solana_streamer::{
@@ -31,7 +29,6 @@ use {
         tls_certificates::new_self_signed_tls_certificate,
     },
     std::{
-        any::Any,
         error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{Arc, RwLock},
@@ -46,11 +43,14 @@ pub enum QuicClientError {
 }
 
 pub struct QuicPool {
-    connections: Vec<Arc<dyn BaseClientConnection>>,
+    connections: Vec<Arc<Quic>>,
     endpoint: Arc<QuicLazyInitializedEndpoint>,
 }
 impl ConnectionPool for QuicPool {
-    fn add_connection(&mut self, config: &dyn NewConnectionConfig, addr: &SocketAddr) {
+    type BaseClientConnection = Quic;
+    type NewConnectionConfig = QuicConfig;
+
+    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) {
         let connection = self.create_pool_entry(config, addr);
         self.connections.push(connection);
     }
@@ -59,7 +59,7 @@ impl ConnectionPool for QuicPool {
         self.connections.len()
     }
 
-    fn get(&self, index: usize) -> Result<Arc<dyn BaseClientConnection>, ConnectionPoolError> {
+    fn get(&self, index: usize) -> Result<Arc<Self::BaseClientConnection>, ConnectionPoolError> {
         self.connections
             .get(index)
             .cloned()
@@ -68,10 +68,9 @@ impl ConnectionPool for QuicPool {
 
     fn create_pool_entry(
         &self,
-        config: &dyn NewConnectionConfig,
+        config: &Self::NewConnectionConfig,
         addr: &SocketAddr,
-    ) -> Arc<dyn BaseClientConnection> {
-        let config = QuicConfig::downcast_ref(config);
+    ) -> Arc<Self::BaseClientConnection> {
         Arc::new(Quic(Arc::new(QuicClient::new(
             self.endpoint.clone(),
             *addr,
@@ -104,14 +103,6 @@ impl NewConnectionConfig for QuicConfig {
             maybe_client_pubkey: None,
             client_endpoint: None,
         })
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
     }
 }
 
@@ -166,23 +157,18 @@ impl QuicConfig {
     pub fn update_client_endpoint(&mut self, client_endpoint: Endpoint) {
         self.client_endpoint = Some(client_endpoint);
     }
-
-    /// Convenient function to downcast a generic NewConnectionConfig reference to QuicConfig
-    pub fn downcast_ref(config: &dyn NewConnectionConfig) -> &Self {
-        match config.as_any().downcast_ref::<QuicConfig>() {
-            Some(config) => config,
-            None => panic!("Expecting a QuicConfig!"),
-        }
-    }
 }
 
 pub struct Quic(Arc<QuicClient>);
 impl BaseClientConnection for Quic {
+    type BlockingClientConnection = BlockingQuicClientConnection;
+    type NonblockingClientConnection = NonblockingQuicClientConnection;
+
     fn new_blocking_connection(
         &self,
         _addr: SocketAddr,
         stats: Arc<ConnectionCacheStats>,
-    ) -> Arc<dyn BlockingClientConnection> {
+    ) -> Arc<Self::BlockingClientConnection> {
         Arc::new(BlockingQuicClientConnection::new_with_client(
             self.0.clone(),
             stats,
@@ -193,7 +179,7 @@ impl BaseClientConnection for Quic {
         &self,
         _addr: SocketAddr,
         stats: Arc<ConnectionCacheStats>,
-    ) -> Arc<dyn NonblockingClientConnection> {
+    ) -> Arc<Self::NonblockingClientConnection> {
         Arc::new(NonblockingQuicClientConnection::new_with_client(
             self.0.clone(),
             stats,
@@ -203,40 +189,39 @@ impl BaseClientConnection for Quic {
 
 #[derive(Default)]
 pub struct QuicConnectionManager {
-    connection_config: Option<Box<dyn NewConnectionConfig>>,
+    connection_config: Option<QuicConfig>,
 }
 
 impl ConnectionManager for QuicConnectionManager {
-    fn new_connection_pool(&self) -> Box<dyn ConnectionPool> {
-        Box::new(QuicPool {
+    type ConnectionPool = QuicPool;
+    type NewConnectionConfig = QuicConfig;
+
+    fn new_connection_pool(&self) -> Self::ConnectionPool {
+        QuicPool {
             connections: Vec::default(),
-            endpoint: Arc::new(self.connection_config.as_ref().map_or(
-                QuicLazyInitializedEndpoint::default(),
-                |config| {
-                    let config = QuicConfig::downcast_ref(config.as_ref());
-                    config.create_endpoint()
-                },
-            )),
-        })
+            endpoint: Arc::new(
+                self.connection_config
+                    .as_ref()
+                    .map_or(QuicLazyInitializedEndpoint::default(), |config| {
+                        config.create_endpoint()
+                    }),
+            ),
+        }
     }
 
-    fn new_connection_config(&self) -> Box<dyn NewConnectionConfig> {
-        Box::new(QuicConfig::new().unwrap())
+    fn new_connection_config(&self) -> QuicConfig {
+        QuicConfig::new().unwrap()
     }
 
     fn get_port_offset(&self) -> u16 {
         QUIC_PORT_OFFSET
-    }
-
-    fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::QUIC
     }
 }
 
 impl QuicConnectionManager {
     pub fn new_with_connection_config(config: QuicConfig) -> Self {
         Self {
-            connection_config: Some(Box::new(config)),
+            connection_config: Some(config),
         }
     }
 }

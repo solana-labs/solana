@@ -199,7 +199,7 @@ mod target_arch {
             .map_err(|_| AltBn128Error::InvalidInputData)?;
 
         let mut result_point_data = [0; ALT_BN128_MULTIPLICATION_OUTPUT_LEN + 1];
-        let result_point: G1 = p.into_projective().mul(&fr).into();
+        let result_point: G1 = p.into_projective().mul(fr).into();
         <G1 as ToBytes>::write(&result_point, &mut result_point_data[..])
             .map_err(|_| AltBn128Error::InvalidInputData)?;
         if result_point == G1::zero() {
