@@ -137,24 +137,25 @@ pub struct RecordTransactionsSummary {
     pub starting_transaction_index: Option<usize>,
 }
 
-#[derive(Clone)]
 pub struct TransactionRecorder {
     // shared by all users of PohRecorder
     pub record_sender: Sender<Record>,
     pub is_exited: Arc<AtomicBool>,
-    leader_bank_notifier: Arc<LeaderBankNotifier>,
+}
+
+impl Clone for TransactionRecorder {
+    fn clone(&self) -> Self {
+        TransactionRecorder::new(self.record_sender.clone(), self.is_exited.clone())
+    }
 }
 
 impl TransactionRecorder {
-    pub fn new(
-        record_sender: Sender<Record>,
-        is_exited: Arc<AtomicBool>,
-        leader_bank_notifier: Arc<LeaderBankNotifier>,
-    ) -> Self {
+    pub fn new(record_sender: Sender<Record>, is_exited: Arc<AtomicBool>) -> Self {
         Self {
+            // shared
             record_sender,
+            // shared
             is_exited,
-            leader_bank_notifier,
         }
     }
 
@@ -180,7 +181,6 @@ impl TransactionRecorder {
                     starting_transaction_index = starting_index;
                 }
                 Err(PohRecorderError::MaxHeightReached) => {
-                    self.leader_bank_notifier.set_completed(bank_slot);
                     return RecordTransactionsSummary {
                         record_transactions_timings,
                         result: Err(PohRecorderError::MaxHeightReached),
@@ -420,11 +420,7 @@ impl PohRecorder {
     }
 
     pub fn new_recorder(&self) -> TransactionRecorder {
-        TransactionRecorder::new(
-            self.record_sender.clone(),
-            self.is_exited.clone(),
-            self.leader_bank_notifier.clone(),
-        )
+        TransactionRecorder::new(self.record_sender.clone(), self.is_exited.clone())
     }
 
     pub fn new_leader_bank_notifier(&self) -> Arc<LeaderBankNotifier> {
@@ -585,6 +581,8 @@ impl PohRecorder {
     }
 
     pub fn set_bank(&mut self, bank: &Arc<Bank>, track_transaction_indexes: bool) {
+        assert!(self.working_bank.is_none());
+        self.leader_bank_notifier.set_in_progress(bank);
         let working_bank = WorkingBank {
             bank: bank.clone(),
             start: Arc::new(Instant::now()),

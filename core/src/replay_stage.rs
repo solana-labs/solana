@@ -46,10 +46,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
-    solana_poh::{
-        leader_bank_notifier::LeaderBankNotifier,
-        poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
-    },
+    solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     solana_program_runtime::timings::ExecuteTimings,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
@@ -484,7 +481,6 @@ impl ReplayStage {
                     r_bank_forks.get_vote_only_mode_signal(),
                 )
             };
-            let leader_bank_notifier = poh_recorder.read().unwrap().new_leader_bank_notifier();
 
             Self::reset_poh_recorder(
                 &my_pubkey,
@@ -952,7 +948,6 @@ impl ReplayStage {
                         &retransmit_slots_sender,
                         &mut skipped_slots_info,
                         &banking_tracer,
-                        &leader_bank_notifier,
                         has_new_vote_been_rooted,
                         transaction_status_sender.is_some(),
                     );
@@ -1682,7 +1677,6 @@ impl ReplayStage {
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
         banking_tracer: &Arc<BankingTracer>,
-        leader_bank_notifier: &LeaderBankNotifier,
         has_new_vote_been_rooted: bool,
         track_transaction_indexes: bool,
     ) {
@@ -1808,7 +1802,6 @@ impl ReplayStage {
             banking_tracer.hash_event(parent.slot(), &parent.last_blockhash(), &parent.hash());
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
-            leader_bank_notifier.set_in_progress(&tpu_bank);
             poh_recorder
                 .write()
                 .unwrap()
