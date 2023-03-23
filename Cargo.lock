@@ -5387,6 +5387,8 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "static_assertions",
+ "strum",
+ "strum_macros",
  "sys-info",
  "sysctl",
  "systemstat",

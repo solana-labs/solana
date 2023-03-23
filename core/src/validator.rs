@@ -28,6 +28,7 @@ use {
         tvu::{Tvu, TvuConfig, TvuSockets},
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
+    lazy_static::lazy_static,
     rand::{thread_rng, Rng},
     solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
@@ -116,10 +117,60 @@ use {
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    strum::VariantNames,
+    strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr},
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
+
+#[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[strum(serialize_all = "kebab-case")]
+pub enum BlockVerificationMethod {
+    #[default]
+    BlockstoreProcessor,
+}
+
+impl BlockVerificationMethod {
+    pub const fn cli_names() -> &'static [&'static str] {
+        Self::VARIANTS
+    }
+
+    pub fn cli_message() -> &'static str {
+        lazy_static! {
+            static ref MESSAGE: String = format!(
+                "Switch transaction scheduling method for verifying ledger entries [default: {}]",
+                BlockVerificationMethod::default()
+            );
+        };
+
+        &MESSAGE
+    }
+}
+
+#[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[strum(serialize_all = "kebab-case")]
+pub enum BlockProductionMethod {
+    #[default]
+    ThreadLocalMultiIterator,
+}
+
+impl BlockProductionMethod {
+    pub const fn cli_names() -> &'static [&'static str] {
+        Self::VARIANTS
+    }
+
+    pub fn cli_message() -> &'static str {
+        lazy_static! {
+            static ref MESSAGE: String = format!(
+                "Switch transaction scheduling method for producing ledger entries [default: {}]",
+                BlockProductionMethod::default()
+            );
+        };
+
+        &MESSAGE
+    }
+}
 
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
@@ -184,6 +235,8 @@ pub struct ValidatorConfig {
     pub runtime_config: RuntimeConfig,
     pub replay_slots_concurrently: bool,
     pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
+    pub block_verification_method: BlockVerificationMethod,
+    pub block_production_method: BlockProductionMethod,
 }
 
 impl Default for ValidatorConfig {
@@ -248,6 +301,8 @@ impl Default for ValidatorConfig {
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
             banking_trace_dir_byte_limit: 0,
+            block_verification_method: BlockVerificationMethod::default(),
+            block_production_method: BlockProductionMethod::default(),
         }
     }
 }
@@ -686,6 +741,10 @@ impl Validator {
             },
             config.accounts_db_test_hash_calculation,
             last_full_snapshot_slot,
+        );
+        info!(
+            "Using: block-verification-method: {}, block-production-method: {}",
+            config.block_verification_method, config.block_production_method
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);

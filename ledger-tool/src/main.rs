@@ -25,7 +25,10 @@ use {
         },
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
-    solana_core::system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
+    solana_core::{
+        system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
+        validator::BlockVerificationMethod,
+    },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_ledger::{
@@ -1244,6 +1247,16 @@ fn load_bank_forks(
             accounts_update_notifier,
             &Arc::default(),
         );
+    let block_verification_method = value_t!(
+        arg_matches,
+        "block_verification_method",
+        BlockVerificationMethod
+    )
+    .unwrap_or_default();
+    info!(
+        "Using: block-verification-method: {}",
+        block_verification_method,
+    );
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
     let (accounts_package_sender, _accounts_package_receiver) = crossbeam_channel::unbounded();
@@ -1694,6 +1707,16 @@ fn main() {
                 .takes_value(true)
                 .global(true)
                 .help("Use DIR for separate incremental snapshot location"),
+        )
+        .arg(
+            Arg::with_name("block_verification_method")
+                .long("block-verification-method")
+                .value_name("METHOD")
+                .takes_value(true)
+                .possible_values(BlockVerificationMethod::cli_names())
+                .global(true)
+                .hidden(hidden_unless_forced())
+                .help(BlockVerificationMethod::cli_message()),
         )
         .arg(
             Arg::with_name("output_format")

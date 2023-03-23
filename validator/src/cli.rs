@@ -11,7 +11,10 @@ use {
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
-    solana_core::banking_trace::{DirByteLimit, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
+    solana_core::{
+        banking_trace::{DirByteLimit, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
+        validator::{BlockProductionMethod, BlockVerificationMethod},
+    },
     solana_faucet::faucet::{self, FAUCET_PORT},
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
@@ -1339,6 +1342,24 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Write trace files for simulate-leader-blocks, retaining \
                        up to the default or specified total bytes in the \
                        ledger")
+        )
+        .arg(
+            Arg::with_name("block_verification_method")
+                .long("block-verification-method")
+                .hidden(hidden_unless_forced())
+                .value_name("METHOD")
+                .takes_value(true)
+                .possible_values(BlockVerificationMethod::cli_names())
+                .help(BlockVerificationMethod::cli_message())
+        )
+        .arg(
+            Arg::with_name("block_production_method")
+                .long("block-production-method")
+                .hidden(hidden_unless_forced())
+                .value_name("METHOD")
+                .takes_value(true)
+                .possible_values(BlockProductionMethod::cli_names())
+                .help(BlockProductionMethod::cli_message())
         )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
