@@ -14,7 +14,10 @@ use {
         system_monitor_service::SystemMonitorService,
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE_MS,
-        validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
+        validator::{
+            is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod, Validator,
+            ValidatorConfig, ValidatorStartProgress,
+        },
     },
     solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},
     solana_ledger::blockstore_options::{
@@ -1188,6 +1191,10 @@ pub fn main() {
     }
     let full_api = matches.is_present("full_rpc_api");
 
+    if matches.is_present("skip_poh_verify") {
+        eprintln!("--skip-poh-verify is deprecated.  Replace with --skip-verification.");
+    }
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -1272,7 +1279,8 @@ pub fn main() {
         repair_whitelist,
         gossip_validators,
         wal_recovery_mode,
-        poh_verify: !matches.is_present("skip_poh_verify"),
+        run_verification: !(matches.is_present("skip_poh_verify")
+            || matches.is_present("skip_verification")),
         debug_keys,
         contact_debug_interval,
         send_transaction_service_config: send_transaction_service::Config {
@@ -1521,6 +1529,18 @@ pub fn main() {
     }
 
     configure_banking_trace_dir_byte_limit(&mut validator_config, &matches);
+    validator_config.block_verification_method = value_t!(
+        matches,
+        "block_verification_method",
+        BlockVerificationMethod
+    )
+    .unwrap_or_default();
+    validator_config.block_production_method = value_t!(
+        matches, // comment to align formatting...
+        "block_production_method",
+        BlockProductionMethod
+    )
+    .unwrap_or_default();
 
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {

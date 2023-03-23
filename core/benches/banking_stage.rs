@@ -81,7 +81,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let (exit, poh_recorder, poh_service, _signal_receiver) =
             create_test_recorder(&bank, &blockstore, None, None);
 
-        let recorder = poh_recorder.read().unwrap().recorder();
+        let recorder = poh_recorder.read().unwrap().new_recorder();
         let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
 
         let tx = test_tx();

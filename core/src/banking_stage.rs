@@ -396,7 +396,7 @@ impl BankingStage {
                 );
                 let consumer = Consumer::new(
                     committer,
-                    poh_recorder.read().unwrap().recorder(),
+                    poh_recorder.read().unwrap().new_recorder(),
                     QosService::new(id),
                     log_messages_bytes_limit,
                 );
@@ -999,7 +999,7 @@ mod tests {
                 &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
-            let recorder = poh_recorder.recorder();
+            let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);

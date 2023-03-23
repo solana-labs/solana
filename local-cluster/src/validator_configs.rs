@@ -36,7 +36,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         accounts_hash_interval_slots: config.accounts_hash_interval_slots,
         max_genesis_archive_unpacked_size: config.max_genesis_archive_unpacked_size,
         wal_recovery_mode: config.wal_recovery_mode.clone(),
-        poh_verify: config.poh_verify,
+        run_verification: config.run_verification,
         require_tower: config.require_tower,
         tower_storage: config.tower_storage.clone(),
         debug_keys: config.debug_keys.clone(),
@@ -66,6 +66,8 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         runtime_config: config.runtime_config.clone(),
         replay_slots_concurrently: config.replay_slots_concurrently,
         banking_trace_dir_byte_limit: config.banking_trace_dir_byte_limit,
+        block_verification_method: config.block_verification_method.clone(),
+        block_production_method: config.block_production_method.clone(),
     }
 }
 

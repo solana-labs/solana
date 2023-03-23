@@ -756,8 +756,6 @@ fn test_bank_forks_incremental_snapshot(
         // Since AccountsBackgroundService isn't running, manually make a full snapshot archive
         // at the right interval
         if snapshot_utils::should_take_full_snapshot(slot, FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS) {
-            bank.force_flush_accounts_cache();
-            bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
             make_full_snapshot_archive(&bank, &snapshot_test_config.snapshot_config).unwrap();
         }
         // Similarly, make an incremental snapshot archive at the right interval, but only if
@@ -771,8 +769,6 @@ fn test_bank_forks_incremental_snapshot(
             last_full_snapshot_slot,
         ) && slot != last_full_snapshot_slot.unwrap()
         {
-            bank.force_flush_accounts_cache();
-            bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
             make_incremental_snapshot_archive(
                 &bank,
                 last_full_snapshot_slot.unwrap(),
@@ -801,6 +797,8 @@ fn make_full_snapshot_archive(
 ) -> snapshot_utils::Result<()> {
     let slot = bank.slot();
     info!("Making full snapshot archive from bank at slot: {}", slot);
+    bank.force_flush_accounts_cache();
+    bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
     let bank_snapshot_info =
         snapshot_utils::get_bank_snapshots_pre(&snapshot_config.bank_snapshots_dir)
             .into_iter()
@@ -837,6 +835,8 @@ fn make_incremental_snapshot_archive(
         "Making incremental snapshot archive from bank at slot: {}, and base slot: {}",
         slot, incremental_snapshot_base_slot,
     );
+    bank.force_flush_accounts_cache();
+    bank.update_incremental_accounts_hash(incremental_snapshot_base_slot);
     let bank_snapshot_info =
         snapshot_utils::get_bank_snapshots_pre(&snapshot_config.bank_snapshots_dir)
             .into_iter()

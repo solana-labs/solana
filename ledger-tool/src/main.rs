@@ -18,13 +18,17 @@ use {
     serde_json::json,
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
     solana_clap_utils::{
+        hidden_unless_forced,
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
-    solana_core::system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
+    solana_core::{
+        system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
+        validator::BlockVerificationMethod,
+    },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_ledger::{
@@ -1244,6 +1248,16 @@ fn load_bank_forks(
             &Arc::default(),
             None,
         );
+    let block_verification_method = value_t!(
+        arg_matches,
+        "block_verification_method",
+        BlockVerificationMethod
+    )
+    .unwrap_or_default();
+    info!(
+        "Using: block-verification-method: {}",
+        block_verification_method,
+    );
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
     let (accounts_package_sender, _accounts_package_receiver) = crossbeam_channel::unbounded();
@@ -1477,7 +1491,7 @@ fn main() {
         .help(
             "Debug option to scan all AppendVecs and verify account index refcounts prior to clean",
         )
-        .hidden(true);
+        .hidden(hidden_unless_forced());
     let accounts_filler_count = Arg::with_name("accounts_filler_count")
         .long("accounts-filler-count")
         .value_name("COUNT")
@@ -1524,7 +1538,7 @@ fn main() {
         Arg::with_name("accounts_db_skip_initial_hash_calculation")
             .long("accounts-db-skip-initial-hash-calculation")
             .help("Do not verify accounts hash at startup.")
-            .hidden(true);
+            .hidden(hidden_unless_forced());
     let ancient_append_vecs = Arg::with_name("accounts_db_ancient_append_vecs")
         .long("accounts-db-ancient-append-vecs")
         .value_name("SLOT-OFFSET")
@@ -1533,11 +1547,11 @@ fn main() {
         .help(
             "AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.",
         )
-        .hidden(true);
+        .hidden(hidden_unless_forced());
     let halt_at_slot_store_hash_raw_data = Arg::with_name("halt_at_slot_store_hash_raw_data")
             .long("halt-at-slot-store-hash-raw-data")
             .help("After halting at slot, run an accounts hash calculation and store the raw hash data for debugging.")
-            .hidden(true);
+            .hidden(hidden_unless_forced());
     let verify_index_arg = Arg::with_name("verify_accounts_index")
         .long("verify-accounts-index")
         .takes_value(false)
@@ -1695,6 +1709,16 @@ fn main() {
                 .takes_value(true)
                 .global(true)
                 .help("Use DIR for separate incremental snapshot location"),
+        )
+        .arg(
+            Arg::with_name("block_verification_method")
+                .long("block-verification-method")
+                .value_name("METHOD")
+                .takes_value(true)
+                .possible_values(BlockVerificationMethod::cli_names())
+                .global(true)
+                .hidden(hidden_unless_forced())
+                .help(BlockVerificationMethod::cli_message()),
         )
         .arg(
             Arg::with_name("output_format")
@@ -1932,7 +1956,16 @@ fn main() {
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
                     .takes_value(false)
-                    .help("Skip ledger PoH verification"),
+                    .help(
+                        "Deprecated, please use --skip-verification.\n\
+                         Skip ledger PoH and transaction verification."
+                    ),
+            )
+            .arg(
+                Arg::with_name("skip_verification")
+                    .long("skip-verification")
+                    .takes_value(false)
+                    .help("Skip ledger PoH and transaction verification."),
             )
             .arg(
                 Arg::with_name("print_accounts_stats")
@@ -2530,7 +2563,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: Some(0),
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2621,7 +2654,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2829,9 +2862,16 @@ fn main() {
                 let debug_keys = pubkeys_of(arg_matches, "debug_key")
                     .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
 
+                if arg_matches.is_present("skip_poh_verify") {
+                    eprintln!(
+                        "--skip-poh-verify is deprecated.  Replace with --skip-verification."
+                    );
+                }
+
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                    poh_verify: !arg_matches.is_present("skip_poh_verify"),
+                    run_verification: !(arg_matches.is_present("skip_poh_verify")
+                        || arg_matches.is_present("skip_verification")),
                     on_halt_store_hash_raw_data_for_debug: arg_matches
                         .is_present("halt_at_slot_store_hash_raw_data"),
                     // ledger tool verify always runs the accounts hash calc at the end of processing the blockstore
@@ -2899,7 +2939,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
 
@@ -3083,7 +3123,7 @@ fn main() {
                     ProcessOptions {
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
-                        poh_verify: false,
+                        run_verification: false,
                         accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                         accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                         ..ProcessOptions::default()
@@ -3435,7 +3475,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -3524,7 +3564,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);

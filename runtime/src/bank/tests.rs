@@ -3221,6 +3221,7 @@ fn test_bank_tx_compute_unit_fee() {
         true,
         true,
         true,
+        false,
     );
 
     let (expected_fee_collected, expected_fee_burned) =
@@ -3405,6 +3406,7 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         true,
         true,
         true,
+        false,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -3426,6 +3428,7 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         true,
         true,
         true,
+        false,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -3542,6 +3545,7 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
                         true,
                         true,
                         true,
+                        false,
                     ) * 2
                 )
                 .0
@@ -10714,6 +10718,7 @@ fn test_calculate_fee() {
                 true,
                 true,
                 support_set_accounts_data_size_limit_ix,
+                false,
             ),
             0
         );
@@ -10734,6 +10739,7 @@ fn test_calculate_fee() {
                 true,
                 true,
                 support_set_accounts_data_size_limit_ix,
+                false,
             ),
             1
         );
@@ -10759,6 +10765,7 @@ fn test_calculate_fee() {
                 true,
                 true,
                 support_set_accounts_data_size_limit_ix,
+                false,
             ),
             4
         );
@@ -10788,7 +10795,8 @@ fn test_calculate_fee_compute_units() {
                 false,
                 true,
                 true,
-                support_set_accounts_data_size_limit_ix
+                support_set_accounts_data_size_limit_ix,
+                false,
             ),
             max_fee + lamports_per_signature
         );
@@ -10810,7 +10818,8 @@ fn test_calculate_fee_compute_units() {
                 false,
                 true,
                 true,
-                support_set_accounts_data_size_limit_ix
+                support_set_accounts_data_size_limit_ix,
+                false,
             ),
             max_fee + 3 * lamports_per_signature
         );
@@ -10855,6 +10864,7 @@ fn test_calculate_fee_compute_units() {
                 true,
                 true,
                 support_set_accounts_data_size_limit_ix,
+                false,
             );
             assert_eq!(
                 fee,
@@ -10904,7 +10914,8 @@ fn test_calculate_fee_secp256k1() {
                 false,
                 true,
                 true,
-                support_set_accounts_data_size_limit_ix
+                support_set_accounts_data_size_limit_ix,
+                false,
             ),
             2
         );
@@ -10927,7 +10938,8 @@ fn test_calculate_fee_secp256k1() {
                 false,
                 true,
                 true,
-                support_set_accounts_data_size_limit_ix
+                support_set_accounts_data_size_limit_ix,
+                false,
             ),
             11
         );
@@ -12660,6 +12672,7 @@ fn test_calculate_fee_with_congestion_multiplier() {
                 remove_congestion_multiplier,
                 true,
                 true,
+                false,
             ),
             signature_fee * signature_count
         );
@@ -12684,6 +12697,7 @@ fn test_calculate_fee_with_congestion_multiplier() {
                 remove_congestion_multiplier,
                 true,
                 true,
+                false,
             ),
             signature_fee * signature_count / denominator
         );
@@ -12726,6 +12740,7 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
             true,
             enable_request_heap_frame_ix,
             true,
+            false,
         ),
         signature_fee + request_cu * lamports_per_cu
     );
@@ -12743,6 +12758,7 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
             true,
             enable_request_heap_frame_ix,
             true,
+            false,
         ),
         signature_fee
     );
@@ -12914,4 +12930,40 @@ fn test_bank_verify_accounts_hash_with_base() {
             ..VerifyAccountsHashConfig::default_for_test()
         },
     ));
+}
+
+#[allow(clippy::field_reassign_with_default)]
+#[test]
+fn test_calculate_loaded_accounts_data_size_cost() {
+    let mut compute_budget = ComputeBudget::default();
+
+    // accounts data size are priced in block of 32K, ...
+
+    // ... requesting less than 32K should still be charged as one block
+    compute_budget.loaded_accounts_data_size_limit = 31_usize * 1024;
+    assert_eq!(
+        compute_budget.heap_cost,
+        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
+    );
+
+    // ... requesting exact 32K should be charged as one block
+    compute_budget.loaded_accounts_data_size_limit = 32_usize * 1024;
+    assert_eq!(
+        compute_budget.heap_cost,
+        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
+    );
+
+    // ... requesting slightly above 32K should be charged as 2 block
+    compute_budget.loaded_accounts_data_size_limit = 33_usize * 1024;
+    assert_eq!(
+        compute_budget.heap_cost * 2,
+        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
+    );
+
+    // ... requesting exact 64K should be charged as 2 block
+    compute_budget.loaded_accounts_data_size_limit = 64_usize * 1024;
+    assert_eq!(
+        compute_budget.heap_cost * 2,
+        Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
+    );
 }

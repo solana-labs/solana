@@ -5,10 +5,7 @@ use {
     crossbeam_channel::{unbounded, Sender},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
-    solana_perf::{
-        deduper::Deduper,
-        packet::{Packet, PacketBatch, PacketBatchRecycler, PacketFlags},
-    },
+    solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
@@ -25,10 +22,6 @@ use {
         time::{Duration, Instant},
     },
 };
-
-const DEDUPER_FALSE_POSITIVE_RATE: f64 = 0.001;
-const DEDUPER_NUM_BITS: u64 = 637_534_199; // 76MB
-const DEDUPER_RESET_CYCLE: Duration = Duration::from_secs(5 * 60);
 
 pub(crate) struct ShredFetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -47,8 +40,6 @@ impl ShredFetchStage {
         turbine_disabled: Arc<AtomicBool>,
     ) {
         const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
-        let mut rng = rand::thread_rng();
-        let mut deduper = Deduper::<2, [u8]>::new(&mut rng, DEDUPER_NUM_BITS);
         let mut last_updated = Instant::now();
         let mut keypair = repair_context
             .as_ref()
@@ -63,9 +54,6 @@ impl ShredFetchStage {
         let mut stats = ShredFetchStats::default();
 
         for mut packet_batch in recvr {
-            if deduper.maybe_reset(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, DEDUPER_RESET_CYCLE) {
-                stats.num_deduper_saturations += 1;
-            }
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
                 {
@@ -102,12 +90,11 @@ impl ShredFetchStage {
             let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut() {
                 if turbine_disabled
-                    || should_discard_packet(
+                    || should_discard_shred(
                         packet,
                         last_root,
                         max_slot,
                         shred_version,
-                        &deduper,
                         should_drop_merkle_shreds,
                         &mut stats,
                     )
@@ -245,39 +232,6 @@ impl ShredFetchStage {
     }
 }
 
-// Returns true if the packet should be marked as discard.
-#[must_use]
-fn should_discard_packet<const K: usize>(
-    packet: &Packet,
-    root: Slot,
-    max_slot: Slot, // Max slot to ingest shreds for.
-    shred_version: u16,
-    deduper: &Deduper<K, [u8]>,
-    should_drop_merkle_shreds: impl Fn(Slot) -> bool,
-    stats: &mut ShredFetchStats,
-) -> bool {
-    if should_discard_shred(
-        packet,
-        root,
-        max_slot,
-        shred_version,
-        should_drop_merkle_shreds,
-        stats,
-    ) {
-        return true;
-    }
-    if packet
-        .data(..)
-        .map(|data| deduper.dedup(data))
-        .unwrap_or(true)
-    {
-        stats.duplicate_shred += 1;
-        true
-    } else {
-        false
-    }
-}
-
 #[must_use]
 fn should_drop_merkle_shreds(shred_slot: Slot, root_bank: &Bank) -> bool {
     check_feature_activation(
@@ -299,13 +253,12 @@ mod tests {
             blockstore::MAX_DATA_SHREDS_PER_SLOT,
             shred::{ReedSolomonCache, Shred, ShredFlags},
         },
+        solana_sdk::packet::Packet,
     };
 
     #[test]
     fn test_data_code_same_index() {
         solana_logger::setup();
-        let mut rng = rand::thread_rng();
-        let deduper = Deduper::<2, [u8]>::new(&mut rng, /*num_bits:*/ 640_007);
         let mut packet = Packet::default();
         let mut stats = ShredFetchStats::default();
 
@@ -327,12 +280,11 @@ mod tests {
         let last_slot = 100;
         let slots_per_epoch = 10;
         let max_slot = last_slot + 2 * slots_per_epoch;
-        assert!(!should_discard_packet(
+        assert!(!should_discard_shred(
             &packet,
             last_root,
             max_slot,
             shred_version,
-            &deduper,
             |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
@@ -342,12 +294,11 @@ mod tests {
             &ReedSolomonCache::default(),
         );
         coding[0].copy_to_packet(&mut packet);
-        assert!(!should_discard_packet(
+        assert!(!should_discard_shred(
             &packet,
             last_root,
             max_slot,
             shred_version,
-            &deduper,
             |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
@@ -356,8 +307,6 @@ mod tests {
     #[test]
     fn test_shred_filter() {
         solana_logger::setup();
-        let mut rng = rand::thread_rng();
-        let deduper = Deduper::<2, [u8]>::new(&mut rng, /*num_bits:*/ 640_007);
         let mut packet = Packet::default();
         let mut stats = ShredFetchStats::default();
         let last_root = 0;
@@ -367,12 +316,11 @@ mod tests {
         let max_slot = last_slot + 2 * slots_per_epoch;
 
         // packet size is 0, so cannot get index
-        assert!(should_discard_packet(
+        assert!(should_discard_shred(
             &packet,
             last_root,
             max_slot,
             shred_version,
-            &deduper,
             |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
@@ -390,50 +338,35 @@ mod tests {
         shred.copy_to_packet(&mut packet);
 
         // rejected slot is 2, root is 3
-        assert!(should_discard_packet(
+        assert!(should_discard_shred(
             &packet,
             3,
             max_slot,
             shred_version,
-            &deduper,
             |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.slot_out_of_range, 1);
 
-        assert!(should_discard_packet(
+        assert!(should_discard_shred(
             &packet,
             last_root,
             max_slot,
-            345, // shred_version
-            &deduper,
+            345,       // shred_version
             |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.shred_version_mismatch, 1);
 
         // Accepted for 1,3
-        assert!(!should_discard_packet(
+        assert!(!should_discard_shred(
             &packet,
             last_root,
             max_slot,
             shred_version,
-            &deduper,
             |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
-
-        // deduper should filter duplicate
-        assert!(should_discard_packet(
-            &packet,
-            last_root,
-            max_slot,
-            shred_version,
-            &deduper,
-            |_| false, // should_drop_merkle_shreds
-            &mut stats,
-        ));
-        assert_eq!(stats.duplicate_shred, 1);
 
         let shred = Shred::new_from_data(
             1_000_000,
@@ -448,12 +381,11 @@ mod tests {
         shred.copy_to_packet(&mut packet);
 
         // Slot 1 million is too high
-        assert!(should_discard_packet(
+        assert!(should_discard_shred(
             &packet,
             last_root,
             max_slot,
             shred_version,
-            &deduper,
             |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
@@ -461,12 +393,11 @@ mod tests {
         let index = MAX_DATA_SHREDS_PER_SLOT as u32;
         let shred = Shred::new_from_data(5, index, 0, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
-        assert!(should_discard_packet(
+        assert!(should_discard_shred(
             &packet,
             last_root,
             max_slot,
             shred_version,
-            &deduper,
             |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));

@@ -41,6 +41,7 @@ pub struct BucketMapHolderStats {
     pub failed_to_evict: AtomicU64,
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
+    pub buckets_scanned: AtomicU64,
     pub inserts: AtomicU64,
     count: AtomicUsize,
     pub bg_waiting_us: AtomicU64,
@@ -372,6 +373,11 @@ impl BucketMapHolderStats {
                 ("items", self.items.swap(0, Ordering::Relaxed), i64),
                 ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
                 ("ms_per_age", ms_per_age, i64),
+                (
+                    "buckets_scanned",
+                    self.buckets_scanned.swap(0, Ordering::Relaxed),
+                    i64
+                ),
                 (
                     "flush_scan_us",
                     self.flush_scan_us.swap(0, Ordering::Relaxed),

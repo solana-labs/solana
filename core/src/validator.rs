@@ -28,6 +28,7 @@ use {
         tvu::{Tvu, TvuConfig, TvuSockets},
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
+    lazy_static::lazy_static,
     rand::{thread_rng, Rng},
     solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
     solana_client::connection_cache::ConnectionCache,
@@ -117,10 +118,60 @@ use {
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    strum::VariantNames,
+    strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr},
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
+
+#[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[strum(serialize_all = "kebab-case")]
+pub enum BlockVerificationMethod {
+    #[default]
+    BlockstoreProcessor,
+}
+
+impl BlockVerificationMethod {
+    pub const fn cli_names() -> &'static [&'static str] {
+        Self::VARIANTS
+    }
+
+    pub fn cli_message() -> &'static str {
+        lazy_static! {
+            static ref MESSAGE: String = format!(
+                "Switch transaction scheduling method for verifying ledger entries [default: {}]",
+                BlockVerificationMethod::default()
+            );
+        };
+
+        &MESSAGE
+    }
+}
+
+#[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[strum(serialize_all = "kebab-case")]
+pub enum BlockProductionMethod {
+    #[default]
+    ThreadLocalMultiIterator,
+}
+
+impl BlockProductionMethod {
+    pub const fn cli_names() -> &'static [&'static str] {
+        Self::VARIANTS
+    }
+
+    pub fn cli_message() -> &'static str {
+        lazy_static! {
+            static ref MESSAGE: String = format!(
+                "Switch transaction scheduling method for producing ledger entries [default: {}]",
+                BlockProductionMethod::default()
+            );
+        };
+
+        &MESSAGE
+    }
+}
 
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
@@ -153,7 +204,9 @@ pub struct ValidatorConfig {
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-    pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
+    /// Run PoH, transaction signature and other transaction verifications during blockstore
+    /// processing.
+    pub run_verification: bool,
     pub require_tower: bool,
     pub tower_storage: Arc<dyn TowerStorage>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -183,6 +236,8 @@ pub struct ValidatorConfig {
     pub runtime_config: RuntimeConfig,
     pub replay_slots_concurrently: bool,
     pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
+    pub block_verification_method: BlockVerificationMethod,
+    pub block_production_method: BlockProductionMethod,
 }
 
 impl Default for ValidatorConfig {
@@ -217,7 +272,7 @@ impl Default for ValidatorConfig {
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
-            poh_verify: true,
+            run_verification: true,
             require_tower: false,
             tower_storage: Arc::new(crate::tower_storage::NullTowerStorage::default()),
             debug_keys: None,
@@ -247,6 +302,8 @@ impl Default for ValidatorConfig {
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
             banking_trace_dir_byte_limit: 0,
+            block_verification_method: BlockVerificationMethod::default(),
+            block_production_method: BlockProductionMethod::default(),
         }
     }
 }
@@ -688,6 +745,10 @@ impl Validator {
             },
             config.accounts_db_test_hash_calculation,
             last_full_snapshot_slot,
+        );
+        info!(
+            "Using: block-verification-method: {}, block-production-method: {}",
+            config.block_verification_method, config.block_production_method
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
@@ -1488,7 +1549,7 @@ fn load_blockstore(
         .or_else(|| blockstore.highest_slot().unwrap_or(None));
 
     let process_options = blockstore_processor::ProcessOptions {
-        poh_verify: config.poh_verify,
+        run_verification: config.run_verification,
         halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
         debug_keys: config.debug_keys.clone(),

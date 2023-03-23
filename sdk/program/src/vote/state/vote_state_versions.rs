@@ -1,9 +1,8 @@
-use super::{vote_state_0_23_5::VoteState0_23_5, vote_state_1_14_11::VoteState1_14_11, *};
+use super::{vote_state_0_23_5::VoteState0_23_5, *};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum VoteStateVersions {
     V0_23_5(Box<VoteState0_23_5>),
-    V1_14_11(Box<VoteState1_14_11>),
     Current(Box<VoteState>),
 }
 
@@ -28,7 +27,7 @@ impl VoteStateVersions {
                     ///  payout should be given to this VoteAccount
                     commission: state.commission,
 
-                    votes: Self::landed_votes_from_lockouts(state.votes),
+                    votes: state.votes.clone(),
 
                     root_slot: state.root_slot,
 
@@ -48,31 +47,8 @@ impl VoteStateVersions {
                     last_timestamp: state.last_timestamp.clone(),
                 }
             }
-
-            VoteStateVersions::V1_14_11(state) => VoteState {
-                node_pubkey: state.node_pubkey,
-                authorized_withdrawer: state.authorized_withdrawer,
-                commission: state.commission,
-
-                votes: Self::landed_votes_from_lockouts(state.votes),
-
-                root_slot: state.root_slot,
-
-                authorized_voters: state.authorized_voters.clone(),
-
-                prior_voters: CircBuf::default(),
-
-                epoch_credits: state.epoch_credits,
-
-                last_timestamp: state.last_timestamp,
-            },
-
             VoteStateVersions::Current(state) => *state,
         }
-    }
-
-    fn landed_votes_from_lockouts(lockouts: VecDeque<Lockout>) -> VecDeque<LandedVote> {
-        lockouts.into_iter().map(|lockout| lockout.into()).collect()
     }
 
     pub fn is_uninitialized(&self) -> bool {
@@ -80,8 +56,6 @@ impl VoteStateVersions {
             VoteStateVersions::V0_23_5(vote_state) => {
                 vote_state.authorized_voter == Pubkey::default()
             }
-
-            VoteStateVersions::V1_14_11(vote_state) => vote_state.authorized_voters.is_empty(),
 
             VoteStateVersions::Current(vote_state) => vote_state.authorized_voters.is_empty(),
         }

@@ -1,7 +1,10 @@
 use {
     crate::spl_convert::FromOtherSolana,
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
-    solana_clap_utils::input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
+    solana_clap_utils::{
+        hidden_unless_forced,
+        input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
+    },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
         fee_calculator::FeeRateGovernor,
@@ -185,7 +188,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("faucet")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Deprecated. BenchTps no longer queries the faucet directly"),
         )
         .arg(

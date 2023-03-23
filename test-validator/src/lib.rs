@@ -941,7 +941,7 @@ impl TestValidator {
                     .unwrap()
                     .0,
             ],
-            poh_verify: false, // Skip PoH verification of ledger on startup for speed
+            run_verification: false, // Skip PoH verification of ledger on startup for speed
             snapshot_config: SnapshotConfig {
                 full_snapshot_archive_interval_slots: 100,
                 incremental_snapshot_archive_interval_slots: Slot::MAX,
