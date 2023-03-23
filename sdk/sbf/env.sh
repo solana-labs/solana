@@ -10,7 +10,7 @@ fi
 "$sbf_sdk"/scripts/install.sh
 
 # Use the SDK's version of llvm to build the compiler-builtins for SBF
-export CC="$sbf_sdk/dependencies/sbf-tools/llvm/bin/clang"
-export AR="$sbf_sdk/dependencies/sbf-tools/llvm/bin/llvm-ar"
-export OBJDUMP="$sbf_sdk/dependencies/sbf-tools/llvm/bin/llvm-objdump"
-export OBJCOPY="$sbf_sdk/dependencies/sbf-tools/llvm/bin/llvm-objcopy"
+export CC="$sbf_sdk/dependencies/platform-tools/llvm/bin/clang"
+export AR="$sbf_sdk/dependencies/platform-tools/llvm/bin/llvm-ar"
+export OBJDUMP="$sbf_sdk/dependencies/platform-tools/llvm/bin/llvm-objdump"
+export OBJCOPY="$sbf_sdk/dependencies/platform-tools/llvm/bin/llvm-objcopy"

@@ -603,7 +603,8 @@ pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 
 #[derive(Default, Clone)]
 pub struct ProcessOptions {
-    pub poh_verify: bool,
+    /// Run PoH, transaction signature and other transaction verifications on the entries.
+    pub run_verification: bool,
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
     pub new_hard_forks: Option<Vec<Slot>>,
@@ -746,7 +747,8 @@ pub fn process_blockstore_from_root(
     info!("Processing ledger from slot {}...", start_slot);
     let now = Instant::now();
 
-    // ensure start_slot is rooted for correct replay
+    // Ensure start_slot is rooted for correct replay; also ensure start_slot and
+    // qualifying children are marked as connected
     if blockstore.is_primary_access() {
         blockstore
             .mark_slots_as_if_rooted_normally_at_startup(
@@ -754,6 +756,9 @@ pub fn process_blockstore_from_root(
                 true,
             )
             .expect("Couldn't mark start_slot as root on startup");
+        blockstore
+            .set_and_chain_connected_on_root_and_next_slots(bank.slot())
+            .expect("Couldn't mark start_slot as connected during startup")
     } else {
         info!(
             "Starting slot {} isn't root and won't be updated due to being secondary blockstore access",
@@ -889,7 +894,7 @@ fn confirm_full_slot(
     timing: &mut ExecuteTimings,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
-    let skip_verification = !opts.poh_verify;
+    let skip_verification = !opts.run_verification;
 
     confirm_slot(
         blockstore,
@@ -915,16 +920,43 @@ fn confirm_full_slot(
     }
 }
 
+/// Measures different parts of the slot confirmation processing pipeline.
 #[derive(Debug)]
 pub struct ConfirmationTiming {
+    /// Moment when the `ConfirmationTiming` instance was created.  Used to track the total wall
+    /// clock time from the moment the first shard for the slot is received and to the moment the
+    /// slot is complete.
     pub started: Instant,
+
+    /// Wall clock time used by the entry replay code.  Does not include the PoH or the transaction
+    /// signature/precompiles verification, but can overlap with the PoH and signature verification.
+    /// In microseconds.
     pub replay_elapsed: u64,
+
+    /// Wall clock time used by the transaction execution part of pipeline.  `replay_elapsed`
+    /// includes this time.  In microseconds.
     pub execute_batches_us: u64,
+
+    /// Wall clock times, used for the PoH verification of entries.  In microseconds.
     pub poh_verify_elapsed: u64,
+
+    /// Wall clock time, used for the signature verification as well as precompiles verification.
+    /// In microseconds.
     pub transaction_verify_elapsed: u64,
+
+    /// Wall clock time spent loading data sets (and entries) from the blockstore.  This does not
+    /// include the case when the blockstore load failed.  In microseconds.
     pub fetch_elapsed: u64,
+
+    /// Same as `fetch_elapsed` above, but for the case when the blockstore load fails.  In
+    /// microseconds.
     pub fetch_fail_elapsed: u64,
+
+    /// Time used in transaction execution.  Across multiple threads, running `execute_batch()`.
     pub execute_timings: ExecuteTimings,
+
+    /// Time used to execute transactions, via `execute_batch()`, in the thread that consumed the
+    /// most time.
     pub end_to_end_execute_timings: ThreadExecuteTimings,
 }
 
@@ -934,9 +966,9 @@ impl ConfirmationTiming {
         execute_batches_internal_metrics: ExecuteBatchesInternalMetrics,
     ) {
         let ConfirmationTiming {
-            execute_timings: ref mut cumulative_execute_timings,
-            execute_batches_us: ref mut cumulative_execute_batches_us,
-            ref mut end_to_end_execute_timings,
+            execute_timings: cumulative_execute_timings,
+            execute_batches_us: cumulative_execute_batches_us,
+            end_to_end_execute_timings,
             ..
         } = self;
 
@@ -1097,7 +1129,8 @@ fn confirm_slot_entries(
         let tick_hash_count = &mut progress.tick_hash_count;
         verify_ticks(bank, &entries, slot_full, tick_hash_count).map_err(|err| {
             warn!(
-                "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, last_blockhash: {}, shred_index: {}, slot_full: {}",
+                "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, \
+                last_blockhash: {}, shred_index: {}, slot_full: {}",
                 err,
                 slot,
                 num_entries,
@@ -1142,73 +1175,72 @@ fn confirm_slot_entries(
     );
     let transaction_cpu_duration_us = timing::duration_as_us(&check_start.elapsed());
 
-    match check_result {
-        Ok(mut check_result) => {
-            let entries = check_result.entries();
-            assert!(entries.is_some());
-
-            let mut replay_elapsed = Measure::start("replay_elapsed");
-            let mut replay_entries: Vec<_> = entries
-                .unwrap()
-                .into_iter()
-                .zip(entry_starting_indexes)
-                .map(|(entry, starting_index)| ReplayEntry {
-                    entry,
-                    starting_index,
-                })
-                .collect();
-            // Note: This will shuffle entries' transactions in-place.
-            let process_result = process_entries_with_callback(
-                bank,
-                &mut replay_entries,
-                transaction_status_sender,
-                replay_vote_sender,
-                timing,
-                log_messages_bytes_limit,
-            )
-            .map_err(BlockstoreProcessorError::from);
-            replay_elapsed.stop();
-            timing.replay_elapsed += replay_elapsed.as_us();
-
-            // If running signature verification on the GPU, wait for that
-            // computation to finish, and get the result of it. If we did the
-            // signature verification on the CPU, this just returns the
-            // already-computed result produced in start_verify_transactions.
-            // Either way, check the result of the signature verification.
-            if !check_result.finish_verify() {
-                warn!("Ledger proof of history failed at slot: {}", bank.slot());
-                return Err(TransactionError::SignatureFailure.into());
-            }
-
-            if let Some(mut verifier) = verifier {
-                let verified = verifier.finish_verify();
-                timing.poh_verify_elapsed += verifier.poh_duration_us();
-                // The GPU Entry verification (if any) is kicked off right when the CPU-side
-                // Entry verification finishes, so these times should be disjoint
-                timing.transaction_verify_elapsed +=
-                    transaction_cpu_duration_us + check_result.gpu_verify_duration();
-                if !verified {
-                    warn!("Ledger proof of history failed at slot: {}", bank.slot());
-                    return Err(BlockError::InvalidEntryHash.into());
-                }
-            }
-
-            process_result?;
-
-            progress.num_shreds += num_shreds;
-            progress.num_entries += num_entries;
-            progress.num_txs += num_txs;
-            if let Some(last_entry_hash) = last_entry_hash {
-                progress.last_entry = last_entry_hash;
-            }
-
-            Ok(())
-        }
+    let mut check_result = match check_result {
+        Ok(check_result) => check_result,
         Err(err) => {
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
-            Err(err.into())
+            return Err(err.into());
+        }
+    };
+
+    let entries = check_result.entries();
+    assert!(entries.is_some());
+
+    let mut replay_elapsed = Measure::start("replay_elapsed");
+    let mut replay_entries: Vec<_> = entries
+        .unwrap()
+        .into_iter()
+        .zip(entry_starting_indexes)
+        .map(|(entry, starting_index)| ReplayEntry {
+            entry,
+            starting_index,
+        })
+        .collect();
+    // Note: This will shuffle entries' transactions in-place.
+    let process_result = process_entries_with_callback(
+        bank,
+        &mut replay_entries,
+        transaction_status_sender,
+        replay_vote_sender,
+        timing,
+        log_messages_bytes_limit,
+    )
+    .map_err(BlockstoreProcessorError::from);
+    replay_elapsed.stop();
+    timing.replay_elapsed += replay_elapsed.as_us();
+
+    // If running signature verification on the GPU, wait for that computation to finish, and get
+    // the result of it. If we did the signature verification on the CPU, this just returns the
+    // already-computed result produced in start_verify_transactions.  Either way, check the result
+    // of the signature verification.
+    if !check_result.finish_verify() {
+        warn!("Ledger proof of history failed at slot: {}", bank.slot());
+        return Err(TransactionError::SignatureFailure.into());
+    }
+
+    if let Some(mut verifier) = verifier {
+        let verified = verifier.finish_verify();
+        timing.poh_verify_elapsed += verifier.poh_duration_us();
+        // The GPU Entry verification (if any) is kicked off right when the CPU-side Entry
+        // verification finishes, so these times should be disjoint
+        timing.transaction_verify_elapsed +=
+            transaction_cpu_duration_us + check_result.gpu_verify_duration();
+        if !verified {
+            warn!("Ledger proof of history failed at slot: {}", bank.slot());
+            return Err(BlockError::InvalidEntryHash.into());
         }
     }
+
+    process_result?;
+
+    progress.num_shreds += num_shreds;
+    progress.num_entries += num_entries;
+    progress.num_txs += num_txs;
+    if let Some(last_entry_hash) = last_entry_hash {
+        progress.last_entry = last_entry_hash;
+    }
+
+    Ok(())
 }
 
 // Special handling required for processing the entries in slot 0
@@ -1517,13 +1549,16 @@ fn load_frozen_forks(
 fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
     bank.force_flush_accounts_cache();
     // note that this slot may not be a root
-    let _ = bank.verify_accounts_hash(VerifyAccountsHashConfig {
-        test_hash_calculation: false,
-        ignore_mismatch: true,
-        require_rooted_bank: false,
-        run_in_background: false,
-        store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
-    });
+    let _ = bank.verify_accounts_hash(
+        None,
+        VerifyAccountsHashConfig {
+            test_hash_calculation: false,
+            ignore_mismatch: true,
+            require_rooted_bank: false,
+            run_in_background: false,
+            store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
+        },
+    );
 }
 
 // `roots` is sorted largest to smallest by root slot
@@ -1865,7 +1900,7 @@ pub mod tests {
             &genesis_config,
             &blockstore,
             &ProcessOptions {
-                poh_verify: true,
+                run_verification: true,
                 ..ProcessOptions::default()
             },
             blockstore_access_type.clone(),
@@ -1920,7 +1955,7 @@ pub mod tests {
             &genesis_config,
             &blockstore,
             &ProcessOptions {
-                poh_verify: true,
+                run_verification: true,
                 ..ProcessOptions::default()
             },
             &Arc::default(),
@@ -1935,7 +1970,7 @@ pub mod tests {
             &genesis_config,
             &blockstore,
             &ProcessOptions {
-                poh_verify: true,
+                run_verification: true,
                 ..ProcessOptions::default()
             },
             &Arc::default(),
@@ -1989,7 +2024,7 @@ pub mod tests {
         );
 
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2054,7 +2089,7 @@ pub mod tests {
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 1, blockhash);
 
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2072,7 +2107,7 @@ pub mod tests {
                slot 2 (all ticks)
         */
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2141,7 +2176,7 @@ pub mod tests {
         blockstore.set_roots(vec![0, 1, 4].iter()).unwrap();
 
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2221,7 +2256,7 @@ pub mod tests {
         blockstore.set_roots(vec![0, 1].iter()).unwrap();
 
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2435,7 +2470,7 @@ pub mod tests {
 
         // Check that we can properly restart the ledger / leader scheduler doesn't fail
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2580,7 +2615,7 @@ pub mod tests {
             )
             .unwrap();
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -2611,7 +2646,7 @@ pub mod tests {
 
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -3285,7 +3320,7 @@ pub mod tests {
 
         // Specify halting at slot 0
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             halt_at_slot: Some(0),
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
@@ -3339,7 +3374,7 @@ pub mod tests {
         let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
         let bank0 = bank_forks.get(0).unwrap();
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
@@ -3803,7 +3838,7 @@ pub mod tests {
         }
 
         let opts = ProcessOptions {
-            poh_verify: true,
+            run_verification: true,
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };

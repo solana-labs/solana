@@ -115,7 +115,7 @@ To turn on SBF interpreter trace messages in a local cluster configure the
 Source level debugging of on-chain programs written in Rust or C can
 be done using the stand-alone tool rbpf-cli, included in the SDK, and
 lldb, distrubuted with Solana Rust and Clang compiler binary package
-sbf-tools.
+platform-tools.
 
 The rbpf-cli tool loads a compiled on-chain program, executes it in
 RBPF virtual machine and runs a gdb server that accepts incoming
@@ -162,11 +162,11 @@ to run rbpf-cli) run the command
 solana-lldb
 ```
 
-This script is installed in sbf-tools path. If that path is not added
-to `PATH` environment variable, it may be necessary to specify the
-full path, e.g.
+This script is installed in platform-tools path. If that path is not
+added to `PATH` environment variable, it may be necessary to specify
+the full path, e.g.
 ```
-~/.cache/solana/v1.35/sbf-tools/llvm/bin/solana-lldb
+~/.cache/solana/v1.35/platform-tools/llvm/bin/solana-lldb
 ```
 After starting the debugger, load the .debug file by entering the
 following command at the debugger prompt
@@ -198,12 +198,12 @@ extension. Open CodeLLDB Extension Settings. In
 Advanced settings change the value of `Lldb: Library` field to the
 path of `liblldb.so` (or liblldb.dylib on macOS). For example on Linux a
 possible path to Solana customized lldb can be
-`/home/<user>/.cache/solana/v1.33/sbf-tools/llvm/lib/liblldb.so.`
+`/home/<user>/.cache/solana/v1.33/platform-tools/llvm/lib/liblldb.so.`
 where `<user>` is your Linux system username. This can also be added
 directly to `~/.config/Code/User/settings.json` file, e.g.
 ```
 {
-    "lldb.library": "/home/<user>/.cache/solana/v1.35/sbf-tools/llvm/lib/liblldb.so"
+    "lldb.library": "/home/<user>/.cache/solana/v1.35/platform-tools/llvm/lib/liblldb.so"
 }
 ```
 

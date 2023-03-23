@@ -14,6 +14,7 @@ use {
     solana_clap_utils::{
         compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
+        hidden_unless_forced,
         input_parsers::*,
         input_validators::*,
         keypair::{DefaultSigner, SignerIndex},
@@ -267,7 +268,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("force")
                         .long("force")
                         .takes_value(false)
-                        .hidden(true) // Don't document this argument to discourage its use
+                        .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
                         .help("Override vote account sanity checks (use carefully!)")
                 )
                 .arg(
@@ -298,7 +299,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("force")
                         .long("force")
                         .takes_value(false)
-                        .hidden(true) // Don't document this argument to discourage its use
+                        .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
                         .help("Override vote account sanity checks (use carefully!)")
                 )
                 .arg(
@@ -391,6 +392,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .validator(is_valid_signer)
+                        .required_unless("new_withdraw_authority")
                         .help("New authorized staker")
                 )
                 .arg(
@@ -399,6 +401,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .validator(is_valid_signer)
+                        .required_unless("new_stake_authority")
                         .help("New authorized withdrawer")
                 )
                 .arg(stake_authority_arg())
@@ -947,6 +950,11 @@ pub fn parse_stake_authorize(
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
     let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
+    if new_authorizations.is_empty() {
+        return Err(CliError::BadParameter(
+            "New authorization list must include at least one authority".to_string(),
+        ));
+    }
     let new_authorizations = new_authorizations
         .into_iter()
         .map(

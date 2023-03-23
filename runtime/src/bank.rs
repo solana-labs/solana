@@ -49,7 +49,7 @@ use {
             CalcAccountsHashDataSource, IncludeSlotInHash, VerifyAccountsHashAndLamportsConfig,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
-        accounts_hash::{AccountsHash, IncrementalAccountsHash},
+        accounts_hash::{AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash},
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
@@ -66,6 +66,7 @@ use {
         runtime_config::RuntimeConfig,
         serde_snapshot::{SerdeAccountsHash, SerdeIncrementalAccountsHash},
         snapshot_hash::SnapshotHash,
+        sorted_storages::SortedStorages,
         stake_account::{self, StakeAccount},
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
@@ -121,6 +122,7 @@ use {
         feature_set::{
             self, add_set_tx_loaded_accounts_data_size_instruction, disable_fee_calculator,
             enable_early_verification_of_account_modifications, enable_request_heap_frame_ix,
+            include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             use_default_units_in_fee_calculation, FeatureSet,
         },
@@ -1790,8 +1792,8 @@ impl Bank {
 
         report_new_bank_metrics(
             slot,
-            new.block_height,
             parent.slot(),
+            new.block_height,
             NewBankTimings {
                 bank_rc_creation_time_us,
                 total_elapsed_time_us: time.as_us(),
@@ -2340,7 +2342,15 @@ impl Bank {
             let stakes = self.stakes_cache.stakes().clone();
             let stakes = Arc::new(StakesEnum::from(stakes));
             let new_epoch_stakes = EpochStakes::new(stakes, leader_schedule_epoch);
-            {
+            info!(
+                "new epoch stakes, epoch: {}, total_stake: {}",
+                leader_schedule_epoch,
+                new_epoch_stakes.total_stake(),
+            );
+
+            // It is expensive to log the details of epoch stakes. Only log them at "trace"
+            // level for debugging purpose.
+            if log::log_enabled!(log::Level::Trace) {
                 let vote_stakes: HashMap<_, _> = self
                     .stakes_cache
                     .stakes()
@@ -2348,12 +2358,7 @@ impl Bank {
                     .delegated_stakes()
                     .map(|(pubkey, stake)| (*pubkey, stake))
                     .collect();
-                info!(
-                    "new epoch stakes, epoch: {}, stakes: {:#?}, total_stake: {}",
-                    leader_schedule_epoch,
-                    vote_stakes,
-                    new_epoch_stakes.total_stake(),
-                );
+                trace!("new epoch stakes, stakes: {vote_stakes:#?}");
             }
             self.epoch_stakes
                 .insert(leader_schedule_epoch, new_epoch_stakes);
@@ -3572,6 +3577,8 @@ impl Bank {
             self.enable_request_heap_frame_ix(),
             self.feature_set
                 .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+            self.feature_set
+                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
         ))
     }
 
@@ -3621,6 +3628,8 @@ impl Bank {
             self.enable_request_heap_frame_ix(),
             self.feature_set
                 .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+            self.feature_set
+                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
         )
     }
 
@@ -4980,6 +4989,7 @@ impl Bank {
         remove_congestion_multiplier: bool,
         enable_request_heap_frame_ix: bool,
         support_set_accounts_data_size_limit_ix: bool,
+        include_loaded_account_data_size_in_fee: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
         let congestion_multiplier = if lamports_per_signature == 0 {
@@ -5007,10 +5017,20 @@ impl Bank {
             .saturating_mul(fee_structure.lamports_per_signature);
         let write_lock_fee = Self::get_num_write_locks_in_message(message)
             .saturating_mul(fee_structure.lamports_per_write_lock);
+
+        // `compute_fee` covers costs for both requested_compute_units and
+        // requested_loaded_account_data_size
+        let loaded_accounts_data_size_cost = if include_loaded_account_data_size_in_fee {
+            Self::calculate_loaded_accounts_data_size_cost(&compute_budget)
+        } else {
+            0_u64
+        };
+        let total_compute_units =
+            loaded_accounts_data_size_cost.saturating_add(compute_budget.compute_unit_limit);
         let compute_fee = fee_structure
             .compute_fee_bins
             .iter()
-            .find(|bin| compute_budget.compute_unit_limit <= bin.limit)
+            .find(|bin| total_compute_units <= bin.limit)
             .map(|bin| bin.fee)
             .unwrap_or_else(|| {
                 fee_structure
@@ -5026,6 +5046,23 @@ impl Bank {
             .saturating_add(compute_fee) as f64)
             * congestion_multiplier)
             .round() as u64
+    }
+
+    // Calculate cost of loaded accounts size in the same way heap cost is charged at
+    // rate of 8cu per 32K. Citing `program_runtime\src\compute_budget.rs`: "(cost of
+    // heap is about) 0.5us per 32k at 15 units/us rounded up"
+    //
+    // Before feature `support_set_loaded_accounts_data_size_limit_ix` is enabled, or
+    // if user doesn't use compute budget ix `set_loaded_accounts_data_size_limit_ix`
+    // to set limit, `compute_budget.loaded_accounts_data_size_limit` is set to default
+    // limit of 64MB; which will convert to (64M/32K)*8CU = 16_000 CUs
+    //
+    fn calculate_loaded_accounts_data_size_cost(compute_budget: &ComputeBudget) -> u64 {
+        const ACCOUNT_DATA_COST_PAGE_SIZE: u64 = 32_u64.saturating_mul(1024);
+        (compute_budget.loaded_accounts_data_size_limit as u64)
+            .saturating_add(ACCOUNT_DATA_COST_PAGE_SIZE.saturating_sub(1))
+            .saturating_div(ACCOUNT_DATA_COST_PAGE_SIZE)
+            .saturating_mul(compute_budget.heap_cost)
     }
 
     fn filter_program_errors_and_collect_fee(
@@ -5073,6 +5110,8 @@ impl Bank {
                     self.enable_request_heap_frame_ix(),
                     self.feature_set
                         .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+                    self.feature_set
+                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -6713,7 +6752,6 @@ impl Bank {
                     &builtin.name,
                     &builtin.id,
                     builtin.process_instruction_with_context,
-                    builtin.default_compute_unit_cost,
                 );
             }
             for precompile in get_precompiles() {
@@ -7080,7 +7118,11 @@ impl Bank {
     /// return true if all is good
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_accounts_hash(&self, config: VerifyAccountsHashConfig) -> bool {
+    pub fn verify_accounts_hash(
+        &self,
+        base: Option<(Slot, /*capitalization*/ u64)>,
+        config: VerifyAccountsHashConfig,
+    ) -> bool {
         let accounts = &self.rc.accounts;
         // Wait until initial hash calc is complete before starting a new hash calc.
         // This should only occur when we halt at a slot in ledger-tool.
@@ -7097,7 +7139,7 @@ impl Bank {
         {
             if let Some(parent) = self.parent() {
                 info!("{} is not a root, so attempting to verify bank hash on parent bank at slot: {}", self.slot(), parent.slot());
-                return parent.verify_accounts_hash(config);
+                return parent.verify_accounts_hash(base, config);
             } else {
                 // this will result in mismatch errors
                 // accounts hash calc doesn't include unrooted slots
@@ -7125,6 +7167,7 @@ impl Bank {
                         let result = accounts_.verify_accounts_hash_and_lamports(
                             slot,
                             cap,
+                            base,
                             VerifyAccountsHashAndLamportsConfig {
                                 ancestors: &ancestors,
                                 test_hash_calculation: config.test_hash_calculation,
@@ -7148,6 +7191,7 @@ impl Bank {
             let result = accounts.verify_accounts_hash_and_lamports(
                 slot,
                 cap,
+                base,
                 VerifyAccountsHashAndLamportsConfig {
                     ancestors,
                     test_hash_calculation: config.test_hash_calculation,
@@ -7205,7 +7249,7 @@ impl Bank {
         self.rc
             .accounts
             .accounts_db
-            .get_snapshot_storages(requested_slots, None)
+            .get_snapshot_storages(requested_slots)
             .0
     }
 
@@ -7420,6 +7464,31 @@ impl Bank {
         self.update_accounts_hash(CalcAccountsHashDataSource::IndexForTests, false, false)
     }
 
+    /// Calculate the incremental accounts hash from `base_slot` to `self`
+    pub fn update_incremental_accounts_hash(&self, base_slot: Slot) -> IncrementalAccountsHash {
+        let config = CalcAccountsHashConfig {
+            use_bg_thread_pool: true,
+            check_hash: false,
+            ancestors: None, // does not matter, will not be used
+            epoch_schedule: &self.epoch_schedule,
+            rent_collector: &self.rent_collector,
+            store_detailed_debug_info_on_failure: false,
+        };
+        let storages = self.get_snapshot_storages(Some(base_slot));
+        let sorted_storages = SortedStorages::new(&storages);
+        self.rc
+            .accounts
+            .accounts_db
+            .update_incremental_accounts_hash(
+                &config,
+                &sorted_storages,
+                self.slot(),
+                HashStats::default(),
+            )
+            .unwrap() // unwrap here will never fail since check_hash = false
+            .0
+    }
+
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(
@@ -7427,13 +7496,18 @@ impl Bank {
         test_hash_calculation: bool,
         accounts_db_skip_shrink: bool,
         last_full_snapshot_slot: Slot,
+        base: Option<(Slot, /*capitalization*/ u64)>,
     ) -> bool {
         let (_, clean_time_us) = measure_us!({
             let should_clean = !accounts_db_skip_shrink && self.slot() > 0;
             if should_clean {
                 info!("Cleaning...");
+                // We cannot clean past the last full snapshot's slot because we are about to
+                // perform an accounts hash calculation *up to that slot*.  If we cleaned *past*
+                // that slot, then accounts could be removed from older storages, which would
+                // change the accounts hash.
                 self.rc.accounts.accounts_db.clean_accounts(
-                    None,
+                    Some(last_full_snapshot_slot),
                     true,
                     Some(last_full_snapshot_slot),
                 );
@@ -7461,13 +7535,16 @@ impl Bank {
             let should_verify_accounts = !self.rc.accounts.accounts_db.skip_initial_hash_calc;
             if should_verify_accounts {
                 info!("Verifying accounts...");
-                let verified = self.verify_accounts_hash(VerifyAccountsHashConfig {
-                    test_hash_calculation,
-                    ignore_mismatch: false,
-                    require_rooted_bank: false,
-                    run_in_background: true,
-                    store_hash_raw_data_for_debug: false,
-                });
+                let verified = self.verify_accounts_hash(
+                    base,
+                    VerifyAccountsHashConfig {
+                        test_hash_calculation,
+                        ignore_mismatch: false,
+                        require_rooted_bank: false,
+                        run_in_background: true,
+                        store_hash_raw_data_for_debug: false,
+                    },
+                );
                 info!("Verifying accounts... In background.");
                 verified
             } else {
@@ -7689,12 +7766,8 @@ impl Bank {
         name: &str,
         program_id: &Pubkey,
         process_instruction: ProcessInstructionWithContext,
-        default_compute_unit_cost: u64,
     ) {
-        debug!(
-            "Adding program {} under {:?} default_compute_unit_cost {}",
-            name, program_id, default_compute_unit_cost
-        );
+        debug!("Adding program {} under {:?}", name, program_id);
         self.add_builtin_account(name, program_id, false);
         if let Some(entry) = self
             .builtin_programs
@@ -7703,18 +7776,13 @@ impl Bank {
             .find(|entry| entry.program_id == *program_id)
         {
             entry.process_instruction = process_instruction;
-            entry.default_compute_unit_cost = default_compute_unit_cost;
         } else {
             self.builtin_programs.vec.push(BuiltinProgram {
                 program_id: *program_id,
                 process_instruction,
-                default_compute_unit_cost,
             });
         }
-        debug!(
-            "Added program {} under {:?} default_compute_unit_cost {}",
-            name, program_id, default_compute_unit_cost
-        );
+        debug!("Added program {} under {:?}", name, program_id);
     }
 
     /// Remove a builtin instruction processor if it already exists
@@ -7982,7 +8050,6 @@ impl Bank {
                         &builtin.name,
                         &builtin.id,
                         builtin.process_instruction_with_context,
-                        builtin.default_compute_unit_cost,
                     ),
                     BuiltinAction::Remove(program_id) => self.remove_builtin(&program_id),
                 }

@@ -125,7 +125,7 @@ test-stable-sbf)
       exit 1
   fi
 
-  # sbf-tools version
+  # platform-tools version
   "$cargo_build_sbf" -V
 
   # SBF program instruction count assertion

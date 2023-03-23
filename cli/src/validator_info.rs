@@ -11,6 +11,7 @@ use {
         self, ValidatorInfo, MAX_LONG_FIELD_LENGTH, MAX_SHORT_FIELD_LENGTH,
     },
     solana_clap_utils::{
+        hidden_unless_forced,
         input_parsers::pubkey_of,
         input_validators::{is_pubkey, is_url},
         keypair::DefaultSigner,
@@ -182,7 +183,7 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
                             Arg::with_name("force")
                                 .long("force")
                                 .takes_value(false)
-                                .hidden(true) // Don't document this argument to discourage its use
+                                .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
                                 .help("Override keybase username validity check"),
                         ),
                 )

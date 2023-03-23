@@ -18,6 +18,7 @@ use {
     serde_json::json,
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
     solana_clap_utils::{
+        hidden_unless_forced,
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
@@ -26,7 +27,7 @@ use {
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
-        validator::{ReplayingBackend, DEFAULT_BANKING_BACKEND, DEFAULT_REPLAYING_BACKEND},
+        validator::BlockVerificationMethod,
     },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
@@ -71,8 +72,9 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, create_accounts_run_and_snapshot_dirs, move_and_async_delete_path, ArchiveFormat,
-            SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
+            self, clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
+            move_and_async_delete_path, ArchiveFormat, SnapshotVersion,
+            DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
         vote_sender_types::ReplayVoteSender,
     },
@@ -1116,7 +1118,7 @@ fn load_bank_forks(
         Some(SnapshotConfig {
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
-            bank_snapshots_dir,
+            bank_snapshots_dir: bank_snapshots_dir.clone(),
             ..SnapshotConfig::new_load_only()
         })
     };
@@ -1183,18 +1185,11 @@ fn load_bank_forks(
         vec![non_primary_accounts_path]
     };
 
-    // For all account_paths, set up the run/ and snapshot/ sub directories.
-    // If the sub directories do not exist, the account_path will be cleaned because older version put account files there
-    let account_run_paths: Vec<PathBuf> = account_paths.into_iter().map(
-        |account_path| {
-            match create_accounts_run_and_snapshot_dirs(&account_path) {
-                Ok((account_run_path, _account_snapshot_path)) => account_run_path,
-                Err(err) => {
-                    eprintln!("Unable to create account run and snapshot sub directories: {}, err: {err:?}", account_path.display());
-                    exit(1);
-                }
-            }
-        }).collect();
+    let (account_run_paths, account_snapshot_paths) =
+        create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
+            eprintln!("Error: {err:?}");
+            exit(1);
+        });
 
     // From now on, use run/ paths in the same way as the previous account_paths.
     let account_paths = account_run_paths;
@@ -1208,6 +1203,17 @@ fn load_bank_forks(
     });
     measure.stop();
     info!("done. {}", measure);
+
+    info!(
+        "Cleaning contents of account snapshot paths: {:?}",
+        account_snapshot_paths
+    );
+    if let Err(e) =
+        clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths)
+    {
+        eprintln!("Failed to clean orphaned account snapshot dirs.  Error: {e:?}");
+        exit(1);
+    }
 
     let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
     let mut transaction_notifier = Option::<TransactionNotifierLock>::default();
@@ -1242,12 +1248,18 @@ fn load_bank_forks(
             accounts_update_notifier,
             &Arc::default(),
         );
-    let replaying_backend = arg_matches
-        .value_of("replaying_backend")
-        .map(ReplayingBackend::from)
-        .unwrap();
+    let block_verification_method = value_t!(
+        arg_matches,
+        "block_verification_method",
+        BlockVerificationMethod
+    )
+    .unwrap_or_default();
+    info!(
+        "Using: block-verification-method: {}",
+        block_verification_method,
+    );
     let no_transaction_status_sender = None;
-    if matches!(replaying_backend, ReplayingBackend::UnifiedScheduler) {
+    if matches!(block_verification_method, BlockVerificationMethod::UnifiedScheduler) {
         let no_poh_recorder = None;
         let no_replay_vote_sender = None::<ReplayVoteSender>;
         bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(no_poh_recorder, process_options.runtime_config.log_messages_bytes_limit, no_transaction_status_sender.clone(), no_replay_vote_sender), false);
@@ -1434,6 +1446,11 @@ fn main() {
     const DEFAULT_ROOT_COUNT: &str = "1";
     const DEFAULT_LATEST_OPTIMISTIC_SLOTS_COUNT: &str = "1";
     const DEFAULT_MAX_SLOTS_ROOT_REPAIR: &str = "2000";
+    // Use std::usize::MAX for DEFAULT_MAX_*_SNAPSHOTS_TO_RETAIN such that
+    // ledger-tool commands won't accidentally remove any snapshots by default
+    const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = std::usize::MAX;
+    const DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = std::usize::MAX;
+
     solana_logger::setup_with_default("solana=info");
 
     let starting_slot_arg = Arg::with_name("starting_slot")
@@ -1482,7 +1499,7 @@ fn main() {
         .help(
             "Debug option to scan all AppendVecs and verify account index refcounts prior to clean",
         )
-        .hidden(true);
+        .hidden(hidden_unless_forced());
     let accounts_filler_count = Arg::with_name("accounts_filler_count")
         .long("accounts-filler-count")
         .value_name("COUNT")
@@ -1529,7 +1546,7 @@ fn main() {
         Arg::with_name("accounts_db_skip_initial_hash_calculation")
             .long("accounts-db-skip-initial-hash-calculation")
             .help("Do not verify accounts hash at startup.")
-            .hidden(true);
+            .hidden(hidden_unless_forced());
     let ancient_append_vecs = Arg::with_name("accounts_db_ancient_append_vecs")
         .long("accounts-db-ancient-append-vecs")
         .value_name("SLOT-OFFSET")
@@ -1538,11 +1555,11 @@ fn main() {
         .help(
             "AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.",
         )
-        .hidden(true);
+        .hidden(hidden_unless_forced());
     let halt_at_slot_store_hash_raw_data = Arg::with_name("halt_at_slot_store_hash_raw_data")
             .long("halt-at-slot-store-hash-raw-data")
             .help("After halting at slot, run an accounts hash calculation and store the raw hash data for debugging.")
-            .hidden(true);
+            .hidden(hidden_unless_forced());
     let verify_index_arg = Arg::with_name("verify_accounts_index")
         .long("verify-accounts-index")
         .takes_value(false)
@@ -1595,9 +1612,8 @@ fn main() {
         .takes_value(true)
         .help("Log when transactions are processed that reference the given key(s).");
 
-    // Use std::usize::MAX for maximum_*_snapshots_to_retain such that
-    // ledger-tool commands will not remove any snapshots by default
-    let default_max_full_snapshot_archives_to_retain = &std::usize::MAX.to_string();
+    let default_max_full_snapshot_archives_to_retain =
+        &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
     let maximum_full_snapshot_archives_to_retain = Arg::with_name(
         "maximum_full_snapshots_to_retain",
     )
@@ -1610,7 +1626,8 @@ fn main() {
         "The maximum number of full snapshot archives to hold on to when purging older snapshots.",
     );
 
-    let default_max_incremental_snapshot_archives_to_retain = &std::usize::MAX.to_string();
+    let default_max_incremental_snapshot_archives_to_retain =
+        &DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
     let maximum_incremental_snapshot_archives_to_retain = Arg::with_name(
         "maximum_incremental_snapshots_to_retain",
     )
@@ -1701,33 +1718,14 @@ fn main() {
                 .help("Use DIR for separate incremental snapshot location"),
         )
         .arg(
-            Arg::with_name("replaying_backend")
-                .long("replaying-backend")
-                .value_name("BACKEND")
+            Arg::with_name("block_verification_method")
+                .long("block-verification-method")
+                .value_name("METHOD")
                 .takes_value(true)
-                .possible_values(&[
-                    "blockstore-processor",
-                    "unified-scheduler",
-                    ])
-                .default_value(DEFAULT_REPLAYING_BACKEND)
+                .possible_values(BlockVerificationMethod::cli_names())
                 .global(true)
-                .help(
-                    "Switch transaction scheduling backend for validating ledger entries"
-                ),
-        )
-        .arg(
-            Arg::with_name("banking_backend")
-                .long("banking-backend")
-                .value_name("BACKEND")
-                .takes_value(true)
-                .possible_values(&[
-                    "multi-iterator",
-                    ])
-                .default_value(DEFAULT_BANKING_BACKEND)
-                .global(true)
-                .help(
-                    "Switch transaction scheduling backend for generating ledger entries"
-                ),
+                .hidden(hidden_unless_forced())
+                .help(BlockVerificationMethod::cli_message()),
         )
         .arg(
             Arg::with_name("output_format")
@@ -1965,7 +1963,16 @@ fn main() {
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
                     .takes_value(false)
-                    .help("Skip ledger PoH verification"),
+                    .help(
+                        "Deprecated, please use --skip-verification.\n\
+                         Skip ledger PoH and transaction verification."
+                    ),
+            )
+            .arg(
+                Arg::with_name("skip_verification")
+                    .long("skip-verification")
+                    .takes_value(false)
+                    .help("Skip ledger PoH and transaction verification."),
             )
             .arg(
                 Arg::with_name("print_accounts_stats")
@@ -2126,6 +2133,16 @@ fn main() {
                     .validator(is_pubkey)
                     .multiple(true)
                     .help("List of accounts to remove while creating the snapshot"),
+            )
+            .arg(
+                Arg::with_name("feature_gates_to_deactivate")
+                    .required(false)
+                    .long("deactivate-feature-gate")
+                    .takes_value(true)
+                    .value_name("PUBKEY")
+                    .validator(is_pubkey)
+                    .multiple(true)
+                    .help("List of feature gates to deactivate while creating the snapshot")
             )
             .arg(
                 Arg::with_name("vote_accounts_to_destake")
@@ -2553,7 +2570,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: Some(0),
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2644,7 +2661,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2852,9 +2869,16 @@ fn main() {
                 let debug_keys = pubkeys_of(arg_matches, "debug_key")
                     .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
 
+                if arg_matches.is_present("skip_poh_verify") {
+                    eprintln!(
+                        "--skip-poh-verify is deprecated.  Replace with --skip-verification."
+                    );
+                }
+
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                    poh_verify: !arg_matches.is_present("skip_poh_verify"),
+                    run_verification: !(arg_matches.is_present("skip_poh_verify")
+                        || arg_matches.is_present("skip_verification")),
                     on_halt_store_hash_raw_data_for_debug: arg_matches
                         .is_present("halt_at_slot_store_hash_raw_data"),
                     // ledger tool verify always runs the accounts hash calc at the end of processing the blockstore
@@ -2922,7 +2946,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
 
@@ -3008,6 +3032,8 @@ fn main() {
                 let bootstrap_validator_pubkeys = pubkeys_of(arg_matches, "bootstrap_validator");
                 let accounts_to_remove =
                     pubkeys_of(arg_matches, "accounts_to_remove").unwrap_or_default();
+                let feature_gates_to_deactivate =
+                    pubkeys_of(arg_matches, "feature_gates_to_deactivate").unwrap_or_default();
                 let vote_accounts_to_destake: HashSet<_> =
                     pubkeys_of(arg_matches, "vote_accounts_to_destake")
                         .unwrap_or_default()
@@ -3104,7 +3130,7 @@ fn main() {
                     ProcessOptions {
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
-                        poh_verify: false,
+                        run_verification: false,
                         accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                         accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                         ..ProcessOptions::default()
@@ -3126,6 +3152,7 @@ fn main() {
                             || hashes_per_tick.is_some()
                             || remove_stake_accounts
                             || !accounts_to_remove.is_empty()
+                            || !feature_gates_to_deactivate.is_empty()
                             || !vote_accounts_to_destake.is_empty()
                             || faucet_pubkey.is_some()
                             || bootstrap_validator_pubkeys.is_some();
@@ -3178,6 +3205,32 @@ fn main() {
 
                             account.set_lamports(0);
                             bank.store_account(&address, &account);
+                            debug!("Account removed: {address}");
+                        }
+
+                        for address in feature_gates_to_deactivate {
+                            let mut account = bank.get_account(&address).unwrap_or_else(|| {
+                                eprintln!(
+                                    "Error: Feature-gate account does not exist, unable to deactivate it: {address}"
+                                );
+                                exit(1);
+                            });
+
+                            match feature::from_account(&account) {
+                                Some(feature) => {
+                                    if feature.activated_at.is_none() {
+                                        warn!("Feature gate is not yet activated: {address}");
+                                    }
+                                }
+                                None => {
+                                    eprintln!("Error: Account is not a `Feature`: {address}");
+                                    exit(1);
+                                }
+                            }
+
+                            account.set_lamports(0);
+                            bank.store_account(&address, &account);
+                            debug!("Feature gate deactivated: {address}");
                         }
 
                         if !vote_accounts_to_destake.is_empty() {
@@ -3429,7 +3482,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -3518,7 +3571,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
-                    poh_verify: false,
+                    run_verification: false,
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);

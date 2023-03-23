@@ -3,6 +3,7 @@ use {
     lazy_static::lazy_static,
     log::warn,
     solana_clap_utils::{
+        hidden_unless_forced,
         input_validators::{
             is_keypair, is_keypair_or_ask_keyword, is_niceness_adjustment_valid, is_parsable,
             is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
@@ -12,7 +13,7 @@ use {
     },
     solana_core::{
         banking_trace::{DirByteLimit, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
-        validator::{DEFAULT_BANKING_BACKEND, DEFAULT_REPLAYING_BACKEND},
+        validator::{BlockProductionMethod, BlockVerificationMethod},
     },
     solana_faucet::faucet::{self, FAUCET_PORT},
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
@@ -201,7 +202,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("no_port_check")
                 .long("no-port-check")
                 .takes_value(false)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Do not perform TCP/UDP reachable port checks at start-up")
         )
         .arg(
@@ -493,37 +494,37 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("no_poh_speed_test")
                 .long("no-poh-speed-test")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Skip the check for PoH speed."),
         )
         .arg(
             Arg::with_name("no_os_network_limits_test")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .long("no-os-network-limits-test")
                 .help("Skip checks for OS network limits.")
         )
         .arg(
             Arg::with_name("no_os_memory_stats_reporting")
                 .long("no-os-memory-stats-reporting")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Disable reporting of OS memory statistics.")
         )
         .arg(
             Arg::with_name("no_os_network_stats_reporting")
                 .long("no-os-network-stats-reporting")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Disable reporting of OS network statistics.")
         )
         .arg(
             Arg::with_name("no_os_cpu_stats_reporting")
                 .long("no-os-cpu-stats-reporting")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Disable reporting of OS CPU statistics.")
         )
         .arg(
             Arg::with_name("no_os_disk_stats_reporting")
                 .long("no-os-disk-stats-reporting")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Disable reporting of OS disk statistics.")
         )
         .arg(
@@ -590,7 +591,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         )
         .arg(
             Arg::with_name("rocksdb_ledger_compression")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .long("rocksdb-ledger-compression")
                 .value_name("COMPRESSION_TYPE")
                 .takes_value(true)
@@ -602,7 +603,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         )
         .arg(
             Arg::with_name("rocksdb_perf_sample_interval")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .long("rocksdb-perf-sample-interval")
                 .value_name("ROCKS_PERF_SAMPLE_INTERVAL")
                 .takes_value(true)
@@ -615,7 +616,16 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("skip_poh_verify")
                 .long("skip-poh-verify")
                 .takes_value(false)
-                .help("Skip ledger verification at validator bootup"),
+                .help(
+                    "Deprecated, please use --skip-verification.\n\
+                     Skip ledger verification at validator bootup."
+                ),
+        )
+        .arg(
+            Arg::with_name("skip_verification")
+                .long("skip-verification")
+                .takes_value(false)
+                .help("Skip ledger verification at validator bootup."),
         )
         .arg(
             Arg::with_name("cuda")
@@ -674,7 +684,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         )
         .arg(
             Arg::with_name("no_wait_for_vote_to_start_leader")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .long("no-wait-for-vote-to-start-leader")
                 .help("If the validator starts up with no ledger, it will wait to start block
                       production until it sees a vote land in a rooted slot. This prevents
@@ -729,7 +739,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         )
         .arg(
             Arg::with_name("repair_whitelist")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .long("repair-whitelist")
                 .validator(is_pubkey)
                 .value_name("VALIDATOR IDENTITY")
@@ -762,7 +772,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("tpu_use_quic")
                 .long("tpu-use-quic")
                 .takes_value(false)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .conflicts_with("tpu_disable_quic")
                 .help("Use QUIC to send transactions."),
         )
@@ -886,7 +896,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("The maximum number of connections that RPC PubSub will support. \
                        This is a hard limit and no new connections beyond this limit can \
                        be made until an old connection is dropped. (Obsolete)"),
@@ -897,7 +907,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("BYTES")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("The maximum length in bytes of acceptable incoming frames. Messages longer \
                        than this will be rejected. (Obsolete)"),
         )
@@ -907,7 +917,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("BYTES")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("The maximum size in bytes to which the incoming websocket buffer can grow. \
                       (Obsolete)"),
         )
@@ -917,7 +927,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("BYTES")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("The maximum size in bytes to which the outgoing websocket buffer can grow. \
                        (Obsolete)"),
         )
@@ -974,7 +984,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("rpc_send_transaction_batch_ms")
                 .long("rpc-send-batch-ms")
                 .value_name("MILLISECS")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .takes_value(true)
                 .validator(|s| is_within_range(s, 1..=MAX_BATCH_SEND_RATE_MS))
                 .default_value(&default_args.rpc_send_transaction_batch_ms)
@@ -1010,7 +1020,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("rpc_send_transaction_batch_size")
                 .long("rpc-send-batch-size")
                 .value_name("NUMBER")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .takes_value(true)
                 .validator(|s| is_within_range(s, 1..=MAX_TRANSACTION_BATCH_SIZE))
                 .default_value(&default_args.rpc_send_transaction_batch_size)
@@ -1036,7 +1046,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("enable_accountsdb_repl")
                 .long("enable-accountsdb-repl")
                 .takes_value(false)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Enable AccountsDb Replication"),
         )
         .arg(
@@ -1045,7 +1055,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("HOST")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("IP address to bind the AccountsDb Replication port [default: use --bind-address]"),
         )
         .arg(
@@ -1054,7 +1064,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("PORT")
                 .takes_value(true)
                 .validator(port_validator)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Enable AccountsDb Replication Service on this port"),
         )
         .arg(
@@ -1064,7 +1074,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .validator(is_parsable::<usize>)
                 .takes_value(true)
                 .default_value(&default_args.accountsdb_repl_threads)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Number of threads to use for servicing AccountsDb Replication requests"),
         )
         .arg(
@@ -1126,7 +1136,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         )
         .arg(
             Arg::with_name("poh_pinned_cpu_core")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .long("experimental-poh-pinned-cpu-core")
                 .takes_value(true)
                 .value_name("CPU_CORE_INDEX")
@@ -1142,7 +1152,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         )
         .arg(
             Arg::with_name("poh_hashes_per_batch")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .long("poh-hashes-per-batch")
                 .takes_value(true)
                 .value_name("NUM")
@@ -1151,7 +1161,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("process_ledger_before_services")
                 .long("process-ledger-before-services")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Process the local ledger fully before starting networking services")
         )
         .arg(
@@ -1186,13 +1196,13 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("accounts_db_verify_refcounts")
                 .long("accounts-db-verify-refcounts")
                 .help("Debug option to scan all append vecs and verify account index refcounts prior to clean")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
         )
         .arg(
             Arg::with_name("accounts_db_create_ancient_storage_packed")
                 .long("accounts-db-create-ancient-storage-packed")
                 .help("Create ancient storages in one shot instead of appending.")
-                .hidden(true),
+                .hidden(hidden_unless_forced()),
             )
         .arg(
             Arg::with_name("accounts_db_ancient_append_vecs")
@@ -1201,7 +1211,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .validator(is_parsable::<i64>)
                 .takes_value(true)
                 .help("AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.")
-                .hidden(true),
+                .hidden(hidden_unless_forced()),
         )
         .arg(
             Arg::with_name("accounts_db_cache_limit_mb")
@@ -1300,7 +1310,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("allow-private-addr")
                 .takes_value(false)
                 .help("Allow contacting private ip addresses")
-                .hidden(true),
+                .hidden(hidden_unless_forced()),
         )
         .arg(
             Arg::with_name("log_messages_bytes_limit")
@@ -1334,31 +1344,22 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        ledger")
         )
         .arg(
-            Arg::with_name("replaying_backend")
-                .long("replaying-backend")
-                .value_name("BACKEND")
+            Arg::with_name("block_verification_method")
+                .long("block-verification-method")
+                .hidden(hidden_unless_forced())
+                .value_name("METHOD")
                 .takes_value(true)
-                .possible_values(&[
-                    "blockstore-processor",
-                    "unified-scheduler",
-                    ])
-                .default_value(&default_args.replaying_backend)
-                .help(
-                    "Switch transaction scheduling backend for validating ledger entries"
-                ),
+                .possible_values(BlockVerificationMethod::cli_names())
+                .help(BlockVerificationMethod::cli_message())
         )
         .arg(
-            Arg::with_name("banking_backend")
-                .long("banking-backend")
-                .value_name("BACKEND")
+            Arg::with_name("block_production_method")
+                .long("block-production-method")
+                .hidden(hidden_unless_forced())
+                .value_name("METHOD")
                 .takes_value(true)
-                .possible_values(&[
-                    "multi-iterator",
-                    ])
-                .default_value(&default_args.banking_backend)
-                .help(
-                    "Switch transaction scheduling backend for generating ledger entries"
-                ),
+                .possible_values(BlockProductionMethod::cli_names())
+                .help(BlockProductionMethod::cli_message())
         )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
@@ -1496,6 +1497,48 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .about("Run the validator")
         )
         .subcommand(
+            SubCommand::with_name("plugin")
+                .about("Manage and view geyser plugins")
+                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .setting(AppSettings::InferSubcommands)
+                .subcommand(
+                    SubCommand::with_name("list")
+                        .about("List all current running gesyer plugins")
+                )
+                .subcommand(
+                    SubCommand::with_name("unload")
+                        .about("Unload a particular gesyer plugin. You must specify the gesyer plugin name")
+                        .arg(
+                            Arg::with_name("name")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                )
+                .subcommand(
+                    SubCommand::with_name("reload")
+                        .about("Reload a particular gesyer plugin. You must specify the gesyer plugin name and the new config path")
+                        .arg(
+                            Arg::with_name("name")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                        .arg(
+                            Arg::with_name("config")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                )
+                .subcommand(
+                    SubCommand::with_name("load")
+                        .about("Load a new gesyer plugin. You must specify the config path. Fails if overwriting (use reload)")
+                        .arg(
+                            Arg::with_name("config")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                )
+        )
+        .subcommand(
             SubCommand::with_name("set-identity")
                 .about("Set the validator identity")
                 .arg(
@@ -1587,17 +1630,17 @@ fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
         Arg::with_name("accounts_db_skip_shrink")
             .long("accounts-db-skip-shrink")
             .help("This is obsolete since it is now enabled by default. Enables faster starting of validators by skipping startup clean and shrink.")
-            .hidden(true),
+            .hidden(hidden_unless_forced()),
         Arg::with_name("accounts_db_caching_enabled")
             .long("accounts-db-caching-enabled")
-            .hidden(true),
+            .hidden(hidden_unless_forced()),
         Arg::with_name("accounts_db_index_hashing")
             .long("accounts-db-index-hashing")
             .help(
                 "Enables the use of the index in hash calculation in \
                    AccountsHashVerifier/Accounts Background Service.",
             )
-            .hidden(true),
+            .hidden(hidden_unless_forced()),
         Arg::with_name("no_accounts_db_index_hashing")
             .long("no-accounts-db-index-hashing")
             .help(
@@ -1605,24 +1648,24 @@ fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
                    Disables the use of the index in hash calculation in \
                    AccountsHashVerifier/Accounts Background Service.",
             )
-            .hidden(true),
+            .hidden(hidden_unless_forced()),
         Arg::with_name("bpf_jit")
             .long("bpf-jit")
-            .hidden(true)
+            .hidden(hidden_unless_forced())
             .takes_value(false)
             .conflicts_with("no_bpf_jit"),
         Arg::with_name("disable_quic_servers")
             .long("disable-quic-servers")
             .takes_value(false)
-            .hidden(true),
+            .hidden(hidden_unless_forced()),
         Arg::with_name("enable_quic_servers")
-            .hidden(true)
+            .hidden(hidden_unless_forced())
             .long("enable-quic-servers"),
         Arg::with_name("enable_cpi_and_log_storage")
             .long("enable-cpi-and-log-storage")
             .requires("enable_rpc_transaction_history")
             .takes_value(false)
-            .hidden(true)
+            .hidden(hidden_unless_forced())
             .help(
                 "Deprecated, please use \"enable-extended-tx-metadata-storage\". \
                    Include CPI inner instructions, logs and return data in \
@@ -1631,7 +1674,7 @@ fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
         Arg::with_name("incremental_snapshots")
             .long("incremental-snapshots")
             .takes_value(false)
-            .hidden(true)
+            .hidden(hidden_unless_forced())
             .conflicts_with("no_incremental_snapshots")
             .help("Enable incremental snapshots")
             .long_help(
@@ -1643,29 +1686,29 @@ fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
         Arg::with_name("minimal_rpc_api")
             .long("minimal-rpc-api")
             .takes_value(false)
-            .hidden(true)
+            .hidden(hidden_unless_forced())
             .help("Only expose the RPC methods required to serve snapshots to other nodes"),
         Arg::with_name("no_check_vote_account")
             .long("no-check-vote-account")
             .takes_value(false)
             .conflicts_with("no_voting")
             .requires("entrypoint")
-            .hidden(true)
+            .hidden(hidden_unless_forced())
             .help("Skip the RPC vote account sanity check"),
         Arg::with_name("no_rocksdb_compaction")
             .long("no-rocksdb-compaction")
-            .hidden(true)
+            .hidden(hidden_unless_forced())
             .takes_value(false)
             .help("Disable manual compaction of the ledger database (this is ignored)."),
         Arg::with_name("rocksdb_compaction_interval")
             .long("rocksdb-compaction-interval-slots")
-            .hidden(true)
+            .hidden(hidden_unless_forced())
             .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
             .takes_value(true)
             .help("Number of slots between compacting ledger"),
         Arg::with_name("rocksdb_max_compaction_jitter")
             .long("rocksdb-max-compaction-jitter-slots")
-            .hidden(true)
+            .hidden(hidden_unless_forced())
             .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
             .takes_value(true)
             .help("Introduce jitter into the compaction to offset compaction operation"),
@@ -1747,8 +1790,6 @@ pub struct DefaultArgs {
     pub wait_for_restart_window_max_delinquent_stake: String,
 
     pub banking_trace_dir_byte_limit: String,
-    pub replaying_backend: String,
-    pub banking_backend: String,
 }
 
 impl DefaultArgs {
@@ -1828,8 +1869,6 @@ impl DefaultArgs {
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
-            replaying_backend: DEFAULT_REPLAYING_BACKEND.to_string(),
-            banking_backend: DEFAULT_BANKING_BACKEND.to_string(),
         }
     }
 }
@@ -2015,7 +2054,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
             Arg::with_name("enable_rpc_bigtable_ledger_storage")
                 .long("enable-rpc-bigtable-ledger-storage")
                 .takes_value(false)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Fetch historical transaction info from a BigTable instance \
                        as a fallback to local ledger data"),
         )
@@ -2024,7 +2063,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .long("rpc-bigtable-instance")
                 .value_name("INSTANCE_NAME")
                 .takes_value(true)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .default_value("solana-ledger")
                 .help("Name of BigTable instance to target"),
         )
@@ -2033,7 +2072,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .long("rpc-bigtable-app-profile-id")
                 .value_name("APP_PROFILE_ID")
                 .takes_value(true)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
                 .help("Application profile id to use in Bigtable requests")
         )

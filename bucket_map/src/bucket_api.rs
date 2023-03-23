@@ -16,7 +16,7 @@ use {
 
 type LockedBucket<T> = RwLock<Option<Bucket<T>>>;
 
-pub struct BucketApi<T: Clone + Copy> {
+pub struct BucketApi<T: Clone + Copy + 'static> {
     drives: Arc<Vec<PathBuf>>,
     max_search: MaxSearch,
     pub stats: Arc<BucketMapStats>,

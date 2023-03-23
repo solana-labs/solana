@@ -622,7 +622,7 @@ impl ProgramTest {
         let add_native = |this: &mut ProgramTest, process_fn: ProcessInstructionWithContext| {
             info!("\"{}\" program loaded as native code", program_name);
             this.builtins
-                .push(Builtin::new(program_name, program_id, process_fn, 0));
+                .push(Builtin::new(program_name, program_id, process_fn));
         };
 
         let warn_invalid_program_name = || {
@@ -695,12 +695,8 @@ impl ProgramTest {
         process_instruction: ProcessInstructionWithContext,
     ) {
         info!("\"{}\" builtin program", program_name);
-        self.builtins.push(Builtin::new(
-            program_name,
-            program_id,
-            process_instruction,
-            0,
-        ));
+        self.builtins
+            .push(Builtin::new(program_name, program_id, process_instruction));
     }
 
     /// Deactivate a runtime feature.
@@ -793,7 +789,7 @@ impl ProgramTest {
         // Add loaders
         macro_rules! add_builtin {
             ($b:expr) => {
-                bank.add_builtin(&$b.0, &$b.1, $b.2, $b.3)
+                bank.add_builtin(&$b.0, &$b.1, $b.2)
             };
         }
         add_builtin!(solana_bpf_loader_deprecated_program!());
@@ -816,7 +812,6 @@ impl ProgramTest {
                 &builtin.name,
                 &builtin.id,
                 builtin.process_instruction_with_context,
-                0,
             );
         }
 

@@ -188,6 +188,7 @@ struct ServeRepairStats {
     orphan: usize,
     pong: usize,
     ancestor_hashes: usize,
+    window_index_misses: usize,
     ping_cache_check_failed: usize,
     pings_sent: usize,
     decode_time_us: u64,
@@ -297,6 +298,28 @@ impl RepairProtocol {
             | Self::AncestorHashes { .. } => true,
         }
     }
+
+    fn max_response_packets(&self) -> usize {
+        match self {
+            RepairProtocol::WindowIndex { .. }
+            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
+            | RepairProtocol::HighestWindowIndex { .. }
+            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
+            | RepairProtocol::AncestorHashes { .. }
+            | RepairProtocol::LegacyAncestorHashes(_, _, _) => 1,
+            RepairProtocol::Orphan { .. } | RepairProtocol::LegacyOrphanWithNonce(_, _, _) => {
+                MAX_ORPHAN_REPAIR_RESPONSES
+            }
+            RepairProtocol::Pong(_) => 0, // no response
+            RepairProtocol::LegacyWindowIndex(_, _, _)
+            | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
+            | RepairProtocol::LegacyOrphan(_, _) => 0, // unsupported
+        }
+    }
+
+    fn max_response_bytes(&self) -> usize {
+        self.max_response_packets() * PACKET_DATA_SIZE
+    }
 }
 
 #[derive(Clone)]
@@ -381,17 +404,18 @@ impl ServeRepair {
                 }
                 | RepairProtocol::LegacyWindowIndexWithNonce(_, slot, shred_index, nonce) => {
                     stats.window_index += 1;
-                    (
-                        Self::run_window_request(
-                            recycler,
-                            from_addr,
-                            blockstore,
-                            *slot,
-                            *shred_index,
-                            *nonce,
-                        ),
-                        "WindowIndexWithNonce",
-                    )
+                    let batch = Self::run_window_request(
+                        recycler,
+                        from_addr,
+                        blockstore,
+                        *slot,
+                        *shred_index,
+                        *nonce,
+                    );
+                    if batch.is_none() {
+                        stats.window_index_misses += 1;
+                    }
+                    (batch, "WindowIndexWithNonce")
                 }
                 RepairProtocol::HighestWindowIndex {
                     header: RepairRequestHeader { nonce, .. },
@@ -726,6 +750,7 @@ impl ServeRepair {
                 i64
             ),
             ("pong", stats.pong, i64),
+            ("window_index_misses", stats.window_index_misses, i64),
             (
                 "ping_cache_check_failed",
                 stats.ping_cache_check_failed,
@@ -914,17 +939,17 @@ impl ServeRepair {
         let identity_keypair = self.cluster_info.keypair().clone();
         let mut pending_pings = Vec::default();
 
-        let requests_len = requests.len();
-        for (
-            i,
-            RepairRequestWithMeta {
-                request,
-                from_addr,
-                stake,
-                ..
-            },
-        ) in requests.into_iter().enumerate()
+        for RepairRequestWithMeta {
+            request,
+            from_addr,
+            stake,
+            ..
+        } in requests.into_iter()
         {
+            if !data_budget.check(request.max_response_bytes()) {
+                stats.dropped_requests_outbound_bandwidth += 1;
+                continue;
+            }
             if !matches!(&request, RepairProtocol::Pong(_)) {
                 let (check, ping_pkt) =
                     Self::check_ping_cache(ping_cache, &request, &from_addr, &identity_keypair);
@@ -955,9 +980,8 @@ impl ServeRepair {
                     false => stats.total_response_bytes_unstaked += num_response_bytes,
                 }
             } else {
-                stats.dropped_requests_outbound_bandwidth += requests_len - i;
+                stats.dropped_requests_outbound_bandwidth += 1;
                 stats.total_dropped_response_packets += num_response_packets;
-                break;
             }
         }
 
@@ -1214,8 +1238,6 @@ impl ServeRepair {
             from_addr,
             nonce,
         )?;
-
-        inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
         Some(PacketBatch::new_unpinned_with_recycler_data(
             recycler,
             "run_window_request",
