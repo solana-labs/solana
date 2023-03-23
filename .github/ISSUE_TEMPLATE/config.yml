@@ -1,0 +1,7 @@
+contact_links:
+  - about: "Have a question about using this software, or about Solana in general? Post it on the Solana Stack Exchange."
+    name: Ask a Question
+    url: "https://solana.stackexchange.com/questions/ask"
+  - about: "Start or join a discussion on the Solana Tech Discord."
+    name: Start a Discussion
+    url: "https://solana.com/discord"
