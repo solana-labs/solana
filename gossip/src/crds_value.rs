@@ -440,12 +440,12 @@ impl NodeInstance {
     }
 
     // Returns true if the crds-value is a duplicate instance
-    // of this node, with a more recent timestamp.
+    // of this node, with an older timestamp.
     pub(crate) fn check_duplicate(&self, other: &CrdsValue) -> bool {
         match &other.data {
             CrdsData::NodeInstance(other) => {
                 self.token != other.token
-                    && self.timestamp <= other.timestamp
+                    && self.timestamp > other.timestamp
                     && self.from == other.from
             }
             _ => false,
