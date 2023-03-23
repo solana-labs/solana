@@ -5015,7 +5015,7 @@ pub mod tests {
                 .into_iter()
                 .map(|tx| SanitizedTransaction::try_from_legacy_transaction(tx).unwrap())
                 .collect();
-            prioritization_fee_cache.update(bank, transactions.iter());
+            prioritization_fee_cache.update(&bank, transactions.iter());
         }
 
         fn get_prioritization_fee_cache(&self) -> &PrioritizationFeeCache {

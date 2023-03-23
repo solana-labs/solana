@@ -201,7 +201,7 @@ impl PrioritizationFeeCache {
     /// Update with a list of non-vote transactions' tx_priority_details and tx_account_locks; Only
     /// transactions have both valid priority_detail and account_locks will be used to update
     /// fee_cache asynchronously.
-    pub fn update<'a>(&self, bank: Arc<Bank>, txs: impl Iterator<Item = &'a SanitizedTransaction>) {
+    pub fn update<'a>(&self, bank: &Bank, txs: impl Iterator<Item = &'a SanitizedTransaction>) {
         let mut successful_transaction_update_count: u64 = 0;
         let (_, send_updates_time) = measure!(
             {
@@ -427,7 +427,7 @@ mod tests {
         bank: Arc<Bank>,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
     ) {
-        prioritization_fee_cache.update(bank.clone(), txs);
+        prioritization_fee_cache.update(&bank, txs);
 
         let block_fee = PrioritizationFeeCache::get_prioritization_fee(
             prioritization_fee_cache.cache.clone(),

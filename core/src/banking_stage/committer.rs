@@ -131,7 +131,7 @@ impl Committer {
                 starting_transaction_index,
             );
             self.prioritization_fee_cache
-                .update(bank.clone(), executed_transactions.into_iter());
+                .update(bank, executed_transactions.into_iter());
         });
         execute_and_commit_timings.find_and_send_votes_us = find_and_send_votes_us;
         (commit_time_us, commit_transaction_statuses)
