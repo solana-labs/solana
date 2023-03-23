@@ -2620,6 +2620,7 @@ fn rebuild_bank_from_snapshot(
             accounts_db_config,
             accounts_update_notifier,
             exit,
+            None,
         )?)
     })?;
 
@@ -5313,6 +5314,7 @@ mod tests {
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             &Arc::default(),
+            None,
         )
         .unwrap();
         deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
