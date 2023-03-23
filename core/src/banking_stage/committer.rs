@@ -1,5 +1,6 @@
 use {
     crate::leader_slot_banking_stage_timing_metrics::LeaderExecuteAndCommitTimings,
+    itertools::Itertools,
     solana_ledger::{
         blockstore_processor::TransactionStatusSender, token_balances::collect_token_balances,
     },
@@ -81,7 +82,6 @@ impl Committer {
         let (last_blockhash, lamports_per_signature) =
             bank.last_blockhash_and_lamports_per_signature();
 
-        use itertools::Itertools;
         let executed_transactions = execution_results
             .iter()
             .zip(batch.sanitized_transactions())
