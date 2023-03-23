@@ -577,6 +577,7 @@ async fn packet_batch_sender(
     let mut batch_start_time = Instant::now();
     loop {
         let mut packet_batch = PacketBatch::with_capacity(PACKETS_PER_BATCH);
+        let mut total_bytes: usize = 0;
 
         stats
             .total_packets_allocated
@@ -604,6 +605,10 @@ async fn packet_batch_sender(
                         .total_packets_sent_to_consumer
                         .fetch_add(len, Ordering::Relaxed);
 
+                    stats
+                        .total_bytes_sent_to_consumer
+                        .fetch_add(total_bytes, Ordering::Relaxed);
+
                     trace!("Sent {} packet batch", len);
                 }
                 break;
@@ -616,6 +621,10 @@ async fn packet_batch_sender(
                     packet_batch.set_len(packet_batch.len() + 1);
                 }
 
+                if packet_batch.len() == 1 {
+                    batch_start_time = Instant::now();
+                }
+
                 let i = packet_batch.len() - 1;
                 *packet_batch[i].meta_mut() = packet_accumulator.meta;
                 for chunk in packet_accumulator.chunks {
@@ -623,9 +632,7 @@ async fn packet_batch_sender(
                         .copy_from_slice(&chunk.bytes);
                 }
 
-                if packet_batch.len() == 1 {
-                    batch_start_time = Instant::now();
-                }
+                total_bytes += packet_batch[i].meta().size;
             }
         }
     }
@@ -827,6 +834,9 @@ async fn handle_chunk(
                         stats
                             .total_packets_sent_for_batching
                             .fetch_add(1, Ordering::Relaxed);
+                        stats
+                            .total_bytes_sent_for_batching
+                            .fetch_add(len, Ordering::Relaxed);
                         trace!("sent {} byte packet for batching", len);
                     }
                 } else {
