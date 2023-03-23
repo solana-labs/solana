@@ -1651,8 +1651,6 @@ fn main() {
         .to_string();
     let default_graph_vote_account_mode = GraphVoteAccountMode::default();
 
-    let block_verification_method_help = &BlockVerificationMethod::cli_message();
-
     let mut measure_total_execution_time = Measure::start("ledger tool");
 
     let matches = App::new(crate_name!())
@@ -1718,7 +1716,7 @@ fn main() {
                 .possible_values(BlockVerificationMethod::cli_names())
                 .global(true)
                 .hidden(hidden_unless_forced())
-                .help(block_verification_method_help),
+                .help(BlockVerificationMethod::cli_message()),
         )
         .arg(
             Arg::with_name("output_format")

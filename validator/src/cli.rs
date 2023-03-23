@@ -1341,7 +1341,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("METHOD")
                 .takes_value(true)
                 .possible_values(BlockVerificationMethod::cli_names())
-                .help(&default_args.block_verification_method_help),
+                .help(BlockVerificationMethod::cli_message())
         )
         .arg(
             Arg::with_name("block_production_method")
@@ -1350,7 +1350,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("METHOD")
                 .takes_value(true)
                 .possible_values(BlockProductionMethod::cli_names())
-                .help(&default_args.block_production_method_help),
+                .help(BlockProductionMethod::cli_message())
         )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
@@ -1781,8 +1781,6 @@ pub struct DefaultArgs {
     pub wait_for_restart_window_max_delinquent_stake: String,
 
     pub banking_trace_dir_byte_limit: String,
-    pub block_verification_method_help: String,
-    pub block_production_method_help: String,
 }
 
 impl DefaultArgs {
@@ -1862,8 +1860,6 @@ impl DefaultArgs {
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
-            block_verification_method_help: BlockVerificationMethod::cli_message(),
-            block_production_method_help: BlockProductionMethod::cli_message(),
         }
     }
 }

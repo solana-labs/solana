@@ -28,6 +28,7 @@ use {
         tvu::{Tvu, TvuConfig, TvuSockets},
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
+    lazy_static::lazy_static,
     rand::{thread_rng, Rng},
     solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
@@ -135,11 +136,15 @@ impl BlockVerificationMethod {
         Self::VARIANTS
     }
 
-    pub fn cli_message() -> String {
-        format!(
-            "Switch transaction scheduling method for verifying ledger entries [default: {}]",
-            Self::default()
-        )
+    pub fn cli_message() -> &'static str {
+        lazy_static! {
+            static ref MESSAGE: String = format!(
+                "Switch transaction scheduling method for verifying ledger entries [default: {}]",
+                BlockVerificationMethod::default()
+            );
+        };
+
+        &MESSAGE
     }
 }
 
@@ -155,11 +160,15 @@ impl BlockProductionMethod {
         Self::VARIANTS
     }
 
-    pub fn cli_message() -> String {
-        format!(
-            "Switch transaction scheduling method for producing ledger entries [default: {}]",
-            Self::default()
-        )
+    pub fn cli_message() -> &'static str {
+        lazy_static! {
+            static ref MESSAGE: String = format!(
+                "Switch transaction scheduling method for producing ledger entries [default: {}]",
+                BlockProductionMethod::default()
+            );
+        };
+
+        &MESSAGE
     }
 }
 
