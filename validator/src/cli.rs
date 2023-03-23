@@ -301,7 +301,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         )
         .arg(
             Arg::with_name("snapshot_from_dir")
-            .long("snapshot-from-file")
+            .long("snapshot-from-dir")
             .takes_value(false)
             // Hide it because it is for internal usage only at this point.  Once this path has been verified via
             // internal usage, this argument will be removed, and this path will be set as the default.

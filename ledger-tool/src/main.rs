@@ -87,7 +87,7 @@ use {
     std::{
         collections::{BTreeMap, BTreeSet, HashMap, HashSet},
         ffi::OsStr,
-        fs::File,
+        fs::{create_dir_all, File},
         io::{self, stdout, BufRead, BufReader, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
@@ -1075,6 +1075,13 @@ fn load_bank_forks(
         if path.exists() {
             move_and_async_delete_path(path);
         }
+        if !path.exists() {
+            // Keep the empty directory
+            create_dir_all(path).unwrap_or_else(|err| {
+                eprintln!("Error: {err:?}");
+                exit(1);
+            });
+        }
     });
     measure.stop();
     info!("done. {}", measure);
@@ -1348,7 +1355,7 @@ fn main() {
         .takes_value(false)
         .help("Do not start from a local snapshot if present");
     let snapshot_from_dir = Arg::with_name("snapshot_from_dir")
-        .long("snapshot-from-file")
+        .long("snapshot-from-dir")
         .takes_value(false)
         .help("Construct initial bank state from files instead of archives");
     let no_bpf_jit_arg = Arg::with_name("no_bpf_jit")
@@ -2848,7 +2855,7 @@ fn main() {
 
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    AccessType::Primary,
                     wal_recovery_mode,
                     force_update_to_open,
                 );

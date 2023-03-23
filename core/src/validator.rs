@@ -108,6 +108,7 @@ use {
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
+        fs::create_dir_all,
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::{
@@ -2182,6 +2183,16 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 fn cleanup_accounts_paths(config: &ValidatorConfig) {
     for accounts_path in &config.account_paths {
         move_and_async_delete_path(accounts_path);
+        if !accounts_path.exists() {
+            // Keep the empty directory
+            create_dir_all(accounts_path).unwrap_or_else(|err| {
+                panic!(
+                    "Failed to create accounts directory {}: {}",
+                    accounts_path.display(),
+                    err
+                );
+            });
+        }
     }
     if let Some(ref shrink_paths) = config.account_shrink_paths {
         for accounts_path in shrink_paths {
@@ -2227,7 +2238,11 @@ mod tests {
         solana_tpu_client::tpu_client::{
             DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
         },
-        std::{fs::remove_dir_all, thread, time::Duration},
+        std::{
+            fs::{create_dir_all, remove_dir_all},
+            thread,
+            time::Duration,
+        },
     };
 
     #[test]
