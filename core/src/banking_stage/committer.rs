@@ -85,13 +85,7 @@ impl Committer {
         let executed_transactions = execution_results
             .iter()
             .zip(batch.sanitized_transactions())
-            .filter_map(|(execution_result, tx)| {
-                if execution_result.was_executed() {
-                    Some(tx)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(execution_result, tx)| execution_result.was_executed().then_some(tx))
             .collect_vec();
 
         let (tx_results, commit_time_us) = measure_us!(bank.commit_transactions(
