@@ -7,13 +7,13 @@
 use {
     crossbeam_channel::{Receiver, Sender},
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
-    solana_measure::{measure, measure::Measure},
+    solana_measure::{measure::Measure, measure_us},
     solana_runtime::{
-        accounts_hash::{AccountsHash, CalcAccountsHashConfig, HashStats},
-        epoch_accounts_hash::EpochAccountsHash,
+        accounts_hash::{AccountsHash, AccountsHashEnum, CalcAccountsHashConfig, HashStats},
         snapshot_config::SnapshotConfig,
         snapshot_package::{
             self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
+            SnapshotType,
         },
         sorted_storages::SortedStorages,
     },
@@ -56,54 +56,57 @@ impl AccountsHashVerifier {
         let t_accounts_hash_verifier = Builder::new()
             .name("solAcctHashVer".to_string())
             .spawn(move || {
+                let mut last_full_snapshot = None;
                 let mut hashes = vec![];
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
 
-                    if let Some((
+                    let Some((
                         accounts_package,
                         num_outstanding_accounts_packages,
                         num_re_enqueued_accounts_packages,
                     )) = Self::get_next_accounts_package(
                         &accounts_package_sender,
                         &accounts_package_receiver,
-                    ) {
-                        info!("handling accounts package: {accounts_package:?}");
-                        let enqueued_time = accounts_package.enqueued.elapsed();
-
-                        let (_, measure) = measure!(Self::process_accounts_package(
-                            accounts_package,
-                            &cluster_info,
-                            known_validators.as_ref(),
-                            halt_on_known_validators_accounts_hash_mismatch,
-                            snapshot_package_sender.as_ref(),
-                            &mut hashes,
-                            &exit,
-                            fault_injection_rate_slots,
-                            &snapshot_config,
-                        ));
-
-                        datapoint_info!(
-                            "accounts_hash_verifier",
-                            (
-                                "num-outstanding-accounts-packages",
-                                num_outstanding_accounts_packages as i64,
-                                i64
-                            ),
-                            (
-                                "num-re-enqueued-accounts-packages",
-                                num_re_enqueued_accounts_packages as i64,
-                                i64
-                            ),
-                            ("enqueued-time-us", enqueued_time.as_micros() as i64, i64),
-                            ("total-processing-time-us", measure.as_us() as i64, i64),
-                        );
-                    } else {
+                    ) else {
                         std::thread::sleep(LOOP_LIMITER);
-                    }
+                        continue;
+                    };
+                    info!("handling accounts package: {accounts_package:?}");
+                    let enqueued_time = accounts_package.enqueued.elapsed();
+
+                    let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
+                        accounts_package,
+                        &cluster_info,
+                        known_validators.as_ref(),
+                        halt_on_known_validators_accounts_hash_mismatch,
+                        snapshot_package_sender.as_ref(),
+                        &mut hashes,
+                        &exit,
+                        fault_injection_rate_slots,
+                        &snapshot_config,
+                        &mut last_full_snapshot,
+                    ));
+
+                    datapoint_info!(
+                        "accounts_hash_verifier",
+                        (
+                            "num-outstanding-accounts-packages",
+                            num_outstanding_accounts_packages,
+                            i64
+                        ),
+                        (
+                            "num-re-enqueued-accounts-packages",
+                            num_re_enqueued_accounts_packages,
+                            i64
+                        ),
+                        ("enqueued-time-us", enqueued_time.as_micros(), i64),
+                        ("handling-time-us", handling_time_us, i64),
+                    );
                 }
+                info!("Accounts Hash Verifier has stopped");
             })
             .unwrap();
         Self {
@@ -184,8 +187,10 @@ impl AccountsHashVerifier {
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
         snapshot_config: &SnapshotConfig,
+        last_full_snapshot: &mut Option<FullSnapshotAccountsHashInfo>,
     ) {
-        let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
+        let accounts_hash =
+            Self::calculate_and_verify_accounts_hash(&accounts_package, last_full_snapshot);
 
         Self::save_epoch_accounts_hash(&accounts_package, accounts_hash);
 
@@ -209,7 +214,10 @@ impl AccountsHashVerifier {
     }
 
     /// returns calculated accounts hash
-    fn calculate_and_verify_accounts_hash(accounts_package: &AccountsPackage) -> AccountsHash {
+    fn calculate_and_verify_accounts_hash(
+        accounts_package: &AccountsPackage,
+        last_full_snapshot: &mut Option<FullSnapshotAccountsHashInfo>,
+    ) -> AccountsHashEnum {
         let mut measure_hash = Measure::start("hash");
         let mut sort_time = Measure::start("sort_storages");
         let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
@@ -302,25 +310,41 @@ impl AccountsHashVerifier {
                 None,
             );
         }
+
+        if accounts_package.package_type
+            == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+        {
+            *last_full_snapshot = Some(FullSnapshotAccountsHashInfo {
+                slot: accounts_package.slot,
+                accounts_hash,
+                capitalization: lamports,
+            });
+        }
+
         datapoint_info!(
             "accounts_hash_verifier",
             ("calculate_hash", measure_hash.as_us(), i64),
         );
-        accounts_hash
+        accounts_hash.into()
     }
 
-    fn save_epoch_accounts_hash(accounts_package: &AccountsPackage, accounts_hash: AccountsHash) {
+    fn save_epoch_accounts_hash(
+        accounts_package: &AccountsPackage,
+        accounts_hash: AccountsHashEnum,
+    ) {
         if accounts_package.package_type == AccountsPackageType::EpochAccountsHash {
+            let AccountsHashEnum::Full(accounts_hash) = accounts_hash else {
+                panic!("EAH requires a full accounts hash!");
+            };
             info!(
                 "saving epoch accounts hash, slot: {}, hash: {}",
                 accounts_package.slot, accounts_hash.0,
             );
-            let epoch_accounts_hash = EpochAccountsHash::from(accounts_hash);
             accounts_package
                 .accounts
                 .accounts_db
                 .epoch_accounts_hash_manager
-                .set_valid(epoch_accounts_hash, accounts_package.slot);
+                .set_valid(accounts_hash.into(), accounts_package.slot);
         }
     }
 
@@ -342,17 +366,17 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
-        accounts_hash: AccountsHash,
+        accounts_hash: AccountsHashEnum,
     ) {
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
-            let fault_hash = Self::generate_fault_hash(&accounts_hash.0);
+            let fault_hash = Self::generate_fault_hash(accounts_hash.as_hash());
             warn!("inserting fault at slot: {}", accounts_package.slot);
             hashes.push((accounts_package.slot, fault_hash));
         } else {
-            hashes.push((accounts_package.slot, accounts_hash.0));
+            hashes.push((accounts_package.slot, *accounts_hash.as_hash()));
         }
 
         retain_max_n_elements(hashes, MAX_SNAPSHOT_HASHES);
@@ -374,7 +398,7 @@ impl AccountsHashVerifier {
         accounts_package: AccountsPackage,
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         snapshot_config: &SnapshotConfig,
-        accounts_hash: AccountsHash,
+        accounts_hash: AccountsHashEnum,
     ) {
         if !snapshot_config.should_generate_snapshots()
             || !matches!(
@@ -388,7 +412,7 @@ impl AccountsHashVerifier {
             return;
         };
 
-        let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
+        let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
         snapshot_package_sender
             .send(snapshot_package)
             .expect("send snapshot package");
@@ -443,6 +467,16 @@ impl AccountsHashVerifier {
     pub fn join(self) -> thread::Result<()> {
         self.t_accounts_hash_verifier.join()
     }
+}
+
+/// Soon incremental snapshots will no longer calculate a *full* accounts hash.  To support correct
+/// snapshot verification at load time, the incremental snapshot will need to include *this*
+/// information about the full snapshot it was based on.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+struct FullSnapshotAccountsHashInfo {
+    slot: Slot,
+    accounts_hash: AccountsHash,
+    capitalization: u64,
 }
 
 #[cfg(test)]
@@ -531,6 +565,7 @@ mod tests {
                 &exit,
                 0,
                 &snapshot_config,
+                &mut None,
             );
 
             // sleep for 1ms to create a newer timestamp for gossip entry

@@ -179,32 +179,76 @@ fn main() {
 
     let faucet_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), faucet_port);
 
-    let mut programs_to_load = vec![];
+    let parse_address = |address: &str, input_type: &str| {
+        address
+            .parse::<Pubkey>()
+            .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
+            .unwrap_or_else(|err| {
+                println!("Error: invalid {input_type} {address}: {err}");
+                exit(1);
+            })
+    };
+
+    let parse_program_path = |program: &str| {
+        let program_path = PathBuf::from(program);
+        if !program_path.exists() {
+            println!(
+                "Error: program file does not exist: {}",
+                program_path.display()
+            );
+            exit(1);
+        }
+        program_path
+    };
+
+    let mut upgradeable_programs_to_load = vec![];
     if let Some(values) = matches.values_of("bpf_program") {
         let values: Vec<&str> = values.collect::<Vec<_>>();
         for address_program in values.chunks(2) {
             match address_program {
                 [address, program] => {
-                    let address = address
-                        .parse::<Pubkey>()
-                        .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
-                        .unwrap_or_else(|err| {
-                            println!("Error: invalid address {address}: {err}");
-                            exit(1);
-                        });
+                    let address = parse_address(address, "address");
+                    let program_path = parse_program_path(program);
 
-                    let program_path = PathBuf::from(program);
-                    if !program_path.exists() {
-                        println!(
-                            "Error: program file does not exist: {}",
-                            program_path.display()
-                        );
-                        exit(1);
-                    }
-
-                    programs_to_load.push(ProgramInfo {
+                    upgradeable_programs_to_load.push(UpgradeableProgramInfo {
                         program_id: address,
-                        loader: solana_sdk::bpf_loader::id(),
+                        loader: solana_sdk::bpf_loader_upgradeable::id(),
+                        upgrade_authority: Pubkey::default(),
+                        program_path,
+                    });
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    if let Some(values) = matches.values_of("upgradeable_program") {
+        let values: Vec<&str> = values.collect::<Vec<_>>();
+        for address_program_upgrade_authority in values.chunks(3) {
+            match address_program_upgrade_authority {
+                [address, program, upgrade_authority] => {
+                    let address = parse_address(address, "address");
+                    let program_path = parse_program_path(program);
+                    let upgrade_authority_address = if *upgrade_authority == "none" {
+                        Pubkey::default()
+                    } else {
+                        upgrade_authority
+                            .parse::<Pubkey>()
+                            .or_else(|_| {
+                                read_keypair_file(upgrade_authority).map(|keypair| keypair.pubkey())
+                            })
+                            .unwrap_or_else(|err| {
+                                println!(
+                                    "Error: invalid upgrade_authority {upgrade_authority}: {err}"
+                                );
+                                exit(1);
+                            })
+                    };
+
+                    upgradeable_programs_to_load.push(UpgradeableProgramInfo {
+                        program_id: address,
+                        loader: solana_sdk::bpf_loader_upgradeable::id(),
+                        upgrade_authority: upgrade_authority_address,
                         program_path,
                     });
                 }
@@ -363,7 +407,7 @@ fn main() {
             validator_exit: genesis.validator_exit.clone(),
             authorized_voter_keypairs: genesis.authorized_voter_keypairs.clone(),
             staked_nodes_overrides: genesis.staked_nodes_overrides.clone(),
-            post_init: admin_service_post_init.clone(),
+            post_init: admin_service_post_init,
             tower_storage: tower_storage.clone(),
         },
     );
@@ -408,7 +452,7 @@ fn main() {
         })
         .bpf_jit(!matches.is_present("no_bpf_jit"))
         .rpc_port(rpc_port)
-        .add_programs_with_path(&programs_to_load)
+        .add_upgradeable_programs_with_path(&upgradeable_programs_to_load)
         .add_accounts_from_json_files(&accounts_to_load)
         .unwrap_or_else(|e| {
             println!("Error: add_accounts_from_json_files failed: {e}");
@@ -517,13 +561,6 @@ fn main() {
 
     match genesis.start_with_mint_address(mint_address, socket_addr_space) {
         Ok(test_validator) => {
-            *admin_service_post_init.write().unwrap() =
-                Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
-                    bank_forks: test_validator.bank_forks(),
-                    cluster_info: test_validator.cluster_info(),
-                    vote_account: test_validator.vote_account_address(),
-                    repair_whitelist: test_validator.repair_whitelist(),
-                });
             if let Some(dashboard) = dashboard {
                 dashboard.run(Duration::from_millis(250));
             }

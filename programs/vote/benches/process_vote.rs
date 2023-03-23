@@ -123,8 +123,7 @@ fn bench_process_vote_instruction(
             .configure(&[0], &instruction_accounts, &instruction_data);
         invoke_context.push().unwrap();
         assert!(
-            solana_vote_program::vote_processor::process_instruction(1, &mut invoke_context)
-                .is_ok()
+            solana_vote_program::vote_processor::process_instruction(&mut invoke_context).is_ok()
         );
         invoke_context.pop().unwrap();
     });

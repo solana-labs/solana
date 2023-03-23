@@ -25,8 +25,8 @@ security issue in this email. **Only provide such details in the advisory**.
 
 If you do not receive a response from security@solanalabs.com please followup with
 the team directly. You can do this in the `#core-technology` channel of the
-[Solana Tech discord server](https://solana.com/discord), by pinging the admins
-in the channel and referencing the fact that you submitted a security problem.
+[Solana Tech discord server](https://solana.com/discord), by pinging the `Solana Labs`
+role in the channel and referencing the fact that you submitted a security problem.
 
 <a name="process"></a>
 ## Incident Response Process

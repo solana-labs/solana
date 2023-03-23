@@ -64,6 +64,7 @@ use {
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
         runtime_config::RuntimeConfig,
+        serde_snapshot::{SerdeAccountsHash, SerdeIncrementalAccountsHash},
         snapshot_hash::SnapshotHash,
         stake_account::{self, StakeAccount},
         stake_weighted_timestamp::{
@@ -77,7 +78,6 @@ use {
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
         vote_account::{VoteAccount, VoteAccountsHashMap},
-        vote_parser,
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
@@ -119,9 +119,10 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, disable_fee_calculator, enable_early_verification_of_account_modifications,
-            enable_request_heap_frame_ix, remove_congestion_multiplier_from_fee_calculation,
-            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
+            self, add_set_tx_loaded_accounts_data_size_instruction, disable_fee_calculator,
+            enable_early_verification_of_account_modifications, enable_request_heap_frame_ix,
+            remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
+            use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -242,11 +243,11 @@ pub struct BankIncrementalSnapshotPersistence {
     /// slot of full snapshot
     pub full_slot: Slot,
     /// accounts hash from the full snapshot
-    pub full_hash: Hash,
+    pub full_hash: SerdeAccountsHash,
     /// capitalization from the full snapshot
     pub full_capitalization: u64,
     /// hash of the accounts in the incremental snapshot slot range, including zero-lamport accounts
-    pub incremental_hash: Hash,
+    pub incremental_hash: SerdeIncrementalAccountsHash,
     /// capitalization of the accounts in the incremental snapshot slot range
     pub incremental_capitalization: u64,
 }
@@ -801,6 +802,7 @@ impl PartialEq for Bank {
             return true;
         }
         let Self {
+            bank_freeze_or_destruction_incremented: _,
             rc: _,
             status_cache: _,
             blockhash_queue,
@@ -1164,6 +1166,9 @@ pub struct Bank {
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
     pub loaded_programs_cache: Arc<RwLock<LoadedPrograms>>,
+
+    /// true when the bank's freezing or destruction has completed
+    bank_freeze_or_destruction_incremented: AtomicBool,
     scheduler: RwLock<Option<Box<dyn LikeScheduler>>>,
 }
 
@@ -1329,6 +1334,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
+            bank_freeze_or_destruction_incremented: AtomicBool::default(),
             incremental_snapshot_persistence: None,
             rc: BankRc::new(accounts, Slot::default()),
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
@@ -1393,6 +1399,7 @@ impl Bank {
             scheduler: RwLock::new(None),
         };
 
+        bank.bank_created();
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
         bank.accounts_data_size_initial = accounts_data_size_initial;
 
@@ -1547,15 +1554,15 @@ impl Bank {
         let epoch_schedule = parent.epoch_schedule;
         let epoch = epoch_schedule.get_epoch(slot);
 
-        let (rc, bank_rc_creation_time_us) = measure_us!(BankRc {
-            accounts: Arc::new(Accounts::new_from_parent(
-                &parent.rc.accounts,
+        let (rc, bank_rc_creation_time_us) = measure_us!({
+            let accounts_db = Arc::clone(&parent.rc.accounts.accounts_db);
+            accounts_db.insert_default_bank_hash_stats(slot, parent.slot());
+            BankRc {
+                accounts: Arc::new(Accounts::new(accounts_db)),
+                parent: RwLock::new(Some(Arc::clone(parent))),
                 slot,
-                parent.slot(),
-            )),
-            parent: RwLock::new(Some(parent.clone())),
-            slot,
-            bank_id_generator: parent.rc.bank_id_generator.clone(),
+                bank_id_generator: Arc::clone(&parent.rc.bank_id_generator),
+            }
         });
 
         let (status_cache, status_cache_time_us) = measure_us!(Arc::clone(&parent.status_cache));
@@ -1604,7 +1611,9 @@ impl Bank {
         let (feature_set, feature_set_time_us) = measure_us!(parent.feature_set.clone());
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
-        let mut new = Bank {
+        parent.bank_created();
+        let mut new = Self {
+            bank_freeze_or_destruction_incremented: AtomicBool::default(),
             incremental_snapshot_persistence: None,
             rc,
             status_cache,
@@ -1839,6 +1848,27 @@ impl Bank {
         self.vote_only_bank
     }
 
+    fn bank_created(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .bank_progress
+            .increment_bank_creation_count();
+    }
+
+    fn bank_frozen_or_destroyed(&self) {
+        if !self
+            .bank_freeze_or_destruction_incremented
+            .swap(true, AcqRel)
+        {
+            self.rc
+                .accounts
+                .accounts_db
+                .bank_progress
+                .increment_bank_frozen_or_destroyed();
+        }
+    }
+
     /// Like `new_from_parent` but additionally:
     /// * Doesn't assume that the parent is anywhere near `slot`, parent could be millions of slots
     /// in the past
@@ -1922,6 +1952,7 @@ impl Bank {
         let feature_set = new();
         let mut bank = Self {
             incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
+            bank_freeze_or_destruction_incremented: AtomicBool::default(),
             rc: bank_rc,
             status_cache: new(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
@@ -1984,6 +2015,8 @@ impl Bank {
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
             scheduler: RwLock::new(None),
         };
+        bank.bank_created();
+
         bank.finish_init(
             genesis_config,
             additional_builtins,
@@ -3237,6 +3270,7 @@ impl Bank {
             self.freeze_started.store(true, Relaxed);
             *hash = self.hash_internal_state();
             self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
+            self.bank_frozen_or_destroyed();
         }
     }
 
@@ -3533,6 +3567,8 @@ impl Bank {
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
             self.enable_request_heap_frame_ix(),
+            self.feature_set
+                .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
         ))
     }
 
@@ -3580,6 +3616,8 @@ impl Bank {
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
             self.enable_request_heap_frame_ix(),
+            self.feature_set
+                .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
         )
     }
 
@@ -4639,35 +4677,38 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
                 (Ok(loaded_transaction), nonce) => {
-                    let compute_budget =
-                        if let Some(compute_budget) = self.runtime_config.compute_budget {
-                            compute_budget
-                        } else {
-                            let mut compute_budget =
-                                ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
+                    let compute_budget = if let Some(compute_budget) =
+                        self.runtime_config.compute_budget
+                    {
+                        compute_budget
+                    } else {
+                        let mut compute_budget =
+                            ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
 
-                            let mut compute_budget_process_transaction_time =
-                                Measure::start("compute_budget_process_transaction_time");
-                            let process_transaction_result = compute_budget.process_instructions(
-                                tx.message().program_instructions_iter(),
-                                true,
-                                !self
-                                    .feature_set
-                                    .is_active(&remove_deprecated_request_unit_ix::id()),
-                                true, // don't reject txs that use request heap size ix
-                            );
-                            compute_budget_process_transaction_time.stop();
-                            saturating_add_assign!(
-                                timings
-                                    .execute_accessories
-                                    .compute_budget_process_transaction_us,
-                                compute_budget_process_transaction_time.as_us()
-                            );
-                            if let Err(err) = process_transaction_result {
-                                return TransactionExecutionResult::NotExecuted(err);
-                            }
-                            compute_budget
-                        };
+                        let mut compute_budget_process_transaction_time =
+                            Measure::start("compute_budget_process_transaction_time");
+                        let process_transaction_result = compute_budget.process_instructions(
+                            tx.message().program_instructions_iter(),
+                            true,
+                            !self
+                                .feature_set
+                                .is_active(&remove_deprecated_request_unit_ix::id()),
+                            true, // don't reject txs that use request heap size ix
+                            self.feature_set
+                                .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+                        );
+                        compute_budget_process_transaction_time.stop();
+                        saturating_add_assign!(
+                            timings
+                                .execute_accessories
+                                .compute_budget_process_transaction_us,
+                            compute_budget_process_transaction_time.as_us()
+                        );
+                        if let Err(err) = process_transaction_result {
+                            return TransactionExecutionResult::NotExecuted(err);
+                        }
+                        compute_budget
+                    };
 
                     self.execute_loaded_transaction(
                         tx,
@@ -4718,7 +4759,7 @@ impl Bank {
                 }
             }
 
-            let is_vote = vote_parser::is_simple_vote_transaction(tx);
+            let is_vote = tx.is_simple_vote_transaction();
 
             if execution_result.was_executed() // Skip log collection for unprocessed transactions
                 && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
@@ -4935,6 +4976,7 @@ impl Bank {
         support_request_units_deprecated: bool,
         remove_congestion_multiplier: bool,
         enable_request_heap_frame_ix: bool,
+        support_set_accounts_data_size_limit_ix: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
         let congestion_multiplier = if lamports_per_signature == 0 {
@@ -4954,6 +4996,7 @@ impl Bank {
                 use_default_units_per_instruction,
                 support_request_units_deprecated,
                 enable_request_heap_frame_ix,
+                support_set_accounts_data_size_limit_ix,
             )
             .unwrap_or_default();
         let prioritization_fee = prioritization_fee_details.get_fee();
@@ -5025,6 +5068,8 @@ impl Bank {
                     self.feature_set
                         .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                     self.enable_request_heap_frame_ix(),
+                    self.feature_set
+                        .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -8280,6 +8325,7 @@ impl Drop for Bank {
             }
         }
 
+        self.bank_frozen_or_destroyed();
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
         } else {

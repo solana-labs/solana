@@ -94,19 +94,15 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         );
         let (s, _r) = unbounded();
         let committer = Committer::new(None, s);
+        let consumer = Consumer::new(committer, recorder, QosService::new(1), None, None);
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
-            Consumer::consume_buffered_packets(
+            consumer.consume_buffered_packets(
                 &bank_start,
                 &mut transaction_buffer,
-                None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
-                &committer,
-                &recorder,
-                &QosService::new(1),
                 &mut LeaderSlotMetricsTracker::new(0),
-                None,
             );
         });
 

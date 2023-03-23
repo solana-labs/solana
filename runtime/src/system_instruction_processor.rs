@@ -315,10 +315,7 @@ fn transfer_with_seed(
     )
 }
 
-pub fn process_instruction(
-    _first_instruction_account: IndexOfAccount,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -1867,9 +1864,9 @@ mod tests {
                 },
             ],
             Ok(()),
-            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
+            |invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
-                super::process_instruction(first_instruction_account, invoke_context)
+                super::process_instruction(invoke_context)
             },
         );
     }
@@ -2225,9 +2222,9 @@ mod tests {
                 },
             ],
             Err(NonceError::NoRecentBlockhashes.into()),
-            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
+            |invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
-                super::process_instruction(first_instruction_account, invoke_context)
+                super::process_instruction(invoke_context)
             },
         );
     }

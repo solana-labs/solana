@@ -4,6 +4,7 @@ pub use solana_perf::report_target_features;
 use {
     crate::{
         accounts_hash_verifier::AccountsHashVerifier,
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         banking_trace::{self, BankingTracer},
         broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
@@ -442,6 +443,7 @@ impl Validator {
         use_quic: bool,
         tpu_connection_pool_size: usize,
         tpu_enable_udp: bool,
+        admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
     ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
         assert_eq!(&id, node.info.pubkey());
@@ -513,6 +515,7 @@ impl Validator {
                 *start_progress.write().unwrap() = ValidatorStartProgress::CleaningBlockStore;
                 backup_and_clear_blockstore(
                     ledger_path,
+                    config,
                     wait_for_supermajority_slot + 1,
                     shred_version,
                 );
@@ -965,6 +968,13 @@ impl Validator {
             stats_reporter_sender,
             exit.clone(),
         );
+
+        *admin_rpc_service_post_init.write().unwrap() = Some(AdminRpcRequestMetadataPostInit {
+            bank_forks: bank_forks.clone(),
+            cluster_info: cluster_info.clone(),
+            vote_account: *vote_account,
+            repair_whitelist: config.repair_whitelist.clone(),
+        });
 
         let waited_for_supermajority = match wait_for_supermajority(
             config,
@@ -1423,6 +1433,15 @@ fn post_process_restored_tower(
     Ok(restored_tower)
 }
 
+fn blockstore_options_from_config(config: &ValidatorConfig) -> BlockstoreOptions {
+    BlockstoreOptions {
+        recovery_mode: config.wal_recovery_mode.clone(),
+        column_options: config.ledger_column_options.clone(),
+        enforce_ulimit_nofile: config.enforce_ulimit_nofile,
+        ..BlockstoreOptions::default()
+    }
+}
+
 #[allow(clippy::type_complexity)]
 fn load_blockstore(
     config: &ValidatorConfig,
@@ -1480,16 +1499,8 @@ fn load_blockstore(
         ledger_signal_receiver,
         completed_slots_receiver,
         ..
-    } = Blockstore::open_with_signal(
-        ledger_path,
-        BlockstoreOptions {
-            recovery_mode: config.wal_recovery_mode.clone(),
-            column_options: config.ledger_column_options.clone(),
-            enforce_ulimit_nofile: config.enforce_ulimit_nofile,
-            ..BlockstoreOptions::default()
-        },
-    )
-    .expect("Failed to open ledger database");
+    } = Blockstore::open_with_signal(ledger_path, blockstore_options_from_config(config))
+        .expect("Failed to open ledger database");
     blockstore.shred_timing_point_sender = poh_timing_point_sender;
     // following boot sequence (esp BankForks) could set root. so stash the original value
     // of blockstore root away here as soon as possible.
@@ -1750,8 +1761,6 @@ fn maybe_warp_slot(
     accounts_background_request_sender: &AbsRequestSender,
 ) -> Result<(), String> {
     if let Some(warp_slot) = config.warp_slot {
-        process_blockstore.process()?;
-
         let mut bank_forks = bank_forks.write().unwrap();
 
         let working_bank = bank_forks.working_bank();
@@ -1807,6 +1816,11 @@ fn maybe_warp_slot(
             "created snapshot: {}",
             full_snapshot_archive_info.path().display()
         );
+
+        drop(bank_forks);
+        // Process blockstore after warping bank forks to make sure tower and
+        // bank forks are in sync.
+        process_blockstore.process()?;
     }
     Ok(())
 }
@@ -1837,15 +1851,31 @@ fn blockstore_contains_bad_shred_version(
     false
 }
 
-fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_version: u16) {
-    let blockstore = Blockstore::open(ledger_path).unwrap();
+fn backup_and_clear_blockstore(
+    ledger_path: &Path,
+    config: &ValidatorConfig,
+    start_slot: Slot,
+    shred_version: u16,
+) {
+    let blockstore =
+        Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config)).unwrap();
     let do_copy_and_clear =
         blockstore_contains_bad_shred_version(&blockstore, start_slot, shred_version);
 
     // If found, then copy shreds to another db and clear from start_slot
     if do_copy_and_clear {
-        let folder_name = format!("backup_rocksdb_{}", thread_rng().gen_range(0, 99999));
-        let backup_blockstore = Blockstore::open(&ledger_path.join(folder_name));
+        let folder_name = format!(
+            "backup_{}_{}",
+            config
+                .ledger_column_options
+                .shred_storage_type
+                .blockstore_directory(),
+            thread_rng().gen_range(0, 99999)
+        );
+        let backup_blockstore = Blockstore::open_with_options(
+            &ledger_path.join(folder_name),
+            blockstore_options_from_config(config),
+        );
         let mut last_print = Instant::now();
         let mut copied = 0;
         let mut last_slot = None;
@@ -1981,7 +2011,8 @@ fn wait_for_supermajority(
             }
 
             for i in 1.. {
-                if i % 10 == 1 {
+                let logging = i % 10 == 1;
+                if logging {
                     info!(
                         "Waiting for {}% of activated stake at slot {} to be in gossip...",
                         WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
@@ -1990,7 +2021,7 @@ fn wait_for_supermajority(
                 }
 
                 let gossip_stake_percent =
-                    get_stake_percent_in_gossip(&bank, cluster_info, i % 10 == 0);
+                    get_stake_percent_in_gossip(&bank, cluster_info, logging);
 
                 *start_progress.write().unwrap() =
                     ValidatorStartProgress::WaitingForSupermajority {
@@ -2200,6 +2231,7 @@ mod tests {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            Arc::new(RwLock::new(None)),
         )
         .expect("assume successful validator start");
         assert_eq!(
@@ -2218,6 +2250,8 @@ mod tests {
             solana_entry::entry,
             solana_ledger::{blockstore, get_tmp_ledger_path},
         };
+
+        let validator_config = ValidatorConfig::default_for_test();
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -2244,7 +2278,7 @@ mod tests {
             drop(blockstore);
 
             // this purges and compacts all slots greater than or equal to 5
-            backup_and_clear_blockstore(&blockstore_path, 5, 2);
+            backup_and_clear_blockstore(&blockstore_path, &validator_config, 5, 2);
 
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             // assert that slots less than 5 aren't affected
@@ -2295,6 +2329,7 @@ mod tests {
                     DEFAULT_TPU_USE_QUIC,
                     DEFAULT_TPU_CONNECTION_POOL_SIZE,
                     DEFAULT_TPU_ENABLE_UDP,
+                    Arc::new(RwLock::new(None)),
                 )
                 .expect("assume successful validator start")
             })

@@ -236,15 +236,10 @@ EOF
              ^fetch-perf-libs.sh \
              ^programs/ \
              ^sdk/ \
-             ^scripts/build-downstream-projects.sh \
+             ^ci/downstream-projects \
+             .buildkite/scripts/build-downstream-projects.sh \
       ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "scripts/build-downstream-projects.sh"
-    name: "downstream-projects"
-    timeout_in_minutes: 40
-    agents:
-      queue: "sol-private"
-EOF
+    .buildkite/scripts/build-downstream-projects.sh sol-private >> "$output_file"
   else
     annotate --style info \
       "downstream-projects skipped as no relevant files were modified"
