@@ -2413,7 +2413,7 @@ impl ClusterInfo {
         };
 
         // Check if there is a duplicate instance of
-        // this node with more recent timestamp.
+        // this node with an older timestamp.
         let instance = self.instance.read().unwrap();
         let check_duplicate_instance = |values: &[CrdsValue]| {
             if should_check_duplicate_instance {
