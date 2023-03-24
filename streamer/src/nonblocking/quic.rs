@@ -616,14 +616,13 @@ async fn packet_batch_sender(
             let timeout_res = timeout(Duration::from_micros(250), packet_receiver.recv()).await;
 
             if let Ok(Ok(packet_accumulator)) = timeout_res {
-                unsafe {
-                    packet_batch.set_len(packet_batch.len() + 1);
+                // Start the timeout from when the packet batch first becomes non-empty
+                if packet_batch.is_empty() {
+                    batch_start_time = Instant::now();
                 }
 
-                // Start the timeout from when we first put a packet in the batch,
-                // making it non-empty
-                if packet_batch.len() == 1 {
-                    batch_start_time = Instant::now();
+                unsafe {
+                    packet_batch.set_len(packet_batch.len() + 1);
                 }
 
                 let i = packet_batch.len() - 1;
