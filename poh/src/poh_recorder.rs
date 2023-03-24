@@ -47,9 +47,6 @@ pub const MAX_GRACE_SLOTS: u64 = 2;
 
 #[derive(Error, Debug, Clone)]
 pub enum PohRecorderError {
-    #[error("invalid calling object")]
-    InvalidCallingObject,
-
     #[error("max height reached")]
     MaxHeightReached,
 
