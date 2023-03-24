@@ -140,24 +140,17 @@ pub struct RecordTransactionsSummary {
     pub starting_transaction_index: Option<usize>,
 }
 
+#[derive(Clone)]
 pub struct TransactionRecorder {
     // shared by all users of PohRecorder
     pub record_sender: Sender<Record>,
     pub is_exited: Arc<AtomicBool>,
 }
 
-impl Clone for TransactionRecorder {
-    fn clone(&self) -> Self {
-        TransactionRecorder::new(self.record_sender.clone(), self.is_exited.clone())
-    }
-}
-
 impl TransactionRecorder {
     pub fn new(record_sender: Sender<Record>, is_exited: Arc<AtomicBool>) -> Self {
         Self {
-            // shared
             record_sender,
-            // shared
             is_exited,
         }
     }
