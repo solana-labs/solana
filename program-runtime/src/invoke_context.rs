@@ -774,6 +774,7 @@ impl<'a> InvokeContext<'a> {
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
 
                 if is_builtin_program
+                    && result.is_ok()
                     && *compute_units_consumed == 0
                     && self
                         .feature_set
