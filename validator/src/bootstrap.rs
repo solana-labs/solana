@@ -17,7 +17,7 @@ use {
     solana_runtime::{
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_package::SnapshotType,
-        snapshot_utils::{self, SnapshotFrom},
+        snapshot_utils::{self},
     },
     solana_sdk::{
         clock::Slot,
