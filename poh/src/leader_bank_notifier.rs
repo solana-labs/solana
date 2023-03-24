@@ -76,7 +76,7 @@ impl LeaderBankNotifier {
     /// If the timeout is reached, the weak reference is unupgradable.
     pub fn get_or_wait_for_in_progress(&self, timeout: Duration) -> Weak<Bank> {
         let state = self.state.lock().unwrap();
-        self.get_or_wait_for_in_progress_state(timeout, state)
+        Self::get_or_wait_for_in_progress_state(&self.condvar, timeout, state)
             .map(|state| state.bank.clone())
             .unwrap_or_default()
     }
@@ -88,7 +88,8 @@ impl LeaderBankNotifier {
 
         // If currently `StandBy`, need to wait for `InProgress` to begin.
         let now = Instant::now();
-        let state = self.get_or_wait_for_in_progress_state(remaining_timeout, state)?;
+        let state =
+            Self::get_or_wait_for_in_progress_state(&self.condvar, remaining_timeout, state)?;
         remaining_timeout = remaining_timeout.checked_sub(now.elapsed())?;
 
         // Wait for `StandBy` to be set.
@@ -106,14 +107,14 @@ impl LeaderBankNotifier {
         }
     }
 
-    // Helper function to get or wait for the `InProgress` status with a given `MutexGuard`.
+    /// Helper function to get or wait for the `InProgress` status with a given `MutexGuard`.
+    /// If `InProgress` status is reached, the state `MutexGuard` is returned, otherwise None.
     fn get_or_wait_for_in_progress_state<'a>(
-        &self,
+        condvar: &'a Condvar,
         timeout: Duration,
         state: MutexGuard<'a, SlotAndBankWithStatus>,
     ) -> Option<MutexGuard<'a, SlotAndBankWithStatus>> {
-        let (state, wait_timeout_result) = self
-            .condvar
+        let (state, wait_timeout_result) = condvar
             .wait_timeout_while(state, timeout, |state| {
                 matches!(state.status, Status::StandBy)
             })
