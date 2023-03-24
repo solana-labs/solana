@@ -215,7 +215,7 @@ impl LoadedProgram {
             LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
             LoadedProgramType::LegacyV0(executable) => Ok(executable),
             LoadedProgramType::LegacyV1(executable) => Ok(executable),
-            LoadedProgramType::BuiltIn(_) => Err(InstructionError::IncorrectProgramId),
+            _ => Err(InstructionError::IncorrectProgramId),
         }
     }
 
