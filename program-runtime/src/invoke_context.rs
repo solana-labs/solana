@@ -689,26 +689,21 @@ impl<'a> InvokeContext<'a> {
                 self.transaction_context
                     .set_return_data(program_id, Vec::new())?;
 
-                let is_builtin_program = builtin_id == program_id;
                 let pre_remaining_units = self.get_remaining();
-                let result = if is_builtin_program {
-                    let logger = self.get_log_collector();
-                    stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
-                    (entry.process_instruction)(self)
-                        .map(|()| {
-                            stable_log::program_success(&logger, &program_id);
-                        })
-                        .map_err(|err| {
-                            stable_log::program_failure(&logger, &program_id, &err);
-                            err
-                        })
-                } else {
-                    (entry.process_instruction)(self)
-                };
+                let logger = self.get_log_collector();
+                stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
+                let result = (entry.process_instruction)(self)
+                    .map(|()| {
+                        stable_log::program_success(&logger, &program_id);
+                    })
+                    .map_err(|err| {
+                        stable_log::program_failure(&logger, &program_id, &err);
+                        err
+                    });
                 let post_remaining_units = self.get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
 
-                if is_builtin_program
+                if builtin_id == program_id
                     && result.is_ok()
                     && *compute_units_consumed == 0
                     && self

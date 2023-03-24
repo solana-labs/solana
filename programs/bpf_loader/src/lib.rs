@@ -1527,7 +1527,6 @@ fn execute<'a, 'b: 'a>(
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
-    let stack_height = invoke_context.get_stack_height();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let program_id = *instruction_context.get_last_program_key(transaction_context)?;
@@ -1575,7 +1574,6 @@ fn execute<'a, 'b: 'a>(
         create_vm_time.stop();
 
         execute_time = Measure::start("execute");
-        stable_log::program_invoke(&log_collector, &program_id, stack_height);
         let (compute_units_consumed, result) = vm.execute_program(!use_jit);
         drop(vm);
         ic_logger_msg!(
@@ -1609,7 +1607,6 @@ fn execute<'a, 'b: 'a>(
                 } else {
                     status.into()
                 };
-                stable_log::program_failure(&log_collector, &program_id, &error);
                 Err(error)
             }
             ProgramResult::Err(error) => {
@@ -1631,11 +1628,9 @@ fn execute<'a, 'b: 'a>(
                         }
                     }
                     err => {
-                        ic_logger_msg!(log_collector, "Program failed to complete: {}", err);
                         InstructionError::ProgramFailedToComplete
                     }
                 };
-                stable_log::program_failure(&log_collector, &program_id, &error);
                 Err(error)
             }
             _ => Ok(()),
@@ -1665,9 +1660,6 @@ fn execute<'a, 'b: 'a>(
         .deserialize_us
         .saturating_add(deserialize_time.as_us());
 
-    if execute_or_deserialize_result.is_ok() {
-        stable_log::program_success(&log_collector, &program_id);
-    }
     execute_or_deserialize_result
 }
 
