@@ -613,15 +613,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        Reads/writes perf samples are collected in 1 / ROCKS_PERF_SAMPLE_INTERVAL sampling rate."),
         )
         .arg(
-            Arg::with_name("skip_poh_verify")
-                .long("skip-poh-verify")
-                .takes_value(false)
-                .help(
-                    "Deprecated, please use --skip-verification.\n\
-                     Skip ledger verification at validator bootup."
-                ),
-        )
-        .arg(
             Arg::with_name("skip_verification")
                 .long("skip-verification")
                 .takes_value(false)
@@ -1700,6 +1691,14 @@ fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
             .hidden(hidden_unless_forced())
             .takes_value(false)
             .help("Disable manual compaction of the ledger database (this is ignored)."),
+        Arg::with_name("skip_poh_verify")
+            .long("skip-poh-verify")
+            .hidden(hidden_unless_forced())
+            .takes_value(false)
+            .help(
+                "Please use --skip-verification.\n\
+                 Skip ledger verification at validator bootup."
+            ),
         Arg::with_name("rocksdb_compaction_interval")
             .long("rocksdb-compaction-interval-slots")
             .hidden(hidden_unless_forced())
@@ -1940,6 +1939,7 @@ lazy_static! {
             "Vote account sanity checks are no longer performed by default.",
         ),
         ("no_rocksdb_compaction", ""),
+        ("skip_poh_verify", "Please use --skip-verification"),
         ("rocksdb_compaction_interval", ""),
         ("rocksdb_max_compaction_jitter", ""),
     ];
