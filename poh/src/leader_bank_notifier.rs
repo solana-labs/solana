@@ -114,11 +114,6 @@ impl LeaderBankNotifier {
         timeout: Duration,
         state: MutexGuard<'a, SlotAndBankWithStatus>,
     ) -> Option<MutexGuard<'a, SlotAndBankWithStatus>> {
-        // Immediately return if the status is `InProgress`
-        if matches!(state.status, Status::InProgress) {
-            return Some(state);
-        }
-
         let (state, wait_timeout_result) = self
             .condvar
             .wait_timeout_while(state, timeout, |state| {
