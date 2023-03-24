@@ -87,7 +87,7 @@ use {
     std::{
         collections::{BTreeMap, BTreeSet, HashMap, HashSet},
         ffi::OsStr,
-        fs::{create_dir_all, File},
+        fs::File,
         io::{self, stdout, BufRead, BufReader, Write},
         num::NonZeroUsize,
         path::{Path, PathBuf},
@@ -985,15 +985,10 @@ fn load_bank_forks(
             starting_slot = std::cmp::max(full_snapshot_slot, incremental_snapshot_slot);
         }
 
-        let snapshot_from = match arg_matches.is_present("snapshot_from_dir") {
-            true => SnapshotFrom::Dir,
-            false => SnapshotFrom::Archive,
-        };
         Some(SnapshotConfig {
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             bank_snapshots_dir: bank_snapshots_dir.clone(),
-            snapshot_from,
             ..SnapshotConfig::new_load_only()
         })
     };
@@ -1074,17 +1069,6 @@ fn load_bank_forks(
     account_paths.iter().for_each(|path| {
         if path.exists() {
             move_and_async_delete_path(path);
-        }
-        if !path.exists() {
-            // Keep the empty directory
-            create_dir_all(path).unwrap_or_else(|err| {
-                eprintln!(
-                    "Failed to create accounts directory {}: {}",
-                    path.display(),
-                    err
-                );
-                exit(1);
-            });
         }
     });
     measure.stop();
@@ -1358,10 +1342,6 @@ fn main() {
         .long("no-snapshot")
         .takes_value(false)
         .help("Do not start from a local snapshot if present");
-    let snapshot_from_dir = Arg::with_name("snapshot_from_dir")
-        .long("snapshot-from-dir")
-        .takes_value(false)
-        .help("Construct initial bank state from files instead of archives");
     let no_bpf_jit_arg = Arg::with_name("no_bpf_jit")
         .long("no-bpf-jit")
         .takes_value(false)
@@ -1842,7 +1822,6 @@ fn main() {
             SubCommand::with_name("verify")
             .about("Verify the ledger")
             .arg(&no_snapshot_arg)
-            .arg(&snapshot_from_dir)
             .arg(&account_paths_arg)
             .arg(&accounts_index_path_arg)
             .arg(&halt_at_slot_arg)
@@ -1896,7 +1875,6 @@ fn main() {
             SubCommand::with_name("graph")
             .about("Create a Graphviz rendering of the ledger")
             .arg(&no_snapshot_arg)
-            .arg(&snapshot_from_dir)
             .arg(&account_paths_arg)
             .arg(&accounts_index_bins)
             .arg(&accounts_index_limit)
@@ -1931,7 +1909,6 @@ fn main() {
             SubCommand::with_name("create-snapshot")
             .about("Create a new ledger snapshot")
             .arg(&no_snapshot_arg)
-            .arg(&snapshot_from_dir)
             .arg(&account_paths_arg)
             .arg(&accounts_index_bins)
             .arg(&accounts_index_limit)
