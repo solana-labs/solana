@@ -21,7 +21,7 @@ use {
     },
     solana_sdk::{
         entrypoint::{HEAP_LENGTH, SUCCESS},
-        feature_set::FeatureSet,
+        feature_set::{self, FeatureSet},
         instruction::InstructionError,
         loader_v3::{self, LoaderV3State, DEPLOYMENT_COOLDOWN_IN_SLOTS},
         loader_v3_instruction::LoaderV3Instruction,
@@ -534,6 +534,12 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
     let instruction_data = instruction_context.get_instruction_data();
     let program_id = instruction_context.get_last_program_key(transaction_context)?;
     if loader_v3::check_id(program_id) {
+        if invoke_context
+            .feature_set
+            .is_active(&feature_set::native_programs_consume_cu::id())
+        {
+            invoke_context.consume_checked(2000)?;
+        }
         match limited_deserialize(instruction_data)? {
             LoaderV3Instruction::Write { offset, bytes } => {
                 process_instruction_write(invoke_context, offset, bytes)
