@@ -39,7 +39,7 @@ impl LeaderBankNotifier {
     /// Set the status to `InProgress` and notify any waiting threads.
     /// Panics if the status is not `StandBy` - cannot have multiple
     /// leader banks in progress.
-    pub fn set_in_progress(&self, bank: &Arc<Bank>) {
+    pub(crate) fn set_in_progress(&self, bank: &Arc<Bank>) {
         let mut state = self.state.lock().unwrap();
         assert_eq!(state.status, Status::StandBy);
 
@@ -55,7 +55,7 @@ impl LeaderBankNotifier {
 
     /// Set the status to `StandBy` and notify any waiting threads if the status was changed.
     /// Panics if the stored slot does not match the given slot.
-    pub fn set_completed(&self, slot: Slot) {
+    pub(crate) fn set_completed(&self, slot: Slot) {
         let mut state = self.state.lock().unwrap();
         assert_eq!(state.slot, Some(slot));
 
