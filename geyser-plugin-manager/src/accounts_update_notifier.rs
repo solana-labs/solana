@@ -143,9 +143,9 @@ impl AccountsUpdateNotifierImpl {
     ) {
         let mut measure2 = Measure::start("geyser-plugin-notify_plugins_of_account_update");
         let plugin_manager = self.plugin_manager.read().unwrap();
-        let mut count = 0;
+        let mut have_plugins = false;
         for plugin in plugin_manager.geyser_plugins() {
-            count += 1;
+            have_plugins = true;
             let mut measure = Measure::start("geyser-plugin-update-account");
             match plugin.update_account(
                 ReplicaAccountInfoVersions::V0_0_3(&account),
@@ -178,7 +178,7 @@ impl AccountsUpdateNotifierImpl {
                 100000
             );
         }
-        if count == 0 {
+        if !have_plugins {
             return;
         }
         measure2.stop();

@@ -39,9 +39,9 @@ impl TransactionNotifier for TransactionNotifierImpl {
         );
 
         let plugin_manager = self.plugin_manager.read().unwrap();
-        let mut count = 0;
+        let mut have_plugins = false;
         for plugin in plugin_manager.geyser_plugins() {
-            count += 1;
+            have_plugins = true;
             if !plugin.transaction_notifications_enabled() {
                 continue;
             }
@@ -64,7 +64,7 @@ impl TransactionNotifier for TransactionNotifierImpl {
                 }
             }
         }
-        if count == 0 {
+        if !have_plugins {
             return;
         }
         measure.stop();

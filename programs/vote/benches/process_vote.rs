@@ -9,7 +9,6 @@ use {
         clock::{Clock, Slot},
         hash::Hash,
         pubkey::Pubkey,
-        signature::Signature,
         slot_hashes::{SlotHashes, MAX_ENTRIES},
         sysvar,
         transaction_context::{

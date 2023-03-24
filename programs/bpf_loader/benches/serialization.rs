@@ -8,7 +8,6 @@ use {
         account::{Account, AccountSharedData},
         bpf_loader, bpf_loader_deprecated,
         pubkey::Pubkey,
-        signature::Signature,
         sysvar::rent::Rent,
         transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
     },
