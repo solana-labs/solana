@@ -167,7 +167,7 @@ impl PrioritizationFeeCache {
         let metrics_clone = metrics.clone();
         let service_thread = Some(
             Builder::new()
-                .name("prioritization-fee-cache-servicing-thread".to_string())
+                .name("solPrFeeCachSvc".to_string())
                 .spawn(move || {
                     Self::service_loop(cache_clone, receiver, metrics_clone);
                 })
