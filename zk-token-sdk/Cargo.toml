@@ -19,7 +19,6 @@ aes-gcm-siv = { workspace = true }
 arrayref = { workspace = true }
 bincode = { workspace = true }
 byteorder = { workspace = true }
-cipher = { workspace = true }
 curve25519-dalek = { workspace = true, features = ["serde"] }
 getrandom = { workspace = true, features = ["dummy"] }
 itertools = { workspace = true }

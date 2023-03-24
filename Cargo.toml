@@ -156,7 +156,6 @@ cargo_metadata = "0.15.0"
 cc = "1.0.79"
 chrono = { version = "0.4.23", default-features = false }
 chrono-humanize = "0.2.1"
-cipher = "0.4"
 clap = "2.33.1"
 console = "0.15.0"
 console_error_panic_hook = "0.1.7"
