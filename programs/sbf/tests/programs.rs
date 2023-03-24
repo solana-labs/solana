@@ -1470,7 +1470,7 @@ fn test_program_sbf_compute_budget() {
     );
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::set_compute_unit_limit(1),
+            ComputeBudgetInstruction::set_compute_unit_limit(150),
             Instruction::new_with_bincode(program_id, &0, vec![]),
         ],
         Some(&mint_keypair.pubkey()),
@@ -2185,7 +2185,13 @@ fn test_program_sbf_disguised_as_sbf_loader() {
             mint_keypair,
             ..
         } = create_genesis_config(50);
+
         let mut bank = Bank::new_for_tests(&genesis_config);
+        // disable native_programs_consume_cu feature to allow test program
+        // not consume units.
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&solana_sdk::feature_set::native_programs_consume_cu::id());
+        bank.feature_set = Arc::new(feature_set);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
         bank.add_builtin(&name, &id, entrypoint);
         bank.deactivate_feature(

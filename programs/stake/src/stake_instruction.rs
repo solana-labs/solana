@@ -58,6 +58,14 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
 
     trace!("process_instruction: {:?}", data);
 
+    // Consume compute units if feature `native_programs_consume_cu` is activated,
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::native_programs_consume_cu::id())
+    {
+        invoke_context.consume_checked(750)?;
+    }
+
     let get_stake_account = || {
         let me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
         if *me.get_owner() != id() {

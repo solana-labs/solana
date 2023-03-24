@@ -5129,8 +5129,10 @@ fn test_add_duplicate_static_program() {
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     fn mock_vote_processor(
-        _invoke_context: &mut InvokeContext,
+        invoke_context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
+        // mock builtin must consume units
+        invoke_context.consume_checked(1)?;
         Err(InstructionError::Custom(42))
     }
 
@@ -5177,8 +5179,10 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
         let mut bank = create_simple_test_bank(500);
 
         fn mock_ix_processor(
-            _invoke_context: &mut InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
+            // mock builtin must consume units
+            invoke_context.consume_checked(1)?;
             Err(InstructionError::Custom(42))
         }
 
@@ -6473,6 +6477,8 @@ fn test_transaction_with_duplicate_accounts_in_instruction() {
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
         let lamports = u64::from_le_bytes(instruction_data.try_into().unwrap());
+        // mock builtin must consume units
+        invoke_context.consume_checked(1)?;
         instruction_context
             .try_borrow_instruction_account(transaction_context, 2)?
             .checked_sub_lamports(lamports)?;
@@ -6526,8 +6532,10 @@ fn test_transaction_with_program_ids_passed_to_programs() {
 
     #[allow(clippy::unnecessary_wraps)]
     fn mock_process_instruction(
-        _invoke_context: &mut InvokeContext,
+        invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
+        // mock builtin must consume units
+        invoke_context.consume_checked(1)?;
         Ok(())
     }
 
@@ -6744,8 +6752,10 @@ fn test_program_id_as_payer() {
 
 #[allow(clippy::unnecessary_wraps)]
 fn mock_ok_vote_processor(
-    _invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext,
 ) -> std::result::Result<(), InstructionError> {
+    // mock builtin must consume units
+    invoke_context.consume_checked(1)?;
     Ok(())
 }
 
@@ -10193,6 +10203,8 @@ fn test_transfer_sysvar() {
     ) -> std::result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
+        // mock builtin should consume units
+        let _ = invoke_context.consume_checked(1);
         instruction_context
             .try_borrow_instruction_account(transaction_context, 1)?
             .set_data(vec![0; 40])?;
@@ -10406,11 +10418,13 @@ fn test_compute_budget_program_noop() {
         assert_eq!(
             *compute_budget,
             ComputeBudget {
-                compute_unit_limit: 1,
+                compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
                 heap_size: Some(48 * 1024),
                 ..ComputeBudget::default()
             }
         );
+        // mock builtin should consume units
+        let _ = invoke_context.consume_checked(1);
         Ok(())
     }
     let program_id = solana_sdk::pubkey::new_rand();
@@ -10418,7 +10432,9 @@ fn test_compute_budget_program_noop() {
 
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::set_compute_unit_limit(1),
+            ComputeBudgetInstruction::set_compute_unit_limit(
+                compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+            ),
             ComputeBudgetInstruction::request_heap_frame(48 * 1024),
             Instruction::new_with_bincode(program_id, &0, vec![]),
         ],
@@ -10449,11 +10465,13 @@ fn test_compute_request_instruction() {
         assert_eq!(
             *compute_budget,
             ComputeBudget {
-                compute_unit_limit: 1,
+                compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
                 heap_size: Some(48 * 1024),
                 ..ComputeBudget::default()
             }
         );
+        // mock builtin should consume units
+        let _ = invoke_context.consume_checked(1);
         Ok(())
     }
     let program_id = solana_sdk::pubkey::new_rand();
@@ -10461,7 +10479,9 @@ fn test_compute_request_instruction() {
 
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::set_compute_unit_limit(1),
+            ComputeBudgetInstruction::set_compute_unit_limit(
+                compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+            ),
             ComputeBudgetInstruction::request_heap_frame(48 * 1024),
             Instruction::new_with_bincode(program_id, &0, vec![]),
         ],
@@ -10499,7 +10519,7 @@ fn test_failed_compute_request_instruction() {
         assert_eq!(
             *compute_budget,
             ComputeBudget {
-                compute_unit_limit: 1,
+                compute_unit_limit: compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
                 heap_size: Some(48 * 1024),
                 ..ComputeBudget::default()
             }
@@ -11063,6 +11083,8 @@ fn mock_transfer_process_instruction(
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
+    // mock builtin must consume units
+    invoke_context.consume_checked(1)?;
     if let Ok(instruction) = bincode::deserialize(instruction_data) {
         match instruction {
             MockTransferInstruction::Transfer(amount) => {
@@ -11871,6 +11893,8 @@ fn mock_realloc_process_instruction(
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
+    // mock builtin must consume units
+    invoke_context.consume_checked(1)?;
     if let Ok(instruction) = bincode::deserialize(instruction_data) {
         match instruction {
             MockReallocInstruction::Realloc(new_size, new_balance, _) => {

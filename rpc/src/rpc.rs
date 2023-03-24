@@ -5890,7 +5890,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -5974,7 +5974,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -6002,7 +6002,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -6051,7 +6051,7 @@ pub mod tests {
                     "accounts":null,
                     "logs":[],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":0,
                 }
             },
             "id":1
@@ -6080,7 +6080,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,

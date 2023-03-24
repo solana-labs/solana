@@ -45,8 +45,8 @@ use {
             check_slice_translation_size, delay_visibility_of_program_deployment,
             disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
             enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, remove_bpf_loader_incorrect_program_id,
-            round_up_heap_size, FeatureSet,
+            limit_max_instruction_trace_length, native_programs_consume_cu,
+            remove_bpf_loader_incorrect_program_id, round_up_heap_size, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -520,15 +520,29 @@ fn process_instruction_common(
     let program_account =
         instruction_context.try_borrow_last_program_account(transaction_context)?;
 
+    // Consume compute units if feature `native_programs_consume_cu` is activated
+    let native_programs_consume_cu = invoke_context
+        .feature_set
+        .is_active(&native_programs_consume_cu::id());
+
     // Program Management Instruction
     if native_loader::check_id(program_account.get_owner()) {
         drop(program_account);
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
         return if bpf_loader_upgradeable::check_id(program_id) {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(2_370)?;
+            }
             process_loader_upgradeable_instruction(invoke_context, use_jit)
         } else if bpf_loader::check_id(program_id) {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(570)?;
+            }
             process_loader_instruction(invoke_context, use_jit)
         } else if bpf_loader_deprecated::check_id(program_id) {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(1_140)?;
+            }
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
             Err(InstructionError::UnsupportedProgramId)
         } else {
