@@ -53,17 +53,13 @@ impl LeaderBankNotifier {
         self.condvar.notify_all();
     }
 
-    /// Set the status to `StandBy` and notify any waiting threads if the status was changed.
-    /// Panics if the stored slot does not match the given slot.
+    /// Set the status to `StandBy` and notify any waiting threads.
+    /// Panics if the current status is not `InProgress` or the stored slot does not match
+    /// the given slot.
     pub(crate) fn set_completed(&self, slot: Slot) {
         let mut state = self.state.lock().unwrap();
+        assert_eq!(state.status, Status::InProgress);
         assert_eq!(state.slot, Some(slot));
-
-        // `set_completed` can be called multiple times for the same slot because it
-        // may be called from multiple threads.
-        if matches!(state.status, Status::StandBy) {
-            return;
-        }
 
         state.status = Status::StandBy;
         drop(state);
