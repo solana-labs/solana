@@ -1890,6 +1890,11 @@ fn main() {
             .about("Prints the ledger's shred hash")
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
         )
         .subcommand(
             SubCommand::with_name("shred-meta")
@@ -1902,6 +1907,11 @@ fn main() {
             .about("Prints the hash of the working bank after reading the ledger")
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&halt_at_slot_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
         )
         .subcommand(
             SubCommand::with_name("bounds")
@@ -1976,6 +1986,11 @@ fn main() {
             .about("Create a Graphviz rendering of the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -2005,6 +2020,10 @@ fn main() {
             .about("Create a new ledger snapshot")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&accountsdb_skip_shrink)
             .arg(&ancient_append_vecs)
@@ -2193,6 +2212,11 @@ fn main() {
             .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&geyser_plugin_args)
@@ -2220,6 +2244,11 @@ fn main() {
             .about("Print capitalization (aka, total supply) while checksumming it")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -2568,6 +2597,7 @@ fn main() {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: Some(0),
                     run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2659,6 +2689,7 @@ fn main() {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2944,6 +2975,7 @@ fn main() {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     ..ProcessOptions::default()
                 };
 
@@ -3480,6 +3512,7 @@ fn main() {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
                     run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -3569,6 +3602,7 @@ fn main() {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
                     run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
