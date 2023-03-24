@@ -200,7 +200,7 @@ fn execute_batch(
         );
     }
 
-    prioritization_fee_cache.update(bank.clone(), executed_transactions.into_iter());
+    prioritization_fee_cache.update(bank, executed_transactions.into_iter());
 
     let first_err = get_first_error(batch, fee_collection_results);
     first_err.map(|(result, _)| result).unwrap_or(Ok(()))
