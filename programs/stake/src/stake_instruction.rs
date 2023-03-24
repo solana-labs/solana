@@ -8,7 +8,8 @@ use {
     },
     log::*,
     solana_program_runtime::{
-        invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
+        declare_process_instruction, invoke_context::InvokeContext,
+        sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
         clock::Clock,
@@ -51,20 +52,15 @@ fn get_optional_pubkey<'a>(
     )
 }
 
-pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+declare_process_instruction!(750);
+pub fn process_instruction_inner(
+    invoke_context: &mut InvokeContext,
+) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
 
     trace!("process_instruction: {:?}", data);
-
-    // Consume compute units if feature `native_programs_consume_cu` is activated,
-    if invoke_context
-        .feature_set
-        .is_active(&feature_set::native_programs_consume_cu::id())
-    {
-        invoke_context.consume_checked(750)?;
-    }
 
     let get_stake_account = || {
         let me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;

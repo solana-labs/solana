@@ -432,15 +432,21 @@ fn create_memory_mapping<'a, 'b, C: ContextObject>(
     })
 }
 
-pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
-    process_instruction_common(invoke_context, false)
+pub fn process_instruction(
+    invoke_context: &mut InvokeContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    process_instruction_inner(invoke_context, false)
+        .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
 }
 
-pub fn process_instruction_jit(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
-    process_instruction_common(invoke_context, true)
+pub fn process_instruction_jit(
+    invoke_context: &mut InvokeContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    process_instruction_inner(invoke_context, true)
+        .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
 }
 
-fn process_instruction_common(
+fn process_instruction_inner(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -1627,9 +1633,7 @@ fn execute<'a, 'b: 'a>(
                             _ => unreachable!(),
                         }
                     }
-                    err => {
-                        InstructionError::ProgramFailedToComplete
-                    }
+                    err => InstructionError::ProgramFailedToComplete,
                 };
                 Err(error)
             }

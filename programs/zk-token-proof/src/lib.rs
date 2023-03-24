@@ -2,7 +2,7 @@
 
 use {
     bytemuck::Pod,
-    solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
+    solana_program_runtime::{declare_process_instruction, ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
         feature_set,
         instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
@@ -114,7 +114,10 @@ fn process_close_proof_context(invoke_context: &mut InvokeContext) -> Result<(),
     Ok(())
 }
 
-pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+declare_process_instruction!(0);
+pub fn process_instruction_inner(
+    invoke_context: &mut InvokeContext,
+) -> Result<(), InstructionError> {
     if invoke_context.get_stack_height() != TRANSACTION_LEVEL_STACK_HEIGHT {
         // Not supported as an inner instruction
         return Err(InstructionError::UnsupportedProgramId);
@@ -137,21 +140,27 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
         }
         ProofInstruction::VerifyCloseAccount => {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(6_012)?;
+                invoke_context
+                    .consume_checked(6_012)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyCloseAccount");
             process_verify_proof::<CloseAccountData, CloseAccountProofContext>(invoke_context)
         }
         ProofInstruction::VerifyWithdraw => {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(112_454)?;
+                invoke_context
+                    .consume_checked(112_454)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyWithdraw");
             process_verify_proof::<WithdrawData, WithdrawProofContext>(invoke_context)
         }
         ProofInstruction::VerifyWithdrawWithheldTokens => {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(7_943)?;
+                invoke_context
+                    .consume_checked(7_943)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyWithdrawWithheldTokens");
             process_verify_proof::<WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext>(
@@ -160,21 +169,27 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
         }
         ProofInstruction::VerifyTransfer => {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(219_290)?;
+                invoke_context
+                    .consume_checked(219_290)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyTransfer");
             process_verify_proof::<TransferData, TransferProofContext>(invoke_context)
         }
         ProofInstruction::VerifyTransferWithFee => {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(407_121)?;
+                invoke_context
+                    .consume_checked(407_121)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyTransferWithFee");
             process_verify_proof::<TransferWithFeeData, TransferWithFeeProofContext>(invoke_context)
         }
         ProofInstruction::VerifyPubkeyValidity => {
             if native_programs_consume_cu {
-                invoke_context.consume_checked(2_619)?;
+                invoke_context
+                    .consume_checked(2_619)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyPubkeyValidity");
             process_verify_proof::<PubkeyValidityData, PubkeyValidityProofContext>(invoke_context)

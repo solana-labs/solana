@@ -219,7 +219,7 @@ mod tests {
 
         fn mock_system_process_instruction(
             invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
+        ) -> Result<(), Box<dyn std::error::Error>> {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let instruction_data = instruction_context.get_instruction_data();
@@ -245,7 +245,7 @@ mod tests {
                     }
                 }
             } else {
-                Err(InstructionError::InvalidInstructionData)
+                Err(Box::new(InstructionError::InvalidInstructionData))
             }
         }
 
@@ -432,7 +432,7 @@ mod tests {
 
         fn mock_system_process_instruction(
             invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
+        ) -> Result<(), Box<dyn std::error::Error>> {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let instruction_data = instruction_context.get_instruction_data();
@@ -448,7 +448,7 @@ mod tests {
                         let dup_account = instruction_context
                             .try_borrow_instruction_account(transaction_context, 2)?;
                         if from_account.get_lamports() != dup_account.get_lamports() {
-                            return Err(InstructionError::InvalidArgument);
+                            return Err(Box::new(InstructionError::InvalidArgument));
                         }
                         Ok(())
                     }
@@ -460,7 +460,7 @@ mod tests {
                             .try_borrow_instruction_account(transaction_context, 2)?
                             .get_lamports();
                         if lamports_a != lamports_b {
-                            return Err(InstructionError::InvalidArgument);
+                            return Err(Box::new(InstructionError::InvalidArgument));
                         }
                         Ok(())
                     }
@@ -479,7 +479,7 @@ mod tests {
                     }
                 }
             } else {
-                Err(InstructionError::InvalidInstructionData)
+                Err(Box::new(InstructionError::InvalidInstructionData))
             }
         }
 
@@ -647,10 +647,10 @@ mod tests {
         let mock_program_id = Pubkey::new_unique();
         fn mock_process_instruction(
             invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
+        ) -> Result<(), Box<dyn std::error::Error>> {
             // mock builtin should consume units
             let _ = invoke_context.consume_checked(1);
-            Err(InstructionError::Custom(0xbabb1e))
+            Err(Box::new(InstructionError::Custom(0xbabb1e)))
         }
         let builtin_programs = &[BuiltinProgram {
             program_id: mock_program_id,

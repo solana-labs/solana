@@ -100,7 +100,7 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
     invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     set_invoke_context(invoke_context);
 
     let transaction_context = &invoke_context.transaction_context;
@@ -134,8 +134,8 @@ pub fn builtin_process_instruction(
 
     // Execute the program
     process_instruction(program_id, &account_infos, instruction_data).map_err(|err| {
-        let err = u64::from(err);
-        stable_log::program_failure(&log_collector, program_id, &err.into());
+        let err: Box<dyn std::error::Error> = Box::new(InstructionError::from(u64::from(err)));
+        stable_log::program_failure(&log_collector, program_id, err.as_ref());
         err
     })?;
     stable_log::program_success(&log_collector, program_id);
