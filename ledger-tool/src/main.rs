@@ -3236,7 +3236,7 @@ fn main() {
                                 .unwrap()
                                 .into_iter()
                             {
-                                if let Ok(StakeState::Stake(meta, stake)) = account.state() {
+                                if let Ok(StakeState::Staked(meta, stake)) = account.state() {
                                     if vote_accounts_to_destake
                                         .contains(&stake.delegation.voter_pubkey)
                                     {

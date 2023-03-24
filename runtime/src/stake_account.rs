@@ -127,7 +127,7 @@ impl AbiExample for StakeAccount<Delegation> {
             account::Account,
             stake::state::{Meta, Stake},
         };
-        let stake_state = StakeState::Stake(Meta::example(), Stake::example());
+        let stake_state = StakeState::Staked(Meta::example(), Stake::example());
         let mut account = Account::example();
         account.data.resize(196, 0u8);
         account.owner = solana_stake_program::id();

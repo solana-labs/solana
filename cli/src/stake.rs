@@ -1498,7 +1498,7 @@ pub fn process_stake_authorize(
         let authority = config.signers[*authority];
         if let Some(current_stake_account) = current_stake_account {
             let authorized = match current_stake_account {
-                StakeState::Stake(Meta { authorized, .. }, ..) => Some(authorized),
+                StakeState::Staked(Meta { authorized, .. }, ..) => Some(authorized),
                 StakeState::Initialized(Meta { authorized, .. }) => Some(authorized),
                 _ => None,
             };
@@ -1628,7 +1628,7 @@ pub fn process_deactivate_stake_account(
 
         let vote_account_address = match stake_account.state() {
             Ok(stake_state) => match stake_state {
-                StakeState::Stake(_, stake) => stake.delegation.voter_pubkey,
+                StakeState::Staked(_, stake) => stake.delegation.voter_pubkey,
                 _ => {
                     return Err(CliError::BadParameter(format!(
                         "{stake_account_address} is not a delegated stake account",
@@ -2114,7 +2114,7 @@ pub fn process_stake_set_lockup(
     if !sign_only {
         let state = get_stake_account_state(rpc_client, stake_account_pubkey, config.commitment)?;
         let lockup = match state {
-            StakeState::Stake(Meta { lockup, .. }, ..) => Some(lockup),
+            StakeState::Staked(Meta { lockup, .. }, ..) => Some(lockup),
             StakeState::Initialized(Meta { lockup, .. }) => Some(lockup),
             _ => None,
         };
@@ -2188,7 +2188,7 @@ pub fn build_stake_state(
     clock: &Clock,
 ) -> CliStakeState {
     match stake_state {
-        StakeState::Stake(
+        StakeState::Staked(
             Meta {
                 rent_exempt_reserve,
                 authorized,

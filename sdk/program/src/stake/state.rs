@@ -22,7 +22,7 @@ pub enum StakeState {
     #[default]
     Uninitialized,
     Initialized(Meta),
-    Stake(Meta, Stake),
+    Staked(Meta, Stake),
     RewardsPool,
 }
 
@@ -38,7 +38,7 @@ impl BorshDeserialize for StakeState {
             2 => {
                 let meta: Meta = BorshDeserialize::deserialize(buf)?;
                 let stake: Stake = BorshDeserialize::deserialize(buf)?;
-                Ok(StakeState::Stake(meta, stake))
+                Ok(StakeState::Staked(meta, stake))
             }
             3 => Ok(StakeState::RewardsPool),
             _ => Err(io::Error::new(
@@ -57,7 +57,7 @@ impl BorshSerialize for StakeState {
                 writer.write_all(&1u32.to_le_bytes())?;
                 meta.serialize(writer)
             }
-            StakeState::Stake(meta, stake) => {
+            StakeState::Staked(meta, stake) => {
                 writer.write_all(&2u32.to_le_bytes())?;
                 meta.serialize(writer)?;
                 stake.serialize(writer)
@@ -75,21 +75,21 @@ impl StakeState {
 
     pub fn stake(&self) -> Option<Stake> {
         match self {
-            StakeState::Stake(_meta, stake) => Some(*stake),
+            StakeState::Staked(_meta, stake) => Some(*stake),
             _ => None,
         }
     }
 
     pub fn delegation(&self) -> Option<Delegation> {
         match self {
-            StakeState::Stake(_meta, stake) => Some(stake.delegation),
+            StakeState::Staked(_meta, stake) => Some(stake.delegation),
             _ => None,
         }
     }
 
     pub fn authorized(&self) -> Option<Authorized> {
         match self {
-            StakeState::Stake(meta, _stake) => Some(meta.authorized),
+            StakeState::Staked(meta, _stake) => Some(meta.authorized),
             StakeState::Initialized(meta) => Some(meta.authorized),
             _ => None,
         }
@@ -101,7 +101,7 @@ impl StakeState {
 
     pub fn meta(&self) -> Option<Meta> {
         match self {
-            StakeState::Stake(meta, _stake) => Some(*meta),
+            StakeState::Staked(meta, _stake) => Some(*meta),
             StakeState::Initialized(meta) => Some(*meta),
             _ => None,
         }
@@ -610,7 +610,7 @@ mod test {
             },
             lockup: Lockup::default(),
         }));
-        check_borsh_deserialization(StakeState::Stake(
+        check_borsh_deserialization(StakeState::Staked(
             Meta {
                 rent_exempt_reserve: 1,
                 authorized: Authorized {
@@ -644,7 +644,7 @@ mod test {
             },
             lockup: Lockup::default(),
         }));
-        check_borsh_serialization(StakeState::Stake(
+        check_borsh_serialization(StakeState::Staked(
             Meta {
                 rent_exempt_reserve: 1,
                 authorized: Authorized {

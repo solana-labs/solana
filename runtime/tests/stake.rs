@@ -346,7 +346,7 @@ fn test_stake_account_lifetime() {
     // Test that correct lamports are staked
     let account = bank.get_account(&stake_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(_meta, stake) = stake_state {
+    if let StakeState::Staked(_meta, stake) = stake_state {
         assert_eq!(stake.delegation.stake, stake_starting_delegation,);
     } else {
         panic!("wrong account type found")
@@ -370,7 +370,7 @@ fn test_stake_account_lifetime() {
     // Test that lamports are still staked
     let account = bank.get_account(&stake_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(_meta, stake) = stake_state {
+    if let StakeState::Staked(_meta, stake) = stake_state {
         assert_eq!(stake.delegation.stake, stake_starting_delegation,);
     } else {
         panic!("wrong account type found")
@@ -615,7 +615,7 @@ fn test_create_stake_account_from_seed() {
     // Test that correct lamports are staked
     let account = bank.get_account(&stake_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(_meta, stake) = stake_state {
+    if let StakeState::Staked(_meta, stake) = stake_state {
         assert_eq!(stake.delegation.stake, delegation);
     } else {
         panic!("wrong account type found")

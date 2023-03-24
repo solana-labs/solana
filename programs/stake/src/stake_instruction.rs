@@ -655,7 +655,7 @@ mod tests {
     }
 
     fn just_stake(meta: Meta, stake: u64) -> StakeState {
-        StakeState::Stake(
+        StakeState::Staked(
             meta,
             Stake {
                 delegation: Delegation {
@@ -2810,7 +2810,7 @@ mod tests {
                 StakeState::Initialized(_meta) => {
                     assert_eq!(from(&accounts[0]).unwrap(), state);
                 }
-                StakeState::Stake(_meta, _stake) => {
+                StakeState::Staked(_meta, _stake) => {
                     let stake_0 = from(&accounts[0]).unwrap().stake();
                     assert_eq!(stake_0.unwrap().delegation.stake, stake_lamports / 2);
                 }
@@ -4439,8 +4439,8 @@ mod tests {
             // *must* equal the split amount. Otherwise, the split amount must first be used to
             // make the destination rent exempt, and then the leftover lamports are delegated.
             if expected_result.is_ok() {
-                assert_matches!(accounts[0].state().unwrap(), StakeState::Stake(_, _));
-                if let StakeState::Stake(_, destination_stake) = accounts[1].state().unwrap() {
+                assert_matches!(accounts[0].state().unwrap(), StakeState::Staked(_, _));
+                if let StakeState::Staked(_, destination_stake) = accounts[1].state().unwrap() {
                     let destination_initial_rent_deficit =
                         rent_exempt_reserve.saturating_sub(destination_starting_balance);
                     let expected_destination_stake_delegation =
@@ -4880,7 +4880,7 @@ mod tests {
 
         for split_to_state in &[
             StakeState::Initialized(Meta::default()),
-            StakeState::Stake(Meta::default(), Stake::default()),
+            StakeState::Staked(Meta::default(), Stake::default()),
             StakeState::RewardsPool,
         ] {
             let split_to_account = AccountSharedData::new_data_with_space(
@@ -5052,10 +5052,10 @@ mod tests {
             );
 
             // verify no stake leakage in the case of a stake
-            if let StakeState::Stake(meta, stake) = state {
+            if let StakeState::Staked(meta, stake) = state {
                 assert_eq!(
                     accounts[1].state(),
-                    Ok(StakeState::Stake(
+                    Ok(StakeState::Staked(
                         *meta,
                         Stake {
                             delegation: Delegation {
@@ -5157,11 +5157,11 @@ mod tests {
                 stake_lamports + initial_balance,
             );
 
-            if let StakeState::Stake(meta, stake) = state {
+            if let StakeState::Staked(meta, stake) = state {
                 let expected_stake =
                     stake_lamports / 2 - (rent_exempt_reserve.saturating_sub(initial_balance));
                 assert_eq!(
-                    Ok(StakeState::Stake(
+                    Ok(StakeState::Staked(
                         meta,
                         Stake {
                             delegation: Delegation {
@@ -5181,7 +5181,7 @@ mod tests {
                         + initial_balance.saturating_sub(rent_exempt_reserve),
                 );
                 assert_eq!(
-                    Ok(StakeState::Stake(
+                    Ok(StakeState::Staked(
                         meta,
                         Stake {
                             delegation: Delegation {
@@ -5283,7 +5283,7 @@ mod tests {
                 stake_lamports + initial_balance
             );
 
-            if let StakeState::Stake(meta, stake) = state {
+            if let StakeState::Staked(meta, stake) = state {
                 let expected_split_meta = Meta {
                     authorized: Authorized::auto(&stake_address),
                     rent_exempt_reserve: split_rent_exempt_reserve,
@@ -5293,7 +5293,7 @@ mod tests {
                     - (split_rent_exempt_reserve.saturating_sub(initial_balance));
 
                 assert_eq!(
-                    Ok(StakeState::Stake(
+                    Ok(StakeState::Staked(
                         expected_split_meta,
                         Stake {
                             delegation: Delegation {
@@ -5312,7 +5312,7 @@ mod tests {
                         + initial_balance.saturating_sub(split_rent_exempt_reserve)
                 );
                 assert_eq!(
-                    Ok(StakeState::Stake(
+                    Ok(StakeState::Staked(
                         meta,
                         Stake {
                             delegation: Delegation {
@@ -5482,9 +5482,9 @@ mod tests {
                     assert_eq!(Ok(*state), accounts[1].state());
                     assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
                 }
-                StakeState::Stake(meta, stake) => {
+                StakeState::Staked(meta, stake) => {
                     assert_eq!(
-                        Ok(StakeState::Stake(
+                        Ok(StakeState::Staked(
                             *meta,
                             Stake {
                                 delegation: Delegation {
@@ -5580,9 +5580,9 @@ mod tests {
                 stake_lamports + initial_balance
             );
 
-            if let StakeState::Stake(meta, stake) = state {
+            if let StakeState::Staked(meta, stake) = state {
                 assert_eq!(
-                    Ok(StakeState::Stake(
+                    Ok(StakeState::Staked(
                         meta,
                         Stake {
                             delegation: Delegation {
@@ -5708,13 +5708,13 @@ mod tests {
                     );
                     assert_eq!(Ok(StakeState::Uninitialized), accounts[0].state());
                 }
-                StakeState::Stake(_meta, stake) => {
+                StakeState::Staked(_meta, stake) => {
                     // Expected stake should reflect original stake amount so that extra lamports
                     // from the rent_exempt_reserve inequality do not magically activate
                     let expected_stake = stake_lamports - source_rent_exempt_reserve;
 
                     assert_eq!(
-                        Ok(StakeState::Stake(
+                        Ok(StakeState::Staked(
                             expected_split_meta,
                             Stake {
                                 delegation: Delegation {
@@ -5837,7 +5837,7 @@ mod tests {
                     StakeState::Initialized(meta) => {
                         assert_eq!(accounts[0].state(), Ok(StakeState::Initialized(*meta)),);
                     }
-                    StakeState::Stake(meta, stake) => {
+                    StakeState::Staked(meta, stake) => {
                         let expected_stake = stake.delegation.stake
                             + merge_from_state
                                 .stake()
@@ -5848,7 +5848,7 @@ mod tests {
                                 });
                         assert_eq!(
                             accounts[0].state(),
-                            Ok(StakeState::Stake(
+                            Ok(StakeState::Staked(
                                 *meta,
                                 Stake {
                                     delegation: Delegation {
@@ -5890,7 +5890,7 @@ mod tests {
         };
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Stake(meta, stake),
+            &StakeState::Staked(meta, stake),
             StakeState::size_of(),
             &id(),
         )
@@ -6217,7 +6217,7 @@ mod tests {
         };
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
-            &StakeState::Stake(meta, stake),
+            &StakeState::Staked(meta, stake),
             StakeState::size_of(),
             &id(),
         )
@@ -6233,7 +6233,7 @@ mod tests {
         };
         let merge_from_account = AccountSharedData::new_data_with_space(
             merge_from_lamports,
-            &StakeState::Stake(meta, merge_from_stake),
+            &StakeState::Staked(meta, merge_from_stake),
             StakeState::size_of(),
             &id(),
         )
@@ -6395,7 +6395,7 @@ mod tests {
                 };
                 transaction_accounts[0]
                     .1
-                    .set_state(&StakeState::Stake(meta, stake))
+                    .set_state(&StakeState::Staked(meta, stake))
                     .unwrap();
             }
             if clock.epoch == merge_from_deactivation_epoch {
@@ -6409,7 +6409,7 @@ mod tests {
                 };
                 transaction_accounts[1]
                     .1
-                    .set_state(&StakeState::Stake(meta, merge_from_stake))
+                    .set_state(&StakeState::Staked(meta, merge_from_stake))
                     .unwrap();
             }
             stake_history.add(
@@ -6621,7 +6621,7 @@ mod tests {
         let vote_address = Pubkey::new_unique();
         let stake_address = Pubkey::new_unique();
 
-        let initial_stake_state = StakeState::Stake(
+        let initial_stake_state = StakeState::Staked(
             Meta::default(),
             new_stake(
                 1, /* stake */
@@ -6822,7 +6822,7 @@ mod tests {
         let mut unrelated_stake_account = stake_account.clone();
         assert_ne!(unrelated_vote_address, vote_address);
         unrelated_stake_account
-            .serialize_data(&StakeState::Stake(
+            .serialize_data(&StakeState::Staked(
                 Meta::default(),
                 new_stake(
                     1, /* stake */
@@ -6908,7 +6908,7 @@ mod tests {
 
         let prepare_stake_account = |activation_epoch, expected_stake_activation_status| {
             let initial_stake_delegation = minimum_delegation + rent_exempt_reserve;
-            let initial_stake_state = StakeState::Stake(
+            let initial_stake_state = StakeState::Staked(
                 Meta {
                     authorized: Authorized {
                         staker: authorized_staker,
@@ -7043,7 +7043,7 @@ mod tests {
         );
 
         assert_eq!(output_accounts[0].lamports(), rent_exempt_reserve);
-        if let StakeState::Stake(meta, stake) =
+        if let StakeState::Staked(meta, stake) =
             output_accounts[0].borrow().deserialize_data().unwrap()
         {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
@@ -7060,7 +7060,7 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve
         );
-        if let StakeState::Stake(meta, stake) =
+        if let StakeState::Staked(meta, stake) =
             output_accounts[1].borrow().deserialize_data().unwrap()
         {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
@@ -7202,7 +7202,7 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve + 42
         );
-        if let StakeState::Stake(meta, stake) =
+        if let StakeState::Staked(meta, stake) =
             output_accounts[1].borrow().deserialize_data().unwrap()
         {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
@@ -7218,14 +7218,14 @@ mod tests {
         //
         let mut stake_account_over_allocated =
             prepare_stake_account(0 /*activation_epoch:*/, None);
-        if let StakeState::Stake(mut meta, stake) = stake_account_over_allocated
+        if let StakeState::Staked(mut meta, stake) = stake_account_over_allocated
             .borrow_mut()
             .deserialize_data()
             .unwrap()
         {
             meta.rent_exempt_reserve += 42;
             stake_account_over_allocated
-                .set_state(&StakeState::Stake(meta, stake))
+                .set_state(&StakeState::Staked(meta, stake))
                 .unwrap();
         }
         stake_account_over_allocated
@@ -7248,7 +7248,7 @@ mod tests {
         );
 
         assert_eq!(output_accounts[0].lamports(), rent_exempt_reserve + 42);
-        if let StakeState::Stake(meta, _stake) =
+        if let StakeState::Staked(meta, _stake) =
             output_accounts[0].borrow().deserialize_data().unwrap()
         {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve + 42);
@@ -7259,7 +7259,7 @@ mod tests {
             output_accounts[1].lamports(),
             minimum_delegation + rent_exempt_reserve,
         );
-        if let StakeState::Stake(meta, stake) =
+        if let StakeState::Staked(meta, stake) =
             output_accounts[1].borrow().deserialize_data().unwrap()
         {
             assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
@@ -7399,7 +7399,7 @@ mod tests {
 
         let mut deactivating_stake_account =
             prepare_stake_account(0 /*activation_epoch:*/, None);
-        if let StakeState::Stake(meta, mut stake) = deactivating_stake_account
+        if let StakeState::Staked(meta, mut stake) = deactivating_stake_account
             .borrow_mut()
             .deserialize_data()
             .unwrap()
@@ -7417,7 +7417,7 @@ mod tests {
             );
 
             deactivating_stake_account
-                .set_state(&StakeState::Stake(meta, stake))
+                .set_state(&StakeState::Staked(meta, stake))
                 .unwrap();
         }
         let _ = process_instruction_redelegate(
@@ -7436,7 +7436,7 @@ mod tests {
         //          (less than `minimum_delegation + rent_exempt_reserve`)
         //
         let mut stake_account_too_few_lamports = stake_account.clone();
-        if let StakeState::Stake(meta, mut stake) = stake_account_too_few_lamports
+        if let StakeState::Staked(meta, mut stake) = stake_account_too_few_lamports
             .borrow_mut()
             .deserialize_data()
             .unwrap()
@@ -7447,7 +7447,7 @@ mod tests {
                 minimum_delegation + rent_exempt_reserve - 1
             );
             stake_account_too_few_lamports
-                .set_state(&StakeState::Stake(meta, stake))
+                .set_state(&StakeState::Staked(meta, stake))
                 .unwrap();
         } else {
             panic!("Invalid stake_account");
