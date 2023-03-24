@@ -590,7 +590,7 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
         drop(program);
         loaded_program.usage_counter.fetch_add(1, Ordering::Relaxed);
         match &loaded_program.program {
-            LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
+            LoadedProgramType::Invalid(_) => Err(InstructionError::InvalidAccountData),
             LoadedProgramType::Typed(executable) => execute(invoke_context, executable),
             _ => Err(InstructionError::IncorrectProgramId),
         }
