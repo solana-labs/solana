@@ -88,9 +88,7 @@ impl LeaderBankNotifier {
 
         // If currently `StandBy`, need to wait for `InProgress` to begin.
         let now = Instant::now();
-        let state = self.get_or_wait_for_in_progress_state(remaining_timeout, state);
-
-        let Some(state) = state else { return None; };
+        let state = self.get_or_wait_for_in_progress_state(remaining_timeout, state)?;
         remaining_timeout = remaining_timeout.saturating_sub(now.elapsed());
 
         // Wait for `StandBy` to be set.
