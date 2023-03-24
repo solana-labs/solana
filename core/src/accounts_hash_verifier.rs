@@ -417,7 +417,11 @@ impl AccountsHashVerifier {
 
         datapoint_info!(
             "accounts_hash_verifier",
-            ("calculate_incremental_accounts_hash", measure_hash_us, i64),
+            (
+                "calculate_incremental_accounts_hash_us",
+                measure_hash_us,
+                i64
+            ),
         );
 
         incremental_accounts_hash
