@@ -867,7 +867,7 @@ impl Validator {
         };
 
         // block min prioritization fee cache should be readable by RPC, and writable by validator
-        // (for now, by replay stage)
+        // (by both replay stage and banking stage)
         let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
@@ -1156,6 +1156,7 @@ impl Validator {
             banking_tracer,
             tracer_thread,
             tpu_enable_udp,
+            &prioritization_fee_cache,
         );
 
         datapoint_info!(
