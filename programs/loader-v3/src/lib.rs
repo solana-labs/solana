@@ -21,7 +21,7 @@ use {
     },
     solana_sdk::{
         entrypoint::{HEAP_LENGTH, SUCCESS},
-        feature_set::FeatureSet,
+        feature_set::{self, FeatureSet},
         instruction::InstructionError,
         loader_v3::{self, LoaderV3State, DEPLOYMENT_COOLDOWN_IN_SLOTS},
         loader_v3_instruction::LoaderV3Instruction,
@@ -534,6 +534,12 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
     let instruction_data = instruction_context.get_instruction_data();
     let program_id = instruction_context.get_last_program_key(transaction_context)?;
     if loader_v3::check_id(program_id) {
+        if invoke_context
+            .feature_set
+            .is_active(&feature_set::native_programs_consume_cu::id())
+        {
+            invoke_context.consume_checked(2000)?;
+        }
         match limited_deserialize(instruction_data)? {
             LoaderV3Instruction::Write { offset, bytes } => {
                 process_instruction_write(invoke_context, offset, bytes)
@@ -590,67 +596,49 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
 mod tests {
     use {
         super::*,
+        solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
             account::{
                 create_account_shared_data_for_test, AccountSharedData, ReadableAccount,
                 WritableAccount,
             },
             account_utils::StateMut,
-            native_loader,
+            instruction::AccountMeta,
             slot_history::Slot,
             sysvar::{clock, rent},
-            transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
+            transaction_context::IndexOfAccount,
         },
         std::{fs::File, io::Read, path::Path},
     };
 
     fn process_instruction(
-        mut program_indices: Vec<IndexOfAccount>,
+        program_indices: Vec<IndexOfAccount>,
         instruction_data: &[u8],
-        mut transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
+        transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
         instruction_accounts: &[(IndexOfAccount, bool, bool)],
         expected_result: Result<(), InstructionError>,
     ) -> Vec<AccountSharedData> {
-        program_indices.insert(0, transaction_accounts.len() as IndexOfAccount);
-        let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
-        transaction_accounts.push((loader_v3::id(), processor_account));
-        let compute_budget = ComputeBudget::default();
-        let mut transaction_context = TransactionContext::new(
-            transaction_accounts,
-            Some(rent::Rent::default()),
-            compute_budget.max_invoke_stack_height,
-            compute_budget.max_instruction_trace_length,
-        );
-        transaction_context.enable_cap_accounts_data_allocations_per_transaction();
         let instruction_accounts = instruction_accounts
             .iter()
-            .enumerate()
             .map(
-                |(instruction_account_index, (index_in_transaction, is_signer, is_writable))| {
-                    InstructionAccount {
-                        index_in_transaction: *index_in_transaction,
-                        index_in_caller: *index_in_transaction,
-                        index_in_callee: instruction_account_index as IndexOfAccount,
-                        is_signer: *is_signer,
-                        is_writable: *is_writable,
-                    }
+                |(index_in_transaction, is_signer, is_writable)| AccountMeta {
+                    pubkey: transaction_accounts[*index_in_transaction as usize].0,
+                    is_signer: *is_signer,
+                    is_writable: *is_writable,
                 },
             )
             .collect::<Vec<_>>();
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context
-            .transaction_context
-            .get_next_instruction_context()
-            .unwrap()
-            .configure(&program_indices, &instruction_accounts, instruction_data);
-        let result = invoke_context
-            .push()
-            .and_then(|_| super::process_instruction(&mut invoke_context));
-        let pop_result = invoke_context.pop();
-        assert_eq!(result.and(pop_result), expected_result);
-        let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
-        transaction_accounts.pop();
-        transaction_accounts
+        mock_process_instruction(
+            &loader_v3::id(),
+            program_indices,
+            instruction_data,
+            transaction_accounts,
+            instruction_accounts,
+            None,
+            None,
+            expected_result,
+            super::process_instruction,
+        )
     }
 
     fn load_program_account_from_elf(

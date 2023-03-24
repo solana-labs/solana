@@ -774,6 +774,7 @@ impl<'a> InvokeContext<'a> {
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
 
                 if is_builtin_program
+                    && result.is_ok()
                     && *compute_units_consumed == 0
                     && self
                         .feature_set
@@ -1024,20 +1025,19 @@ pub fn mock_process_instruction(
     if let Some(feature_set) = feature_set_override {
         invoke_context.feature_set = feature_set;
     }
-    invoke_context
-        .transaction_context
-        .get_next_instruction_context()
-        .unwrap()
-        .configure(
-            &program_indices,
-            &preparation.instruction_accounts,
-            instruction_data,
-        );
-    let result = invoke_context
-        .push()
-        .and_then(|_| process_instruction(&mut invoke_context));
-    let pop_result = invoke_context.pop();
-    assert_eq!(result.and(pop_result), expected_result);
+    let builtin_programs = &[BuiltinProgram {
+        program_id: *loader_id,
+        process_instruction,
+    }];
+    invoke_context.builtin_programs = builtin_programs;
+    let result = invoke_context.process_instruction(
+        instruction_data,
+        &preparation.instruction_accounts,
+        &program_indices,
+        &mut 0,
+        &mut ExecuteTimings::default(),
+    );
+    assert_eq!(result, expected_result);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
     transaction_accounts.pop();
     transaction_accounts
