@@ -78,7 +78,7 @@ impl LeaderBankNotifier {
         let state = self.state.lock().unwrap();
         self.get_or_wait_for_in_progress_state(timeout, state)
             .map(|state| state.bank.clone())
-            .unwrap_or_else(Weak::new)
+            .unwrap_or_default()
     }
 
     /// Wait for next notification for a completed leader slot.
