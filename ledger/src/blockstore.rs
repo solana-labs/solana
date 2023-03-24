@@ -857,7 +857,7 @@ impl Blockstore {
             match shred.shred_type() {
                 ShredType::Data => {
                     match self.check_insert_data_shred(
-                        shred,
+                        shred.clone(),
                         &mut erasure_metas,
                         &mut index_working_set,
                         &mut slot_meta_working_set,
@@ -872,19 +872,53 @@ impl Blockstore {
                         Err(InsertDataShredError::Exists) => {
                             if is_repaired {
                                 metrics.num_repaired_data_shreds_exists += 1;
+                                info!(
+                                    "Shred already exits at {:?} {:?} slot {:?} index {} data complete {}",
+                                    self.ledger_path,
+                                    shred.shred_type(),
+                                    shred.slot(),
+                                    shred.index(),
+                                    shred.data_complete()
+                                );                
                             } else {
                                 metrics.num_turbine_data_shreds_exists += 1;
                             }
                         }
                         Err(InsertDataShredError::InvalidShred) => {
+                            info!(
+                                "Shred is invalid at {:?} {:?} slot {:?} index {} data complete {}",
+                                self.ledger_path,
+                                shred.shred_type(),
+                                shred.slot(),
+                                shred.index(),
+                                shred.data_complete()
+                            );                
+
                             metrics.num_data_shreds_invalid += 1
                         }
                         Err(InsertDataShredError::BlockstoreError(err)) => {
                             metrics.num_data_shreds_blockstore_error += 1;
+                            info!(
+                                "Shred block store error at {:?} slot {:?} index {} data complete {}",
+                                self.ledger_path,
+                                shred.slot(),
+                                shred.index(),
+                                shred.data_complete()
+                            );                
+
                             error!("blockstore error: {}", err);
                         }
                         Ok(completed_data_sets) => {
                             if is_repaired {
+                                info!(
+                                    "Shred complete data sets {:?} {:?} slot {:?} index {} data complete {}",
+                                    self.ledger_path,
+                                    shred.shred_type(),
+                                    shred.slot(),
+                                    shred.index(),
+                                    shred.data_complete()
+                                );                
+
                                 metrics.num_repair += 1;
                             }
                             newly_completed_data_sets.extend(completed_data_sets);
