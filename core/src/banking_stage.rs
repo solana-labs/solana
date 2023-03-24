@@ -48,6 +48,8 @@ mod packet_receiver;
 
 #[allow(dead_code)]
 mod thread_aware_account_locks;
+#[allow(dead_code)]
+pub(crate) mod thread_set;
 
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 6;
