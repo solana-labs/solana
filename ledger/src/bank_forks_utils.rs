@@ -247,8 +247,7 @@ fn bank_forks_from_snapshot(
                 return (Arc::new(RwLock::new(bank_forks)), None);
             }
             Err(err) => {
-                error!("Failed to load bank from snapshot dir: {:?}", err);
-                info!("Falling back to loading from snapshot archives");
+                error!("Failed to load bank from snapshot dir: {:?}, falling back to loading from snapshot archive", err);
             }
         }
     }

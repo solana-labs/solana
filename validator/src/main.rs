@@ -1509,7 +1509,7 @@ pub fn main() {
             (Slot::MAX, Slot::MAX)
         };
 
-    let snapshot_from = match matches.is_present("snapshot_from_dir") {
+    let snapshot_from = match matches.is_present("boot_from_local_state") {
         true => SnapshotFrom::Dir,
         false => SnapshotFrom::Archive,
     };
