@@ -1,11 +1,53 @@
 #![allow(dead_code)]
 
 use {
-    crate::{bucket::Bucket, bucket_storage::BucketStorage, RefCount},
+    crate::{
+        bucket::Bucket,
+        bucket_storage::{BucketOccupied, BucketStorage},
+        RefCount,
+    },
     modular_bitfield::prelude::*,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::fmt::Debug,
 };
+
+/// header for elements in a bucket
+#[repr(C)]
+struct OccupiedHeader {
+    /// non-zero if occupied, 0 if occupied
+    occupied: u64,
+}
+
+/// allocated in `contents` in a BucketStorage
+#[derive(Debug, Default)]
+pub struct BucketWithHeader {}
+
+impl BucketOccupied for BucketWithHeader {
+    fn occupy(&mut self, element: &mut [u8], _ix: usize) {
+        let entry: &mut OccupiedHeader =
+            BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
+        assert_eq!(entry.occupied, 0);
+        entry.occupied = 1;
+    }
+    fn free(&mut self, element: &mut [u8], _ix: usize) {
+        let entry: &mut OccupiedHeader =
+            BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
+        assert_eq!(entry.occupied, 1);
+        entry.occupied = 0;
+    }
+    fn is_free(&self, element: &[u8], _ix: usize) -> bool {
+        let entry: &OccupiedHeader = BucketStorage::<BucketWithHeader>::get_from_parts(element);
+        let free = entry.occupied == 0;
+        assert!(free || entry.occupied == 1);
+        entry.occupied == 0
+    }
+    fn offset_to_first_data() -> usize {
+        std::mem::size_of::<OccupiedHeader>()
+    }
+}
+
+pub type DataBucket = BucketWithHeader;
+pub type IndexBucket = BucketWithHeader;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -82,7 +124,7 @@ impl IndexEntry {
 
     // This function maps the original data location into an index in the current bucket storage.
     // This is coupled with how we resize bucket storages.
-    pub fn data_loc(&self, storage: &BucketStorage) -> u64 {
+    pub fn data_loc(&self, storage: &BucketStorage<DataBucket>) -> u64 {
         self.storage_offset() << (storage.capacity_pow2 - self.storage_capacity_when_created_pow2())
     }
 
@@ -95,7 +137,7 @@ impl IndexEntry {
             data_bucket.get_cell_slice(loc, self.num_slots)
         } else {
             // num_slots is 0. This means we don't have an actual allocation.
-            BucketStorage::get_empty_cell_slice()
+            &[]
         };
         Some((slice, self.ref_count))
     }
