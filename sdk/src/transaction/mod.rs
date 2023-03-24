@@ -1671,11 +1671,10 @@ mod tests {
 
     #[test]
     fn test_unsized_signers() {
-        use crate::transaction::Transaction;
-        use crate::signer::keypair::Keypair;
-        use crate::message::Message;
-        use crate::hash::Hash;
-        use crate::instruction::Instruction;
+        use crate::{
+            hash::Hash, instruction::Instruction, message::Message, signer::keypair::Keypair,
+            transaction::Transaction,
+        };
 
         fn instructions_to_tx(
             instructions: &[Instruction],
@@ -1690,6 +1689,6 @@ mod tests {
         let signer: Box<dyn Signer> = Box::new(Keypair::new());
         let tx = instructions_to_tx(&[], Box::new(vec![signer]));
 
-        assert_eq!(tx.is_signed(), true);
+        assert!(tx.is_signed());
     }
 }
