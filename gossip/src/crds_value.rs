@@ -983,8 +983,8 @@ mod test {
             token: rng.gen(),
         };
         let other_crds = make_crds_value(other.clone());
-        assert!(!node.check_duplicate(&other_crds));
-        assert!(other.check_duplicate(&node_crds));
+        assert!(node.check_duplicate(&other_crds));
+        assert!(!other.check_duplicate(&node_crds));
         assert_eq!(node.overrides(&other_crds), Some(true));
         assert_eq!(other.overrides(&node_crds), Some(false));
         // Updated wallclock is not a duplicate.
@@ -1012,8 +1012,8 @@ mod test {
                 token: rng.gen(),
             };
             let other_crds = make_crds_value(other.clone());
-            assert!(node.check_duplicate(&other_crds));
-            assert!(other.check_duplicate(&node_crds));
+            assert!(!node.check_duplicate(&other_crds));
+            assert!(!other.check_duplicate(&node_crds));
             assert_eq!(node.overrides(&other_crds), Some(other.token < node.token));
             assert_eq!(other.overrides(&node_crds), Some(node.token < other.token));
         }
@@ -1026,8 +1026,8 @@ mod test {
                 token: rng.gen(),
             };
             let other_crds = make_crds_value(other.clone());
-            assert!(node.check_duplicate(&other_crds));
-            assert!(!other.check_duplicate(&node_crds));
+            assert!(!node.check_duplicate(&other_crds));
+            assert!(other.check_duplicate(&node_crds));
             assert_eq!(node.overrides(&other_crds), Some(false));
             assert_eq!(other.overrides(&node_crds), Some(true));
         }
