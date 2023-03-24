@@ -1027,7 +1027,7 @@ impl Blockstore {
         let mut start = Measure::start("Shred recovery");
         // Handle chaining for the members of the slot_meta_working_set that were inserted into,
         // drop the others
-        handle_chaining(&self.db, &mut write_batch, &mut slot_meta_working_set)?;
+        handle_chaining(&self, &mut write_batch, &mut slot_meta_working_set)?;
         start.stop();
         metrics.chaining_elapsed_us += start.as_us();
 
@@ -3722,7 +3722,7 @@ fn find_slot_meta_in_cached_state<'a>(
 /// - `working_set`: a slot-id to SlotMetaWorkingSetEntry map.  This function
 ///   will remove all entries which insertion did not actually occur.
 fn handle_chaining(
-    db: &Database,
+    db: &Blockstore,
     write_batch: &mut WriteBatch,
     working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
 ) -> Result<()> {
@@ -3731,12 +3731,13 @@ fn handle_chaining(
     let mut new_chained_slots = HashMap::new();
     let working_set_slots: Vec<_> = working_set.keys().collect();
     for slot in working_set_slots {
-        handle_chaining_for_slot(db, write_batch, working_set, &mut new_chained_slots, *slot)?;
+        handle_chaining_for_slot(&db.db, write_batch, working_set, &mut new_chained_slots, *slot)?;
     }
 
     // Write all the newly changed slots in new_chained_slots to the write_batch
     for (slot, meta) in new_chained_slots.iter() {
         let meta: &SlotMeta = &RefCell::borrow(meta);
+        info!("Shred new chain at {:?} slot {}, meta {:?}", db.ledger_path(), slot, meta);
         write_batch.put::<cf::SlotMeta>(*slot, meta)?;
     }
     Ok(())
