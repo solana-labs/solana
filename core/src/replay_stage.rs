@@ -3508,12 +3508,13 @@ impl ReplayStage {
 
         // Filter out what we've already seen
         info!(
-            "generate new forks {:?} at {:?}",
+            "generate new forks {:?}, frozen slots: {:?} at {:?}",
             {
                 let mut next_slots = next_slots.iter().collect::<Vec<_>>();
                 next_slots.sort();
                 next_slots
             },
+            frozen_bank_slots,
             blockstore.ledger_path()
         );
         let mut generate_new_bank_forks_loop = Measure::start("generate_new_bank_forks_loop");
