@@ -3507,11 +3507,15 @@ impl ReplayStage {
         generate_new_bank_forks_get_slots_since.stop();
 
         // Filter out what we've already seen
-        trace!("generate new forks {:?}", {
-            let mut next_slots = next_slots.iter().collect::<Vec<_>>();
-            next_slots.sort();
-            next_slots
-        });
+        info!(
+            "generate new forks {:?} at {:?}",
+            {
+                let mut next_slots = next_slots.iter().collect::<Vec<_>>();
+                next_slots.sort();
+                next_slots
+            },
+            blockstore.ledger_path()
+        );
         let mut generate_new_bank_forks_loop = Measure::start("generate_new_bank_forks_loop");
         let mut new_banks = HashMap::new();
         for (parent_slot, children) in next_slots {
@@ -3521,17 +3525,22 @@ impl ReplayStage {
                 .clone();
             for child_slot in children {
                 if forks.get(child_slot).is_some() || new_banks.get(&child_slot).is_some() {
-                    trace!("child already active or frozen {}", child_slot);
+                    info!(
+                        "child already active or frozen {} at {:?}",
+                        child_slot,
+                        blockstore.ledger_path()
+                    );
                     continue;
                 }
                 let leader = leader_schedule_cache
                     .slot_leader_at(child_slot, Some(&parent_bank))
                     .unwrap();
                 info!(
-                    "new fork:{} parent:{} root:{}",
+                    "new fork:{} parent:{} root:{} at {:?}",
                     child_slot,
                     parent_slot,
-                    forks.root()
+                    forks.root(),
+                    blockstore.ledger_path(),
                 );
                 let child_bank = Self::new_bank_from_parent_with_notify(
                     &parent_bank,

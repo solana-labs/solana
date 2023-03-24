@@ -156,8 +156,10 @@ impl AncestorHashesService {
         repair_info: RepairInfo,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
-
-        info!("Start AncestorHashesService repair_quic_config {}", repair_quic_config.is_some());
+        info!(
+            "Start AncestorHashesService repair_quic_config {}",
+            repair_quic_config.is_some()
+        );
         let outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>> =
             Arc::new(RwLock::new(OutstandingAncestorHashesRepairs::default()));
         let (response_sender, response_receiver) = unbounded();
@@ -288,7 +290,11 @@ impl AncestorHashesService {
         let timeout = Duration::new(1, 0);
         let mut packet_batches = vec![response_receiver.recv_timeout(timeout)?];
 
-        info!("Got ancestor hash response at {:?} use connection_cache {:?}", keypair.pubkey(), ancestore_connection_cache.is_some());
+        info!(
+            "Got ancestor hash response at {:?} use connection_cache {:?}",
+            keypair.pubkey(),
+            ancestore_connection_cache.is_some()
+        );
         let mut total_packets = packet_batches[0].len();
 
         let mut dropped_packets = 0;

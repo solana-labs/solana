@@ -58,9 +58,9 @@ pub fn setup() {
 }
 
 // When we have multi-threading tests like local-clusters, it's nice to print
- // the thread id at the beginning, so you can filter out logs belonging to
- // different threads.
- pub fn setup_logging_with_thread_id(filter: &str) {
+// the thread id at the beginning, so you can filter out logs belonging to
+// different threads.
+pub fn setup_logging_with_thread_id(filter: &str) {
     let logger = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or(filter))
         .format(|buf, record| {
             writeln!(
