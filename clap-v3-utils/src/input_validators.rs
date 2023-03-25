@@ -1,5 +1,5 @@
 use {
-    crate::keypair::{parse_signer_source, SignerSourceKind, ASK_KEYWORD},
+    crate::keypair::{parse_source, SourceKind, ASK_KEYWORD},
     chrono::DateTime,
     solana_sdk::{
         clock::{Epoch, Slot},
@@ -89,16 +89,13 @@ where
         .map_err(|err| format!("{err}"))
 }
 
-// Return an error if a `SignerSourceKind::Prompt` cannot be parsed
+// Return an error if a `SourceKind::Prompt` cannot be parsed
 pub fn is_prompt_signer_source(string: &str) -> Result<(), String> {
     if string == ASK_KEYWORD {
         return Ok(());
     }
-    match parse_signer_source(string)
-        .map_err(|err| format!("{err}"))?
-        .kind
-    {
-        SignerSourceKind::Prompt => Ok(()),
+    match parse_source(string).map_err(|err| format!("{err}"))?.kind {
+        SourceKind::Prompt => Ok(()),
         _ => Err(format!(
             "Unable to parse input as `prompt:` URI scheme or `ASK` keyword: {string}"
         )),
@@ -119,11 +116,11 @@ pub fn is_valid_pubkey<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
 {
-    match parse_signer_source(string.as_ref())
+    match parse_source(string.as_ref())
         .map_err(|err| format!("{err}"))?
         .kind
     {
-        SignerSourceKind::Filepath(path) => is_keypair(path),
+        SourceKind::Filepath(path) => is_keypair(path),
         _ => Ok(()),
     }
 }

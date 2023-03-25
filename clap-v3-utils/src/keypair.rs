@@ -164,9 +164,9 @@ impl DefaultSigner {
 
     fn path(&self) -> Result<&str, Box<dyn std::error::Error>> {
         if !self.is_path_checked.borrow().deref() {
-            parse_signer_source(&self.path)
+            parse_source(&self.path)
                 .and_then(|s| {
-                    if let SignerSourceKind::Filepath(path) = &s.kind {
+                    if let SourceKind::Filepath(path) = &s.kind {
                         std::fs::metadata(path).map(|_| ()).map_err(|e| e.into())
                     } else {
                         Ok(())
@@ -369,14 +369,14 @@ impl DefaultSigner {
     }
 }
 
-pub(crate) struct SignerSource {
-    pub kind: SignerSourceKind,
+pub(crate) struct Source {
+    pub kind: SourceKind,
     pub derivation_path: Option<DerivationPath>,
     pub legacy: bool,
 }
 
-impl SignerSource {
-    fn new(kind: SignerSourceKind) -> Self {
+impl Source {
+    fn new(kind: SourceKind) -> Self {
         Self {
             kind,
             derivation_path: None,
@@ -384,7 +384,7 @@ impl SignerSource {
         }
     }
 
-    fn new_legacy(kind: SignerSourceKind) -> Self {
+    fn new_legacy(kind: SourceKind) -> Self {
         Self {
             kind,
             derivation_path: None,
@@ -393,13 +393,13 @@ impl SignerSource {
     }
 }
 
-const SIGNER_SOURCE_PROMPT: &str = "prompt";
-const SIGNER_SOURCE_FILEPATH: &str = "file";
-const SIGNER_SOURCE_USB: &str = "usb";
-const SIGNER_SOURCE_STDIN: &str = "stdin";
-const SIGNER_SOURCE_PUBKEY: &str = "pubkey";
+const SOURCE_PROMPT: &str = "prompt";
+const SOURCE_FILEPATH: &str = "file";
+const SOURCE_USB: &str = "usb";
+const SOURCE_STDIN: &str = "stdin";
+const SOURCE_PUBKEY: &str = "pubkey";
 
-pub(crate) enum SignerSourceKind {
+pub(crate) enum SourceKind {
     Prompt,
     Filepath(String),
     Usb(RemoteWalletLocator),
@@ -407,19 +407,19 @@ pub(crate) enum SignerSourceKind {
     Pubkey(Pubkey),
 }
 
-impl AsRef<str> for SignerSourceKind {
+impl AsRef<str> for SourceKind {
     fn as_ref(&self) -> &str {
         match self {
-            Self::Prompt => SIGNER_SOURCE_PROMPT,
-            Self::Filepath(_) => SIGNER_SOURCE_FILEPATH,
-            Self::Usb(_) => SIGNER_SOURCE_USB,
-            Self::Stdin => SIGNER_SOURCE_STDIN,
-            Self::Pubkey(_) => SIGNER_SOURCE_PUBKEY,
+            Self::Prompt => SOURCE_PROMPT,
+            Self::Filepath(_) => SOURCE_FILEPATH,
+            Self::Usb(_) => SOURCE_USB,
+            Self::Stdin => SOURCE_STDIN,
+            Self::Pubkey(_) => SOURCE_PUBKEY,
         }
     }
 }
 
-impl std::fmt::Debug for SignerSourceKind {
+impl std::fmt::Debug for SourceKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s: &str = self.as_ref();
         write!(f, "{s}")
@@ -427,7 +427,7 @@ impl std::fmt::Debug for SignerSourceKind {
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum SignerSourceError {
+pub(crate) enum SourceError {
     #[error("unrecognized signer source")]
     UnrecognizedSource,
     #[error(transparent)]
@@ -438,9 +438,7 @@ pub(crate) enum SignerSourceError {
     IoError(#[from] std::io::Error),
 }
 
-pub(crate) fn parse_signer_source<S: AsRef<str>>(
-    source: S,
-) -> Result<SignerSource, SignerSourceError> {
+pub(crate) fn parse_source<S: AsRef<str>>(source: S) -> Result<Source, SourceError> {
     let source = source.as_ref();
     let source = {
         #[cfg(target_family = "windows")]
@@ -462,43 +460,43 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
         }
     };
     match uriparse::URIReference::try_from(source.as_str()) {
-        Err(_) => Err(SignerSourceError::UnrecognizedSource),
+        Err(_) => Err(SourceError::UnrecognizedSource),
         Ok(uri) => {
             if let Some(scheme) = uri.scheme() {
                 let scheme = scheme.as_str().to_ascii_lowercase();
                 match scheme.as_str() {
-                    SIGNER_SOURCE_PROMPT => Ok(SignerSource {
-                        kind: SignerSourceKind::Prompt,
+                    SOURCE_PROMPT => Ok(Source {
+                        kind: SourceKind::Prompt,
                         derivation_path: DerivationPath::from_uri_any_query(&uri)?,
                         legacy: false,
                     }),
-                    SIGNER_SOURCE_FILEPATH => Ok(SignerSource::new(SignerSourceKind::Filepath(
-                        uri.path().to_string(),
-                    ))),
-                    SIGNER_SOURCE_USB => Ok(SignerSource {
-                        kind: SignerSourceKind::Usb(RemoteWalletLocator::new_from_uri(&uri)?),
+                    SOURCE_FILEPATH => {
+                        Ok(Source::new(SourceKind::Filepath(uri.path().to_string())))
+                    }
+                    SOURCE_USB => Ok(Source {
+                        kind: SourceKind::Usb(RemoteWalletLocator::new_from_uri(&uri)?),
                         derivation_path: DerivationPath::from_uri_key_query(&uri)?,
                         legacy: false,
                     }),
-                    SIGNER_SOURCE_STDIN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
+                    SOURCE_STDIN => Ok(Source::new(SourceKind::Stdin)),
                     _ => {
                         #[cfg(target_family = "windows")]
                         // On Windows, an absolute path's drive letter will be parsed as the URI
                         // scheme. Assume a filepath source in case of a single character shceme.
                         if scheme.len() == 1 {
-                            return Ok(SignerSource::new(SignerSourceKind::Filepath(source)));
+                            return Ok(Source::new(SourceKind::Filepath(source)));
                         }
-                        Err(SignerSourceError::UnrecognizedSource)
+                        Err(SourceError::UnrecognizedSource)
                     }
                 }
             } else {
                 match source.as_str() {
-                    STDOUT_OUTFILE_TOKEN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
-                    ASK_KEYWORD => Ok(SignerSource::new_legacy(SignerSourceKind::Prompt)),
+                    STDOUT_OUTFILE_TOKEN => Ok(Source::new(SourceKind::Stdin)),
+                    ASK_KEYWORD => Ok(Source::new_legacy(SourceKind::Prompt)),
                     _ => match Pubkey::from_str(source.as_str()) {
-                        Ok(pubkey) => Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey))),
+                        Ok(pubkey) => Ok(Source::new(SourceKind::Pubkey(pubkey))),
                         Err(_) => std::fs::metadata(source.as_str())
-                            .map(|_| SignerSource::new(SignerSourceKind::Filepath(source)))
+                            .map(|_| Source::new(SourceKind::Filepath(source)))
                             .map_err(|err| err.into()),
                     },
                 }
@@ -755,13 +753,13 @@ pub fn signer_from_path_with_config(
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     config: &SignerFromPathConfig,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
-    let SignerSource {
+    let Source {
         kind,
         derivation_path,
         legacy,
-    } = parse_signer_source(path)?;
+    } = parse_source(path)?;
     match kind {
-        SignerSourceKind::Prompt => {
+        SourceKind::Prompt => {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
             Ok(Box::new(keypair_from_seed_phrase(
                 keypair_name,
@@ -771,7 +769,7 @@ pub fn signer_from_path_with_config(
                 legacy,
             )?))
         }
-        SignerSourceKind::Filepath(path) => match read_keypair_file(&path) {
+        SourceKind::Filepath(path) => match read_keypair_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("could not read keypair file \"{path}\". Run \"solana-keygen new\" to create a keypair file: {e}"),
@@ -779,11 +777,11 @@ pub fn signer_from_path_with_config(
             .into()),
             Ok(file) => Ok(Box::new(file)),
         },
-        SignerSourceKind::Stdin => {
+        SourceKind::Stdin => {
             let mut stdin = std::io::stdin();
             Ok(Box::new(read_keypair(&mut stdin)?))
         }
-        SignerSourceKind::Usb(locator) => {
+        SourceKind::Usb(locator) => {
             if wallet_manager.is_none() {
                 *wallet_manager = maybe_wallet_manager()?;
             }
@@ -799,7 +797,7 @@ pub fn signer_from_path_with_config(
                 Err(RemoteWalletError::NoDeviceFound.into())
             }
         }
-        SignerSourceKind::Pubkey(pubkey) => {
+        SourceKind::Pubkey(pubkey) => {
             let presigner = pubkeys_sigs_of(matches, SIGNER_ARG.name)
                 .as_ref()
                 .and_then(|presigners| presigner_from_pubkey_sigs(&pubkey, presigners));
@@ -861,9 +859,9 @@ pub fn pubkey_from_path(
     keypair_name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Pubkey, Box<dyn error::Error>> {
-    let SignerSource { kind, .. } = parse_signer_source(path)?;
+    let Source { kind, .. } = parse_source(path)?;
     match kind {
-        SignerSourceKind::Pubkey(pubkey) => Ok(pubkey),
+        SourceKind::Pubkey(pubkey) => Ok(pubkey),
         _ => Ok(signer_from_path(matches, path, keypair_name, wallet_manager)?.pubkey()),
     }
 }
@@ -874,13 +872,13 @@ pub fn resolve_signer_from_path(
     keypair_name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Option<String>, Box<dyn error::Error>> {
-    let SignerSource {
+    let Source {
         kind,
         derivation_path,
         legacy,
-    } = parse_signer_source(path)?;
+    } = parse_source(path)?;
     match kind {
-        SignerSourceKind::Prompt => {
+        SourceKind::Prompt => {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
             // This method validates the seed phrase, but returns `None` because there is no path
             // on disk or to a device
@@ -893,7 +891,7 @@ pub fn resolve_signer_from_path(
             )
             .map(|_| None)
         }
-        SignerSourceKind::Filepath(path) => match read_keypair_file(&path) {
+        SourceKind::Filepath(path) => match read_keypair_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!(
@@ -904,13 +902,13 @@ pub fn resolve_signer_from_path(
             .into()),
             Ok(_) => Ok(Some(path.to_string())),
         },
-        SignerSourceKind::Stdin => {
+        SourceKind::Stdin => {
             let mut stdin = std::io::stdin();
             // This method validates the keypair from stdin, but returns `None` because there is no
             // path on disk or to a device
             read_keypair(&mut stdin).map(|_| None)
         }
-        SignerSourceKind::Usb(locator) => {
+        SourceKind::Usb(locator) => {
             if wallet_manager.is_none() {
                 *wallet_manager = maybe_wallet_manager()?;
             }
@@ -1008,13 +1006,13 @@ fn encodable_key_from_path<K: EncodableKey>(
     keypair_name: &str,
     confirm_pubkey: bool,
 ) -> Result<K, Box<dyn error::Error>> {
-    let SignerSource {
+    let Source {
         kind,
         derivation_path,
         legacy,
-    } = parse_signer_source(path)?;
+    } = parse_source(path)?;
     match kind {
-        SignerSourceKind::Prompt => {
+        SourceKind::Prompt => {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
             Ok(encodable_key_from_seed_phrase(
                 keypair_name,
@@ -1024,7 +1022,7 @@ fn encodable_key_from_path<K: EncodableKey>(
                 legacy,
             )?)
         }
-        SignerSourceKind::Filepath(path) => match K::read_keypair_file(&path) {
+        SourceKind::Filepath(path) => match K::read_keypair_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!(
@@ -1035,7 +1033,7 @@ fn encodable_key_from_path<K: EncodableKey>(
             .into()),
             Ok(file) => Ok(file),
         },
-        SignerSourceKind::Stdin => {
+        SourceKind::Stdin => {
             let mut stdin = std::io::stdin();
             Ok(K::read_keypair(&mut stdin)?)
         }
@@ -1191,41 +1189,39 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_signer_source() {
+    fn test_parse_source() {
         assert!(matches!(
-            parse_signer_source(STDOUT_OUTFILE_TOKEN).unwrap(),
-            SignerSource {
-                kind: SignerSourceKind::Stdin,
+            parse_source(STDOUT_OUTFILE_TOKEN).unwrap(),
+            Source {
+                kind: SourceKind::Stdin,
                 derivation_path: None,
                 legacy: false,
             }
         ));
         let stdin = "stdin:".to_string();
         assert!(matches!(
-            parse_signer_source(stdin).unwrap(),
-            SignerSource {
-                kind: SignerSourceKind::Stdin,
+            parse_source(stdin).unwrap(),
+            Source {
+                kind: SourceKind::Stdin,
                 derivation_path: None,
                 legacy: false,
             }
         ));
         assert!(matches!(
-            parse_signer_source(ASK_KEYWORD).unwrap(),
-            SignerSource {
-                kind: SignerSourceKind::Prompt,
+            parse_source(ASK_KEYWORD).unwrap(),
+            Source {
+                kind: SourceKind::Prompt,
                 derivation_path: None,
                 legacy: true,
             }
         ));
         let pubkey = Pubkey::new_unique();
-        assert!(
-            matches!(parse_signer_source(pubkey.to_string()).unwrap(), SignerSource {
-                kind: SignerSourceKind::Pubkey(p),
+        assert!(matches!(parse_source(pubkey.to_string()).unwrap(), Source {
+                kind: SourceKind::Pubkey(p),
                 derivation_path: None,
                 legacy: false,
             }
-            if p == pubkey)
-        );
+            if p == pubkey));
 
         // Set up absolute and relative path strs
         let file0 = NamedTempFile::new().unwrap();
@@ -1239,28 +1235,24 @@ mod tests {
         assert!(path.is_relative());
         let relative_path_str = path.to_str().unwrap();
 
-        assert!(
-            matches!(parse_signer_source(absolute_path_str).unwrap(), SignerSource {
-                kind: SignerSourceKind::Filepath(p),
+        assert!(matches!(parse_source(absolute_path_str).unwrap(), Source {
+                kind: SourceKind::Filepath(p),
                 derivation_path: None,
                 legacy: false,
-            } if p == absolute_path_str)
-        );
-        assert!(
-            matches!(parse_signer_source(relative_path_str).unwrap(), SignerSource {
-                kind: SignerSourceKind::Filepath(p),
+            } if p == absolute_path_str));
+        assert!(matches!(parse_source(relative_path_str).unwrap(), Source {
+                kind: SourceKind::Filepath(p),
                 derivation_path: None,
                 legacy: false,
-            } if p == relative_path_str)
-        );
+            } if p == relative_path_str));
 
         let usb = "usb://ledger".to_string();
         let expected_locator = RemoteWalletLocator {
             manufacturer: Manufacturer::Ledger,
             pubkey: None,
         };
-        assert!(matches!(parse_signer_source(usb).unwrap(), SignerSource {
-                kind: SignerSourceKind::Usb(u),
+        assert!(matches!(parse_source(usb).unwrap(), Source {
+                kind: SourceKind::Usb(u),
                 derivation_path: None,
                 legacy: false,
             } if u == expected_locator));
@@ -1270,38 +1262,35 @@ mod tests {
             pubkey: None,
         };
         let expected_derivation_path = Some(DerivationPath::new_bip44(Some(0), Some(0)));
-        assert!(matches!(parse_signer_source(usb).unwrap(), SignerSource {
-                kind: SignerSourceKind::Usb(u),
+        assert!(matches!(parse_source(usb).unwrap(), Source {
+                kind: SourceKind::Usb(u),
                 derivation_path: d,
                 legacy: false,
             } if u == expected_locator && d == expected_derivation_path));
-        // Catchall into SignerSource::Filepath fails
+        // Catchall into Source::Filepath fails
         let junk = "sometextthatisnotapubkeyorfile".to_string();
         assert!(Pubkey::from_str(&junk).is_err());
-        assert!(matches!(
-            parse_signer_source(&junk),
-            Err(SignerSourceError::IoError(_))
-        ));
+        assert!(matches!(parse_source(&junk), Err(SourceError::IoError(_))));
 
         let prompt = "prompt:".to_string();
         assert!(matches!(
-            parse_signer_source(prompt).unwrap(),
-            SignerSource {
-                kind: SignerSourceKind::Prompt,
+            parse_source(prompt).unwrap(),
+            Source {
+                kind: SourceKind::Prompt,
                 derivation_path: None,
                 legacy: false,
             }
         ));
         assert!(
-            matches!(parse_signer_source(format!("file:{absolute_path_str}")).unwrap(), SignerSource {
-                kind: SignerSourceKind::Filepath(p),
+            matches!(parse_source(format!("file:{absolute_path_str}")).unwrap(), Source {
+                kind: SourceKind::Filepath(p),
                 derivation_path: None,
                 legacy: false,
             } if p == absolute_path_str)
         );
         assert!(
-            matches!(parse_signer_source(format!("file:{relative_path_str}")).unwrap(), SignerSource {
-                kind: SignerSourceKind::Filepath(p),
+            matches!(parse_source(format!("file:{relative_path_str}")).unwrap(), Source {
+                kind: SourceKind::Filepath(p),
                 derivation_path: None,
                 legacy: false,
             } if p == relative_path_str)
