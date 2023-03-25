@@ -96,11 +96,7 @@ impl LeaderBankNotifier {
             })
             .unwrap();
 
-        if !wait_timeout_result.timed_out() {
-            state.slot
-        } else {
-            None
-        }
+        (!wait_timeout_result.timed_out()).then(|| state.slot.expect("some slot when completed"))
     }
 
     /// Helper function to get or wait for the `InProgress` status with a given `MutexGuard`.
