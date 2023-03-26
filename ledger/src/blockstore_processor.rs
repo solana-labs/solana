@@ -285,11 +285,11 @@ fn process_batches(
     if !bank.with_scheduler() {
         execute_batches(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit)
     } else {
-        send_batches_to_scheduler(bank, batches)
+        send_batches_to_scheduler_for_execution(bank, batches)
     }
 }
 
-fn send_batches_to_scheduler(bank: &Arc<Bank>, batches: &[TransactionBatchWithIndexes]) -> Result<()> {
+fn send_batches_to_scheduler_for_execution(bank: &Arc<Bank>, batches: &[TransactionBatchWithIndexes]) -> Result<()> {
     for batch in batches {
         let TransactionBatchWithIndexes {
             batch,
