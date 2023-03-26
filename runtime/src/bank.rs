@@ -8167,9 +8167,9 @@ impl Bank {
             Borrowed(&'a mut T),
             Owned(T)
         }
-        impl<'a, T> Deref for Cow2<'a, T> {
+        impl<'a, T> DerefMut for Cow2<'a, T> {
             type Target = T;
-            fn deref(&self) -> &<Self as Deref>::Target { 
+            fn deref_mut(&mut self) -> &<Self as Deref>::Target { 
                 match self {
                     Cow2::Borrowed(t) => t,
                     Cow2::Owned(t) => &t,
