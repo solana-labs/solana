@@ -125,7 +125,6 @@ impl SchedulerPool {
             schedulers.len(),
             schedulers.len() + 1
         );
-        scheduler.clear_last_termination();
 
         schedulers.push(scheduler);
     }
@@ -941,9 +940,7 @@ impl LikeScheduler for Scheduler {
         info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
         */
 
-        if is_restart {
-            self.do_clear_stop(true);
-        }
+        self.do_clear_stop(is_restart);
 
         info!(
             "Scheduler::gracefully_stop(): {} waiting done.. from_internal: {from_internal} is_restart: {is_restart}", label,
@@ -967,10 +964,6 @@ impl LikeScheduler for Scheduler {
 impl LikePooledScheduler for Scheduler {
     fn replace_scheduler_context(&self, context: SchedulerContext) {
         self.replace_scheduler_context_inner(context);
-    }
-
-    fn clear_last_termination(&mut self) {
-        self.do_clear_stop(false);
     }
 }
 
