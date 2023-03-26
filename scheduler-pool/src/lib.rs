@@ -912,7 +912,7 @@ impl LikeScheduler for Scheduler {
         self.timings_and_result.take().unwrap()
     }
 
-    fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool) {
+    fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool) -> Option<(ExecuteTimings, Result<()>)> {
         self.do_trigger_stop(is_restart);
         let label = format!("id_{:016x}", self.random_id); //SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
         info!(
@@ -952,6 +952,11 @@ impl LikeScheduler for Scheduler {
         info!(
             "Scheduler::gracefully_stop(): {} waiting done.. from_internal: {from_internal} is_restart: {is_restart}", label,
         );
+        if !is_restart {
+            self.take_termination_timings_and_result()
+        } else {
+            None
+        }
     }
 
     fn trigger_termination(&mut self) {

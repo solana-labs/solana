@@ -1182,7 +1182,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
 
     fn trigger_termination(&mut self);
-    fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool);
+    fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool) -> Option<(ExecuteTimings, Result<()>)> ;
     fn take_termination_timings_and_result(&mut self) -> (ExecuteTimings, Result<()>);
 
     // drop with exit atomicbool integration??
@@ -8170,7 +8170,6 @@ impl Bank {
                 scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART);
             }
             if let Some(mut scheduler) = (!IS_RESTART).then(|| s.take()).flatten() {
-                let timing_and_result = scheduler.take_termination_timings_and_result();
                 scheduler.scheduler_pool().return_to_pool(scheduler);
                 Some(timing_and_result)
             } else {
