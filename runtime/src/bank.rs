@@ -8165,9 +8165,9 @@ impl Bank {
             info!("wait_for_scheduler(VIA_DROP): {}", std::backtrace::Backtrace::force_capture());
         }
         let a = if VIA_DROP {
-            3
+            3_usize
         } else {
-            4
+            4_isize
         };
 
         if let Some(mut scheduler) = s.take() {
