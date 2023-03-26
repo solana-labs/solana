@@ -8170,7 +8170,7 @@ impl Bank {
         } else {
             s.take().map(|a| Cow::Owned(i.clone()))
         };
-        if let Some(mut scheduler) = s {
+        if let Some(mut scheduler) = s.take() {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
             scheduler.wait_for_termination(FROM_INTERNAL, false);
