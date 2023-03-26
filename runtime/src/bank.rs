@@ -8174,7 +8174,7 @@ impl Bank {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
             scheduler.wait_for_termination(FROM_INTERNAL, false);
-            if let Some(sjjj) = ss {
+            if let Some(Cow::Owned(sjjj)) = ss {
                 let timing_and_result = scheduler.take_termination_timings_and_result();
                 scheduler.scheduler_pool().return_to_pool(scheduler);
                 Some(timing_and_result)
