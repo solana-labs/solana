@@ -8164,8 +8164,9 @@ impl Bank {
             info!("wait_for_scheduler(VIA_DROP): {}", std::backtrace::Backtrace::force_capture());
         }
 
+        let i = 3;
         let ss = if IS_RESTART {
-            s.as_mut().map(|a| Cow::Borrowed(3))
+            s.as_mut().map(|a| Cow::Borrowed(&i))
         } else {
             s.take()
         };
