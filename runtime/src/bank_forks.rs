@@ -107,8 +107,8 @@ pub struct BankForks {
 }
 
 pub trait InstalledSchedulerPool: Send + Sync + std::fmt::Debug {
-    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikePooledScheduler>;
-    fn return_to_pool(&self, scheduler: Box<dyn LikePooledScheduler>);
+    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn InstalledScheduler>;
+    fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler>);
     // drop with exit atomicbool integration??
 }
 
