@@ -9,9 +9,8 @@ use solana_runtime::bank::Bank;
 use solana_runtime::bank::LoadAndExecuteTransactionsOutput;
 use solana_runtime::bank::CommitTransactionCounts;
 use std::borrow::Cow;
-use solana_runtime::bank::LikeScheduler;
-use solana_runtime::bank_forks::LikePooledScheduler;
-use solana_runtime::bank_forks::LikeSchedulerPool;
+use solana_runtime::bank::InstalledScheduler;
+use solana_runtime::bank_forks::InstalledSchedulerPool;
 use solana_runtime::bank::SchedulerContext;
 use std::sync::atomic::AtomicBool;
 use solana_sdk::transaction::SanitizedTransaction;
@@ -45,7 +44,7 @@ pub use solana_scheduler::Mode;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
-    schedulers: std::sync::Mutex<Vec<Box<dyn LikePooledScheduler>>>,
+    schedulers: std::sync::Mutex<Vec<Box<dyn InstalledScheduler>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
@@ -66,7 +65,7 @@ impl SchedulerPool {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
 
-    pub fn new_boxed(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>) -> Box<dyn LikeSchedulerPool> {
+    pub fn new_boxed(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>) -> Box<dyn InstalledSchedulerPool> {
         Box::new(SchedulerPoolWrapper::new(poh_recorder, log_messages_bytes_limit, transaction_status_sender, replay_vote_sender))
     }
 }
@@ -92,7 +91,7 @@ impl SchedulerPoolWrapper {
 }
 
 impl SchedulerPool {
-    fn take_from_pool(self: &Arc<Self>, context: Option<SchedulerContext>) -> Box<dyn LikePooledScheduler> {
+    fn take_from_pool(self: &Arc<Self>, context: Option<SchedulerContext>) -> Box<dyn InstalledScheduler> {
         let mut schedulers = self.schedulers.lock().unwrap();
         let maybe_scheduler = schedulers.pop();
         if let Some(scheduler) = maybe_scheduler {
@@ -116,7 +115,7 @@ impl SchedulerPool {
         }
     }
 
-    fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn LikePooledScheduler>) {
+    fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn InstalledScheduler>) {
         let mut schedulers = self.schedulers.lock().unwrap();
 
         trace!(
@@ -130,12 +129,12 @@ impl SchedulerPool {
     }
 }
 
-impl LikeSchedulerPool for SchedulerPoolWrapper {
-    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikePooledScheduler> {
+impl InstalledSchedulerPool for SchedulerPoolWrapper {
+    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn InstalledScheduler> {
         self.0.take_from_pool(Some(context))
     }
 
-    fn return_to_pool(&self, scheduler: Box<dyn LikePooledScheduler>) {
+    fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler>) {
         self.0.return_to_pool(scheduler);
     }
 }
@@ -861,7 +860,7 @@ impl Drop for Scheduler {
 }
 
 
-impl LikeScheduler for Scheduler {
+impl InstalledScheduler for Scheduler {
     fn random_id(&self) -> u64 {
         self.random_id
     }
@@ -956,12 +955,12 @@ impl LikeScheduler for Scheduler {
         self.do_trigger_stop(false);
     }
 
-    fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool> {
+    fn scheduler_pool(&self) -> Box<dyn InstalledSchedulerPool> {
         Box::new(SchedulerPoolWrapper(self.scheduler_pool.clone()))
     }
 }
 
-impl LikePooledScheduler for Scheduler {
+impl InstalledScheduler for Scheduler {
     fn replace_scheduler_context(&self, context: SchedulerContext) {
         self.replace_scheduler_context_inner(context);
     }
