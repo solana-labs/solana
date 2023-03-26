@@ -8178,6 +8178,8 @@ impl Bank {
                 let timing_and_result = scheduler.take_termination_timings_and_result();
                 scheduler.scheduler_pool().return_to_pool(scheduler);
                 Some(timing_and_result)
+            } else {
+                None
             }
         } else {
             warn!(
