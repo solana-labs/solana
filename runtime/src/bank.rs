@@ -3709,11 +3709,6 @@ impl Bank {
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
-        debug!(
-            "register_recent_blockhash: slot: {} reinitializing the scheduler: start",
-            self.slot()
-        );
-
         self.wait_for_reusable_scheduler();
         // Only acquire the write lock for the blockhash queue on block boundaries because
         // readers can starve this write lock acquisition and ticks would be slowed down too
@@ -8207,6 +8202,11 @@ impl Bank {
     fn wait_for_reusable_scheduler(&self) {
         let mut s = self.scheduler.write().unwrap();
         if let Some(mut scheduler) = s.as_mut() {
+            debug!(
+                "register_recent_blockhash: slot: {} reinitializing the scheduler: start",
+                self.slot()
+            );
+
             scheduler.gracefully_stop(false, true);
         }
     }
