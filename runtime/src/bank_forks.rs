@@ -107,9 +107,12 @@ pub struct BankForks {
 }
 
 pub trait LikeSchedulerPool: Send + Sync + std::fmt::Debug {
-    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikeScheduler>;
-    fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>);
+    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikePooledScheduler>;
+    fn return_to_pool(&self, scheduler: Box<dyn LikePooledScheduler>);
     // drop with exit atomicbool integration??
+}
+
+pub trait LikePooledScheduler: LikeScheduler {
 }
 
 impl Index<u64> for BankForks {
@@ -231,7 +234,7 @@ impl BankForks {
     }
 
     // take Mode when we support to use unified_scheduler for banking.
-    fn add_new_bank(&mut self, bank: Bank, for_replaying: bool, inherited_scheduler: Option<Box<dyn LikeScheduler>>) -> Arc<Bank> {
+    fn add_new_bank(&mut self, bank: Bank, for_replaying: bool, inherited_scheduler: Option<Box<dyn LikePooledScheduler>>) -> Arc<Bank> {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), SchedulableBank(bank.clone()));
         assert!(prev.is_none());

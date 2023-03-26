@@ -10,6 +10,7 @@ use solana_runtime::bank::LoadAndExecuteTransactionsOutput;
 use solana_runtime::bank::CommitTransactionCounts;
 use std::borrow::Cow;
 use solana_runtime::bank::LikeScheduler;
+use solana_runtime::bank_forks::LikePooledScheduler;
 use solana_runtime::bank_forks::LikeSchedulerPool;
 use solana_runtime::bank::SchedulerContext;
 use std::sync::atomic::AtomicBool;
@@ -44,7 +45,7 @@ pub use solana_scheduler::Mode;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
-    schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler>>>,
+    schedulers: std::sync::Mutex<Vec<Box<dyn LikePooledScheduler>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
@@ -91,7 +92,7 @@ impl SchedulerPoolWrapper {
 }
 
 impl SchedulerPool {
-    fn take_from_pool(self: &Arc<Self>, context: Option<SchedulerContext>) -> Box<dyn LikeScheduler> {
+    fn take_from_pool(self: &Arc<Self>, context: Option<SchedulerContext>) -> Box<dyn LikePooledScheduler> {
         let mut schedulers = self.schedulers.lock().unwrap();
         let maybe_scheduler = schedulers.pop();
         if let Some(scheduler) = maybe_scheduler {
@@ -115,7 +116,7 @@ impl SchedulerPool {
         }
     }
 
-    fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn LikeScheduler>) {
+    fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn LikePooledScheduler>) {
         let mut schedulers = self.schedulers.lock().unwrap();
 
         trace!(
@@ -131,11 +132,11 @@ impl SchedulerPool {
 }
 
 impl LikeSchedulerPool for SchedulerPoolWrapper {
-    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikeScheduler> {
+    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikePooledScheduler> {
         self.0.take_from_pool(Some(context))
     }
 
-    fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>) {
+    fn return_to_pool(&self, scheduler: Box<dyn LikePooledScheduler>) {
         self.0.return_to_pool(scheduler);
     }
 }
@@ -969,6 +970,9 @@ impl LikeScheduler for Scheduler {
     fn replace_scheduler_context(&self, context: SchedulerContext) {
         self.replace_scheduler_context_inner(context);
     }
+}
+
+impl LikePooledScheduler for Scheduler {
 }
 
 fn send_transaction_status(sender: &TransactionStatusSender, pre: Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, bank: &Arc<Bank>, batch: &TransactionBatch, mut mint_decimals: &mut HashMap<Pubkey, u8>, tx_results: Option<TransactionResults>, commited_first_transaction_index: Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> {

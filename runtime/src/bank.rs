@@ -54,7 +54,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         bank::metrics::*,
-        bank_forks::LikeSchedulerPool,
+        bank_forks::{LikeSchedulerPool, LikePooledScheduler},
         blockhash_queue::BlockhashQueue,
         builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
@@ -1171,7 +1171,7 @@ pub struct Bank {
 
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
-    scheduler: RwLock<Option<Box<dyn LikeScheduler>>>,
+    scheduler: RwLock<Option<Box<dyn LikePooledScheduler>>>,
 }
 
 pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
@@ -8168,7 +8168,7 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub(crate) fn install_scheduler(&self, scheduler: Box<dyn LikeScheduler>) {
+    pub(crate) fn install_scheduler(&self, scheduler: Box<dyn LikePooledScheduler>) {
         let mut s = self.scheduler.write().unwrap();
         assert!(s.is_none());
         *s = Some(scheduler)
