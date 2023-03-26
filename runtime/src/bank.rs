@@ -54,7 +54,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         bank::metrics::*,
-        bank_forks::{LikeSchedulerPool, LikePooledScheduler},
+        bank_forks::InstalledSchedulerPool,
         blockhash_queue::BlockhashQueue,
         builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
@@ -1172,19 +1172,22 @@ pub struct Bank {
 
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
-    scheduler: RwLock<Option<Box<dyn LikePooledScheduler>>>,
+    scheduler: RwLock<Option<Box<dyn InstalledScheduler>>>,
 }
 
-pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
+pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
     fn random_id(&self) -> u64;
-    fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
+    fn scheduler_pool(&self) -> Box<dyn InstalledSchedulerPool>;
 
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
 
     fn trigger_termination(&mut self);
     fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool) -> Option<(ExecuteTimings, Result<()>)> ;
 
+    fn replace_scheduler_context(&self, context: SchedulerContext);
+
     // drop with exit atomicbool integration??
+
 }
 
 struct VoteWithStakeDelegations {
@@ -8150,7 +8153,7 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub(crate) fn install_scheduler(&self, scheduler: Box<dyn LikePooledScheduler>) {
+    pub(crate) fn install_scheduler(&self, scheduler: Box<dyn InstalledScheduler>) {
         let mut s = self.scheduler.write().unwrap();
         assert!(s.is_none());
         *s = Some(scheduler)

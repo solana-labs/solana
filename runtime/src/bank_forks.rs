@@ -3,7 +3,7 @@
 use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
-        bank::{Bank, LikeScheduler, SchedulerContext},
+        bank::{Bank, InstalledScheduler, SchedulerContext},
         epoch_accounts_hash,
         snapshot_config::SnapshotConfig,
     },
@@ -89,8 +89,8 @@ impl std::ops::Deref for SchedulableBank {
 enum InstalledSchedulerPool {
     #[default]
     NotInstalled,
-    ReplayOnly(Box<dyn LikeSchedulerPool>),
-    Full(Box<dyn LikeSchedulerPool>),
+    ReplayOnly(Box<dyn InstalledSchedulerPool>),
+    Full(Box<dyn InstalledSchedulerPool>),
 }
 
 pub struct BankForks {
@@ -106,14 +106,10 @@ pub struct BankForks {
     scheduler_pool: InstalledSchedulerPool,
 }
 
-pub trait LikeSchedulerPool: Send + Sync + std::fmt::Debug {
+pub trait InstalledSchedulerPool: Send + Sync + std::fmt::Debug {
     fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikePooledScheduler>;
     fn return_to_pool(&self, scheduler: Box<dyn LikePooledScheduler>);
     // drop with exit atomicbool integration??
-}
-
-pub trait LikePooledScheduler: LikeScheduler {
-    fn replace_scheduler_context(&self, context: SchedulerContext);
 }
 
 impl Index<u64> for BankForks {
@@ -251,14 +247,14 @@ impl BankForks {
         bank
     }
 
-    fn get_scheduler_pool(&self, for_replaying: bool) -> Option<(solana_scheduler::Mode, &Box<dyn LikeSchedulerPool>)> {
+    fn get_scheduler_pool(&self, for_replaying: bool) -> Option<(solana_scheduler::Mode, &Box<dyn InstalledSchedulerPool>)> {
         match (for_replaying, &self.scheduler_pool) {
             (false, _) | (true, InstalledSchedulerPool::NotInstalled) => None,
             (true, InstalledSchedulerPool::ReplayOnly(scheduler_pool) | InstalledSchedulerPool::Full(scheduler_pool)) => Some((solana_scheduler::Mode::Replaying, scheduler_pool))
         }
     }
 
-    pub fn install_scheduler_pool(&mut self, pool: Box<dyn LikeSchedulerPool>, replay_only: bool) {
+    pub fn install_scheduler_pool(&mut self, pool: Box<dyn InstalledSchedulerPool>, replay_only: bool) {
         use assert_matches::assert_matches;
         assert_matches!(&self.scheduler_pool, InstalledSchedulerPool::NotInstalled);
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
