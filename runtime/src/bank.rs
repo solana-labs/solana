@@ -8168,6 +8168,7 @@ impl Bank {
             Owned(T)
         }
         impl<'a, T> Deref for Cow2<'a, T> {
+            type Target = T;
         }
 
         let i = 3_isize;
