@@ -954,7 +954,7 @@ impl LikeScheduler for Scheduler {
         );
     }
 
-    fn trigger_stop(&mut self) {
+    fn trigger_termination(&mut self) {
         self.do_trigger_stop(false);
     }
 
