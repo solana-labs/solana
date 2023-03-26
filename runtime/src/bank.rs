@@ -8225,7 +8225,7 @@ impl Bank {
     }
 
     fn wait_for_reusable_scheduler(&self) {
-        self.do_wait_for_completed_scheduler::<false, false, true>();
+        assert_matches!(self.do_wait_for_completed_scheduler::<false, false, true>(), None);
     }
 
     /// Get the EAH that will be used by snapshots
