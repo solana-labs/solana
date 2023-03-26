@@ -908,7 +908,7 @@ impl LikeScheduler for Scheduler {
             .unwrap();
     }
 
-    fn take_timings_and_result(&mut self) -> (ExecuteTimings, Result<()>) {
+    fn take_termination_timings_and_result(&mut self) -> (ExecuteTimings, Result<()>) {
         self.timings_and_result.take().unwrap()
     }
 
