@@ -8166,7 +8166,7 @@ impl Bank {
 
         let i = 3_isize;
         let ss = if IS_RESTART {
-            s.as_mut().map(|a| Cow::Borrowed(&i))
+            s.as_mut().map(|a| Cow::Borrowed(a))
         } else {
             s.take().map(|a| Cow::Owned(a))
         };
