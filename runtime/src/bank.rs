@@ -8165,7 +8165,7 @@ impl Bank {
         }
 
         let ss = if IS_RESTART {
-            Cow::Borrowed(s.as_mut())
+            s.as_mut().map(Cow::Borrowed)
         } else {
             s.take()
         };
