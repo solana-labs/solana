@@ -983,7 +983,8 @@ impl SchedulerContext {
     pub fn drop_cyclically(mut self) -> bool {
         let mut did_drop = false;
         if let Ok(bank) = Arc::try_unwrap(self.bank) {
-            did_drop = bank.wait_for_scheduler_via_internal_drop();
+            bank.wait_for_scheduler_via_internal_drop();
+            did_drop = true;
         }
 
         did_drop
@@ -8205,8 +8206,8 @@ impl Bank {
         self.do_wait_for_scheduler::<true, false>()
     }
 
-    fn wait_for_scheduler_via_internal_drop(self) -> bool {
-        !matches!(self.do_wait_for_scheduler::<true, true>(), (_, Ok(false)))
+    fn wait_for_scheduler_via_internal_drop(self) {
+        assert!(!matches!(self.do_wait_for_scheduler::<true, true>(), (_, Ok(false))))
     }
 
     /// Get the EAH that will be used by snapshots
