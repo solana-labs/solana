@@ -8167,7 +8167,7 @@ impl Bank {
             Borrowed(&'a mut T),
             Owned(T)
         }
-        impl<T> Deref for Cow2<T> {
+        impl<'a, T> Deref for Cow2<'a, T> {
         }
 
         let i = 3_isize;
