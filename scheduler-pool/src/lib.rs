@@ -966,13 +966,12 @@ impl LikeScheduler for Scheduler {
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool> {
         Box::new(SchedulerPoolWrapper(self.scheduler_pool.clone()))
     }
-
-    fn replace_scheduler_context(&self, context: SchedulerContext) {
-        self.replace_scheduler_context_inner(context);
-    }
 }
 
 impl LikePooledScheduler for Scheduler {
+    fn replace_scheduler_context(&self, context: SchedulerContext) {
+        self.replace_scheduler_context_inner(context);
+    }
 }
 
 fn send_transaction_status(sender: &TransactionStatusSender, pre: Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, bank: &Arc<Bank>, batch: &TransactionBatch, mut mint_decimals: &mut HashMap<Pubkey, u8>, tx_results: Option<TransactionResults>, commited_first_transaction_index: Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> {
