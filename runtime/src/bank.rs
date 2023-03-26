@@ -8207,7 +8207,7 @@ impl Bank {
     }
 
     fn wait_for_completed_scheduler_via_internal_drop(self) {
-        assert!(!matches!(self.do_wait_for_scheduler::<true, true>(), (_, Ok(false))))
+        assert!(!matches!(self.do_wait_for_completed_scheduler::<true, true>(), (_, Ok(false))))
     }
 
     /// Get the EAH that will be used by snapshots
