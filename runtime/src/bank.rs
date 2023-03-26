@@ -8182,7 +8182,7 @@ impl Bank {
     }
 
     pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<()>) {
-        self.do_wait_for_completed_scheduler::<false, false>().map(|(_, r)| r).or_else(Ok(())
+        self.do_wait_for_completed_scheduler::<false, false>().map(|(_, r)| r).unwrap_or(Ok(()))
     }
 
     fn wait_for_completed_scheduler_via_drop(&self) -> (ExecuteTimings, Result<()>) {
