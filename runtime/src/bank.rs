@@ -8169,7 +8169,7 @@ impl Bank {
             if let Some(mut scheduler) = s.as_mut() {
                 scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART);
             }
-            if let Some(mut scheduler) = (!IS_RESTART).then(|| s.take()) {
+            if let Some(mut scheduler) = (!IS_RESTART).then(|| s.take()).flatten() {
                 let timing_and_result = scheduler.take_termination_timings_and_result();
                 scheduler.scheduler_pool().return_to_pool(scheduler);
                 Some(timing_and_result)
