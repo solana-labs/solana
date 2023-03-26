@@ -2618,7 +2618,7 @@ impl ReplayStage {
                             // bank is completed
                             continue;
                     },
-                    Ok(true | false) => {
+                    Ok(false | true) => {
                     },
                 };
 
