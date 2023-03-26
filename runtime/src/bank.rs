@@ -8211,7 +8211,7 @@ impl Bank {
 
     fn wait_for_reusable_scheduler(&self) {
         let mut scheduler = self.scheduler.write().unwrap();
-        let () = scheduler.as_mut().unwrap().gracefully_stop(false, true).unwrap();
+        scheduler.as_mut().unwrap().gracefully_stop(false, true).unwrap()
     }
 
     /// Get the EAH that will be used by snapshots
