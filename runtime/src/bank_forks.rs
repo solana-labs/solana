@@ -103,7 +103,7 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
-    scheduler_pool: InstalledSchedulerPool,
+    scheduler_pool: EnabledSchedulerPool,
 }
 
 pub trait InstalledSchedulerPool: Send + Sync + std::fmt::Debug {
