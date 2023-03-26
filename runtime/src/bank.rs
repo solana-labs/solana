@@ -8198,15 +8198,15 @@ impl Bank {
     }
 
     pub fn wait_for_scheduler(&self) -> (ExecuteTimings, Result<()>) {
-        self.do_wait_for_scheduler::<false>(false).1
+        self.do_wait_for_scheduler::<false, false>().1
     }
 
     pub fn wait_for_scheduler_via_drop(&self) -> (ExecuteTimings, Result<()>) {
-        self.do_wait_for_scheduler::<true>(false).1
+        self.do_wait_for_scheduler::<true, false>().1
     }
 
     pub fn drop_from_scheduler_thread(self) -> bool {
-        self.do_wait_for_scheduler::<true>(true).0
+        self.do_wait_for_scheduler::<true, true>().0
     }
 
     /// Get the EAH that will be used by snapshots
