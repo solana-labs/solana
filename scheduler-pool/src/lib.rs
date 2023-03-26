@@ -953,7 +953,7 @@ impl LikeScheduler for Scheduler {
             "Scheduler::gracefully_stop(): {} waiting done.. from_internal: {from_internal} is_restart: {is_restart}", label,
         );
 
-        (!is_restart).then(|true| self.take_termination_timings_and_result())
+        (!is_restart).then(|| self.take_termination_timings_and_result())
     }
 
     fn trigger_termination(&mut self) {
