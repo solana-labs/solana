@@ -8182,10 +8182,10 @@ impl Bank {
         if let Some(mut scheduler) = s.take() {
             info!("wait_for_scheduler({via_drop}): gracefully stopping bank ({})... from_internal: {from_internal} by {current_thread_name}", self.slot());
 
-            let () = scheduler.gracefully_stop(from_internal, false);
-            let e = scheduler.take_timings_and_result();
+            scheduler.gracefully_stop(from_internal, false);
+            let (timing, result) = scheduler.take_timings_and_result();
             scheduler.scheduler_pool().return_to_pool(scheduler);
-            (e.0, e.1.map(|()| true))
+            (timing, result.map(|()| true))
         } else {
             warn!(
                 "Bank::wait_for_scheduler(via_drop: {}) skipped from_internal: {from_internal} by {} ...",
