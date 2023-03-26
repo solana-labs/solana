@@ -8198,7 +8198,7 @@ impl Bank {
     }
 
     pub fn wait_for_scheduler(&self, via_drop: bool) -> (ExecuteTimings, Result<()>) {
-        self.do_wait_for_scheduler(via_drop, false).1
+        self.do_wait_for_scheduler::<false>(via_drop, false).1
     }
 
     pub fn drop_from_scheduler_thread(self) -> bool {
