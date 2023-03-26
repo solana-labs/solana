@@ -8157,14 +8157,14 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub fn do_wait_for_completed_scheduler<const VIA_DROP: bool, const FROM_INTERNAL: bool>(&self) -> (ExecuteTimings, Result<bool>) {
+    pub fn do_wait_for_completed_scheduler<const VIA_DROP: bool, const FROM_INTERNAL: bool, T>(&self) -> (ExecuteTimings, Result<bool>) {
         const DID_WAIT: bool = true;
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if VIA_DROP {
             info!("wait_for_scheduler(VIA_DROP): {}", std::backtrace::Backtrace::force_capture());
         }
-        let a = if VIA_DROP {
+        let a: T = if VIA_DROP {
             3_usize
         } else {
             4_isize
