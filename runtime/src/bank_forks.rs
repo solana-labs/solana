@@ -113,7 +113,7 @@ pub trait LikeSchedulerPool: Send + Sync + std::fmt::Debug {
 }
 
 pub trait LikePooledScheduler: LikeScheduler {
-    fn clear_termination(&mut self);
+    fn clear_last_termination(&mut self);
     fn replace_scheduler_context(&self, context: SchedulerContext);
 }
 
