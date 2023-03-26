@@ -8180,7 +8180,7 @@ impl Bank {
             fn deref_mut(&mut self) -> &mut <Self as Deref>::Target { 
                 match self {
                     Cow2::Borrowed(t) => t,
-                    Cow2::Owned(t) => &mut t,
+                    Cow2::Owned(t) => t,
                 }
             }
         }
