@@ -1183,7 +1183,6 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
 
     fn trigger_termination(&mut self);
     fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool) -> Option<(ExecuteTimings, Result<()>)> ;
-    fn take_termination_timings_and_result(&mut self) -> (ExecuteTimings, Result<()>);
 
     // drop with exit atomicbool integration??
 }
