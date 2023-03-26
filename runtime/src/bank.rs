@@ -1181,8 +1181,8 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
 
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
 
-    fn trigger_completion(&mut self);
-    fn wait_for_completion(&mut self, from_internal: bool, is_restart: bool);
+    fn trigger_termination(&mut self);
+    fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool);
     fn take_timings_and_result(&mut self) -> (ExecuteTimings, Result<()>);
 
     // drop with exit atomicbool integration??
@@ -8168,7 +8168,7 @@ impl Bank {
         if let Some(mut scheduler) = s.take() {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
-            scheduler.wait_for_completion(FROM_INTERNAL, false);
+            scheduler.wait_for_termination(FROM_INTERNAL, false);
             let (timing, result) = scheduler.take_timings_and_result();
             scheduler.scheduler_pool().return_to_pool(scheduler);
             (timing, result.map(|()| DID_WAIT))
@@ -8202,7 +8202,7 @@ impl Bank {
                 self.slot()
             );
 
-            scheduler.gracefully_stop(false, true);
+            scheduler.wait_for_termination(false, true);
             debug!(
                 "register_recent_blockhash: slot: {} reinitializing the scheduler: end",
                 self.slot()
