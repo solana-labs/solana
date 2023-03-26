@@ -8166,15 +8166,15 @@ impl Bank {
         if s.is_some() {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
-            if let Some(mut scheduler) = s.as_mut() {
+            let timings_and_result = if let Some(mut scheduler) = s.as_mut() {
                 scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART);
-            }
-            if let Some(mut scheduler) = (!IS_RESTART).then(|| s.take()).flatten() {
-                scheduler.scheduler_pool().return_to_pool(scheduler);
-                Some(timing_and_result)
             } else {
                 None
+            };
+            if let Some(mut scheduler) = (!IS_RESTART).then(|| s.take()).flatten() {
+                scheduler.scheduler_pool().return_to_pool(scheduler);
             }
+            timings_and_result
         } else {
             warn!(
                 "Bank::wait_for_scheduler(via_drop: {VIA_DROP}) skipped from_internal: {FROM_INTERNAL} by {} ...",
