@@ -8173,7 +8173,7 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub fn do_wait_for_scheduler<const via_drop: bool, const from_internal: bool>(&self) -> (ExecuteTimings, Result<bool>) {
+    pub fn do_wait_for_completed_scheduler<const via_drop: bool, const from_internal: bool>(&self) -> (ExecuteTimings, Result<bool>) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if via_drop {
@@ -8198,15 +8198,15 @@ impl Bank {
         }
     }
 
-    pub fn wait_for_scheduler(&self) -> (ExecuteTimings, Result<bool>) {
-        self.do_wait_for_scheduler::<false, false>()
+    pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<bool>) {
+        self.do_wait_for_completed_scheduler::<false, false>()
     }
 
-    pub fn wait_for_scheduler_via_drop(&self) -> (ExecuteTimings, Result<bool>) {
-        self.do_wait_for_scheduler::<true, false>()
+    pub fn wait_for_completed_scheduler_via_drop(&self) -> (ExecuteTimings, Result<bool>) {
+        self.do_wait_for_completed_scheduler::<true, false>()
     }
 
-    fn wait_for_scheduler_via_internal_drop(self) {
+    fn wait_for_completed_scheduler_via_internal_drop(self) {
         assert!(!matches!(self.do_wait_for_scheduler::<true, true>(), (_, Ok(false))))
     }
 
