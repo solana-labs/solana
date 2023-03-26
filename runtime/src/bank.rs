@@ -8225,6 +8225,7 @@ impl Bank {
     }
 
     fn wait_for_reusable_scheduler(&self) {
+        use assert_matches::assert_matches;
         assert_matches!(self.do_wait_for_completed_scheduler::<false, false, true>(), None);
     }
 
