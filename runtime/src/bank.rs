@@ -8172,7 +8172,7 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub fn do_wait_for_scheduler<const via_drop: bool, const from_internal: bool>(&self) -> (bool, (ExecuteTimings, Result<()>)) {
+    pub fn do_wait_for_scheduler<const via_drop: bool, const from_internal: bool>(&self) -> (ExecuteTimings, Result<bool>) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if via_drop {
