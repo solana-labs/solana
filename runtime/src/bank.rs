@@ -8206,7 +8206,7 @@ impl Bank {
     }
 
     pub fn wait_for_scheduler_via_internal_drop(self) -> bool {
-        self.do_wait_for_scheduler::<true, true>().0
+        !matches!(self.do_wait_for_scheduler::<true, true>(), (_, Ok(false)))
     }
 
     /// Get the EAH that will be used by snapshots
