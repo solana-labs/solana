@@ -3780,7 +3780,7 @@ fn handle_chaining_for_slot(
     slot: Slot,
 ) -> Result<()> {
 
-    debug!("Shred handle_chaining_for_slot slot {} at {:?}", slot, db.ledger_path());
+    debug!("Shred handle_chaining_for_slot at {:?} slot {}", db.ledger_path(), slot);
     let slot_meta_entry = working_set
         .get(&slot)
         .expect("Slot must exist in the working_set hashmap");
@@ -3806,7 +3806,7 @@ fn handle_chaining_for_slot(
                 let prev_slot_meta =
                     find_slot_meta_else_create(db, working_set, new_chained_slots, prev_slot)?;
                 if !new_chained_slots.is_empty() {
-                    debug!("Shred find_slot_meta_else_create new chain: {:?} slot {} prev_slot {} at {:?}", new_chained_slots, slot, prev_slot, db.ledger_path());
+                    debug!("Shred find_slot_meta_else_create new chain: at {:?} {:?} slot {} prev_slot {} ",  db.ledger_path(), new_chained_slots, slot, prev_slot);
                 }
 
                 // This is a newly inserted slot/orphan so run the chaining logic to link it to a
@@ -3856,7 +3856,7 @@ fn handle_chaining_for_slot(
         )?;
 
         if !new_chained_slots.is_empty() {
-            debug!("Shred traverse_children_mut new chain: {:?} slot {} at {:?}", new_chained_slots, slot, db.ledger_path());
+            debug!("Shred traverse_children_mut at {:?} new chains {:?} slot {} ", db.ledger_path(), new_chained_slots, slot);
         }
     }
 
