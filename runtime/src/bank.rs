@@ -8180,6 +8180,11 @@ impl Bank {
 
             (Default::default(), Ok(!DID_WAIT))
         }
+        let a = if VIA_DROP {
+            3
+        } else {
+            4
+        };
     }
 
     pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<bool>) {
