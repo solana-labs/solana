@@ -843,11 +843,12 @@ impl Blockstore {
         for (shred, is_repaired) in shreds.into_iter().zip(is_repaired) {
             let shred_source = if is_repaired {
                 info!(
-                    "Shred is from repair at {:?} {:?} slot {:?} index {} data complete {}",
+                    "Shred is from repair at {:?} {:?} slot {:?} index {} completed ranges: {:?} data complete {}",
                     self.ledger_path,
                     shred.shred_type(),
                     shred.slot(),
                     shred.index(),
+                    self.get_completed_ranges(shred.slot(), 0),
                     shred.data_complete()
                 );
                 ShredSource::Repaired
