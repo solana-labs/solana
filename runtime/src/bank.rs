@@ -8188,15 +8188,15 @@ impl Bank {
     }
 
     pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<bool>) {
-        self.do_wait_for_completed_scheduler::<false, false>()
+        self.do_wait_for_completed_scheduler::<false, false, _>()
     }
 
     fn wait_for_completed_scheduler_via_drop(&self) -> (ExecuteTimings, Result<bool>) {
-        self.do_wait_for_completed_scheduler::<true, false>()
+        self.do_wait_for_completed_scheduler::<true, false, _>()
     }
 
     fn wait_for_completed_scheduler_via_internal_drop(self) {
-        assert!(!matches!(self.do_wait_for_completed_scheduler::<true, true>(), (_, Ok(false))))
+        assert!(!matches!(self.do_wait_for_completed_scheduler::<true, true, _>(), (_, Ok(false))))
     }
 
     fn wait_for_reusable_scheduler(&self) {
