@@ -8186,7 +8186,7 @@ impl Bank {
             let e = scheduler.take_timings_and_result();
             let scheduler = s.take().unwrap();
             scheduler.scheduler_pool().return_to_pool(scheduler);
-            (e.0, e.1.map_ok(|()| true))
+            (e.0, e.1.map(|()| true))
         } else {
             warn!(
                 "Bank::wait_for_scheduler(via_drop: {}) skipped from_internal: {from_internal} by {} ...",
