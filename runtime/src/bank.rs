@@ -8159,7 +8159,7 @@ impl Bank {
 
     fn do_wait_for_completed_scheduler<const VIA_DROP: bool, const FROM_INTERNAL: bool, const IS_RESTART: bool>(&self) -> Option<(ExecuteTimings, Result<()>)> {
         let mut s = self.scheduler.write().unwrap();
-        let current_thread_name = std::thread::current().name().unwrap().to_string();
+        let current_thread_name = std::thread::current().name().unwrap();
         if VIA_DROP {
             info!("wait_for_scheduler(VIA_DROP): {}", std::backtrace::Backtrace::force_capture());
         }
