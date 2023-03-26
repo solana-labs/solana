@@ -126,7 +126,7 @@ impl BankForks {
     }
 
     pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
-        self.banks.iter().map(|(&s, b)| (s, b.clone_arc())).collect()
+        self.banks.iter().map(|(&s, b)| (s, b.clone())).collect()
     }
 
     pub fn get_vote_only_mode_signal(&self) -> Arc<AtomicBool> {
