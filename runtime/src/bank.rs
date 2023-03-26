@@ -8171,8 +8171,10 @@ impl Bank {
             } else {
                 None
             };
-            if let Some(mut scheduler) = (!IS_RESTART).then(|| s.take()).flatten() {
-                scheduler.scheduler_pool().return_to_pool(scheduler);
+            if !IS_RESTART {
+                if let Some(mut scheduler) = s.take() {
+                    scheduler.scheduler_pool().return_to_pool(scheduler);
+                }
             }
             timings_and_result
         } else {
