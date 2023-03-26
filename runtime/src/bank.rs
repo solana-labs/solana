@@ -8424,7 +8424,7 @@ impl TotalAccountsStats {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        if self.scheduler.read().unwrap().is_some() {
+        if self.with_scheduler() {
             let (_t, r) = self.wait_for_completed_scheduler_via_drop();
             if let Err(err) = r {
                 warn!(
