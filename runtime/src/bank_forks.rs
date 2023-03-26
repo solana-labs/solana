@@ -81,7 +81,7 @@ impl std::ops::Deref for BankWithScheduler {
     type Target = &Bank;
 
     fn deref(&self) -> &Bank {
-        &&self.0
+        &self.0
     }
 }
 
