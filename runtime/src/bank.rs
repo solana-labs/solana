@@ -8167,6 +8167,8 @@ impl Bank {
             Borrowed(&'a mut T),
             Owned(T)
         }
+        impl Deref for Cow2 {
+        }
 
         let i = 3_isize;
         let ss = if IS_RESTART {
