@@ -1183,7 +1183,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
 
     fn trigger_termination(&mut self);
     fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool);
-    fn take_timings_and_result(&mut self) -> (ExecuteTimings, Result<()>);
+    fn take_termination_timings_and_result(&mut self) -> (ExecuteTimings, Result<()>);
 
     // drop with exit atomicbool integration??
 }
@@ -6337,7 +6337,7 @@ impl Bank {
     pub fn handle_aborted_transactions(&self) -> Vec<Result<Option<ExecuteTimings>>> {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.take_timings_and_result()
+        scheduler.take_termination_timings_and_result()
     }
     */
 
@@ -8169,7 +8169,7 @@ impl Bank {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
             scheduler.wait_for_termination(FROM_INTERNAL, false);
-            let (timing, result) = scheduler.take_timings_and_result();
+            let (timing, result) = scheduler.take_termination_timings_and_result();
             scheduler.scheduler_pool().return_to_pool(scheduler);
             (timing, result.map(|()| DID_WAIT))
         } else {
