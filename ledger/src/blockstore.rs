@@ -3779,6 +3779,8 @@ fn handle_chaining_for_slot(
     new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot: Slot,
 ) -> Result<()> {
+
+    debug!("Shred handle_chaining_for_slot slot {} at {:?}", slot, db.ledger_path());
     let slot_meta_entry = working_set
         .get(&slot)
         .expect("Slot must exist in the working_set hashmap");
