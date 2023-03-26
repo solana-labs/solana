@@ -8172,7 +8172,7 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub fn do_wait_for_scheduler<const aaa: bool>(&self, from_internal: bool) -> (bool, (ExecuteTimings, Result<()>)) {
+    pub fn do_wait_for_scheduler<const via_drop: bool>(&self, from_internal: bool) -> (bool, (ExecuteTimings, Result<()>)) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if via_drop {
@@ -8198,11 +8198,11 @@ impl Bank {
     }
 
     pub fn wait_for_scheduler(&self, via_drop: bool) -> (ExecuteTimings, Result<()>) {
-        self.do_wait_for_scheduler::<false>(via_drop, false).1
+        self.do_wait_for_scheduler::<false>(false).1
     }
 
     pub fn drop_from_scheduler_thread(self) -> bool {
-        self.do_wait_for_scheduler::<true>(true, true).0
+        self.do_wait_for_scheduler::<true>(true).0
     }
 
     /// Get the EAH that will be used by snapshots
