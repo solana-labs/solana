@@ -967,6 +967,13 @@ impl Blockstore {
                         leader_schedule_cache.slot_leader_at(shred.slot(), /*bank=*/ None)?;
                     if !shred.verify(&leader) {
                         metrics.num_recovered_failed_sig += 1;
+                        info!(
+                            "Shred cannot verify with leader {:?} at {:?} slot {} index {}",
+                            leader,
+                            self.ledger_path(),
+                            shred.slot(),
+                            shred.index()
+                        );
                         return None;
                     }
                     // Since the data shreds are fully recovered from the
@@ -3737,6 +3744,11 @@ fn handle_chaining(
     working_set.retain(|_, entry| entry.did_insert_occur);
     let mut new_chained_slots = HashMap::new();
     let working_set_slots: Vec<_> = working_set.keys().collect();
+    info!(
+        "Shred handle_chaining at {:?} working set {:?}",
+        db.ledger_path(),
+        working_set_slots
+    );
     for slot in working_set_slots {
         handle_chaining_for_slot(db, write_batch, working_set, &mut new_chained_slots, *slot)?;
     }
