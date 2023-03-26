@@ -3654,7 +3654,7 @@ fn commit_slot_meta_working_set(
 ///
 /// Also see [`find_slot_meta_in_cached_state`] and [`find_slot_meta_in_db_else_create`].
 fn find_slot_meta_else_create<'a>(
-    db: &Database,
+    db: &Blockstore,
     working_set: &'a HashMap<u64, SlotMetaWorkingSetEntry>,
     chained_slots: &'a mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot_index: u64,
@@ -3663,7 +3663,7 @@ fn find_slot_meta_else_create<'a>(
     if let Some(slot) = result {
         Ok(slot)
     } else {
-        find_slot_meta_in_db_else_create(db, slot_index, chained_slots)
+        find_slot_meta_in_db_else_create(&db.db, slot_index, chained_slots)
     }
 }
 
@@ -3732,7 +3732,7 @@ fn handle_chaining(
     let mut new_chained_slots = HashMap::new();
     let working_set_slots: Vec<_> = working_set.keys().collect();
     for slot in working_set_slots {
-        handle_chaining_for_slot(&db.db, write_batch, working_set, &mut new_chained_slots, *slot)?;
+        handle_chaining_for_slot(db, write_batch, working_set, &mut new_chained_slots, *slot)?;
     }
 
     // Write all the newly changed slots in new_chained_slots to the write_batch
@@ -3773,7 +3773,7 @@ fn handle_chaining(
 ///   which connectivity have been updated.
 /// `slot`: the slot which we want to handle its chaining effect.
 fn handle_chaining_for_slot(
-    db: &Database,
+    db: &Blockstore,
     write_batch: &mut WriteBatch,
     working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
@@ -3804,7 +3804,7 @@ fn handle_chaining_for_slot(
                 let prev_slot_meta =
                     find_slot_meta_else_create(db, working_set, new_chained_slots, prev_slot)?;
                 if !new_chained_slots.is_empty() {
-                    debug!("Shred find_slot_meta_else_create new chain: {:?} slot {} prev_slot {}", new_chained_slots, slot, prev_slot);
+                    debug!("Shred find_slot_meta_else_create new chain: {:?} slot {} prev_slot {} at {:?}", new_chained_slots, slot, prev_slot, db.ledger_path());
                 }
 
                 // This is a newly inserted slot/orphan so run the chaining logic to link it to a
@@ -3854,7 +3854,7 @@ fn handle_chaining_for_slot(
         )?;
 
         if !new_chained_slots.is_empty() {
-            debug!("Shred traverse_children_mut new chain: {:?} slot {}", new_chained_slots, slot);
+            debug!("Shred traverse_children_mut new chain: {:?} slot {} at {:?}", new_chained_slots, slot, db.ledger_path());
         }
     }
 
@@ -3876,7 +3876,7 @@ fn handle_chaining_for_slot(
 ///   slots and determine whether to further traverse the children slots of
 ///   a given slot.
 fn traverse_children_mut<F>(
-    db: &Database,
+    db: &Blockstore,
     slot: Slot,
     slot_meta: &Rc<RefCell<SlotMeta>>,
     working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
