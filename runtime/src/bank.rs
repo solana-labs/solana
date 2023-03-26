@@ -8157,46 +8157,40 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub fn do_wait_for_completed_scheduler<const VIA_DROP: bool, const FROM_INTERNAL: bool, T>(&self) -> (ExecuteTimings, Result<bool>) {
+    fn do_wait_for_completed_scheduler<const VIA_DROP: bool, const FROM_INTERNAL: bool>(&self) -> Option<(ExecuteTimings, Result<()>)> {
         const DID_WAIT: bool = true;
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if VIA_DROP {
             info!("wait_for_scheduler(VIA_DROP): {}", std::backtrace::Backtrace::force_capture());
         }
-        let a = if VIA_DROP {
-            3 as T
-        } else {
-            4 as T
-        };
 
         if let Some(mut scheduler) = s.take() {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
             scheduler.wait_for_termination(FROM_INTERNAL, false);
-            let (timing, result) = scheduler.take_termination_timings_and_result();
+            let timing_and_result = scheduler.take_termination_timings_and_result();
             scheduler.scheduler_pool().return_to_pool(scheduler);
-            (timing, result.map(|()| DID_WAIT))
+            Some(timing_and_result)
         } else {
             warn!(
                 "Bank::wait_for_scheduler(via_drop: {VIA_DROP}) skipped from_internal: {FROM_INTERNAL} by {} ...",
                 current_thread_name
             );
-
-            (Default::default(), Ok(!DID_WAIT))
+            None
         }
     }
 
-    pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<bool>) {
-        self.do_wait_for_completed_scheduler::<false, false, usize>()
+    pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<()>) {
+        self.do_wait_for_completed_scheduler::<false, false>().map(|(_, r)| r).or_else(Ok(())
     }
 
-    fn wait_for_completed_scheduler_via_drop(&self) -> (ExecuteTimings, Result<bool>) {
-        self.do_wait_for_completed_scheduler::<true, false, isize>()
+    fn wait_for_completed_scheduler_via_drop(&self) -> (ExecuteTimings, Result<()>) {
+        self.do_wait_for_completed_scheduler::<true, false>()
     }
 
     fn wait_for_completed_scheduler_via_internal_drop(self) {
-        assert!(!matches!(self.do_wait_for_completed_scheduler::<true, true, u8>(), (_, Ok(false))))
+        assert!(!matches!(self.do_wait_for_completed_scheduler::<true, true>(), (_, Ok(false))))
     }
 
     fn wait_for_reusable_scheduler(&self) {
