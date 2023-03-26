@@ -57,9 +57,9 @@ struct SetRootTimings {
     prune_remove_ms: i64,
 }
 
-struct SchedulableBank(Arc<Bank>);
+struct BankWithScheduler(Arc<Bank>);
 
-impl SchedulableBank {
+impl BankWithScheduler {
     fn clone_arc(&self) -> Arc<Bank> {
         self.0.clone()
     }
@@ -71,13 +71,13 @@ impl SchedulableBank {
     }
 }
 
-impl Drop for SchedulableBank {
+impl Drop for BankWithScheduler {
     fn drop(&mut self) {
         self.0.trigger_scheduler_termination();
     }
 }
 
-impl std::ops::Deref for SchedulableBank {
+impl std::ops::Deref for BankWithScheduler {
     type Target = Arc<Bank>;
 
     fn deref(&self) -> &Arc<Bank> {
@@ -94,7 +94,7 @@ enum EnabledSchedulerPool {
 }
 
 pub struct BankForks {
-    banks: HashMap<Slot, SchedulableBank>,
+    banks: HashMap<Slot, BankWithScheduler>,
     descendants: HashMap<Slot, HashSet<Slot>>,
     root: Arc<AtomicSlot>,
 
@@ -202,10 +202,10 @@ impl BankForks {
 
         // Iterate through the heads of all the different forks
         for bank in initial_forks {
-            banks.insert(bank.slot(), SchedulableBank(bank.clone()));
+            banks.insert(bank.slot(), BankWithScheduler(bank.clone()));
             let parents = bank.parents();
             for parent in parents {
-                if banks.insert(parent.slot(), SchedulableBank(parent.clone())).is_some() {
+                if banks.insert(parent.slot(), BankWithScheduler(parent.clone())).is_some() {
                     // All ancestors have already been inserted by another fork
                     break;
                 }
@@ -233,7 +233,7 @@ impl BankForks {
     // take Mode when we support to use unified_scheduler for banking.
     fn add_new_bank(&mut self, bank: Bank, for_replaying: bool) -> Arc<Bank> {
         let bank = Arc::new(bank);
-        let prev = self.banks.insert(bank.slot(), SchedulableBank(bank.clone()));
+        let prev = self.banks.insert(bank.slot(), BankWithScheduler(bank.clone()));
         assert!(prev.is_none());
         let slot = bank.slot();
         self.descendants.entry(slot).or_default();
