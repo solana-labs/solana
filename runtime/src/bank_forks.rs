@@ -86,9 +86,9 @@ impl std::ops::Deref for SchedulableBank {
 }
 
 #[derive(Debug, Default)]
-enum InstalledSchedulerPool {
+enum EnabledSchedulerPool {
     #[default]
-    NotInstalled,
+    Disabled,
     ReplayOnly(Box<dyn InstalledSchedulerPool>),
     Full(Box<dyn InstalledSchedulerPool>),
 }
@@ -249,14 +249,14 @@ impl BankForks {
 
     fn get_scheduler_pool(&self, for_replaying: bool) -> Option<(solana_scheduler::Mode, &Box<dyn InstalledSchedulerPool>)> {
         match (for_replaying, &self.scheduler_pool) {
-            (false, _) | (true, InstalledSchedulerPool::NotInstalled) => None,
+            (false, _) | (true, InstalledSchedulerPool::Disabled) => None,
             (true, InstalledSchedulerPool::ReplayOnly(scheduler_pool) | InstalledSchedulerPool::Full(scheduler_pool)) => Some((solana_scheduler::Mode::Replaying, scheduler_pool))
         }
     }
 
     pub fn install_scheduler_pool(&mut self, pool: Box<dyn InstalledSchedulerPool>, replay_only: bool) {
         use assert_matches::assert_matches;
-        assert_matches!(&self.scheduler_pool, InstalledSchedulerPool::NotInstalled);
+        assert_matches!(&self.scheduler_pool, InstalledSchedulerPool::Disabled);
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         if replay_only {
             self.scheduler_pool = InstalledSchedulerPool::ReplayOnly(pool);
