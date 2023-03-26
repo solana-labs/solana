@@ -8164,6 +8164,11 @@ impl Bank {
         if VIA_DROP {
             info!("wait_for_scheduler(VIA_DROP): {}", std::backtrace::Backtrace::force_capture());
         }
+        let a = if VIA_DROP {
+            3
+        } else {
+            4
+        };
 
         if let Some(mut scheduler) = s.take() {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
@@ -8180,11 +8185,6 @@ impl Bank {
 
             (Default::default(), Ok(!DID_WAIT))
         }
-        let a = if VIA_DROP {
-            3
-        } else {
-            4
-        };
     }
 
     pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<bool>) {
