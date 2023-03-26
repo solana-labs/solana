@@ -955,10 +955,6 @@ impl LikeScheduler for Scheduler {
         Ok(())
     }
 
-    fn clear_stop(&mut self) {
-        self.do_clear_stop(false);
-    }
-
     fn trigger_stop(&mut self) {
         self.do_trigger_stop(false);
     }
@@ -971,6 +967,10 @@ impl LikeScheduler for Scheduler {
 impl LikePooledScheduler for Scheduler {
     fn replace_scheduler_context(&self, context: SchedulerContext) {
         self.replace_scheduler_context_inner(context);
+    }
+
+    fn clear_stop(&mut self) {
+        self.do_clear_stop(false);
     }
 }
 
