@@ -3715,11 +3715,6 @@ impl Bank {
         // much if the write lock is acquired for each tick.
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
 
-        debug!(
-            "register_recent_blockhash: slot: {} reinitializing the scheduler: end",
-            self.slot()
-        );
-
         let mut blockhash = *blockhash;
         w_blockhash_queue.register_hash(&blockhash, self.fee_rate_governor.lamports_per_signature);
         self.update_recent_blockhashes_locked(&w_blockhash_queue);
@@ -8208,6 +8203,10 @@ impl Bank {
             );
 
             scheduler.gracefully_stop(false, true);
+            debug!(
+                "register_recent_blockhash: slot: {} reinitializing the scheduler: end",
+                self.slot()
+            );
         }
     }
 
