@@ -8190,7 +8190,7 @@ impl Bank {
     }
 
     fn wait_for_completed_scheduler_via_internal_drop(self) {
-        assert!(!matches!(self.do_wait_for_completed_scheduler::<true, true>(), (_, Ok(false))))
+        assert_matches!(self.do_wait_for_completed_scheduler::<true, true>(), Some(_));
     }
 
     fn wait_for_reusable_scheduler(&self) {
