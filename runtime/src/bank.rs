@@ -8168,7 +8168,7 @@ impl Bank {
         let ss = if IS_RESTART {
             s.as_mut().map(|a| Cow::Borrowed(&i))
         } else {
-            s.take()
+            s.take().map(|a| Cow::Owned(i.clone()))
         };
         if let Some(mut scheduler) = s {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
