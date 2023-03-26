@@ -968,7 +968,7 @@ impl LikePooledScheduler for Scheduler {
         self.replace_scheduler_context_inner(context);
     }
 
-    fn clear_stop(&mut self) {
+    fn clear_termination(&mut self) {
         self.do_clear_stop(false);
     }
 }
