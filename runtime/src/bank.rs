@@ -8171,8 +8171,8 @@ impl Bank {
             type Target = T;
             fn deref(&self) -> &<Self as Deref>::Target { 
                 match self {
-                    Borrowed(t) => t,
-                    Owned(t) => &t,
+                    Cow2::Borrowed(t) => t,
+                    Cow2::Owned(t) => &t,
                 }
             }
         }
