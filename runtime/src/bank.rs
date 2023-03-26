@@ -8163,6 +8163,10 @@ impl Bank {
         if VIA_DROP {
             info!("wait_for_scheduler(VIA_DROP): {}", std::backtrace::Backtrace::force_capture());
         }
+        enum Cow2<'a, T> {
+            Borrowed(&'a mut T),
+            Owned(T)
+        }
 
         let i = 3_isize;
         let ss = if IS_RESTART {
