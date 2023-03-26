@@ -880,7 +880,7 @@ impl Blockstore {
                                     shred.slot(),
                                     shred.index(),
                                     shred.data_complete()
-                                );                
+                                );
                             } else {
                                 metrics.num_turbine_data_shreds_exists += 1;
                             }
@@ -893,7 +893,7 @@ impl Blockstore {
                                 shred.slot(),
                                 shred.index(),
                                 shred.data_complete()
-                            );                
+                            );
 
                             metrics.num_data_shreds_invalid += 1
                         }
@@ -905,7 +905,7 @@ impl Blockstore {
                                 shred.slot(),
                                 shred.index(),
                                 shred.data_complete()
-                            );                
+                            );
 
                             error!("blockstore error: {}", err);
                         }
@@ -918,7 +918,7 @@ impl Blockstore {
                                     shred.slot(),
                                     shred.index(),
                                     shred.data_complete()
-                                );                
+                                );
 
                                 metrics.num_repair += 1;
                             }
@@ -3073,6 +3073,12 @@ impl Blockstore {
             self.meta_cf.multi_get(slots.to_vec()).into_iter().collect();
         let slot_metas = slot_metas?;
 
+        info!(
+            "Shred all SlotMeta at {:?}: {:?} since {:?}",
+            self.ledger_path(),
+            slot_metas,
+            slots
+        );
         let result: HashMap<u64, Vec<u64>> = slots
             .iter()
             .zip(slot_metas)
@@ -3738,7 +3744,12 @@ fn handle_chaining(
     // Write all the newly changed slots in new_chained_slots to the write_batch
     for (slot, meta) in new_chained_slots.iter() {
         let meta: &SlotMeta = &RefCell::borrow(meta);
-        info!("Shred new chain recorded at {:?} slot {}, meta {:?}", db.ledger_path(), slot, meta);
+        info!(
+            "Shred new chain recorded at {:?} slot {}, meta {:?}",
+            db.ledger_path(),
+            slot,
+            meta
+        );
         write_batch.put::<cf::SlotMeta>(*slot, meta)?;
     }
     Ok(())
@@ -3779,8 +3790,11 @@ fn handle_chaining_for_slot(
     new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot: Slot,
 ) -> Result<()> {
-
-    debug!("Shred handle_chaining_for_slot at {:?} slot {}", db.ledger_path(), slot);
+    debug!(
+        "Shred handle_chaining_for_slot at {:?} slot {}",
+        db.ledger_path(),
+        slot
+    );
     let slot_meta_entry = working_set
         .get(&slot)
         .expect("Slot must exist in the working_set hashmap");
@@ -3856,7 +3870,12 @@ fn handle_chaining_for_slot(
         )?;
 
         if !new_chained_slots.is_empty() {
-            debug!("Shred traverse_children_mut at {:?} new chains {:?} slot {} ", db.ledger_path(), new_chained_slots, slot);
+            debug!(
+                "Shred traverse_children_mut at {:?} new chains {:?} slot {} ",
+                db.ledger_path(),
+                new_chained_slots,
+                slot
+            );
         }
     }
 
