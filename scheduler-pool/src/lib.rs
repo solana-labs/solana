@@ -958,9 +958,7 @@ impl InstalledScheduler for Scheduler {
     fn scheduler_pool(&self) -> Box<dyn InstalledSchedulerPool> {
         Box::new(SchedulerPoolWrapper(self.scheduler_pool.clone()))
     }
-}
 
-impl InstalledScheduler for Scheduler {
     fn replace_scheduler_context(&self, context: SchedulerContext) {
         self.replace_scheduler_context_inner(context);
     }
