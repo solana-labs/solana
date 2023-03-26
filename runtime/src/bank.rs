@@ -8177,7 +8177,7 @@ impl Bank {
             }
         }
         impl<'a, T> core::ops::DerefMut for Cow2<'a, T> {
-            fn deref_mut(&mut self) -> &<Self as Deref>::Target { 
+            fn deref_mut(&mut self) -> &mut <Self as Deref>::Target { 
                 match self {
                     Cow2::Borrowed(t) => t,
                     Cow2::Owned(t) => &t,
