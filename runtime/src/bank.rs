@@ -3714,16 +3714,11 @@ impl Bank {
             self.slot()
         );
 
-
-        let mut w_blockhash_queue = if !self.with_scheduler() {
-            self.blockhash_queue.write().unwrap()
-        } else {
-            self.wait_for_reusable_scheduler();
-            // Only acquire the write lock for the blockhash queue on block boundaries because
-            // readers can starve this write lock acquisition and ticks would be slowed down too
-            // much if the write lock is acquired for each tick.
-            self.blockhash_queue.write().unwrap()
-        };
+        self.wait_for_reusable_scheduler();
+        // Only acquire the write lock for the blockhash queue on block boundaries because
+        // readers can starve this write lock acquisition and ticks would be slowed down too
+        // much if the write lock is acquired for each tick.
+        let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
 
         debug!(
             "register_recent_blockhash: slot: {} reinitializing the scheduler: end",
@@ -8210,8 +8205,10 @@ impl Bank {
     }
 
     fn wait_for_reusable_scheduler(&self) {
-        let mut scheduler = self.scheduler.write().unwrap();
-        scheduler.as_mut().unwrap().gracefully_stop(false, true)
+        let mut s = self.scheduler.write().unwrap();
+        if let Some(mut scheduler) = s.as_mut() {
+            scheduler.gracefully_stop(false, true);
+        }
     }
 
     /// Get the EAH that will be used by snapshots
