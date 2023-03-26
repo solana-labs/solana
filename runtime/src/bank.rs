@@ -8186,23 +8186,23 @@ impl Bank {
             let e = scheduler.take_timings_and_result();
             let scheduler = s.take().unwrap();
             scheduler.scheduler_pool().return_to_pool(scheduler);
-            (true, e)
+            (e.0, e.1.map_ok(|()| true))
         } else {
             warn!(
                 "Bank::wait_for_scheduler(via_drop: {}) skipped from_internal: {from_internal} by {} ...",
                 via_drop, current_thread_name
             );
 
-            (false, (Default::default(), Ok(())))
+            (Default::default(), Ok(false))
         }
     }
 
-    pub fn wait_for_scheduler(&self) -> (ExecuteTimings, Result<()>) {
-        self.do_wait_for_scheduler::<false, false>().1
+    pub fn wait_for_scheduler(&self) -> (ExecuteTimings, Result<bool>) {
+        self.do_wait_for_scheduler::<false, false>()
     }
 
-    pub fn wait_for_scheduler_via_drop(&self) -> (ExecuteTimings, Result<()>) {
-        self.do_wait_for_scheduler::<true, false>().1
+    pub fn wait_for_scheduler_via_drop(&self) -> (ExecuteTimings, Result<bool>) {
+        self.do_wait_for_scheduler::<true, false>()
     }
 
     pub fn wait_for_scheduler_via_internal_drop(self) -> bool {
