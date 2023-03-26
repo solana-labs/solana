@@ -3718,8 +3718,7 @@ impl Bank {
         let mut w_blockhash_queue = if !self.with_scheduler() {
             self.blockhash_queue.write().unwrap()
         } else {
-            let mut scheduler = self.scheduler.write().unwrap();
-            let () = scheduler.as_mut().unwrap().gracefully_stop(false, true).unwrap();
+            self.wait_for_reusable_scheduler();
             // Only acquire the write lock for the blockhash queue on block boundaries because
             // readers can starve this write lock acquisition and ticks would be slowed down too
             // much if the write lock is acquired for each tick.
@@ -8208,6 +8207,11 @@ impl Bank {
 
     fn wait_for_completed_scheduler_via_internal_drop(self) {
         assert!(!matches!(self.do_wait_for_completed_scheduler::<true, true>(), (_, Ok(false))))
+    }
+
+    fn wait_for_reusable_scheduler(&self) {
+        let mut scheduler = self.scheduler.write().unwrap();
+        let () = scheduler.as_mut().unwrap().gracefully_stop(false, true).unwrap();
     }
 
     /// Get the EAH that will be used by snapshots
