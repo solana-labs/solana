@@ -269,7 +269,7 @@ impl BankForks {
     }
 
     pub fn add_new_bank_for_banking(&mut self, bank: Bank) -> Arc<Bank> {
-        self.add_new_bank(bank, false, None)
+        self.add_new_bank(bank, false)
     }
 
     pub fn add_new_bank_for_replaying(&mut self, bank: Bank) -> Arc<Bank> {
