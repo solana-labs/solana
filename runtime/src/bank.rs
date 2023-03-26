@@ -8194,7 +8194,7 @@ impl Bank {
         if let Some(mut scheduler) = ss {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
-            scheduler.wait_for_termination(FROM_INTERNAL, false);
+            scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART);
             if let Cow2::Owned(mut scheduler) = scheduler {
                 let timing_and_result = scheduler.take_termination_timings_and_result();
                 scheduler.scheduler_pool().return_to_pool(scheduler);
@@ -8225,19 +8225,7 @@ impl Bank {
     }
 
     fn wait_for_reusable_scheduler(&self) {
-        let mut s = self.scheduler.write().unwrap();
-        if let Some(mut scheduler) = s.as_mut() {
-            debug!(
-                "register_recent_blockhash: slot: {} reinitializing the scheduler: start",
-                self.slot()
-            );
-
-            scheduler.wait_for_termination(false, true);
-            debug!(
-                "register_recent_blockhash: slot: {} reinitializing the scheduler: end",
-                self.slot()
-            );
-        }
+        self.do_wait_for_completed_scheduler::<false, false, true>();
     }
 
     /// Get the EAH that will be used by snapshots
