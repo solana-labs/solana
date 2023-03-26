@@ -6345,7 +6345,7 @@ impl Bank {
         let mut s = self.scheduler.write().unwrap();
         if let Some(mut scheduler) = s.as_mut() {
             info!("not_schedulable... slot: {}", self.slot());
-            scheduler.trigger_stop();
+            scheduler.trigger_completion();
         }
     }
 
