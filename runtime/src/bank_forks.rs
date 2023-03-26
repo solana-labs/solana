@@ -113,7 +113,7 @@ pub trait InstalledSchedulerPool: Send + Sync + std::fmt::Debug {
 }
 
 impl Index<u64> for BankForks {
-    type Output = Bank;
+    type Output = Arc<Bank>;
     fn index(&self, bank_slot: Slot) -> &Self::Output {
         &self.banks[&bank_slot].0
     }
