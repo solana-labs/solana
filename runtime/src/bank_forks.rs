@@ -249,19 +249,19 @@ impl BankForks {
 
     fn get_scheduler_pool(&self, for_replaying: bool) -> Option<(solana_scheduler::Mode, &Box<dyn InstalledSchedulerPool>)> {
         match (for_replaying, &self.scheduler_pool) {
-            (false, _) | (true, InstalledSchedulerPool::Disabled) => None,
-            (true, InstalledSchedulerPool::ReplayOnly(scheduler_pool) | InstalledSchedulerPool::Full(scheduler_pool)) => Some((solana_scheduler::Mode::Replaying, scheduler_pool))
+            (false, _) | (true, EnabledSchedulerPool::Disabled) => None,
+            (true, EnabledSchedulerPool::ReplayOnly(scheduler_pool) | EnabledSchedulerPool::Full(scheduler_pool)) => Some((solana_scheduler::Mode::Replaying, scheduler_pool))
         }
     }
 
     pub fn install_scheduler_pool(&mut self, pool: Box<dyn InstalledSchedulerPool>, replay_only: bool) {
         use assert_matches::assert_matches;
-        assert_matches!(&self.scheduler_pool, InstalledSchedulerPool::Disabled);
+        assert_matches!(&self.scheduler_pool, EnabledSchedulerPool::Disabled);
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         if replay_only {
-            self.scheduler_pool = InstalledSchedulerPool::ReplayOnly(pool);
+            self.scheduler_pool = EnabledSchedulerPool::ReplayOnly(pool);
         } else {
-            self.scheduler_pool = InstalledSchedulerPool::Full(pool);
+            self.scheduler_pool = EnabledSchedulerPool::Full(pool);
         }
     }
 
