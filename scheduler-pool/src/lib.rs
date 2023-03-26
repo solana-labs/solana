@@ -125,7 +125,7 @@ impl SchedulerPool {
             schedulers.len(),
             schedulers.len() + 1
         );
-        scheduler.clear_stop();
+        scheduler.clear_last_termination();
 
         schedulers.push(scheduler);
     }
@@ -968,7 +968,7 @@ impl LikePooledScheduler for Scheduler {
         self.replace_scheduler_context_inner(context);
     }
 
-    fn clear_termination(&mut self) {
+    fn clear_last_termination(&mut self) {
         self.do_clear_stop(false);
     }
 }
