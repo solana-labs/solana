@@ -8202,7 +8202,7 @@ impl Bank {
     }
 
     pub fn drop_from_scheduler_thread(self) -> bool {
-        self.do_wait_for_scheduler(true, true).0
+        self.do_wait_for_scheduler::<true>(true, true).0
     }
 
     /// Get the EAH that will be used by snapshots
