@@ -8163,39 +8163,13 @@ impl Bank {
         if VIA_DROP {
             info!("wait_for_scheduler(VIA_DROP): {}", std::backtrace::Backtrace::force_capture());
         }
-        enum Cow2<'a, T> {
-            Borrowed(&'a mut T),
-            Owned(T)
-        }
-        impl<'a, T> Deref for Cow2<'a, T> {
-            type Target = T;
-            fn deref(&self) -> &<Self as Deref>::Target { 
-                match self {
-                    Cow2::Borrowed(t) => t,
-                    Cow2::Owned(t) => &t,
-                }
-            }
-        }
-        impl<'a, T> core::ops::DerefMut for Cow2<'a, T> {
-            fn deref_mut(&mut self) -> &mut <Self as Deref>::Target { 
-                match self {
-                    Cow2::Borrowed(t) => t,
-                    Cow2::Owned(t) => t,
-                }
-            }
-        }
-
-        let i = 3_isize;
-        let ss = if IS_RESTART {
-            s.as_mut().map(|a| Cow2::Borrowed(a))
-        } else {
-            s.take().map(|a| Cow2::Owned(a))
-        };
-        if let Some(mut scheduler) = ss {
+        if s.is_some() {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
-            scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART);
-            if let Cow2::Owned(mut scheduler) = scheduler {
+            if let Some(mut scheduler) = s.as_mut() {
+                scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART);
+            }
+            if let Some(mut scheduler) = IS_RESTART.then(|| s.take()) {
                 let timing_and_result = scheduler.take_termination_timings_and_result();
                 scheduler.scheduler_pool().return_to_pool(scheduler);
                 Some(timing_and_result)
