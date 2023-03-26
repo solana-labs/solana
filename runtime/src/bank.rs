@@ -8201,7 +8201,7 @@ impl Bank {
         self.do_wait_for_completed_scheduler::<false, false>()
     }
 
-    pub fn wait_for_completed_scheduler_via_drop(&self) -> (ExecuteTimings, Result<bool>) {
+    fn wait_for_completed_scheduler_via_drop(&self) -> (ExecuteTimings, Result<bool>) {
         self.do_wait_for_completed_scheduler::<true, false>()
     }
 
