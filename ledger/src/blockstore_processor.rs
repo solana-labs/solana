@@ -283,13 +283,13 @@ fn process_batches(
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     if !bank.with_scheduler() {
-        execute_batches_as_replay_backend(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit)
+        execute_batches(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit)
     } else {
-        send_batches_to_replay_backend(bank, batches)
+        send_batches_to_scheduler(bank, batches)
     }
 }
 
-fn send_batches_to_replay_backend(bank: &Arc<Bank>, batches: &[TransactionBatchWithIndexes]) -> Result<()> {
+fn send_batches_to_scheduler(bank: &Arc<Bank>, batches: &[TransactionBatchWithIndexes]) -> Result<()> {
     for batch in batches {
         let TransactionBatchWithIndexes {
             batch,
@@ -320,7 +320,7 @@ fn rebatch_transactions<'a>(
     }
 }
 
-fn execute_batches_as_replay_backend(
+fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
     transaction_status_sender: Option<&TransactionStatusSender>,
