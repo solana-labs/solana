@@ -8169,6 +8169,12 @@ impl Bank {
         }
         impl<'a, T> Deref for Cow2<'a, T> {
             type Target = T;
+            fn deref(&self) -> &<Self as Deref>::Target { 
+                match self {
+                    Borrowed(t) => t,
+                    Owned(t) => &t,
+                }
+            }
         }
 
         let i = 3_isize;
