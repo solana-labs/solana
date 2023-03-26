@@ -2,6 +2,12 @@
 use thiserror::Error;
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum ElGamalError {
+    #[error("key derivation method not support")]
+    DerivationMethodNotSupported,
+}
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum DiscreteLogError {
     #[error("discrete log number of threads not power-of-two")]
     DiscreteLogThreads,

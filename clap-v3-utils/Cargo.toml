@@ -16,6 +16,7 @@ rpassword = { workspace = true }
 solana-perf = { workspace = true }
 solana-remote-wallet = { workspace = true }
 solana-sdk = { workspace = true }
+solana-zk-token-sdk = { workspace = true }
 thiserror = { workspace = true }
 tiny-bip39 = { workspace = true }
 uriparse = { workspace = true }

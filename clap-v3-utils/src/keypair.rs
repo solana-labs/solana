@@ -33,6 +33,7 @@ use {
             EncodableKey, Keypair, NullSigner, Presigner, Signature, Signer,
         },
     },
+    solana_zk_token_sdk::encryption::elgamal::ElGamalKeypair,
     std::{
         cell::RefCell,
         convert::TryFrom,
@@ -997,6 +998,49 @@ pub fn keypair_from_path(
     keypair_name: &str,
     confirm_pubkey: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
+    encodable_key_from_path(matches, path, keypair_name, confirm_pubkey)
+}
+
+/// Loads an [ElGamalKeypair] from one of several possible sources.
+///
+/// If `confirm_pubkey` is `true` then after deriving the pubkey, the user will
+/// be prompted to confirm that the ElGamal pubkey is as expected.
+///
+/// The way this function interprets its arguments is analogous to that of
+/// [`signer_from_path`].
+///
+/// The bip32 hierarchical derivation of an ElGamal keypair is not currently
+/// supported.
+///
+/// # Examples
+///
+/// ```no_run`
+/// use clap::{Arg, Command};
+/// use solana_clap_v3_utils::keypair::keypair_from_path;
+///
+/// let clap_app = Command::new("my-program")
+///     // The argument we'll parse as a signer "path"
+///     .arg(Arg::new("elgamal-keypair")
+///         .required(true)
+///         .help("The default signer"));
+///
+/// let clap_matches = clap_app.get_matches();
+/// let elgamal_keypair_str: String = clap_matches.value_of_t_or_exit("elgamal-keypair");
+///
+/// let elgamal_keypair = elgamal_keypair_from_path(
+///     &clap_matches,
+///     &keypair_str,
+///     "elgamal-keypair",
+///     false,
+/// )?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn elgamal_keypair_from_path(
+    matches: &ArgMatches,
+    path: &str,
+    keypair_name: &str,
+    confirm_pubkey: bool,
+) -> Result<ElGamalKeypair, Box<dyn error::Error>> {
     encodable_key_from_path(matches, path, keypair_name, confirm_pubkey)
 }
 
