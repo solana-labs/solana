@@ -80,7 +80,7 @@ impl Drop for BankWithScheduler {
 impl std::ops::Deref for BankWithScheduler {
     type Target = Arc<Bank>;
 
-    fn deref(&self) -> &Arc<Bank> {
+    fn deref(&self) -> &Bank {
         &self.0
     }
 }
