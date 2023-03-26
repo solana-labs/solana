@@ -8164,7 +8164,12 @@ impl Bank {
             info!("wait_for_scheduler(VIA_DROP): {}", std::backtrace::Backtrace::force_capture());
         }
 
-        if let Some(mut scheduler) = s.take() {
+        let ss = if IS_RESTART {
+            s.as_mut()
+        } else {
+            s.take()
+        };
+        if let Some(mut scheduler) = ss {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
             scheduler.wait_for_termination(FROM_INTERNAL, false);
