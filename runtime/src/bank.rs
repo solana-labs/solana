@@ -8186,7 +8186,7 @@ impl Bank {
         if let Some(mut scheduler) = ss {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
-            //scheduler.wait_for_termination(FROM_INTERNAL, false);
+            scheduler.wait_for_termination(FROM_INTERNAL, false);
             if let Cow2::Owned(mut scheduler) = scheduler {
                 let timing_and_result = scheduler.take_termination_timings_and_result();
                 scheduler.scheduler_pool().return_to_pool(scheduler);
