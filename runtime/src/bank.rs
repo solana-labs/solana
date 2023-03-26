@@ -8205,7 +8205,7 @@ impl Bank {
         self.do_wait_for_scheduler::<true, false>()
     }
 
-    pub fn wait_for_scheduler_via_internal_drop(self) -> bool {
+    fn wait_for_scheduler_via_internal_drop(self) -> bool {
         !matches!(self.do_wait_for_scheduler::<true, true>(), (_, Ok(false)))
     }
 
