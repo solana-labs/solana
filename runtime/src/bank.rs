@@ -8173,6 +8173,7 @@ impl Bank {
     }
 
     pub fn do_wait_for_completed_scheduler<const via_drop: bool, const from_internal: bool>(&self) -> (ExecuteTimings, Result<bool>) {
+        const DID_WAIT: bool = true;
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if via_drop {
@@ -8185,14 +8186,14 @@ impl Bank {
             scheduler.gracefully_stop(from_internal, false);
             let (timing, result) = scheduler.take_timings_and_result();
             scheduler.scheduler_pool().return_to_pool(scheduler);
-            (timing, result.map(|()| true))
+            (timing, result.map(|()| DID_WAIT))
         } else {
             warn!(
                 "Bank::wait_for_scheduler(via_drop: {}) skipped from_internal: {from_internal} by {} ...",
                 via_drop, current_thread_name
             );
 
-            (Default::default(), Ok(false))
+            (Default::default(), Ok(!DID_WAIT))
         }
     }
 
