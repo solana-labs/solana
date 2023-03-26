@@ -8179,7 +8179,7 @@ impl Bank {
             info!("wait_for_scheduler(via_drop): {}", std::backtrace::Backtrace::force_capture());
         }
 
-        if let Some(scheduler) = s.take() {
+        if let Some(mut scheduler) = s.take() {
             info!("wait_for_scheduler({via_drop}): gracefully stopping bank ({})... from_internal: {from_internal} by {current_thread_name}", self.slot());
 
             let () = scheduler.gracefully_stop(from_internal, false);
