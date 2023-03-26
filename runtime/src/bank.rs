@@ -8172,7 +8172,7 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub fn do_wait_for_completed_scheduler<const VIA_DROP: bool, const from_internal: bool>(&self) -> (ExecuteTimings, Result<bool>) {
+    pub fn do_wait_for_completed_scheduler<const VIA_DROP: bool, const FROM_INTERNAL: bool>(&self) -> (ExecuteTimings, Result<bool>) {
         const DID_WAIT: bool = true;
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
@@ -8181,15 +8181,15 @@ impl Bank {
         }
 
         if let Some(mut scheduler) = s.take() {
-            info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {from_internal} by {current_thread_name}", self.slot());
+            info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
-            scheduler.gracefully_stop(from_internal, false);
+            scheduler.gracefully_stop(FROM_INTERNAL, false);
             let (timing, result) = scheduler.take_timings_and_result();
             scheduler.scheduler_pool().return_to_pool(scheduler);
             (timing, result.map(|()| DID_WAIT))
         } else {
             warn!(
-                "Bank::wait_for_scheduler(via_drop: {VIA_DROP}) skipped from_internal: {from_internal} by {} ...",
+                "Bank::wait_for_scheduler(via_drop: {VIA_DROP}) skipped from_internal: {FROM_INTERNAL} by {} ...",
                 current_thread_name
             );
 
