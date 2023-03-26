@@ -4650,6 +4650,11 @@ impl Bank {
 
         execution_time.stop();
 
+        self.loaded_programs_cache
+            .write()
+            .unwrap()
+            .sort_and_evict(None);
+
         debug!(
             "check: {}us load: {}us execute: {}us txs_len={}",
             check_time.as_us(),

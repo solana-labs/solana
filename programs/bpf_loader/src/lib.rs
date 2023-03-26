@@ -68,7 +68,7 @@ use {
         fmt::Debug,
         mem,
         rc::Rc,
-        sync::Arc,
+        sync::{atomic::Ordering, Arc},
     },
     thiserror::Error,
 };
@@ -588,6 +588,8 @@ fn process_instruction_common(
     if let Some(load_program_metrics) = load_program_metrics {
         load_program_metrics.submit_datapoint(&mut invoke_context.timings);
     }
+
+    executor.usage_counter.fetch_add(1, Ordering::Relaxed);
     match &executor.program {
         LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
         LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
