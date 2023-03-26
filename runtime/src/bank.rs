@@ -1185,7 +1185,6 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn clear_stop(&mut self);
     fn take_timings_and_result(&mut self) -> (ExecuteTimings, Result<()>);
 
-    fn replace_scheduler_context(&self, context: SchedulerContext);
     // drop with exit atomicbool integration??
 }
 

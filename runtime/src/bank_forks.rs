@@ -113,6 +113,7 @@ pub trait LikeSchedulerPool: Send + Sync + std::fmt::Debug {
 }
 
 pub trait LikePooledScheduler: LikeScheduler {
+    fn replace_scheduler_context(&self, context: SchedulerContext);
 }
 
 impl Index<u64> for BankForks {
