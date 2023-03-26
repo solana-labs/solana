@@ -3738,7 +3738,7 @@ fn handle_chaining(
     // Write all the newly changed slots in new_chained_slots to the write_batch
     for (slot, meta) in new_chained_slots.iter() {
         let meta: &SlotMeta = &RefCell::borrow(meta);
-        info!("Shred new chain at {:?} slot {}, meta {:?}", db.ledger_path(), slot, meta);
+        info!("Shred new chain recorded at {:?} slot {}, meta {:?}", db.ledger_path(), slot, meta);
         write_batch.put::<cf::SlotMeta>(*slot, meta)?;
     }
     Ok(())
