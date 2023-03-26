@@ -6343,7 +6343,7 @@ impl Bank {
     }
     */
 
-    pub fn not_schedulable(&self) {
+    pub fn trigger_scheduler_termination(&self) {
         let mut s = self.scheduler.write().unwrap();
         if let Some(mut scheduler) = s.as_mut() {
             info!("not_schedulable... slot: {}", self.slot());
@@ -8159,7 +8159,7 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    fn do_wait_for_completed_scheduler<const VIA_DROP: bool, const FROM_INTERNAL: bool, const IS_RESTART: bool>(&self) -> Option<(ExecuteTimings, Result<()>)> {
+    fn wait_for_scheduler<const VIA_DROP: bool, const FROM_INTERNAL: bool, const IS_RESTART: bool>(&self) -> Option<(ExecuteTimings, Result<()>)> {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if VIA_DROP {
@@ -8187,21 +8187,21 @@ impl Bank {
     }
 
     pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<()>) {
-        self.do_wait_for_completed_scheduler::<false, false, false>().unwrap_or((ExecuteTimings::default(), Ok(())))
+        self.wait_for_scheduler::<false, false, false>().unwrap_or((ExecuteTimings::default(), Ok(())))
     }
 
     fn wait_for_completed_scheduler_via_drop(&self) -> (ExecuteTimings, Result<()>) {
-        self.do_wait_for_completed_scheduler::<true, false, false>().unwrap_or((ExecuteTimings::default(), Ok(())))
+        self.wait_for_scheduler::<true, false, false>().unwrap_or((ExecuteTimings::default(), Ok(())))
     }
 
     fn wait_for_completed_scheduler_via_internal_drop(self) {
         use assert_matches::assert_matches;
-        assert_matches!(self.do_wait_for_completed_scheduler::<true, true, false>(), Some(_));
+        assert_matches!(self.wait_for_scheduler::<true, true, false>(), Some(_));
     }
 
     fn wait_for_reusable_scheduler(&self) {
         use assert_matches::assert_matches;
-        assert_matches!(self.do_wait_for_completed_scheduler::<false, false, true>(), None);
+        assert_matches!(self.wait_for_scheduler::<false, false, true>(), None);
     }
 
     /// Get the EAH that will be used by snapshots

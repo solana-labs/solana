@@ -73,7 +73,7 @@ impl SchedulableBank {
 
 impl Drop for SchedulableBank {
     fn drop(&mut self) {
-        self.0.not_schedulable();
+        self.0.trigger_scheduler_termination();
     }
 }
 
