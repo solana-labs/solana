@@ -113,7 +113,6 @@ pub trait LikeSchedulerPool: Send + Sync + std::fmt::Debug {
 }
 
 pub trait LikePooledScheduler: LikeScheduler {
-    fn replace_scheduler_context(&self, context: SchedulerContext);
 }
 
 impl Index<u64> for BankForks {
@@ -235,7 +234,7 @@ impl BankForks {
     }
 
     // take Mode when we support to use unified_scheduler for banking.
-    fn add_new_bank(&mut self, bank: Bank, for_replaying: bool, inherited_scheduler: Option<Box<dyn LikePooledScheduler>>) -> Arc<Bank> {
+    fn add_new_bank(&mut self, bank: Bank, for_replaying: bool) -> Arc<Bank> {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), SchedulableBank(bank.clone()));
         assert!(prev.is_none());
@@ -246,12 +245,7 @@ impl BankForks {
         }
         if let Some((mode, scheduler_pool)) = self.get_scheduler_pool(for_replaying) {
             let new_context = SchedulerContext::new(bank.clone(), mode);
-            if let Some(inherited_scheduler) = inherited_scheduler {
-                inherited_scheduler.replace_scheduler_context(new_context);
-                bank.install_scheduler(inherited_scheduler);
-            } else {
-                bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
-            }
+            bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
         }
         bank
     }
