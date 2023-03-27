@@ -80,7 +80,14 @@ impl<O: BucketOccupied> BucketStorage<O> {
         stats: Arc<BucketStats>,
         count: Arc<AtomicU64>,
     ) -> Self {
-        let cell_size = elem_size * num_elems + O::offset_to_first_data() as u64;
+        let offset = O::offset_to_first_data();
+        let size_of_u64 = std::mem::size_of::<u64>();
+        assert_eq!(
+            offset / size_of_u64 * size_of_u64,
+            offset,
+            "header size must be a multiple of u64"
+        );
+        let cell_size = elem_size * num_elems + offset as u64;
         let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &stats);
         Self {
             path,
@@ -187,8 +194,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         }
     }
 
-    #[allow(clippy::mut_from_ref)]
-    pub fn get_mut_from_parts<T: Sized>(item_slice: &mut [u8]) -> &mut T {
+    pub(crate) fn get_mut_from_parts<T: Sized>(item_slice: &mut [u8]) -> &mut T {
         unsafe {
             let item = item_slice.as_ptr() as *mut T;
             &mut *item
@@ -356,7 +362,11 @@ impl<O: BucketOccupied> BucketStorage<O> {
 
 #[cfg(test)]
 mod test {
-    use {super::*, crate::index_entry::IndexBucket, tempfile::tempdir};
+    use {
+        super::*,
+        crate::{bucket_storage::BucketOccupied, index_entry::IndexBucket},
+        tempfile::tempdir,
+    };
 
     #[test]
     fn test_bucket_storage() {
@@ -385,5 +395,41 @@ mod test {
         assert!(!storage.is_free(ix));
         storage.free(ix);
         assert!(storage.is_free(ix));
+    }
+
+    struct BucketBadHeader {}
+
+    impl BucketOccupied for BucketBadHeader {
+        fn occupy(&mut self, _element: &mut [u8], _ix: usize) {
+            unimplemented!();
+        }
+        fn free(&mut self, _element: &mut [u8], _ix: usize) {
+            unimplemented!();
+        }
+        fn is_free(&self, _element: &[u8], _ix: usize) -> bool {
+            unimplemented!();
+        }
+        fn offset_to_first_data() -> usize {
+            // not multiple of u64
+            std::mem::size_of::<u64>() - 1
+        }
+        /// initialize this struct
+        fn new(_num_elements: usize) -> Self {
+            Self {}
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: `(left == right)`")]
+    fn test_header_size() {
+        _ = BucketStorage::<BucketBadHeader>::new_with_capacity(
+            Arc::default(),
+            0,
+            0,
+            0,
+            0,
+            Arc::default(),
+            Arc::default(),
+        );
     }
 }

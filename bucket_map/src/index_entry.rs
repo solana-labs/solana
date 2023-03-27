@@ -11,10 +11,16 @@ use {
     std::fmt::Debug,
 };
 
+/// in use/occupied
+const OCCUPIED_OCCUPIED: u64 = 1;
+/// free, ie. not occupied
+const OCCUPIED_FREE: u64 = 0;
+
 /// header for elements in a bucket
+/// needs to be multiple of size_of::<u64>()
 #[repr(C)]
 struct OccupiedHeader {
-    /// non-zero if occupied, 0 if occupied
+    /// OCCUPIED_OCCUPIED or OCCUPIED_FREE
     occupied: u64,
 }
 
@@ -26,20 +32,20 @@ impl BucketOccupied for BucketWithHeader {
     fn occupy(&mut self, element: &mut [u8], _ix: usize) {
         let entry: &mut OccupiedHeader =
             BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
-        assert_eq!(entry.occupied, 0);
-        entry.occupied = 1;
+        assert_eq!(entry.occupied, OCCUPIED_FREE);
+        entry.occupied = OCCUPIED_OCCUPIED;
     }
     fn free(&mut self, element: &mut [u8], _ix: usize) {
         let entry: &mut OccupiedHeader =
             BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
-        assert_eq!(entry.occupied, 1);
-        entry.occupied = 0;
+        assert_eq!(entry.occupied, OCCUPIED_OCCUPIED);
+        entry.occupied = OCCUPIED_FREE;
     }
     fn is_free(&self, element: &[u8], _ix: usize) -> bool {
         let entry: &OccupiedHeader = BucketStorage::<BucketWithHeader>::get_from_parts(element);
-        let free = entry.occupied == 0;
-        assert!(free || entry.occupied == 1);
-        entry.occupied == 0
+        let free = entry.occupied == OCCUPIED_FREE;
+        assert!(free || entry.occupied == OCCUPIED_OCCUPIED);
+        free
     }
     fn offset_to_first_data() -> usize {
         std::mem::size_of::<OccupiedHeader>()
