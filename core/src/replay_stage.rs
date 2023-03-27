@@ -1178,6 +1178,11 @@ impl ReplayStage {
         my_pubkey: &Pubkey,
         leader_schedule_cache: &LeaderScheduleCache,
     ) {
+        debug!(
+            "dump_then_repair_correct_slots at {:?}, duplicate slots: {:?}",
+            blockstore.ledger_path(),
+            duplicate_slots_to_repair
+        );
         if duplicate_slots_to_repair.is_empty() {
             return;
         }
@@ -1208,14 +1213,16 @@ impl ReplayStage {
                 })
                 .unwrap_or(false);
 
+            debug!("dump_then_repair_correct_slots checking slot {duplicate_slot} correct_hash: {correct_hash} is_poh_building_on_duplicate_fork {is_poh_building_on_duplicate_fork} at {:?}", blockstore.ledger_path());
+
             let did_dump_repair = {
                 if !is_poh_building_on_duplicate_fork {
                     let frozen_hash = bank_forks.read().unwrap().bank_hash(*duplicate_slot);
                     if let Some(frozen_hash) = frozen_hash {
                         if frozen_hash == *correct_hash {
                             warn!(
-                                "Trying to dump slot {} with correct_hash {}",
-                                *duplicate_slot, *correct_hash
+                                "Trying to dump slot {} with correct_hash {} at {:?}",
+                                *duplicate_slot, *correct_hash, blockstore.ledger_path()
                             );
                             return false;
                         } else if frozen_hash == Hash::default()
@@ -1224,15 +1231,16 @@ impl ReplayStage {
                             )
                         {
                             warn!(
-                                "Trying to dump unfrozen slot {} that is not dead",
-                                *duplicate_slot
+                                "Trying to dump unfrozen slot {} that is not dead at {:?}",
+                                *duplicate_slot,
+                                blockstore.ledger_path()
                             );
                             return false;
                         }
                     } else {
                         warn!(
-                            "Trying to dump slot {} which does not exist in bank forks",
-                            *duplicate_slot
+                            "Trying to dump slot {} which does not exist in bank forks at {:?}",
+                            *duplicate_slot, blockstore.ledger_path()
                         );
                         return false;
                     }
@@ -1357,7 +1365,11 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         blockstore: &Blockstore,
     ) {
-        warn!("purging slot {}", duplicate_slot);
+        warn!(
+            "purging slot {} at {:?}",
+            duplicate_slot,
+            blockstore.ledger_path()
+        );
 
         // Doesn't need to be root bank, just needs a common bank to
         // access the status cache and accounts
@@ -1410,8 +1422,11 @@ impl ReplayStage {
 
         for (slot, slot_id) in slots_to_purge {
             warn!(
-                "purging descendant: {} with slot_id {}, of slot {}",
-                slot, slot_id, duplicate_slot
+                "purging descendant: {} with slot_id {}, of slot {} at {:?}",
+                slot,
+                slot_id,
+                duplicate_slot,
+                blockstore.ledger_path()
             );
             // Clear the slot signatures from status cache for this slot.
             // TODO: What about RPC queries that had already cloned the Bank for this slot
@@ -2459,10 +2474,18 @@ impl ReplayStage {
             replay_result: None,
         };
         let my_pubkey = &my_pubkey.clone();
-        trace!("Replay active bank: slot {}", bank_slot);
+        info!(
+            "Replay active bank: slot {} at {:?}",
+            bank_slot,
+            blockstore.ledger_path()
+        );
         if progress.get(&bank_slot).map(|p| p.is_dead).unwrap_or(false) {
             // If the fork was marked as dead, don't replay it
-            debug!("bank_slot {:?} is marked dead", bank_slot);
+            debug!(
+                "bank_slot {:?} is marked dead at {:?}",
+                bank_slot,
+                blockstore.ledger_path()
+            );
             replay_result.is_slot_dead = true;
         } else {
             let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
