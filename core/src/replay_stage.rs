@@ -1515,6 +1515,8 @@ impl ReplayStage {
                     return;
                 }
 
+                debug!("process_gossip_duplicate_confirmed_slots insert duplicate confirmed slot {confirmed_slot} hash {}duplicate_confirmed_hash");
+
                 let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
                     duplicate_confirmed_hash,
                     || progress.is_dead(confirmed_slot).unwrap_or(false),
@@ -3496,6 +3498,10 @@ impl ReplayStage {
 
         *gossip_duplicate_confirmed_slots = gossip_duplicate_confirmed_slots.split_off(&new_root);
         // gossip_confirmed_slots now only contains entries >= `new_root`
+        debug!(
+            "handle_new_root split  gossip_duplicate_confirmed_slots {:?}",
+            gossip_duplicate_confirmed_slots
+        );
 
         unfrozen_gossip_verified_vote_hashes.set_root(new_root);
         *epoch_slots_frozen_slots = epoch_slots_frozen_slots.split_off(&new_root);
