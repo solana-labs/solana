@@ -15,7 +15,7 @@ async fn timeout() {
     let mut client = context.banks_client;
     let payer = context.payer;
     let receiver = Pubkey::new_unique();
-    // If you set num_txs to 1 it never hangs.
+    // If you set num_txs to 1, the process_transactions call never hangs.
     // If you set it to 2 it sometimes hangs.
     // If you set it to 10 it seems to always hang.
     // Based on the logs this test usually hangs after processing 3 or 4 transactions
