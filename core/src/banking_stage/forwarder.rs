@@ -162,17 +162,7 @@ impl Forwarder {
             None => return (Ok(()), 0, None),
         };
 
-        const INTERVAL_MS: u64 = 100;
-        // 12 MB outbound limit per second
-        const MAX_BYTES_PER_SECOND: usize = 12_000_000;
-        const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
-        const MAX_BYTES_BUDGET: usize = MAX_BYTES_PER_INTERVAL * 5;
-        self.data_budget.update(INTERVAL_MS, |bytes| {
-            std::cmp::min(
-                bytes.saturating_add(MAX_BYTES_PER_INTERVAL),
-                MAX_BYTES_BUDGET,
-            )
-        });
+        self.update_data_budget();
 
         let packet_vec: Vec<_> = forwardable_packets
             .filter_map(|p| {
@@ -226,6 +216,21 @@ impl Forwarder {
         }
 
         (Ok(()), packet_vec_len, Some(leader_pubkey))
+    }
+
+    /// Re-fill the data budget if enough time has passed
+    fn update_data_budget(&self) {
+        const INTERVAL_MS: u64 = 100;
+        // 12 MB outbound limit per second
+        const MAX_BYTES_PER_SECOND: usize = 12_000_000;
+        const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
+        const MAX_BYTES_BUDGET: usize = MAX_BYTES_PER_INTERVAL * 5;
+        self.data_budget.update(INTERVAL_MS, |bytes| {
+            std::cmp::min(
+                bytes.saturating_add(MAX_BYTES_PER_INTERVAL),
+                MAX_BYTES_BUDGET,
+            )
+        });
     }
 }
 
