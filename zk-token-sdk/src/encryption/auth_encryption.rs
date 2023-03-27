@@ -305,22 +305,22 @@ mod tests {
         let keypair2 = Keypair::new();
 
         assert_ne!(
-            AeKey::new_from_signer(&keypair1, &Pubkey::default().as_ref())
+            AeKey::new_from_signer(&keypair1, Pubkey::default().as_ref())
                 .unwrap()
                 .0,
-            AeKey::new_from_signer(&keypair2, &Pubkey::default().as_ref())
+            AeKey::new_from_signer(&keypair2, Pubkey::default().as_ref())
                 .unwrap()
                 .0,
         );
 
         let null_signer = NullSigner::new(&Pubkey::default());
-        assert!(AeKey::new_from_signer(&null_signer, &Pubkey::default().as_ref()).is_err());
+        assert!(AeKey::new_from_signer(&null_signer, Pubkey::default().as_ref()).is_err());
     }
 
     fn tmp_file_path(name: &str) -> String {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        format!("{}/tmp/{}", out_dir, name)
+        format!("{out_dir}/tmp/{name}")
     }
 
     #[test]
