@@ -3524,7 +3524,12 @@ impl ReplayStage {
         let mut generate_new_bank_forks_loop = Measure::start("generate_new_bank_forks_loop");
         let mut new_banks = HashMap::new();
         for (parent_slot, children) in next_slots {
-            info!("checking if to create new fork for parent {} and children {:?} at {:?}", parent_slot, children, blockstore.ledger_path());
+            info!(
+                "checking if to create new fork for parent {} and children {:?} at {:?}",
+                parent_slot,
+                children,
+                blockstore.ledger_path()
+            );
             let parent_bank = frozen_banks
                 .get(&parent_slot)
                 .expect("missing parent in bank forks")
@@ -3532,9 +3537,11 @@ impl ReplayStage {
             for child_slot in children {
                 if forks.get(child_slot).is_some() || new_banks.get(&child_slot).is_some() {
                     info!(
-                        "child already active or frozen {} at {:?}",
+                        "child already active or frozen {} at {:?} exists in forks: {} exits in new bank: {}",
                         child_slot,
-                        blockstore.ledger_path()
+                        blockstore.ledger_path(),
+                        forks.get(child_slot).is_some(),
+                        new_banks.get(&child_slot).is_some(),
                     );
                     continue;
                 }
