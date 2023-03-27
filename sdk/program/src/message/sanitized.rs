@@ -197,6 +197,14 @@ impl SanitizedMessage {
         }
     }
 
+    /// Returns the list of account keys used for account lookup tables.
+    pub fn message_address_table_lookups(&self) -> &[v0::MessageAddressTableLookup] {
+        match self {
+            Self::Legacy(_) => &[],
+            Self::V0(message) => &message.message.address_table_lookups,
+        }
+    }
+
     /// Returns true if the account at the specified index is an input to some
     /// program instruction in this message.
     fn is_key_passed_to_program(&self, key_index: usize) -> bool {

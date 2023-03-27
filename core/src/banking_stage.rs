@@ -48,11 +48,14 @@ pub mod consumer;
 mod decision_maker;
 mod forwarder;
 mod packet_receiver;
+
 #[allow(dead_code)]
 mod scheduler_messages;
 
 #[allow(dead_code)]
 mod thread_aware_account_locks;
+#[allow(dead_code)]
+mod worker;
 
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 6;
@@ -609,6 +612,7 @@ mod tests {
             pubkey::Pubkey,
             signature::{Keypair, Signer},
             system_transaction,
+            transaction::{SanitizedTransaction, Transaction},
         },
         solana_streamer::socket::SocketAddrSpace,
         solana_vote_program::{
@@ -626,6 +630,12 @@ mod tests {
         let cluster_info =
             ClusterInfo::new(node.info.clone(), keypair, SocketAddrSpace::Unspecified);
         (node, cluster_info)
+    }
+
+    pub(crate) fn sanitize_transactions(txs: Vec<Transaction>) -> Vec<SanitizedTransaction> {
+        txs.into_iter()
+            .map(SanitizedTransaction::from_transaction_for_tests)
+            .collect()
     }
 
     #[test]
