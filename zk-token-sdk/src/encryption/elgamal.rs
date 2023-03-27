@@ -16,7 +16,6 @@
 use {
     crate::encryption::{
         discrete_log::DiscreteLog,
-        errors::ElGamalError,
         pedersen::{Pedersen, PedersenCommitment, PedersenOpening, G, H},
     },
     core::ops::{Add, Mul, Sub},
@@ -48,7 +47,14 @@ use {
         io::{Read, Write},
         path::Path,
     },
+    thiserror::Error,
 };
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum ElGamalError {
+    #[error("key derivation method not supported")]
+    DerivationMethodNotSupported,
+}
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
 pub struct ElGamal;
