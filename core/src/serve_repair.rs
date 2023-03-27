@@ -1277,40 +1277,29 @@ impl ServeRepair {
         recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: &Blockstore,
-        mut slot: Slot,
+        slot: Slot,
         max_responses: usize,
         nonce: Nonce,
     ) -> Option<PacketBatch> {
         let mut res =
             PacketBatch::new_unpinned_with_recycler(recycler.clone(), max_responses, "run_orphan");
         // Try to find the next "n" parent slots of the input slot
-        while let Ok(Some(meta)) = blockstore.meta(slot) {
-            if meta.received == 0 {
-                break;
-            }
-            let packet = repair_response::repair_response_packet(
+        let packets = std::iter::successors(blockstore.meta(slot).ok()?, |meta| {
+            blockstore.meta(meta.parent_slot?).ok()?
+        })
+        .map_while(|meta| {
+            repair_response::repair_response_packet(
                 blockstore,
-                slot,
-                meta.received - 1,
+                meta.slot,
+                meta.received.checked_sub(1u64)?,
                 from_addr,
                 nonce,
-            );
-            if let Some(packet) = packet {
-                res.push(packet);
-            } else {
-                break;
-            }
-
-            if meta.parent_slot.is_some() && res.len() < max_responses {
-                slot = meta.parent_slot.unwrap();
-            } else {
-                break;
-            }
+            )
+        });
+        for packet in packets.take(max_responses) {
+            res.push(packet);
         }
-        if res.is_empty() {
-            return None;
-        }
-        Some(res)
+        (!res.is_empty()).then_some(res)
     }
 
     fn run_ancestor_hashes(
