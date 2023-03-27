@@ -1032,10 +1032,11 @@ impl ServeRepair {
             identity_keypair,
         )?;
         debug!(
-            "Sending repair request from {} for {:#?}",
+            "Sending repair request from {} for {:?}",
             identity_keypair.pubkey(),
             repair_request
         );
+
         Ok((addr, out))
     }
 
