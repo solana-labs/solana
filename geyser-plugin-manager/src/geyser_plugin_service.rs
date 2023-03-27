@@ -3,6 +3,7 @@ use {
         accounts_update_notifier::AccountsUpdateNotifierImpl,
         block_metadata_notifier::BlockMetadataNotifierImpl,
         block_metadata_notifier_interface::BlockMetadataNotifierLock,
+        entry_notifier::EntryNotifierImpl,
         geyser_plugin_manager::{GeyserPluginManager, GeyserPluginManagerRequest},
         slot_status_notifier::SlotStatusNotifierImpl,
         slot_status_observer::SlotStatusObserver,
@@ -11,6 +12,7 @@ use {
     crossbeam_channel::Receiver,
     log::*,
     solana_rpc::{
+        entry_notifier_interface::EntryNotifierLock,
         optimistically_confirmed_bank_tracker::BankNotification,
         transaction_notifier_interface::TransactionNotifierLock,
     },
@@ -30,6 +32,7 @@ pub struct GeyserPluginService {
     plugin_manager: Arc<RwLock<GeyserPluginManager>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
+    entry_notifier: Option<EntryNotifierLock>,
     block_metadata_notifier: Option<BlockMetadataNotifierLock>,
 }
 
@@ -74,6 +77,7 @@ impl GeyserPluginService {
         let account_data_notifications_enabled =
             plugin_manager.account_data_notifications_enabled();
         let transaction_notifications_enabled = plugin_manager.transaction_notifications_enabled();
+        let entry_notifications_enabled = plugin_manager.entry_notifications_enabled();
         let plugin_manager = Arc::new(RwLock::new(plugin_manager));
 
         let accounts_update_notifier: Option<AccountsUpdateNotifier> =
@@ -93,10 +97,20 @@ impl GeyserPluginService {
                 None
             };
 
+        let entry_notifier: Option<EntryNotifierLock> = if entry_notifications_enabled {
+            let entry_notifier = EntryNotifierImpl::new(plugin_manager.clone());
+            Some(Arc::new(RwLock::new(entry_notifier)))
+        } else {
+            None
+        };
+
         let (slot_status_observer, block_metadata_notifier): (
             Option<SlotStatusObserver>,
             Option<BlockMetadataNotifierLock>,
-        ) = if account_data_notifications_enabled || transaction_notifications_enabled {
+        ) = if account_data_notifications_enabled
+            || transaction_notifications_enabled
+            || entry_notifications_enabled
+        {
             let slot_status_notifier = SlotStatusNotifierImpl::new(plugin_manager.clone());
             let slot_status_notifier = Arc::new(RwLock::new(slot_status_notifier));
             (
@@ -124,6 +138,7 @@ impl GeyserPluginService {
             plugin_manager,
             accounts_update_notifier,
             transaction_notifier,
+            entry_notifier,
             block_metadata_notifier,
         })
     }
@@ -144,6 +159,10 @@ impl GeyserPluginService {
 
     pub fn get_transaction_notifier(&self) -> Option<TransactionNotifierLock> {
         self.transaction_notifier.clone()
+    }
+
+    pub fn get_entry_notifier(&self) -> Option<EntryNotifierLock> {
+        self.entry_notifier.clone()
     }
 
     pub fn get_block_metadata_notifier(&self) -> Option<BlockMetadataNotifierLock> {

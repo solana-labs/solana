@@ -19,6 +19,7 @@ jsonrpc-server-utils = { workspace = true }
 libloading = { workspace = true }
 log = { workspace = true }
 serde_json = { workspace = true }
+solana-entry = { workspace = true }
 solana-geyser-plugin-interface = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
