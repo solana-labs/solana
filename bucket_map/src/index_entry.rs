@@ -25,7 +25,6 @@ struct OccupiedHeader {
 }
 
 /// allocated in `contents` in a BucketStorage
-#[derive(Debug, Default)]
 pub struct BucketWithHeader {}
 
 impl BucketOccupied for BucketWithHeader {

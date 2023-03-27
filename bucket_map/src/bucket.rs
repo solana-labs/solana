@@ -23,7 +23,6 @@ use {
     },
 };
 
-#[derive(Default)]
 pub struct ReallocatedItems<I: BucketOccupied, D: BucketOccupied> {
     // Some if the index was reallocated
     // u64 is random associated with the new index
@@ -33,7 +32,15 @@ pub struct ReallocatedItems<I: BucketOccupied, D: BucketOccupied> {
     pub data: Option<(u64, BucketStorage<D>)>,
 }
 
-#[derive(Default)]
+impl<I: BucketOccupied, D: BucketOccupied> Default for ReallocatedItems<I, D> {
+    fn default() -> Self {
+        Self {
+            index: None,
+            data: None,
+        }
+    }
+}
+
 pub struct Reallocated<I: BucketOccupied, D: BucketOccupied> {
     /// > 0 if reallocations are encoded
     pub active_reallocations: AtomicUsize,
@@ -41,6 +48,15 @@ pub struct Reallocated<I: BucketOccupied, D: BucketOccupied> {
     /// actual reallocated bucket
     /// mutex because bucket grow code runs with a read lock
     pub items: Mutex<ReallocatedItems<I, D>>,
+}
+
+impl<I: BucketOccupied, D: BucketOccupied> Default for Reallocated<I, D> {
+    fn default() -> Self {
+        Self {
+            active_reallocations: AtomicUsize::default(),
+            items: Mutex::default(),
+        }
+    }
 }
 
 impl<I: BucketOccupied, D: BucketOccupied> Reallocated<I, D> {
