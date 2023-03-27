@@ -45,10 +45,8 @@ use {
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
         feature_set::FeatureSet,
         fee::FeeStructure,
-        fee_calculator::FeeRateGovernor,
         loader_instruction,
         message::{v0::LoadedAddresses, SanitizedMessage},
-        rent::Rent,
         signature::keypair_from_seed,
         stake,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
@@ -59,7 +57,7 @@ use {
         ConfirmedTransactionWithStatusMeta, InnerInstructions, TransactionStatusMeta,
         TransactionWithStatusMeta, VersionedTransactionWithStatusMeta,
     },
-    std::{collections::HashMap, str::FromStr},
+    std::collections::HashMap,
 };
 use {
     solana_bpf_loader_program::{
@@ -72,21 +70,29 @@ use {
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        genesis_utils::{
+            bootstrap_validator_stake_lamports, create_genesis_config,
+            create_genesis_config_with_leader_ex, GenesisConfigInfo,
+        },
     },
     solana_sdk::{
         account::AccountSharedData,
         bpf_loader, bpf_loader_deprecated,
         client::SyncClient,
+        clock::UnixTimestamp,
         entrypoint::SUCCESS,
+        fee_calculator::FeeRateGovernor,
+        genesis_config::ClusterType,
+        hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
         pubkey::Pubkey,
+        rent::Rent,
         signature::{Keypair, Signer},
         system_program,
         transaction::{SanitizedTransaction, Transaction, TransactionError},
     },
-    std::sync::Arc,
+    std::{str::FromStr, sync::Arc, time::Duration},
 };
 
 fn run_program(name: &str) -> u64 {
@@ -380,6 +386,40 @@ fn execute_transactions(
         },
     )
     .collect()
+}
+
+fn get_stable_genesis_config() -> GenesisConfigInfo {
+    let validator_pubkey =
+        Pubkey::from_str("GLh546CXmtZdvpEzL8sxzqhhUf7KPvmGaRpFHB5W1sjV").unwrap();
+    let mint_keypair = Keypair::from_base58_string(
+        "4YTH9JSRgZocmK9ezMZeJCCV2LVeR2NatTBA8AFXkg2x83fqrt8Vwyk91961E7ns4vee9yUBzuDfztb8i9iwTLFd",
+    );
+    let voting_keypair = Keypair::from_base58_string(
+        "4EPWEn72zdNY1JSKkzyZ2vTZcKdPW3jM5WjAgUadnoz83FR5cDFApbo7s5mwBcYXn8afVe2syReJaqBi4fkhG3mH",
+    );
+    let stake_pubkey = Pubkey::from_str("HGq9JF77xFXRgWRJy8VQuhdbdugrT856RvQDzr1KJo6E").unwrap();
+
+    let mut genesis_config = create_genesis_config_with_leader_ex(
+        123,
+        &mint_keypair.pubkey(),
+        &validator_pubkey,
+        &voting_keypair.pubkey(),
+        &stake_pubkey,
+        bootstrap_validator_stake_lamports(),
+        42,
+        FeeRateGovernor::new(0, 0), // most tests can't handle transaction fees
+        Rent::free(),               // most tests don't expect rent
+        ClusterType::Development,
+        vec![],
+    );
+    genesis_config.creation_time = Duration::ZERO.as_secs() as UnixTimestamp;
+
+    GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        voting_keypair,
+        validator_pubkey,
+    }
 }
 
 #[test]
@@ -1685,17 +1725,36 @@ fn test_program_sbf_upgrade() {
         genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_config(50);
+    } = get_stable_genesis_config();
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, &id, entrypoint);
-    let bank_client = BankClient::new(bank);
+    bank.deactivate_feature(&solana_sdk::feature_set::delay_visibility_of_program_deployment::id());
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
 
     // Deploy upgrade program
-    let buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
+    let buffer_keypair = Keypair::from_base58_string(
+        "4q4UvWxh2oMifTGbChDeWCbdN8eJEUQ1E6cuNnmymJ6AN5CMUT2VW5A1RKnG9dy7ypLczB9inMUAafh5TkpXrtxg",
+    );
+    let program_keypair = Keypair::from_base58_string(
+        "3LQpBxgpaFNJPit5a8t51pJKMkUmNUn5PhSTcuuhuuBxe43cTeqVPhMtKkFNr5VpFzCExf4ihibvuZgGxmjy6t8n",
+    );
     let program_id = program_keypair.pubkey();
-    let authority_keypair = Keypair::new();
+    let authority_keypair = Keypair::from_base58_string(
+        "285XFW2NTWd6CMvtHzvYYS1kWzmzcGBnyEXbH1v8hq6YJqJsLMTYMPkbEQqeE7m7UqhoMeK5V3HMJLf9DdxwU2Gy",
+    );
+
+    let mut instruction =
+        Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
+
+    // Call program before its deployed
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::ProgramAccountNotFound
+    );
+
     load_upgradeable_program(
         &bank_client,
         &mint_keypair,
@@ -1705,9 +1764,6 @@ fn test_program_sbf_upgrade() {
         "solana_sbf_rust_upgradeable",
     );
 
-    let mut instruction =
-        Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
-
     // Call upgrade program
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
     assert_eq!(
@@ -1716,7 +1772,9 @@ fn test_program_sbf_upgrade() {
     );
 
     // Upgrade program
-    let buffer_keypair = Keypair::new();
+    let buffer_keypair = Keypair::from_base58_string(
+        "2BgE4gD5wUCwiAVPYbmWd2xzXSsD9W2fWgNjwmVkm8WL7i51vK9XAXNnX1VB6oKQZmjaUPRd5RzE6RggB9DeKbZC",
+    );
     upgrade_program(
         &bank_client,
         &mint_keypair,
@@ -1739,7 +1797,9 @@ fn test_program_sbf_upgrade() {
     );
 
     // Set a new authority
-    let new_authority_keypair = Keypair::new();
+    let new_authority_keypair = Keypair::from_base58_string(
+        "3n15jxc2LAqAK9oMcC1JQYAzXhEqo61gsKAL6UBx7Vv8FEUfb7u3LUkq7Yy77KERgSsQGsCriQrFMAWN61PUDPJD",
+    );
     set_upgrade_authority(
         &bank_client,
         &mint_keypair,
@@ -1749,7 +1809,9 @@ fn test_program_sbf_upgrade() {
     );
 
     // Upgrade back to the original program
-    let buffer_keypair = Keypair::new();
+    let buffer_keypair = Keypair::from_base58_string(
+        "5T5L31FiUphXh4N6mxiWhEKPrdLhvMJSbaHo1Ne7zZYkw6YT1fVkqsWdA6pHMtqATiMTc4sfx5yTV9M9AnWDoBkW",
+    );
     upgrade_program(
         &bank_client,
         &mint_keypair,
@@ -1766,6 +1828,12 @@ fn test_program_sbf_upgrade() {
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(42))
     );
+    bank.freeze();
+    assert_eq!(
+        bank.hash(),
+        Hash::from_str("7Q6rqcHJDsJm3JMibwoqtJNtVc5LqWcbxxUhXB5h54an")
+            .expect("Failed to generate hash")
+    );
 }
 
 #[test]
@@ -1777,7 +1845,7 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
         genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_config(50);
+    } = get_stable_genesis_config();
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, &id, entrypoint);
@@ -1785,13 +1853,21 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
     let bank_client = BankClient::new_shared(&bank);
 
     // Deploy upgradeable program
-    let buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
+    let buffer_keypair = Keypair::from_base58_string(
+        "4q4UvWxh2oMifTGbChDeWCbdN8eJEUQ1E6cuNnmymJ6AN5CMUT2VW5A1RKnG9dy7ypLczB9inMUAafh5TkpXrtxg",
+    );
+    let program_keypair = Keypair::from_base58_string(
+        "3LQpBxgpaFNJPit5a8t51pJKMkUmNUn5PhSTcuuhuuBxe43cTeqVPhMtKkFNr5VpFzCExf4ihibvuZgGxmjy6t8n",
+    );
     let program_id = program_keypair.pubkey();
-    let authority_keypair = Keypair::new();
+    let authority_keypair = Keypair::from_base58_string(
+        "285XFW2NTWd6CMvtHzvYYS1kWzmzcGBnyEXbH1v8hq6YJqJsLMTYMPkbEQqeE7m7UqhoMeK5V3HMJLf9DdxwU2Gy",
+    );
 
     // Deploy indirect invocation program
-    let indirect_program_keypair = Keypair::new();
+    let indirect_program_keypair = Keypair::from_base58_string(
+        "2BgE4gD5wUCwiAVPYbmWd2xzXSsD9W2fWgNjwmVkm8WL7i51vK9XAXNnX1VB6oKQZmjaUPRd5RzE6RggB9DeKbZC",
+    );
     load_upgradeable_program(
         &bank_client,
         &mint_keypair,
@@ -1862,6 +1938,12 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
             );
         }
     }
+    bank.freeze();
+    assert_eq!(
+        bank.hash(),
+        Hash::from_str("2SDK5STZRyMQPKBB5feR2rAkvER3ARgyQZYjhkgTS7Sn")
+            .expect("Failed to generate hash")
+    );
 }
 
 #[test]
@@ -1873,7 +1955,7 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
         genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_config(50);
+    } = get_stable_genesis_config();
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, &id, entrypoint);
@@ -1881,10 +1963,16 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
     let bank_client = BankClient::new_shared(&bank);
 
     // Deploy upgradeable program
-    let buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
+    let buffer_keypair = Keypair::from_base58_string(
+        "4q4UvWxh2oMifTGbChDeWCbdN8eJEUQ1E6cuNnmymJ6AN5CMUT2VW5A1RKnG9dy7ypLczB9inMUAafh5TkpXrtxg",
+    );
+    let program_keypair = Keypair::from_base58_string(
+        "3LQpBxgpaFNJPit5a8t51pJKMkUmNUn5PhSTcuuhuuBxe43cTeqVPhMtKkFNr5VpFzCExf4ihibvuZgGxmjy6t8n",
+    );
     let program_id = program_keypair.pubkey();
-    let authority_keypair = Keypair::new();
+    let authority_keypair = Keypair::from_base58_string(
+        "285XFW2NTWd6CMvtHzvYYS1kWzmzcGBnyEXbH1v8hq6YJqJsLMTYMPkbEQqeE7m7UqhoMeK5V3HMJLf9DdxwU2Gy",
+    );
     load_upgradeable_program(
         &bank_client,
         &mint_keypair,
@@ -1895,7 +1983,9 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
     );
 
     // Deploy indirect invocation program
-    let indirect_program_keypair = Keypair::new();
+    let indirect_program_keypair = Keypair::from_base58_string(
+        "2BgE4gD5wUCwiAVPYbmWd2xzXSsD9W2fWgNjwmVkm8WL7i51vK9XAXNnX1VB6oKQZmjaUPRd5RzE6RggB9DeKbZC",
+    );
     load_upgradeable_program(
         &bank_client,
         &mint_keypair,
@@ -1906,7 +1996,9 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
     );
 
     // Deploy panic program
-    let panic_program_keypair = Keypair::new();
+    let panic_program_keypair = Keypair::from_base58_string(
+        "3n15jxc2LAqAK9oMcC1JQYAzXhEqo61gsKAL6UBx7Vv8FEUfb7u3LUkq7Yy77KERgSsQGsCriQrFMAWN61PUDPJD",
+    );
     load_upgradeable_program(
         &bank_client,
         &mint_keypair,
@@ -1928,7 +2020,9 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
     );
 
     // Prepare redeployment
-    let buffer_keypair = Keypair::new();
+    let buffer_keypair = Keypair::from_base58_string(
+        "5T5L31FiUphXh4N6mxiWhEKPrdLhvMJSbaHo1Ne7zZYkw6YT1fVkqsWdA6pHMtqATiMTc4sfx5yTV9M9AnWDoBkW",
+    );
     load_upgradeable_buffer(
         &bank_client,
         &mint_keypair,
@@ -1966,6 +2060,12 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
             TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
         );
     }
+    bank.freeze();
+    assert_eq!(
+        bank.hash(),
+        Hash::from_str("2A2vqbUKExRbnaAzSnDFXdsBZRZSpCjGZCAA3mFZG2sV")
+            .expect("Failed to generate hash")
+    );
 }
 
 #[test]
@@ -1977,7 +2077,7 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
         genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_config(50);
+    } = get_stable_genesis_config();
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, &id, entrypoint);
@@ -1985,10 +2085,16 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
     let bank_client = BankClient::new_shared(&bank);
 
     // Deploy upgradeable program
-    let buffer_keypair = Keypair::new();
-    let program_keypair = Keypair::new();
+    let buffer_keypair = Keypair::from_base58_string(
+        "4q4UvWxh2oMifTGbChDeWCbdN8eJEUQ1E6cuNnmymJ6AN5CMUT2VW5A1RKnG9dy7ypLczB9inMUAafh5TkpXrtxg",
+    );
+    let program_keypair = Keypair::from_base58_string(
+        "3LQpBxgpaFNJPit5a8t51pJKMkUmNUn5PhSTcuuhuuBxe43cTeqVPhMtKkFNr5VpFzCExf4ihibvuZgGxmjy6t8n",
+    );
     let program_id = program_keypair.pubkey();
-    let authority_keypair = Keypair::new();
+    let authority_keypair = Keypair::from_base58_string(
+        "285XFW2NTWd6CMvtHzvYYS1kWzmzcGBnyEXbH1v8hq6YJqJsLMTYMPkbEQqeE7m7UqhoMeK5V3HMJLf9DdxwU2Gy",
+    );
     load_upgradeable_program(
         &bank_client,
         &mint_keypair,
@@ -1999,7 +2105,9 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
     );
 
     // Deploy indirect invocation program
-    let indirect_program_keypair = Keypair::new();
+    let indirect_program_keypair = Keypair::from_base58_string(
+        "2BgE4gD5wUCwiAVPYbmWd2xzXSsD9W2fWgNjwmVkm8WL7i51vK9XAXNnX1VB6oKQZmjaUPRd5RzE6RggB9DeKbZC",
+    );
     load_upgradeable_program(
         &bank_client,
         &mint_keypair,
@@ -2055,6 +2163,12 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
             TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
         );
     }
+    bank.freeze();
+    assert_eq!(
+        bank.hash(),
+        Hash::from_str("3GSSW9KDp7urvxjK3DjWDRyJmTvXE8mQoXBEKAcXCisM")
+            .expect("Failed to generate hash")
+    );
 }
 
 #[test]
