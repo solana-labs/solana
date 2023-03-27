@@ -2996,7 +2996,7 @@ pub mod tests {
                 .get_current_instruction_context()
                 .expect("Failed to get instruction context")
                 .get_instruction_data()
-                .get(0)
+                .first()
                 .expect("Failed to get instruction data");
             Err(instruction_errors
                 .get(*err as usize)
