@@ -30,7 +30,11 @@ use {
         saturating_add_assign,
         transaction_context::{BorrowedAccount, InstructionContext},
     },
-    std::{cell::RefCell, rc::Rc, sync::Arc},
+    std::{
+        cell::RefCell,
+        rc::Rc,
+        sync::{atomic::Ordering, Arc},
+    },
 };
 
 fn get_state(data: &[u8]) -> Result<&LoaderV3State, InstructionError> {
@@ -584,6 +588,7 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
             get_or_create_executor_time.as_us()
         );
         drop(program);
+        loaded_program.usage_counter.fetch_add(1, Ordering::Relaxed);
         match &loaded_program.program {
             LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
             LoadedProgramType::Typed(executable) => execute(invoke_context, executable),
