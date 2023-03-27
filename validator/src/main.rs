@@ -1191,10 +1191,6 @@ pub fn main() {
     }
     let full_api = matches.is_present("full_rpc_api");
 
-    if matches.is_present("skip_poh_verify") {
-        eprintln!("--skip-poh-verify is deprecated.  Replace with --skip-verification.");
-    }
-
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
