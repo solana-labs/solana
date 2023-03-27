@@ -1,10 +1,7 @@
 use {
     solana_program_test::ProgramTest,
-    solana_sdk::{
-        pubkey::Pubkey, signature::Signer, transaction::Transaction,
-    },
+    solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::Transaction},
 };
-
 
 #[should_panic(expected = "RpcError(DeadlineExceeded")]
 #[tokio::test]
@@ -29,7 +26,11 @@ async fn timeout() {
             &receiver,
             transfer_lamports_base + i as u64, // deduping the tx
         )];
-        let msg = solana_sdk::message::Message::new_with_blockhash(&ixs, Some(&payer.pubkey()), &context.last_blockhash);
+        let msg = solana_sdk::message::Message::new_with_blockhash(
+            &ixs,
+            Some(&payer.pubkey()),
+            &context.last_blockhash,
+        );
         let tx = Transaction::new(&[&payer], msg, context.last_blockhash);
         txs.push(tx);
     }

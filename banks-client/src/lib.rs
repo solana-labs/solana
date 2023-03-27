@@ -537,7 +537,10 @@ mod tests {
         solana_sdk::{message::Message, signature::Signer, system_instruction},
         std::sync::{Arc, RwLock},
         tarpc::transport,
-        tokio::{runtime::Runtime, time::{sleep, Duration}},
+        tokio::{
+            runtime::Runtime,
+            time::{sleep, Duration},
+        },
     };
 
     #[test]
