@@ -3514,7 +3514,11 @@ impl ReplayStage {
                 next_slots.sort();
                 next_slots
             },
-            frozen_bank_slots,
+            {
+                let mut slots = frozen_bank_slots.clone();
+                slots.sort();
+                slots
+            },
             blockstore.ledger_path()
         );
         let mut generate_new_bank_forks_loop = Measure::start("generate_new_bank_forks_loop");
