@@ -13,7 +13,7 @@ use {
         collections::{BTreeMap, HashMap, HashSet},
         ops::Index,
         sync::{Arc, RwLock},
-        time::Instant,
+        time::{Duration, Instant},
     },
 };
 
@@ -171,9 +171,12 @@ pub struct RetransmitInfo {
 
 impl RetransmitInfo {
     pub fn reached_retransmit_threshold(&self) -> bool {
+        if self.retry_iteration > RETRANSMIT_BACKOFF_CAP * 2 {
+            return false;
+        }
         let backoff = std::cmp::min(self.retry_iteration, RETRANSMIT_BACKOFF_CAP);
         let backoff_duration_ms = (1_u64 << backoff) * RETRANSMIT_BASE_DELAY_MS;
-        self.retry_time.elapsed().as_millis() > u128::from(backoff_duration_ms)
+        self.retry_time.elapsed() > Duration::from_millis(backoff_duration_ms)
     }
 
     pub fn increment_retry_iteration(&mut self) {
