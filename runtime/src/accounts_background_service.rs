@@ -640,7 +640,6 @@ impl AccountsBackgroundService {
                             return;
                         }
                     } else {
-                        bank.shrink_candidate_slots();
                         if bank.block_height() - last_cleaned_block_height
                             > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
                         {
@@ -652,6 +651,7 @@ impl AccountsBackgroundService {
                             bank.clean_accounts(last_full_snapshot_slot);
                             last_cleaned_block_height = bank.block_height();
                         }
+                        bank.shrink_candidate_slots();
                     }
                     stats.record_and_maybe_submit(start_time.elapsed());
                     sleep(Duration::from_millis(INTERVAL_MS));
