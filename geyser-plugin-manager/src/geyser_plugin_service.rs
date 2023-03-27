@@ -74,6 +74,7 @@ impl GeyserPluginService {
         let account_data_notifications_enabled =
             plugin_manager.account_data_notifications_enabled();
         let transaction_notifications_enabled = plugin_manager.transaction_notifications_enabled();
+        let entry_notifications_enabled = plugin_manager.entry_notifications_enabled();
         let plugin_manager = Arc::new(RwLock::new(plugin_manager));
 
         let accounts_update_notifier: Option<AccountsUpdateNotifier> =
@@ -86,7 +87,7 @@ impl GeyserPluginService {
             };
 
         let transaction_notifier: Option<TransactionNotifierLock> =
-            if transaction_notifications_enabled {
+            if transaction_notifications_enabled || entry_notifications_enabled {
                 let transaction_notifier = TransactionNotifierImpl::new(plugin_manager.clone());
                 Some(Arc::new(RwLock::new(transaction_notifier)))
             } else {
@@ -96,7 +97,10 @@ impl GeyserPluginService {
         let (slot_status_observer, block_metadata_notifier): (
             Option<SlotStatusObserver>,
             Option<BlockMetadataNotifierLock>,
-        ) = if account_data_notifications_enabled || transaction_notifications_enabled {
+        ) = if account_data_notifications_enabled
+            || transaction_notifications_enabled
+            || entry_notifications_enabled
+        {
             let slot_status_notifier = SlotStatusNotifierImpl::new(plugin_manager.clone());
             let slot_status_notifier = Arc::new(RwLock::new(slot_status_notifier));
             (
