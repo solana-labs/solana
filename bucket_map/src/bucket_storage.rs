@@ -34,17 +34,22 @@ use {
 */
 pub const DEFAULT_CAPACITY_POW2: u8 = 5;
 
+/// keep track of an individual element's occupied vs. free state
+/// every element must either be occupied or free and should never be double occupied or double freed
+/// For parameters below, `element` is used to view/modify header fields or fields within the element data.
 pub trait BucketOccupied {
     /// set entry at `ix` as occupied (as opposed to free)
-    fn occupy(&mut self, cell: &mut [u8], ix: usize);
+    fn occupy(&mut self, element: &mut [u8], ix: usize);
     /// set entry at `ix` as free
-    fn free(&mut self, cell: &mut [u8], ix: usize);
+    fn free(&mut self, element: &mut [u8], ix: usize);
     /// return true if entry at `ix` is free
-    fn is_free(&self, cell: &[u8], ix: usize) -> bool;
+    fn is_free(&self, element: &[u8], ix: usize) -> bool;
     /// # of bytes prior to first data held in the element.
     /// This is the header size, if a header exists per element in the data.
+    /// This must be a multiple of sizeof(u64)
     fn offset_to_first_data() -> usize;
     /// initialize this struct
+    /// `num_elements` is the number of elements allocated in the bucket
     fn new(num_elements: usize) -> Self;
 }
 
