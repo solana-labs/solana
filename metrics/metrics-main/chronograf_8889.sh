@@ -9,12 +9,12 @@ cd "$(dirname "$0")"
 
 case $HOST in
 metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
+  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
+  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
   ;;
 tds-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
+  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
+  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
   ;;
 *)
   echo "Error: unknown $HOST"
@@ -54,11 +54,11 @@ sudo docker run \
   --detach \
   --name=chronograf_8889 \
   --env AUTH_DURATION=24h \
-  --env GOOGLE_CLIENT_ID= \
-  --env GOOGLE_CLIENT_SECRET= \
+  --env GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID_8889 \
+  --env GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET_8889 \
   --env PUBLIC_URL=https://metrics.solana.com:8889 \
-  --env GOOGLE_DOMAINS=solana.com,jito.wtf,jumpcrypto.com,certus.one,mango.markets,influxdata.com,solana.org,searce.com  \
-  --env TOKEN_SECRET= \
+  --env GOOGLE_DOMAINS=solana.com,jito.wtf,jumpcrypto.com,certus.one,mango.markets,influxdata.com,solana.org \
+  --env TOKEN_SECRET=$TOKEN_SECRET \
   --env TLS_PRIVATE_KEY=/certs/privkey.pem \
   --env TLS_CERTIFICATE=/certs/fullchain.pem \
   --env inactivity-duration=48h \
@@ -68,4 +68,4 @@ sudo docker run \
   --volume /var/lib/chronograf_8889:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file="5" \
-  $CHRONOGRAF_IMAGE --influxdb-url=https://$HOST:8086 --influxdb-username=root --influxdb-password=1c04e343572a4a0612f6a28ad9f28092d14a1ba8 
+  $CHRONOGRAF_IMAGE --influxdb-url=https://$HOST:8086 --influxdb-username=$INFLUXDB_USERNAME --influxdb-password=$INLUXDB_PASSWORD

@@ -45,6 +45,6 @@ sudo docker run -it -d \
   --user root:root \
   --publish 9093:9093 \
   --name=alertmanager \
-  --volume /prometheus/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
+  --volume "PWD"/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
   --volume /etc/hosts:/etc/hosts \
   $ALERTMANAGER_IMAGE 

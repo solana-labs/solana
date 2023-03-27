@@ -1,6 +1,6 @@
 #!/bin/bash -ex
 #
-# (Re)starts the Chronograf2 containers
+# (Re)starts the Chronograf containers
 #
 
 cd "$(dirname "$0")"
@@ -9,12 +9,12 @@ cd "$(dirname "$0")"
 
 case $HOST in
 metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
+  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
+  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
   ;;
 tds-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
+  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
+  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
   ;;
 *)
   echo "Error: unknown $HOST"
@@ -32,8 +32,8 @@ for container in chronograf_2; do
 
   (
     set +e
-    sudo docker kill chronograf2
-    sudo docker rm -f chronograf2
+    sudo docker kill $container
+    sudo docker rm -f $container
     exit 0
   )
 done
@@ -55,14 +55,14 @@ sudo docker run \
   --detach \
   --env AUTH_DURATION=24h \
   --env inactivity-duration=48h \
-  --env GOOGLE_CLIENT_ID= \
-  --env GOOGLE_CLIENT_SECRET= \
+  --env GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID_8888 \
+  --env GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET_8888 \
   --env PUBLIC_URL=https://metrics.solana.com:8888 \
-  --env GOOGLE_DOMAINS=solana.com,jito.wtf,jumpcrypto.com,certus.one,mango.markets,influxdata.com,solana.org,searce.com  \
+  --env GOOGLE_DOMAINS=solana.com,jito.wtf,jumpcrypto.com,certus.one,mango.markets,influxdata.com,solana.org  \
   --env TLS_CERTIFICATE=/certs/fullchain.pem \
   --env TLS_PRIVATE_KEY=/certs/privkey.pem \
-  --env TOKEN_SECRET= \
-  --name=chronograf2 \
+  --env TOKEN_SECRET=$TOKEN_SECRET \
+  --name=chronograf \
   --net=influxdb \
   --publish 8888:8888 \
   --user 0:0 \

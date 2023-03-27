@@ -9,12 +9,12 @@ cd "$(dirname "$0")"
 
 case $HOST in
 metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
+  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
+  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
   ;;
 tds-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
+  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
+  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
   ;;
 *)
   echo "Error: unknown $HOST"
@@ -24,12 +24,12 @@ esac
 : "${INFLUXDB_IMAGE:=influxdb:1.7}"
 : "${CHRONOGRAF_IMAGE:=chronograf:1.9.4}"
 : "${KAPACITOR_IMAGE:=kapacitor:1.6.5}"
-: "${GRAFANA_IMAGE:=grafana/grafana:8.5.5}"
+: "${GRAFANA_IMAGE:=grafana/grafana:9.4.7}"
 : "${PROMETHEUS_IMAGE:=prom/prometheus:v2.28.0}"
 : "${ALERTMANAGER_IMAGE:=prom/alertmanager:v0.23.0}"
 : "${ALERTMANAGER_DISCORD_IMAGE:=benjojo/alertmanager-discord:latest}"
 
-#docker pull $INFLUXDB_IMAGE
+docker pull $INFLUXDB_IMAGE
 docker pull $CHRONOGRAF_IMAGE
 docker pull $KAPACITOR_IMAGE
 docker pull $GRAFANA_IMAGE
@@ -37,38 +37,20 @@ docker pull $PROMETHEUS_IMAGE
 docker pull $ALERTMANAGER_IMAGE
 docker pull $ALERTMANAGER_DISCORD_IMAGE
 
-for container in chronograf chronograf_8889; do
+for container in chronograf chronograf_8889 prometheus alertmanager alertmanager-discord grafana kapacitor; do
   [[ -w /var/lib/$container ]]
   [[ -x /var/lib/$container ]]
 
   (
     set +e
-   # docker kill $container
-   # docker rm -f $container
-    docker kill prometheus
-    docker rm -f prometheus
-    docker kill alertmanager
-    docker rm -f alertmanager
-    docker kill alertmanager-discord
-    docker rm -f alertmanager-discord
-    docker kill grafana
-    docker rm -f grafana
-    docker kill grafana2
-    docker rm -f grafana2
-    docker kill chronograf2
-    docker rm -f chronograf2
-    docker kill chronograf_8889
-    docker rm -f chronograf_8889
-    docker kill kapacitor
-    docker rm -f kapacitor
+    docker kill $container
+    docker rm -f $container
     exit 0
   )
 done
 
-
-
-#docker network remove influxdb || true
-#docker network create influxdb
+docker network remove influxdb || true
+docker network create influxdb
 pwd
 rm -rf certs
 mkdir -p certs
@@ -99,7 +81,7 @@ sudo docker run -it -d \
 sudo docker run -it -d \
   --publish 9094:9094 \
   --name=alertmanager-discord \
-  --env DISCORD_WEBHOOK="" \
+  --env DISCORD_WEBHOOK=$DISCORD_WEBHOOK_ALERTMANAGER \
   $ALERTMANAGER_DISCORD_IMAGE
 
 sudo docker run \
@@ -116,15 +98,17 @@ sudo docker run \
   --log-opt max-file=5 \
   $GRAFANA_IMAGE
 
+sleep 20s
+
 sudo docker run \
   --detach \
   --name=chronograf_8889 \
   --env AUTH_DURATION=24h \
-  --env GOOGLE_CLIENT_ID= \
-  --env GOOGLE_CLIENT_SECRET= \
+  --env GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID_8889 \
+  --env GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET_8889 \
   --env PUBLIC_URL=https://metrics.solana.com:8889 \
-  --env GOOGLE_DOMAINS=solana.com,jito.wtf,jumpcrypto.com,certus.one,mango.markets,influxdata.com,solana.org,searce.com  \
-  --env TOKEN_SECRET= \
+  --env GOOGLE_DOMAINS=solana.com,jito.wtf,jumpcrypto.com,certus.one,mango.markets,influxdata.com,solana.org  \
+  --env TOKEN_SECRET=$TOKEN_SECRET \
   --env TLS_PRIVATE_KEY=/certs/privkey.pem \
   --env TLS_CERTIFICATE=/certs/fullchain.pem \
   --env inactivity-duration=48h \
@@ -134,20 +118,20 @@ sudo docker run \
   --volume /var/lib/chronograf_8889:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file="5" \
-  $CHRONOGRAF_IMAGE --influxdb-url=https://$HOST:8086 --influxdb-username=root --influxdb-password=1c04e343572a4a0612f6a28ad9f28092d14a1ba8
+  $CHRONOGRAF_IMAGE --influxdb-url=https://$HOST:8086 --influxdb-username=$INFLUXDB_USERNAME --influxdb-password=$INLUXDB_PASSWORD
 
 sudo docker run \
   --detach \
   --env AUTH_DURATION=24h \
   --env inactivity-duration=48h \
-  --env GOOGLE_CLIENT_ID= \
-  --env GOOGLE_CLIENT_SECRET= \
+  --env GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID_8888 \
+  --env GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET_8888 \
   --env PUBLIC_URL=https://metrics.solana.com:8888 \
-  --env GOOGLE_DOMAINS=solana.com,jito.wtf,jumpcrypto.com,certus.one,mango.markets,influxdata.com,solana.org,searce.com  \
+  --env GOOGLE_DOMAINS=solana.com,jito.wtf,jumpcrypto.com,certus.one,mango.markets,influxdata.com,solana.org \
   --env TLS_CERTIFICATE=/certs/fullchain.pem \
   --env TLS_PRIVATE_KEY=/certs/privkey.pem \
-  --env TOKEN_SECRET= \
-  --name=chronograf2 \
+  --env TOKEN_SECRET=$TOKEN_SECRET \
+  --name=chronograf \
   --net=influxdb \
   --publish 8888:8888 \
   --user 0:0 \
@@ -156,20 +140,6 @@ sudo docker run \
   --log-opt max-size=1g \
   --log-opt max-file=5 \
   chronograf:1.8.8 --influxdb-url=https://metrics.solana.com:8086
-
-sudo docker run \
-  --detach \
-  --name=grafana2 \
-  --net=influxdb \
-  --publish 3001:3001 \
-  --user root:root \
-  --env GF_PATHS_CONFIG=/grafana.ini \
-  --volume "$PWD"/certs:/certs:ro \
-  --volume "$PWD"/grafana-metrics.solana.com2.ini:/grafana.ini:ro \
-  --volume /var/lib/grafana2:/var/lib/grafana2 \
-  --log-opt max-size=1g \
-  --log-opt max-file=5 \
-  grafana/grafana:8.3.1
 
 sudo docker run \
   --detach \
@@ -182,7 +152,6 @@ sudo docker run \
   --log-opt max-file=5  \
   kapacitor:1.6.5
 
-"$(dirname "$0")"/start-telegraf.sh
 curl -h | sed -ne '/--tlsv/p'
 curl --retry 10 --retry-delay 5 -v --head https://$HOST:8086/ping 
 

@@ -9,12 +9,12 @@ cd "$(dirname "$0")"
 
 case $HOST in
 metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
+  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
+  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
   ;;
 tds-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
+  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
+  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
   ;;
 *)
   echo "Error: unknown $HOST"
@@ -43,8 +43,8 @@ sudo docker run -it -d \
   --user root:root \
   --publish 9090:9090 \
   --name=prometheus \
-  --volume /prometheus/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml \
-  --volume /prometheus/prometheus/first_rules.yml:/etc/prometheus/first_rules.yml \
+  --volume "$PWD"/prometheus.yml:/etc/prometheus/prometheus.yml \
+  --volume "$PWD"/first_rules.yml:/etc/prometheus/first_rules.yml \
   --volume /prometheus/prometheus/data:/prometheus \
   --volume /etc/hosts:/etc/hosts \
   $PROMETHEUS_IMAGE

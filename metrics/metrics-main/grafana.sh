@@ -9,19 +9,19 @@ cd "$(dirname "$0")"
 
 case $HOST in
 metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
+  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
+  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
   ;;
 tds-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
+  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
+  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
   ;;
 *)
   echo "Error: unknown $HOST"
   exit 1
 esac
 
-: "${GRAFANA_IMAGE:=grafana/grafana:8.5.5}"
+: "${GRAFANA_IMAGE:=grafana/grafana:9.4.7}"
 
 
 # remove the container
