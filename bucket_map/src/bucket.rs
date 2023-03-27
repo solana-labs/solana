@@ -3,8 +3,8 @@ use {
         bucket_item::BucketItem,
         bucket_map::BucketMapError,
         bucket_stats::BucketMapStats,
-        bucket_storage::{BucketStorage, DEFAULT_CAPACITY_POW2},
-        index_entry::IndexEntry,
+        bucket_storage::{BucketOccupied, BucketStorage, DEFAULT_CAPACITY_POW2},
+        index_entry::{DataBucket, IndexBucket, IndexEntry},
         MaxSearch, RefCount,
     },
     rand::{thread_rng, Rng},
@@ -23,27 +23,43 @@ use {
     },
 };
 
-#[derive(Default)]
-pub struct ReallocatedItems {
+pub struct ReallocatedItems<I: BucketOccupied, D: BucketOccupied> {
     // Some if the index was reallocated
     // u64 is random associated with the new index
-    pub index: Option<(u64, BucketStorage)>,
+    pub index: Option<(u64, BucketStorage<I>)>,
     // Some for a data bucket reallocation
     // u64 is data bucket index
-    pub data: Option<(u64, BucketStorage)>,
+    pub data: Option<(u64, BucketStorage<D>)>,
 }
 
-#[derive(Default)]
-pub struct Reallocated {
+impl<I: BucketOccupied, D: BucketOccupied> Default for ReallocatedItems<I, D> {
+    fn default() -> Self {
+        Self {
+            index: None,
+            data: None,
+        }
+    }
+}
+
+pub struct Reallocated<I: BucketOccupied, D: BucketOccupied> {
     /// > 0 if reallocations are encoded
     pub active_reallocations: AtomicUsize,
 
     /// actual reallocated bucket
     /// mutex because bucket grow code runs with a read lock
-    pub items: Mutex<ReallocatedItems>,
+    pub items: Mutex<ReallocatedItems<I, D>>,
 }
 
-impl Reallocated {
+impl<I: BucketOccupied, D: BucketOccupied> Default for Reallocated<I, D> {
+    fn default() -> Self {
+        Self {
+            active_reallocations: AtomicUsize::default(),
+            items: Mutex::default(),
+        }
+    }
+}
+
+impl<I: BucketOccupied, D: BucketOccupied> Reallocated<I, D> {
     /// specify that a reallocation has occurred
     pub fn add_reallocation(&self) {
         assert_eq!(
@@ -65,15 +81,15 @@ impl Reallocated {
 pub struct Bucket<T> {
     drives: Arc<Vec<PathBuf>>,
     //index
-    pub index: BucketStorage,
+    pub index: BucketStorage<IndexBucket>,
     //random offset for the index
     random: u64,
     //storage buckets to store SlotSlice up to a power of 2 in len
-    pub data: Vec<BucketStorage>,
+    pub data: Vec<BucketStorage<DataBucket>>,
     _phantom: PhantomData<T>,
     stats: Arc<BucketMapStats>,
 
-    pub reallocated: Reallocated,
+    pub reallocated: Reallocated<IndexBucket, DataBucket>,
 }
 
 impl<'b, T: Clone + Copy + 'static> Bucket<T> {
@@ -149,7 +165,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     /// if entry does not exist, return just the index of an empty entry appropriate for this key
     /// returns (existing entry, index of the found or empty entry)
     fn find_entry_mut<'a>(
-        index: &'a mut BucketStorage,
+        index: &'a mut BucketStorage<IndexBucket>,
         key: &Pubkey,
         random: u64,
     ) -> Result<(Option<&'a mut IndexEntry>, u64), BucketMapError> {
@@ -188,7 +204,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     fn bucket_find_entry<'a>(
-        index: &'a BucketStorage,
+        index: &'a BucketStorage<IndexBucket>,
         key: &Pubkey,
         random: u64,
     ) -> Option<(&'a IndexEntry, u64)> {
@@ -207,7 +223,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     fn bucket_create_key(
-        index: &mut BucketStorage,
+        index: &mut BucketStorage<IndexBucket>,
         key: &Pubkey,
         random: u64,
         is_resizing: bool,
@@ -219,7 +235,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             if !index.is_free(ii) {
                 continue;
             }
-            index.allocate(ii, is_resizing).unwrap();
+            index.occupy(ii, is_resizing).unwrap();
             let elem: &mut IndexEntry = index.get_mut(ii);
             // These fields will be overwritten after allocation by callers.
             // Since this part of the mmapped file could have previously been used by someone else, there can be garbage here.
@@ -280,7 +296,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             elem
         } else {
             let is_resizing = false;
-            self.index.allocate(elem_ix, is_resizing).unwrap();
+            self.index.occupy(elem_ix, is_resizing).unwrap();
             // These fields will be overwritten after allocation by callers.
             // Since this part of the mmapped file could have previously been used by someone else, there can be garbage here.
             let elem_allocate: &mut IndexEntry = self.index.get_mut(elem_ix);
@@ -332,7 +348,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                     //debug!(                        "DATA ALLOC {:?} {} {} {}",                        key, elem.data_location, best_bucket.capacity, elem_uid                    );
                     if num_slots > 0 {
                         let best_bucket = &mut self.data[best_fit_bucket as usize];
-                        best_bucket.allocate(ix, false).unwrap();
+                        best_bucket.occupy(ix, false).unwrap();
                         let slice = best_bucket.get_mut_cell_slice(ix, num_slots);
                         slice.iter_mut().zip(data).for_each(|(dest, src)| {
                             *dest = *src;
@@ -418,7 +434,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         }
     }
 
-    pub fn apply_grow_index(&mut self, random: u64, index: BucketStorage) {
+    pub fn apply_grow_index(&mut self, random: u64, index: BucketStorage<IndexBucket>) {
         self.stats
             .index
             .resize_grow(self.index.capacity_bytes(), index.capacity_bytes());
@@ -431,13 +447,13 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         std::mem::size_of::<T>() as u64
     }
 
-    fn add_data_bucket(&mut self, bucket: BucketStorage) {
+    fn add_data_bucket(&mut self, bucket: BucketStorage<DataBucket>) {
         self.stats.data.file_count.fetch_add(1, Ordering::Relaxed);
         self.stats.data.resize_grow(0, bucket.capacity_bytes());
         self.data.push(bucket);
     }
 
-    pub fn apply_grow_data(&mut self, ix: usize, bucket: BucketStorage) {
+    pub fn apply_grow_data(&mut self, ix: usize, bucket: BucketStorage<DataBucket>) {
         if self.data.get(ix).is_none() {
             for i in self.data.len()..ix {
                 // insert empty data buckets
@@ -477,7 +493,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         items.data = Some((data_index, new_bucket));
     }
 
-    fn bucket_index_ix(index: &BucketStorage, key: &Pubkey, random: u64) -> u64 {
+    fn bucket_index_ix(index: &BucketStorage<IndexBucket>, key: &Pubkey, random: u64) -> u64 {
         let mut s = DefaultHasher::new();
         key.hash(&mut s);
         //the locally generated random will make it hard for an attacker

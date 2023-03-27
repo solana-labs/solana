@@ -1,11 +1,62 @@
 #![allow(dead_code)]
 
 use {
-    crate::{bucket::Bucket, bucket_storage::BucketStorage, RefCount},
+    crate::{
+        bucket::Bucket,
+        bucket_storage::{BucketOccupied, BucketStorage},
+        RefCount,
+    },
     modular_bitfield::prelude::*,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::fmt::Debug,
 };
+
+/// in use/occupied
+const OCCUPIED_OCCUPIED: u64 = 1;
+/// free, ie. not occupied
+const OCCUPIED_FREE: u64 = 0;
+
+/// header for elements in a bucket
+/// needs to be multiple of size_of::<u64>()
+#[repr(C)]
+struct OccupiedHeader {
+    /// OCCUPIED_OCCUPIED or OCCUPIED_FREE
+    occupied: u64,
+}
+
+/// allocated in `contents` in a BucketStorage
+pub struct BucketWithHeader {}
+
+impl BucketOccupied for BucketWithHeader {
+    fn occupy(&mut self, element: &mut [u8], _ix: usize) {
+        let entry: &mut OccupiedHeader =
+            BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
+        assert_eq!(entry.occupied, OCCUPIED_FREE);
+        entry.occupied = OCCUPIED_OCCUPIED;
+    }
+    fn free(&mut self, element: &mut [u8], _ix: usize) {
+        let entry: &mut OccupiedHeader =
+            BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
+        assert_eq!(entry.occupied, OCCUPIED_OCCUPIED);
+        entry.occupied = OCCUPIED_FREE;
+    }
+    fn is_free(&self, element: &[u8], _ix: usize) -> bool {
+        let entry: &OccupiedHeader = BucketStorage::<BucketWithHeader>::get_from_parts(element);
+        let free = entry.occupied == OCCUPIED_FREE;
+        assert!(free || entry.occupied == OCCUPIED_OCCUPIED);
+        free
+    }
+    fn offset_to_first_data() -> usize {
+        std::mem::size_of::<OccupiedHeader>()
+    }
+    /// initialize this struct
+    fn new(_num_elements: usize) -> Self {
+        Self {}
+    }
+}
+
+pub type DataBucket = BucketWithHeader;
+pub type IndexBucket = BucketWithHeader;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -82,7 +133,7 @@ impl IndexEntry {
 
     // This function maps the original data location into an index in the current bucket storage.
     // This is coupled with how we resize bucket storages.
-    pub fn data_loc(&self, storage: &BucketStorage) -> u64 {
+    pub fn data_loc(&self, storage: &BucketStorage<DataBucket>) -> u64 {
         self.storage_offset() << (storage.capacity_pow2 - self.storage_capacity_when_created_pow2())
     }
 
@@ -95,7 +146,7 @@ impl IndexEntry {
             data_bucket.get_cell_slice(loc, self.num_slots)
         } else {
             // num_slots is 0. This means we don't have an actual allocation.
-            BucketStorage::get_empty_cell_slice()
+            &[]
         };
         Some((slice, self.ref_count))
     }
