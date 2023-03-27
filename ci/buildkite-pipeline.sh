@@ -312,6 +312,13 @@ pull_or_push_steps() {
     wait_step
   fi
 
+  # just a bunch of debugging
+  git branch
+  git status
+  optional_old_version_number_debug=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
+    grep -e "^-version" | sed  's/-version = "\(.*\)"/\1/')
+  echo "optional_old_version_number_debug: ->$optional_old_version_number_debug<-"
+
   # Version bump PRs are an edge case that can skip most of the CI steps
   if affects .toml$ && affects .lock$ && ! affects_other_than .toml$ .lock$; then
     optional_old_version_number=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
