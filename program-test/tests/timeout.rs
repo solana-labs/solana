@@ -6,6 +6,9 @@ use {
 #[should_panic(expected = "RpcError(DeadlineExceeded")]
 #[tokio::test]
 async fn timeout() {
+    // example of a test that hangs. The reasons for this hanging are a separate issue:
+    // https://github.com/solana-labs/solana/issues/30527).
+    // We just want to observe the timeout behaviour here.
     let mut pt = ProgramTest::default();
     pt.prefer_bpf(true);
     let context = pt.start_with_context().await;
@@ -15,7 +18,7 @@ async fn timeout() {
     // If you set num_txs to 1 it never hangs.
     // If you set it to 2 it sometimes hangs.
     // If you set it to 10 it seems to always hang.
-    // Based on the logs it usually hangs after processing 3 or 4 transactions
+    // Based on the logs this test usually hangs after processing 3 or 4 transactions
     let num_txs = 10;
     let num_txs_u64 = num_txs as u64;
     let transfer_lamports_base = 1_000_000u64;
