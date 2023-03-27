@@ -3833,6 +3833,8 @@ fn handle_chaining_for_slot(
                     find_slot_meta_else_create(db, working_set, new_chained_slots, prev_slot)?;
                 if !new_chained_slots.is_empty() {
                     debug!("Shred find_slot_meta_else_create new chain: at {:?} {:?} slot {} prev_slot {} ",  db.ledger_path(), new_chained_slots, slot, prev_slot);
+                } else {
+                    debug!("Shred find_slot_meta_else_create no new_chain: at {:?} slot {} prev_slot {} ",  db.ledger_path(), slot, prev_slot);
                 }
 
                 // This is a newly inserted slot/orphan so run the chaining logic to link it to a
@@ -3886,6 +3888,12 @@ fn handle_chaining_for_slot(
                 "Shred traverse_children_mut at {:?} new chains {:?} slot {} ",
                 db.ledger_path(),
                 new_chained_slots,
+                slot
+            );
+        } else {
+            debug!(
+                "Shred traverse_children_mut at {:?} no new_chains slot {} ",
+                db.ledger_path(),
                 slot
             );
         }
