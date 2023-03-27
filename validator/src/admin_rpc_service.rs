@@ -596,7 +596,10 @@ impl AdminRpc for AdminRpcImpl {
         debug!("set_tpu_host_address rpc request received: {:?}", tpu_addr);
 
         meta.with_post_init(|post_init| {
-            post_init.cluster_info.set_tpu(tpu_addr);
+            post_init.cluster_info.set_tpu(tpu_addr).map_err(|err| {
+                error!("Failed to set TPU address to {}: {}", tpu_addr, err);
+                jsonrpc_core::error::Error::internal_error()
+            })?;
             warn!(
                 "TPU address set to {:?}",
                 post_init.cluster_info.my_contact_info().tpu()
