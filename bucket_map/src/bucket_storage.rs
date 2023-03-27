@@ -195,17 +195,13 @@ impl<O: BucketOccupied> BucketStorage<O> {
     }
 
     pub(crate) fn get_mut_from_parts<T: Sized>(item_slice: &mut [u8]) -> &mut T {
-        unsafe {
-            let item = item_slice.as_ptr() as *mut T;
-            &mut *item
-        }
+        let item = item_slice.as_mut_ptr() as *mut T;
+        unsafe { &mut *item }
     }
 
     pub(crate) fn get_from_parts<T: Sized>(item_slice: &[u8]) -> &T {
-        unsafe {
-            let item = item_slice.as_ptr() as *const T;
-            &*item
-        }
+        let item = item_slice.as_ptr() as *const T;
+        unsafe { &*item }
     }
 
     pub fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
