@@ -1515,7 +1515,7 @@ impl ReplayStage {
                     return;
                 }
 
-                debug!("process_gossip_duplicate_confirmed_slots insert duplicate confirmed slot {confirmed_slot} hash {}duplicate_confirmed_hash");
+                debug!("process_gossip_duplicate_confirmed_slots insert duplicate confirmed slot {confirmed_slot} hash {duplicate_confirmed_hash}");
 
                 let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
                     duplicate_confirmed_hash,
