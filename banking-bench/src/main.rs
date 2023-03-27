@@ -454,7 +454,6 @@ fn main() {
             bank_forks.clone(),
             &Arc::new(PrioritizationFeeCache::new(0u64)),
         );
-        poh_recorder.write().unwrap().set_bank(&bank, false);
 
         // This is so that the signal_receiver does not go out of scope after the closure.
         // If it is dropped before poh_service, then poh_service will error when
@@ -538,6 +537,7 @@ fn main() {
                     std::u64::MAX,
                 );
 
+                assert!(poh_recorder.read().unwrap().bank().is_none());
                 poh_recorder.write().unwrap().set_bank(&bank, false);
                 assert!(poh_recorder.read().unwrap().bank().is_some());
                 debug!(
