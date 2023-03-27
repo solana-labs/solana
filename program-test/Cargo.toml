@@ -30,3 +30,5 @@ tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 solana-stake-program = { workspace = true }
+tarpc = { workspace = true }
+futures = { workspace = true }

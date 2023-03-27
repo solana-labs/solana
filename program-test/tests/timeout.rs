@@ -1,7 +1,55 @@
 use {
+    futures::future::{join_all, Future, FutureExt},
+    solana_banks_client::{BanksClient, BanksClientError},
     solana_program_test::ProgramTest,
-    solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::Transaction},
+    solana_sdk::{
+        commitment_config::CommitmentLevel, pubkey::Pubkey, signature::Signer,
+        transaction::Transaction,
+    },
+    std::time::{Duration, SystemTime},
+    tarpc::context::current,
 };
+
+fn one_second_from_now() -> SystemTime {
+    SystemTime::now() + Duration::from_secs(1)
+}
+
+// like the BanksClient method of the same name,
+// but uses a context with a one-second deadline
+fn process_transaction_with_commitment(
+    client: &mut BanksClient,
+    transaction: Transaction,
+    commitment: CommitmentLevel,
+) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+    let mut ctx = current();
+    ctx.deadline = one_second_from_now();
+    client
+        .process_transaction_with_commitment_and_context(ctx, transaction, commitment)
+        .map(|result| match result? {
+            None => Err(BanksClientError::ClientError(
+                "invalid blockhash or fee-payer",
+            )),
+            Some(transaction_result) => Ok(transaction_result?),
+        })
+}
+
+// like the BanksClient method of the same name,
+// but uses a context with a one-second deadline
+async fn process_transactions_with_commitment(
+    client: &mut BanksClient,
+    transactions: Vec<Transaction>,
+    commitment: CommitmentLevel,
+) -> Result<(), BanksClientError> {
+    let mut clients: Vec<_> = transactions.iter().map(|_| client.clone()).collect();
+    let futures = clients
+        .iter_mut()
+        .zip(transactions)
+        .map(|(client, transaction)| {
+            process_transaction_with_commitment(client, transaction, commitment)
+        });
+    let statuses = join_all(futures).await;
+    statuses.into_iter().collect() // Convert Vec<Result<_, _>> to Result<Vec<_>>
+}
 
 #[should_panic(expected = "RpcError(DeadlineExceeded")]
 #[tokio::test]
@@ -37,7 +85,9 @@ async fn timeout() {
         let tx = Transaction::new(&[&payer], msg, context.last_blockhash);
         txs.push(tx);
     }
-    client.process_transactions(txs).await.unwrap();
+    process_transactions_with_commitment(&mut client, txs, CommitmentLevel::default())
+        .await
+        .unwrap();
     let balance_after = client.get_balance(receiver).await.unwrap();
     assert_eq!(
         balance_after,
