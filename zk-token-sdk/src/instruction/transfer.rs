@@ -45,22 +45,8 @@ lazy_static::lazy_static! {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferData {
-<<<<<<< HEAD
-    /// Group encryption of the low 32 bits of the transfer amount
-    pub ciphertext_lo: pod::TransferAmountEncryption,
-
-    /// Group encryption of the high 32 bits of the transfer amount
-    pub ciphertext_hi: pod::TransferAmountEncryption,
-
-    /// The public encryption keys associated with the transfer: source, dest, and auditor
-    pub transfer_pubkeys: pod::TransferPubkeys,
-
-    /// The final spendable ciphertext after the transfer
-    pub new_source_ciphertext: pod::ElGamalCiphertext,
-=======
     /// The context data for the transfer proof
     pub context: TransferProofContext,
->>>>>>> 2d58bb287 ([zk-token-sdk] Add option to create proof context state in the proof verification program (#29996))
 
     /// Zero-knowledge proofs for Transfer
     pub proof: TransferProof,
