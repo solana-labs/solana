@@ -27,7 +27,6 @@ solana-net-utils = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }
-solana-tpu-client = { workspace = true, features = ["default"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 

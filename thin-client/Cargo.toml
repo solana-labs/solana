@@ -17,7 +17,6 @@ solana-connection-cache = { workspace = true }
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-sdk = { workspace = true }
-solana-tpu-client = { workspace = true }
 
 [dev-dependencies]
 solana-logger = { workspace = true }

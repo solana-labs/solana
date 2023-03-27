@@ -15,6 +15,5 @@ solana-connection-cache = { workspace = true }
 solana-net-utils = { workspace = true }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }
-solana-tpu-client = { workspace = true, features = ["default"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
