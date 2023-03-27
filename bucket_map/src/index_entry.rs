@@ -12,6 +12,7 @@ use {
     modular_bitfield::prelude::*,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::fmt::Debug,
+    std::marker::PhantomData,
 };
 
 /// header for elements in a bucket
@@ -21,69 +22,72 @@ struct OccupiedHeader {
     occupied: u64,
 }
 
-/// allocated in `contents` in a BucketStorage
-#[derive(Debug, Default)]
-pub struct BucketWithBitVec {
-    pub occupied: BitVec,
+/// header for elements in a bucket
+#[repr(C)]
+struct RefCountHeader {
+    ref_count: RefCount,
 }
 
-impl BucketOccupied for BucketWithBitVec {
+/// allocated in `contents` in a BucketStorage
+#[derive(Debug, Default)]
+pub struct BucketWith2BitVec<T> {
+    pub occupied: BitVec,
+    _phantom: Phantom<T>,
+}
+
+impl<T> BucketOccupied for BucketWith2BitVec<T> {
     fn occupy(&mut self, _element: &mut [u8], ix: usize) {
-        self.occupied.set(ix as u64, true);
+        self.occupied.set((ix * 2) as u64, true);
+        self.occupied.set((ix * 1 + 1) as u64, true);
     }
     fn free(&mut self, _element: &mut [u8], ix: usize) {
-        self.occupied.set(ix as u64, false);
+        self.occupied.set((ix * 2) as u64, false);
+        self.occupied.set((ix * 1 + 1) as u64, false);
     }
     fn is_free(&self, _element: &[u8], ix: usize) -> bool {
-        !self.occupied.get(ix as u64)
+        !(self.occupied.get((ix * 2) as u64) || self.occupied.get((ix * 2 + 1) as u64))
     }
     fn offset_to_first_data() -> usize {
-        // no header, nothing stored in data stream
         0
     }
     fn new(num_elements: usize) -> Self {
         Self {
-            occupied: BitVec::new_fill(false, num_elements as u64),
-        }
-    }
-}
-
-/// allocated in `contents` in a BucketStorage
-#[derive(Debug, Default)]
-pub struct IndexBucketUsingRefCountBits<T> {
-    _phantom: PhantomData<T>,
-}
-
-impl<T: Copy + 'static> BucketOccupied for IndexBucketUsingRefCountBits<T> {
-    fn occupy(&mut self, element: &mut [u8], _ix: usize) {
-        let entry: &mut IndexEntry<T> =
-            BucketStorage::<IndexBucketUsingRefCountBits<T>>::get_mut_from_parts(element);
-        assert!(matches!(entry.get_slot_count_enum(), SlotCountEnum::Free));
-        entry.set_slot_count_enum_value(SlotCountEnum::ZeroSlots);
-    }
-    fn free(&mut self, element: &mut [u8], _ix: usize) {
-        let entry: &mut IndexEntry<T> =
-            BucketStorage::<IndexBucketUsingRefCountBits<T>>::get_mut_from_parts(element);
-        assert!(!matches!(entry.get_slot_count_enum(), SlotCountEnum::Free));
-        entry.set_slot_count_enum_value(SlotCountEnum::Free);
-    }
-    fn is_free(&self, element: &[u8], _ix: usize) -> bool {
-        let entry: &IndexEntry<T> =
-            BucketStorage::<IndexBucketUsingRefCountBits<T>>::get_from_parts(element);
-        matches!(entry.get_slot_count_enum(), SlotCountEnum::Free)
-    }
-    fn offset_to_first_data() -> usize {
-        0
-    }
-    fn new(_num_elements: usize) -> Self {
-        Self {
+            occupied: BitVec::new_fill(false, (num_elements * 2) as u64),
             _phantom: PhantomData,
         }
     }
 }
 
-pub type DataBucket = BucketWithBitVec;
-pub type IndexBucket<T> = IndexBucketUsingRefCountBits<T>;
+/// allocated in `contents` in a BucketStorage
+#[derive(Debug, Default)]
+pub struct BucketWithBitVecAndRefCountHeader {
+    pub occupied: BitVec,
+}
+
+impl BucketOccupied for BucketWithBitVecAndRefCountHeader {
+    fn occupy(&mut self, _element: &mut [u8], ix: usize) {
+        self.occupied.set((ix * 2) as u64, true);
+        self.occupied.set((ix * 1 + 1) as u64, true);
+    }
+    fn free(&mut self, _element: &mut [u8], ix: usize) {
+        self.occupied.set((ix * 2) as u64, false);
+        self.occupied.set((ix * 1 + 1) as u64, false);
+    }
+    fn is_free(&self, _element: &[u8], ix: usize) -> bool {
+        !(self.occupied.get((ix * 2) as u64) || self.occupied.get((ix * 2 + 1) as u64))
+    }
+    fn offset_to_first_data() -> usize {
+        std::mem::size_of::<RefCountHeader>()
+    }
+    fn new(num_elements: usize) -> Self {
+        Self {
+            occupied: BitVec::new_fill(false, (num_elements * 2) as u64),
+        }
+    }
+}
+
+pub type DataBucket = BucketWithBitVecAndRefCountHeader;
+pub type IndexBucket<T> = BucketWith2BitVec<T>;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -91,7 +95,6 @@ pub type IndexBucket<T> = IndexBucketUsingRefCountBits<T>;
 // stored in the index bucket
 pub struct IndexEntry<T: Clone + Copy> {
     pub(crate) key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
-    packed_ref_count: PackedRefCount,
     /// depends on the contents of ref_count.slot_count_enum
     pub(crate) contents: SingleElementOrMultipleSlots<T>,
 }
@@ -174,17 +177,16 @@ pub(crate) struct PackedStorage {
 impl<T: Clone + Copy + 'static> IndexEntry<T> {
     pub fn init(&mut self, pubkey: &Pubkey) {
         self.key = *pubkey;
-        self.packed_ref_count.set_ref_count(0);
         self.set_slot_count_enum_value(SlotCountEnum::ZeroSlots);
     }
 
-    pub(crate) fn set_ref_count(&mut self, ref_count: RefCount) {
+    pub(crate) fn set_ref_count2(&mut self, ref_count: RefCount) {
         self.packed_ref_count
             .set_ref_count_checked(ref_count)
             .expect("ref count must fit into 62 bits!")
     }
 
-    pub(crate) fn get_slot_count_enum(&self) -> SlotCountEnum<'_, T> {
+    pub(crate) fn get_slot_count_enum2(&self) -> SlotCountEnum<'_, T> {
         unsafe {
             match self.packed_ref_count.slot_count_enum() {
                 0 => SlotCountEnum::Free,
@@ -198,7 +200,7 @@ impl<T: Clone + Copy + 'static> IndexEntry<T> {
         }
     }
 
-    pub(crate) fn get_multiple_slots_mut(&mut self) -> Option<&mut MultipleSlots> {
+    pub(crate) fn get_multiple_slots_mut2(&mut self) -> Option<&mut MultipleSlots> {
         unsafe {
             match self.packed_ref_count.slot_count_enum() {
                 3 => Some(&mut self.contents.multiple_slots),
@@ -207,7 +209,7 @@ impl<T: Clone + Copy + 'static> IndexEntry<T> {
         }
     }
 
-    pub(crate) fn set_slot_count_enum_value<'a>(&'a mut self, value: SlotCountEnum<'a, T>) {
+    pub(crate) fn set_slot_count_enum_value2<'a>(&'a mut self, value: SlotCountEnum<'a, T>) {
         self.packed_ref_count.set_slot_count_enum(match value {
             SlotCountEnum::Free => 0,
             SlotCountEnum::ZeroSlots => 1,
@@ -236,8 +238,8 @@ impl<T: Clone + Copy + 'static> IndexEntry<T> {
         }
     }
 
-    pub fn ref_count(&self) -> RefCount {
-        self.packed_ref_count.ref_count()
+    pub fn ref_count2(&self) -> RefCount {
+        todo!();//self.packed_ref_count.ref_count()
     }
 
     // This function maps the original data location into an index in the current bucket storage.
