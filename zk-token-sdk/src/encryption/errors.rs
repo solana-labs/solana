@@ -3,7 +3,7 @@ use thiserror::Error;
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum ElGamalError {
-    #[error("key derivation method not support")]
+    #[error("key derivation method not supported")]
     DerivationMethodNotSupported,
 }
 

@@ -11,17 +11,35 @@ use {
 };
 use {
     arrayref::{array_ref, array_refs},
+    sha3::{Digest, Sha3_512},
     solana_sdk::{
-        instruction::Instruction,
-        message::Message,
-        pubkey::Pubkey,
+        derivation_path::DerivationPath,
         signature::Signature,
-        signer::{Signer, SignerError},
+        signer::{
+            keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, Signer,
+            SignerError,
+        },
     },
-    std::{convert::TryInto, fmt},
+    std::{
+        convert::TryInto,
+        error, fmt,
+        fs::{self, File, OpenOptions},
+        io::{Read, Write},
+        path::Path,
+    },
     subtle::ConstantTimeEq,
+    thiserror::Error,
     zeroize::Zeroize,
 };
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum AuthenticatedEncryptionError {
+    #[error("key derivation method not supported")]
+    DerivationMethodNotSupported,
+
+    #[error("pubkey does not exist")]
+    PubkeyDoesNotExist,
+}
 
 struct AuthenticatedEncryption;
 impl AuthenticatedEncryption {
@@ -66,24 +84,28 @@ impl AuthenticatedEncryption {
 #[derive(Debug, Zeroize)]
 pub struct AeKey([u8; 16]);
 impl AeKey {
-    pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
-        let message = Message::new(
-            &[Instruction::new_with_bytes(*address, b"AeKey", vec![])],
-            Some(&signer.try_pubkey()?),
-        );
-        let signature = signer.try_sign_message(&message.serialize())?;
-
-        // Some `Signer` implementations return the default signature, which is not suitable for
-        // use as key material
-        if bool::from(signature.as_ref().ct_eq(Signature::default().as_ref())) {
-            Err(SignerError::Custom("Rejecting default signature".into()))
-        } else {
-            Ok(AeKey(signature.as_ref()[..16].try_into().unwrap()))
-        }
+    pub fn new_from_signer(signer: &dyn Signer, tag: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+        let seed = Self::seed_from_signer(signer, tag)?;
+        Self::from_seed(&seed)
     }
 
-    pub fn random<T: RngCore + CryptoRng>(rng: &mut T) -> Self {
-        AuthenticatedEncryption::keygen(rng)
+    pub fn seed_from_signer(signer: &dyn Signer, tag: &[u8]) -> Result<Vec<u8>, SignerError> {
+        let message = [b"AeKey", tag].concat();
+        let signature = signer.try_sign_message(&message)?;
+
+        if bool::from(signature.as_ref().ct_eq(Signature::default().as_ref())) {
+            return Err(SignerError::Custom("Rejecting default signatures".into()));
+        }
+
+        let mut hasher = Sha3_512::new();
+        hasher.update(signature.as_ref());
+        let result = hasher.finalize();
+
+        Ok(result.to_vec())
+    }
+
+    pub fn new_rand() -> Self {
+        AuthenticatedEncryption::keygen(&mut OsRng)
     }
 
     pub fn encrypt(&self, amount: u64) -> AeCiphertext {
@@ -92,6 +114,125 @@ impl AeKey {
 
     pub fn decrypt(&self, ct: &AeCiphertext) -> Option<u64> {
         AuthenticatedEncryption::decrypt(self, ct)
+    }
+
+    /// Reads a JSON-encoded key from a `Reader` implementor
+    pub fn read_json<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+        let bytes: [u8; 16] = serde_json::from_reader(reader)?;
+        Ok(Self(bytes))
+    }
+
+    /// Reads key from a file
+    pub fn read_json_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
+        let mut file = File::open(path.as_ref())?;
+        Self::read_json(&mut file)
+    }
+
+    /// Writes to a `Write` implementer with JSON-encoding
+    pub fn write_json<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+        let bytes = self.0;
+        let json = serde_json::to_string(&bytes.to_vec())?;
+        writer.write_all(&json.clone().into_bytes())?;
+        Ok(json)
+    }
+
+    /// Write key to a file with JSON-encoding
+    pub fn write_json_file<F: AsRef<Path>>(
+        &self,
+        outfile: F,
+    ) -> Result<String, Box<dyn error::Error>> {
+        let outfile = outfile.as_ref();
+
+        if let Some(outdir) = outfile.parent() {
+            fs::create_dir_all(outdir)?;
+        }
+
+        let mut f = {
+            #[cfg(not(unix))]
+            {
+                OpenOptions::new()
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                OpenOptions::new().mode(0o600)
+            }
+        }
+        .write(true)
+        .truncate(true)
+        .create(true)
+        .open(outfile)?;
+
+        self.write_json(&mut f)
+    }
+
+    /// Derive a key from an entropy seed.
+    ///
+    /// The seed is hashed using SHA3-512 and the first 16 bytes of the digest is taken as key. The
+    /// hash SHA3-512 is used to be consistent with `ElGamalKeypair::from_seed`.
+    pub fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+        const MINIMUM_SEED_LEN: usize = 16;
+
+        if seed.len() < MINIMUM_SEED_LEN {
+            return Err("Seed is too short".into());
+        }
+
+        let mut hasher = Sha3_512::new();
+        hasher.update(seed);
+        let result = hasher.finalize();
+
+        Ok(Self(result[..16].try_into()?))
+    }
+
+    /// Derive a key from a seed phrase and passphrase.
+    pub fn from_seed_phrase_and_passphrase(
+        seed_phrase: &str,
+        passphrase: &str,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        Self::from_seed(&generate_seed_from_seed_phrase_and_passphrase(
+            seed_phrase,
+            passphrase,
+        ))
+    }
+}
+
+impl EncodableKey for AeKey {
+    fn pubkey_string(&self) -> Result<String, Box<dyn error::Error>> {
+        Err(AuthenticatedEncryptionError::PubkeyDoesNotExist.into())
+    }
+
+    fn read_key<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+        Self::read_json(reader)
+    }
+
+    fn read_key_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
+        Self::read_json_file(path)
+    }
+
+    fn write_key<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+        self.write_json(writer)
+    }
+
+    fn write_key_file<F: AsRef<Path>>(&self, outfile: F) -> Result<String, Box<dyn error::Error>> {
+        self.write_json_file(outfile)
+    }
+
+    fn key_from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+        Self::from_seed(seed)
+    }
+
+    fn key_from_seed_and_derivation_path(
+        _seed: &[u8],
+        _derivation_path: Option<DerivationPath>,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        Err(AuthenticatedEncryptionError::DerivationMethodNotSupported.into())
+    }
+
+    fn key_from_seed_phrase_and_passphrase(
+        seed_phrase: &str,
+        passphrase: &str,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        Self::from_seed_phrase_and_passphrase(seed_phrase, passphrase)
     }
 }
 
@@ -143,12 +284,13 @@ impl fmt::Display for AeCiphertext {
 mod tests {
     use {
         super::*,
-        solana_sdk::{signature::Keypair, signer::null_signer::NullSigner},
+        bip39::{Language, Mnemonic, MnemonicType, Seed},
+        solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::null_signer::NullSigner},
     };
 
     #[test]
     fn test_aes_encrypt_decrypt_correctness() {
-        let key = AeKey::random(&mut OsRng);
+        let key = AeKey::new_rand();
         let amount = 55;
 
         let ct = key.encrypt(amount);
@@ -158,16 +300,87 @@ mod tests {
     }
 
     #[test]
-    fn test_aes_new() {
+    fn test_aes_new_from_signer() {
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
 
         assert_ne!(
-            AeKey::new(&keypair1, &Pubkey::default()).unwrap().0,
-            AeKey::new(&keypair2, &Pubkey::default()).unwrap().0,
+            AeKey::new_from_signer(&keypair1, &Pubkey::default().as_ref())
+                .unwrap()
+                .0,
+            AeKey::new_from_signer(&keypair2, &Pubkey::default().as_ref())
+                .unwrap()
+                .0,
         );
 
         let null_signer = NullSigner::new(&Pubkey::default());
-        assert!(AeKey::new(&null_signer, &Pubkey::default()).is_err());
+        assert!(AeKey::new_from_signer(&null_signer, &Pubkey::default().as_ref()).is_err());
+    }
+
+    fn tmp_file_path(name: &str) -> String {
+        use std::env;
+        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+        format!("{}/tmp/{}", out_dir, name)
+    }
+
+    #[test]
+    fn test_write_key_file() {
+        let outfile = tmp_file_path("test_write_ae_key_file.json");
+        let serialized_key = AeKey::new_rand().write_json_file(&outfile).unwrap();
+        let key_vec: Vec<u8> = serde_json::from_str(&serialized_key).unwrap();
+        assert!(Path::new(&outfile).exists());
+        assert_eq!(key_vec, AeKey::read_json_file(&outfile).unwrap().0.to_vec());
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                File::open(&outfile)
+                    .expect("open")
+                    .metadata()
+                    .expect("metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+        }
+        fs::remove_file(&outfile).unwrap();
+    }
+
+    #[test]
+    fn test_write_keypair_file_truncate() {
+        let outfile = tmp_file_path("test_write_keypair_file_truncate.json");
+
+        AeKey::new_rand().write_json_file(&outfile).unwrap();
+        AeKey::read_json_file(&outfile).unwrap();
+
+        // Ensure outfile is truncated
+        {
+            let mut f = File::create(&outfile).unwrap();
+            f.write_all(String::from_utf8([b'a'; 2048].to_vec()).unwrap().as_bytes())
+                .unwrap();
+        }
+        AeKey::new_rand().write_json_file(&outfile).unwrap();
+        AeKey::read_json_file(&outfile).unwrap();
+    }
+
+    #[test]
+    fn test_key_from_seed() {
+        let good_seed = vec![0; 16];
+        assert!(AeKey::from_seed(&good_seed).is_ok());
+
+        let too_short_seed = vec![0; 8];
+        assert!(AeKey::from_seed(&too_short_seed).is_err());
+    }
+
+    #[test]
+    fn test_key_from_seed_phrase_and_passphrase() {
+        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+        let passphrase = "42";
+        let seed = Seed::new(&mnemonic, passphrase);
+        let expected_key = AeKey::from_seed(seed.as_bytes()).unwrap();
+        let key = AeKey::from_seed_phrase_and_passphrase(mnemonic.phrase(), passphrase).unwrap();
+        assert_eq!(key.0, expected_key.0);
     }
 }

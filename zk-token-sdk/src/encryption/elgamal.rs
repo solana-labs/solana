@@ -273,41 +273,38 @@ impl ElGamalKeypair {
 }
 
 impl EncodableKey for ElGamalKeypair {
-    fn pubkey_to_string(&self) -> Result<String, Box<dyn error::Error>> {
+    fn pubkey_string(&self) -> Result<String, Box<dyn error::Error>> {
         Ok(self.public.to_string())
     }
 
-    fn read_keypair<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+    fn read_key<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
         Self::read_json(reader)
     }
 
-    fn read_keypair_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
+    fn read_key_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
         Self::read_json_file(path)
     }
 
-    fn write_keypair<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+    fn write_key<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
         self.write_json(writer)
     }
 
-    fn write_keypair_file<F: AsRef<Path>>(
-        &self,
-        outfile: F,
-    ) -> Result<String, Box<dyn error::Error>> {
+    fn write_key_file<F: AsRef<Path>>(&self, outfile: F) -> Result<String, Box<dyn error::Error>> {
         self.write_json_file(outfile)
     }
 
-    fn keypair_from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+    fn key_from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
         Self::from_seed(seed)
     }
 
-    fn keypair_from_seed_and_derivation_path(
+    fn key_from_seed_and_derivation_path(
         _seed: &[u8],
         _derivation_path: Option<DerivationPath>,
     ) -> Result<Self, Box<dyn error::Error>> {
         Err(ElGamalError::DerivationMethodNotSupported.into())
     }
 
-    fn keypair_from_seed_phrase_and_passphrase(
+    fn key_from_seed_phrase_and_passphrase(
         seed_phrase: &str,
         passphrase: &str,
     ) -> Result<Self, Box<dyn error::Error>> {
@@ -854,8 +851,7 @@ mod tests {
     fn tmp_file_path(name: &str) -> String {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = ElGamalKeypair::new_rand();
-        format!("{}/tmp/{}-{}", out_dir, name, keypair.public)
+        format!("{}/tmp/{}", out_dir, name)
     }
 
     #[test]
@@ -925,7 +921,7 @@ mod tests {
     }
 
     #[test]
-    fn test_secret_key_new() {
+    fn test_secret_key_new_from_signer() {
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
 
@@ -967,10 +963,10 @@ mod tests {
     #[test]
     fn test_keypair_from_seed() {
         let good_seed = vec![0; 32];
-        assert!(ElGamalKeypair::keypair_from_seed(&good_seed).is_ok());
+        assert!(ElGamalKeypair::from_seed(&good_seed).is_ok());
 
         let too_short_seed = vec![0; 31];
-        assert!(ElGamalKeypair::keypair_from_seed(&too_short_seed).is_err());
+        assert!(ElGamalKeypair::from_seed(&too_short_seed).is_err());
     }
 
     #[test]
@@ -978,7 +974,7 @@ mod tests {
         let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
         let passphrase = "42";
         let seed = Seed::new(&mnemonic, passphrase);
-        let expected_keypair = ElGamalKeypair::keypair_from_seed(seed.as_bytes()).unwrap();
+        let expected_keypair = ElGamalKeypair::from_seed(seed.as_bytes()).unwrap();
         let keypair =
             ElGamalKeypair::from_seed_phrase_and_passphrase(mnemonic.phrase(), passphrase).unwrap();
         assert_eq!(keypair.public, expected_keypair.public);
