@@ -3868,6 +3868,7 @@ fn handle_chaining_for_slot(
         // of the input slot
         let slot_function = |slot: &mut SlotMeta| {
             slot.set_connected();
+            info!("Shred slot_function at {:?} slot {:?} is_full: {}", db.ledger_path(), slot, slot.is_full());
 
             // We don't want to set the is_connected flag on the children of non-full
             // slots
