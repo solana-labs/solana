@@ -175,13 +175,9 @@ impl Forwarder {
         });
 
         let packet_vec: Vec<_> = forwardable_packets
-            .filter_map(|p| {
-                if !p.meta().forwarded() && self.data_budget.take(p.meta().size) {
-                    Some(p.data(..)?.to_vec())
-                } else {
-                    None
-                }
-            })
+            .filter(|p| !p.meta().forwarded())
+            .filter(|p| self.data_budget.take(p.meta().size))
+            .filter_map(|p| p.data(..).map(|data| data.to_vec()))
             .collect();
 
         let packet_vec_len = packet_vec.len();
