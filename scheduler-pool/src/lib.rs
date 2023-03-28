@@ -1,3 +1,4 @@
+#![feature(custom_inner_attributes)]
 #![rustfmt::skip]
 #![allow(unused_imports)]
 #![allow(dead_code)]
