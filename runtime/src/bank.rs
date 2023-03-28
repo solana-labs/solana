@@ -949,18 +949,18 @@ impl AbiExample for BuiltinPrograms {
 }
 
 #[derive(Clone, Debug)]
-pub struct SchedulerContext {
+pub struct SchedulingContext {
     pub bank: std::sync::Arc<Bank>,
     pub mode: solana_scheduler::Mode,
 }
 
-impl solana_scheduler::WithMode for SchedulerContext {
+impl solana_scheduler::WithMode for SchedulingContext {
     fn mode(&self) -> solana_scheduler::Mode {
         self.mode
     }
 }
 
-impl SchedulerContext {
+impl SchedulingContext {
     pub fn new(bank: Arc<Bank>, mode: solana_scheduler::Mode) -> Self {
         Self {
             bank,
@@ -1184,7 +1184,7 @@ pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
     fn trigger_termination(&mut self);
     fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool) -> Option<(ExecuteTimings, Result<()>)> ;
 
-    fn replace_scheduler_context(&self, context: SchedulerContext);
+    fn replace_scheduler_context(&self, context: SchedulingContext);
 
     // drop with exit atomicbool integration??
 

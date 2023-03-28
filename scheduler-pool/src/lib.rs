@@ -11,7 +11,7 @@ use solana_runtime::bank::CommitTransactionCounts;
 use std::borrow::Cow;
 use solana_runtime::bank::InstalledScheduler;
 use solana_runtime::bank_forks::InstalledSchedulerPool;
-use solana_runtime::bank::SchedulerContext;
+use solana_runtime::bank::SchedulingContext;
 use std::sync::atomic::AtomicBool;
 use solana_sdk::transaction::SanitizedTransaction;
 use solana_sdk::transaction::Result;
@@ -60,7 +60,7 @@ impl SchedulerPool {
         }
     }
 
-    fn prepare_new_scheduler(self: &Arc<Self>, context: SchedulerContext) {
+    fn prepare_new_scheduler(self: &Arc<Self>, context: SchedulingContext) {
         // block on some max count of borrowed schdulers!
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
@@ -91,7 +91,7 @@ impl SchedulerPoolWrapper {
 }
 
 impl SchedulerPool {
-    fn take_from_pool(self: &Arc<Self>, context: Option<SchedulerContext>) -> Box<dyn InstalledScheduler> {
+    fn take_from_pool(self: &Arc<Self>, context: Option<SchedulingContext>) -> Box<dyn InstalledScheduler> {
         let mut schedulers = self.schedulers.lock().unwrap();
         let maybe_scheduler = schedulers.pop();
         if let Some(scheduler) = maybe_scheduler {
@@ -130,7 +130,7 @@ impl SchedulerPool {
 }
 
 impl InstalledSchedulerPool for SchedulerPoolWrapper {
-    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn InstalledScheduler> {
+    fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler> {
         self.0.take_from_pool(Some(context))
     }
 
@@ -154,7 +154,7 @@ pub(crate) struct Scheduler {
     commit_status: Arc<CommitStatus>,
     checkpoint: Arc<Checkpoint>,
     stopped_mode: Option<solana_scheduler::Mode>,
-    current_scheduler_context: RwLock<Option<SchedulerContext>>,
+    current_scheduler_context: RwLock<Option<SchedulingContext>>,
     thread_count: usize,
     scheduler_pool: Arc<SchedulerPool>, // use Weak to cut circuric dep.
 }
@@ -173,12 +173,12 @@ impl CommitStatus {
         }
     }
 
-    fn check_and_wait(&self, random_id: u64, current_thread_name: &str, last_seq: &mut usize, context: &mut Option<SchedulerContext>) {
+    fn check_and_wait(&self, random_id: u64, current_thread_name: &str, last_seq: &mut usize, context: &mut Option<SchedulingContext>) {
         let mut is_paused = self.is_paused.lock().unwrap();
         if *last_seq != is_paused.1 {
             *last_seq = is_paused.1;
             if let Some(sc) = context.take() {
-                info!("CommitStatus: {current_thread_name} {} detected stale scheduler_context...", SchedulerContext::log_prefix(random_id, Some(&sc)));
+                info!("CommitStatus: {current_thread_name} {} detected stale scheduler_context...", SchedulingContext::log_prefix(random_id, Some(&sc)));
                 // drop arc in scheduler_context as soon as possible
                 drop(sc);
             }
@@ -217,7 +217,7 @@ impl CommitStatus {
 }
 
 #[derive(Debug)]
-pub struct Checkpoint(std::sync::Mutex<((usize, usize), Option<(ExecuteTimings, Result<()>)>, Option<SchedulerContext>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
+pub struct Checkpoint(std::sync::Mutex<((usize, usize), Option<(ExecuteTimings, Result<()>)>, Option<SchedulingContext>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
 
 impl Checkpoint {
     pub fn wait_for_restart(&self) {
@@ -313,7 +313,7 @@ impl Checkpoint {
             .unwrap();
     }
 
-    fn wait_for_restart_from_internal_thread(&self, scheduler_context: Option<SchedulerContext>) {
+    fn wait_for_restart_from_internal_thread(&self, scheduler_context: Option<SchedulingContext>) {
         let did_drop = if let Some(scheduler_context) = scheduler_context {
             scheduler_context.drop_cyclically()
         } else {
@@ -375,7 +375,7 @@ impl Checkpoint {
         ))
     }
 
-    pub fn replace_context_value(&self, new: SchedulerContext) {
+    pub fn replace_context_value(&self, new: SchedulingContext) {
         let mut g = self.0.lock().unwrap();
         let (_, self_return_value, b, context_count) = &mut *g;
         assert_eq!(*context_count, 0);
@@ -385,9 +385,9 @@ impl Checkpoint {
 }
 
 impl solana_scheduler::WithContext for Checkpoint {
-    type Context = SchedulerContext;
+    type Context = SchedulingContext;
 
-    fn use_context_value(&self) -> Option<SchedulerContext> {
+    fn use_context_value(&self) -> Option<SchedulingContext> {
         let mut a = &mut None;
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
@@ -416,7 +416,7 @@ impl solana_scheduler::WithContext for Checkpoint {
 
 
 impl Scheduler {
-    fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulerContext) -> Self {
+    fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
         let start = Instant::now();
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
@@ -669,7 +669,7 @@ impl Scheduler {
                             drop(ee);
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush) => {
-                            info!("post_execution_handler: {} {:?}", SchedulerContext::log_prefix(random_id, latest_scheduler_context.as_ref()), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
+                            info!("post_execution_handler: {} {:?}", SchedulingContext::log_prefix(random_id, latest_scheduler_context.as_ref()), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
                             if let Some(solana_scheduler::Mode::Replaying) = latest_scheduler_context.as_ref().map(|c| c.mode) {
                                 assert_eq!(skipped, 0);
                             }
@@ -720,7 +720,7 @@ impl Scheduler {
                         Some(&scheduled_high_ee_sender),
                         &processed_ee_receiver,
                         Some(&retired_ee_sender),
-                        |context| SchedulerContext::log_prefix(random_id, context.as_ref()),
+                        |context| SchedulingContext::log_prefix(random_id, context.as_ref()),
                     );
                     if scheduler_context.is_none() {
                        scheduler_context = checkpoint.use_context_value();
@@ -770,7 +770,7 @@ impl Scheduler {
         Checkpoint::new(thread_count)
     }
 
-    fn replace_scheduler_context_inner(&self, context: SchedulerContext) {
+    fn replace_scheduler_context_inner(&self, context: SchedulingContext) {
         self.checkpoint.replace_context_value(context);
     }
 
@@ -778,7 +778,7 @@ impl Scheduler {
         drop(self.current_scheduler_context.write().unwrap().take());
     }
 
-    fn scheduler_context_inner(&self) -> Option<SchedulerContext> {
+    fn scheduler_context_inner(&self) -> Option<SchedulingContext> {
         let mut sc = self.current_scheduler_context.write().unwrap();
         if let Some(sc) = &mut *sc {
             Some(sc.clone())
@@ -799,7 +799,7 @@ impl Scheduler {
 
         info!(
             "Scheduler::trigger_stop(): {} triggering stop..",
-            SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref()),
+            SchedulingContext::log_prefix(self.random_id, self.scheduler_context().as_ref()),
         );
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
@@ -837,7 +837,7 @@ impl Scheduler {
         }
     }
 
-    fn scheduler_context(&self) -> Option<SchedulerContext> {
+    fn scheduler_context(&self) -> Option<SchedulingContext> {
         self.scheduler_context_inner()
     }
 
@@ -908,7 +908,7 @@ impl InstalledScheduler for Scheduler {
 
     fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool) -> Option<(ExecuteTimings, Result<()>)> {
         self.do_trigger_stop(is_restart);
-        let label = format!("id_{:016x}", self.random_id); //SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
+        let label = format!("id_{:016x}", self.random_id); //SchedulingContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
         info!(
             "Scheduler::gracefully_stop(): {} {} waiting.. from_internal: {from_internal} is_restart: {is_restart}", label, std::thread::current().name().unwrap().to_string()
         );
@@ -959,7 +959,7 @@ impl InstalledScheduler for Scheduler {
         Box::new(SchedulerPoolWrapper(self.scheduler_pool.clone()))
     }
 
-    fn replace_scheduler_context(&self, context: SchedulerContext) {
+    fn replace_scheduler_context(&self, context: SchedulingContext) {
         self.replace_scheduler_context_inner(context);
     }
 }

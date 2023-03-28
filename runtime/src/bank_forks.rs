@@ -3,7 +3,7 @@
 use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
-        bank::{Bank, InstalledScheduler, SchedulerContext},
+        bank::{Bank, InstalledScheduler, SchedulingContext},
         epoch_accounts_hash,
         snapshot_config::SnapshotConfig,
     },
@@ -99,7 +99,7 @@ pub struct BankForks {
 }
 
 pub trait InstalledSchedulerPool: Send + Sync + std::fmt::Debug {
-    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn InstalledScheduler>;
+    fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler>;
     fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler>);
     // drop with exit atomicbool integration??
 }
@@ -232,7 +232,7 @@ impl BankForks {
             self.descendants.entry(parent).or_default().insert(slot);
         }
         if let Some(scheduler_pool) = &self.scheduler_pool {
-            let new_context = SchedulerContext::new(bank.clone(), solana_scheduler::Mode::Replaying);
+            let new_context = SchedulingContext::new(bank.clone(), solana_scheduler::Mode::Replaying);
             bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
         }
         bank
