@@ -354,6 +354,11 @@ impl AncestorHashesService {
                 ancestore_connection_cache,
             );
             if let Some((slot, decision)) = decision {
+                info!(
+                    "process_packet_batch got duplicate ancestor decision: {slot} {:?} at {:?}",
+                    decision,
+                    blockstore.ledger_path()
+                );
                 Self::handle_ancestor_request_decision(
                     slot,
                     decision,
@@ -528,6 +533,10 @@ impl AncestorHashesService {
             // Signal ReplayStage to dump the fork that is descended from
             // `earliest_mismatched_slot_to_dump`.
             if !potential_slots_to_dump.is_empty() {
+                debug!(
+                    "Sending duplicate slots info to relay stage: {:?}",
+                    potential_slots_to_dump
+                );
                 let _ = duplicate_slots_reset_sender.send(potential_slots_to_dump);
             }
         }
