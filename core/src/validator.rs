@@ -3,6 +3,7 @@
 pub use solana_perf::report_target_features;
 use {
     crate::{
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
@@ -376,6 +377,7 @@ impl Validator {
         use_quic: bool,
         tpu_connection_pool_size: usize,
         tpu_enable_udp: bool,
+        admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
     ) -> Self {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -855,6 +857,12 @@ impl Validator {
             } else {
                 (None, None)
             };
+
+        *admin_rpc_service_post_init.write().unwrap() = Some(AdminRpcRequestMetadataPostInit {
+            bank_forks: bank_forks.clone(),
+            cluster_info: cluster_info.clone(),
+            vote_account: *vote_account,
+        });
 
         let waited_for_supermajority = if let Ok(waited) = wait_for_supermajority(
             config,
@@ -1893,6 +1901,7 @@ mod tests {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            Arc::new(RwLock::new(None)),
         );
 
         assert_eq!(
@@ -1991,6 +2000,7 @@ mod tests {
                     DEFAULT_TPU_USE_QUIC,
                     DEFAULT_TPU_CONNECTION_POOL_SIZE,
                     DEFAULT_TPU_ENABLE_UDP,
+                    Arc::new(RwLock::new(None)),
                 )
             })
             .collect();

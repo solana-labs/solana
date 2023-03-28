@@ -10,6 +10,7 @@ use {
         rpc_client::RpcClient,
     },
     solana_core::{
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
@@ -118,6 +119,7 @@ pub struct TestValidatorGenesis {
     pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
     pub tpu_enable_udp: bool,
+    admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -146,6 +148,8 @@ impl Default for TestValidatorGenesis {
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             tpu_enable_udp: DEFAULT_TPU_ENABLE_UDP,
+            admin_rpc_service_post_init:
+                Arc::<RwLock<Option<AdminRpcRequestMetadataPostInit>>>::default(),
         }
     }
 }
@@ -757,6 +761,7 @@ impl TestValidator {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             config.tpu_enable_udp,
+            config.admin_rpc_service_post_init.clone(),
         ));
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
