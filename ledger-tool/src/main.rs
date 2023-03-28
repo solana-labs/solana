@@ -1271,7 +1271,7 @@ fn load_bank_forks(
             solana_scheduler_pool::SchedulerPool::new_boxed(
                 no_poh_recorder,
                 process_options.runtime_config.log_messages_bytes_limit,
-                no_transaction_status_sender.clone(),
+                no_transaction_status_sender,
                 no_replay_vote_sender,
                 _ignored_prioritization_fee_cache,
             ),
