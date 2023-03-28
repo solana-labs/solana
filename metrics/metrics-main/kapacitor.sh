@@ -2,7 +2,6 @@
 sudo docker kill kapacitor
 sudo docker rm -f kapacitor
 
-
 #running influx kapacitor service
 sudo docker run \
   --detach \

@@ -4,7 +4,7 @@
 #
 cd "$(dirname "$0")"
 
-. host.sh
+. "$PWD"/host.sh
 
 
 echo +++ status
@@ -22,8 +22,8 @@ echo +++ status
 
 for container in influxdb_internal chronograf_8888_internal chronograf_8889_internal grafana_internal; do
           if [ "$(sudo docker inspect --format='{{.State.Status}}' $container)" != "running" ] || [ "$(sudo docker inspect --format='{{.State.Status}}' $container)" = "exited" ]; then
-        curl -X POST -H 'Content-type: application/json' --data '{"text": "'"$container"' container is down in metrics-internal server"}' $SLACK_WEBHOOK
-        curl -X POST -H 'Content-type: application/json' --data '{"content": "'"$container"' container is down in metrics-internal server"}' $DISCORD_WEBHOOK
+        curl -X POST -H 'Content-type: application/json' --data '{"text": "'"$container"' container is down in metrics-internal server"}' "$SLACK_WEBHOOK"
+        curl -X POST -H 'Content-type: application/json' --data '{"content": "'"$container"' container is down in metrics-internal server"}' "$DISCORD_WEBHOOK"
         echo "Starting up script"
         sudo bash $container.sh
         sleep 30

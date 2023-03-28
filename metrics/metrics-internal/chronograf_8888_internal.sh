@@ -4,23 +4,7 @@
 #
 cd "$(dirname "$0")"
 
-. host.sh
-
-
-case $HOST in
-internal-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
-  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
-  ;;
-tds-internal-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
-  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
-  ;;
-*)
-  echo "Error: unknown $HOST"
-  exit 1
-esac
-
+. "$PWD"/host.sh
 
 : "${CHRONOGRAF_IMAGE:=chronograf:1.8.8}"
 
@@ -40,8 +24,8 @@ pwd
 rm -rf certs
 mkdir -p certs
 chmod 700 certs
-sudo cp /etc/letsencrypt/live/$HOST/fullchain.pem certs/
-sudo cp /etc/letsencrypt/live/$HOST/privkey.pem certs/
+sudo cp /etc/letsencrypt/live/"$HOST"/fullchain.pem certs/
+sudo cp /etc/letsencrypt/live/"$HOST"/privkey.pem certs/
 sudo chmod 0444 certs/*
 sudo chown buildkite-agent:buildkite-agent certs
 
@@ -52,11 +36,11 @@ sudo sudo docker run \
   --env AUTH_DURATION=24h \
   --env TLS_CERTIFICATE=/certs/fullchain.pem \
   --env TLS_PRIVATE_KEY=/certs/privkey.pem \
-  --env GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID_8888 \
-  --env GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET_8888 \
+  --env GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID_8888" \
+  --env GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET_8888" \
   --env GOOGLE_DOMAINS=solana.com,jito.wtf,jumpcrypto.com,certus.one,mango.markets \
   --env PUBLIC_URL=https://internal-metrics.solana.com:8888 \
-  --env TOKEN_SECRET=$TOKEN_SECRET \
+  --env TOKEN_SECRET="$TOKEN_SECRET" \
   --env inactivity-duration=48h \
   --name=chronograf_8888_internal \
   --net=influxdb \
@@ -66,4 +50,4 @@ sudo sudo docker run \
   --volume /var/lib/chronograf:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file="5" \
-  $CHRONOGRAF_IMAGE --influxdb-url=https://$HOST:8086
+  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086

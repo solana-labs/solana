@@ -5,36 +5,20 @@
 
 cd "$(dirname "$0")"
 
-. host.sh
-
-case $HOST in
-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
-  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
-  ;;
-tds-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=$CHRONOGRAF_GH_CLIENT_ID
-  CHRONOGRAF_GH_CLIENT_SECRET=$CHRONOGRAF_GH_CLIENT_SECRET
-  ;;
-*)
-  echo "Error: unknown $HOST"
-  exit 1
-esac
+. "$PWD"/host.sh
 
 : "${GRAFANA_IMAGE:=grafana/grafana:9.4.7}"
-
 
 # remove the container
 sudo docker kill grafana
 sudo docker rm -f grafana
 
-
 pwd
 rm -rf certs
 mkdir -p certs
 chmod 700 certs
-sudo cp /etc/letsencrypt/live/$HOST/fullchain.pem certs/
-sudo cp /etc/letsencrypt/live/$HOST/privkey.pem certs/
+sudo cp /etc/letsencrypt/live/"$HOST"/fullchain.pem certs/
+sudo cp /etc/letsencrypt/live/"$HOST"/privkey.pem certs/
 sudo chmod 0444 certs/*
 
 
@@ -47,7 +31,7 @@ sudo docker run \
   --user root:root \
   --env GF_PATHS_CONFIG=/grafana.ini \
   --volume "$PWD"/certs:/certs:ro \
-  --volume "$PWD"/grafana-$HOST.ini:/grafana.ini:ro \
+  --volume "$PWD"/grafana-"$HOST".ini:/grafana.ini:ro \
   --volume /var/lib/grafana:/var/lib/grafana \
   --log-opt max-size=1g \
   --log-opt max-file=5 \
