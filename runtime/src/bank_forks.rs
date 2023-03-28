@@ -85,14 +85,6 @@ impl std::ops::Deref for BankWithScheduler {
     }
 }
 
-#[derive(Debug, Default)]
-enum EnabledSchedulerPool {
-    #[default]
-    Disabled,
-    ReplayOnly(Box<dyn InstalledSchedulerPool>),
-    Full(Box<dyn InstalledSchedulerPool>),
-}
-
 pub struct BankForks {
     banks: HashMap<Slot, BankWithScheduler>,
     descendants: HashMap<Slot, HashSet<Slot>>,
@@ -103,7 +95,7 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
-    scheduler_pool: EnabledSchedulerPool,
+    scheduler_pool: Option<Box<dyn InstalledSchedulerPool>>,
 }
 
 pub trait InstalledSchedulerPool: Send + Sync + std::fmt::Debug {
@@ -230,8 +222,7 @@ impl BankForks {
         }
     }
 
-    // take Mode when we support to use unified_scheduler for banking.
-    fn add_new_bank(&mut self, bank: Bank, for_replaying: bool) -> Arc<Bank> {
+    fn add_new_bank(&mut self, bank: Bank) -> Arc<Bank> {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), BankWithScheduler(bank.clone()));
         assert!(prev.is_none());
@@ -240,29 +231,18 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        if let Some((mode, scheduler_pool)) = self.get_scheduler_pool(for_replaying) {
+        if let Some(scheduler_pool) = self.scheduler_pool {
             let new_context = SchedulerContext::new(bank.clone(), mode);
             bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
         }
         bank
     }
 
-    fn get_scheduler_pool(&self, for_replaying: bool) -> Option<(solana_scheduler::Mode, &Box<dyn InstalledSchedulerPool>)> {
-        match (for_replaying, &self.scheduler_pool) {
-            (false, _) | (true, EnabledSchedulerPool::Disabled) => None,
-            (true, EnabledSchedulerPool::ReplayOnly(scheduler_pool) | EnabledSchedulerPool::Full(scheduler_pool)) => Some((solana_scheduler::Mode::Replaying, scheduler_pool))
-        }
-    }
-
-    pub fn install_scheduler_pool(&mut self, pool: Box<dyn InstalledSchedulerPool>, replay_only: bool) {
+    pub fn install_scheduler_pool(&mut self, pool: Box<dyn InstalledSchedulerPool>) {
         use assert_matches::assert_matches;
-        assert_matches!(&self.scheduler_pool, EnabledSchedulerPool::Disabled);
+        assert_matches!(&self.scheduler_pool, None);
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
-        if replay_only {
-            self.scheduler_pool = EnabledSchedulerPool::ReplayOnly(pool);
-        } else {
-            self.scheduler_pool = EnabledSchedulerPool::Full(pool);
-        }
+        self.scheduler_pool = Some(pool);
     }
 
     pub fn add_new_bank_for_banking(&mut self, bank: Bank) -> Arc<Bank> {
