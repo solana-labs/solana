@@ -754,7 +754,7 @@ impl Validator {
                 SchedulerPool,
             };
             let scheduler_pool = SchedulerPool::new_boxed(None, config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone(), Some(replay_vote_sender.clone()));
-            bank_forks.write().unwrap().install_scheduler_pool(scheduler_pool, false);
+            bank_forks.write().unwrap().install_scheduler_pool(scheduler_pool);
         } else {
             info!("not installing scheduler pool...");
         }
