@@ -300,17 +300,18 @@ impl Accounts {
         program_accounts: &HashMap<Pubkey, &Pubkey>,
     ) -> Result<AccountSharedData> {
         // Check for tombstone
-        match &program.program {
-            LoadedProgramType::FailedVerification => {
-                Err(TransactionError::InstructionError(0, InvalidAccountData))
+        // Ignoring the tombstone here for now. The loader will catch this condition and return
+        // error.
+        let _ignore = match &program.program {
+            LoadedProgramType::FailedVerification | LoadedProgramType::Closed => {
+                Err(TransactionError::InvalidProgramForExecution)
             }
-            LoadedProgramType::Closed => Err(TransactionError::InvalidProgramForExecution),
             LoadedProgramType::DelayVisibility => {
                 debug_assert!(feature_set.is_active(&delay_visibility_of_program_deployment::id()));
                 Err(TransactionError::InvalidProgramForExecution)
             }
             _ => Ok(()),
-        }?;
+        };
         // It's an executable program account. The program is already loaded in the cache.
         // So the account data is not needed. Return a dummy AccountSharedData with meta
         // information.
