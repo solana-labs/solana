@@ -577,7 +577,7 @@ fn process_instruction_common(
     };
 
     let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-    let (loaded_program, load_program_metrics) = load_program_from_account(
+    let (executor, load_program_metrics) = load_program_from_account(
         &invoke_context.feature_set,
         invoke_context.get_compute_budget(),
         log_collector,
@@ -600,7 +600,7 @@ fn process_instruction_common(
 
     executor.usage_counter.fetch_add(1, Ordering::Relaxed);
 
-    execute(loaded_program, invoke_context)
+    execute(executor, invoke_context)
 }
 
 fn process_loader_upgradeable_instruction(
