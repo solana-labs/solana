@@ -299,7 +299,7 @@ impl BankForks {
     }
 
     pub fn bank(&self, slot: Slot) -> Option<Arc<Bank>> {
-        self.banks[&slot].new_arc()
+        Some(self.banks[&slot].new_arc())
     }
 
     fn do_set_root_return_metrics(
