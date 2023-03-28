@@ -279,7 +279,15 @@ impl LoadedPrograms {
             let existing = second_level
                 .get(index)
                 .expect("Missing entry, even though position was found");
-            assert!(
+            if existing.is_tombstone()
+                && entry.is_tombstone()
+                && existing.deployment_slot == entry.deployment_slot
+            {
+                // If there's already a tombstone for the program at the given slot, let's return
+                // the existing entry instead of adding another.
+                return existing.clone();
+            }
+            debug_assert!(
                 existing.deployment_slot != entry.deployment_slot
                     || existing.effective_slot != entry.effective_slot
             );
