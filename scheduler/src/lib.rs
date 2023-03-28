@@ -7,6 +7,7 @@
 #![allow(clippy::drop_copy)]
 #![allow(clippy::drop_ref)]
 #![allow(clippy::or_fun_call)]
+#![allow(clippy::let_and_return)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
