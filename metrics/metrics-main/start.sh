@@ -69,15 +69,15 @@ sudo docker run -it -d \
   --volume /prometheus/prometheus/data:/prometheus \
   --volume /etc/hosts:/etc/hosts \
   $PROMETHEUS_IMAGE
-  
+
 sudo docker run -it -d \
   --user root:root \
   --publish 9093:9093 \
   --name=alertmanager \
   --volume /prometheus/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
   --volume /etc/hosts:/etc/hosts \
-  $ALERTMANAGER_IMAGE 
-  
+  $ALERTMANAGER_IMAGE
+
 sudo docker run -it -d \
   --publish 9094:9094 \
   --name=alertmanager-discord \
@@ -153,6 +153,6 @@ sudo docker run \
   kapacitor:1.6.5
 
 curl -h | sed -ne '/--tlsv/p'
-curl --retry 10 --retry-delay 5 -v --head https://$HOST:8086/ping 
+curl --retry 10 --retry-delay 5 -v --head https://$HOST:8086/ping
 
 exit 0
