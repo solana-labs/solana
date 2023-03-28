@@ -78,6 +78,20 @@ struct PackedStorage {
 }
 
 impl IndexEntry {
+    /// return closest bucket index fit for the slot slice.
+    /// Since bucket size is 2^index, the return value is
+    ///     min index, such that 2^index >= num_slots
+    ///     index = ceiling(log2(num_slots))
+    /// special case, when slot slice empty, return 0th index.
+    pub fn data_bucket_from_num_slots(num_slots: Slot) -> u64 {
+        // Compute the ceiling of log2 for integer
+        if num_slots == 0 {
+            0
+        } else {
+            (Slot::BITS - (num_slots - 1).leading_zeros()) as u64
+        }
+    }
+
     pub fn init(&mut self, pubkey: &Pubkey) {
         self.key = *pubkey;
         self.ref_count = 0;
@@ -97,20 +111,6 @@ impl IndexEntry {
         self.storage_cap_and_offset
             .set_offset_checked(storage_offset)
             .expect("New storage offset must fit into 7 bytes!")
-    }
-
-    /// return closest bucket index fit for the slot slice.
-    /// Since bucket size is 2^index, the return value is
-    ///     min index, such that 2^index >= num_slots
-    ///     index = ceiling(log2(num_slots))
-    /// special case, when slot slice empty, return 0th index.
-    pub fn data_bucket_from_num_slots(num_slots: Slot) -> u64 {
-        // Compute the ceiling of log2 for integer
-        if num_slots == 0 {
-            0
-        } else {
-            (Slot::BITS - (num_slots - 1).leading_zeros()) as u64
-        }
     }
 
     pub fn data_bucket_ix(&self) -> u64 {
