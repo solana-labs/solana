@@ -463,13 +463,18 @@ impl Default for ProgramTest {
         let prefer_bpf =
             std::env::var("BPF_OUT_DIR").is_ok() || std::env::var("SBF_OUT_DIR").is_ok();
 
+        // deactivate feature `native_program_consume_cu` to continue support existing mock/test
+        // programs that do not consume units.
+        let deactivate_feature_set =
+            HashSet::from([solana_sdk::feature_set::native_programs_consume_cu::id()]);
+
         Self {
             accounts: vec![],
             builtins: vec![],
             compute_max_units: None,
             prefer_bpf,
             use_bpf_jit: false,
-            deactivate_feature_set: HashSet::default(),
+            deactivate_feature_set,
             transaction_account_lock_limit: None,
         }
     }

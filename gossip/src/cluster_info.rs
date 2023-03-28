@@ -28,7 +28,9 @@ use {
         crds::{Crds, Cursor, GossipRoute},
         crds_gossip::CrdsGossip,
         crds_gossip_error::CrdsGossipError,
-        crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
+        crds_gossip_pull::{
+            CrdsFilter, CrdsTimeouts, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
+        },
         crds_value::{
             self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, IncrementalSnapshotHashes,
             LowestSlot, NodeInstance, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
@@ -2158,7 +2160,7 @@ impl ClusterInfo {
         &self,
         from: &Pubkey,
         crds_values: Vec<CrdsValue>,
-        timeouts: &HashMap<Pubkey, u64>,
+        timeouts: &CrdsTimeouts,
     ) -> (usize, usize, usize) {
         let len = crds_values.len();
         trace!("PullResponse me: {} from: {} len={}", self.id(), from, len);
@@ -3305,9 +3307,13 @@ RPC Enabled Nodes: 1"#;
         });
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
         let data = test_crds_values(entrypoint_pubkey);
-        let timeouts = [(Pubkey::default(), CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS)]
-            .into_iter()
-            .collect();
+        let stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
+        let timeouts = CrdsTimeouts::new(
+            cluster_info.id(),
+            CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS, // default_timeout
+            Duration::from_secs(48 * 3600),   // epoch_duration
+            &stakes,
+        );
         assert_eq!(
             (0, 0, 1),
             ClusterInfo::handle_pull_response(
@@ -4081,9 +4087,10 @@ RPC Enabled Nodes: 1"#;
         let entrypoint_crdsvalue =
             CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(entrypoint.clone()));
         let cluster_info = Arc::new(cluster_info);
+        let stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
         let timeouts = cluster_info.gossip.make_timeouts(
             cluster_info.id(),
-            &HashMap::default(), // stakes,
+            &stakes,
             Duration::from_millis(cluster_info.gossip.pull.crds_timeout),
         );
         ClusterInfo::handle_pull_response(
@@ -4729,8 +4736,13 @@ RPC Enabled Nodes: 1"#;
         })
         .take(NO_ENTRIES)
         .collect();
-        let mut timeouts = HashMap::new();
-        timeouts.insert(Pubkey::default(), CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS * 4);
+        let stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
+        let timeouts = CrdsTimeouts::new(
+            cluster_info.id(),
+            CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS * 4, // default_timeout
+            Duration::from_secs(48 * 3600),       // epoch_duration
+            &stakes,
+        );
         assert_eq!(
             (0, 0, NO_ENTRIES),
             cluster_info.handle_pull_response(&entrypoint_pubkey, data, &timeouts)

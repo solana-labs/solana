@@ -323,6 +323,14 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
 
     trace!("process_instruction: {:?}", instruction);
 
+    // Consume compute units if feature `native_programs_consume_cu` is activated,
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::native_programs_consume_cu::id())
+    {
+        invoke_context.consume_checked(150)?;
+    }
+
     let signers = instruction_context.get_signers(transaction_context)?;
     match instruction {
         SystemInstruction::CreateAccount {

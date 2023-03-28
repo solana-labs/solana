@@ -371,7 +371,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let hash_map = RwLock::new(HashMap::<Pubkey, (Vec<(usize, usize)>, RefCount)>::new());
-        let max_slot_list_len = 3;
+        let max_slot_list_len = 5;
         let all_keys = Mutex::new(vec![]);
 
         let gen_rand_value = || {

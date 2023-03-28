@@ -34,53 +34,26 @@ use {
 */
 pub const DEFAULT_CAPACITY_POW2: u8 = 5;
 
-#[derive(Debug, PartialEq, Eq)]
-enum IsAllocatedFlagLocation {
-    /// 'allocated' flag per entry is stored in a u64 header per entry
-    InHeader,
+/// keep track of an individual element's occupied vs. free state
+/// every element must either be occupied or free and should never be double occupied or double freed
+/// For parameters below, `element` is used to view/modify header fields or fields within the element data.
+pub trait BucketOccupied {
+    /// set entry at `ix` as occupied (as opposed to free)
+    fn occupy(&mut self, element: &mut [u8], ix: usize);
+    /// set entry at `ix` as free
+    fn free(&mut self, element: &mut [u8], ix: usize);
+    /// return true if entry at `ix` is free
+    fn is_free(&self, element: &[u8], ix: usize) -> bool;
+    /// # of bytes prior to first data held in the element.
+    /// This is the header size, if a header exists per element in the data.
+    /// This must be a multiple of sizeof(u64)
+    fn offset_to_first_data() -> usize;
+    /// initialize this struct
+    /// `num_elements` is the number of elements allocated in the bucket
+    fn new(num_elements: usize) -> Self;
 }
 
-const IS_ALLOCATED_FLAG_LOCATION: IsAllocatedFlagLocation = IsAllocatedFlagLocation::InHeader;
-
-/// A Header UID of 0 indicates that the header is unlocked
-const UID_UNLOCKED: Uid = 0;
-/// uid in maps is 1 or 0, where 0 is empty, 1 is in-use
-const UID_LOCKED: Uid = 1;
-
-/// u64 for purposes of 8 byte alignment
-/// We only need 1 bit of this.
-type Uid = u64;
-
-#[repr(C)]
-struct Header {
-    lock: u64,
-}
-
-impl Header {
-    /// try to lock this entry with 'uid'
-    /// return true if it could be locked
-    fn try_lock(&mut self) -> bool {
-        if self.lock == UID_UNLOCKED {
-            self.lock = UID_LOCKED;
-            true
-        } else {
-            false
-        }
-    }
-
-    /// mark this entry as unlocked
-    fn unlock(&mut self) {
-        assert_eq!(UID_LOCKED, self.lock);
-        self.lock = UID_UNLOCKED;
-    }
-
-    /// true if this entry is unlocked
-    fn is_unlocked(&self) -> bool {
-        self.lock == UID_UNLOCKED
-    }
-}
-
-pub struct BucketStorage {
+pub struct BucketStorage<O: BucketOccupied> {
     path: PathBuf,
     mmap: MmapMut,
     pub cell_size: u64,
@@ -88,20 +61,21 @@ pub struct BucketStorage {
     pub count: Arc<AtomicU64>,
     pub stats: Arc<BucketStats>,
     pub max_search: MaxSearch,
+    pub contents: O,
 }
 
 #[derive(Debug)]
 pub enum BucketStorageError {
-    AlreadyAllocated,
+    AlreadyOccupied,
 }
 
-impl Drop for BucketStorage {
+impl<O: BucketOccupied> Drop for BucketStorage<O> {
     fn drop(&mut self) {
-        let _ = remove_file(&self.path);
+        _ = remove_file(&self.path);
     }
 }
 
-impl BucketStorage {
+impl<O: BucketOccupied> BucketStorage<O> {
     pub fn new_with_capacity(
         drives: Arc<Vec<PathBuf>>,
         num_elems: u64,
@@ -111,7 +85,14 @@ impl BucketStorage {
         stats: Arc<BucketStats>,
         count: Arc<AtomicU64>,
     ) -> Self {
-        let cell_size = elem_size * num_elems + Self::header_size() as u64;
+        let offset = O::offset_to_first_data();
+        let size_of_u64 = std::mem::size_of::<u64>();
+        assert_eq!(
+            offset / size_of_u64 * size_of_u64,
+            offset,
+            "header size must be a multiple of u64"
+        );
+        let cell_size = elem_size * num_elems + offset as u64;
         let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &stats);
         Self {
             path,
@@ -121,13 +102,7 @@ impl BucketStorage {
             capacity_pow2,
             stats,
             max_search,
-        }
-    }
-
-    /// non-zero if there is a header allocated prior to each element to store the 'allocated' bit
-    fn header_size() -> usize {
-        match IS_ALLOCATED_FLAG_LOCATION {
-            IsAllocatedFlagLocation::InHeader => std::mem::size_of::<Header>(),
+            contents: O::new(1 << capacity_pow2),
         }
     }
 
@@ -154,46 +129,29 @@ impl BucketStorage {
         )
     }
 
-    /// return ref to header of item 'ix' in mmapped file
-    fn header_ptr(&self, ix: u64) -> &Header {
-        self.header_mut_ptr(ix)
-    }
-
-    /// return ref to header of item 'ix' in mmapped file
-    #[allow(clippy::mut_from_ref)]
-    fn header_mut_ptr(&self, ix: u64) -> &mut Header {
-        assert_eq!(
-            IS_ALLOCATED_FLAG_LOCATION,
-            IsAllocatedFlagLocation::InHeader
-        );
-        let ix = (ix * self.cell_size) as usize;
-        let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
-        unsafe {
-            let hdr = hdr_slice.as_ptr() as *mut Header;
-            hdr.as_mut().unwrap()
-        }
-    }
-
-    /// true if the entry at index 'ix' is free (as opposed to being allocated)
+    /// true if the entry at index 'ix' is free (as opposed to being occupied)
     pub fn is_free(&self, ix: u64) -> bool {
-        // note that the terminology in the implementation is locked or unlocked.
-        // but our api is allocate/free
-        match IS_ALLOCATED_FLAG_LOCATION {
-            IsAllocatedFlagLocation::InHeader => self.header_ptr(ix).is_unlocked(),
-        }
+        let start = self.get_start_offset_with_header(ix);
+        let entry = &self.mmap[start..];
+        self.contents.is_free(entry, ix as usize)
     }
 
     fn try_lock(&mut self, ix: u64) -> bool {
-        match IS_ALLOCATED_FLAG_LOCATION {
-            IsAllocatedFlagLocation::InHeader => self.header_mut_ptr(ix).try_lock(),
+        let start = self.get_start_offset_with_header(ix);
+        let entry = &mut self.mmap[start..];
+        if self.contents.is_free(entry, ix as usize) {
+            self.contents.occupy(entry, ix as usize);
+            true
+        } else {
+            false
         }
     }
 
     /// 'is_resizing' true if caller is resizing the index (so don't increment count)
     /// 'is_resizing' false if caller is adding an item to the index (so increment count)
-    pub fn allocate(&mut self, ix: u64, is_resizing: bool) -> Result<(), BucketStorageError> {
-        assert!(ix < self.capacity(), "allocate: bad index size");
-        let mut e = Err(BucketStorageError::AlreadyAllocated);
+    pub fn occupy(&mut self, ix: u64, is_resizing: bool) -> Result<(), BucketStorageError> {
+        assert!(ix < self.capacity(), "occupy: bad index size");
+        let mut e = Err(BucketStorageError::AlreadyOccupied);
         //debug!("ALLOC {} {}", ix, uid);
         if self.try_lock(ix) {
             e = Ok(());
@@ -206,16 +164,13 @@ impl BucketStorage {
 
     pub fn free(&mut self, ix: u64) {
         assert!(ix < self.capacity(), "bad index size");
-        match IS_ALLOCATED_FLAG_LOCATION {
-            IsAllocatedFlagLocation::InHeader => {
-                self.header_mut_ptr(ix).unlock();
-            }
-        }
+        let start = self.get_start_offset_with_header(ix);
+        self.contents.free(&mut self.mmap[start..], ix as usize);
         self.count.fetch_sub(1, Ordering::Relaxed);
     }
 
     pub fn get<T: Sized>(&self, ix: u64) -> &T {
-        let start = self.get_start_offset(ix);
+        let start = self.get_start_offset_no_header(ix);
         let end = start + std::mem::size_of::<T>();
         let item_slice: &[u8] = &self.mmap[start..end];
         unsafe {
@@ -224,18 +179,17 @@ impl BucketStorage {
         }
     }
 
-    pub fn get_empty_cell_slice<T: Sized + 'static>() -> &'static [T] {
-        &[]
+    fn get_start_offset_with_header(&self, ix: u64) -> usize {
+        assert!(ix < self.capacity(), "bad index size");
+        (self.cell_size * ix) as usize
     }
 
-    fn get_start_offset(&self, ix: u64) -> usize {
-        assert!(ix < self.capacity(), "bad index size");
-        let ix = self.cell_size * ix;
-        ix as usize + Self::header_size()
+    fn get_start_offset_no_header(&self, ix: u64) -> usize {
+        self.get_start_offset_with_header(ix) + O::offset_to_first_data()
     }
 
     pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
-        let start = self.get_start_offset(ix);
+        let start = self.get_start_offset_no_header(ix);
         let end = start + std::mem::size_of::<T>() * len as usize;
         //debug!("GET slice {} {}", start, end);
         let item_slice: &[u8] = &self.mmap[start..end];
@@ -245,20 +199,28 @@ impl BucketStorage {
         }
     }
 
-    #[allow(clippy::mut_from_ref)]
-    pub fn get_mut<T: Sized>(&self, ix: u64) -> &mut T {
-        let start = self.get_start_offset(ix);
-        let end = start + std::mem::size_of::<T>();
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *mut T;
-            &mut *item
-        }
+    pub(crate) fn get_mut_from_parts<T: Sized>(item_slice: &mut [u8]) -> &mut T {
+        assert!(std::mem::size_of::<T>() <= item_slice.len());
+        let item = item_slice.as_mut_ptr() as *mut T;
+        unsafe { &mut *item }
+    }
+
+    pub(crate) fn get_from_parts<T: Sized>(item_slice: &[u8]) -> &T {
+        assert!(std::mem::size_of::<T>() <= item_slice.len());
+        let item = item_slice.as_ptr() as *const T;
+        unsafe { &*item }
+    }
+
+    pub fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
+        let start = self.get_start_offset_no_header(ix);
+        let item_slice = &mut self.mmap[start..];
+        let item_slice = &mut item_slice[..std::mem::size_of::<T>()];
+        Self::get_mut_from_parts(item_slice)
     }
 
     #[allow(clippy::mut_from_ref)]
     pub fn get_mut_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &mut [T] {
-        let start = self.get_start_offset(ix);
+        let start = self.get_start_offset_no_header(ix);
         let end = start + std::mem::size_of::<T>() * len as usize;
         //debug!("GET mut slice {} {}", start, end);
         let item_slice: &[u8] = &self.mmap[start..end];
@@ -333,10 +295,12 @@ impl BucketStorage {
         let index_grow = 1 << increment;
         (0..old_cap as usize).for_each(|i| {
             if !old_bucket.is_free(i as u64) {
-                match IS_ALLOCATED_FLAG_LOCATION {
-                    IsAllocatedFlagLocation::InHeader => {
-                        // nothing to do when bit is in header
-                    }
+                {
+                    // copying from old to new. If 'occupied' bit is stored outside the data, then
+                    // occupied has to be set on the new entry in the new bucket.
+                    let start = self.get_start_offset_with_header((i * index_grow) as u64);
+                    self.contents
+                        .occupy(&mut self.mmap[start..], i * index_grow);
                 }
                 let old_ix = i * old_bucket.cell_size as usize;
                 let new_ix = old_ix * index_grow;
@@ -401,7 +365,11 @@ impl BucketStorage {
 
 #[cfg(test)]
 mod test {
-    use {super::*, tempfile::tempdir};
+    use {
+        super::*,
+        crate::{bucket_storage::BucketOccupied, index_entry::IndexBucket},
+        tempfile::tempdir,
+    };
 
     #[test]
     fn test_bucket_storage() {
@@ -409,20 +377,62 @@ mod test {
         let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
         assert!(!paths.is_empty());
 
-        let mut storage =
-            BucketStorage::new(Arc::new(paths), 1, 1, 1, Arc::default(), Arc::default());
+        let mut storage = BucketStorage::<IndexBucket>::new(
+            Arc::new(paths),
+            1,
+            1,
+            1,
+            Arc::default(),
+            Arc::default(),
+        );
         let ix = 0;
         assert!(storage.is_free(ix));
-        assert!(storage.allocate(ix, false).is_ok());
-        assert!(storage.allocate(ix, false).is_err());
+        assert!(storage.occupy(ix, false).is_ok());
+        assert!(storage.occupy(ix, false).is_err());
         assert!(!storage.is_free(ix));
         storage.free(ix);
         assert!(storage.is_free(ix));
         assert!(storage.is_free(ix));
-        assert!(storage.allocate(ix, false).is_ok());
-        assert!(storage.allocate(ix, false).is_err());
+        assert!(storage.occupy(ix, false).is_ok());
+        assert!(storage.occupy(ix, false).is_err());
         assert!(!storage.is_free(ix));
         storage.free(ix);
         assert!(storage.is_free(ix));
+    }
+
+    struct BucketBadHeader {}
+
+    impl BucketOccupied for BucketBadHeader {
+        fn occupy(&mut self, _element: &mut [u8], _ix: usize) {
+            unimplemented!();
+        }
+        fn free(&mut self, _element: &mut [u8], _ix: usize) {
+            unimplemented!();
+        }
+        fn is_free(&self, _element: &[u8], _ix: usize) -> bool {
+            unimplemented!();
+        }
+        fn offset_to_first_data() -> usize {
+            // not multiple of u64
+            std::mem::size_of::<u64>() - 1
+        }
+        /// initialize this struct
+        fn new(_num_elements: usize) -> Self {
+            Self {}
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: `(left == right)`")]
+    fn test_header_size() {
+        _ = BucketStorage::<BucketBadHeader>::new_with_capacity(
+            Arc::default(),
+            0,
+            0,
+            0,
+            0,
+            Arc::default(),
+            Arc::default(),
+        );
     }
 }

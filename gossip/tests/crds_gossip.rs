@@ -10,7 +10,7 @@ use {
         crds::GossipRoute,
         crds_gossip::*,
         crds_gossip_error::CrdsGossipError,
-        crds_gossip_pull::{ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
+        crds_gossip_pull::{CrdsTimeouts, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
         crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS,
         crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
@@ -345,7 +345,7 @@ fn network_run_push(
                 let node_pubkey = node.keypair.pubkey();
                 let timeouts = node.gossip.make_timeouts(
                     node_pubkey,
-                    &HashMap::default(), // stakes
+                    &stakes,
                     Duration::from_millis(node.gossip.pull.crds_timeout),
                 );
                 node.gossip.purge(&node_pubkey, thread_pool, now, &timeouts);
@@ -477,8 +477,7 @@ fn network_run_pull(
     let mut convergance = 0f64;
     let num = network.len();
     let network_values: Vec<Node> = network.values().cloned().collect();
-    let mut timeouts = HashMap::new();
-    timeouts.insert(Pubkey::default(), CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS);
+    let stakes = stakes(network);
     for node in &network_values {
         let mut ping_cache = node.ping_cache.lock().unwrap();
         for other in &network_values {
@@ -566,6 +565,12 @@ fn network_run_pull(
                 msgs += rsp.len();
                 if let Some(node) = network.get(&from) {
                     let mut stats = ProcessPullStats::default();
+                    let timeouts = CrdsTimeouts::new(
+                        node.keypair.pubkey(),
+                        CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS, // default_timeout
+                        Duration::from_secs(48 * 3600),   // epoch_duration
+                        &stakes,
+                    );
                     let (vers, vers_expired_timeout, failed_inserts) = node
                         .gossip
                         .filter_pull_responses(&timeouts, rsp, now, &mut stats);
