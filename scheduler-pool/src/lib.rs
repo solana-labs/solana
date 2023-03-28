@@ -49,15 +49,17 @@ pub struct SchedulerPool {
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
+    prioritization_fee_cache: Arc<PrioritizationFeeCache>,
 }
 
 impl SchedulerPool {
-    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>) -> Self {
+    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>, prioritization_fee_cache: Arc<PrioritizationFeeCache>) -> Self {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
+            prioritization_fee_cache,
         }
     }
 
@@ -67,7 +69,7 @@ impl SchedulerPool {
     }
 
     pub fn new_boxed(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>, prioritization_fee_cache: Arc<PrioritizationFeeCache>) -> Box<dyn InstalledSchedulerPool> {
-        Box::new(SchedulerPoolWrapper::new(poh_recorder, log_messages_bytes_limit, transaction_status_sender, replay_vote_sender))
+        Box::new(SchedulerPoolWrapper::new(poh_recorder, log_messages_bytes_limit, transaction_status_sender, replay_vote_sender, prioritization_fee_cache))
     }
 }
 
@@ -86,8 +88,8 @@ impl Drop for SchedulerPool {
 struct SchedulerPoolWrapper(Arc<SchedulerPool>);
 
 impl SchedulerPoolWrapper {
-    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>) -> Self {
-        Self(Arc::new(SchedulerPool::new(poh_recorder, log_messages_bytes_limit, transaction_status_sender, replay_vote_sender)))
+    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>, prioritization_fee_cache: Arc<PrioritizationFeeCache>) -> Self {
+        Self(Arc::new(SchedulerPool::new(poh_recorder, log_messages_bytes_limit, transaction_status_sender, replay_vote_sender, prioritization_fee_cache)))
     }
 }
 
