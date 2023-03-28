@@ -1825,7 +1825,7 @@ fn maybe_warp_slot(
         root_bank.squash();
         root_bank.force_flush_accounts_cache();
 
-        bank_forks.add_new_bank_for_replaying(Bank::warp_from_parent(
+        bank_forks.insert(Bank::warp_from_parent(
             &root_bank,
             &Pubkey::default(),
             warp_slot,

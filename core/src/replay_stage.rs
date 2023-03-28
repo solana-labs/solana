@@ -1801,7 +1801,7 @@ impl ReplayStage {
             // new()-ing of its child bank
             banking_tracer.hash_event(parent.slot(), &parent.last_blockhash(), &parent.hash());
 
-            let tpu_bank = bank_forks.write().unwrap().add_new_bank_for_banking(tpu_bank);
+            let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
             poh_recorder
                 .write()
                 .unwrap()
@@ -3596,7 +3596,7 @@ impl ReplayStage {
             Measure::start("generate_new_bank_forks_write_lock");
         let mut forks = bank_forks.write().unwrap();
         for (_, bank) in new_banks {
-            forks.add_new_bank_for_replaying(bank);
+            forks.insert(bank);
         }
         generate_new_bank_forks_write_lock.stop();
         saturating_add_assign!(
