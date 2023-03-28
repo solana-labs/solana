@@ -980,7 +980,7 @@ impl SchedulingContext {
             context
                 .as_ref()
                 .map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode))
-                .unwrap_or("".into())
+                .unwrap_or_else(|| "".into())
         )
     }
 
@@ -8174,8 +8174,7 @@ impl Bank {
 
             let timings_and_result = s
                 .as_mut()
-                .map(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART))
-                .flatten();
+                .and_then(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART))
             if !IS_RESTART {
                 if let Some(scheduler) = s.take() {
                     scheduler.scheduler_pool().return_to_pool(scheduler);
