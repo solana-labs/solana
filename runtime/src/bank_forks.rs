@@ -222,7 +222,7 @@ impl BankForks {
         }
     }
 
-    fn insert(&mut self, bank: Bank) -> Arc<Bank> {
+    pub fn insert(&mut self, bank: Bank) -> Arc<Bank> {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), BankWithScheduler(bank.clone()));
         assert!(prev.is_none());
