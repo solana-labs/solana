@@ -510,7 +510,7 @@ impl Scheduler {
                     .get_account_locks(tx_account_lock_limit)
                     .map(|_| ());
                 let mut batch =
-                    TransactionBatch::new(vec![lock_result], &bank, Cow::Owned(vec![ee.task.tx.0.clone()]));
+                    TransactionBatch::new(vec![lock_result], bank, Cow::Owned(vec![ee.task.tx.0.clone()]));
                 batch.set_needs_unlock(false);
                 let bb = scheduler_pool.transaction_status_sender.as_ref().map(|sender|
                     send_transaction_status(sender, None, bank, &batch, &mut mint_decimals, None, None)
