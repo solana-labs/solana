@@ -907,7 +907,7 @@ use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch]
 enum ModeSpecificTaskQueue {
-    BlockProduction(ChannelBackedTaskQueue),
+    BlockVerification(ChannelBackedTaskQueue),
 }
 
 #[enum_dispatch(ModeSpecificTaskQueue)]
@@ -1267,7 +1267,7 @@ impl ScheduleStage {
                         &mut next_task.lock_attempts_mut(ast),
                         (
                             if runnable_queue.is_backed_by_channel() {
-                                Mode::BlockProduction
+                                Mode::BlockVerification
                             } else {
                                 panic!()
                             }
@@ -1757,7 +1757,7 @@ impl ScheduleStage {
             bool,
         ) = Default::default();
 
-        let mut runnable_queue = ModeSpecificTaskQueue::BlockProduction(ChannelBackedTaskQueue::new(from_prev));
+        let mut runnable_queue = ModeSpecificTaskQueue::BlockVerification(ChannelBackedTaskQueue::new(from_prev));
 
         let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
             .unwrap_or(format!("{}", executing_thread_count + 1))
@@ -1817,7 +1817,7 @@ impl ScheduleStage {
                                        if Some(new_mode) != mode {
                                            if !force_channel_backed {
                                                runnable_queue = match new_mode {
-                                                   Mode::BlockProduction => ModeSpecificTaskQueue::BlockProduction(ChannelBackedTaskQueue::new(from_prev)),
+                                                   Mode::BlockVerification => ModeSpecificTaskQueue::BlockVerification(ChannelBackedTaskQueue::new(from_prev)),
                                                };
                                            }
                                            mode = Some(new_mode);
