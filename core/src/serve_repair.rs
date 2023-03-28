@@ -1352,6 +1352,12 @@ impl ServeRepair {
         slot: Slot,
         nonce: Nonce,
     ) -> Option<PacketBatch> {
+        debug!(
+            "Got ancestor hash request from address {:?} at slot {:?} at {:?}",
+            from_addr,
+            slot,
+            blockstore.ledger_path()
+        );
         let ancestor_slot_hashes = if blockstore.is_duplicate_confirmed(slot) {
             let ancestor_iterator =
                 AncestorIteratorWithHash::from(AncestorIterator::new_inclusive(slot, blockstore));
