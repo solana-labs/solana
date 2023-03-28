@@ -353,6 +353,7 @@ impl AncestorHashesService {
                 ancestor_socket,
                 ancestore_connection_cache,
             );
+            debug!("process_packet_batch Got a decision {:?} at {:?}", decision, blockstore.ledger_path());
             if let Some((slot, decision)) = decision {
                 info!(
                     "process_packet_batch got duplicate ancestor decision: {slot} {:?} at {:?}",
