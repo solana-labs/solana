@@ -296,7 +296,7 @@ fn process_batches(
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     if !bank.with_scheduler() {
-        execute_batches(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit, prioritization_fee_cache)
+        rebatch_and_execute_batches(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit, prioritization_fee_cache)
     } else {
         send_batches_to_scheduler_for_execution(bank, batches)
     }
@@ -333,7 +333,7 @@ fn rebatch_transactions<'a>(
     }
 }
 
-fn execute_batches(
+fn rebatch_and_execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -440,6 +440,7 @@ fn execute_batches(
 pub fn process_entries_for_tests(
     bank: &Arc<Bank>,
     entries: Vec<Entry>,
+    randomize: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
@@ -471,6 +472,7 @@ pub fn process_entries_for_tests(
     let result = process_entries(
         bank,
         &mut replay_entries,
+        randomize,
         transaction_status_sender,
         replay_vote_sender,
         &mut confirmation_timing,
@@ -486,6 +488,7 @@ pub fn process_entries_for_tests(
 fn process_entries(
     bank: &Arc<Bank>,
     entries: &mut [ReplayEntry],
+    randomize: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
@@ -527,9 +530,17 @@ fn process_entries(
             }
             EntryType::Transactions(transactions) => {
                 let starting_index = *starting_index;
-                let transaction_indexes = 
+                let transaction_indexes = if randomize {
+                    let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
+                        transactions.drain(..).zip(starting_index..).collect();
+                    transactions_and_indexes.shuffle(&mut rng);
+                    let (txs, indexes): (Vec<_>, Vec<_>) =
+                        transactions_and_indexes.into_iter().unzip();
+                    *transactions = txs;
+                    indexes
+                } else {
                     (starting_index..starting_index.saturating_add(transactions.len())).collect()
-                ;
+                };
 
                 loop {
                     // try to lock the accounts
