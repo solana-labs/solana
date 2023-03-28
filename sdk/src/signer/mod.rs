@@ -4,11 +4,17 @@
 
 use {
     crate::{
+        derivation_path::DerivationPath,
         pubkey::Pubkey,
         signature::{PresignerError, Signature},
         transaction::TransactionError,
     },
     itertools::Itertools,
+    std::{
+        error,
+        io::{Read, Write},
+        path::Path,
+    },
     thiserror::Error,
 };
 
@@ -101,6 +107,25 @@ impl std::fmt::Debug for dyn Signer {
 /// Removes duplicate signers while preserving order. O(n²)
 pub fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
     signers.into_iter().unique_by(|s| s.pubkey()).collect()
+}
+
+/// The `EncodableKey` trait defines the interface by which cryptographic keys/keypairs are read,
+/// written, and derived from sources.
+pub trait EncodableKey: Sized {
+    fn pubkey_string(&self) -> Result<String, Box<dyn error::Error>>;
+    fn read_key<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>>;
+    fn read_key_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>>;
+    fn write_key<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>>;
+    fn write_key_file<F: AsRef<Path>>(&self, outfile: F) -> Result<String, Box<dyn error::Error>>;
+    fn key_from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>>;
+    fn key_from_seed_and_derivation_path(
+        seed: &[u8],
+        derivation_path: Option<DerivationPath>,
+    ) -> Result<Self, Box<dyn error::Error>>;
+    fn key_from_seed_phrase_and_passphrase(
+        seed_phrase: &str,
+        passphrase: &str,
+    ) -> Result<Self, Box<dyn error::Error>>;
 }
 
 #[cfg(test)]
