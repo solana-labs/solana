@@ -45,4 +45,3 @@ The fee market dashboard shows:
 ### Ping Results
 
 The ping reults dashboard displays relevant information about the Ping API
-

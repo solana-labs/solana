@@ -5,7 +5,7 @@ Services :
 1. Influxdb
 2. Chronograf (on port 8888)
 3. Chronograf_8889 (on port 8889)
-4. Grafana 
+4. Grafana
 
 To install all the services on metrics-internal server, you need to run the ./start.sh script
 

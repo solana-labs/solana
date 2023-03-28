@@ -1,8 +1,8 @@
 ![image](https://user-images.githubusercontent.com/110216567/184346286-94e0b45f-19e9-4fc9-a1a3-2e50c6f12bf8.png)
 
-Services : 
-1. Prometheus 
-2. AlertManager 
+Services:
+1. Prometheus
+2. AlertManager
 3. Chronograf2 (on port 8888) 
 4. Chronograf_8889 (on port 8889) 
 5. Grafana (on port 3000) 
