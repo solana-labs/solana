@@ -30,7 +30,10 @@ pub struct ReadOnlyAtomicSlot {
 
 impl ReadOnlyAtomicSlot {
     pub fn get(&self) -> Slot {
-        self.slot.load(Ordering::Relaxed)
+        // The expectation is that an instance `ReadOnlyAtomicSlot` is on a different thread than
+        // BankForks *and* this instance is being accessed *without* locking BankForks first.
+        // Thus, to ensure atomic ordering correctness, we must use Acquire-Release semantics.
+        self.slot.load(Ordering::Acquire)
     }
 }
 
@@ -235,7 +238,10 @@ impl BankForks {
         highest_confirmed_root: Option<Slot>,
     ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
         let old_epoch = self.root_bank().epoch();
-        self.root.store(root, Ordering::Relaxed);
+        // To support `RootBankCache` (via `ReadOnlyAtomicSlot`) accessing `root` *without* locking
+        // BankForks first *and* from a different thread, this store *must* be at least Release to
+        // ensure atomic ordering correctness.
+        self.root.store(root, Ordering::Release);
 
         let root_bank = self
             .banks
