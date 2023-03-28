@@ -1800,6 +1800,7 @@ pub mod tests {
         matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
+        solana_program_runtime::invoke_context::InvokeContext,
         solana_runtime::{
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
@@ -1810,6 +1811,7 @@ pub mod tests {
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
             hash::Hash,
+            instruction::{Instruction, InstructionError},
             native_token::LAMPORTS_PER_SOL,
             pubkey::Pubkey,
             signature::{Keypair, Signer},
@@ -2882,6 +2884,155 @@ pub mod tests {
         for result in batch2.lock_results() {
             assert!(result.is_ok());
         }
+    }
+
+    #[test]
+    fn test_transaction_result_does_not_affect_bankhash() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(1000);
+
+        fn get_instruction_errors() -> Vec<InstructionError> {
+            vec![
+                InstructionError::GenericError,
+                InstructionError::InvalidArgument,
+                InstructionError::InvalidInstructionData,
+                InstructionError::InvalidAccountData,
+                InstructionError::AccountDataTooSmall,
+                InstructionError::InsufficientFunds,
+                InstructionError::IncorrectProgramId,
+                InstructionError::MissingRequiredSignature,
+                InstructionError::AccountAlreadyInitialized,
+                InstructionError::UninitializedAccount,
+                InstructionError::UnbalancedInstruction,
+                InstructionError::ModifiedProgramId,
+                InstructionError::ExternalAccountLamportSpend,
+                InstructionError::ExternalAccountDataModified,
+                InstructionError::ReadonlyLamportChange,
+                InstructionError::ReadonlyDataModified,
+                InstructionError::DuplicateAccountIndex,
+                InstructionError::ExecutableModified,
+                InstructionError::RentEpochModified,
+                InstructionError::NotEnoughAccountKeys,
+                InstructionError::AccountDataSizeChanged,
+                InstructionError::AccountNotExecutable,
+                InstructionError::AccountBorrowFailed,
+                InstructionError::AccountBorrowOutstanding,
+                InstructionError::DuplicateAccountOutOfSync,
+                InstructionError::Custom(0),
+                InstructionError::InvalidError,
+                InstructionError::ExecutableDataModified,
+                InstructionError::ExecutableLamportChange,
+                InstructionError::ExecutableAccountNotRentExempt,
+                InstructionError::UnsupportedProgramId,
+                InstructionError::CallDepth,
+                InstructionError::MissingAccount,
+                InstructionError::ReentrancyNotAllowed,
+                InstructionError::MaxSeedLengthExceeded,
+                InstructionError::InvalidSeeds,
+                InstructionError::InvalidRealloc,
+                InstructionError::ComputationalBudgetExceeded,
+                InstructionError::PrivilegeEscalation,
+                InstructionError::ProgramEnvironmentSetupFailure,
+                InstructionError::ProgramFailedToComplete,
+                InstructionError::ProgramFailedToCompile,
+                InstructionError::Immutable,
+                InstructionError::IncorrectAuthority,
+                InstructionError::BorshIoError("error".to_string()),
+                InstructionError::AccountNotRentExempt,
+                InstructionError::InvalidAccountOwner,
+                InstructionError::ArithmeticOverflow,
+                InstructionError::UnsupportedSysvar,
+                InstructionError::IllegalOwner,
+                InstructionError::MaxAccountsDataAllocationsExceeded,
+                InstructionError::MaxAccountsExceeded,
+                InstructionError::MaxInstructionTraceLengthExceeded,
+                InstructionError::BuiltinProgramsMustConsumeComputeUnits,
+            ]
+        }
+
+        fn mock_processor_ok(
+            invoke_context: &mut InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            invoke_context.consume_checked(1)?;
+            Ok(())
+        }
+
+        let mock_program_id = solana_sdk::pubkey::new_rand();
+
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.add_builtin("mock_processor", &mock_program_id, mock_processor_ok);
+
+        let tx = Transaction::new_signed_with_payer(
+            &[Instruction::new_with_bincode(
+                mock_program_id,
+                &10,
+                Vec::new(),
+            )],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair],
+            bank.last_blockhash(),
+        );
+
+        let entry = next_entry(&bank.last_blockhash(), 1, vec![tx]);
+        let bank = Arc::new(bank);
+        let result = process_entries_for_tests(&bank, vec![entry], false, None, None);
+        bank.freeze();
+        let blockhash_ok = bank.last_blockhash();
+        let bankhash_ok = bank.hash();
+        assert!(result.is_ok());
+
+        fn mock_processor_err(
+            invoke_context: &mut InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            let instruction_errors = get_instruction_errors();
+
+            invoke_context.consume_checked(1)?;
+            let err = invoke_context
+                .transaction_context
+                .get_current_instruction_context()
+                .expect("Failed to get instruction context")
+                .get_instruction_data()
+                .first()
+                .expect("Failed to get instruction data");
+            Err(instruction_errors
+                .get(*err as usize)
+                .expect("Invalid error index")
+                .clone())
+        }
+
+        let mut bankhash_err = None;
+
+        (0..get_instruction_errors().len()).for_each(|err| {
+            let mut bank = Bank::new_for_tests(&genesis_config);
+            bank.add_builtin("mock_processor", &mock_program_id, mock_processor_err);
+
+            let tx = Transaction::new_signed_with_payer(
+                &[Instruction::new_with_bincode(
+                    mock_program_id,
+                    &(err as u8),
+                    Vec::new(),
+                )],
+                Some(&mint_keypair.pubkey()),
+                &[&mint_keypair],
+                bank.last_blockhash(),
+            );
+
+            let entry = next_entry(&bank.last_blockhash(), 1, vec![tx]);
+            let bank = Arc::new(bank);
+            let _result = process_entries_for_tests(&bank, vec![entry], false, None, None);
+            bank.freeze();
+
+            assert_eq!(blockhash_ok, bank.last_blockhash());
+            assert!(bankhash_ok != bank.hash());
+            if let Some(bankhash) = bankhash_err {
+                assert_eq!(bankhash, bank.hash());
+            }
+            bankhash_err = Some(bank.hash());
+        });
     }
 
     #[test]

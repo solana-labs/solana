@@ -23,11 +23,9 @@ use {
 
 /// Reasons the runtime might have rejected an instruction.
 ///
-/// Instructions errors are included in the bank hashes and therefore are
-/// included as part of the transaction results when determining consensus.
-/// Because of this, members of this enum must not be removed, but new ones can
-/// be added.  Also, it is crucial that meta-information if any that comes along
-/// with an error be consistent across software versions.  For example, it is
+/// Members of this enum must not be removed, but new ones can be added.
+/// Also, it is crucial that meta-information if any that comes along with
+/// an error be consistent across software versions.  For example, it is
 /// dangerous to include error strings from 3rd party crates because they could
 /// change at any time and changes to them are difficult to detect.
 #[derive(
