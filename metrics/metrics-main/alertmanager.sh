@@ -7,21 +7,6 @@ cd "$(dirname "$0")"
 
 . host.sh
 
-case $HOST in
-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
-  ;;
-tds-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=
-  CHRONOGRAF_GH_CLIENT_SECRET=
-  ;;
-*)
-  echo "Error: unknown $HOST"
-  exit 1
-esac
-
-
 : "${ALERTMANAGER_IMAGE:=prom/alertmanager:v0.23.0}"
 
 

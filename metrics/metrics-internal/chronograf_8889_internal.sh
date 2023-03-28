@@ -25,18 +25,16 @@ esac
 : "${CHRONOGRAF_IMAGE:=chronograf:1.8.8}"
 
 # remove the container
-for container in  chronograf_8889_internal ; do
-  [[ -w /var/lib/$container ]]
-  [[ -x /var/lib/$container ]]
+container=chronograf_8889_internal
+[[ -w /var/lib/$container ]]
+[[ -x /var/lib/$container ]]
 
-  (
-    set +e
-    sudo docker kill $container
-    sudo docker rm -f $container
-    exit 0
-  )
-done
-
+(
+  set +e
+  sudo docker kill $container
+  sudo docker rm -f $container
+  exit 0
+)
 
 pwd
 rm -rf certs

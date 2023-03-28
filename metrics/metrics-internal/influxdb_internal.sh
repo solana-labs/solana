@@ -25,18 +25,16 @@ esac
 : "${INFLUXDB_IMAGE:=influxdb:1.7}"
 
 # Remove the container
-for container in influxdb_internal ; do
-  [[ -w /var/lib/$container ]]
-  [[ -x /var/lib/$container ]]
+container=influxdb_internal
+[[ -w /var/lib/$container ]]
+[[ -x /var/lib/$container ]]
 
-  (
-    set +e
-    sudo docker kill $container
-    sudo docker rm -f $container
-    exit 0
-  )
-done
-
+(
+  set +e
+  sudo docker kill $container
+  sudo docker rm -f $container
+  exit 0
+)
 
 pwd
 rm -rf certs

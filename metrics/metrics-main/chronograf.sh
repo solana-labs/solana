@@ -26,17 +26,16 @@ esac
 
 
 # remove the container
-for container in chronograf_2; do
-  [[ -w /var/lib/$container ]]
-  [[ -x /var/lib/$container ]]
+container=chronograf
+[[ -w /var/lib/$container ]]
+[[ -x /var/lib/$container ]]
 
-  (
-    set +e
-    sudo docker kill $container
-    sudo docker rm -f $container
-    exit 0
-  )
-done
+(
+  set +e
+  sudo docker kill $container
+  sudo docker rm -f $container
+  exit 0
+)
 
 
 pwd

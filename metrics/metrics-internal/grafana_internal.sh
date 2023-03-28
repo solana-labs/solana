@@ -26,16 +26,16 @@ esac
 : "${GRAFANA_IMAGE:=grafana/grafana:8.3.1}"
 
 # remove the container
-for container in grafana_internal ; do
+container=grafana_internal
+[[ -w /var/lib/$container ]]
+[[ -x /var/lib/$container ]]
 
-  (
-    set +e
-    sudo docker kill $container
-    sudo docker rm -f $container
-    exit 0
-  )
-done
-
+(
+  set +e
+  sudo docker kill $container
+  sudo docker rm -f $container
+  exit 0
+)
 
 pwd
 rm -rf certs
