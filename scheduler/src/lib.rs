@@ -3,6 +3,7 @@
 #![allow(unused_variables)]
 #![allow(unused_parens)]
 #![allow(unreachable_code)]
+#![allow(unused_mut)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
