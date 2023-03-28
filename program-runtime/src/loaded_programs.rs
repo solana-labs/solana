@@ -227,12 +227,12 @@ impl LoadedProgram {
     }
 
     pub fn is_tombstone(&self) -> bool {
-        match self.program {
+        matches!(
+            self.program,
             LoadedProgramType::FailedVerification
-            | LoadedProgramType::Closed
-            | LoadedProgramType::DelayVisibility => true,
-            _ => false,
-        }
+                | LoadedProgramType::Closed
+                | LoadedProgramType::DelayVisibility
+        )
     }
 }
 
