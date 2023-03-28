@@ -14,6 +14,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::if_same_then_else)]
 #![allow(clippy::never_loop)]
+#![allow(clippy::needless_lifetimes)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
