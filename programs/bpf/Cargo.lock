@@ -4070,7 +4070,7 @@ dependencies = [
  "solana-sdk 1.14.18",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022 0.6.0",
+ "spl-token-2022 0.6.1",
  "thiserror",
  "zstd",
 ]
@@ -4667,7 +4667,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
- "spl-token-2022 0.6.0",
+ "spl-token-2022 0.6.1",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -5029,7 +5029,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022 0.6.0",
+ "spl-token-2022 0.6.1",
  "static_assertions",
  "tempfile",
  "thiserror",
@@ -5362,7 +5362,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022 0.6.0",
+ "spl-token-2022 0.6.1",
  "stream-cancel",
  "thiserror",
  "tokio",
@@ -5722,7 +5722,7 @@ dependencies = [
  "spl-associated-token-account",
  "spl-memo",
  "spl-token",
- "spl-token-2022 0.6.0",
+ "spl-token-2022 0.6.1",
  "thiserror",
 ]
 
@@ -5983,9 +5983,9 @@ dependencies = [
 
 [[package]]
 name = "spl-token-2022"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67fcd758e8d22c5fce17315015f5ff319604d1a6e57a73c72795639dba898890"
+checksum = "0043b590232c400bad5ee9eb983ced003d15163c4c5d56b090ac6d9a57457b47"
 dependencies = [
  "arrayref",
  "bytemuck",
