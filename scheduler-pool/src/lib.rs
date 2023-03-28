@@ -474,7 +474,7 @@ impl Scheduler {
                 'retry: loop {
                 let Some(bank) = latest_scheduler_context.as_ref().map(|sc| sc.bank()) else {
                     match mode {
-                        Some(solana_scheduler::Mode::Replaying) => panic!(),
+                        Some(solana_scheduler::Mode::BlockVerification) => panic!(),
                         None => (),
                     };
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, Default::default())).unwrap();
@@ -525,7 +525,7 @@ impl Scheduler {
                     bank.last_blockhash_and_lamports_per_signature();
 
                 let commited_first_transaction_index = match mode {
-                    solana_scheduler::Mode::Replaying => {
+                    solana_scheduler::Mode::BlockVerification => {
                         //info!("replaying commit! {slot}");
                         Some(ee.task.transaction_index(mode) as usize)
                    },
@@ -561,7 +561,7 @@ impl Scheduler {
                 } else {
                     let sig = || ee.task.tx.0.signature().to_string();
                     match mode {
-                        solana_scheduler::Mode::Replaying => {
+                        solana_scheduler::Mode::BlockVerification => {
                             error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig(), tx_result);
                         },
                     }
@@ -676,7 +676,7 @@ impl Scheduler {
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
                             let propagate_tx_error = match latest_scheduler_context.as_ref().unwrap().mode {
-                                solana_scheduler::Mode::Replaying => true, // tx_error isn't acceptable only for replaying
+                                solana_scheduler::Mode::BlockVerification => true, // tx_error isn't acceptable only for replaying
                             };
                             if !propagate_tx_error {
                                 first_error = Ok(());
