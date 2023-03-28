@@ -1,0 +1,101 @@
+groups:
+  - name: AllInstances
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        annotations:
+            title: 'Instance {{ $labels.instance }} down'
+            description: '{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 1 minute.'
+        labels:
+            severity: critical
+
+      - alert: CpuLoad Warning
+        expr: node_load15 / (count without (cpu, mode) (node_cpu_seconds_total{mode="system"})) > 1
+        for: 10m
+        labels:
+            severity: warning
+        annotations:
+            title: 'Instance {{ $labels.instance }} Warning'
+            summary: "CPU load (instance {{ $labels.instance }})"
+            description: "CPU load (15m) is high\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+      - alert: CpuLoad Critical
+        expr: node_load15 / (count without (cpu, mode) (node_cpu_seconds_total{mode="system"})) > 2
+        for: 10m
+        labels:
+            severity: critical
+        annotations:
+            title: 'Instance {{ $labels.instance }} CpuLoad is Critical'
+            summary: "CPU load (instance {{ $labels.instance }})"
+            description: "CPU load (15m) is high\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+      - alert: OutOfMemory
+        expr: (node_memory_MemFree_bytes + node_memory_Cached_bytes + node_memory_Buffers_bytes) / node_memory_MemTotal_bytes * 100 < 20
+        for: 10m
+        labels:
+            severity: warning
+        annotations:
+            title: 'Instance {{ $labels.instance }} OutOfMemory warning'
+            summary: "Out of memory (instance {{ $labels.instance }})"
+            description: "Node memory is filling up (< 20% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+      - alert: OutOfMemory
+        expr: (node_memory_MemFree_bytes + node_memory_Cached_bytes + node_memory_Buffers_bytes) / node_memory_MemTotal_bytes * 100 < 10
+        for: 10m
+        labels:
+            severity: critical
+        annotations:
+            title: 'Instance {{ $labels.instance }} OutOfMemory critical'
+            summary: "Out of memory (instance {{ $labels.instance }})"
+            description: "Node memory is filling up (< 10% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+      - alert: OutOfDiskSpace>80
+        expr: node_filesystem_free_bytes{mountpoint ="/"} / node_filesystem_size_bytes{mountpoint ="/"} * 100 < 20
+        for: 10m
+        labels:
+            severity: warning
+        annotations:
+            title: 'Instance {{ $labels.instance }} Disk space more than 80%'
+            summary: "Out of disk space (instance {{ $labels.instance }})"
+            description: "Disk is almost full (< 20% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+      - alert: OutOfDiskSpace>90
+        expr: node_filesystem_free_bytes{mountpoint ="/"} / node_filesystem_size_bytes{mountpoint ="/"} * 100 < 10
+        for: 10m
+        labels:
+            severity: critical
+        annotations:
+            title: 'Instance {{ $labels.instance }} Disk space more than 90%'
+            summary: "Out of disk space (instance {{ $labels.instance }})"
+            description: "Disk is almost full (< 10% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+      - alert: InfluxdbOutOfDiskSpace>80
+        expr: (node_filesystem_avail_bytes{job=~"Influx-Data|Influx-Meta", mountpoint="/var/lib/influxdb"} * 100) / node_filesystem_size_bytes{job=~"Influx-Data|Influx-Meta", mountpoint="/var/lib/influxdb"} < 20 and ON (instance, device, mountpoint) node_filesystem_readonly{job=~"Influx-Data|Influx-Meta", mountpoint="/var/lib/influxdb"} == 0
+        for: 10m
+        labels:
+            severity: critical
+        annotations:
+            title: 'Influxdb Instance {{ $labels.instance }} Disk space more than 80%'
+            summary: "Out of disk space (instance {{ $labels.instance }})"
+            description: "Disk is almost full (< 20% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+      - alert: InfluxdbOutOfMemory>80
+        expr: node_memory_MemAvailable_bytes{job=~"Influx-Data|Influx-Meta"} / node_memory_MemTotal_bytes{job=~"Influx-Data|Influx-Meta"} * 100 < 20
+        for: 10m
+        labels:
+            severity: critical
+        annotations:
+            title: 'Influxdb Instance {{ $labels.instance }} OutOfMemory critical'
+            summary: "Out of memory (instance {{ $labels.instance }})"
+            description: "Node memory is filling up (< 20% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+      - alert: InfluxdbServiceInactive
+        expr: node_systemd_unit_state{job=~"Influx-Data|Influx-Meta",name=~"influxdb-meta.service|influxdb.service",state="active"} == 0
+        for: 10m
+        labels:
+            severity: critical
+        annotations:
+            title: 'Service {{ $labels.name }} is inactive in the Instance {{ $labels.instance }} '
+            summary: "Inactive Service (instance {{ $labels.instance }})"
+            description: "Service is Inactive \n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"

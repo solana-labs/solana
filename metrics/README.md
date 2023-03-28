@@ -1,47 +1,47 @@
 # Metrics
 
-## Testnet Grafana Dashboard
+## InfluxDB
 
-There are three versions of the testnet dashboard, corresponding to the three
-release channels:
-* https://metrics.solana.com:3000/d/monitor-edge/cluster-telemetry-edge
-* https://metrics.solana.com:3000/d/monitor-beta/cluster-telemetry-beta
-* https://metrics.solana.com:3000/d/monitor/cluster-telemetry
+In oder to explore validator specific metrics from mainnet-beta, testnet or devnet you can use Chronograf:
 
-The dashboard for each channel is defined from the
-`metrics/scripts/grafana-provisioning/dashboards/cluster-monitor.json` source
-file in the git branch associated with that channel, and deployed by automation
-running `ci/publish-metrics-dashboard.sh`.
+* https://metrics.solana.com:8888/ (production enviroment)
+* https://metrics.solana.com:8889/ (testing enviroment)
 
-A deploy can be triggered at any time via the `New Build` button of
-https://buildkite.com/solana-labs/publish-metrics-dashboard.
+For local cluster deployments you should use:
 
-### Modifying a Dashboard
+* https://internal-metrics.solana.com:8888/
 
-Dashboard updates are accomplished by modifying
-`metrics/scripts/grafana-provisioning/dashboards/cluster-monitor.json`,
-**manual edits made directly in Grafana will be overwritten**.
+## Public Grafana Dashboards
 
-* Check out metrics to add at https://metrics.solana.com:8888/ in the data explorer.
-* When editing a query for a dashboard graph, use the "Toggle Edit Mode" selection
-  behind the hamburger button to use raw SQL and copy the query into the text field.
-  You may have to fixup the query with the dashboard variables like $testnet or $timeFilter,
-  check other functioning fields in the dashboard for examples.
+There are three main public dashboards for cluster related metrics:
 
-1. Open the desired dashboard in Grafana
-2. Create a development copy of the dashboard by selecting `Save As..` in the
-   `Settings` menu for the dashboard
-3. Edit dashboard as desired
-4. Extract the JSON Model by selecting `JSON Model` in the `Settings` menu.  Copy the JSON to the clipboard
-    and paste into `metrics/scripts/grafana-provisioning/dashboards/cluster-monitor.json`,
-5. Delete your development dashboard: `Settings` => `Delete`
+* https://metrics.solana.com/d/monitor-edge/cluster-telemetry
+* https://metrics.solana.com/d/0n54roOVz/fee-market
+* https://metrics.solana.com/d/UpIWbId4k/ping-result
 
-### Deploying a Dashboard Manually
+For local cluster deployments you should use:
 
-If you need to immediately deploy a dashboard using the contents of
-`cluster-monitor.json` in your local workspace,
-```
-$ export GRAFANA_API_TOKEN="an API key from https://metrics.solana.com:3000/org/apikeys"
-$ metrics/publish-metrics-dashboard.sh (edge|beta|stable)
-```
-Note that automation will eventually overwrite your manual deploy.
+* https://internal-metrics.solana.com:3000/
+
+### Cluster Telemetry
+
+The cluster telemetry dashboard shows the current state of the cluster:
+
+1. Cluster Stability
+2. Validator Streamer
+3. Tomer Consensus
+4. IP Network
+5. Snapshots
+6. RPC Send Transaction Service
+
+### Fee Market
+
+The fee market dashboard shows:
+
+1. Total Priorization Fees
+2. Block Min Priorization Fees
+3. Cost Tracker Stats
+
+### Ping Results
+
+The ping reults dashboard displays relevant information about the Ping API
