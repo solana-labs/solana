@@ -8174,7 +8174,7 @@ impl Bank {
 
             let timings_and_result = s
                 .as_mut()
-                .and_then(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART))
+                .and_then(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART));
             if !IS_RESTART {
                 if let Some(scheduler) = s.take() {
                     scheduler.scheduler_pool().return_to_pool(scheduler);
