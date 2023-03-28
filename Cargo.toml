@@ -122,7 +122,7 @@ edition = "2021"
 
 [workspace.dependencies]
 aes-gcm-siv = "0.10.3"
-ahash = "0.7.6"
+ahash = "0.8.3"
 anyhow = "1.0.58"
 ark-bn254 = "0.3.0"
 ark-ec = "0.3.0"

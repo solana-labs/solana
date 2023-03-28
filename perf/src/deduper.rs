@@ -2,10 +2,10 @@
 
 use {
     crate::packet::{Packet, PacketBatch},
-    ahash::AHasher,
+    ahash::RandomState,
     rand::Rng,
     std::{
-        hash::{Hash, Hasher},
+        hash::{BuildHasher, Hash, Hasher},
         iter::repeat_with,
         marker::PhantomData,
         sync::atomic::{AtomicU64, Ordering},
@@ -16,7 +16,7 @@ use {
 pub struct Deduper<const K: usize, T: ?Sized> {
     num_bits: u64,
     bits: Vec<AtomicU64>,
-    seeds: [(u128, u128); K],
+    state: [RandomState; K],
     clock: Instant,
     popcount: AtomicU64, // Number of one bits in self.bits.
     _phantom: PhantomData<T>,
@@ -28,7 +28,7 @@ impl<const K: usize, T: ?Sized + Hash> Deduper<K, T> {
         let size = usize::try_from(size).unwrap();
         Self {
             num_bits,
-            seeds: std::array::from_fn(|_| rng.gen()),
+            state: std::array::from_fn(|_| new_random_state(rng)),
             clock: Instant::now(),
             bits: repeat_with(AtomicU64::default).take(size).collect(),
             popcount: AtomicU64::default(),
@@ -54,7 +54,7 @@ impl<const K: usize, T: ?Sized + Hash> Deduper<K, T> {
         assert!(0.0 < false_positive_rate && false_positive_rate < 1.0);
         let saturated = self.false_positive_rate() >= false_positive_rate;
         if saturated || self.clock.elapsed() >= reset_cycle {
-            self.seeds = std::array::from_fn(|_| rng.gen());
+            self.state = std::array::from_fn(|_| new_random_state(rng));
             self.clock = Instant::now();
             self.bits.fill_with(AtomicU64::default);
             self.popcount = AtomicU64::default();
@@ -67,8 +67,8 @@ impl<const K: usize, T: ?Sized + Hash> Deduper<K, T> {
     #[allow(clippy::integer_arithmetic)]
     pub fn dedup(&self, data: &T) -> bool {
         let mut out = true;
-        for seed in self.seeds {
-            let mut hasher = AHasher::new_with_keys(seed.0, seed.1);
+        let hashers = self.state.iter().map(RandomState::build_hasher);
+        for mut hasher in hashers {
             data.hash(&mut hasher);
             let hash: u64 = hasher.finish() % self.num_bits;
             let index = (hash >> 6) as usize;
@@ -81,6 +81,10 @@ impl<const K: usize, T: ?Sized + Hash> Deduper<K, T> {
         }
         out
     }
+}
+
+fn new_random_state<R: Rng>(rng: &mut R) -> RandomState {
+    RandomState::with_seeds(rng.gen(), rng.gen(), rng.gen(), rng.gen())
 }
 
 pub fn dedup_packets_and_count_discards<const K: usize>(
@@ -237,12 +241,12 @@ mod tests {
         ));
     }
 
-    #[test_case([0xf9; 32],  3_199_997, 101_192,  51_414,  70, 101_125)]
-    #[test_case([0xdc; 32],  3_200_003, 101_192,  51_414,  71, 101_132)]
-    #[test_case([0xa5; 32],  6_399_971, 202_384, 102_828, 127, 202_157)]
-    #[test_case([0xdb; 32],  6_400_013, 202_386, 102_828, 145, 202_277)]
-    #[test_case([0xcd; 32], 12_799_987, 404_771, 205_655, 289, 404_434)]
-    #[test_case([0xc3; 32], 12_800_009, 404_771, 205_656, 309, 404_278)]
+    #[test_case([0xf9; 32],  3_199_997, 101_192,  51_414,  66, 101_121)]
+    #[test_case([0xdc; 32],  3_200_003, 101_192,  51_414,  60, 101_092)]
+    #[test_case([0xa5; 32],  6_399_971, 202_384, 102_828, 125, 202_178)]
+    #[test_case([0xdb; 32],  6_400_013, 202_386, 102_828, 135, 202_235)]
+    #[test_case([0xcd; 32], 12_799_987, 404_771, 205_655, 285, 404_410)]
+    #[test_case([0xc3; 32], 12_800_009, 404_771, 205_656, 293, 404_397)]
     fn test_dedup_seeded(
         seed: [u8; 32],
         num_bits: u64,
