@@ -254,7 +254,6 @@ impl Checkpoint {
             assert!(*threads_after_checkpoint <= 1);
             *threads_after_checkpoint = threads_after_checkpoint.checked_add(1).unwrap();
             assert_eq!(*context_count, 0);
-            drop((threads_before_checkpoint, threads_after_checkpoint, self_return_value, _a, context_count, g));
             self.1.notify_all();
             info!(
                 "Checkpoint::wait_for_restart: {} notified all others...",
