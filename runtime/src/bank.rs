@@ -984,7 +984,7 @@ impl SchedulingContext {
         )
     }
 
-    pub fn drop_cyclically(mut self) -> bool {
+    pub fn drop_cyclically(self) -> bool {
         let mut did_drop = false;
         if let Ok(bank) = Arc::try_unwrap(self.bank) {
             bank.wait_for_completed_scheduler_via_internal_drop();
@@ -6341,8 +6341,7 @@ impl Bank {
 
     pub fn trigger_scheduler_termination(&self) {
         let mut s = self.scheduler.write().unwrap();
-        if let Some(mut scheduler) = s.as_mut() {
-            info!("not_schedulable... slot: {}", self.slot());
+        if let Some(scheduler) = s.as_mut() {
             scheduler.trigger_termination();
         }
     }
@@ -8178,7 +8177,7 @@ impl Bank {
                 .map(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART))
                 .flatten();
             if !IS_RESTART {
-                if let Some(mut scheduler) = s.take() {
+                if let Some(scheduler) = s.take() {
                     scheduler.scheduler_pool().return_to_pool(scheduler);
                 }
             }
