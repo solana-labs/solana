@@ -21,7 +21,3 @@ solana-logger = { workspace = true }
 sha2 = { workspace = true }
 triomphe = { workspace = true }
 rand = { workspace = true }
-
-[[bin]]
-name = "solana-scheduler"
-path = "src/main.rs"
