@@ -5638,6 +5638,7 @@ dependencies = [
  "libloading",
  "log",
  "serde_json",
+ "solana-entry",
  "solana-geyser-plugin-interface",
  "solana-measure",
  "solana-metrics",
