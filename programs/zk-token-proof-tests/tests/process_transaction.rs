@@ -9,13 +9,13 @@ use {
         transaction::{Transaction, TransactionError},
     },
     solana_zk_token_sdk::{
-        encryption::elgamal::ElGamalKeypair, instruction::*, zk_token_proof_instruction::*,
+        encryption::{elgamal::ElGamalKeypair, pedersen::*}, instruction::*, zk_token_proof_instruction::*,
         zk_token_proof_program, zk_token_proof_state::ProofContextState,
     },
     std::mem::size_of,
 };
 
-const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 6] = [
+const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 8] = [
     ProofInstruction::VerifyCloseAccount,
     ProofInstruction::VerifyWithdraw,
     ProofInstruction::VerifyWithdrawWithheldTokens,
@@ -23,6 +23,7 @@ const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 6] = [
     ProofInstruction::VerifyTransferWithFee,
     ProofInstruction::VerifyPubkeyValidity,
     ProofInstruction::VerifyValidityProof,
+    ProofInstruction::VerifyAggregatedValidityProof,
 ];
 
 #[tokio::test]
@@ -314,6 +315,137 @@ async fn test_pubkey_validity() {
     test_close_context_state(
         ProofInstruction::VerifyPubkeyValidity,
         size_of::<ProofContextState<PubkeyValidityProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_validity_proof() {
+    let destination_pubkey = ElGamalKeypair::new_rand().public;
+    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+
+    let amount: u64 = 55;
+    let (commitment, opening) = Pedersen::new(amount);
+
+    let destination_handle = destination_pubkey.decrypt_handle(&opening);
+    let auditor_handle = auditor_pubkey.decrypt_handle(&opening);
+
+    let success_proof_data = ValidityProofData::new(
+        &destination_pubkey,
+        &auditor_pubkey,
+        &commitment,
+        &destination_handle,
+        &auditor_handle,
+        amount,
+        &opening,
+    )
+    .unwrap();
+
+    let incorrect_amount: u64 = 0;
+    let fail_proof_data = ValidityProofData::new(
+        &destination_pubkey,
+        &auditor_pubkey,
+        &commitment,
+        &destination_handle,
+        &auditor_handle,
+        incorrect_amount,
+        &opening,
+    )
+    .unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyValidityProof,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyValidityProof,
+        size_of::<ProofContextState<ValidityProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyValidityProof,
+        size_of::<ProofContextState<ValidityProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_aggregated_validity_proof() {
+    let destination_pubkey = ElGamalKeypair::new_rand().public;
+    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+
+    let amount_lo: u64 = 55;
+    let amount_hi: u64 = 77;
+
+    let (commitment_lo, opening_lo) = Pedersen::new(amount_lo);
+    let (commitment_hi, opening_hi) = Pedersen::new(amount_hi);
+
+    let destination_handle_lo = destination_pubkey.decrypt_handle(&opening_lo);
+    let destination_handle_hi = destination_pubkey.decrypt_handle(&opening_hi);
+
+    let auditor_handle_lo = auditor_pubkey.decrypt_handle(&opening_lo);
+    let auditor_handle_hi = auditor_pubkey.decrypt_handle(&opening_hi);
+
+    let success_proof_data = AggregatedValidityProofData::new(
+        &destination_pubkey,
+        &auditor_pubkey,
+        &commitment_lo,
+        &commitment_hi,
+        &destination_handle_lo,
+        &destination_handle_hi,
+        &auditor_handle_lo,
+        &auditor_handle_hi,
+        amount_lo,
+        amount_hi,
+        &opening_lo,
+        &opening_hi,
+    )
+    .unwrap();
+
+    let incorrect_amount_lo: u64 = 0;
+    let incorrect_amount_hi: u64 = 0;
+    let fail_proof_data = AggregatedValidityProofData::new(
+        &destination_pubkey,
+        &auditor_pubkey,
+        &commitment_lo,
+        &commitment_hi,
+        &destination_handle_lo,
+        &destination_handle_hi,
+        &auditor_handle_lo,
+        &auditor_handle_hi,
+        incorrect_amount_lo,
+        incorrect_amount_hi,
+        &opening_lo,
+        &opening_hi,
+    )
+    .unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyAggregatedValidityProof,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyAggregatedValidityProof,
+        size_of::<ProofContextState<AggregatedValidityProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyAggregatedValidityProof,
+        size_of::<ProofContextState<AggregatedValidityProofContext>>(),
         &success_proof_data,
     )
     .await;

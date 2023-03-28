@@ -24,7 +24,10 @@ pub use {
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
     transfer::{TransferData, TransferProofContext},
     transfer_with_fee::{FeeParameters, TransferWithFeeData, TransferWithFeeProofContext},
-    validity_proof::{ValidityProofContext, ValidityProofData},
+    validity_proof::{
+        AggregatedValidityProofContext, AggregatedValidityProofData, ValidityProofContext,
+        ValidityProofData,
+    },
     withdraw::{WithdrawData, WithdrawProofContext},
     withdraw_withheld::{WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext},
 };
@@ -41,6 +44,7 @@ pub enum ProofType {
     TransferWithFee,
     PubkeyValidity,
     ValidityProof,
+    AggregatedValidityProof,
 }
 
 pub trait ZkProofData<T: Pod> {

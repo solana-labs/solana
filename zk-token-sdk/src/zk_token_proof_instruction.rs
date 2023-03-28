@@ -150,6 +150,24 @@ pub enum ProofInstruction {
     ///   `ValidityProofData`
     ///
     VerifyValidityProof,
+
+    /// Verify a (ciphertext) aggregated validity proof.
+    ///
+    /// This instruction can be configured to optionally create a proof context state account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `AggregatedValidityProofData`
+    ///
+    VerifyAggregatedValidityProof,
 }
 
 /// Pubkeys associated with a context state account to be used as parameters to functions.

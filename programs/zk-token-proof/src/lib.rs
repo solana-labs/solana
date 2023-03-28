@@ -195,5 +195,11 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
             ic_msg!(invoke_context, "VerifyValidityProof");
             process_verify_proof::<ValidityProofData, ValidityProofContext>(invoke_context)
         }
+        ProofInstruction::VerifyAggregatedValidityProof => {
+            ic_msg!(invoke_context, "VerifyAggregatedValidityProof");
+            process_verify_proof::<AggregatedValidityProofData, AggregatedValidityProofContext>(
+                invoke_context,
+            )
+        }
     }
 });
