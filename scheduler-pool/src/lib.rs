@@ -651,7 +651,7 @@ impl Scheduler {
                                     Err(e) => {
                                         transaction_error_counts.record(&e);
                                         match latest_scheduler_context.as_ref().unwrap().mode {
-                                            solana_scheduler::Mode::Replaying => {
+                                            solana_scheduler::Mode::BlockVerification => {
                                                 error!(
                                                     "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
                                                     e, ee.task.tx.0
@@ -670,7 +670,7 @@ impl Scheduler {
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush) => {
                             info!("post_execution_handler: {} {:?}", SchedulingContext::log_prefix(random_id, latest_scheduler_context.as_ref()), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
-                            if let Some(solana_scheduler::Mode::Replaying) = latest_scheduler_context.as_ref().map(|c| c.mode) {
+                            if let Some(solana_scheduler::Mode::BlockVerification) = latest_scheduler_context.as_ref().map(|c| c.mode) {
                                 assert_eq!(skipped, 0);
                             }
                             transaction_error_counts.reset();
