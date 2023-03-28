@@ -39,6 +39,7 @@ use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_ledger::token_balances::collect_token_balances;
 use solana_scheduler::WithMode;
 use solana_scheduler::WithContext;
+use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
 
 pub use solana_scheduler::Mode;
 
