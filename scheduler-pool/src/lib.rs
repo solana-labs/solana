@@ -65,7 +65,7 @@ impl SchedulerPool {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
 
-    pub fn new_boxed(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>, Arc<PrioritizationFeeCache>) -> Box<dyn InstalledSchedulerPool> {
+    pub fn new_boxed(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>, prioritization_fee_cache: Arc<PrioritizationFeeCache>) -> Box<dyn InstalledSchedulerPool> {
         Box::new(SchedulerPoolWrapper::new(poh_recorder, log_messages_bytes_limit, transaction_status_sender, replay_vote_sender))
     }
 }
