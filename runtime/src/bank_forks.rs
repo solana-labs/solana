@@ -232,7 +232,7 @@ impl BankForks {
             self.descendants.entry(parent).or_default().insert(slot);
         }
         if let Some(scheduler_pool) = self.scheduler_pool {
-            let new_context = SchedulerContext::new(bank.clone(), solana_schduler::Mode::Replaying);
+            let new_context = SchedulerContext::new(bank.clone(), solana_scheduler::Mode::Replaying);
             bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
         }
         bank
