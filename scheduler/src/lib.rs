@@ -4,6 +4,7 @@
 #![allow(unused_parens)]
 #![allow(unreachable_code)]
 #![allow(unused_mut)]
+#![allow(clippy::drop_copy)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
