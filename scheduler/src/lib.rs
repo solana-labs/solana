@@ -1,4 +1,4 @@
-#[allow(*)]
+#[!allow(clippy)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
