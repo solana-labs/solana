@@ -57,6 +57,7 @@ impl SnapshotPackagerService {
         let t_snapshot_packager = Builder::new()
             .name("solSnapshotPkgr".to_string())
             .spawn(move || {
+                info!("SnapshotPackagerService has started");
                 renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
                 let mut snapshot_gossip_manager = enable_gossip_push.then(||
                     SnapshotGossipManager::new(
@@ -122,7 +123,7 @@ impl SnapshotPackagerService {
                         ("handling-time-us", handling_time_us, i64),
                     );
                 }
-                info!("Snapshot Packager Service has stopped");
+                info!("SnapshotPackagerService has stopped");
             })
             .unwrap();
 

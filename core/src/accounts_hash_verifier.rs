@@ -61,6 +61,7 @@ impl AccountsHashVerifier {
         let t_accounts_hash_verifier = Builder::new()
             .name("solAcctHashVer".to_string())
             .spawn(move || {
+                info!("AccountsHashVerifier has started");
                 let mut hashes = vec![];
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -109,7 +110,7 @@ impl AccountsHashVerifier {
                         ("handling-time-us", handling_time_us, i64),
                     );
                 }
-                info!("Accounts Hash Verifier has stopped");
+                info!("AccountsHashVerifier has stopped");
             })
             .unwrap();
         Self {
