@@ -2586,12 +2586,14 @@ impl ReplayStage {
 
                 let (cumulative_timings, r) = bank.wait_for_completed_scheduler();
                 {
-                    let cumulative_timings2 = solana_program_runtime::timings::ThreadExecuteTimings {
-                        execute_timings: cumulative_timings,
-                        ..Default::default()
-                    };
+                    let cumulative_timings2 =
+                        solana_program_runtime::timings::ThreadExecuteTimings {
+                            execute_timings: cumulative_timings,
+                            ..Default::default()
+                        };
                     let mut metrics =
-                        solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default();
+                        solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default(
+                        );
                     metrics
                         .execution_timings_per_thread
                         .insert(0, cumulative_timings2);
@@ -2599,28 +2601,27 @@ impl ReplayStage {
                 }
                 match r {
                     Err(err) => {
-                            // Error means the slot needs to be marked as dead
-                            Self::mark_dead_slot(
-                                blockstore,
-                                bank,
-                                bank_forks.read().unwrap().root(),
-                                &BlockstoreProcessorError::InvalidTransaction(err.into()),
-                                rpc_subscriptions,
-                                duplicate_slots_tracker,
-                                gossip_duplicate_confirmed_slots,
-                                epoch_slots_frozen_slots,
-                                progress,
-                                heaviest_subtree_fork_choice,
-                                duplicate_slots_to_repair,
-                                ancestor_hashes_replay_update_sender,
-                                purge_repair_slot_counter,
-                            );
-                            // If the bank was corrupted, don't try to run the below logic to check if the
-                            // bank is completed
-                            continue;
-                    },
-                    Ok(()) => {
-                    },
+                        // Error means the slot needs to be marked as dead
+                        Self::mark_dead_slot(
+                            blockstore,
+                            bank,
+                            bank_forks.read().unwrap().root(),
+                            &BlockstoreProcessorError::InvalidTransaction(err.into()),
+                            rpc_subscriptions,
+                            duplicate_slots_tracker,
+                            gossip_duplicate_confirmed_slots,
+                            epoch_slots_frozen_slots,
+                            progress,
+                            heaviest_subtree_fork_choice,
+                            duplicate_slots_to_repair,
+                            ancestor_hashes_replay_update_sender,
+                            purge_repair_slot_counter,
+                        );
+                        // If the bank was corrupted, don't try to run the below logic to check if the
+                        // bank is completed
+                        continue;
+                    }
+                    Ok(()) => {}
                 };
 
                 let replay_progress = bank_progress.replay_progress.clone();

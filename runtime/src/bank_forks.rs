@@ -197,7 +197,10 @@ impl BankForks {
             banks.insert(bank.slot(), BankWithScheduler(bank.clone()));
             let parents = bank.parents();
             for parent in parents {
-                if banks.insert(parent.slot(), BankWithScheduler(parent.clone())).is_some() {
+                if banks
+                    .insert(parent.slot(), BankWithScheduler(parent.clone()))
+                    .is_some()
+                {
                     // All ancestors have already been inserted by another fork
                     break;
                 }
@@ -224,7 +227,9 @@ impl BankForks {
 
     pub fn insert(&mut self, bank: Bank) -> Arc<Bank> {
         let bank = Arc::new(bank);
-        let prev = self.banks.insert(bank.slot(), BankWithScheduler(bank.clone()));
+        let prev = self
+            .banks
+            .insert(bank.slot(), BankWithScheduler(bank.clone()));
         assert!(prev.is_none());
         let slot = bank.slot();
         self.descendants.entry(slot).or_default();
@@ -232,7 +237,8 @@ impl BankForks {
             self.descendants.entry(parent).or_default().insert(slot);
         }
         if let Some(scheduler_pool) = &self.scheduler_pool {
-            let new_context = SchedulingContext::new(bank.clone(), solana_scheduler::Mode::BlockVerification);
+            let new_context =
+                SchedulingContext::new(bank.clone(), solana_scheduler::Mode::BlockVerification);
             bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
         }
         bank
@@ -287,7 +293,8 @@ impl BankForks {
         let root_bank = self
             .banks
             .get(&root)
-            .expect("root bank didn't exist in bank_forks").new_arc();
+            .expect("root bank didn't exist in bank_forks")
+            .new_arc();
         let new_epoch = root_bank.epoch();
         if old_epoch != new_epoch {
             info!(

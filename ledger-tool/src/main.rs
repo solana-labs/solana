@@ -1259,12 +1259,23 @@ fn load_bank_forks(
         block_verification_method,
     );
     let no_transaction_status_sender = None;
-    if matches!(block_verification_method, BlockVerificationMethod::UnifiedScheduler) {
+    if matches!(
+        block_verification_method,
+        BlockVerificationMethod::UnifiedScheduler
+    ) {
         use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
         let no_poh_recorder = None;
         let no_replay_vote_sender = None::<ReplayVoteSender>;
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(no_poh_recorder, process_options.runtime_config.log_messages_bytes_limit, no_transaction_status_sender.clone(), no_replay_vote_sender, _ignored_prioritization_fee_cache));
+        bank_forks.write().unwrap().install_scheduler_pool(
+            solana_scheduler_pool::SchedulerPool::new_boxed(
+                no_poh_recorder,
+                process_options.runtime_config.log_messages_bytes_limit,
+                no_transaction_status_sender.clone(),
+                no_replay_vote_sender,
+                _ignored_prioritization_fee_cache,
+            ),
+        );
     } else {
         info!("not installing scheduler pool...");
     }

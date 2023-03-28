@@ -962,10 +962,7 @@ impl solana_scheduler::WithMode for SchedulingContext {
 
 impl SchedulingContext {
     pub fn new(bank: Arc<Bank>, mode: solana_scheduler::Mode) -> Self {
-        Self {
-            bank,
-            mode,
-        }
+        Self { bank, mode }
     }
 
     pub fn slot(&self) -> Slot {
@@ -977,7 +974,14 @@ impl SchedulingContext {
     }
 
     pub fn log_prefix(random_id: u64, context: Option<&Self>) -> String {
-        format!("id_{:016x}{}", random_id, context.as_ref().map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into()))
+        format!(
+            "id_{:016x}{}",
+            random_id,
+            context
+                .as_ref()
+                .map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode))
+                .unwrap_or("".into())
+        )
     }
 
     pub fn drop_cyclically(mut self) -> bool {
@@ -1182,12 +1186,15 @@ pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
 
     fn trigger_termination(&mut self);
-    fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool) -> Option<(ExecuteTimings, Result<()>)> ;
+    fn wait_for_termination(
+        &mut self,
+        from_internal: bool,
+        is_restart: bool,
+    ) -> Option<(ExecuteTimings, Result<()>)>;
 
     fn replace_scheduler_context(&self, context: SchedulingContext);
 
     // drop with exit atomicbool integration??
-
 }
 
 type InstalledSchedulerBox = Option<Box<dyn InstalledScheduler>>;
@@ -8148,18 +8155,28 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    fn wait_for_scheduler<const VIA_DROP: bool, const FROM_INTERNAL: bool, const IS_RESTART: bool>(&self) -> Option<(ExecuteTimings, Result<()>)> {
+    fn wait_for_scheduler<
+        const VIA_DROP: bool,
+        const FROM_INTERNAL: bool,
+        const IS_RESTART: bool,
+    >(
+        &self,
+    ) -> Option<(ExecuteTimings, Result<()>)> {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if VIA_DROP {
-            info!("wait_for_scheduler(VIA_DROP): {}", std::backtrace::Backtrace::force_capture());
+            info!(
+                "wait_for_scheduler(VIA_DROP): {}",
+                std::backtrace::Backtrace::force_capture()
+            );
         }
         if s.is_some() {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
-            let timings_and_result = s.as_mut().map(|scheduler|
-                scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART)
-            ).flatten();
+            let timings_and_result = s
+                .as_mut()
+                .map(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART))
+                .flatten();
             if !IS_RESTART {
                 if let Some(mut scheduler) = s.take() {
                     scheduler.scheduler_pool().return_to_pool(scheduler);
@@ -8176,11 +8193,13 @@ impl Bank {
     }
 
     pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<()>) {
-        self.wait_for_scheduler::<false, false, false>().unwrap_or((ExecuteTimings::default(), Ok(())))
+        self.wait_for_scheduler::<false, false, false>()
+            .unwrap_or((ExecuteTimings::default(), Ok(())))
     }
 
     fn wait_for_completed_scheduler_via_drop(&self) -> (ExecuteTimings, Result<()>) {
-        self.wait_for_scheduler::<true, false, false>().unwrap_or((ExecuteTimings::default(), Ok(())))
+        self.wait_for_scheduler::<true, false, false>()
+            .unwrap_or((ExecuteTimings::default(), Ok(())))
     }
 
     fn wait_for_completed_scheduler_via_internal_drop(self) {

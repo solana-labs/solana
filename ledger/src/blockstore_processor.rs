@@ -296,19 +296,33 @@ fn process_batches(
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     if !bank.with_scheduler() {
-        rebatch_and_execute_batches(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit, prioritization_fee_cache)
+        rebatch_and_execute_batches(
+            bank,
+            batches,
+            transaction_status_sender,
+            replay_vote_sender,
+            confirmation_timing,
+            log_messages_bytes_limit,
+            prioritization_fee_cache,
+        )
     } else {
         send_batches_to_scheduler_for_execution(bank, batches)
     }
 }
 
-fn send_batches_to_scheduler_for_execution(bank: &Arc<Bank>, batches: &[TransactionBatchWithIndexes]) -> Result<()> {
+fn send_batches_to_scheduler_for_execution(
+    bank: &Arc<Bank>,
+    batches: &[TransactionBatchWithIndexes],
+) -> Result<()> {
     for batch in batches {
         let TransactionBatchWithIndexes {
             batch,
             transaction_indexes,
         } = batch;
-        bank.schedule_transactions_to_commit(batch.sanitized_transactions(), transaction_indexes.into_iter());
+        bank.schedule_transactions_to_commit(
+            batch.sanitized_transactions(),
+            transaction_indexes.into_iter(),
+        );
     }
     Ok(())
 }
