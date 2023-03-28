@@ -5,6 +5,7 @@
 #![allow(unreachable_code)]
 #![allow(unused_mut)]
 #![allow(unused_labels)]
+#![allow(clippy::bool_assert_comparison)]
 
 use {
     log::*,
