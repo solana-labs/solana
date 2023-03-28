@@ -1172,7 +1172,7 @@ pub struct Bank {
 
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
-    scheduler: RwLock<Option<Box<dyn InstalledScheduler>>>,
+    scheduler: RwLock<InstalledSchedulerBox>,
 }
 
 pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
@@ -1189,6 +1189,8 @@ pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
     // drop with exit atomicbool integration??
 
 }
+
+type InstalledSchedulerBox = Option<Box<dyn InstalledScheduler>>;
 
 struct VoteWithStakeDelegations {
     vote_state: Arc<VoteState>,
@@ -6329,14 +6331,6 @@ impl Bank {
     ) {
         self.schedule_and_commit_transactions(transactions, transaction_indexes)
     }
-
-    /*
-    pub fn handle_aborted_transactions(&self) -> Vec<Result<Option<ExecuteTimings>>> {
-        let s = self.scheduler2.read().unwrap();
-        let scheduler = s.as_ref().unwrap();
-        scheduler.take_termination_timings_and_result()
-    }
-    */
 
     pub fn trigger_scheduler_termination(&self) {
         let mut s = self.scheduler.write().unwrap();
