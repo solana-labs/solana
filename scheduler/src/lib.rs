@@ -8,6 +8,8 @@
 #![allow(clippy::drop_ref)]
 #![allow(clippy::or_fun_call)]
 #![allow(clippy::let_and_return)]
+#![allow(clippy::while_let_loop)]
+#![allow(clippy::overly_complex_bool_expr)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
