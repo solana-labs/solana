@@ -1260,6 +1260,7 @@ fn load_bank_forks(
     );
     let no_transaction_status_sender = None;
     if matches!(block_verification_method, BlockVerificationMethod::UnifiedScheduler) {
+        use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
         let no_poh_recorder = None;
         let no_replay_vote_sender = None::<ReplayVoteSender>;
         let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
