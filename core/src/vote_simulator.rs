@@ -128,7 +128,7 @@ impl VoteSimulator {
                     Some((new_bank.parent_slot(), new_bank.parent_hash())),
                 );
             }
-            let new_bank = self.bank_forks.write().unwrap().insert(new_bank);
+            self.bank_forks.write().unwrap().insert(new_bank);
 
             walk.forward();
         }
