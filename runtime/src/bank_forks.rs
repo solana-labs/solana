@@ -112,6 +112,13 @@ pub trait InstalledSchedulerPool: Send + Sync + std::fmt::Debug {
     // drop with exit atomicbool integration??
 }
 
+impl Index<u64> for BankForks {
+    type Output = Arc<Bank>;
+    fn index(&self, bank_slot: Slot) -> &Self::Output {
+        &self.banks[&bank_slot].0
+    }
+}
+
 impl BankForks {
     pub fn new(bank: Bank) -> Self {
         let root = bank.slot();
@@ -187,7 +194,7 @@ impl BankForks {
     }
 
     pub fn root_bank(&self) -> Arc<Bank> {
-        self.banks[&self.root()].new_arc()
+        self[self.root()].clone()
     }
 
     pub fn new_from_banks(initial_forks: &[Arc<Bank>], root: Slot) -> Self {
@@ -295,11 +302,7 @@ impl BankForks {
     }
 
     pub fn working_bank(&self) -> Arc<Bank> {
-        self.banks[&self.highest_slot()].new_arc()
-    }
-
-    pub fn bank(&self, slot: Slot) -> Option<Arc<Bank>> {
-        Some(self.banks[&slot].new_arc())
+        self[self.highest_slot()].clone()
     }
 
     fn do_set_root_return_metrics(

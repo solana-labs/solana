@@ -125,7 +125,7 @@ impl BanksServer {
     }
 
     fn bank(&self, commitment: CommitmentLevel) -> Arc<Bank> {
-        self.bank_forks.read().unwrap().bank(self.slot(commitment)).unwrap()
+        self.bank_forks.read().unwrap()[self.slot(commitment)].clone()
     }
 
     async fn poll_signature_status(
