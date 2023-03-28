@@ -2887,7 +2887,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_transaction_result_influences_blockhash() {
+    fn test_transaction_result_does_not_affect_bankhash() {
         solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
