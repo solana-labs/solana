@@ -11,6 +11,7 @@ use {
         rpc_request::MAX_MULTIPLE_ACCOUNTS,
     },
     solana_core::{
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
@@ -126,6 +127,7 @@ pub struct TestValidatorGenesis {
     compute_unit_limit: Option<u64>,
     pub log_messages_bytes_limit: Option<usize>,
     pub tpu_enable_udp: bool,
+    admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -156,6 +158,8 @@ impl Default for TestValidatorGenesis {
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
             tpu_enable_udp: DEFAULT_TPU_ENABLE_UDP,
+            admin_rpc_service_post_init:
+                Arc::<RwLock<Option<AdminRpcRequestMetadataPostInit>>>::default(),
         }
     }
 }
@@ -844,6 +848,7 @@ impl TestValidator {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             config.tpu_enable_udp,
+            config.admin_rpc_service_post_init.clone(),
         ));
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of

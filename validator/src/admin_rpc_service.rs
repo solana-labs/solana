@@ -7,15 +7,12 @@ use {
     log::*,
     serde::{Deserialize, Serialize},
     solana_core::{
-        consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit, consensus::Tower,
+        tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
-    solana_gossip::{
-        cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
-    },
-    solana_runtime::bank_forks::BankForks,
+    solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
     solana_sdk::{
         exit::Exit,
-        pubkey::Pubkey,
         signature::{read_keypair_file, Keypair, Signer},
     },
     std::{
@@ -27,13 +24,6 @@ use {
         time::{Duration, SystemTime},
     },
 };
-
-#[derive(Clone)]
-pub struct AdminRpcRequestMetadataPostInit {
-    pub cluster_info: Arc<ClusterInfo>,
-    pub bank_forks: Arc<RwLock<BankForks>>,
-    pub vote_account: Pubkey,
-}
 
 #[derive(Clone)]
 pub struct AdminRpcRequestMetadata {
