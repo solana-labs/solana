@@ -722,7 +722,7 @@ impl AncestorHashesService {
             let slot = repairable_dead_slot_pool.iter().next().cloned();
             if let Some(slot) = slot {
                 warn!(
-                    "Cluster froze slot: {}, but we marked it as dead.
+                    "manage_ancestor_requests Cluster froze slot: {}, but we marked it as dead.
                     Initiating protocol to sample cluster for dead slot ancestors.",
                     slot
                 );
@@ -782,6 +782,7 @@ impl AncestorHashesService {
                     if total_completed_slot_stake as f64 / total_stake as f64 > DUPLICATE_THRESHOLD
                     {
                         repairable_dead_slot_pool.insert(*dead_slot);
+                        debug!("manage_ancestor_requests insertrepairable_dead_slot_pool {} ", *dead_slot);
                         false
                     } else {
                         true
