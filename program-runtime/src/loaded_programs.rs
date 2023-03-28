@@ -58,7 +58,9 @@ pub trait WorkingSlot {
 pub enum LoadedProgramType {
     /// Tombstone for undeployed, closed or unloadable programs
     #[default]
-    Invalid,
+    FailedVerification,
+    Closed,
+    DelayVisibility,
     LegacyV0(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     LegacyV1(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     Typed(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
@@ -68,7 +70,11 @@ pub enum LoadedProgramType {
 impl Debug for LoadedProgramType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LoadedProgramType::Invalid => write!(f, "LoadedProgramType::Invalid"),
+            LoadedProgramType::FailedVerification => {
+                write!(f, "LoadedProgramType::FailedVerification")
+            }
+            LoadedProgramType::Closed => write!(f, "LoadedProgramType::Closed"),
+            LoadedProgramType::DelayVisibility => write!(f, "LoadedProgramType::DelayVisibility"),
             LoadedProgramType::LegacyV0(_) => write!(f, "LoadedProgramType::LegacyV0"),
             LoadedProgramType::LegacyV1(_) => write!(f, "LoadedProgramType::LegacyV1"),
             LoadedProgramType::Typed(_) => write!(f, "LoadedProgramType::Typed"),
@@ -190,18 +196,25 @@ impl LoadedProgram {
         }
     }
 
-    pub fn new_tombstone(slot: Slot) -> Self {
-        Self {
-            program: LoadedProgramType::Invalid,
+    pub fn new_tombstone(slot: Slot, reason: LoadedProgramType) -> Self {
+        let tombstone = Self {
+            program: reason,
             account_size: 0,
             deployment_slot: slot,
             effective_slot: slot,
             usage_counter: AtomicU64::default(),
-        }
+        };
+        debug_assert!(tombstone.is_tombstone());
+        tombstone
     }
 
     pub fn is_tombstone(&self) -> bool {
-        matches!(self.program, LoadedProgramType::Invalid)
+        matches!(
+            self.program,
+            LoadedProgramType::FailedVerification
+                | LoadedProgramType::Closed
+                | LoadedProgramType::DelayVisibility
+        )
     }
 }
 
@@ -266,7 +279,15 @@ impl LoadedPrograms {
             let existing = second_level
                 .get(index)
                 .expect("Missing entry, even though position was found");
-            assert!(
+            if existing.is_tombstone()
+                && entry.is_tombstone()
+                && existing.deployment_slot == entry.deployment_slot
+            {
+                // If there's already a tombstone for the program at the given slot, let's return
+                // the existing entry instead of adding another.
+                return existing.clone();
+            }
+            debug_assert!(
                 existing.deployment_slot != entry.deployment_slot
                     || existing.effective_slot != entry.effective_slot
             );
@@ -395,7 +416,13 @@ mod tests {
     }
 
     fn set_tombstone(cache: &mut LoadedPrograms, key: Pubkey, slot: Slot) -> Arc<LoadedProgram> {
-        cache.assign_program(key, Arc::new(LoadedProgram::new_tombstone(slot)))
+        cache.assign_program(
+            key,
+            Arc::new(LoadedProgram::new_tombstone(
+                slot,
+                LoadedProgramType::FailedVerification,
+            )),
+        )
     }
 
     #[test]
@@ -637,14 +664,17 @@ mod tests {
 
     #[test]
     fn test_tombstone() {
-        let tombstone = LoadedProgram::new_tombstone(0);
-        assert!(matches!(tombstone.program, LoadedProgramType::Invalid));
+        let tombstone = LoadedProgram::new_tombstone(0, LoadedProgramType::FailedVerification);
+        assert!(matches!(
+            tombstone.program,
+            LoadedProgramType::FailedVerification
+        ));
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 0);
         assert_eq!(tombstone.effective_slot, 0);
 
-        let tombstone = LoadedProgram::new_tombstone(100);
-        assert!(matches!(tombstone.program, LoadedProgramType::Invalid));
+        let tombstone = LoadedProgram::new_tombstone(100, LoadedProgramType::Closed);
+        assert!(matches!(tombstone.program, LoadedProgramType::Closed));
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 100);
         assert_eq!(tombstone.effective_slot, 100);
@@ -835,7 +865,7 @@ mod tests {
         usage_counter: AtomicU64,
     ) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
-            program: LoadedProgramType::Invalid,
+            program: LoadedProgramType::FailedVerification,
             account_size: 0,
             deployment_slot,
             effective_slot,

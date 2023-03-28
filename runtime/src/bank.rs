@@ -95,7 +95,9 @@ use {
         compute_budget::{self, ComputeBudget},
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
-        loaded_programs::{LoadedProgram, LoadedProgramEntry, LoadedPrograms, WorkingSlot},
+        loaded_programs::{
+            LoadedProgram, LoadedProgramEntry, LoadedProgramType, LoadedPrograms, WorkingSlot,
+        },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -4043,6 +4045,7 @@ impl Bank {
     }
 
     /// Get any cached executors needed by the transaction
+    #[cfg(test)]
     fn get_tx_executor_cache(
         &self,
         accounts: &[TransactionAccount],
@@ -4197,15 +4200,8 @@ impl Bank {
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
+        tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
     ) -> TransactionExecutionResult {
-        let mut get_tx_executor_cache_time = Measure::start("get_tx_executor_cache_time");
-        let tx_executor_cache = self.get_tx_executor_cache(&loaded_transaction.accounts);
-        get_tx_executor_cache_time.stop();
-        saturating_add_assign!(
-            timings.execute_accessories.get_executors_us,
-            get_tx_executor_cache_time.as_us()
-        );
-
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
         let mut transaction_context = TransactionContext::new(
@@ -4439,11 +4435,13 @@ impl Bank {
                 Err(e) => {
                     // Create a tombstone for the program in the cache
                     debug!("Failed to load program {}, error {:?}", pubkey, e);
-                    let tombstone = self
-                        .loaded_programs_cache
-                        .write()
-                        .unwrap()
-                        .assign_program(*pubkey, Arc::new(LoadedProgram::new_tombstone(self.slot)));
+                    let tombstone = self.loaded_programs_cache.write().unwrap().assign_program(
+                        *pubkey,
+                        Arc::new(LoadedProgram::new_tombstone(
+                            self.slot,
+                            LoadedProgramType::FailedVerification,
+                        )),
+                    );
                     loaded_programs_for_txs.insert(*pubkey, tombstone);
                 }
             });
@@ -4451,11 +4449,14 @@ impl Bank {
         (program_accounts_map, loaded_programs_for_txs)
     }
 
-    fn replenish_executor_cache(
+    fn replenish_executor_cache<'a>(
         &self,
-        program_owners: &[&Pubkey],
+        program_owners: &[&'a Pubkey],
         sanitized_txs: &[SanitizedTransaction],
         check_results: &mut [TransactionCheckResult],
+    ) -> (
+        HashMap<Pubkey, &'a Pubkey>,
+        HashMap<Pubkey, Arc<LoadedProgram>>,
     ) {
         let mut filter_programs_time = Measure::start("filter_programs_accounts");
         let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
@@ -4467,6 +4468,7 @@ impl Bank {
         );
         filter_programs_time.stop();
 
+        let mut loaded_programs_for_txs = HashMap::new();
         let mut filter_missing_programs_time = Measure::start("filter_missing_programs_accounts");
         let missing_executors = program_accounts_map
             .keys()
@@ -4475,6 +4477,10 @@ impl Bank {
                     .read()
                     .unwrap()
                     .get(key)
+                    .map(|program| {
+                        loaded_programs_for_txs.insert(*key, program.clone());
+                        program
+                    })
                     .is_none()
                     .then_some(key)
             })
@@ -4484,15 +4490,27 @@ impl Bank {
         let executors = missing_executors
             .iter()
             .map(|pubkey| match self.load_program(pubkey) {
-                Ok(program) => (**pubkey, program),
+                Ok(program) => {
+                    loaded_programs_for_txs.insert(**pubkey, program.clone());
+                    (**pubkey, program)
+                }
                 // Create a tombstone for the programs that failed to load
-                Err(_) => (**pubkey, Arc::new(LoadedProgram::new_tombstone(self.slot))),
+                Err(_) => {
+                    let tombstone = Arc::new(LoadedProgram::new_tombstone(
+                        self.slot,
+                        LoadedProgramType::FailedVerification,
+                    ));
+                    loaded_programs_for_txs.insert(**pubkey, tombstone.clone());
+                    (**pubkey, tombstone)
+                }
             });
 
         // avoid locking the cache if there are no new executors
         if executors.len() > 0 {
             self.executor_cache.write().unwrap().put(executors);
         }
+
+        (program_accounts_map, loaded_programs_for_txs)
     }
 
     #[allow(clippy::type_complexity)]
@@ -4561,7 +4579,6 @@ impl Bank {
             bpf_loader_upgradeable::id(),
             bpf_loader::id(),
             bpf_loader_deprecated::id(),
-            native_loader::id(),
         ];
 
         let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
@@ -4574,7 +4591,12 @@ impl Bank {
             &check_results,
         );
         */
-        self.replenish_executor_cache(&program_owners_refs, sanitized_txs, &mut check_results);
+        let (executable_programs_in_tx_batch, loaded_programs_map) =
+            self.replenish_executor_cache(&program_owners_refs, sanitized_txs, &mut check_results);
+
+        let tx_executor_cache = Rc::new(RefCell::new(TransactionExecutorCache::new(
+            loaded_programs_map.clone().into_iter(),
+        )));
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = self.rc.accounts.load_accounts(
@@ -4587,6 +4609,8 @@ impl Bank {
             &self.feature_set,
             &self.fee_structure,
             account_overrides,
+            &executable_programs_in_tx_batch,
+            &loaded_programs_map,
         );
         load_time.stop();
 
@@ -4643,6 +4667,7 @@ impl Bank {
                         timings,
                         &mut error_counters,
                         log_messages_bytes_limit,
+                        tx_executor_cache.clone(),
                     )
                 }
             })

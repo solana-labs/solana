@@ -24,16 +24,21 @@ use {
         transaction_error_metrics::TransactionErrorMetrics,
     },
     dashmap::DashMap,
+    itertools::Itertools,
     log::*,
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
-    solana_program_runtime::compute_budget::{self, ComputeBudget},
+    solana_program_runtime::{
+        compute_budget::{self, ComputeBudget},
+        loaded_programs::{LoadedProgram, LoadedProgramType},
+    },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
-        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        bpf_loader_upgradeable,
         clock::{BankId, Slot},
         feature_set::{
-            self, add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
+            self, add_set_tx_loaded_accounts_data_size_instruction,
+            delay_visibility_of_program_deployment, enable_request_heap_frame_ix,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
             use_default_units_in_fee_calculation, FeatureSet,
@@ -287,6 +292,38 @@ impl Accounts {
         }
     }
 
+    fn account_shared_data_from_program(
+        key: &Pubkey,
+        feature_set: &FeatureSet,
+        program: &LoadedProgram,
+        program_accounts: &HashMap<Pubkey, &Pubkey>,
+    ) -> Result<AccountSharedData> {
+        // Check for tombstone
+        // Ignoring the tombstone here for now. The loader will catch this condition and return
+        // error.
+        let _ignore = match &program.program {
+            LoadedProgramType::FailedVerification | LoadedProgramType::Closed => {
+                Err(TransactionError::InvalidProgramForExecution)
+            }
+            LoadedProgramType::DelayVisibility => {
+                debug_assert!(feature_set.is_active(&delay_visibility_of_program_deployment::id()));
+                Err(TransactionError::InvalidProgramForExecution)
+            }
+            _ => Ok(()),
+        };
+        // It's an executable program account. The program is already loaded in the cache.
+        // So the account data is not needed. Return a dummy AccountSharedData with meta
+        // information.
+        let mut program_account = AccountSharedData::default();
+        let program_owner = program_accounts
+            .get(key)
+            .ok_or(TransactionError::AccountNotFound)?;
+        program_account.set_owner(**program_owner);
+        program_account.set_executable(true);
+        Ok(program_account)
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn load_transaction_accounts(
         &self,
         ancestors: &Ancestors,
@@ -296,6 +333,8 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
+        program_accounts: &HashMap<Pubkey, &Pubkey>,
+        loaded_programs: &HashMap<Pubkey, Arc<LoadedProgram>>,
     ) -> Result<LoadedTransaction> {
         // NOTE: this check will never fail because `tx` is sanitized
         if tx.signatures().is_empty() && fee != 0 {
@@ -308,7 +347,7 @@ impl Accounts {
         let mut tx_rent: TransactionRent = 0;
         let message = tx.message();
         let account_keys = message.account_keys();
-        let mut account_found_and_dep_index = Vec::with_capacity(account_keys.len());
+        let mut accounts_found = Vec::with_capacity(account_keys.len());
         let mut account_deps = Vec::with_capacity(account_keys.len());
         let mut rent_debits = RentDebits::default();
 
@@ -319,12 +358,18 @@ impl Accounts {
             Self::get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
         let mut accumulated_accounts_data_size: usize = 0;
 
+        let instruction_accounts = message
+            .instructions()
+            .iter()
+            .flat_map(|instruction| &instruction.accounts)
+            .unique()
+            .collect::<Vec<&u8>>();
+
         let mut accounts = account_keys
             .iter()
             .enumerate()
             .map(|(i, key)| {
                 let mut account_found = true;
-                let mut account_dep_index = None;
                 #[allow(clippy::collapsible_else_if)]
                 let account = if solana_sdk::sysvar::instructions::check_id(key) {
                     Self::construct_instructions_account(
@@ -333,10 +378,30 @@ impl Accounts {
                             .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
                     )
                 } else {
-                    let (mut account, rent) = if let Some(account_override) =
+                    let instruction_account = u8::try_from(i)
+                        .map(|i| instruction_accounts.contains(&&i))
+                        .unwrap_or(false);
+                    let (account_size, mut account, rent) = if let Some(account_override) =
                         account_overrides.and_then(|overrides| overrides.get(key))
                     {
-                        (account_override.clone(), 0)
+                        (account_override.data().len(), account_override.clone(), 0)
+                    } else if let Some(program) = (!instruction_account && !message.is_writable(i))
+                        .then_some(())
+                        .and_then(|_| loaded_programs.get(key))
+                    {
+                        // This condition block does special handling for accounts that are passed
+                        // as instruction account to any of the instructions in the transaction.
+                        // It's been noticed that some programs are reading other program accounts
+                        // (that are passed to the program as instruction accounts). So such accounts
+                        // are needed to be loaded even though corresponding compiled program may
+                        // already be present in the cache.
+                        Self::account_shared_data_from_program(
+                            key,
+                            feature_set,
+                            program,
+                            program_accounts,
+                        )
+                        .map(|program_account| (program.account_size, program_account, 0))?
                     } else {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
@@ -350,9 +415,9 @@ impl Accounts {
                                             set_exempt_rent_epoch_max,
                                         )
                                         .rent_amount;
-                                    (account, rent_due)
+                                    (account.data().len(), account, rent_due)
                                 } else {
-                                    (account, 0)
+                                    (account.data().len(), account, 0)
                                 }
                             })
                             .unwrap_or_else(|| {
@@ -364,12 +429,12 @@ impl Accounts {
                                     // with this field already set would allow us to skip rent collection for these accounts.
                                     default_account.set_rent_epoch(u64::MAX);
                                 }
-                                (default_account, 0)
+                                (default_account.data().len(), default_account, 0)
                             })
                     };
                     Self::accumulate_and_check_loaded_account_data_size(
                         &mut accumulated_accounts_data_size,
-                        account.data().len(),
+                        account_size,
                         requested_loaded_accounts_data_size_limit,
                         error_counters,
                     )?;
@@ -397,36 +462,6 @@ impl Accounts {
                             error_counters.invalid_writable_account += 1;
                             return Err(TransactionError::InvalidWritableAccount);
                         }
-
-                        if account.executable() {
-                            // The upgradeable loader requires the derived ProgramData account
-                            if let Ok(UpgradeableLoaderState::Program {
-                                programdata_address,
-                            }) = account.state()
-                            {
-                                if let Some((programdata_account, _)) = self
-                                    .accounts_db
-                                    .load_with_fixed_root(ancestors, &programdata_address)
-                                {
-                                    Self::accumulate_and_check_loaded_account_data_size(
-                                        &mut accumulated_accounts_data_size,
-                                        programdata_account.data().len(),
-                                        requested_loaded_accounts_data_size_limit,
-                                        error_counters,
-                                    )?;
-                                    account_dep_index =
-                                        Some(account_keys.len().saturating_add(account_deps.len())
-                                            as IndexOfAccount);
-                                    account_deps.push((programdata_address, programdata_account));
-                                } else {
-                                    error_counters.account_not_found += 1;
-                                    return Err(TransactionError::ProgramAccountNotFound);
-                                }
-                            } else {
-                                error_counters.invalid_program_for_execution += 1;
-                                return Err(TransactionError::InvalidProgramForExecution);
-                            }
-                        }
                     } else if account.executable() && message.is_writable(i) {
                         error_counters.invalid_writable_account += 1;
                         return Err(TransactionError::InvalidWritableAccount);
@@ -438,7 +473,7 @@ impl Accounts {
                     account
                 };
 
-                account_found_and_dep_index.push((account_found, account_dep_index));
+                accounts_found.push(account_found);
                 Ok((*key, account))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -468,9 +503,7 @@ impl Accounts {
                     let (program_id, program_account) = accounts
                         .get(program_index)
                         .ok_or(TransactionError::ProgramAccountNotFound)?;
-                    let (account_found, account_dep_index) = account_found_and_dep_index
-                        .get(program_index)
-                        .unwrap_or(&(true, None));
+                    let account_found = accounts_found.get(program_index).unwrap_or(&true);
                     if native_loader::check_id(program_id) {
                         return Ok(account_indices);
                     }
@@ -483,9 +516,6 @@ impl Accounts {
                         return Err(TransactionError::InvalidProgramForExecution);
                     }
                     account_indices.insert(0, program_index as IndexOfAccount);
-                    if let Some(account_index) = account_dep_index {
-                        account_indices.insert(0, *account_index);
-                    }
                     let owner_id = program_account.owner();
                     if native_loader::check_id(owner_id) {
                         return Ok(account_indices);
@@ -641,6 +671,8 @@ impl Accounts {
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
+        program_accounts: &HashMap<Pubkey, &Pubkey>,
+        loaded_programs: &HashMap<Pubkey, Arc<LoadedProgram>>,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
@@ -676,6 +708,8 @@ impl Accounts {
                         rent_collector,
                         feature_set,
                         account_overrides,
+                        program_accounts,
+                        loaded_programs,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
@@ -1416,6 +1450,7 @@ mod tests {
         solana_program_runtime::executor_cache::TransactionExecutorCache,
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
+            bpf_loader_upgradeable::UpgradeableLoaderState,
             epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,
             hash::Hash,
@@ -1500,6 +1535,8 @@ mod tests {
             feature_set,
             fee_structure,
             None,
+            &HashMap::new(),
+            &HashMap::new(),
         )
     }
 
@@ -2542,10 +2579,6 @@ mod tests {
         );
         assert_eq!(
             result.accounts[result.program_indices[0][1] as usize],
-            accounts[4]
-        );
-        assert_eq!(
-            result.accounts[result.program_indices[0][2] as usize],
             accounts[3]
         );
     }
@@ -3272,6 +3305,8 @@ mod tests {
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
             account_overrides,
+            &HashMap::new(),
+            &HashMap::new(),
         )
     }
 
