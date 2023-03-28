@@ -513,7 +513,7 @@ impl Scheduler {
                     TransactionBatch::new(vec![lock_result], &bank, Cow::Owned(vec![ee.task.tx.0.clone()]));
                 batch.set_needs_unlock(false);
                 let bb = scheduler_pool.transaction_status_sender.as_ref().map(|sender|
-                    send_transaction_status(sender, None, &bank, &batch, &mut mint_decimals, None, None)
+                    send_transaction_status(sender, None, bank, &batch, &mut mint_decimals, None, None)
                 );
 
                 let mut timings = Default::default();
@@ -597,11 +597,11 @@ impl Scheduler {
                 );
 
                 if execution_results[0].was_executed() {
-                    scheduler_pool.prioritization_fee_cache.update(&bank, [ee.task.tx.0.clone()].iter());
+                    scheduler_pool.prioritization_fee_cache.update(bank, [ee.task.tx.0.clone()].iter());
                 }
                 if let Some(commited_first_transaction_index) = commited_first_transaction_index {
                     if let Some(bb) = bb {
-                        assert!(send_transaction_status(scheduler_pool.transaction_status_sender.as_ref().unwrap(), bb, &bank, &batch, &mut mint_decimals, Some(tx_results), Some(commited_first_transaction_index)).is_none());
+                        assert!(send_transaction_status(scheduler_pool.transaction_status_sender.as_ref().unwrap(), bb, bank, &batch, &mut mint_decimals, Some(tx_results), Some(commited_first_transaction_index)).is_none());
                     }
                 }
 
