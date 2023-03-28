@@ -2585,10 +2585,12 @@ impl ReplayStage {
                 let r_replay_stats = replay_stats.read().unwrap();
                 let replay_progress = bank_progress.replay_progress.clone();
                 let r_replay_progress = replay_progress.read().unwrap();
-                debug!("bank {} is completed replay from blockstore, contribute to update cost with {:?}",
+                debug!(
+                    "bank {} has completed replay from blockstore, \
+                     contribute to update cost with {:?}",
                     bank.slot(),
-                    r_replay_stats.execute_timings
-                    );
+                    r_replay_stats.batch_execute.totals
+                );
                 did_complete_bank = true;
                 let _ = cluster_slots_update_sender.send(vec![bank_slot]);
                 if let Some(transaction_status_sender) = transaction_status_sender {
@@ -2682,7 +2684,7 @@ impl ReplayStage {
                     r_replay_progress.num_shreds,
                     bank_complete_time.as_us(),
                 );
-                execute_timings.accumulate(&r_replay_stats.execute_timings);
+                execute_timings.accumulate(&r_replay_stats.batch_execute.totals);
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
