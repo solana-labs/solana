@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(unused_parens)]
+#![allow(unreachable_code)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
