@@ -185,7 +185,6 @@ pub fn load_program_from_account(
         if let Some(loaded_program) = tx_executor_cache.get(program.get_key()) {
             if loaded_program.is_tombstone() {
                 // We cached that the Executor does not exist, abort
-                // This case can only happen once delay_visibility_of_program_deployment is active.
                 return Err(InstructionError::InvalidAccountData);
             }
             // Executor exists and is cached, use it
@@ -593,7 +592,9 @@ fn process_instruction_common(
 
     executor.usage_counter.fetch_add(1, Ordering::Relaxed);
     match &executor.program {
-        LoadedProgramType::Invalid(_) => Err(InstructionError::InvalidAccountData),
+        LoadedProgramType::FailedVerification
+        | LoadedProgramType::Closed
+        | LoadedProgramType::DelayVisibility => Err(InstructionError::InvalidAccountData),
         LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
         LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
         _ => Err(InstructionError::IncorrectProgramId),

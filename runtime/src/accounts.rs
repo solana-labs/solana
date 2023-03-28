@@ -29,7 +29,7 @@ use {
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget},
-        loaded_programs::{InvalidProgramReason, LoadedProgram, LoadedProgramType},
+        loaded_programs::{LoadedProgram, LoadedProgramType},
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -300,20 +300,17 @@ impl Accounts {
         program_accounts: &HashMap<Pubkey, &Pubkey>,
     ) -> Result<AccountSharedData> {
         // Check for tombstone
-        if let LoadedProgramType::Invalid(reason) = &program.program {
-            match reason {
-                InvalidProgramReason::FailedToCompile => {
-                    Err(TransactionError::InstructionError(0, InvalidAccountData))
-                }
-                InvalidProgramReason::Closed => Err(TransactionError::InvalidProgramForExecution),
-                InvalidProgramReason::DelayVisibility => {
-                    debug_assert!(
-                        feature_set.is_active(&delay_visibility_of_program_deployment::id())
-                    );
-                    Err(TransactionError::InstructionError(0, InvalidAccountData))
-                }
-            }?;
-        }
+        match &program.program {
+            LoadedProgramType::FailedVerification => {
+                Err(TransactionError::InstructionError(0, InvalidAccountData))
+            }
+            LoadedProgramType::Closed => Err(TransactionError::InvalidProgramForExecution),
+            LoadedProgramType::DelayVisibility => {
+                debug_assert!(feature_set.is_active(&delay_visibility_of_program_deployment::id()));
+                Err(TransactionError::InvalidProgramForExecution)
+            }
+            _ => Ok(()),
+        }?;
         // It's an executable program account. The program is already loaded in the cache.
         // So the account data is not needed. Return a dummy AccountSharedData with meta
         // information.

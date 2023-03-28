@@ -1,5 +1,5 @@
 use {
-    crate::loaded_programs::{InvalidProgramReason, LoadedProgram},
+    crate::loaded_programs::LoadedProgram,
     log::*,
     rand::Rng,
     solana_sdk::{pubkey::Pubkey, saturating_add_assign, slot_history::Slot, stake_history::Epoch},
@@ -44,10 +44,7 @@ impl TransactionExecutorCache {
     pub fn set_tombstone(&mut self, key: Pubkey, slot: Slot) {
         self.visible.insert(
             key,
-            Arc::new(LoadedProgram::new_tombstone(
-                slot,
-                InvalidProgramReason::Closed,
-            )),
+            Arc::new(LoadedProgram::new_tombstone_program_closed(slot)),
         );
     }
 
@@ -65,10 +62,7 @@ impl TransactionExecutorCache {
                 // we don't load the new version from the database as it should remain invisible
                 self.visible.insert(
                     key,
-                    Arc::new(LoadedProgram::new_tombstone(
-                        current_slot,
-                        InvalidProgramReason::DelayVisibility,
-                    )),
+                    Arc::new(LoadedProgram::new_tombstone_delay_visibility(current_slot)),
                 );
             } else {
                 self.visible.insert(key, executor.clone());
