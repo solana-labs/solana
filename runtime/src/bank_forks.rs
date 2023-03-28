@@ -222,7 +222,7 @@ impl BankForks {
         }
     }
 
-    fn add_new_bank(&mut self, bank: Bank) -> Arc<Bank> {
+    fn insert(&mut self, bank: Bank) -> Arc<Bank> {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), BankWithScheduler(bank.clone()));
         assert!(prev.is_none());
@@ -244,16 +244,6 @@ impl BankForks {
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         self.scheduler_pool = Some(pool);
     }
-
-    pub fn add_new_bank_for_banking(&mut self, bank: Bank) -> Arc<Bank> {
-        self.add_new_bank(bank, false)
-    }
-
-    pub fn add_new_bank_for_replaying(&mut self, bank: Bank) -> Arc<Bank> {
-        self.add_new_bank(bank, true)
-    }
-
-    // pub fn add_new_bank_as_{rooted/freezed}(...) { ... }
 
     pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
         let bank = self.banks.remove(&slot)?;
