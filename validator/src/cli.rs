@@ -1657,12 +1657,6 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         (@into-option $v:expr) => { Some($v) };
     }
 
-    add_arg!(
-        Arg::with_name("accounts_db_skip_shrink")
-            .long("accounts-db-skip-shrink")
-            .help("Enables faster starting of validators by skipping startup clean and shrink."),
-        usage_warning: "Enabled by default",
-    );
     add_arg!(Arg::with_name("accounts_db_caching_enabled").long("accounts-db-caching-enabled"));
     add_arg!(
         Arg::with_name("accounts_db_index_hashing")
@@ -1674,14 +1668,10 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         usage_warning: "The accounts hash is only calculated without using the index.",
     );
     add_arg!(
-        Arg::with_name("no_accounts_db_index_hashing")
-            .long("no-accounts-db-index-hashing")
-            .help(
-                "This is obsolete. See --accounts-db-index-hashing. \
-                   Disables the use of the index in hash calculation in \
-                   AccountsHashVerifier/Accounts Background Service.",
-            ),
-        usage_warning: "The accounts hash is only calculated without using the index.",
+        Arg::with_name("accounts_db_skip_shrink")
+            .long("accounts-db-skip-shrink")
+            .help("Enables faster starting of validators by skipping startup clean and shrink."),
+        usage_warning: "Enabled by default",
     );
     add_arg!(Arg::with_name("bpf_jit")
         .long("bpf-jit")
@@ -1694,11 +1684,6 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         usage_warning: "The quic server cannot be disabled.",
     );
     add_arg!(
-        Arg::with_name("enable_quic_servers")
-            .long("enable-quic-servers"),
-        usage_warning: "The quic server is now enabled by default.",
-    );
-    add_arg!(
         Arg::with_name("enable_cpi_and_log_storage")
             .long("enable-cpi-and-log-storage")
             .requires("enable_rpc_transaction_history")
@@ -1708,6 +1693,11 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
                  transaction info stored",
             ),
         replaced_by: "enable-extended-tx-metadata-storage",
+    );
+    add_arg!(
+        Arg::with_name("enable_quic_servers")
+            .long("enable-quic-servers"),
+        usage_warning: "The quic server is now enabled by default.",
     );
     add_arg!(Arg::with_name("incremental_snapshots")
         .long("incremental-snapshots")
@@ -1724,6 +1714,16 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         .takes_value(false)
         .help("Only expose the RPC methods required to serve snapshots to other nodes"));
     add_arg!(
+        Arg::with_name("no_accounts_db_index_hashing")
+            .long("no-accounts-db-index-hashing")
+            .help(
+                "This is obsolete. See --accounts-db-index-hashing. \
+                   Disables the use of the index in hash calculation in \
+                   AccountsHashVerifier/Accounts Background Service.",
+            ),
+        usage_warning: "The accounts hash is only calculated without using the index.",
+    );
+    add_arg!(
         Arg::with_name("no_check_vote_account")
             .long("no-check-vote-account")
             .takes_value(false)
@@ -1736,13 +1736,6 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         .long("no-rocksdb-compaction")
         .takes_value(false)
         .help("Disable manual compaction of the ledger database"));
-    add_arg!(
-        Arg::with_name("skip_poh_verify")
-            .long("skip-poh-verify")
-            .takes_value(false)
-            .help("Skip ledger verification at validator bootup."),
-        replaced_by: "skip-verification",
-    );
     add_arg!(Arg::with_name("rocksdb_compaction_interval")
         .long("rocksdb-compaction-interval-slots")
         .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
@@ -1753,6 +1746,13 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
         .takes_value(true)
         .help("Introduce jitter into the compaction to offset compaction operation"));
+    add_arg!(
+        Arg::with_name("skip_poh_verify")
+            .long("skip-poh-verify")
+            .takes_value(false)
+            .help("Skip ledger verification at validator bootup."),
+        replaced_by: "skip-verification",
+    );
 
     res
 }
@@ -2447,5 +2447,44 @@ impl DefaultTestArgs {
 impl Default for DefaultTestArgs {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn make_sure_deprecated_arguments_are_sorted_alphabetically() {
+        let deprecated = deprecated_arguments();
+
+        for i in 0..deprecated.len().saturating_sub(1) {
+            let curr_name = deprecated[i].arg.b.name;
+            let next_name = deprecated[i + 1].arg.b.name;
+
+            assert!(
+                curr_name != next_name,
+                "Arguments in `deprecated_arguments()` should be distinct.\n\
+                 Arguments {} and {} use the same name: {}",
+                i,
+                i + 1,
+                curr_name,
+            );
+
+            assert!(
+                curr_name < next_name,
+                "To generate better diffs and for readability purposes, `deprecated_arguments()` \
+                 should list arguments in alphabetical order.\n\
+                 Arguments {} and {} are not.\n\
+                 Argument {} name: {}\n\
+                 Argument {} name: {}",
+                i,
+                i + 1,
+                i,
+                curr_name,
+                i + 1,
+                next_name,
+            );
+        }
     }
 }
