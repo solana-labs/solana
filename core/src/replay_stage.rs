@@ -1969,7 +1969,7 @@ impl ReplayStage {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
         }
-        trace!("handle votable bank {}", bank.slot());
+        debug!("handle votable bank {} at {:?}", bank.slot(), blockstore.ledger_path());
         let new_root = tower.record_bank_vote(bank, vote_account_pubkey);
 
         if let Some(new_root) = new_root {
@@ -2025,7 +2025,9 @@ impl ReplayStage {
                     trace!("latest root send failed: {:?}", e);
                 }
             });
-            info!("new root {}", new_root);
+            info!("new root {} at {:?}", new_root, blockstore.ledger_path());
+        } else {
+            debug!("Bank {} is not treated as a root yet at {:?}", bank.slot(), blockstore.ledger_path());
         }
 
         let mut update_commitment_cache_time = Measure::start("update_commitment_cache");
