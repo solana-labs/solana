@@ -466,7 +466,7 @@ impl Scheduler {
             let scheduler_pool = scheduler_pool.clone();
             let thread_name = format!("solScExLane{:02}", thx);
 
-            std::thread::Builder::new().name(thread_name.clone()).spawn(move || {
+            std::thread::Builder::new().name(thread_name).spawn(move || {
             let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
 
             let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
@@ -486,6 +486,7 @@ impl Scheduler {
 
                 'retry: loop {
                 let Some(bank) = latest_scheduler_context.as_ref().map(|sc| sc.bank()) else {
+                    #[allow(clippy::single_match)]
                     match mode {
                         Some(solana_scheduler::Mode::BlockVerification) => panic!(),
                         None => (),
