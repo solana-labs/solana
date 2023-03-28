@@ -29,4 +29,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
+futures = { workspace = true }
 solana-stake-program = { workspace = true }
+tarpc = { workspace = true }

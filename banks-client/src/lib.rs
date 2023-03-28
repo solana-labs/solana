@@ -33,7 +33,7 @@ use {
         serde_transport::tcp,
         ClientMessage, Response, Transport,
     },
-    tokio::{net::ToSocketAddrs, time::Duration},
+    tokio::net::ToSocketAddrs,
     tokio_serde::formats::Bincode,
 };
 
@@ -234,8 +234,7 @@ impl BanksClient {
         transaction: Transaction,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
-        let mut ctx = context::current();
-        ctx.deadline += Duration::from_secs(50);
+        let ctx = context::current();
         self.process_transaction_with_commitment_and_context(ctx, transaction, commitment)
             .map(|result| match result? {
                 None => Err(BanksClientError::ClientError(
@@ -251,8 +250,7 @@ impl BanksClient {
         transaction: impl Into<VersionedTransaction>,
     ) -> impl Future<Output = Result<BanksTransactionResultWithMetadata, BanksClientError>> + '_
     {
-        let mut ctx = context::current();
-        ctx.deadline += Duration::from_secs(50);
+        let ctx = context::current();
         self.process_transaction_with_metadata_and_context(ctx, transaction.into())
     }
 
@@ -263,8 +261,7 @@ impl BanksClient {
         transaction: Transaction,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
-        let mut ctx = context::current();
-        ctx.deadline += Duration::from_secs(50);
+        let ctx = context::current();
         self.process_transaction_with_preflight_and_commitment_and_context(
             ctx,
             transaction,
@@ -540,7 +537,10 @@ mod tests {
         solana_sdk::{message::Message, signature::Signer, system_instruction},
         std::sync::{Arc, RwLock},
         tarpc::transport,
-        tokio::{runtime::Runtime, time::sleep},
+        tokio::{
+            runtime::Runtime,
+            time::{sleep, Duration},
+        },
     };
 
     #[test]
