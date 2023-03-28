@@ -1081,7 +1081,7 @@ fn confirm_slot_entries(
             num_txs
         })
         .sum::<usize>();
-    trace!(
+    debug!(
         "Fetched entries for slot {}, num_entries: {}, num_shreds: {}, num_txs: {}, slot_full: {}",
         slot,
         num_entries,
