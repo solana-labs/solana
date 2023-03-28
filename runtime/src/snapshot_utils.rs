@@ -1918,10 +1918,23 @@ fn build_storage_from_snapshot_dir(
 
     let account_paths_set: HashSet<_> = HashSet::from_iter(account_paths.iter());
 
-    for dir_symlink in fs::read_dir(accounts_hardlinks)? {
+    for dir_entry in fs::read_dir(&accounts_hardlinks).map_err(|err| {
+        SnapshotError::IoWithSourceAndFile(
+            err,
+            "read_dir failed for accounts_hardlinks",
+            accounts_hardlinks.to_path_buf(),
+        )
+    })? {
+        let symlink_path = dir_entry?.path();
         // The symlink point to <account_path>/snapshot/<slot> which contain the account files hardlinks
         // The corresponding run path should be <account_path>/run/
-        let snapshot_account_path = fs::read_link(dir_symlink?.path())?;
+        let snapshot_account_path = fs::read_link(&symlink_path).map_err(|err| {
+            SnapshotError::IoWithSourceAndFile(
+                err,
+                "read_link failed for symlink",
+                symlink_path.to_path_buf(),
+            )
+        })?;
         let account_run_path = snapshot_account_path
             .parent()
             .ok_or_else(|| SnapshotError::InvalidAccountPath(snapshot_account_path.clone()))?
@@ -1935,11 +1948,17 @@ fn build_storage_from_snapshot_dir(
         }
         // Generate hard-links to make the account files available in the main accounts/, and let the new appendvec
         // paths be in accounts/
-        for file in fs::read_dir(snapshot_account_path)? {
-            let file_path = file?.path().to_path_buf();
+        for file in fs::read_dir(&snapshot_account_path).map_err(|err| {
+            SnapshotError::IoWithSourceAndFile(
+                err,
+                "read_dir failed for snapshot_account_path",
+                snapshot_account_path.to_path_buf(),
+            )
+        })? {
+            let file_path = file?.path();
             let file_name = file_path
                 .file_name()
-                .ok_or_else(|| SnapshotError::InvalidAppendVecPath(file_path.clone()))?;
+                .ok_or_else(|| SnapshotError::InvalidAppendVecPath(file_path.to_path_buf()))?;
             let dest_path = account_run_path.clone().join(file_name);
             fs::hard_link(&file_path, &dest_path).map_err(|e| {
                 let err_msg = format!(
