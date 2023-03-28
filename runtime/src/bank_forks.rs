@@ -298,6 +298,10 @@ impl BankForks {
         self.banks[&self.highest_slot()].new_arc()
     }
 
+    pub fn bank(&self, slot: Slot) -> Option<Arc<Bank>> {
+        self.banks[&slot].new_arc()
+    }
+
     fn do_set_root_return_metrics(
         &mut self,
         root: Slot,
