@@ -1,4 +1,5 @@
-#![allow(clippy)]
+#![allow(unused_imports)]
+#![allow(dead_code)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
