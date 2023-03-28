@@ -16,6 +16,13 @@
 #![allow(clippy::never_loop)]
 #![allow(clippy::needless_lifetimes)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::redundant_closure)]
+#![allow(clippy::needless_bool)]
+#![allow(clippy::len_zero)]
+#![allow(clippy::needless_borrow)]
+#![allow(clippy::or_fun_call)]
+#![allow(clippy::map_flatten)]
+#![allow(clippy::borrow_deref_ref)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
