@@ -1,3 +1,5 @@
+#[allow(all)]
+
 use {
     crossbeam_channel::{bounded, unbounded},
     log::*,
