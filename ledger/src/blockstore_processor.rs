@@ -321,7 +321,7 @@ fn send_batches_to_scheduler_for_execution(
         } = batch;
         bank.schedule_transactions_to_commit(
             batch.sanitized_transactions(),
-            transaction_indexes,
+            transaction_indexes.iter(),
         );
     }
     Ok(())
