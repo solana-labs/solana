@@ -949,7 +949,7 @@ impl InstalledScheduler for Scheduler {
             self.timings_and_result.take()
         } else {
             None
-        }
+        };
 
         self.do_clear_stop(is_restart);
 
