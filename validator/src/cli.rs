@@ -1,6 +1,5 @@
 use {
     clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand},
-    lazy_static::lazy_static,
     log::warn,
     solana_clap_utils::{
         hidden_unless_forced,
@@ -1614,113 +1613,183 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         );
 }
 
-// Helper to add arguments that are no longer used but are being kept around to
-// avoid breaking validator startup commands
-fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
-    vec![
-        Arg::with_name("accounts_db_skip_shrink")
-            .long("accounts-db-skip-shrink")
-            .help("This is obsolete since it is now enabled by default. Enables faster starting of validators by skipping startup clean and shrink.")
-            .hidden(hidden_unless_forced()),
-        Arg::with_name("accounts_db_caching_enabled")
-            .long("accounts-db-caching-enabled")
-            .hidden(hidden_unless_forced()),
+/// Deprecated argument description should be moved into the [`deprecated_arguments()`] function,
+/// expressed as an instance of this type.
+struct DeprecatedArg {
+    /// Deprecated argument description, moved here as is.
+    ///
+    /// `hidden` property will be modified by [`deprecated_arguments()`] to only show this argument
+    /// if [`hidden_unless_forced()`] says they should be displayed.
+    arg: Arg<'static, 'static>,
+
+    /// If simply replaced by a different argument, this is the name of the replacement.
+    ///
+    /// Content should be an argument name, as presented to users.
+    replaced_by: Option<&'static str>,
+
+    /// An explanation to be shown to the user if they still use this argument.
+    ///
+    /// Content should be a complete sentence or several, ending with a period.
+    usage_warning: Option<&'static str>,
+}
+
+fn deprecated_arguments() -> Vec<DeprecatedArg> {
+    let mut res = vec![];
+
+    // This macro reduces indentation and removes some noise from the argument declaration list.
+    macro_rules! add_arg {
+        (
+            $arg:expr
+            $( , replaced_by: $replaced_by:expr )?
+            $( , usage_warning: $usage_warning:expr )?
+            $(,)?
+        ) => {
+            let replaced_by = add_arg!(@into-option $( $replaced_by )?);
+            let usage_warning = add_arg!(@into-option $( $usage_warning )?);
+            res.push(DeprecatedArg {
+                arg: $arg,
+                replaced_by,
+                usage_warning,
+            });
+        };
+
+        (@into-option) => { None };
+        (@into-option $v:expr) => { Some($v) };
+    }
+
+    add_arg!(Arg::with_name("accounts_db_caching_enabled").long("accounts-db-caching-enabled"));
+    add_arg!(
         Arg::with_name("accounts_db_index_hashing")
             .long("accounts-db-index-hashing")
             .help(
                 "Enables the use of the index in hash calculation in \
-                   AccountsHashVerifier/Accounts Background Service.",
-            )
-            .hidden(hidden_unless_forced()),
+                 AccountsHashVerifier/Accounts Background Service.",
+            ),
+        usage_warning: "The accounts hash is only calculated without using the index.",
+    );
+    add_arg!(
+        Arg::with_name("accounts_db_skip_shrink")
+            .long("accounts-db-skip-shrink")
+            .help("Enables faster starting of validators by skipping startup clean and shrink."),
+        usage_warning: "Enabled by default",
+    );
+    add_arg!(Arg::with_name("bpf_jit")
+        .long("bpf-jit")
+        .takes_value(false)
+        .conflicts_with("no_bpf_jit"));
+    add_arg!(
+        Arg::with_name("disable_quic_servers")
+            .long("disable-quic-servers")
+            .takes_value(false),
+        usage_warning: "The quic server cannot be disabled.",
+    );
+    add_arg!(
+        Arg::with_name("enable_cpi_and_log_storage")
+            .long("enable-cpi-and-log-storage")
+            .requires("enable_rpc_transaction_history")
+            .takes_value(false)
+            .help(
+                "Include CPI inner instructions, logs and return data in the historical \
+                 transaction info stored",
+            ),
+        replaced_by: "enable-extended-tx-metadata-storage",
+    );
+    add_arg!(
+        Arg::with_name("enable_quic_servers")
+            .long("enable-quic-servers"),
+        usage_warning: "The quic server is now enabled by default.",
+    );
+    add_arg!(Arg::with_name("incremental_snapshots")
+        .long("incremental-snapshots")
+        .takes_value(false)
+        .conflicts_with("no_incremental_snapshots")
+        .help("Enable incremental snapshots")
+        .long_help(
+            "Enable incremental snapshots by setting this flag.  When enabled, \
+                 --snapshot-interval-slots will set the incremental snapshot interval. To set the
+                 full snapshot interval, use --full-snapshot-interval-slots.",
+        ));
+    add_arg!(Arg::with_name("minimal_rpc_api")
+        .long("minimal-rpc-api")
+        .takes_value(false)
+        .help("Only expose the RPC methods required to serve snapshots to other nodes"));
+    add_arg!(
         Arg::with_name("no_accounts_db_index_hashing")
             .long("no-accounts-db-index-hashing")
             .help(
                 "This is obsolete. See --accounts-db-index-hashing. \
                    Disables the use of the index in hash calculation in \
                    AccountsHashVerifier/Accounts Background Service.",
-            )
-            .hidden(hidden_unless_forced()),
-        Arg::with_name("bpf_jit")
-            .long("bpf-jit")
-            .hidden(hidden_unless_forced())
-            .takes_value(false)
-            .conflicts_with("no_bpf_jit"),
-        Arg::with_name("disable_quic_servers")
-            .long("disable-quic-servers")
-            .takes_value(false)
-            .hidden(hidden_unless_forced()),
-        Arg::with_name("enable_quic_servers")
-            .hidden(hidden_unless_forced())
-            .long("enable-quic-servers"),
-        Arg::with_name("enable_cpi_and_log_storage")
-            .long("enable-cpi-and-log-storage")
-            .requires("enable_rpc_transaction_history")
-            .takes_value(false)
-            .hidden(hidden_unless_forced())
-            .help(
-                "Deprecated, please use \"enable-extended-tx-metadata-storage\". \
-                   Include CPI inner instructions, logs and return data in \
-                   the historical transaction info stored",
             ),
-        Arg::with_name("incremental_snapshots")
-            .long("incremental-snapshots")
-            .takes_value(false)
-            .hidden(hidden_unless_forced())
-            .conflicts_with("no_incremental_snapshots")
-            .help("Enable incremental snapshots")
-            .long_help(
-                "Enable incremental snapshots by setting this flag. \
-                   When enabled, --snapshot-interval-slots will set the \
-                   incremental snapshot interval. To set the full snapshot \
-                   interval, use --full-snapshot-interval-slots.",
-            ),
-        Arg::with_name("minimal_rpc_api")
-            .long("minimal-rpc-api")
-            .takes_value(false)
-            .hidden(hidden_unless_forced())
-            .help("Only expose the RPC methods required to serve snapshots to other nodes"),
+        usage_warning: "The accounts hash is only calculated without using the index.",
+    );
+    add_arg!(
         Arg::with_name("no_check_vote_account")
             .long("no-check-vote-account")
             .takes_value(false)
             .conflicts_with("no_voting")
             .requires("entrypoint")
-            .hidden(hidden_unless_forced())
             .help("Skip the RPC vote account sanity check"),
-        Arg::with_name("no_rocksdb_compaction")
-            .long("no-rocksdb-compaction")
-            .hidden(hidden_unless_forced())
-            .takes_value(false)
-            .help("Disable manual compaction of the ledger database (this is ignored)."),
+        usage_warning: "Vote account sanity checks are no longer performed by default.",
+    );
+    add_arg!(Arg::with_name("no_rocksdb_compaction")
+        .long("no-rocksdb-compaction")
+        .takes_value(false)
+        .help("Disable manual compaction of the ledger database"));
+    add_arg!(Arg::with_name("rocksdb_compaction_interval")
+        .long("rocksdb-compaction-interval-slots")
+        .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
+        .takes_value(true)
+        .help("Number of slots between compacting ledger"));
+    add_arg!(Arg::with_name("rocksdb_max_compaction_jitter")
+        .long("rocksdb-max-compaction-jitter-slots")
+        .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
+        .takes_value(true)
+        .help("Introduce jitter into the compaction to offset compaction operation"));
+    add_arg!(
         Arg::with_name("skip_poh_verify")
             .long("skip-poh-verify")
-            .hidden(hidden_unless_forced())
             .takes_value(false)
-            .help(
-                "Please use --skip-verification.\n\
-                 Skip ledger verification at validator bootup."
-            ),
-        Arg::with_name("rocksdb_compaction_interval")
-            .long("rocksdb-compaction-interval-slots")
-            .hidden(hidden_unless_forced())
-            .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
-            .takes_value(true)
-            .help("Number of slots between compacting ledger"),
-        Arg::with_name("rocksdb_max_compaction_jitter")
-            .long("rocksdb-max-compaction-jitter-slots")
-            .hidden(hidden_unless_forced())
-            .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
-            .takes_value(true)
-            .help("Introduce jitter into the compaction to offset compaction operation"),
-    ]
+            .help("Skip ledger verification at validator bootup."),
+        replaced_by: "skip-verification",
+    );
+
+    res
+}
+
+// Helper to add arguments that are no longer used but are being kept around to avoid breaking
+// validator startup commands.
+fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
+    deprecated_arguments()
+        .into_iter()
+        .map(|info| {
+            let arg = info.arg;
+            // Hide all deprecated arguments by default.
+            arg.hidden(hidden_unless_forced())
+        })
+        .collect()
 }
 
 pub fn warn_for_deprecated_arguments(matches: &ArgMatches) {
-    for (arg, help) in DEPRECATED_ARGS_AND_HELP.iter() {
-        if matches.is_present(arg) {
-            warn!(
-                "{}",
-                format!("--{arg} is deprecated. {help}").replace('_', "-")
-            );
+    for DeprecatedArg {
+        arg,
+        replaced_by,
+        usage_warning,
+    } in deprecated_arguments().into_iter()
+    {
+        if matches.is_present(arg.b.name) {
+            let mut msg = format!("--{} is deprecated", arg.b.name.replace('_', "-"));
+            if let Some(replaced_by) = replaced_by {
+                msg.push_str(&format!(", please use --{replaced_by}"));
+            }
+            msg.push('.');
+            if let Some(usage_warning) = usage_warning {
+                msg.push_str(&format!("  {usage_warning}"));
+                if !msg.ends_with('.') {
+                    msg.push('.');
+                }
+            }
+            warn!("{}", msg);
         }
     }
 }
@@ -1906,43 +1975,6 @@ fn hash_validator(hash: String) -> Result<(), String> {
     Hash::from_str(&hash)
         .map(|_| ())
         .map_err(|e| format!("{e:?}"))
-}
-
-lazy_static! {
-    static ref DEPRECATED_ARGS_AND_HELP: Vec<(&'static str, &'static str)> = vec![
-        ("accounts_db_caching_enabled", ""),
-        (
-            "accounts_db_index_hashing",
-            "The accounts hash is only calculated without using the index.",
-        ),
-        (
-            "no_accounts_db_index_hashing",
-            "The accounts hash is only calculated without using the index.",
-        ),
-        ("bpf_jit", ""),
-        (
-            "disable_quic_servers",
-            "The quic server cannot be disabled.",
-        ),
-        (
-            "enable_quic_servers",
-            "The quic server is now enabled by default.",
-        ),
-        (
-            "enable_cpi_and_log_storage",
-            "Please use --enable-extended-tx-metadata-storage instead.",
-        ),
-        ("incremental_snapshots", ""),
-        ("minimal_rpc_api", ""),
-        (
-            "no_check_vote_account",
-            "Vote account sanity checks are no longer performed by default.",
-        ),
-        ("no_rocksdb_compaction", ""),
-        ("skip_poh_verify", "Please use --skip-verification"),
-        ("rocksdb_compaction_interval", ""),
-        ("rocksdb_max_compaction_jitter", ""),
-    ];
 }
 
 /// Test validator
@@ -2415,5 +2447,44 @@ impl DefaultTestArgs {
 impl Default for DefaultTestArgs {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn make_sure_deprecated_arguments_are_sorted_alphabetically() {
+        let deprecated = deprecated_arguments();
+
+        for i in 0..deprecated.len().saturating_sub(1) {
+            let curr_name = deprecated[i].arg.b.name;
+            let next_name = deprecated[i + 1].arg.b.name;
+
+            assert!(
+                curr_name != next_name,
+                "Arguments in `deprecated_arguments()` should be distinct.\n\
+                 Arguments {} and {} use the same name: {}",
+                i,
+                i + 1,
+                curr_name,
+            );
+
+            assert!(
+                curr_name < next_name,
+                "To generate better diffs and for readability purposes, `deprecated_arguments()` \
+                 should list arguments in alphabetical order.\n\
+                 Arguments {} and {} are not.\n\
+                 Argument {} name: {}\n\
+                 Argument {} name: {}",
+                i,
+                i + 1,
+                i,
+                curr_name,
+                i + 1,
+                next_name,
+            );
+        }
     }
 }

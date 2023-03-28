@@ -53,7 +53,7 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair, Keypair, Signer},
     },
-    solana_send_transaction_service::send_transaction_service::{self},
+    solana_send_transaction_service::send_transaction_service,
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
     solana_validator::{
