@@ -5,8 +5,10 @@
 
 cd "$(dirname "$0")"
 
-# shellcheck source=host.sh
-. host.sh
+if [[ -z $HOST ]]; then
+  HOST=metrics.solana.com
+fi
+echo "HOST: $HOST"
 
 : "${INFLUXDB_IMAGE:=influxdb:1.7}"
 : "${CHRONOGRAF_IMAGE:=chronograf:1.9.4}"
@@ -126,7 +128,7 @@ sudo docker run \
   --volume /var/lib/chronograf:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file=5 \
-  chronograf:1.8.8 --influxdb-url=https://metrics.solana.com:8086
+  $CHRONOGRAF_IMAGE --influxdb-url=https://metrics.solana.com:8086
 
 sudo docker run \
   --detach \
@@ -137,7 +139,7 @@ sudo docker run \
   --user "$(id -u):$(id -g)" \
   --log-opt max-size=1g \
   --log-opt max-file=5  \
-  kapacitor:1.6.5
+  $KAPACITOR_IMAGE
 
 curl -h | sed -ne '/--tlsv/p'
 curl --retry 10 --retry-delay 5 -v --head https://"$HOST":8086/ping

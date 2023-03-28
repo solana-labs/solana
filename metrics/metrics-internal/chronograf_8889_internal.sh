@@ -4,7 +4,10 @@
 #
 cd "$(dirname "$0")"
 
-. "$PWD"/host.sh
+if [[ -z $HOST ]]; then
+  HOST=metrics.solana.com
+fi
+echo "HOST: $HOST"
 
 : "${CHRONOGRAF_IMAGE:=chronograf:1.8.8}"
 

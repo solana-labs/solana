@@ -5,14 +5,24 @@
 
 cd "$(dirname "$0")"
 
-# shellcheck source=host.sh
-. host.sh
+if [[ -z $HOST ]]; then
+  HOST=metrics.solana.com
+fi
+echo "HOST: $HOST"
 
 : "${ALERTMANAGER_IMAGE:=prom/alertmanager:v0.23.0}"
 
-# Remove the container
-sudo docker kill alertmanager
-sudo docker rm -f alertmanager
+# remove the container
+container=alertmanager
+[[ -w /var/lib/$container ]]
+[[ -x /var/lib/$container ]]
+
+(
+  set +e
+  sudo docker kill $container
+  sudo docker rm -f $container
+  exit 0
+)
 
 pwd
 rm -rf certs

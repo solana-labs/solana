@@ -5,14 +5,24 @@
 
 cd "$(dirname "$0")"
 
-# shellcheck source=host.sh
-. host.sh
+if [[ -z $HOST ]]; then
+  HOST=metrics.solana.com
+fi
+echo "HOST: $HOST"
 
 : "${PROMETHEUS_IMAGE:=prom/prometheus:v2.28.0}"
 
-# Remove the container
-sudo docker kill prometheus
-sudo docker rm -f prometheus
+# remove the container
+container=prometheus
+[[ -w /var/lib/$container ]]
+[[ -x /var/lib/$container ]]
+
+(
+  set +e
+  sudo docker kill $container
+  sudo docker rm -f $container
+  exit 0
+)
 
 pwd
 rm -rf certs

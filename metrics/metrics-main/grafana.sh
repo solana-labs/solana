@@ -5,14 +5,24 @@
 
 cd "$(dirname "$0")"
 
-# shellcheck source=host.sh
-. host.sh
+if [[ -z $HOST ]]; then
+  HOST=metrics.solana.com
+fi
+echo "HOST: $HOST"
 
 : "${GRAFANA_IMAGE:=grafana/grafana:9.4.7}"
 
 # remove the container
-sudo docker kill grafana
-sudo docker rm -f grafana
+container=grafana
+[[ -w /var/lib/$container ]]
+[[ -x /var/lib/$container ]]
+
+(
+  set +e
+  sudo docker kill $container
+  sudo docker rm -f $container
+  exit 0
+)
 
 pwd
 rm -rf certs

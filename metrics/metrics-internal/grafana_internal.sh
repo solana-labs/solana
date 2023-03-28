@@ -4,7 +4,10 @@
 #
 cd "$(dirname "$0")"
 
-. "$PWD"/host.sh
+if [[ -z $HOST ]]; then
+  HOST=metrics.solana.com
+fi
+echo "HOST: $HOST"
 
 : "${GRAFANA_IMAGE:=grafana/grafana:9.4.7}"
 

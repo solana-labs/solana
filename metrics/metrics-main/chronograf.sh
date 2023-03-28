@@ -5,8 +5,10 @@
 
 cd "$(dirname "$0")"
 
-# shellcheck source=host.sh
-. host.sh
+if [[ -z $HOST ]]; then
+  HOST=metrics.solana.com
+fi
+echo "HOST: $HOST"
 
 : "${CHRONOGRAF_IMAGE:=chronograf:1.9.4}"
 
