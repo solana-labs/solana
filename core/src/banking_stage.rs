@@ -27,7 +27,10 @@ use {
     solana_measure::{measure, measure_us},
     solana_perf::{data_budget::DataBudget, packet::PACKETS_PER_BATCH},
     solana_poh::poh_recorder::PohRecorder,
-    solana_runtime::{bank_forks::BankForks, vote_sender_types::ReplayVoteSender},
+    solana_runtime::{
+        bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
+        vote_sender_types::ReplayVoteSender,
+    },
     solana_sdk::{feature_set::allow_votes_to_directly_update_vote_state, timing::AtomicInterval},
     std::{
         cmp, env,
@@ -290,6 +293,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -303,6 +307,7 @@ impl BankingStage {
             log_messages_bytes_limit,
             connection_cache,
             bank_forks,
+            prioritization_fee_cache,
         )
     }
 
@@ -319,6 +324,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         // Single thread to generate entries from many banks.
@@ -385,6 +391,7 @@ impl BankingStage {
                 let committer = Committer::new(
                     transaction_status_sender.clone(),
                     replay_vote_sender.clone(),
+                    prioritization_fee_cache.clone(),
                 );
                 let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
                 let forwarder = Forwarder::new(
@@ -640,6 +647,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
             drop(non_vote_sender);
             drop(tpu_vote_sender);
@@ -695,6 +703,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
             trace!("sending bank");
             drop(non_vote_sender);
@@ -775,6 +784,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -936,6 +946,7 @@ mod tests {
                     None,
                     Arc::new(ConnectionCache::default()),
                     bank_forks,
+                    &Arc::new(PrioritizationFeeCache::new(0u64)),
                 );
 
                 // wait for banking_stage to eat the packets
@@ -1129,6 +1140,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
 
             let keypairs = (0..100).map(|_| Keypair::new()).collect_vec();

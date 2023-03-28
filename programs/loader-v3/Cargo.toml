@@ -1,0 +1,28 @@
+[package]
+name = "solana-loader-v3-program"
+version = "1.16.0"
+description = "Solana Loader v3"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+edition = "2021"
+publish = false
+
+[dependencies]
+log = { workspace = true }
+rand = { workspace = true }
+solana-measure = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana_rbpf = { workspace = true }
+
+[dev-dependencies]
+bincode = { workspace = true }
+
+[lib]
+crate-type = ["lib"]
+name = "solana_loader_v3_program"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

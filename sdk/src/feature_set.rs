@@ -638,6 +638,10 @@ pub mod include_loaded_accounts_data_size_in_fee_calculation {
     solana_sdk::declare_id!("EaQpmC6GtRssaZ3PCUM5YksGqUdMLeZ46BQXYtHYakDS");
 }
 
+pub mod native_programs_consume_cu {
+    solana_sdk::declare_id!("8pgXCMNXC8qyEFypuwpXyRxLXZdpM4Qo72gJ6k87A6wL");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -792,6 +796,7 @@ lazy_static! {
         (round_up_heap_size::id(), "round up heap size when calculating heap cost #30679"),
         (remove_bpf_loader_incorrect_program_id::id(), "stop incorrectly throwing IncorrectProgramId in bpf_loader #30747"),
         (include_loaded_accounts_data_size_in_fee_calculation::id(), "include transaction loaded accounts data size in base fee calculation #30657"),
+        (native_programs_consume_cu::id(), "Native program should consume compute units #30620"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

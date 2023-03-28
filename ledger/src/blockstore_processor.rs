@@ -31,6 +31,7 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
         epoch_accounts_hash::EpochAccountsHash,
+        prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
         vote_account::VoteAccountsHashMap,
@@ -131,6 +132,7 @@ fn execute_batch(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     let TransactionBatchWithIndexes {
         batch,
@@ -170,6 +172,12 @@ fn execute_batch(
         ..
     } = tx_results;
 
+    let executed_transactions = execution_results
+        .iter()
+        .zip(batch.sanitized_transactions())
+        .filter_map(|(execution_result, tx)| execution_result.was_executed().then_some(tx))
+        .collect_vec();
+
     if let Some(transaction_status_sender) = transaction_status_sender {
         let transactions = batch.sanitized_transactions().to_vec();
         let post_token_balances = if record_token_balances {
@@ -192,6 +200,8 @@ fn execute_batch(
         );
     }
 
+    prioritization_fee_cache.update(bank, executed_transactions.into_iter());
+
     let first_err = get_first_error(batch, fee_collection_results);
     first_err.map(|(result, _)| result).unwrap_or(Ok(()))
 }
@@ -209,6 +219,7 @@ fn execute_batches_internal(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<ExecuteBatchesInternalMetrics> {
     assert!(!batches.is_empty());
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
@@ -232,6 +243,7 @@ fn execute_batches_internal(
                             replay_vote_sender,
                             &mut timings,
                             log_messages_bytes_limit,
+                            prioritization_fee_cache,
                         )
                     },
                     "execute_batch",
@@ -281,9 +293,10 @@ fn process_batches(
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     if !bank.with_scheduler() {
-        execute_batches(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit)
+        execute_batches(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit, prioritization_fee_cache)
     } else {
         send_batches_to_scheduler_for_execution(bank, batches)
     }
@@ -327,6 +340,7 @@ fn execute_batches(
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     if batches.is_empty() {
         return Ok(());
@@ -408,6 +422,7 @@ fn execute_batches(
         transaction_status_sender,
         replay_vote_sender,
         log_messages_bytes_limit,
+        prioritization_fee_cache,
     )?;
 
     confirmation_timing.process_execute_batches_internal_metrics(execute_batches_internal_metrics);
@@ -452,13 +467,15 @@ pub fn process_entries_for_tests(
             })
             .collect();
 
-    let result = process_entries_with_callback(
+    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+    let result = process_entries(
         bank,
         &mut replay_entries,
         transaction_status_sender,
         replay_vote_sender,
         &mut confirmation_timing,
         None,
+        &_ignored_prioritization_fee_cache,
     );
 
     debug!("process_entries: {:?}", confirmation_timing);
@@ -466,14 +483,14 @@ pub fn process_entries_for_tests(
 }
 
 // Note: If randomize is true this will shuffle entries' transactions in-place.
-#[allow(clippy::too_many_arguments)]
-fn process_entries_with_callback(
+fn process_entries(
     bank: &Arc<Bank>,
     entries: &mut [ReplayEntry],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -499,6 +516,7 @@ fn process_entries_with_callback(
                         replay_vote_sender,
                         confirmation_timing,
                         log_messages_bytes_limit,
+                        prioritization_fee_cache,
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
@@ -553,6 +571,7 @@ fn process_entries_with_callback(
                             replay_vote_sender,
                             confirmation_timing,
                             log_messages_bytes_limit,
+                            prioritization_fee_cache,
                         )?;
                         batches.clear();
                     }
@@ -567,6 +586,7 @@ fn process_entries_with_callback(
         replay_vote_sender,
         confirmation_timing,
         log_messages_bytes_limit,
+        prioritization_fee_cache,
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
@@ -895,6 +915,7 @@ fn confirm_full_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.run_verification;
+    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
 
     confirm_slot(
         blockstore,
@@ -907,6 +928,7 @@ fn confirm_full_slot(
         recyclers,
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
+        &_ignored_prioritization_fee_cache,
     )?;
 
     timing.accumulate(&confirmation_timing.execute_timings);
@@ -1059,6 +1081,7 @@ pub fn confirm_slot(
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
@@ -1086,6 +1109,7 @@ pub fn confirm_slot(
         replay_vote_sender,
         recyclers,
         log_messages_bytes_limit,
+        prioritization_fee_cache,
     )
 }
 
@@ -1100,6 +1124,7 @@ fn confirm_slot_entries(
     replay_vote_sender: Option<&ReplayVoteSender>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
     let (entries, num_shreds, slot_full) = slot_entries_load_result;
@@ -1197,13 +1222,14 @@ fn confirm_slot_entries(
         })
         .collect();
     // Note: This will shuffle entries' transactions in-place.
-    let process_result = process_entries_with_callback(
+    let process_result = process_entries(
         bank,
         &mut replay_entries,
         transaction_status_sender,
         replay_vote_sender,
         timing,
         log_messages_bytes_limit,
+        prioritization_fee_cache,
     )
     .map_err(BlockstoreProcessorError::from);
     replay_elapsed.stop();

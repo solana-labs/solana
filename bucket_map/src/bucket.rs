@@ -149,38 +149,41 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     /// if entry does not exist, return just the index of an empty entry appropriate for this key
     /// returns (existing entry, index of the found or empty entry)
     fn find_entry_mut<'a>(
-        &'a self,
+        index: &'a mut BucketStorage,
         key: &Pubkey,
+        random: u64,
     ) -> Result<(Option<&'a mut IndexEntry>, u64), BucketMapError> {
-        let ix = Self::bucket_index_ix(&self.index, key, self.random);
+        let ix = Self::bucket_index_ix(index, key, random);
         let mut first_free = None;
         let mut m = Measure::start("bucket_find_entry_mut");
-        for i in ix..ix + self.index.max_search() {
-            let ii = i % self.index.capacity();
-            if self.index.is_free(ii) {
+        let capacity = index.capacity();
+        for i in ix..ix + index.max_search() {
+            let ii = i % capacity;
+            if index.is_free(ii) {
                 if first_free.is_none() {
                     first_free = Some(ii);
                 }
                 continue;
             }
-            let elem: &mut IndexEntry = self.index.get_mut(ii);
+            let elem: &IndexEntry = index.get(ii);
             if elem.key == *key {
                 m.stop();
-                self.stats
-                    .index
+
+                index
+                    .stats
                     .find_entry_mut_us
                     .fetch_add(m.as_us(), Ordering::Relaxed);
-                return Ok((Some(elem), ii));
+                return Ok((Some(index.get_mut(ii)), ii));
             }
         }
         m.stop();
-        self.stats
-            .index
+        index
+            .stats
             .find_entry_mut_us
             .fetch_add(m.as_us(), Ordering::Relaxed);
         match first_free {
             Some(ii) => Ok((None, ii)),
-            None => Err(self.index_no_space()),
+            None => Err(BucketMapError::IndexNoSpace(index.capacity_pow2)),
         }
     }
 
@@ -238,7 +241,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     pub fn addref(&mut self, key: &Pubkey) -> Option<RefCount> {
-        if let Ok((Some(elem), _)) = self.find_entry_mut(key) {
+        if let Ok((Some(elem), _)) = Self::find_entry_mut(&mut self.index, key, self.random) {
             elem.ref_count += 1;
             return Some(elem.ref_count);
         }
@@ -246,7 +249,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     pub fn unref(&mut self, key: &Pubkey) -> Option<RefCount> {
-        if let Ok((Some(elem), _)) = self.find_entry_mut(key) {
+        if let Ok((Some(elem), _)) = Self::find_entry_mut(&mut self.index, key, self.random) {
             elem.ref_count -= 1;
             return Some(elem.ref_count);
         }
@@ -257,10 +260,6 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         //debug!("READ_VALUE: {:?}", key);
         let (elem, _) = self.find_entry(key)?;
         elem.read_value(self)
-    }
-
-    fn index_no_space(&self) -> BucketMapError {
-        BucketMapError::IndexNoSpace(self.index.capacity_pow2)
     }
 
     pub fn try_write(
@@ -275,7 +274,8 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             // fail early if the data bucket we need doesn't exist - we don't want the index entry partially allocated
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
         }
-        let (elem, elem_ix) = self.find_entry_mut(key)?;
+        let max_search = self.index.max_search();
+        let (elem, elem_ix) = Self::find_entry_mut(&mut self.index, key, self.random)?;
         let elem = if let Some(elem) = elem {
             elem
         } else {
@@ -317,7 +317,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             // For the index bucket, it is more like a hash table and we have to exhaustively search 'max_search' to prove an item does not exist.
             // And we do have to support the 'does not exist' case with good performance. So, it makes sense to grow the index bucket when it is too large.
             // For data buckets, the offset is stored in the index, so it is directly looked up. So, the only search is on INSERT or update to a new sized value.
-            for i in pos..pos + (self.index.max_search() * 10).min(cap) {
+            for i in pos..pos + (max_search * 10).min(cap) {
                 let ix = i % cap;
                 if best_bucket.is_free(ix) {
                     let elem_loc = elem.data_loc(current_bucket);

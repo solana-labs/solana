@@ -15,7 +15,10 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        feature_set::{enable_early_verification_of_account_modifications, FeatureSet},
+        feature_set::{
+            enable_early_verification_of_account_modifications, native_programs_consume_cu,
+            FeatureSet,
+        },
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
         native_loader,
@@ -751,8 +754,9 @@ impl<'a> InvokeContext<'a> {
                 self.transaction_context
                     .set_return_data(program_id, Vec::new())?;
 
+                let is_builtin_program = builtin_id == program_id;
                 let pre_remaining_units = self.get_remaining();
-                let result = if builtin_id == program_id {
+                let result = if is_builtin_program {
                     let logger = self.get_log_collector();
                     stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
                     (entry.process_instruction)(self)
@@ -768,6 +772,16 @@ impl<'a> InvokeContext<'a> {
                 };
                 let post_remaining_units = self.get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+
+                if is_builtin_program
+                    && result.is_ok()
+                    && *compute_units_consumed == 0
+                    && self
+                        .feature_set
+                        .is_active(&native_programs_consume_cu::id())
+                {
+                    return Err(InstructionError::BuiltinProgramsMustConsumeComputeUnits);
+                }
 
                 process_executable_chain_time.stop();
                 saturating_add_assign!(
@@ -1011,20 +1025,19 @@ pub fn mock_process_instruction(
     if let Some(feature_set) = feature_set_override {
         invoke_context.feature_set = feature_set;
     }
-    invoke_context
-        .transaction_context
-        .get_next_instruction_context()
-        .unwrap()
-        .configure(
-            &program_indices,
-            &preparation.instruction_accounts,
-            instruction_data,
-        );
-    let result = invoke_context
-        .push()
-        .and_then(|_| process_instruction(&mut invoke_context));
-    let pop_result = invoke_context.pop();
-    assert_eq!(result.and(pop_result), expected_result);
+    let builtin_programs = &[BuiltinProgram {
+        program_id: *loader_id,
+        process_instruction,
+    }];
+    invoke_context.builtin_programs = builtin_programs;
+    let result = invoke_context.process_instruction(
+        instruction_data,
+        &preparation.instruction_accounts,
+        &program_indices,
+        &mut 0,
+        &mut ExecuteTimings::default(),
+    );
+    assert_eq!(result, expected_result);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
     transaction_accounts.pop();
     transaction_accounts
@@ -1082,6 +1095,8 @@ mod tests {
         assert!(!format!("{builtin_programs:?}").is_empty());
     }
 
+    const MOCK_BUILTIN_COMPUTE_UNIT_COST: u64 = 1;
+
     #[allow(clippy::integer_arithmetic)]
     fn mock_process_instruction(
         invoke_context: &mut InvokeContext,
@@ -1090,6 +1105,8 @@ mod tests {
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
+        // mock builtin must consume units
+        invoke_context.consume_checked(MOCK_BUILTIN_COMPUTE_UNIT_COST)?;
         let instruction_accounts = (0..4)
             .map(|instruction_account_index| InstructionAccount {
                 index_in_transaction: instruction_account_index,
@@ -1372,7 +1389,10 @@ mod tests {
             // the number of compute units consumed should be a non-default which is something greater
             // than zero.
             assert!(compute_units_consumed > 0);
-            assert_eq!(compute_units_consumed, compute_units_to_consume);
+            assert_eq!(
+                compute_units_consumed,
+                compute_units_to_consume + MOCK_BUILTIN_COMPUTE_UNIT_COST
+            );
             assert_eq!(result, expected_result);
 
             invoke_context.pop().unwrap();

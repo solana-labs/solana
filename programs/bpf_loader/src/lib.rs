@@ -45,8 +45,8 @@ use {
             check_slice_translation_size, delay_visibility_of_program_deployment,
             disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
             enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, remove_bpf_loader_incorrect_program_id,
-            round_up_heap_size, FeatureSet,
+            limit_max_instruction_trace_length, native_programs_consume_cu,
+            remove_bpf_loader_incorrect_program_id, round_up_heap_size, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -68,7 +68,7 @@ use {
         fmt::Debug,
         mem,
         rc::Rc,
-        sync::Arc,
+        sync::{atomic::Ordering, Arc},
     },
     thiserror::Error,
 };
@@ -520,15 +520,29 @@ fn process_instruction_common(
     let program_account =
         instruction_context.try_borrow_last_program_account(transaction_context)?;
 
+    // Consume compute units if feature `native_programs_consume_cu` is activated
+    let native_programs_consume_cu = invoke_context
+        .feature_set
+        .is_active(&native_programs_consume_cu::id());
+
     // Program Management Instruction
     if native_loader::check_id(program_account.get_owner()) {
         drop(program_account);
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
         return if bpf_loader_upgradeable::check_id(program_id) {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(2_370)?;
+            }
             process_loader_upgradeable_instruction(invoke_context, use_jit)
         } else if bpf_loader::check_id(program_id) {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(570)?;
+            }
             process_loader_instruction(invoke_context, use_jit)
         } else if bpf_loader_deprecated::check_id(program_id) {
+            if native_programs_consume_cu {
+                invoke_context.consume_checked(1_140)?;
+            }
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
             Err(InstructionError::UnsupportedProgramId)
         } else {
@@ -574,11 +588,13 @@ fn process_instruction_common(
     if let Some(load_program_metrics) = load_program_metrics {
         load_program_metrics.submit_datapoint(&mut invoke_context.timings);
     }
+
+    executor.usage_counter.fetch_add(1, Ordering::Relaxed);
     match &executor.program {
         LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
         LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
         LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
-        LoadedProgramType::BuiltIn(_) => Err(InstructionError::IncorrectProgramId),
+        _ => Err(InstructionError::IncorrectProgramId),
     }
 }
 
@@ -920,7 +936,7 @@ fn process_loader_upgradeable_instruction(
                 );
                 return Err(InstructionError::InsufficientFunds);
             }
-            let deployment_slot = if let UpgradeableLoaderState::ProgramData {
+            if let UpgradeableLoaderState::ProgramData {
                 slot,
                 upgrade_authority_address,
             } = programdata.get_state()?
@@ -945,7 +961,6 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Upgrade authority did not sign");
                     return Err(InstructionError::MissingRequiredSignature);
                 }
-                slot
             } else {
                 ic_logger_msg!(log_collector, "Invalid ProgramData account");
                 return Err(InstructionError::InvalidAccountData);
@@ -962,7 +977,7 @@ fn process_loader_upgradeable_instruction(
                 new_program_id,
                 program_id,
                 UpgradeableLoaderState::size_of_program().saturating_add(programdata_len),
-                deployment_slot,
+                clock.slot,
                 {
                     drop(buffer);
                 },

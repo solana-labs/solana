@@ -1899,6 +1899,11 @@ fn main() {
             .about("Prints the ledger's shred hash")
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
         )
         .subcommand(
             SubCommand::with_name("shred-meta")
@@ -1911,6 +1916,11 @@ fn main() {
             .about("Prints the hash of the working bank after reading the ledger")
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&halt_at_slot_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
         )
         .subcommand(
             SubCommand::with_name("bounds")
@@ -1985,6 +1995,11 @@ fn main() {
             .about("Create a Graphviz rendering of the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -2014,6 +2029,10 @@ fn main() {
             .about("Create a new ledger snapshot")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&accountsdb_skip_shrink)
             .arg(&ancient_append_vecs)
@@ -2202,6 +2221,11 @@ fn main() {
             .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&geyser_plugin_args)
@@ -2229,6 +2253,11 @@ fn main() {
             .about("Print capitalization (aka, total supply) while checksumming it")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&accountsdb_verify_refcounts)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -2362,6 +2391,12 @@ fn main() {
                         .default_value(DEFAULT_LATEST_OPTIMISTIC_SLOTS_COUNT)
                         .required(false)
                         .help("Number of slots in the output"),
+                )
+                .arg(
+                    Arg::with_name("exclude_vote_only_slots")
+                        .long("exclude-vote-only-slots")
+                        .required(false)
+                        .help("Exclude slots that contain only votes from output"),
                 )
         )
         .subcommand(
@@ -2571,6 +2606,7 @@ fn main() {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: Some(0),
                     run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2662,6 +2698,7 @@ fn main() {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2947,6 +2984,7 @@ fn main() {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     ..ProcessOptions::default()
                 };
 
@@ -3483,6 +3521,7 @@ fn main() {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
                     run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -3572,6 +3611,7 @@ fn main() {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     halt_at_slot,
                     run_verification: false,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -4239,11 +4279,37 @@ fn main() {
                     force_update_to_open,
                 );
                 let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
-                let slots = blockstore
-                    .get_latest_optimistic_slots(num_slots)
-                    .expect("Failed to get latest optimistic slots");
-                println!("{:>20} {:>44} {:>32}", "Slot", "Hash", "Timestamp");
-                for (slot, hash, timestamp) in slots.iter() {
+                let exclude_vote_only_slots = arg_matches.is_present("exclude_vote_only_slots");
+
+                let slots_iter = blockstore
+                    .reversed_optimistic_slots_iterator()
+                    .expect("Failed to get reversed optimistic slots iterator")
+                    .map(|(slot, hash, timestamp)| {
+                        let (entries, _, _) = blockstore
+                            .get_slot_entries_with_shred_info(slot, 0, false)
+                            .expect("Failed to get slot entries");
+                        let contains_nonvote = entries
+                            .iter()
+                            .flat_map(|entry| entry.transactions.iter())
+                            .flat_map(get_program_ids)
+                            .any(|program_id| *program_id != solana_vote_program::id());
+                        (slot, hash, timestamp, contains_nonvote)
+                    });
+
+                let slots: Vec<_> = if exclude_vote_only_slots {
+                    slots_iter
+                        .filter(|(_, _, _, contains_nonvote)| *contains_nonvote)
+                        .take(num_slots)
+                        .collect()
+                } else {
+                    slots_iter.take(num_slots).collect()
+                };
+
+                println!(
+                    "{:>20} {:>44} {:>32} {:>13}",
+                    "Slot", "Hash", "Timestamp", "Vote Only?"
+                );
+                for (slot, hash, timestamp, contains_nonvote) in slots.iter() {
                     let time_str = {
                         let secs: u64 = (timestamp / 1_000) as u64;
                         let nanos: u32 = ((timestamp % 1_000) * 1_000_000) as u32;
@@ -4252,7 +4318,10 @@ fn main() {
                         datetime.to_rfc3339()
                     };
                     let hash_str = format!("{hash}");
-                    println!("{:>20} {:>44} {:>32}", slot, &hash_str, &time_str);
+                    println!(
+                        "{:>20} {:>44} {:>32} {:>13}",
+                        slot, &hash_str, &time_str, !contains_nonvote
+                    );
                 }
             }
             ("repair-roots", Some(arg_matches)) => {

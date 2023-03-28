@@ -5014,7 +5014,7 @@ pub mod tests {
                 .into_iter()
                 .map(|tx| SanitizedTransaction::try_from_legacy_transaction(tx).unwrap())
                 .collect();
-            prioritization_fee_cache.update(bank, transactions.iter());
+            prioritization_fee_cache.update(&bank, transactions.iter());
         }
 
         fn get_prioritization_fee_cache(&self) -> &PrioritizationFeeCache {
@@ -5889,7 +5889,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -5973,7 +5973,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -6001,7 +6001,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -6050,7 +6050,7 @@ pub mod tests {
                     "accounts":null,
                     "logs":[],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":0,
                 }
             },
             "id":1
@@ -6079,7 +6079,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
