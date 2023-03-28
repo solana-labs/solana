@@ -584,13 +584,13 @@ impl Scheduler {
                     scheduler_pool.replay_vote_sender.as_ref(),
                 );
 
+                if execution_results[0].was_executed() {
+                    scheduler_pool.prioritization_fee_cache.update(&bank, [ee.task.tx.0.clone()].iter());
+                }
                 if let Some(commited_first_transaction_index) = commited_first_transaction_index {
                     if let Some(bb) = bb {
                         assert!(send_transaction_status(scheduler_pool.transaction_status_sender.as_ref().unwrap(), bb, &bank, &batch, &mut mint_decimals, Some(tx_results), Some(commited_first_transaction_index)).is_none());
                     }
-                }
-                if execution_results[0].was_executed() {
-                    scheduler_pool.prioritization_fee_cache.update(&bank, [ee.task.tx.0.clone()].iter());
                 }
 
                 drop(batch);
