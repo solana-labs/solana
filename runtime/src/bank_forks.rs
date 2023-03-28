@@ -295,7 +295,7 @@ impl BankForks {
     }
 
     pub fn working_bank(&self) -> Arc<Bank> {
-        self[self.highest_slot()].clone()
+        self.banks[&self.highest_slot()].new_arc()
     }
 
     fn do_set_root_return_metrics(
