@@ -5,6 +5,7 @@ use {
 
 #[derive(Debug)]
 pub(crate) enum ThreadAwareLock {
+    NoLocks, // No locks on this account - should only be used to check for removal from map.
     ReadOnly(Box<ReadOnlyLock>),
     WriteOnly(WriteOnlyLock),
     Mixed(MixedLocks),
@@ -26,6 +27,12 @@ impl ThreadAwareLock {
         Self::WriteOnly(WriteOnlyLock { thread_id, count })
     }
 
+    /// Checks if the lock is `NoLocks` - this variant should never be  modified,
+    /// so this is useful to check if the lock should be removed from a map.
+    pub(crate) fn is_no_locks(&self) -> bool {
+        matches!(self, Self::NoLocks)
+    }
+
     /// Returns set of threads that can be read-scheduled.
     /// If the lock is:
     ///     * `ReadOnly` - the `Any` thread-set is returned.
@@ -40,6 +47,7 @@ impl ThreadAwareLock {
             Self::ReadOnly(locks) => locks.read_schedulable(num_threads, sequential_queue_limit),
             Self::WriteOnly(locks) => locks.schedulable(sequential_queue_limit),
             Self::Mixed(locks) => locks.schedulable(sequential_queue_limit),
+            Self::NoLocks => panic!("Should not be called on `None` lock!"),
         }
     }
 
@@ -53,6 +61,7 @@ impl ThreadAwareLock {
             Self::ReadOnly(locks) => locks.write_schedulable(sequential_queue_limit),
             Self::WriteOnly(locks) => locks.schedulable(sequential_queue_limit),
             Self::Mixed(locks) => locks.schedulable(sequential_queue_limit),
+            Self::NoLocks => panic!("Should not be called on `None` lock!"),
         }
     }
 
@@ -61,17 +70,12 @@ impl ThreadAwareLock {
     ///     * `ReadOnly` -  the thread-set is updated and the read-lock count is incremented.
     ///     * `WriteOnly` - the lock is converted to `Mixed` and the read-lock is added.
     ///     * `Mixed` - the read-lock is added to the back of the lock-sequence.
-    pub(crate) fn read_lock(mut self, thread_id: ThreadId) -> Self {
-        match &mut self {
-            Self::ReadOnly(locks) => {
-                locks.read_lock(thread_id);
-                self
-            }
-            Self::WriteOnly(locks) => locks.read_lock(thread_id),
-            Self::Mixed(locks) => {
-                locks.read_lock(thread_id);
-                self
-            }
+    pub(crate) fn read_lock(&mut self, thread_id: ThreadId) {
+        match self {
+            Self::ReadOnly(locks) => locks.read_lock(thread_id),
+            Self::WriteOnly(locks) => *self = locks.read_lock(thread_id),
+            Self::Mixed(locks) => locks.read_lock(thread_id),
+            Self::NoLocks => panic!("Should not be called on `None` lock!"),
         }
     }
 
@@ -82,11 +86,20 @@ impl ThreadAwareLock {
     ///                 read-locks are removed, the lock is converted to `WriteOnly`. Mixed
     ///                 locks can never result in returning true because there are at least
     ///                 two locks in the sequence.
-    pub(crate) fn read_unlock(mut self, thread_id: ThreadId) -> Option<Self> {
+    pub(crate) fn read_unlock(&mut self, thread_id: ThreadId) {
         match self {
-            Self::ReadOnly(ref mut locks) => locks.read_unlock(thread_id).then_some(self),
-            Self::Mixed(locks) => Some(locks.read_unlock(thread_id)),
+            Self::ReadOnly(locks) => {
+                if !locks.read_unlock(thread_id) {
+                    *self = Self::NoLocks
+                }
+            }
+            Self::Mixed(locks) => {
+                if !locks.read_unlock(thread_id) {
+                    *self = locks.to_write_only();
+                }
+            }
             Self::WriteOnly(_) => panic!("cannot unlock_read write locks"),
+            Self::NoLocks => panic!("Should not be called on `None` lock!"),
         }
     }
 
@@ -95,17 +108,12 @@ impl ThreadAwareLock {
     ///     * `ReadOnly` -  the lock is converted to `Mixed` and the write-lock is added.
     ///     * `WriteOnly` - the thread-set is updated and the write-lock count is incremented.
     ///     * `Mixed` - the write-lock is added to the back of the lock-sequence.
-    pub(crate) fn write_lock(mut self, thread_id: ThreadId) -> Self {
-        match &mut self {
-            Self::ReadOnly(locks) => locks.write_lock(thread_id),
-            Self::WriteOnly(locks) => {
-                locks.write_lock(thread_id);
-                self
-            }
-            Self::Mixed(locks) => {
-                locks.write_lock(thread_id);
-                self
-            }
+    pub(crate) fn write_lock(&mut self, thread_id: ThreadId) {
+        match self {
+            Self::ReadOnly(locks) => *self = locks.write_lock(thread_id),
+            Self::WriteOnly(locks) => locks.write_lock(thread_id),
+            Self::Mixed(locks) => locks.write_lock(thread_id),
+            Self::NoLocks => panic!("Should not be called on `None` lock!"),
         }
     }
 
@@ -116,11 +124,20 @@ impl ThreadAwareLock {
     ///                 write-locks are removed, the lock is converted to `ReadOnly`. Mixed
     ///                 locks can never result in returning true because there are at least
     ///                 two locks in the sequence.
-    pub(crate) fn write_unlock(mut self, thread_id: ThreadId) -> Option<Self> {
+    pub(crate) fn write_unlock(&mut self, thread_id: ThreadId) {
         match self {
-            Self::WriteOnly(ref mut locks) => locks.write_unlock(thread_id).then_some(self),
-            Self::Mixed(locks) => Some(locks.write_unlock(thread_id)),
+            Self::WriteOnly(locks) => {
+                if !locks.write_unlock(thread_id) {
+                    *self = Self::NoLocks
+                }
+            }
+            Self::Mixed(locks) => {
+                if !locks.write_unlock(thread_id) {
+                    *self = locks.to_read_only();
+                }
+            }
             Self::ReadOnly(_) => panic!("cannot unlock_write read locks"),
+            Self::NoLocks => panic!("Should not be called on `None` lock!"),
         }
     }
 }
@@ -251,20 +268,18 @@ impl MixedLocks {
     }
 
     /// Removes a read lock on `thread_id`, and panics if the thread doesn't already hold the locks.
-    /// Returns the new lock state - either a WriteOnly lock or a Mixed lock.
-    fn read_unlock(mut self, thread_id: ThreadId) -> ThreadAwareLock {
+    /// Returns `true` if the lock is still mixed, otherwise it should be converted to a `WriteOnlyLock`.
+    fn read_unlock(&mut self, thread_id: ThreadId) -> bool {
         assert_eq!(self.thread_id, thread_id);
         if let Some(LockSequenceItem::Read(count)) = self.lock_sequence.front_mut() {
             self.total_count = self.total_count.checked_sub(1).unwrap();
             *count = count.checked_sub(1).unwrap();
             if *count == 0 {
                 self.lock_sequence.pop_front();
-                if self.lock_sequence.len() == 1 {
-                    return ThreadAwareLock::new_write_lock(self.thread_id, self.total_count);
-                }
+                self.lock_sequence.len() != 1
+            } else {
+                true
             }
-
-            ThreadAwareLock::Mixed(self)
         } else {
             panic!("read lock not found");
         }
@@ -281,20 +296,18 @@ impl MixedLocks {
     }
 
     /// Removes a write lock on `thread_id`, and panics if the thread doesn't already hold the locks.
-    /// Returns the new lock state - either a ReadOnly lock or a Mixed lock.
-    fn write_unlock(mut self, thread_id: ThreadId) -> ThreadAwareLock {
+    /// Returns `true` if the lock is still mixed, otherwise it should be converted to a `ReadOnlyLock`.
+    fn write_unlock(&mut self, thread_id: ThreadId) -> bool {
         assert_eq!(self.thread_id, thread_id);
         if let Some(LockSequenceItem::Write(count)) = self.lock_sequence.front_mut() {
             self.total_count = self.total_count.checked_sub(1).unwrap();
             *count = count.checked_sub(1).unwrap();
             if *count == 0 {
                 self.lock_sequence.pop_front();
-                if self.lock_sequence.len() == 1 {
-                    return ThreadAwareLock::new_read_lock(self.thread_id, self.total_count);
-                }
+                self.lock_sequence.len() != 1
+            } else {
+                true
             }
-
-            ThreadAwareLock::Mixed(self)
         } else {
             panic!("write lock not found");
         }
@@ -356,7 +369,7 @@ mod tests {
         assert_eq!(lock.write_schedulable(TEST_SEQ_LIMIT), ThreadSet::only(0));
 
         // Add another read-lock on thread 0. All threads can read, only thread 0 can write.
-        lock = lock.read_lock(0);
+        lock.read_lock(0);
         assert!(matches!(lock, ThreadAwareLock::ReadOnly(_)));
         assert_eq!(
             lock.read_schedulable(TEST_NUM_THREADS, TEST_SEQ_LIMIT),
@@ -365,11 +378,10 @@ mod tests {
         assert_eq!(lock.write_schedulable(TEST_SEQ_LIMIT), ThreadSet::only(0));
 
         // Remove
-        println!("{lock:?}");
-        lock = lock.read_unlock(0).unwrap();
+        lock.read_unlock(0);
 
         // Add a read-lock on thread 1. Any threads can read, no threads can write.
-        lock = lock.read_lock(1);
+        lock.read_lock(1);
         assert_eq!(
             lock.read_schedulable(TEST_NUM_THREADS, TEST_SEQ_LIMIT),
             ThreadSet::any(TEST_NUM_THREADS)
@@ -377,8 +389,9 @@ mod tests {
         assert_eq!(lock.write_schedulable(TEST_SEQ_LIMIT), ThreadSet::none());
 
         // Remove
-        lock = lock.read_unlock(1).unwrap();
-        assert!(lock.read_unlock(0).is_none()); // No more locks
+        lock.read_unlock(1);
+        lock.read_unlock(0);
+        assert!(lock.is_no_locks());
     }
 
     #[test]
@@ -392,7 +405,7 @@ mod tests {
         assert_eq!(lock.write_schedulable(TEST_SEQ_LIMIT), ThreadSet::only(2));
 
         // Add another write-lock on thread 2. Only thread 2 can read or write.
-        lock = lock.write_lock(2);
+        lock.write_lock(2);
         assert_eq!(
             lock.read_schedulable(TEST_NUM_THREADS, TEST_SEQ_LIMIT),
             ThreadSet::only(2)
@@ -400,46 +413,49 @@ mod tests {
         assert_eq!(lock.write_schedulable(TEST_SEQ_LIMIT), ThreadSet::only(2));
 
         // Remove
-        lock = lock.write_unlock(2).unwrap();
-        assert!(lock.write_unlock(2).is_none()); // No more locks
+        lock.write_unlock(2);
+        lock.write_unlock(2);
+        assert!(lock.is_no_locks());
     }
 
     #[test]
     fn test_read_to_mixed() {
         let mut lock = ThreadAwareLock::new_read_lock(0, 1);
-        lock = lock.write_lock(0);
+        lock.write_lock(0);
         assert_eq!(
             lock.read_schedulable(TEST_NUM_THREADS, TEST_SEQ_LIMIT),
             ThreadSet::only(0)
         );
         assert_eq!(lock.write_schedulable(TEST_SEQ_LIMIT), ThreadSet::only(0));
 
-        lock = lock.read_unlock(0).unwrap();
+        lock.read_unlock(0);
         assert_eq!(
             lock.read_schedulable(TEST_NUM_THREADS, TEST_SEQ_LIMIT),
             ThreadSet::only(0)
         );
         assert_eq!(lock.write_schedulable(TEST_SEQ_LIMIT), ThreadSet::only(0));
-        assert!(lock.write_unlock(0).is_none());
+        lock.write_unlock(0);
+        assert!(lock.is_no_locks());
     }
 
     #[test]
     fn test_write_to_mixed() {
         let mut lock = ThreadAwareLock::new_write_lock(0, 1);
-        lock = lock.read_lock(0);
+        lock.read_lock(0);
         assert_eq!(
             lock.read_schedulable(TEST_NUM_THREADS, TEST_SEQ_LIMIT),
             ThreadSet::only(0)
         );
         assert_eq!(lock.write_schedulable(TEST_SEQ_LIMIT), ThreadSet::only(0));
 
-        lock = lock.write_unlock(0).unwrap();
+        lock.write_unlock(0);
         assert_eq!(
             lock.read_schedulable(TEST_NUM_THREADS, TEST_SEQ_LIMIT),
             ThreadSet::any(TEST_NUM_THREADS)
         );
         assert_eq!(lock.write_schedulable(TEST_SEQ_LIMIT), ThreadSet::only(0));
-        assert!(lock.read_unlock(0).is_none());
+        lock.read_unlock(0);
+        assert!(lock.is_no_locks());
     }
 
     #[test]
@@ -465,7 +481,7 @@ mod tests {
     #[test]
     fn test_mixed_schedulable_limit() {
         let mut lock = ThreadAwareLock::new_write_lock(0, TEST_SEQ_LIMIT - 1);
-        lock = lock.read_lock(0);
+        lock.read_lock(0);
         assert_eq!(
             lock.read_schedulable(TEST_NUM_THREADS, TEST_SEQ_LIMIT),
             ThreadSet::none()
@@ -476,28 +492,28 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_read_only_locks_invalid_lock() {
-        let lock = ThreadAwareLock::new_read_lock(0, 1);
+        let mut lock = ThreadAwareLock::new_read_lock(0, 1);
         lock.write_lock(1);
     }
 
     #[test]
     #[should_panic]
     fn test_write_only_locks_invalid_read_lock() {
-        let lock = ThreadAwareLock::new_write_lock(0, 1);
+        let mut lock = ThreadAwareLock::new_write_lock(0, 1);
         lock.read_lock(1);
     }
 
     #[test]
     #[should_panic]
     fn test_write_only_locks_invalid_write_lock() {
-        let lock = ThreadAwareLock::new_write_lock(0, 1);
+        let mut lock = ThreadAwareLock::new_write_lock(0, 1);
         lock.write_lock(1);
     }
 
     #[test]
     #[should_panic]
     fn test_mixed_locks_invalid_read_lock() {
-        let lock = ThreadAwareLock::Mixed(MixedLocks {
+        let mut lock = ThreadAwareLock::Mixed(MixedLocks {
             thread_id: 0,
             total_count: 2,
             lock_sequence: vec![LockSequenceItem::Write(1), LockSequenceItem::Read(1)].into(),
@@ -508,7 +524,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_mixed_locks_invalid_write_lock() {
-        let lock = ThreadAwareLock::Mixed(MixedLocks {
+        let mut lock = ThreadAwareLock::Mixed(MixedLocks {
             thread_id: 0,
             total_count: 2,
             lock_sequence: vec![LockSequenceItem::Write(1), LockSequenceItem::Read(1)].into(),
@@ -519,7 +535,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_mixed_locks_invalid_read_unlock() {
-        let lock = ThreadAwareLock::Mixed(MixedLocks {
+        let mut lock = ThreadAwareLock::Mixed(MixedLocks {
             thread_id: 0,
             total_count: 2,
             lock_sequence: vec![LockSequenceItem::Write(1), LockSequenceItem::Read(1)].into(),
@@ -530,7 +546,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_mixed_locks_invalid_write_unlock() {
-        let lock = ThreadAwareLock::Mixed(MixedLocks {
+        let mut lock = ThreadAwareLock::Mixed(MixedLocks {
             thread_id: 0,
             total_count: 2,
             lock_sequence: vec![LockSequenceItem::Read(1), LockSequenceItem::Write(1)].into(),
@@ -541,7 +557,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_mixed_locks_invalid_unlock() {
-        let lock = ThreadAwareLock::Mixed(MixedLocks {
+        let mut lock = ThreadAwareLock::Mixed(MixedLocks {
             thread_id: 0,
             total_count: 2,
             lock_sequence: vec![LockSequenceItem::Read(1), LockSequenceItem::Write(1)].into(),
