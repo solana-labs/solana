@@ -133,7 +133,7 @@ pub struct AggregatedValidityProofData {
     pub context: AggregatedValidityProofContext, // 32 bytes
 
     /// Proof that a pair of ciphertexts are valid
-    pub proof: pod::AggregatedValidityProof, // 160 bytes
+    pub proof: pod::AggregatedValidityProof, // 256 bytes
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -260,8 +260,10 @@ impl AggregatedValidityProof {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::encryption::{elgamal::ElGamalKeypair, pedersen::Pedersen};
+    use {
+        super::*,
+        crate::encryption::{elgamal::ElGamalKeypair, pedersen::Pedersen},
+    };
 
     #[test]
     fn test_validity_proof_correctness() {

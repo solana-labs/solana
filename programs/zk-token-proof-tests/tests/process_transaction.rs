@@ -9,8 +9,11 @@ use {
         transaction::{Transaction, TransactionError},
     },
     solana_zk_token_sdk::{
-        encryption::{elgamal::ElGamalKeypair, pedersen::*}, instruction::*, zk_token_proof_instruction::*,
-        zk_token_proof_program, zk_token_proof_state::ProofContextState,
+        encryption::{elgamal::ElGamalKeypair, pedersen::*},
+        instruction::*,
+        zk_token_proof_instruction::*,
+        zk_token_proof_program,
+        zk_token_proof_state::ProofContextState,
     },
     std::mem::size_of,
 };

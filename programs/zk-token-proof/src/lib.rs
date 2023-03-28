@@ -201,5 +201,11 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
                 invoke_context,
             )
         }
+        ProofInstruction::VerifyCtxtCommEqualityProof => {
+            ic_msg!(invoke_context, "VerifyCtxtCommEqualityProof");
+            process_verify_proof::<CtxtCommEqualityProofData, CtxtCommEqualityProofContext>(
+                invoke_context,
+            )
+        }
     }
 });

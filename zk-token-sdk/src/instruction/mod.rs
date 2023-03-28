@@ -1,4 +1,5 @@
 pub mod close_account;
+pub mod equality_proof;
 pub mod pubkey_validity;
 pub mod transfer;
 pub mod transfer_with_fee;
@@ -21,6 +22,7 @@ use {
 pub use {
     bytemuck::Pod,
     close_account::{CloseAccountData, CloseAccountProofContext},
+    equality_proof::{CtxtCommEqualityProofContext, CtxtCommEqualityProofData},
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
     transfer::{TransferData, TransferProofContext},
     transfer_with_fee::{FeeParameters, TransferWithFeeData, TransferWithFeeProofContext},
@@ -45,6 +47,7 @@ pub enum ProofType {
     PubkeyValidity,
     ValidityProof,
     AggregatedValidityProof,
+    CtxtCommEqualityProof,
 }
 
 pub trait ZkProofData<T: Pod> {
