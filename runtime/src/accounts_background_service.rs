@@ -533,7 +533,6 @@ impl AccountsBackgroundService {
         test_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
-        info!("AccountsBackgroundService active");
         let exit = exit.clone();
         let mut last_cleaned_block_height = 0;
         let mut removed_slots_count = 0;
@@ -542,6 +541,7 @@ impl AccountsBackgroundService {
         let t_background = Builder::new()
             .name("solBgAccounts".to_string())
             .spawn(move || {
+                info!("AccountsBackgroundService has started");
                 let mut stats = StatsManager::new();
                 let mut last_snapshot_end_time = None;
 
@@ -656,12 +656,14 @@ impl AccountsBackgroundService {
                     stats.record_and_maybe_submit(start_time.elapsed());
                     sleep(Duration::from_millis(INTERVAL_MS));
                 }
-                info!(
-                    "ABS loop done.  Number of snapshot storages kept alive for fastboot: {}",
+                debug!(
+                    "Storages kept alive for fastboot: {}",
                     last_snapshot_storages
+                        .as_ref()
                         .map(|storages| storages.len())
                         .unwrap_or(0)
                 );
+                info!("AccountsBackgroundService has stopped");
             })
             .unwrap();
 
