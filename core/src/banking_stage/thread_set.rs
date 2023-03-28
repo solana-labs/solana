@@ -1,10 +1,13 @@
-use std::ops::{BitAnd, BitAndAssign};
+use std::{
+    fmt::Display,
+    ops::{BitAnd, BitAndAssign, Sub, SubAssign},
+};
 
 pub(crate) const MAX_THREADS: usize = 64;
 pub(crate) type ThreadId = usize; // 0..MAX_THREADS - 1
 
 /// A bit-set of threads an account is scheduled or can be scheduled for.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub(crate) struct ThreadSet(u64);
 
@@ -73,6 +76,35 @@ impl BitAnd for ThreadSet {
 
     fn bitand(self, rhs: Self) -> Self::Output {
         Self(self.0 & rhs.0)
+    }
+}
+
+impl Sub for ThreadSet {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 & !rhs.0)
+    }
+}
+
+impl SubAssign for ThreadSet {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 &= !rhs.0;
+    }
+}
+
+#[cfg(test)]
+static_assertions::assert_eq_size!(u64, ThreadSet); // Display fmt needs to change if size changes.
+impl Display for ThreadSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ThreadSet({:#064b})", self.0)
+    }
+}
+
+// Manual implementation of Debug to show the bit-set as a binary string.
+impl std::fmt::Debug for ThreadSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self}")
     }
 }
 
