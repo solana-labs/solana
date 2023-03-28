@@ -1,6 +1,6 @@
 use {
     super::{
-        account_lock::AccountLock,
+        thread_aware_lock::ThreadAwareLock,
         thread_set::{ThreadId, ThreadSet, MAX_THREADS},
     },
     solana_sdk::pubkey::Pubkey,
@@ -17,7 +17,7 @@ pub(crate) struct ThreadAwareAccountLocks {
     /// Limit on the number of sequentially queued transactions per account.
     sequential_queue_limit: u32,
     /// Locks held for each account.
-    locks: HashMap<Pubkey, AccountLock>,
+    locks: HashMap<Pubkey, ThreadAwareLock>,
 }
 
 impl ThreadAwareAccountLocks {
@@ -76,7 +76,7 @@ impl ThreadAwareAccountLocks {
                 entry.into_mut().lock_write(thread_id);
             }
             std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(AccountLock::new_write_lock(thread_id, 1));
+                entry.insert(ThreadAwareLock::new_write_lock(thread_id, 1));
             }
         }
     }
@@ -102,7 +102,7 @@ impl ThreadAwareAccountLocks {
                 entry.into_mut().lock_read(thread_id);
             }
             std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(AccountLock::new_read_lock(thread_id, 1));
+                entry.insert(ThreadAwareLock::new_read_lock(thread_id, 1));
             }
         }
     }

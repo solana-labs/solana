@@ -52,7 +52,7 @@ mod thread_aware_account_locks;
 pub(crate) mod thread_set;
 
 #[allow(dead_code)]
-pub(crate) mod account_lock;
+pub(crate) mod thread_aware_lock;
 
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 6;
