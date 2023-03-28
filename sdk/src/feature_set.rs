@@ -641,6 +641,9 @@ pub mod include_loaded_accounts_data_size_in_fee_calculation {
 pub mod native_programs_consume_cu {
     solana_sdk::declare_id!("8pgXCMNXC8qyEFypuwpXyRxLXZdpM4Qo72gJ6k87A6wL");
 }
+pub mod simplify_writable_program_account_check {
+    solana_sdk::declare_id!("5ZCcFAzJ1zsFKe1KSZa9K92jhx7gkcKj97ci2DBo1vwj");
+}
 
 lazy_static! {
     /// Map of feature identifiers to user-visible description
@@ -797,6 +800,7 @@ lazy_static! {
         (remove_bpf_loader_incorrect_program_id::id(), "stop incorrectly throwing IncorrectProgramId in bpf_loader #30747"),
         (include_loaded_accounts_data_size_in_fee_calculation::id(), "include transaction loaded accounts data size in base fee calculation #30657"),
         (native_programs_consume_cu::id(), "Native program should consume compute units #30620"),
+        (simplify_writable_program_account_check::id(), "Simplify checks performed for writable upgradeable program accounts #30559"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
