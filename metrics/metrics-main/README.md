@@ -3,10 +3,10 @@
 Services:
 1. Prometheus
 2. AlertManager
-3. Chronograf2 (on port 8888) 
-4. Chronograf_8889 (on port 8889) 
-5. Grafana (on port 3000) 
-6. Grafana2 (on port 3001)   
+3. Chronograf2 (on port 8888)
+4. Chronograf_8889 (on port 8889)
+5. Grafana (on port 3000)
+6. Grafana2 (on port 3001)
 7. Kapacitor
 
 To install all the services on the metrics-internal server, you need to run the ./start.sh script.

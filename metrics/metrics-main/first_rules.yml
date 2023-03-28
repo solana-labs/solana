@@ -56,7 +56,7 @@ groups:
         labels:
             severity: warning
         annotations:
-            title: 'Instance {{ $labels.instance }} Disk space more than 80%' 
+            title: 'Instance {{ $labels.instance }} Disk space more than 80%'
             summary: "Out of disk space (instance {{ $labels.instance }})"
             description: "Disk is almost full (< 20% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
 
@@ -66,7 +66,7 @@ groups:
         labels:
             severity: critical
         annotations:
-            title: 'Instance {{ $labels.instance }} Disk space more than 90%' 
+            title: 'Instance {{ $labels.instance }} Disk space more than 90%'
             summary: "Out of disk space (instance {{ $labels.instance }})"
             description: "Disk is almost full (< 10% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
 

@@ -52,4 +52,3 @@ sudo docker run \
   --log-opt max-size=1g \
   --log-opt max-file=5 \
   $GRAFANA_IMAGE
-
