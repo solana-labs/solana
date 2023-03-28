@@ -590,7 +590,7 @@ impl Scheduler {
                     }
                 }
                 if execution_results[0].was_executed() {
-                    scheduler_pool.prioritization_fee_cache.update(&bank, [ee.task.tx].iter());
+                    scheduler_pool.prioritization_fee_cache.update(&bank, [ee.task.tx.0].iter());
                 }
 
                 drop(batch);
