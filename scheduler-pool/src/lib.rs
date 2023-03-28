@@ -6,6 +6,7 @@
 #![allow(unused_mut)]
 #![allow(unused_labels)]
 #![allow(clippy::bool_assert_comparison)]
+#![allow(clippy::unnecessary_cast)]
 
 use {
     log::*,
