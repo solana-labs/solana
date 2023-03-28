@@ -893,7 +893,7 @@ impl InstalledScheduler for Scheduler {
         use solana_scheduler::{Mode, UniqueWeight};
         use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
         let uw = match self.current_scheduler_mode() {
-            Mode::Replaying => solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight,
+            Mode::BlockVerification => solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight,
         };
         let t =
             solana_scheduler::Task::new_for_queue(nast, uw, (sanitized_tx.clone(), locks));
