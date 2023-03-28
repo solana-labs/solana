@@ -2599,6 +2599,7 @@ impl ReplayStage {
                         .insert(0, cumulative_timings2);
                     r_replay_stats.process_execute_batches_internal_metrics(metrics);
                 }
+                #[allow(clippy::single_match)]
                 match r {
                     Err(err) => {
                         // Error means the slot needs to be marked as dead
