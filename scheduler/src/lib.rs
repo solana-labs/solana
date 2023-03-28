@@ -11,6 +11,7 @@
 #![allow(clippy::while_let_loop)]
 #![allow(clippy::overly_complex_bool_expr)]
 #![allow(clippy::clone_on_copy)]
+#![allow(clippy::too_many_arguments)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
