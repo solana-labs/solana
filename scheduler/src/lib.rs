@@ -632,8 +632,8 @@ struct Bundle {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Mode {
-    BlockProduction,
-    //BlockVerification
+    BlockVerification
+    //BlockProduction,
 }
 
 #[derive(Debug)]
@@ -695,7 +695,7 @@ impl Task {
 
     pub fn transaction_index(&self, mode: Mode) -> u64 {
         match mode {
-            Mode::Replaying => (UniqueWeight::max_value() - self.unique_weight).try_into().unwrap(),
+            Mode::BlockVerification => (UniqueWeight::max_value() - self.unique_weight).try_into().unwrap(),
         }
     }
 
@@ -907,7 +907,7 @@ use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch]
 enum ModeSpecificTaskQueue {
-    Replaying(ChannelBackedTaskQueue),
+    BlockProduction(ChannelBackedTaskQueue),
 }
 
 #[enum_dispatch(ModeSpecificTaskQueue)]
@@ -1267,7 +1267,7 @@ impl ScheduleStage {
                         &mut next_task.lock_attempts_mut(ast),
                         (
                             if runnable_queue.is_backed_by_channel() {
-                                Mode::Replaying
+                                Mode::BlockProduction
                             } else {
                                 panic!()
                             }
@@ -1757,7 +1757,7 @@ impl ScheduleStage {
             bool,
         ) = Default::default();
 
-        let mut runnable_queue = ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev));
+        let mut runnable_queue = ModeSpecificTaskQueue::BlockProduction(ChannelBackedTaskQueue::new(from_prev));
 
         let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
             .unwrap_or(format!("{}", executing_thread_count + 1))
@@ -1817,7 +1817,7 @@ impl ScheduleStage {
                                        if Some(new_mode) != mode {
                                            if !force_channel_backed {
                                                runnable_queue = match new_mode {
-                                                   Mode::Replaying => ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev)),
+                                                   Mode::BlockProduction => ModeSpecificTaskQueue::BlockProduction(ChannelBackedTaskQueue::new(from_prev)),
                                                };
                                            }
                                            mode = Some(new_mode);
