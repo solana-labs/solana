@@ -45,7 +45,6 @@ use {
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
-        instruction::InstructionError::InvalidAccountData,
         message::{
             v0::{LoadedAddresses, MessageAddressTableLookup},
             SanitizedMessage,
