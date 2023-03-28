@@ -1,4 +1,4 @@
-#[allow(all)]
+#[allow(*)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
