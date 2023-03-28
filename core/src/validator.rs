@@ -758,7 +758,7 @@ impl Validator {
             use solana_scheduler_pool::{
                 SchedulerPool,
             };
-            let scheduler_pool = SchedulerPool::new_boxed(None, config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone(), Some(replay_vote_sender.clone()));
+            let scheduler_pool = SchedulerPool::new_boxed(None, config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone(), Some(replay_vote_sender.clone()), prioritization_fee_cache);
             bank_forks.write().unwrap().install_scheduler_pool(scheduler_pool);
         } else {
             info!("not installing scheduler pool...");
