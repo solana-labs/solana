@@ -1262,7 +1262,7 @@ fn load_bank_forks(
     if matches!(block_verification_method, BlockVerificationMethod::UnifiedScheduler) {
         let no_poh_recorder = None;
         let no_replay_vote_sender = None::<ReplayVoteSender>;
-        bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(no_poh_recorder, process_options.runtime_config.log_messages_bytes_limit, no_transaction_status_sender.clone(), no_replay_vote_sender), false);
+        bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(no_poh_recorder, process_options.runtime_config.log_messages_bytes_limit, no_transaction_status_sender.clone(), no_replay_vote_sender));
     } else {
         info!("not installing scheduler pool...");
     }
