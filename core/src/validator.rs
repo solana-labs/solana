@@ -749,6 +749,11 @@ impl Validator {
         );
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
+
+        // block min prioritization fee cache should be readable by RPC, and writable by validator
+        // (by both replay stage and banking stage)
+        let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
+
         if matches!(&config.block_verification_method, BlockVerificationMethod::UnifiedScheduler) {
             use solana_scheduler_pool::{
                 SchedulerPool,
@@ -877,10 +882,6 @@ impl Validator {
             }
             false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
         };
-
-        // block min prioritization fee cache should be readable by RPC, and writable by validator
-        // (by both replay stage and banking stage)
-        let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
