@@ -589,6 +589,7 @@ impl Scheduler {
                         assert!(send_transaction_status(scheduler_pool.transaction_status_sender.as_ref().unwrap(), bb, &bank, &batch, &mut mint_decimals, Some(tx_results), Some(commited_first_transaction_index)).is_none());
                     }
                 }
+                scheduler_pool.prioritization_fee_cache.update();
 
                 drop(batch);
 
@@ -650,7 +651,6 @@ impl Scheduler {
                                             1 as usize
                                         );
                                         inc_new_counter_info!("bank-process_transactions-sigs", ee.task.tx.0.signatures().len() as usize);
-                                        scheduler_pool.prioritization_fee_cache.update();
                                     },
                                     Err(e) => {
                                         transaction_error_counts.record(&e);
