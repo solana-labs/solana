@@ -632,7 +632,8 @@ struct Bundle {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Mode {
-    Replaying,
+    BlockProduction,
+    //BlockVerification
 }
 
 #[derive(Debug)]
