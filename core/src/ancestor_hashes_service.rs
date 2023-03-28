@@ -353,7 +353,6 @@ impl AncestorHashesService {
                 ancestor_socket,
                 ancestore_connection_cache,
             );
-            debug!("process_packet_batch Got a decision {:?} at {:?}", decision, blockstore.ledger_path());
             if let Some((slot, decision)) = decision {
                 info!(
                     "process_packet_batch got duplicate ancestor decision: {slot} {:?} at {:?}",
@@ -400,6 +399,12 @@ impl AncestorHashesService {
             }
         };
 
+        debug!(
+            "Got a ancestor hash response {:?} at {:?} use connection_cache {}",
+            response,
+            blockstore.ledger_path(),
+            ancestore_connection_cache.is_some()
+        );
         match response {
             AncestorHashesResponse::Hashes(ref hashes) => {
                 // deserialize trailing nonce
@@ -454,7 +459,13 @@ impl AncestorHashesService {
                         // In which case we wouldn't want to delete the newly inserted entry here.
                         ancestor_hashes_status_ref.remove();
                     }
-                    decision.map(|decision| (request_slot, decision))
+                    let decision = decision.map(|decision| (request_slot, decision));
+                    debug!(
+                        "Reached a duplicate ancestor decision {:?} at {:?}",
+                        decision,
+                        blockstore.ledger_path()
+                    );
+                    decision
                 } else {
                     None
                 }
