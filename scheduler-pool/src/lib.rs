@@ -945,16 +945,19 @@ impl InstalledScheduler for Scheduler {
         info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
         */
 
+        let timings_and_result = if !is_restart {
+            self.timings_and_result.take()
+        } else {
+            None
+        }
+
         self.do_clear_stop(is_restart);
 
         info!(
             "Scheduler::gracefully_stop(): {} waiting done.. from_internal: {from_internal} is_restart: {is_restart}", label,
         );
-        if !is_restart {
-            self.timings_and_result.take()
-        } else {
-            None
-        }
+        
+        timings_and_result
     }
 
     fn trigger_termination(&mut self) {
