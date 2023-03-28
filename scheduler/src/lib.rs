@@ -10,6 +10,7 @@
 #![allow(clippy::let_and_return)]
 #![allow(clippy::while_let_loop)]
 #![allow(clippy::overly_complex_bool_expr)]
+#![allow(clippy::clone_on_copy)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
