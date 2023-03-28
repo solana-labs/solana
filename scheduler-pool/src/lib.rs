@@ -7,6 +7,7 @@
 #![allow(unused_labels)]
 #![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::unnecessary_cast)]
+#![allow(clippy::never_loop)]
 
 use {
     log::*,
