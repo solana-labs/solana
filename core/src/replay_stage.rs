@@ -132,6 +132,7 @@ impl Drop for Finalizer {
     }
 }
 
+#[derive(Debug)]
 struct ReplaySlotFromBlockstore {
     is_slot_dead: bool,
     bank_slot: Slot,
@@ -2535,6 +2536,13 @@ impl ReplayStage {
                 replay_timing.replay_blockstore_us += replay_blockstore_time.as_us();
             }
         }
+
+        info!(
+            "Replay active bank result: slot {} result: {:?} at {:?}",
+            bank_slot,
+            replay_result,
+            blockstore.ledger_path()
+        );        
         replay_result
     }
 
