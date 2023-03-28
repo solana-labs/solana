@@ -179,12 +179,12 @@ impl<O: BucketOccupied> BucketStorage<O> {
         }
     }
 
-    fn get_start_offset_with_header(&self, ix: u64) -> usize {
+    pub(crate) fn get_start_offset_with_header(&self, ix: u64) -> usize {
         assert!(ix < self.capacity(), "bad index size");
         (self.cell_size * ix) as usize
     }
 
-    fn get_start_offset_no_header(&self, ix: u64) -> usize {
+    pub(crate) fn get_start_offset_no_header(&self, ix: u64) -> usize {
         self.get_start_offset_with_header(ix) + O::offset_to_first_data()
     }
 
