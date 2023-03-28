@@ -1969,20 +1969,19 @@ fn test_program_sbf_invoke_stable_genesis_and_bank() {
     }
 
     bank.freeze();
+    let expected_hash = Hash::from_str("2A2vqbUKExRbnaAzSnDFXdsBZRZSpCjGZCAA3mFZG2sV")
+        .expect("Failed to generate hash");
     println!("Stable test produced bank hash: {}", bank.hash());
+    println!("Expected hash: {}", expected_hash);
 
     // Enable the following code to match the bank hash with the expected bank hash.
     // Follow these steps.
     // 1. Run this test on the baseline/master commit, and get the expected bank hash.
-    // 2. Update the bank hash in the assert below to match the expected bank hash.
+    // 2. Update the `expected_hash` to match the expected bank hash.
     // 3. Run the test in the PR branch that's being tested.
     // If the hash doesn't match, the PR likely has runtime changes that can lead to
     // consensus failure.
-    //  assert_eq!(
-    //      bank.hash(),
-    //      Hash::from_str("2A2vqbUKExRbnaAzSnDFXdsBZRZSpCjGZCAA3mFZG2sV")
-    //          .expect("Failed to generate hash")
-    //  );
+    //  assert_eq!(bank.hash(), expected_hash);
 }
 
 #[test]
