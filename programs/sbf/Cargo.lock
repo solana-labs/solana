@@ -1379,18 +1379,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "enum_dispatch"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0eb359f1476bf611266ac1f5355bc14aeca37b299d0ebccc038ee7058891c9cb"
-dependencies = [
- "once_cell",
- "proc-macro2 1.0.53",
- "quote 1.0.26",
- "syn 1.0.107",
-]
-
-[[package]]
 name = "env_logger"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4536,7 +4524,6 @@ version = "1.16.0"
 dependencies = [
  "async-trait",
  "bincode",
- "enum_dispatch",
  "futures 0.3.24",
  "futures-util",
  "indexmap",
@@ -4596,7 +4583,6 @@ dependencies = [
  "rayon",
  "solana-measure",
  "solana-metrics",
- "solana-net-utils",
  "solana-sdk 1.16.0",
  "thiserror",
  "tokio",
@@ -4606,7 +4592,6 @@ dependencies = [
 name = "solana-core"
 version = "1.16.0"
 dependencies = [
- "ahash",
  "base64 0.13.0",
  "bincode",
  "bs58",
@@ -5181,7 +5166,6 @@ dependencies = [
  "enum-iterator",
  "itertools",
  "libc",
- "libloading",
  "log",
  "num-derive",
  "num-traits",
@@ -5266,7 +5250,6 @@ dependencies = [
  "solana-rpc-client-api",
  "solana-sdk 1.16.0",
  "solana-streamer",
- "solana-tpu-client",
  "thiserror",
  "tokio",
 ]
@@ -6140,7 +6123,6 @@ dependencies = [
  "solana-rpc-client",
  "solana-rpc-client-api",
  "solana-sdk 1.16.0",
- "solana-tpu-client",
 ]
 
 [[package]]
@@ -6158,7 +6140,6 @@ dependencies = [
  "solana-connection-cache",
  "solana-measure",
  "solana-metrics",
- "solana-net-utils",
  "solana-pubsub-client",
  "solana-rpc-client",
  "solana-rpc-client-api",
@@ -6200,7 +6181,6 @@ dependencies = [
  "solana-net-utils",
  "solana-sdk 1.16.0",
  "solana-streamer",
- "solana-tpu-client",
  "thiserror",
  "tokio",
 ]

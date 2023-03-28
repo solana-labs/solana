@@ -20,7 +20,6 @@ rand = "0.7.0"
 rayon = "1.5.3"
 solana-measure = { path = "../measure", version = "=1.16.0" }
 solana-metrics = { path = "../metrics", version = "=1.16.0" }
-solana-net-utils = { path = "../net-utils", version = "=1.16.0" }
 solana-sdk = { path = "../sdk", version = "=1.16.0" }
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
@@ -28,3 +27,4 @@ tokio = { version = "1", features = ["full"] }
 [dev-dependencies]
 rand_chacha = "0.2.2"
 solana-logger = { path = "../logger", version = "=1.16.0" }
+solana-net-utils = { path = "../net-utils", version = "=1.16.0" }

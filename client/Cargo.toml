@@ -12,7 +12,6 @@ edition = "2021"
 [dependencies]
 async-trait = { workspace = true }
 bincode = { workspace = true }
-enum_dispatch = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 indexmap = { workspace = true }
@@ -41,7 +40,6 @@ tokio = { workspace = true, features = ["full"] }
 [dev-dependencies]
 crossbeam-channel = { workspace = true }
 rand_chacha = { workspace = true }
-solana-logger = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

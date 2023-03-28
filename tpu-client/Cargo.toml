@@ -21,7 +21,6 @@ rayon = { workspace = true }
 solana-connection-cache = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
-solana-net-utils = { workspace = true }
 solana-pubsub-client = { workspace = true }
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }
@@ -31,7 +30,6 @@ tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 rand_chacha = { workspace = true }
-solana-logger = { workspace = true }
 
 [features]
 default = ["spinner"]
