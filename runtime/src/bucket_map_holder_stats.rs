@@ -447,11 +447,11 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
-                    "disk_index_find_entry_mut_us",
+                    "disk_index_find_index_entry_mut_us",
                     disk.map(|disk| disk
                         .stats
                         .index
-                        .find_entry_mut_us
+                        .find_index_entry_mut_us
                         .swap(0, Ordering::Relaxed))
                         .unwrap_or_default(),
                     i64
