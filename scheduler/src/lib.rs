@@ -23,6 +23,7 @@
 #![allow(clippy::or_fun_call)]
 #![allow(clippy::map_flatten)]
 #![allow(clippy::borrow_deref_ref)]
+#![allow(clippy::bool_to_int_with_if)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
