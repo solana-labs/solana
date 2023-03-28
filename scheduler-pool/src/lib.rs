@@ -200,7 +200,7 @@ impl CommitStatus {
         }
 
         info!("CommitStatus: {current_thread_name} is paused...");
-        let MutexGuard(_) = self.condvar.wait_while(is_paused, |now_is_paused| now_is_paused.0).unwrap();
+        let std::sync::MutexGuard(_) = self.condvar.wait_while(is_paused, |now_is_paused| now_is_paused.0).unwrap();
         info!("CommitStatus: {current_thread_name} is resumed...");
     }
 
