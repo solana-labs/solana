@@ -5,7 +5,8 @@
 
 cd "$(dirname "$0")"
 
-. "$PWD"/host.sh
+# shellcheck source=host.sh
+. host.sh
 
 : "${PROMETHEUS_IMAGE:=prom/prometheus:v2.28.0}"
 

@@ -4,7 +4,8 @@
 #
 cd "$(dirname "$0")"
 
-. "$PWD"/host.sh
+# shellcheck source=host.sh
+. host.sh
 
 echo +++ status
 (

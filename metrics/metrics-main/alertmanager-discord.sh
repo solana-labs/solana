@@ -5,7 +5,8 @@
 
 cd "$(dirname "$0")"
 
-. "$PWD"/host.sh
+# shellcheck source=host.sh
+. host.sh
 
 : "${ALERTMANAGER_DISCORD_IMAGE:=benjojo/alertmanager-discord:latest}"
 

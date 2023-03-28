@@ -5,7 +5,8 @@
 
 cd "$(dirname "$0")"
 
-. "$PWD"/host.sh
+# shellcheck source=host.sh
+. host.sh
 
 : "${ALERTMANAGER_IMAGE:=prom/alertmanager:v0.23.0}"
 

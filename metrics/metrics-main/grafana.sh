@@ -5,7 +5,8 @@
 
 cd "$(dirname "$0")"
 
-. "$PWD"/host.sh
+# shellcheck source=host.sh
+. host.sh
 
 : "${GRAFANA_IMAGE:=grafana/grafana:9.4.7}"
 

@@ -5,7 +5,8 @@
 
 cd "$(dirname "$0")"
 
-. "$PWd"/host.sh
+# shellcheck source=host.sh
+. host.sh
 
 : "${CHRONOGRAF_IMAGE:=chronograf:1.9.4}"
 
