@@ -1404,7 +1404,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
-            scheduler: RwLock::new(None),
+            scheduler: RwLock<InstalledSchedulerBox>::default(),
         };
 
         bank.bank_created();
@@ -1703,7 +1703,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
-            scheduler: RwLock::new(None),
+            scheduler: RwLock<InstalledSchedulerBox>::default(),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -2021,7 +2021,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
-            scheduler: RwLock::new(None),
+            scheduler: RwLock<InstalledSchedulerBox>::default(),
         };
         bank.bank_created();
 
