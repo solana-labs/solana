@@ -157,8 +157,9 @@ impl AncestorHashesService {
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
         info!(
-            "Start AncestorHashesService repair_quic_config {}",
-            repair_quic_config.is_some()
+            "Start AncestorHashesService repair_quic_config {} at {:?}",
+            repair_quic_config.is_some(),
+            blockstore.ledger_path()
         );
         let outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>> =
             Arc::new(RwLock::new(OutstandingAncestorHashesRepairs::default()));
@@ -652,6 +653,10 @@ impl AncestorHashesService {
             datapoint_info!("ancestor-repair-retry", ("slot", slot, i64));
             repairable_dead_slot_pool.insert(slot);
         }
+        debug!(
+            "manage_ancestor_requests ancestor-repair-retry: {:?}",
+            repairable_dead_slot_pool
+        );
 
         Self::process_replay_updates(
             ancestor_hashes_replay_update_receiver,
@@ -659,6 +664,10 @@ impl AncestorHashesService {
             dead_slot_pool,
             repairable_dead_slot_pool,
             root_bank.slot(),
+        );
+        debug!(
+            "manage_ancestor_requests process_replay_updates: {:?}",
+            repairable_dead_slot_pool
         );
 
         Self::find_epoch_slots_frozen_dead_slots(
@@ -668,9 +677,20 @@ impl AncestorHashesService {
             &root_bank,
         );
 
+        debug!(
+            "manage_ancestor_requests find_epoch_slots_frozen_dead_slots: {:?}",
+            repairable_dead_slot_pool
+        );
+
         dead_slot_pool.retain(|slot| *slot > root_bank.slot());
 
         repairable_dead_slot_pool.retain(|slot| *slot > root_bank.slot());
+
+        debug!(
+            "manage_ancestor_requests older than root {} : {:?}",
+            root_bank.slot(),
+            repairable_dead_slot_pool
+        );
 
         ancestor_hashes_request_statuses.retain(|slot, status| {
             if *slot <= root_bank.slot() {
@@ -678,6 +698,10 @@ impl AncestorHashesService {
             } else if status.is_expired() {
                 // Add the slot back to the repairable pool to retry
                 repairable_dead_slot_pool.insert(*slot);
+                debug!(
+                    "manage_ancestor_requests expired: {slot} {:?}",
+                    repairable_dead_slot_pool
+                );
                 false
             } else {
                 true
