@@ -589,7 +589,7 @@ impl Scheduler {
                         assert!(send_transaction_status(scheduler_pool.transaction_status_sender.as_ref().unwrap(), bb, &bank, &batch, &mut mint_decimals, Some(tx_results), Some(commited_first_transaction_index)).is_none());
                     }
                 }
-                if execution_result.was_executed() {
+                if execution_results[0].was_executed() {
                     scheduler_pool.prioritization_fee_cache.update(&bank, &[tx]);
                 }
 
