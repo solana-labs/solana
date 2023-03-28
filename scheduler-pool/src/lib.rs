@@ -842,7 +842,7 @@ impl Scheduler {
             );
         } else {
             assert!(self.timings_and_result.is_none());
-            drop(self.stopped_mode.take().unwrap());
+            assert!(self.stopped_mode.take().is_some());
             assert!(self.current_scheduler_context.write().unwrap().is_none());
         }
         self.checkpoint.wait_for_completed_restart();
