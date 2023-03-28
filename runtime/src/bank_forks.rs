@@ -112,14 +112,6 @@ pub trait InstalledSchedulerPool: Send + Sync + std::fmt::Debug {
     // drop with exit atomicbool integration??
 }
 
-// remove this?
-impl Index<u64> for BankForks {
-    type Output = Arc<Bank>;
-    fn index(&self, bank_slot: Slot) -> &Self::Output {
-        &self.banks[&bank_slot].0
-    }
-}
-
 impl BankForks {
     pub fn new(bank: Bank) -> Self {
         let root = bank.slot();
