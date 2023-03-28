@@ -256,22 +256,6 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         Err(BucketMapError::IndexNoSpace(index.capacity_pow2))
     }
 
-    pub fn addref(&mut self, key: &Pubkey) -> Option<RefCount> {
-        if let Ok((Some(elem), _)) = Self::find_index_entry_mut(&mut self.index, key, self.random) {
-            elem.ref_count += 1;
-            return Some(elem.ref_count);
-        }
-        None
-    }
-
-    pub fn unref(&mut self, key: &Pubkey) -> Option<RefCount> {
-        if let Ok((Some(elem), _)) = Self::find_index_entry_mut(&mut self.index, key, self.random) {
-            elem.ref_count -= 1;
-            return Some(elem.ref_count);
-        }
-        None
-    }
-
     pub fn read_value(&self, key: &Pubkey) -> Option<(&[T], RefCount)> {
         //debug!("READ_VALUE: {:?}", key);
         let (elem, _) = self.find_index_entry(key)?;

@@ -158,20 +158,6 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
             0
         }
     }
-
-    /// Increment the refcount for Pubkey `key`
-    pub fn addref(&self, key: &Pubkey) -> Option<RefCount> {
-        let ix = self.bucket_ix(key);
-        let bucket = &self.buckets[ix];
-        bucket.addref(key)
-    }
-
-    /// Decrement the refcount for Pubkey `key`
-    pub fn unref(&self, key: &Pubkey) -> Option<RefCount> {
-        let ix = self.bucket_ix(key);
-        let bucket = &self.buckets[ix];
-        bucket.unref(key)
-    }
 }
 
 /// Look at the first 8 bytes of the input and reinterpret them as a u64
@@ -498,13 +484,7 @@ mod tests {
                     rc = if inc { rc + 1 } else { rc - 1 };
                     hm.insert(k, (v.to_vec(), rc));
                     maps.iter().for_each(|map| {
-                        if thread_rng().gen_range(0, 2) == 0 {
-                            map.update(&k, |current| Some((current.unwrap().0.to_vec(), rc)))
-                        } else if inc {
-                            map.addref(&k);
-                        } else {
-                            map.unref(&k);
-                        }
+                        map.update(&k, |current| Some((current.unwrap().0.to_vec(), rc)))
                     });
 
                     return_key(k);
