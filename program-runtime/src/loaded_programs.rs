@@ -196,34 +196,16 @@ impl LoadedProgram {
         }
     }
 
-    pub fn new_tombstone_verification_failed(slot: Slot) -> Self {
-        Self {
-            program: LoadedProgramType::FailedVerification,
+    pub fn new_tombstone(slot: Slot, reason: LoadedProgramType) -> Self {
+        let tombstone = Self {
+            program: reason,
             account_size: 0,
             deployment_slot: slot,
             effective_slot: slot,
             usage_counter: AtomicU64::default(),
-        }
-    }
-
-    pub fn new_tombstone_program_closed(slot: Slot) -> Self {
-        Self {
-            program: LoadedProgramType::Closed,
-            account_size: 0,
-            deployment_slot: slot,
-            effective_slot: slot,
-            usage_counter: AtomicU64::default(),
-        }
-    }
-
-    pub fn new_tombstone_delay_visibility(slot: Slot) -> Self {
-        Self {
-            program: LoadedProgramType::DelayVisibility,
-            account_size: 0,
-            deployment_slot: slot,
-            effective_slot: slot,
-            usage_counter: AtomicU64::default(),
-        }
+        };
+        debug_assert!(tombstone.is_tombstone());
+        tombstone
     }
 
     pub fn is_tombstone(&self) -> bool {
@@ -428,7 +410,10 @@ mod tests {
     fn set_tombstone(cache: &mut LoadedPrograms, key: Pubkey, slot: Slot) -> Arc<LoadedProgram> {
         cache.assign_program(
             key,
-            Arc::new(LoadedProgram::new_tombstone_verification_failed(slot)),
+            Arc::new(LoadedProgram::new_tombstone(
+                slot,
+                LoadedProgramType::FailedVerification,
+            )),
         )
     }
 
@@ -671,7 +656,7 @@ mod tests {
 
     #[test]
     fn test_tombstone() {
-        let tombstone = LoadedProgram::new_tombstone_verification_failed(0);
+        let tombstone = LoadedProgram::new_tombstone(0, LoadedProgramType::FailedVerification);
         assert!(matches!(
             tombstone.program,
             LoadedProgramType::FailedVerification
@@ -680,7 +665,7 @@ mod tests {
         assert_eq!(tombstone.deployment_slot, 0);
         assert_eq!(tombstone.effective_slot, 0);
 
-        let tombstone = LoadedProgram::new_tombstone_program_closed(100);
+        let tombstone = LoadedProgram::new_tombstone(100, LoadedProgramType::Closed);
         assert!(matches!(tombstone.program, LoadedProgramType::Closed));
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 100);

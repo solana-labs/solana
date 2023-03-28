@@ -95,7 +95,9 @@ use {
         compute_budget::{self, ComputeBudget},
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
-        loaded_programs::{LoadedProgram, LoadedProgramEntry, LoadedPrograms, WorkingSlot},
+        loaded_programs::{
+            LoadedProgram, LoadedProgramEntry, LoadedProgramType, LoadedPrograms, WorkingSlot,
+        },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -4435,7 +4437,10 @@ impl Bank {
                     debug!("Failed to load program {}, error {:?}", pubkey, e);
                     let tombstone = self.loaded_programs_cache.write().unwrap().assign_program(
                         *pubkey,
-                        Arc::new(LoadedProgram::new_tombstone_verification_failed(self.slot)),
+                        Arc::new(LoadedProgram::new_tombstone(
+                            self.slot,
+                            LoadedProgramType::FailedVerification,
+                        )),
                     );
                     loaded_programs_for_txs.insert(*pubkey, tombstone);
                 }
@@ -4491,8 +4496,10 @@ impl Bank {
                 }
                 // Create a tombstone for the programs that failed to load
                 Err(_) => {
-                    let tombstone =
-                        Arc::new(LoadedProgram::new_tombstone_verification_failed(self.slot));
+                    let tombstone = Arc::new(LoadedProgram::new_tombstone(
+                        self.slot,
+                        LoadedProgramType::FailedVerification,
+                    ));
                     loaded_programs_for_txs.insert(**pubkey, tombstone.clone());
                     (**pubkey, tombstone)
                 }
