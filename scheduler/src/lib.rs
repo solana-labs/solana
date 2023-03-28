@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 #![allow(unused_variables)]
+#![allow(unused_parens)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
