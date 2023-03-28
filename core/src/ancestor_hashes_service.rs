@@ -28,6 +28,7 @@ use {
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         pubkey::Pubkey,
+        quic::QUIC_PORT_OFFSET,
         signature::{Signable, Signer},
         signer::keypair::Keypair,
         timing::timestamp,
@@ -782,7 +783,10 @@ impl AncestorHashesService {
                     if total_completed_slot_stake as f64 / total_stake as f64 > DUPLICATE_THRESHOLD
                     {
                         repairable_dead_slot_pool.insert(*dead_slot);
-                        debug!("manage_ancestor_requests insertrepairable_dead_slot_pool {} ", *dead_slot);
+                        debug!(
+                            "manage_ancestor_requests insertrepairable_dead_slot_pool {} ",
+                            *dead_slot
+                        );
                         false
                     } else {
                         true
@@ -838,6 +842,7 @@ impl AncestorHashesService {
                     nonce,
                 );
                 if let Ok(request_bytes) = request_bytes {
+                    debug!("manage_ancestor_requests sending ancestor hashes request to {:?} {:?} slot {} from {:?}", pubkey, socket_addr, duplicate_slot, identity_keypair.pubkey());
                     if let Some(conenection_cache) =
                         ancestor_hashes_request_connection_cache.as_ref()
                     {
@@ -850,9 +855,18 @@ impl AncestorHashesService {
             }
 
             let ancestor_request_status = DeadSlotAncestorRequestStatus::new(
-                sampled_validators
-                    .into_iter()
-                    .map(|(_pk, socket_addr)| socket_addr),
+                sampled_validators.into_iter().map(|(_pk, socket_addr)| {
+                    // When using quic, the socket_addr was auto incremented by the QUIC_PORT_OFFSET when we do get_connection
+                    // However the returned packet address is the one with the offset already done. To ensure they are matched
+                    // We need to do the increment as well when creating DeadSlotAncestorRequestStatus.
+                    let socket_addr = if ancestor_hashes_request_connection_cache.as_ref().is_some()
+                    {
+                        SocketAddr::new(socket_addr.ip(), socket_addr.port() + QUIC_PORT_OFFSET)
+                    } else {
+                        socket_addr
+                    };
+                    socket_addr
+                }),
                 duplicate_slot,
             );
             assert!(!ancestor_hashes_request_statuses.contains_key(&duplicate_slot));
