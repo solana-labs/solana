@@ -1236,6 +1236,7 @@ fn confirm_slot_entries(
     let process_result = process_entries(
         bank,
         &mut replay_entries,
+        true, // shuffle transactions.
         transaction_status_sender,
         replay_vote_sender,
         timing,
