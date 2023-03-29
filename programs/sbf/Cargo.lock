@@ -650,6 +650,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "by_address"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf8dba2868114ed769a1f2590fc9ae5eb331175b44313b6c9b922f8f7ca813d0"
+
+[[package]]
 name = "byte-tools"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -941,6 +947,16 @@ dependencies = [
  "libc",
  "num_cpus",
  "winapi 0.2.8",
+]
+
+[[package]]
+name = "cpu-time"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9e393a7668fe1fad3075085b86c781883000b4ede868f43627b34a87c8b7ded"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -4650,6 +4666,7 @@ dependencies = [
  "solana-rpc",
  "solana-rpc-client-api",
  "solana-runtime",
+ "solana-scheduler-pool",
  "solana-sdk 1.16.0",
  "solana-send-transaction-service",
  "solana-streamer",
@@ -5410,6 +5427,7 @@ name = "solana-runtime"
 version = "1.16.0"
 dependencies = [
  "arrayref",
+ "assert_matches",
  "bincode",
  "blake3",
  "bv",
@@ -5453,6 +5471,7 @@ dependencies = [
  "solana-perf",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
+ "solana-scheduler",
  "solana-sdk 1.16.0",
  "solana-stake-program",
  "solana-vote-program",
@@ -5854,6 +5873,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-scheduler"
+version = "1.16.0"
+dependencies = [
+ "by_address",
+ "cpu-time",
+ "crossbeam-channel",
+ "dashmap",
+ "enum_dispatch",
+ "log",
+ "rand 0.7.3",
+ "sha2 0.10.6",
+ "solana-logger 1.16.0",
+ "solana-sdk 1.16.0",
+ "triomphe",
+]
+
+[[package]]
+name = "solana-scheduler-pool"
+version = "1.16.0"
+dependencies = [
+ "assert_matches",
+ "cpu-time",
+ "crossbeam-channel",
+ "log",
+ "rand 0.7.3",
+ "serde_json",
+ "solana-entry",
+ "solana-ledger",
+ "solana-measure",
+ "solana-metrics",
+ "solana-poh",
+ "solana-program-runtime",
+ "solana-runtime",
+ "solana-scheduler",
+ "solana-sdk 1.16.0",
+ "solana-transaction-status",
+ "thread-priority",
+ "variant_counter",
+]
+
+[[package]]
 name = "solana-sdk"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5954,6 +6014,7 @@ dependencies = [
  "solana-sdk-macro 1.16.0",
  "thiserror",
  "uriparse",
+ "variant_counter",
  "wasm-bindgen",
 ]
 
@@ -6729,6 +6790,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "thread-priority"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a8a950b52fd40d98ac6ed41c7fa9e8dd62b131f48b74f418e810476b01a7460"
+dependencies = [
+ "cfg-if 1.0.0",
+ "libc",
+ "log",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "thread_local"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7191,6 +7264,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0de5f738ceab88e2491a94ddc33c3feeadfa95fedc60363ef110845df12f3878"
 
 [[package]]
+name = "triomphe"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1ee9bd9239c339d714d657fac840c6d2a4f9c45f4f9ec7b0975113458be78db"
+dependencies = [
+ "serde",
+ "stable_deref_trait",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7381,6 +7464,26 @@ name = "valuable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
+
+[[package]]
+name = "variant_counter"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe25b47ca71aa0a5276396746e13907ac3d9fad6692ccc799c6e1fec4f449d55"
+dependencies = [
+ "variant_counter_derived",
+]
+
+[[package]]
+name = "variant_counter_derived"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9a652535ecacd16bdd246845cb3b5cb689f3d663b60d7c80dfa4957b8b4cf0c"
+dependencies = [
+ "proc-macro2 1.0.53",
+ "quote 1.0.26",
+ "syn 1.0.107",
+]
 
 [[package]]
 name = "vcpkg"
