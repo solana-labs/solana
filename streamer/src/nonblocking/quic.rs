@@ -200,30 +200,25 @@ fn prune_unstaked_connection_table(
 
 fn get_connection_stake(
     connection: &Connection,
-    staked_nodes: Arc<RwLock<StakedNodes>>,
+    staked_nodes: &RwLock<StakedNodes>,
 ) -> Option<(Pubkey, u64, u64, u64, u64)> {
-    connection
-        .peer_identity()
-        .and_then(|der_cert_any| der_cert_any.downcast::<Vec<rustls::Certificate>>().ok())
-        .and_then(|der_certs| {
-            if der_certs.len() == 1 {
-                // Use the client cert only if it is self signed and the chain length is 1
-                get_pubkey_from_tls_certificate(&der_certs[0]).and_then(|pubkey| {
-                    debug!("Peer public key is {:?}", pubkey);
-
-                    let staked_nodes = staked_nodes.read().unwrap();
-                    let total_stake = staked_nodes.total_stake;
-                    let max_stake = staked_nodes.max_stake;
-                    let min_stake = staked_nodes.min_stake;
-                    staked_nodes
-                        .pubkey_stake_map
-                        .get(&pubkey)
-                        .map(|stake| (pubkey, *stake, total_stake, max_stake, min_stake))
-                })
-            } else {
-                None
-            }
-        })
+    // Use the client cert only if it is self signed and the chain length is 1.
+    let pubkey = connection
+        .peer_identity()?
+        .downcast::<Vec<rustls::Certificate>>()
+        .ok()
+        .filter(|certs| certs.len() == 1)?
+        .first()
+        .and_then(get_pubkey_from_tls_certificate)?;
+    debug!("Peer public key is {pubkey:?}");
+    let staked_nodes = staked_nodes.read().unwrap();
+    Some((
+        pubkey,
+        staked_nodes.pubkey_stake_map.get(&pubkey).copied()?,
+        staked_nodes.total_stake,
+        staked_nodes.max_stake,
+        staked_nodes.min_stake,
+    ))
 }
 
 pub fn compute_max_allowed_uni_streams(
@@ -477,7 +472,7 @@ async fn setup_connection(
         if let Ok(new_connection) = connecting_result {
             stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
 
-            let params = get_connection_stake(&new_connection, staked_nodes.clone()).map_or(
+            let params = get_connection_stake(&new_connection, &staked_nodes).map_or(
                 NewConnectionHandlerParams::new_unstaked(
                     packet_sender.clone(),
                     max_connections_per_peer,
