@@ -2323,7 +2323,20 @@ fn main() {
                     .long("no-compaction")
                     .required(false)
                     .takes_value(false)
-                    .help("Skip ledger compaction after purge")
+                    .help("--no-compaction is deprecated, ledger compaction \
+                           after purge is disabled by default")
+                    .conflicts_with("enable_compaction")
+                    .hidden(hidden_unless_forced())
+            )
+            .arg(
+                Arg::with_name("enable_compaction")
+                    .long("enable-compaction")
+                    .required(false)
+                    .takes_value(false)
+                    .help("Perform ledger compaction after purge. Compaction \
+                           will optimize storage space, but may take a long \
+                           time to complete.")
+                    .conflicts_with("no_compaction")
             )
             .arg(
                 Arg::with_name("dead_slots_only")
@@ -4129,17 +4142,13 @@ fn main() {
             ("purge", Some(arg_matches)) => {
                 let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
                 let end_slot = value_t!(arg_matches, "end_slot", Slot).ok();
-                let no_compaction = arg_matches.is_present("no_compaction");
+                let perform_compaction = arg_matches.is_present("enable_compaction");
                 let dead_slots_only = arg_matches.is_present("dead_slots_only");
                 let batch_size = value_t_or_exit!(arg_matches, "batch_size", usize);
-                let access_type = if !no_compaction {
-                    AccessType::Primary
-                } else {
-                    AccessType::PrimaryForMaintenance
-                };
+
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    access_type,
+                    AccessType::PrimaryForMaintenance,
                     wal_recovery_mode,
                     force_update_to_open,
                 );
@@ -4167,19 +4176,19 @@ fn main() {
                     exit(1);
                 }
                 info!(
-                "Purging data from slots {} to {} ({} slots) (skip compaction: {}) (dead slot only: {})",
+                "Purging data from slots {} to {} ({} slots) (do compaction: {}) (dead slot only: {})",
                 start_slot,
                 end_slot,
                 end_slot - start_slot,
-                no_compaction,
+                perform_compaction,
                 dead_slots_only,
             );
                 let purge_from_blockstore = |start_slot, end_slot| {
                     blockstore.purge_from_next_slots(start_slot, end_slot);
-                    if no_compaction {
-                        blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
-                    } else {
+                    if perform_compaction {
                         blockstore.purge_and_compact_slots(start_slot, end_slot);
+                    } else {
+                        blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
                     }
                 };
                 if !dead_slots_only {
