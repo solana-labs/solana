@@ -2,7 +2,7 @@ use {
     crate::parse_instruction::{
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
-    borsh::BorshDeserialize,
+    borsh0_9::BorshDeserialize,
     serde_json::json,
     solana_sdk::{instruction::CompiledInstruction, message::AccountKeys, pubkey::Pubkey},
     spl_associated_token_account::instruction::AssociatedTokenAccountInstruction,
