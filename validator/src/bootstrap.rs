@@ -480,6 +480,78 @@ pub fn attempt_download_genesis_and_snapshot(
     Ok(())
 }
 
+// Populates `vetted_rpc_nodes` with a list of RPC nodes that are ready to be
+// used for downloading latest snapshots and/or the genesis block. Guaranteed to
+// find at least one viable node or terminate the process.
+fn get_vetted_rpc_nodes(
+    vetted_rpc_nodes: &mut Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)>,
+    cluster_info: &Arc<ClusterInfo>,
+    cluster_entrypoints: &[ContactInfo],
+    validator_config: &ValidatorConfig,
+    blacklisted_rpc_nodes: &RwLock<HashSet<Pubkey>>,
+    bootstrap_config: &RpcBootstrapConfig,
+) {
+    while vetted_rpc_nodes.is_empty() {
+        let rpc_node_details = match get_rpc_nodes(
+            cluster_info,
+            cluster_entrypoints,
+            validator_config,
+            &mut blacklisted_rpc_nodes.write().unwrap(),
+            bootstrap_config,
+        ) {
+            Ok(rpc_node_details) => rpc_node_details,
+            Err(err) => {
+                error!(
+                    "Failed to get RPC nodes: {err}. Consider checking system \
+                    clock, removing `--no-port-check`, or adjusting \
+                    `--known-validator ...` arguments as applicable"
+                );
+                exit(1);
+            }
+        };
+
+        vetted_rpc_nodes.extend(
+            rpc_node_details
+                .into_par_iter()
+                .map(|rpc_node_details| {
+                    let GetRpcNodeResult {
+                        rpc_contact_info,
+                        snapshot_hash,
+                    } = rpc_node_details;
+
+                    info!(
+                        "Using RPC service from node {}: {:?}",
+                        rpc_contact_info.id, rpc_contact_info.rpc
+                    );
+                    let rpc_client = RpcClient::new_socket_with_timeout(
+                        rpc_contact_info.rpc,
+                        Duration::from_secs(5),
+                    );
+
+                    (rpc_contact_info, snapshot_hash, rpc_client)
+                })
+                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
+                    match rpc_client.get_version() {
+                        Ok(rpc_version) => {
+                            info!("RPC node version: {}", rpc_version.solana_core);
+                            true
+                        }
+                        Err(err) => {
+                            fail_rpc_node(
+                                format!("Failed to get RPC node version: {err}"),
+                                &validator_config.known_validators,
+                                &rpc_contact_info.id,
+                                &mut blacklisted_rpc_nodes.write().unwrap(),
+                            );
+                            false
+                        }
+                    }
+                })
+                .collect::<Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)>>(),
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn rpc_bootstrap(
     node: &Node,
@@ -522,7 +594,7 @@ pub fn rpc_bootstrap(
 
     let blacklisted_rpc_nodes = RwLock::new(HashSet::new());
     let mut gossip = None;
-    let mut vetted_rpc_nodes: Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
+    let mut vetted_rpc_nodes = vec![];
     let mut download_abort_count = 0;
     loop {
         if gossip.is_none() {
@@ -544,64 +616,14 @@ pub fn rpc_bootstrap(
             ));
         }
 
-        while vetted_rpc_nodes.is_empty() {
-            let rpc_node_details = match get_rpc_nodes(
-                &gossip.as_ref().unwrap().0,
-                cluster_entrypoints,
-                validator_config,
-                &mut blacklisted_rpc_nodes.write().unwrap(),
-                &bootstrap_config,
-            ) {
-                Ok(rpc_node_details) => rpc_node_details,
-                Err(err) => {
-                    error!(
-                        "Failed to get RPC nodes: {err}. Consider checking system \
-                        clock, removing `--no-port-check`, or adjusting \
-                        `--known-validator ...` arguments as applicable"
-                    );
-                    exit(1);
-                }
-            };
-
-            vetted_rpc_nodes = rpc_node_details
-                .into_par_iter()
-                .map(|rpc_node_details| {
-                    let GetRpcNodeResult {
-                        rpc_contact_info,
-                        snapshot_hash,
-                    } = rpc_node_details;
-
-                    info!(
-                        "Using RPC service from node {}: {:?}",
-                        rpc_contact_info.id, rpc_contact_info.rpc
-                    );
-                    let rpc_client = RpcClient::new_socket_with_timeout(
-                        rpc_contact_info.rpc,
-                        Duration::from_secs(5),
-                    );
-
-                    (rpc_contact_info, snapshot_hash, rpc_client)
-                })
-                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
-                    match rpc_client.get_version() {
-                        Ok(rpc_version) => {
-                            info!("RPC node version: {}", rpc_version.solana_core);
-                            true
-                        }
-                        Err(err) => {
-                            fail_rpc_node(
-                                format!("Failed to get RPC node version: {err}"),
-                                &validator_config.known_validators,
-                                &rpc_contact_info.id,
-                                &mut blacklisted_rpc_nodes.write().unwrap(),
-                            );
-                            false
-                        }
-                    }
-                })
-                .collect();
-        }
-
+        get_vetted_rpc_nodes(
+            &mut vetted_rpc_nodes,
+            &gossip.as_ref().unwrap().0,
+            cluster_entrypoints,
+            validator_config,
+            &blacklisted_rpc_nodes,
+            &bootstrap_config,
+        );
         let (rpc_contact_info, snapshot_hash, rpc_client) = vetted_rpc_nodes.pop().unwrap();
 
         match attempt_download_genesis_and_snapshot(
