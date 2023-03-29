@@ -15,7 +15,7 @@ if [[ -n $CI && -z $NO_INTERCEPT ]]; then
   #fi
   # we don't care about being racy here as was before; so disable shellcheck
   # shellcheck disable=SC2094
-  if faketty "$@" 2>> "$console_log" 1>> >(tee -a "$console_log"); then
+  if (faketty "$@") 2>> "$console_log" 1>> >(tee -a "$console_log"); then
     exit_code=0
   else
     exit_code=$?
