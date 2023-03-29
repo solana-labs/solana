@@ -478,7 +478,7 @@ pub fn attempt_download_genesis_and_snapshot(
 // find at least one viable node or terminate the process.
 fn get_vetted_rpc_nodes(
     vetted_rpc_nodes: &mut Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)>,
-    gossip: &Option<(Arc<ClusterInfo>, Arc<AtomicBool>, GossipService)>,
+    cluster_info: &Arc<ClusterInfo>,
     cluster_entrypoints: &[ContactInfo],
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &RwLock<HashSet<Pubkey>>,
@@ -486,7 +486,7 @@ fn get_vetted_rpc_nodes(
 ) {
     while vetted_rpc_nodes.is_empty() {
         let rpc_node_details = match get_rpc_nodes(
-            &gossip.as_ref().unwrap().0,
+            cluster_info,
             cluster_entrypoints,
             validator_config,
             &mut blacklisted_rpc_nodes.write().unwrap(),
@@ -611,7 +611,7 @@ pub fn rpc_bootstrap(
 
         get_vetted_rpc_nodes(
             &mut vetted_rpc_nodes,
-            &gossip,
+            &gossip.as_ref().unwrap().0,
             cluster_entrypoints,
             validator_config,
             &blacklisted_rpc_nodes,
