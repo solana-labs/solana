@@ -285,6 +285,7 @@ impl LocalCluster {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            Arc::new(RwLock::new(None)),
         );
 
         let mut validators = HashMap::new();
@@ -484,6 +485,7 @@ impl LocalCluster {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            Arc::new(RwLock::new(None)),
         );
 
         let validator_pubkey = validator_keypair.pubkey();
@@ -846,6 +848,7 @@ impl Cluster for LocalCluster {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            Arc::new(RwLock::new(None)),
         );
         cluster_validator_info.validator = Some(restarted_node);
         cluster_validator_info
