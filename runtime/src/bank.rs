@@ -1198,7 +1198,7 @@ pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
 }
 
 #[derive(Debug, Default)]
-type struct InstalledSchedulerBox(Option<Box<dyn InstalledScheduler>>);
+struct InstalledSchedulerBox(Option<Box<dyn InstalledScheduler>>);
 
 struct VoteWithStakeDelegations {
     vote_state: Arc<VoteState>,
