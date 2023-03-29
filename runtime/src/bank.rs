@@ -6325,7 +6325,7 @@ impl Bank {
         );
 
         let s = self.scheduler.read().unwrap();
-        let scheduler = s.as_ref().unwrap();
+        let scheduler = s.0.as_ref().unwrap();
 
         for (st, &i) in transactions.iter().zip(transaction_indexes) {
             scheduler.schedule_execution(st, i);
@@ -6342,13 +6342,13 @@ impl Bank {
 
     pub fn trigger_scheduler_termination(&self) {
         let mut s = self.scheduler.write().unwrap();
-        if let Some(scheduler) = s.as_mut() {
+        if let Some(scheduler) = s.0.as_mut() {
             scheduler.trigger_termination();
         }
     }
 
     pub fn with_scheduler(&self) -> bool {
-        self.scheduler.read().unwrap().is_some()
+        self.scheduler.read().unwrap().0.is_some()
     }
 
     /// Process a batch of transactions.
@@ -8152,7 +8152,7 @@ impl Bank {
     pub(crate) fn install_scheduler(&self, scheduler: Box<dyn InstalledScheduler>) {
         let mut s = self.scheduler.write().unwrap();
         assert!(s.is_none());
-        *s = Some(scheduler)
+        *s = InstalledScheduler(Some(scheduler);)
     }
 
     fn wait_for_scheduler<
@@ -8170,14 +8170,14 @@ impl Bank {
                 std::backtrace::Backtrace::force_capture()
             );
         }
-        if s.is_some() {
+        if s.0.is_some() {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
-            let timings_and_result = s
+            let timings_and_result = s.0
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART));
             if !IS_RESTART {
-                if let Some(scheduler) = s.take() {
+                if let Some(scheduler) = s.0.take() {
                     scheduler.scheduler_pool().return_to_pool(scheduler);
                 }
             }
