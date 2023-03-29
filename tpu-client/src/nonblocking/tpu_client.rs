@@ -442,7 +442,6 @@ where
         messages: &[Message],
         signers: &T,
     ) -> Result<Vec<Option<TransactionError>>> {
-        let mut expired_blockhash_retries = 5;
         let progress_bar = spinner::new_progress_bar();
         progress_bar.set_message("Setting up...");
 
@@ -455,7 +454,7 @@ where
         let mut transaction_errors = vec![None; transactions.len()];
         let mut confirmed_transactions = 0;
         let mut block_height = self.rpc_client.get_block_height().await?;
-        while expired_blockhash_retries > 0 {
+        for expired_blockhash_retries in (0..5).rev() {
             let (blockhash, last_valid_block_height) = self
                 .rpc_client
                 .get_latest_blockhash_with_commitment(self.rpc_client.commitment())
@@ -555,7 +554,6 @@ where
             progress_bar.println(format!(
                 "Blockhash expired. {expired_blockhash_retries} retries remaining"
             ));
-            expired_blockhash_retries -= 1;
         }
         Err(TpuSenderError::Custom("Max retries exceeded".into()))
     }
