@@ -4403,30 +4403,35 @@ impl Bank {
         );
         filter_programs_time.stop();
 
-        let mut filter_missing_programs_time = Measure::start("filter_missing_programs_accounts");
-        let (mut loaded_programs_for_txs, missing_programs) = self
-            .loaded_programs_cache
-            .read()
-            .unwrap()
-            .extract(self, program_accounts_map.keys().cloned());
-        filter_missing_programs_time.stop();
+        let (mut loaded_programs_for_txs, missing_programs) = {
+            // Lock the global cache to figure out which programs need to be loaded
+            let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
+            loaded_programs_cache.extract(self, program_accounts_map.keys().cloned())
+        };
 
-        missing_programs.iter().for_each(|pubkey| {
-            let program = self.load_program(pubkey).unwrap_or_else(|err| {
-                // Create a tombstone for the program in the cache
-                debug!("Failed to load program {}, error {:?}", pubkey, err);
-                Arc::new(LoadedProgram::new_tombstone(
-                    self.slot,
-                    LoadedProgramType::FailedVerification,
-                ))
-            });
-            let (_was_occupied, entry) = self
-                .loaded_programs_cache
-                .write()
-                .unwrap()
-                .replenish(*pubkey, program);
-            loaded_programs_for_txs.insert(*pubkey, entry);
-        });
+        // Load missing programs while global cache is unlocked
+        let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
+            .iter()
+            .map(|key| {
+                let program = self.load_program(key).unwrap_or_else(|err| {
+                    // Create a tombstone for the program in the cache
+                    debug!("Failed to load program {}, error {:?}", key, err);
+                    Arc::new(LoadedProgram::new_tombstone(
+                        self.slot,
+                        LoadedProgramType::FailedVerification,
+                    ))
+                });
+                (*key, program)
+            })
+            .collect();
+
+        // Lock the global cache again to replenish the missing programs
+        let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
+        for (key, program) in missing_programs {
+            let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
+            // Use the returned entry as that might have been deduplicated globally
+            loaded_programs_for_txs.insert(key, entry);
+        }
 
         (program_accounts_map, loaded_programs_for_txs)
     }
