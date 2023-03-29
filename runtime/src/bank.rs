@@ -6321,7 +6321,7 @@ impl Bank {
         self.cluster_type.unwrap()
     }
 
-    fn schedule_transaction_executions<'a>(
+    pub fn schedule_transaction_executions<'a>(
         &self,
         transactions: &[SanitizedTransaction],
         transaction_indexes: impl Iterator<Item = &'a usize>,
