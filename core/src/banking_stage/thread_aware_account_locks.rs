@@ -51,8 +51,27 @@ impl ThreadAwareAccountLocks {
         }
     }
 
+    /// Returns the `ThreadId` if the accounts are able to be locked
+    /// for the given thread, otherwise `None` is returned.
+    /// If accounts are schedulable, then they are locked for the thread
+    /// selected by the `thread_selector` function.
+    pub fn try_lock_accounts<'a>(
+        &mut self,
+        write_account_locks: impl Iterator<Item = &'a Pubkey> + Clone,
+        read_account_locks: impl Iterator<Item = &'a Pubkey> + Clone,
+        thread_selector: impl FnOnce(ThreadSet) -> ThreadId,
+    ) -> Option<ThreadId> {
+        let schedulable_threads = self
+            .accounts_schedulable_threads(write_account_locks.clone(), read_account_locks.clone());
+        (!schedulable_threads.is_empty()).then(|| {
+            let thread_id = thread_selector(schedulable_threads);
+            self.lock_accounts(write_account_locks, read_account_locks, thread_id);
+            thread_id
+        })
+    }
+
     /// Returns `ThreadSet` that the given accounts can be scheduled on.
-    pub fn accounts_schedulable_threads<'a>(
+    fn accounts_schedulable_threads<'a>(
         &self,
         write_account_locks: impl Iterator<Item = &'a Pubkey>,
         read_account_locks: impl Iterator<Item = &'a Pubkey>,
