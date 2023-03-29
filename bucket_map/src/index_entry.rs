@@ -266,7 +266,15 @@ mod tests {
         let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
         assert!(!paths.is_empty());
 
-        BucketStorage::<IndexBucket>::new(Arc::new(paths), 1, 1, 1, Arc::default(), Arc::default())
+        // `new` here creates a file in `tmpdir`. Once the file is created, `tmpdir` can be dropped without issue.
+        BucketStorage::<IndexBucket>::new(
+            Arc::new(paths),
+            1,
+            std::mem::size_of::<IndexEntry>() as u64,
+            1,
+            Arc::default(),
+            Arc::default(),
+        )
     }
 
     fn index_entry_for_testing() -> (BucketStorage<IndexBucket>, IndexEntryPlaceInBucket) {
