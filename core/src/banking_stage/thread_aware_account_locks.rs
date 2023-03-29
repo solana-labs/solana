@@ -221,7 +221,7 @@ impl ThreadAwareAccountLocks {
         match self.read_locks.entry(*account) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 let (thread_set, lock_counts) = entry.get_mut();
-                assert!(thread_set.contains(thread_id));
+                thread_set.insert(thread_id);
 
                 lock_counts[thread_id] += 1;
             }
@@ -478,7 +478,13 @@ mod tests {
         );
         assert_eq!(
             locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
-            ThreadSet::any(TEST_NUM_THREADS) - ThreadSet::only(2)
+            ThreadSet::any(TEST_NUM_THREADS)
+        );
+
+        locks.read_lock_account(&pk1, 0); // at limit
+        assert_eq!(
+            locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
+            ThreadSet::any(TEST_NUM_THREADS) - ThreadSet::only(0)
         );
     }
 
