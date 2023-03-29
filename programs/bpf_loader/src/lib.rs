@@ -119,10 +119,17 @@ pub fn load_program_from_bytes(
     register_syscalls_time.stop();
     load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
 
+    let effective_slot = if feature_set.is_active(&delay_visibility_of_program_deployment::id()) {
+        deployment_slot.saturating_add(1)
+    } else {
+        deployment_slot
+    };
+
     let loaded_program = LoadedProgram::new(
         loader_key,
         loader,
         deployment_slot,
+        effective_slot,
         programdata,
         account_size,
         use_jit,

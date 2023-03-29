@@ -132,6 +132,7 @@ impl LoadedProgram {
         loader_key: &Pubkey,
         loader: Arc<BuiltInProgram<InvokeContext<'static>>>,
         deployment_slot: Slot,
+        effective_slot: Slot,
         elf_bytes: &[u8],
         account_size: usize,
         use_jit: bool,
@@ -176,7 +177,7 @@ impl LoadedProgram {
         Ok(Self {
             deployment_slot,
             account_size,
-            effective_slot: deployment_slot.saturating_add(1),
+            effective_slot,
             usage_counter: AtomicU64::new(0),
             program,
         })
