@@ -2525,7 +2525,7 @@ fn rebuild_bank_from_unarchived_snapshots(
             (None, None)
         };
     info!(
-        "Rebuiding bank from full snapshot {} and incremental snapshot {:?}",
+        "Rebuilding bank from full snapshot {} and incremental snapshot {:?}",
         full_snapshot_root_paths.snapshot_path().display(),
         incremental_snapshot_root_paths
             .as_ref()
