@@ -369,7 +369,7 @@ mod tests {
             ThreadSet::any(TEST_NUM_THREADS)
         );
 
-        locks.read_lock_account(&pk2, 0);
+        locks.read_lock_account(&pk1, 0);
         assert_eq!(
             locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
             ThreadSet::none()
@@ -400,18 +400,6 @@ mod tests {
     }
 
     #[test]
-    fn test_locks() {
-        let pk1 = Pubkey::new_unique();
-        let pk2 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
-        locks.write_lock_account(&pk1, 0);
-        locks.write_lock_account(&pk1, 0);
-
-        locks.read_lock_account(&pk2, 1);
-        locks.write_lock_account(&pk2, 1);
-    }
-
-    #[test]
     #[should_panic]
     fn test_write_lock_account_write_conflict_panic() {
         let pk1 = Pubkey::new_unique();
@@ -431,7 +419,15 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_write_unlock_account_panic() {
+    fn test_write_unlock_account_not_locked() {
+        let pk1 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        locks.write_unlock_account(&pk1, 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_write_unlock_account_thread_mismatch() {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
         locks.write_lock_account(&pk1, 1);
@@ -449,7 +445,15 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_read_unlock_account_panic() {
+    fn test_read_unlock_account_not_locked() {
+        let pk1 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        locks.read_unlock_account(&pk1, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_read_unlock_account_thread_mismatch() {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
         locks.read_lock_account(&pk1, 0);
