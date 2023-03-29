@@ -100,7 +100,7 @@ module.exports = {
           position: "right",
         },
         {
-          href: "https://discordapp.com/invite/pquxPsq",
+          href: "https://solana.com/discord",
           // label: "Discord",
           className: "header-link-icon header-discord-link",
           "aria-label": "Solana Discord",
@@ -163,7 +163,7 @@ module.exports = {
             },
             {
               label: "Discord »",
-              href: "https://discordapp.com/invite/pquxPsq",
+              href: "https://solana.com/discord",
             },
             {
               label: "Twitter »",
