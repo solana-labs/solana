@@ -4384,25 +4384,10 @@ impl Bank {
     }
 
     #[allow(dead_code)] // Preparation for BankExecutorCache rework
-    fn load_and_get_programs_from_cache<'a>(
+    fn load_and_get_programs_from_cache(
         &self,
-        program_owners: &[&'a Pubkey],
-        sanitized_txs: &[SanitizedTransaction],
-        check_results: &mut [TransactionCheckResult],
-    ) -> (
-        HashMap<Pubkey, &'a Pubkey>,
-        HashMap<Pubkey, Arc<LoadedProgram>>,
-    ) {
-        let mut filter_programs_time = Measure::start("filter_programs_accounts");
-        let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
-            &self.ancestors,
-            sanitized_txs,
-            check_results,
-            program_owners,
-            &self.blockhash_queue.read().unwrap(),
-        );
-        filter_programs_time.stop();
-
+        program_accounts_map: &HashMap<Pubkey, &Pubkey>,
+    ) -> HashMap<Pubkey, Arc<LoadedProgram>> {
         let (mut loaded_programs_for_txs, missing_programs) = {
             // Lock the global cache to figure out which programs need to be loaded
             let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
@@ -4433,28 +4418,13 @@ impl Bank {
             loaded_programs_for_txs.insert(key, entry);
         }
 
-        (program_accounts_map, loaded_programs_for_txs)
+        loaded_programs_for_txs
     }
 
-    fn replenish_executor_cache<'a>(
+    fn replenish_executor_cache(
         &self,
-        program_owners: &[&'a Pubkey],
-        sanitized_txs: &[SanitizedTransaction],
-        check_results: &mut [TransactionCheckResult],
-    ) -> (
-        HashMap<Pubkey, &'a Pubkey>,
-        HashMap<Pubkey, Arc<LoadedProgram>>,
-    ) {
-        let mut filter_programs_time = Measure::start("filter_programs_accounts");
-        let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
-            &self.ancestors,
-            sanitized_txs,
-            check_results,
-            program_owners,
-            &self.blockhash_queue.read().unwrap(),
-        );
-        filter_programs_time.stop();
-
+        program_accounts_map: &HashMap<Pubkey, &Pubkey>,
+    ) -> HashMap<Pubkey, Arc<LoadedProgram>> {
         let mut loaded_programs_for_txs = HashMap::new();
         let mut filter_missing_programs_time = Measure::start("filter_missing_programs_accounts");
         let missing_executors = program_accounts_map
@@ -4492,7 +4462,7 @@ impl Bank {
             self.executor_cache.write().unwrap().put(executors);
         }
 
-        (program_accounts_map, loaded_programs_for_txs)
+        loaded_programs_for_txs
     }
 
     #[allow(clippy::type_complexity)]
@@ -4562,19 +4532,22 @@ impl Bank {
             bpf_loader::id(),
             bpf_loader_deprecated::id(),
         ];
-
         let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
+        let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
+            &self.ancestors,
+            sanitized_txs,
+            &mut check_results,
+            &program_owners_refs,
+            &self.blockhash_queue.read().unwrap(),
+        );
+
         // The following code is currently commented out. This is how the new cache will
         // finally be used, once rest of the code blocks are in place.
         /*
-        let (program_accounts_map, loaded_programs_map) = self.load_and_get_programs_from_cache(
-            &program_owners_refs,
-            sanitized_txs,
-            &check_results,
-        );
+        let loaded_programs_map =
+            self.load_and_get_programs_from_cache(&program_accounts_map);
         */
-        let (executable_programs_in_tx_batch, loaded_programs_map) =
-            self.replenish_executor_cache(&program_owners_refs, sanitized_txs, &mut check_results);
+        let loaded_programs_map = self.replenish_executor_cache(&program_accounts_map);
 
         let tx_executor_cache = Rc::new(RefCell::new(TransactionExecutorCache::new(
             loaded_programs_map.clone().into_iter(),
@@ -4591,7 +4564,7 @@ impl Bank {
             &self.feature_set,
             &self.fee_structure,
             account_overrides,
-            &executable_programs_in_tx_batch,
+            &program_accounts_map,
             &loaded_programs_map,
         );
         load_time.stop();
