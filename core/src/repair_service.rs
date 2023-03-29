@@ -1,5 +1,7 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
+
+use solana_sdk::signer::Signer;
 #[cfg(test)]
 use {
     crate::duplicate_repair_status::DuplicateSlotRepairStatus, solana_ledger::shred::Nonce,
@@ -422,13 +424,14 @@ impl RepairService {
             let mut batch_send_repairs_elapsed = Measure::start("batch_send_repairs_elapsed");
             if !batch.is_empty() {
                 if let Some(connection_cache) = &quic_repair_option {
-                    let result = quic_sendmmsg::batch_send(connection_cache, &batch);
+                    let batch_len = batch.len();
+                    let result = quic_sendmmsg::batch_send(connection_cache, batch);
                     if let Err(QuicSendPktsError::TransportError(err, num_failed)) = result {
                         error!(
                             "{} batch_send failed to send {}/{} packets using connection cache, first error {:?}",
                             id,
                             num_failed,
-                            batch.len(),
+                            batch_len,
                             err
                         );
                     }
