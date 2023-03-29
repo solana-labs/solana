@@ -8150,8 +8150,8 @@ impl Bank {
     }
 
     pub(crate) fn install_scheduler(&self, scheduler: Box<dyn InstalledScheduler>) {
-        let mut s = self.scheduler.write().unwrap().0;
-        assert!(s.is_none());
+        let mut s = self.scheduler.write().unwrap();
+        assert!(s.0.is_none());
         *s = InstalledScheduler(Some(scheduler));
     }
 
