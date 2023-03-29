@@ -10,6 +10,7 @@ use {
     log::*,
     rand::{seq::SliceRandom, thread_rng},
     rayon::{prelude::*, ThreadPool},
+    scopeguard::defer,
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
@@ -934,6 +935,12 @@ pub struct ConfirmationTiming {
     /// slot is complete.
     pub started: Instant,
 
+    /// Wall clock time used by the slot confirmation code, including PoH/signature verification,
+    /// and replay.  As replay can run in parallel with the verification, this value can not be
+    /// recovered from the `replay_elapsed` and or `{poh,transaction}_verify_elapsed`.  This
+    /// includes failed cases, when `confirm_slot_entries` exist with an error.  In microseconds.
+    pub confirmation_elapsed: u64,
+
     /// Wall clock time used by the entry replay code.  Does not include the PoH or the transaction
     /// signature/precompiles verification, but can overlap with the PoH and signature verification.
     /// In microseconds.
@@ -962,6 +969,7 @@ impl Default for ConfirmationTiming {
     fn default() -> Self {
         Self {
             started: Instant::now(),
+            confirmation_elapsed: 0,
             replay_elapsed: 0,
             poh_verify_elapsed: 0,
             transaction_verify_elapsed: 0,
@@ -1096,12 +1104,18 @@ fn confirm_slot_entries(
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let ConfirmationTiming {
+        confirmation_elapsed,
         replay_elapsed,
         poh_verify_elapsed,
         transaction_verify_elapsed,
         batch_execute: batch_execute_timing,
         ..
     } = timing;
+
+    let confirmation_elapsed_timer = Measure::start("confirmation_elapsed");
+    defer! {
+        *confirmation_elapsed += confirmation_elapsed_timer.end_as_us();
+    };
 
     let slot = bank.slot();
     let (entries, num_shreds, slot_full) = slot_entries_load_result;

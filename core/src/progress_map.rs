@@ -64,6 +64,7 @@ impl ReplaySlotStats {
                     self.transaction_verify_elapsed as i64,
                     i64
                 ),
+                ("confirmation_time_us", self.confirmation_elapsed as i64, i64),
                 ("replay_time", self.replay_elapsed as i64, i64),
                 ("execute_batches_us", self.batch_execute.wall_clock_us as i64, i64),
                 (

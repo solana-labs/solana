@@ -5781,6 +5781,7 @@ dependencies = [
  "reed-solomon-erasure",
  "rocksdb",
  "rustc_version 0.4.0",
+ "scopeguard",
  "serde",
  "serde_bytes",
  "sha2 0.10.6",
