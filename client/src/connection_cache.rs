@@ -204,9 +204,9 @@ mod tests {
         super::*,
         crate::connection_cache::ConnectionCache,
         crossbeam_channel::unbounded,
-        solana_sdk::{net::DEFAULT_TPU_COALESCE_MS, quic::QUIC_PORT_OFFSET, signature::Keypair},
+        solana_sdk::{net::DEFAULT_TPU_COALESCE, quic::QUIC_PORT_OFFSET, signature::Keypair},
         solana_streamer::{
-            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
+            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, quic::StreamStats,
             streamer::StakedNodes,
         },
         std::{
@@ -262,8 +262,8 @@ mod tests {
             10,
             10,
             response_recv_stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            DEFAULT_TPU_COALESCE_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 
