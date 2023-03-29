@@ -13,11 +13,11 @@ edition = { workspace = true }
 by_address = { workspace = true }
 cpu-time = { workspace = true }
 crossbeam-channel = { workspace = true }
-enum_dispatch = { workspace = true }
 dashmap = { workspace = true }
+enum_dispatch = { workspace = true }
 log = { workspace = true }
-solana-sdk = { workspace = true }
-solana-logger = { workspace = true }
-sha2 = { workspace = true }
-triomphe = { workspace = true }
 rand = { workspace = true }
+sha2 = { workspace = true }
+solana-logger = { workspace = true }
+solana-sdk = { workspace = true }
+triomphe = { workspace = true }
