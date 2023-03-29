@@ -8,7 +8,7 @@ use {
     bv::BitVec,
     modular_bitfield::prelude::*,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
-    std::fmt::Debug,
+    std::{fmt::Debug, marker::PhantomData},
 };
 
 /// in use/occupied
@@ -25,11 +25,12 @@ struct OccupiedHeader {
 }
 
 /// allocated in `contents` in a BucketStorage
-pub struct BucketWithBitVec {
+pub struct BucketWithBitVec<T: 'static> {
     pub occupied: BitVec,
+    _phantom: PhantomData<&'static T>,
 }
 
-impl BucketOccupied for BucketWithBitVec {
+impl<T> BucketOccupied for BucketWithBitVec<T> {
     fn occupy(&mut self, element: &mut [u8], ix: usize) {
         assert!(self.is_free(element, ix));
         self.occupied.set(ix as u64, true);
@@ -48,17 +49,19 @@ impl BucketOccupied for BucketWithBitVec {
     fn new(num_elements: usize) -> Self {
         Self {
             occupied: BitVec::new_fill(false, num_elements as u64),
+            _phantom: PhantomData,
         }
     }
 }
 
-pub type DataBucket = BucketWithBitVec;
-pub type IndexBucket = BucketWithBitVec;
+pub type DataBucket = BucketWithBitVec<()>;
+pub type IndexBucket<T> = BucketWithBitVec<T>;
 
 /// contains the index of an entry in the index bucket.
 /// This type allows us to call methods to interact with the index entry on this type.
-pub struct IndexEntryPlaceInBucket {
+pub struct IndexEntryPlaceInBucket<T: 'static> {
     pub ix: u64,
+    _phantom: PhantomData<&'static T>,
 }
 
 #[repr(C)]
@@ -98,8 +101,8 @@ impl IndexEntry {
     }
 }
 
-impl IndexEntryPlaceInBucket {
-    pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket>, pubkey: &Pubkey) {
+impl<T> IndexEntryPlaceInBucket<T> {
+    pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
         let index_entry = index_bucket.get_mut::<IndexEntry>(self.ix);
         index_entry.key = *pubkey;
         index_entry.ref_count = 0;
@@ -109,7 +112,7 @@ impl IndexEntryPlaceInBucket {
 
     pub fn set_storage_capacity_when_created_pow2(
         &self,
-        index_bucket: &mut BucketStorage<IndexBucket>,
+        index_bucket: &mut BucketStorage<IndexBucket<T>>,
         storage_capacity_when_created_pow2: u8,
     ) {
         index_bucket
@@ -120,7 +123,7 @@ impl IndexEntryPlaceInBucket {
 
     pub fn set_storage_offset(
         &self,
-        index_bucket: &mut BucketStorage<IndexBucket>,
+        index_bucket: &mut BucketStorage<IndexBucket<T>>,
         storage_offset: u64,
     ) {
         index_bucket
@@ -130,23 +133,26 @@ impl IndexEntryPlaceInBucket {
             .expect("New storage offset must fit into 7 bytes!");
     }
 
-    pub fn data_bucket_ix(&self, index_bucket: &BucketStorage<IndexBucket>) -> u64 {
+    pub fn data_bucket_ix(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> u64 {
         IndexEntry::data_bucket_from_num_slots(self.num_slots(index_bucket))
     }
 
-    pub fn ref_count(&self, index_bucket: &BucketStorage<IndexBucket>) -> RefCount {
+    pub fn ref_count(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> RefCount {
         let index_entry = index_bucket.get::<IndexEntry>(self.ix);
         index_entry.ref_count
     }
 
-    fn storage_capacity_when_created_pow2(&self, index_bucket: &BucketStorage<IndexBucket>) -> u8 {
+    fn storage_capacity_when_created_pow2(
+        &self,
+        index_bucket: &BucketStorage<IndexBucket<T>>,
+    ) -> u8 {
         let index_entry = index_bucket.get::<IndexEntry>(self.ix);
         index_entry
             .storage_cap_and_offset
             .capacity_when_created_pow2()
     }
 
-    pub fn storage_offset(&self, index_bucket: &BucketStorage<IndexBucket>) -> u64 {
+    pub fn storage_offset(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> u64 {
         index_bucket
             .get::<IndexEntry>(self.ix)
             .storage_cap_and_offset
@@ -157,7 +163,7 @@ impl IndexEntryPlaceInBucket {
     /// This is coupled with how we resize bucket storages.
     pub fn data_loc(
         &self,
-        index_bucket: &BucketStorage<IndexBucket>,
+        index_bucket: &BucketStorage<IndexBucket<T>>,
         storage: &BucketStorage<DataBucket>,
     ) -> u64 {
         let index_entry = index_bucket.get::<IndexEntry>(self.ix);
@@ -168,9 +174,9 @@ impl IndexEntryPlaceInBucket {
                     .capacity_when_created_pow2())
     }
 
-    pub fn read_value<'a, T>(
+    pub fn read_value<'a>(
         &self,
-        index_bucket: &BucketStorage<IndexBucket>,
+        index_bucket: &BucketStorage<IndexBucket<T>>,
         data_buckets: &'a [BucketStorage<DataBucket>],
     ) -> Option<(&'a [T], RefCount)> {
         let num_slots = self.num_slots(index_bucket);
@@ -188,28 +194,31 @@ impl IndexEntryPlaceInBucket {
     }
 
     pub fn new(ix: u64) -> Self {
-        Self { ix }
+        Self {
+            ix,
+            _phantom: PhantomData,
+        }
     }
 
-    pub fn key<'a>(&self, index_bucket: &'a BucketStorage<IndexBucket>) -> &'a Pubkey {
+    pub fn key<'a>(&self, index_bucket: &'a BucketStorage<IndexBucket<T>>) -> &'a Pubkey {
         let entry: &IndexEntry = index_bucket.get(self.ix);
         &entry.key
     }
 
     pub fn set_ref_count(
         &self,
-        index_bucket: &mut BucketStorage<IndexBucket>,
+        index_bucket: &mut BucketStorage<IndexBucket<T>>,
         ref_count: RefCount,
     ) {
         let index_entry = index_bucket.get_mut::<IndexEntry>(self.ix);
         index_entry.ref_count = ref_count;
     }
 
-    pub fn num_slots(&self, index_bucket: &BucketStorage<IndexBucket>) -> Slot {
+    pub fn num_slots(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> Slot {
         index_bucket.get::<IndexEntry>(self.ix).num_slots
     }
 
-    pub fn set_num_slots(&self, index_bucket: &mut BucketStorage<IndexBucket>, num_slots: Slot) {
+    pub fn set_num_slots(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, num_slots: Slot) {
         index_bucket.get_mut::<IndexEntry>(self.ix).num_slots = num_slots;
     }
 }
@@ -261,13 +270,13 @@ mod tests {
         assert_eq!(std::mem::size_of::<IndexEntry>(), 32 + 8 + 8 + 8);
     }
 
-    fn index_bucket_for_testing() -> BucketStorage<IndexBucket> {
+    fn index_bucket_for_testing() -> BucketStorage<IndexBucket<u64>> {
         let tmpdir = tempdir().unwrap();
         let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
         assert!(!paths.is_empty());
 
         // `new` here creates a file in `tmpdir`. Once the file is created, `tmpdir` can be dropped without issue.
-        BucketStorage::<IndexBucket>::new(
+        BucketStorage::<IndexBucket<u64>>::new(
             Arc::new(paths),
             1,
             std::mem::size_of::<IndexEntry>() as u64,
@@ -277,7 +286,10 @@ mod tests {
         )
     }
 
-    fn index_entry_for_testing() -> (BucketStorage<IndexBucket>, IndexEntryPlaceInBucket) {
+    fn index_entry_for_testing() -> (
+        BucketStorage<IndexBucket<u64>>,
+        IndexEntryPlaceInBucket<u64>,
+    ) {
         (index_bucket_for_testing(), IndexEntryPlaceInBucket::new(0))
     }
 
