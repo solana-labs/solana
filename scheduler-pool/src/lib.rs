@@ -467,7 +467,7 @@ impl Scheduler {
             let checkpoint = checkpoint.clone();
             let commit_status = commit_status.clone();
             let scheduler_pool = scheduler_pool.clone();
-            let thread_name = format!("solScExLane{:02}", thx);
+            let thread_name = format!("solScExLane{thx:02}");
 
             std::thread::Builder::new().name(thread_name).spawn(move || {
             let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
