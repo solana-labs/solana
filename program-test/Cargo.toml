@@ -1,11 +1,12 @@
 [package]
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 description = "Solana Program Test Framework"
-edition = "2021"
-license = "Apache-2.0"
 name = "solana-program-test"
-repository = "https://github.com/solana-labs/solana"
-version = "1.16.0"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
 assert_matches = { workspace = true }

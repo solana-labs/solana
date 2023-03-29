@@ -1,13 +1,13 @@
 [package]
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-edition = "2021"
 name = "solana-dos"
-version = "1.16.0"
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solanalabs.com/"
 publish = false
 description = "Tool to send various requests to cluster in order to evaluate the effect on performance"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
 bincode = { workspace = true }

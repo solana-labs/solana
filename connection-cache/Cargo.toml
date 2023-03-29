@@ -1,30 +1,30 @@
 [package]
 name = "solana-connection-cache"
-version = "1.16.0"
 description = "Solana Connection Cache"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-connection-cache"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-async-trait = "0.1.57"
-bincode = "1.3.3"
-futures-util = "0.3.26"
-indexmap = "1.9.2"
-indicatif = { version = "0.17.1", optional = true }
-log = "0.4.17"
-rand = "0.7.0"
-rayon = "1.5.3"
-solana-measure = { path = "../measure", version = "=1.16.0" }
-solana-metrics = { path = "../metrics", version = "=1.16.0" }
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
-thiserror = "1.0"
-tokio = { version = "1", features = ["full"] }
+async-trait = { workspace = true }
+bincode = { workspace = true }
+futures-util = { workspace = true }
+indexmap = { workspace = true }
+indicatif = { workspace = true, optional = true }
+log = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-sdk = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
-rand_chacha = "0.2.2"
-solana-logger = { path = "../logger", version = "=1.16.0" }
-solana-net-utils = { path = "../net-utils", version = "=1.16.0" }
+rand_chacha = { workspace = true }
+solana-logger = { workspace = true }
+solana-net-utils = { workspace = true }
