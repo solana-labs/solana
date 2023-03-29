@@ -25,7 +25,7 @@ use {
         commitment_config::CommitmentLevel,
         message::Message,
         signature::Signature,
-        transaction::{self, Transaction, VersionedTransaction},
+        transaction::{self, VersionedTransaction},
     },
     tarpc::{
         client::{self, NewClient, RequestDispatch},
@@ -310,9 +310,9 @@ impl BanksClient {
         self.process_transaction_with_commitment(transaction, CommitmentLevel::default())
     }
 
-    pub async fn process_transactions_with_commitment(
+    pub async fn process_transactions_with_commitment<T: Into<VersionedTransaction>>(
         &mut self,
-        transactions: Vec<Transaction>,
+        transactions: Vec<T>,
         commitment: CommitmentLevel,
     ) -> Result<(), BanksClientError> {
         let mut clients: Vec<_> = transactions.iter().map(|_| self.clone()).collect();
@@ -327,9 +327,9 @@ impl BanksClient {
     }
 
     /// Send transactions and return until the transaction has been finalized or rejected.
-    pub fn process_transactions(
-        &mut self,
-        transactions: Vec<Transaction>,
+    pub fn process_transactions<'a, T: Into<VersionedTransaction> + 'a>(
+        &'a mut self,
+        transactions: Vec<T>,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
         self.process_transactions_with_commitment(transactions, CommitmentLevel::default())
     }
@@ -534,7 +534,7 @@ mod tests {
             bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
             genesis_utils::create_genesis_config,
         },
-        solana_sdk::{message::Message, signature::Signer, system_instruction},
+        solana_sdk::{message::Message, signature::Signer, system_instruction, transaction::Transaction},
         std::sync::{Arc, RwLock},
         tarpc::transport,
         tokio::{
