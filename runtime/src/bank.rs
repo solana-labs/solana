@@ -183,6 +183,7 @@ use {
         time::{Duration, Instant},
     },
 };
+use assert_matches::assert_matches;
 
 /// params to `verify_accounts_hash`
 pub struct VerifyAccountsHashConfig {
@@ -8206,18 +8207,17 @@ impl Bank {
 
     fn wait_for_completed_scheduler_via_drop(&self) -> Option<Result<()>> {
         let maybe_timings_and_result = self.wait_for_scheduler::<true, false, false>();
-
         maybe_timings_and_result.map(|(_timings, result)| result)
     }
 
     fn wait_for_completed_scheduler_via_internal_drop(self) {
-        use assert_matches::assert_matches;
-        assert_matches!(self.wait_for_scheduler::<true, true, false>(), Some(_));
+        let maybe_timings_and_result = self.wait_for_scheduler::<true, true, false>();
+        assert_matches!(maybe_timings_and_result, Some(_));
     }
 
     fn wait_for_reusable_scheduler(&self) {
-        use assert_matches::assert_matches;
-        assert_matches!(self.wait_for_scheduler::<false, false, true>(), None);
+        let maybe_timings_and_result = self.wait_for_scheduler::<false, false, true>();
+        assert_matches!(maybe_timings_and_result, None);
     }
 
     /// Get the EAH that will be used by snapshots
