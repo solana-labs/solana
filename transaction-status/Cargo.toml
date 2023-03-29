@@ -13,7 +13,8 @@ edition = { workspace = true }
 Inflector = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
-borsh = { workspace = true }
+# NOTE: Use the workspace version once spl-associated-token-account uses borsh 0.10.
+borsh0-9 = { package = "borsh", version = "0.9.3" }
 bs58 = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }

@@ -458,9 +458,7 @@ pub enum SystemInstruction {
 /// [`invoke_signed`]: crate::program::invoke_signed
 ///
 /// ```
-/// # use borsh_derive::BorshDeserialize;
-/// # use borsh::BorshSerialize;
-/// # use borsh::de::BorshDeserialize;
+/// # use borsh::{BorshDeserialize, BorshSerialize};
 /// use solana_program::{
 ///     account_info::{next_account_info, AccountInfo},
 ///     entrypoint,
@@ -676,9 +674,7 @@ pub fn create_account_with_seed(
 /// [`invoke_signed`]: crate::program::invoke_signed
 ///
 /// ```
-/// # use borsh_derive::BorshDeserialize;
-/// # use borsh::BorshSerialize;
-/// # use borsh::de::BorshDeserialize;
+/// # use borsh::{BorshDeserialize, BorshSerialize};
 /// use solana_program::{
 ///     account_info::{next_account_info, AccountInfo},
 ///     entrypoint,
@@ -888,9 +884,7 @@ pub fn assign_with_seed(
 /// [`invoke_signed`]: crate::program::invoke_signed
 ///
 /// ```
-/// # use borsh_derive::BorshDeserialize;
-/// # use borsh::BorshSerialize;
-/// # use borsh::de::BorshDeserialize;
+/// # use borsh::{BorshDeserialize, BorshSerialize};
 /// use solana_program::{
 ///     account_info::{next_account_info, AccountInfo},
 ///     entrypoint,
@@ -1109,9 +1103,7 @@ pub fn transfer_with_seed(
 /// [`invoke_signed`]: crate::program::invoke_signed
 ///
 /// ```
-/// # use borsh_derive::BorshDeserialize;
-/// # use borsh::BorshSerialize;
-/// # use borsh::de::BorshDeserialize;
+/// # use borsh::{BorshDeserialize, BorshSerialize};
 /// use solana_program::{
 ///     account_info::{next_account_info, AccountInfo},
 ///     entrypoint,
@@ -1305,9 +1297,7 @@ pub fn allocate_with_seed(
 /// [`invoke_signed`]: crate::program::invoke_signed
 ///
 /// ```
-/// # use borsh_derive::BorshDeserialize;
-/// # use borsh::BorshSerialize;
-/// # use borsh::de::BorshDeserialize;
+/// # use borsh::{BorshDeserialize, BorshSerialize};
 /// use solana_program::{
 ///     account_info::{next_account_info, next_account_infos, AccountInfo},
 ///     entrypoint,
