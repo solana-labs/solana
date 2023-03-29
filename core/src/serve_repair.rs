@@ -930,6 +930,12 @@ impl ServeRepair {
         ) in requests.into_iter().enumerate()
         {
             if !matches!(&request, RepairProtocol::Pong(_)) {
+                info!(
+                    "Got repair request {:?} from {:?} at {:?}",
+                    request,
+                    from_addr,
+                    blockstore.ledger_path()
+                );
                 let (check, ping_pkt) =
                     Self::check_ping_cache(ping_cache, &request, &from_addr, &identity_keypair);
                 if let Some(ping_pkt) = ping_pkt {
@@ -955,6 +961,12 @@ impl ServeRepair {
                 None => continue,
                 Some(rsp) => rsp,
             };
+            debug!(
+                "Send response to {:?} for request {:?} at {:?}",
+                from_addr,
+                request,
+                blockstore.ledger_path()
+            );
             let num_response_packets = rsp.len();
             let num_response_bytes = rsp.iter().map(|p| p.meta().size).sum();
             if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
@@ -1126,6 +1138,13 @@ impl ServeRepair {
                 }
             }
         };
+        debug!(
+            "Repair request {:?} to protocol {:?} from {:?} to {:?}",
+            repair_request,
+            request_proto,
+            identity_keypair.pubkey(),
+            repair_peer_id
+        );
         Self::repair_proto_to_bytes(&request_proto, identity_keypair)
     }
 

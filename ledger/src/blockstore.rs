@@ -1076,7 +1076,7 @@ impl Blockstore {
         metrics.index_meta_time_us += index_meta_time_us;
 
         // Hard coded to debug what slots have been written.
-        let _ = self.get_slots_since(&[30, 31, 32, 33, 34, 35, 36, 37, 38, 39]);
+        // let _ = self.get_slots_since(&[30, 31, 32, 33, 34, 35, 36, 37, 38, 39]);
 
         Ok(newly_completed_data_sets)
     }
