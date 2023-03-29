@@ -40,11 +40,12 @@ pub struct ThreadAwareAccountLocks {
 impl ThreadAwareAccountLocks {
     /// Creates a new `ThreadAwareAccountLocks` with the given number of threads
     /// and queue limit.
-    pub fn new(num_threads: usize, write_queue_limit: u32) -> Self {
+    pub fn new(num_threads: usize, sequential_queue_limit: u32) -> Self {
         assert!(num_threads > 0 && num_threads <= MAX_THREADS);
+        assert!(sequential_queue_limit > 0);
         Self {
             num_threads,
-            sequential_queue_limit: write_queue_limit,
+            sequential_queue_limit,
             write_locks: HashMap::new(),
             read_locks: HashMap::new(),
         }
@@ -310,6 +311,12 @@ mod tests {
     #[should_panic]
     fn test_too_many_num_threads() {
         ThreadAwareAccountLocks::new(MAX_THREADS + 1, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_sequential_limit() {
+        ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 0);
     }
 
     #[test]
