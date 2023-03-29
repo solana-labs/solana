@@ -1200,6 +1200,13 @@ pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
 #[derive(Debug, Default)]
 struct InstalledSchedulerBox(Option<Box<dyn InstalledScheduler>>);
 
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for InstalledSchedulerBox {
+    fn example() -> Self {
+        Self(None)
+    }
+}
+
 struct VoteWithStakeDelegations {
     vote_state: Arc<VoteState>,
     vote_account: AccountSharedData,
