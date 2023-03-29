@@ -80,6 +80,10 @@ sudo docker run \
   --publish 3000:3000 \
   --user root:root \
   --env GF_PATHS_CONFIG=/grafana.ini \
+  --env GF_AUTH_GITHUB_CLIENT_ID="$GITHUB_CLIENT_ID" \
+  --env GF_AUTH_GITHUB_CLIENT_SECRET="$GITHUB_CLIENT_SECRET" \
+  --env GF_SECURITY_ADMIN_USER="$ADMIN_USER_GRAFANA" \
+  --env GF_SECURITY_ADMIN_PASSWORD="$ADMIN_PASSWORD_GRAFANA" \
   --volume "$PWD"/certs:/certs:ro \
   --volume "$PWD"/grafana-"$HOST".ini:/grafana.ini:ro \
   --volume /var/lib/grafana:/var/lib/grafana \
@@ -133,6 +137,8 @@ sudo docker run \
 sudo docker run \
   --detach \
   --name=kapacitor \
+  --env KAPACITOR_USERNAME="$KAPACITOR_USERNAME" \
+  --env KAPACITOR_USERNAME="$KAPACITOR_PASSWORD" \
   --publish 9092:9092 \
   --volume "$PWD"/kapacitor.conf:/etc/kapacitor/kapacitor.conf \
   --volume /var/lib/kapacitor:/var/lib/kapacitor \

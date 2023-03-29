@@ -1,3 +1,5 @@
+![image](https://user-images.githubusercontent.com/110216567/184346286-94e0b45f-19e9-4fc9-a1a3-2e50c6f12bf8.png)
+
 # Metrics
 
 ## InfluxDB
