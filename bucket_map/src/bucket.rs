@@ -156,22 +156,22 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         result
     }
 
-    pub fn find_entry(&self, key: &Pubkey) -> Option<(&IndexEntry, u64)> {
-        Self::bucket_find_entry(&self.index, key, self.random)
+    pub fn find_index_entry(&self, key: &Pubkey) -> Option<(&IndexEntry, u64)> {
+        Self::bucket_find_index_entry(&self.index, key, self.random)
     }
 
     /// find an entry for `key`
     /// if entry exists, return the entry along with the index of the existing entry
     /// if entry does not exist, return just the index of an empty entry appropriate for this key
     /// returns (existing entry, index of the found or empty entry)
-    fn find_entry_mut<'a>(
+    fn find_index_entry_mut<'a>(
         index: &'a mut BucketStorage<IndexBucket>,
         key: &Pubkey,
         random: u64,
     ) -> Result<(Option<&'a mut IndexEntry>, u64), BucketMapError> {
         let ix = Self::bucket_index_ix(index, key, random);
         let mut first_free = None;
-        let mut m = Measure::start("bucket_find_entry_mut");
+        let mut m = Measure::start("bucket_find_index_entry_mut");
         let capacity = index.capacity();
         for i in ix..ix + index.max_search() {
             let ii = i % capacity;
@@ -187,7 +187,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
                 index
                     .stats
-                    .find_entry_mut_us
+                    .find_index_entry_mut_us
                     .fetch_add(m.as_us(), Ordering::Relaxed);
                 return Ok((Some(index.get_mut(ii)), ii));
             }
@@ -195,7 +195,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         m.stop();
         index
             .stats
-            .find_entry_mut_us
+            .find_index_entry_mut_us
             .fetch_add(m.as_us(), Ordering::Relaxed);
         match first_free {
             Some(ii) => Ok((None, ii)),
@@ -203,7 +203,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         }
     }
 
-    fn bucket_find_entry<'a>(
+    fn bucket_find_index_entry<'a>(
         index: &'a BucketStorage<IndexBucket>,
         key: &Pubkey,
         random: u64,
@@ -244,20 +244,20 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             m.stop();
             index
                 .stats
-                .find_entry_mut_us
+                .find_index_entry_mut_us
                 .fetch_add(m.as_us(), Ordering::Relaxed);
             return Ok(ii);
         }
         m.stop();
         index
             .stats
-            .find_entry_mut_us
+            .find_index_entry_mut_us
             .fetch_add(m.as_us(), Ordering::Relaxed);
         Err(BucketMapError::IndexNoSpace(index.capacity_pow2))
     }
 
     pub fn addref(&mut self, key: &Pubkey) -> Option<RefCount> {
-        if let Ok((Some(elem), _)) = Self::find_entry_mut(&mut self.index, key, self.random) {
+        if let Ok((Some(elem), _)) = Self::find_index_entry_mut(&mut self.index, key, self.random) {
             elem.ref_count += 1;
             return Some(elem.ref_count);
         }
@@ -265,7 +265,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     pub fn unref(&mut self, key: &Pubkey) -> Option<RefCount> {
-        if let Ok((Some(elem), _)) = Self::find_entry_mut(&mut self.index, key, self.random) {
+        if let Ok((Some(elem), _)) = Self::find_index_entry_mut(&mut self.index, key, self.random) {
             elem.ref_count -= 1;
             return Some(elem.ref_count);
         }
@@ -274,7 +274,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
     pub fn read_value(&self, key: &Pubkey) -> Option<(&[T], RefCount)> {
         //debug!("READ_VALUE: {:?}", key);
-        let (elem, _) = self.find_entry(key)?;
+        let (elem, _) = self.find_index_entry(key)?;
         elem.read_value(self)
     }
 
@@ -291,7 +291,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
         }
         let max_search = self.index.max_search();
-        let (elem, elem_ix) = Self::find_entry_mut(&mut self.index, key, self.random)?;
+        let (elem, elem_ix) = Self::find_index_entry_mut(&mut self.index, key, self.random)?;
         let elem = if let Some(elem) = elem {
             elem
         } else {
@@ -362,7 +362,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     pub fn delete_key(&mut self, key: &Pubkey) {
-        if let Some((elem, elem_ix)) = self.find_entry(key) {
+        if let Some((elem, elem_ix)) = self.find_index_entry(key) {
             if elem.num_slots > 0 {
                 let ix = elem.data_bucket_ix() as usize;
                 let data_bucket = &self.data[ix];
@@ -411,7 +411,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                         /*
                         let dbg_elem: IndexEntry = *new_elem;
                         assert_eq!(
-                            Self::bucket_find_entry(&index, &elem.key, random).unwrap(),
+                            Self::bucket_find_index_entry(&index, &elem.key, random).unwrap(),
                             (&dbg_elem, new_ix)
                         );
                         */
