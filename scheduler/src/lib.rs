@@ -1755,7 +1755,7 @@ impl ScheduleStage {
             .map(|thx| {
                 let task_receiver = task_receiver.clone();
                 std::thread::Builder::new()
-                    .name(format!("solScIdxer{:02}", thx))
+                    .name(format!("solScIdxer{thx:02}"))
                     .spawn(move || {
                         while let Ok((task, ll)) = task_receiver.recv() {
                             for lock_attempt in ll {
