@@ -166,6 +166,7 @@ impl ThreadAwareAccountLocks {
         read_account_locks: impl Iterator<Item = &'a Pubkey>,
         thread_id: ThreadId,
     ) {
+        assert!(thread_id < self.num_threads);
         for account in write_account_locks {
             self.write_lock_account(account, thread_id);
         }
@@ -430,7 +431,6 @@ mod tests {
             locks.accounts_schedulable_threads([&pk1].into_iter(), std::iter::empty()),
             ThreadSet::any(TEST_NUM_THREADS)
         );
-
         assert_eq!(
             locks.accounts_schedulable_threads(std::iter::empty(), [&pk1].into_iter()),
             ThreadSet::any(TEST_NUM_THREADS)
@@ -442,16 +442,25 @@ mod tests {
         let pk1 = Pubkey::new_unique();
         let pk2 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
-        locks.write_lock_account(&pk1, 2);
 
+        locks.write_lock_account(&pk1, 2);
         assert_eq!(
             locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
             ThreadSet::only(2)
         );
-
         assert_eq!(
             locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
             ThreadSet::only(2)
+        );
+
+        locks.write_lock_account(&pk1, 2); // at limit
+        assert_eq!(
+            locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
+            ThreadSet::none()
+        );
+        assert_eq!(
+            locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
+            ThreadSet::none()
         );
     }
 
@@ -460,8 +469,8 @@ mod tests {
         let pk1 = Pubkey::new_unique();
         let pk2 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
-        locks.read_lock_account(&pk1, 2);
 
+        locks.read_lock_account(&pk1, 2);
         assert_eq!(
             locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
             ThreadSet::only(2)
@@ -493,17 +502,26 @@ mod tests {
         let pk1 = Pubkey::new_unique();
         let pk2 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
+
         locks.read_lock_account(&pk1, 2);
         locks.write_lock_account(&pk2, 2);
-
         assert_eq!(
             locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
             ThreadSet::only(2)
         );
-
         assert_eq!(
             locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
             ThreadSet::only(2)
+        );
+
+        locks.read_lock_account(&pk1, 2); // at limit
+        assert_eq!(
+            locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
+            ThreadSet::none()
+        );
+        assert_eq!(
+            locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
+            ThreadSet::none()
         );
     }
 
@@ -522,6 +540,16 @@ mod tests {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.read_lock_account(&pk1, 0);
+        locks.write_lock_account(&pk1, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_write_lock_account_limit() {
+        let pk1 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
+        locks.write_lock_account(&pk1, 1);
+        locks.write_lock_account(&pk1, 1);
         locks.write_lock_account(&pk1, 1);
     }
 
@@ -566,6 +594,36 @@ mod tests {
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.read_lock_account(&pk1, 0);
         locks.read_unlock_account(&pk1, 1);
+    }
+
+    #[test]
+    fn test_write_locking() {
+        let pk1 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
+        locks.write_lock_account(&pk1, 1);
+        locks.write_lock_account(&pk1, 1);
+        locks.write_unlock_account(&pk1, 1);
+        locks.write_unlock_account(&pk1, 1);
+        assert!(locks.write_locks.is_empty());
+    }
+
+    #[test]
+    fn test_read_locking() {
+        let pk1 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
+        locks.read_lock_account(&pk1, 1);
+        locks.read_lock_account(&pk1, 1);
+        locks.read_unlock_account(&pk1, 1);
+        locks.read_unlock_account(&pk1, 1);
+        assert!(locks.read_locks.is_empty());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_lock_accounts_invalid_thread() {
+        let pk1 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
+        locks.lock_accounts([&pk1].into_iter(), std::iter::empty(), TEST_NUM_THREADS);
     }
 
     #[test]
