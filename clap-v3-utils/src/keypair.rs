@@ -1118,7 +1118,7 @@ fn encodable_key_from_seed_phrase<K: EncodableKey>(
     };
 
     if confirm_pubkey {
-        let pubkey = key.get_pubkey()?.to_string();
+        let pubkey = key.pubkey_string()?;
         print!("Recovered pubkey `{pubkey:?}`. Continue? (y/n): ");
         let _ignored = stdout().flush();
         let mut input = String::new();
