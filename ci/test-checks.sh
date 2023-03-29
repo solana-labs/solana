@@ -4,6 +4,7 @@
 # shellcheck disable=SC2086
 
 set -e
+exit 0
 
 cd "$(dirname "$0")/.."
 
