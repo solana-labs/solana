@@ -300,17 +300,18 @@ mod tests {
     use super::*;
 
     const TEST_NUM_THREADS: usize = 4;
+    const TEST_SEQ_LIMIT: u32 = 2;
 
     #[test]
     #[should_panic]
     fn test_too_few_num_threads() {
-        ThreadAwareAccountLocks::new(0, 1);
+        ThreadAwareAccountLocks::new(0, TEST_SEQ_LIMIT);
     }
 
     #[test]
     #[should_panic]
     fn test_too_many_num_threads() {
-        ThreadAwareAccountLocks::new(MAX_THREADS + 1, 1);
+        ThreadAwareAccountLocks::new(MAX_THREADS + 1, TEST_SEQ_LIMIT);
     }
 
     #[test]
@@ -322,7 +323,7 @@ mod tests {
     #[test]
     fn test_accounts_schedulable_threads_no_outstanding_locks() {
         let pk1 = Pubkey::new_unique();
-        let locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
 
         assert_eq!(
             locks.accounts_schedulable_threads([&pk1].into_iter(), std::iter::empty()),
@@ -339,7 +340,7 @@ mod tests {
     fn test_accounts_schedulable_threads_outstanding_write_only() {
         let pk1 = Pubkey::new_unique();
         let pk2 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.write_lock_account(&pk1, 2);
 
         assert_eq!(
@@ -357,7 +358,7 @@ mod tests {
     fn test_accounts_schedulable_threads_outstanding_read_only() {
         let pk1 = Pubkey::new_unique();
         let pk2 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.read_lock_account(&pk1, 2);
 
         assert_eq!(
@@ -384,7 +385,7 @@ mod tests {
     fn test_accounts_schedulable_threads_outstanding_mixed() {
         let pk1 = Pubkey::new_unique();
         let pk2 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.read_lock_account(&pk1, 2);
         locks.write_lock_account(&pk2, 2);
 
@@ -403,7 +404,7 @@ mod tests {
     #[should_panic]
     fn test_write_lock_account_write_conflict_panic() {
         let pk1 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.write_lock_account(&pk1, 0);
         locks.write_lock_account(&pk1, 1);
     }
@@ -412,7 +413,7 @@ mod tests {
     #[should_panic]
     fn test_write_lock_account_read_conflict_panic() {
         let pk1 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.read_lock_account(&pk1, 0);
         locks.write_lock_account(&pk1, 1);
     }
@@ -421,7 +422,7 @@ mod tests {
     #[should_panic]
     fn test_write_unlock_account_not_locked() {
         let pk1 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.write_unlock_account(&pk1, 0);
     }
 
@@ -429,7 +430,7 @@ mod tests {
     #[should_panic]
     fn test_write_unlock_account_thread_mismatch() {
         let pk1 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.write_lock_account(&pk1, 1);
         locks.write_unlock_account(&pk1, 0);
     }
@@ -438,7 +439,7 @@ mod tests {
     #[should_panic]
     fn test_read_lock_account_write_conflict_panic() {
         let pk1 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.write_lock_account(&pk1, 0);
         locks.read_lock_account(&pk1, 1);
     }
@@ -447,7 +448,7 @@ mod tests {
     #[should_panic]
     fn test_read_unlock_account_not_locked() {
         let pk1 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.read_unlock_account(&pk1, 1);
     }
 
@@ -455,7 +456,7 @@ mod tests {
     #[should_panic]
     fn test_read_unlock_account_thread_mismatch() {
         let pk1 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
         locks.read_lock_account(&pk1, 0);
         locks.read_unlock_account(&pk1, 1);
     }
