@@ -1197,7 +1197,8 @@ pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
     // drop with exit atomicbool integration??
 }
 
-type InstalledSchedulerBox = Option<Box<dyn InstalledScheduler>>;
+#[derive(Debug, Default)]
+type struct InstalledSchedulerBox(Option<Box<dyn InstalledScheduler>>);
 
 struct VoteWithStakeDelegations {
     vote_state: Arc<VoteState>,
