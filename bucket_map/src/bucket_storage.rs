@@ -170,13 +170,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
     }
 
     pub fn get<T: Sized>(&self, ix: u64) -> &T {
-        let start = self.get_start_offset_no_header(ix);
-        let end = start + std::mem::size_of::<T>();
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *const T;
-            &*item
-        }
+        &self.get_cell_slice::<T>(ix, 1)[0]
     }
 
     pub(crate) fn get_start_offset_with_header(&self, ix: u64) -> usize {
@@ -190,13 +184,18 @@ impl<O: BucketOccupied> BucketStorage<O> {
 
     pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
         let start = self.get_start_offset_no_header(ix);
-        let end = start + std::mem::size_of::<T>() * len as usize;
-        //debug!("GET slice {} {}", start, end);
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *const T;
-            std::slice::from_raw_parts(item, len as usize)
-        }
+        let len = std::mem::size_of::<T>() * len as usize;
+        let slice = {
+            let slice = &self.mmap[start..];
+            debug_assert!(slice.len() >= len);
+            &slice[..len]
+        };
+        let ptr = {
+            let ptr = slice.as_ptr() as *const T;
+            debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
+            ptr
+        };
+        unsafe { std::slice::from_raw_parts(ptr, len) }
     }
 
     pub(crate) fn get_mut_from_parts<T: Sized>(item_slice: &mut [u8]) -> &mut T {
@@ -206,21 +205,23 @@ impl<O: BucketOccupied> BucketStorage<O> {
     }
 
     pub fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
-        let start = self.get_start_offset_no_header(ix);
-        let item_slice = &mut self.mmap[start..];
-        let item_slice = &mut item_slice[..std::mem::size_of::<T>()];
-        Self::get_mut_from_parts(item_slice)
+        &mut self.get_mut_cell_slice::<T>(ix, 1)[0]
     }
 
     pub fn get_mut_cell_slice<T: Sized>(&mut self, ix: u64, len: u64) -> &mut [T] {
         let start = self.get_start_offset_no_header(ix);
-        let end = start + std::mem::size_of::<T>() * len as usize;
-        //debug!("GET mut slice {} {}", start, end);
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *mut T;
-            std::slice::from_raw_parts_mut(item, len as usize)
-        }
+        let len = std::mem::size_of::<T>() * len as usize;
+        let slice = {
+            let slice = &mut self.mmap[start..];
+            debug_assert!(slice.len() >= len);
+            &mut slice[..len]
+        };
+        let ptr = {
+            let ptr = slice.as_mut_ptr() as *mut T;
+            debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
+            ptr
+        };
+        unsafe { std::slice::from_raw_parts_mut(ptr, len) }
     }
 
     fn new_map(
