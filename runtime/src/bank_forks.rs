@@ -73,7 +73,7 @@ impl BankWithScheduler {
 
 impl Drop for BankWithScheduler {
     fn drop(&mut self) {
-        self.0.trigger_scheduler_termination();
+        self.0.schedule_termination();
     }
 }
 

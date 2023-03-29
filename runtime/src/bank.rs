@@ -1185,7 +1185,6 @@ pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
     fn scheduler_pool(&self) -> Box<dyn InstalledSchedulerPool>;
 
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
-
     fn schedule_termination(&mut self);
     fn wait_for_termination(
         &mut self,
