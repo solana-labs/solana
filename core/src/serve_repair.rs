@@ -206,7 +206,7 @@ struct ServeRepairStats {
     err_id_mismatch: usize,
 }
 
-#[derive(Debug, AbiExample, Deserialize, Serialize)]
+#[derive(Clone, Debug, AbiExample, Deserialize, Serialize)]
 pub struct RepairRequestHeader {
     signature: Signature,
     sender: Pubkey,
@@ -230,7 +230,7 @@ impl RepairRequestHeader {
 pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
-#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
+#[derive(Clone, Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
 #[frozen_abi(digest = "3bgE3sYHRqetvpo4fcDL6PTV3z2LMAtY6H8BoLFSjCwf")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
@@ -956,7 +956,7 @@ impl ServeRepair {
             }
             stats.processed += 1;
             let rsp = match Self::handle_repair(
-                recycler, &from_addr, blockstore, request, stats, ping_cache,
+                recycler, &from_addr, blockstore, request.clone(), stats, ping_cache,
             ) {
                 None => continue,
                 Some(rsp) => rsp,
