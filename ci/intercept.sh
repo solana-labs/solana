@@ -2,16 +2,20 @@
 
 set -e
 
+faketty() {
+  script --quiet --flush --return --command "$(printf "%q " "$@")" /dev/null
+}
+
 if [[ -n $CI && -z $NO_INTERCEPT ]]; then
   console_log="./intercepted-console-$(date '+%Yy%mm%dd%Hh%Mm%Ss%Nns').log"
   echo "$0: Intercepting stderr into $console_log, along side tee-d stdout."
 
-  if [[ -n $SOLANA_IN_DOCKER_RUN ]]; then
-    (set -x && apt install expect)
-  fi
+  #if [[ -n $SOLANA_IN_DOCKER_RUN ]]; then
+  #  (set -x && apt install expect)
+  #fi
   # we don't care about being racy here as was before; so disable shellcheck
   # shellcheck disable=SC2094
-  if unbuffer "$@" 2>> "$console_log" 1>> >(tee -a "$console_log"); then
+  if faketty "$@" 2>> "$console_log" 1>> >(tee -a "$console_log"); then
     exit_code=0
   else
     exit_code=$?
