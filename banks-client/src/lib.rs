@@ -534,7 +534,9 @@ mod tests {
             bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
             genesis_utils::create_genesis_config,
         },
-        solana_sdk::{message::Message, signature::Signer, system_instruction, transaction::Transaction},
+        solana_sdk::{
+            message::Message, signature::Signer, system_instruction, transaction::Transaction,
+        },
         std::sync::{Arc, RwLock},
         tarpc::transport,
         tokio::{
