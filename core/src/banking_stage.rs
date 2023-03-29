@@ -48,6 +48,10 @@ pub mod consumer;
 mod decision_maker;
 mod forwarder;
 mod packet_receiver;
+
+#[allow(dead_code)]
+mod multi_iterator_scheduler;
+
 #[allow(dead_code)]
 mod scheduler_messages;
 mod transaction_scheduler;

@@ -899,7 +899,7 @@ pub struct Bank {
     pub status_cache: Arc<RwLock<BankStatusCache>>,
 
     /// FIFO queue of `recent_blockhash` items
-    blockhash_queue: RwLock<BlockhashQueue>,
+    pub blockhash_queue: RwLock<BlockhashQueue>,
 
     /// The set of parents including this bank
     pub ancestors: Ancestors,
@@ -3940,7 +3940,7 @@ impl Bank {
             .collect()
     }
 
-    fn check_transaction_age(
+    pub fn check_transaction_age(
         &self,
         tx: &SanitizedTransaction,
         max_age: usize,
@@ -3961,7 +3961,7 @@ impl Bank {
         }
     }
 
-    fn is_transaction_already_processed(
+    pub fn is_transaction_already_processed(
         &self,
         sanitized_tx: &SanitizedTransaction,
         status_cache: &BankStatusCache,
