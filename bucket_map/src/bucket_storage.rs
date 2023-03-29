@@ -212,8 +212,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         Self::get_mut_from_parts(item_slice)
     }
 
-    #[allow(clippy::mut_from_ref)]
-    pub fn get_mut_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &mut [T] {
+    pub fn get_mut_cell_slice<T: Sized>(&mut self, ix: u64, len: u64) -> &mut [T] {
         let start = self.get_start_offset_no_header(ix);
         let end = start + std::mem::size_of::<T>() * len as usize;
         //debug!("GET mut slice {} {}", start, end);
