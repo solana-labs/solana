@@ -80,7 +80,6 @@ use {
         transaction_error_metrics::TransactionErrorMetrics,
         vote_account::{VoteAccount, VoteAccountsHashMap},
     },
-    assert_matches::assert_matches,
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
     itertools::Itertools,
@@ -184,6 +183,7 @@ use {
         time::{Duration, Instant},
     },
 };
+use assert_matches::assert_matches;
 
 /// params to `verify_accounts_hash`
 pub struct VerifyAccountsHashConfig {
@@ -1186,7 +1186,7 @@ pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
 
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
 
-    fn trigger_termination(&mut self);
+    fn schedule_termination(&mut self);
     fn wait_for_termination(
         &mut self,
         from_internal: bool,
@@ -6322,7 +6322,7 @@ impl Bank {
         self.cluster_type.unwrap()
     }
 
-    fn schedule_and_commit_transactions<'a>(
+    fn schedule_transaction_executions<'a>(
         &self,
         transactions: &[SanitizedTransaction],
         transaction_indexes: impl Iterator<Item = &'a usize>,
@@ -6340,18 +6340,10 @@ impl Bank {
         }
     }
 
-    pub fn schedule_transactions_to_commit<'a>(
-        self: &Arc<Bank>,
-        transactions: &[SanitizedTransaction],
-        transaction_indexes: impl Iterator<Item = &'a usize>,
-    ) {
-        self.schedule_and_commit_transactions(transactions, transaction_indexes)
-    }
-
-    pub fn trigger_scheduler_termination(&self) {
+    pub fn schedule_termination(&self) {
         let mut s = self.scheduler.write().unwrap();
         if let Some(scheduler) = s.0.as_mut() {
-            scheduler.trigger_termination();
+            scheduler.schedule_termination();
         }
     }
 
