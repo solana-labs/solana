@@ -73,9 +73,8 @@ fi
 
 nightly_clippy_allows=()
 
-# -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
- _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy -Zunstable-options --workspace --all-targets --features dummy-for-ci-check -- \
+ _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
    --deny=warnings \
    --deny=clippy::integer_arithmetic \
    "${nightly_clippy_allows[@]}"
