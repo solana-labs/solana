@@ -11,6 +11,7 @@
 #![allow(clippy::unnecessary_cast)]
 #![allow(clippy::never_loop)]
 #![allow(clippy::type_complexity)]
+#![allow(clippy::integer_arithmetic)]
 
 use {
     log::*,

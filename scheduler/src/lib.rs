@@ -26,6 +26,7 @@
 #![allow(clippy::map_flatten)]
 #![allow(clippy::borrow_deref_ref)]
 #![allow(clippy::bool_to_int_with_if)]
+#![allow(clippy::integer_arithmetic)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
