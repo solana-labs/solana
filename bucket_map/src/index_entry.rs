@@ -8,7 +8,7 @@ use {
     bv::BitVec,
     modular_bitfield::prelude::*,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
-    std::{fmt::Debug, marker::PhantomData},
+    std::fmt::Debug,
 };
 
 /// in use/occupied
@@ -57,9 +57,8 @@ pub type IndexBucket = BucketWithBitVec;
 
 /// contains the index of an entry in the index bucket.
 /// This type allows us to call methods to interact with the index entry on this type.
-pub struct IndexEntryPlaceInBucket<T: 'static> {
+pub struct IndexEntryPlaceInBucket {
     pub ix: u64,
-    _phantom: PhantomData<T>,
 }
 
 #[repr(C)]
@@ -99,7 +98,7 @@ impl IndexEntry {
     }
 }
 
-impl<T> IndexEntryPlaceInBucket<T> {
+impl IndexEntryPlaceInBucket {
     pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket>, pubkey: &Pubkey) {
         let index_entry = index_bucket.get_mut::<IndexEntry>(self.ix);
         index_entry.key = *pubkey;
@@ -169,7 +168,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
                     .capacity_when_created_pow2())
     }
 
-    pub fn read_value<'a>(
+    pub fn read_value<'a, T>(
         &self,
         index_bucket: &BucketStorage<IndexBucket>,
         data_buckets: &'a [BucketStorage<DataBucket>],
@@ -189,10 +188,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
     }
 
     pub fn new(ix: u64) -> Self {
-        Self {
-            ix,
-            _phantom: PhantomData,
-        }
+        Self { ix }
     }
 
     pub fn key<'a>(&self, index_bucket: &'a BucketStorage<IndexBucket>) -> &'a Pubkey {
@@ -273,7 +269,7 @@ mod tests {
         BucketStorage::<IndexBucket>::new(Arc::new(paths), 1, 1, 1, Arc::default(), Arc::default())
     }
 
-    fn index_entry_for_testing() -> (BucketStorage<IndexBucket>, IndexEntryPlaceInBucket<u64>) {
+    fn index_entry_for_testing() -> (BucketStorage<IndexBucket>, IndexEntryPlaceInBucket) {
         (index_bucket_for_testing(), IndexEntryPlaceInBucket::new(0))
     }
 

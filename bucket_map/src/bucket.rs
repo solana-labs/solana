@@ -156,7 +156,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         result
     }
 
-    pub fn find_index_entry(&self, key: &Pubkey) -> Option<(IndexEntryPlaceInBucket<T>, u64)> {
+    pub fn find_index_entry(&self, key: &Pubkey) -> Option<(IndexEntryPlaceInBucket, u64)> {
         Self::bucket_find_index_entry(&self.index, key, self.random)
     }
 
@@ -168,7 +168,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         index: &mut BucketStorage<IndexBucket>,
         key: &Pubkey,
         random: u64,
-    ) -> Result<(Option<IndexEntryPlaceInBucket<T>>, u64), BucketMapError> {
+    ) -> Result<(Option<IndexEntryPlaceInBucket>, u64), BucketMapError> {
         let ix = Self::bucket_index_ix(index, key, random);
         let mut first_free = None;
         let mut m = Measure::start("bucket_find_index_entry_mut");
@@ -207,7 +207,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         index: &BucketStorage<IndexBucket>,
         key: &Pubkey,
         random: u64,
-    ) -> Option<(IndexEntryPlaceInBucket<T>, u64)> {
+    ) -> Option<(IndexEntryPlaceInBucket, u64)> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
             let ii = i % index.capacity();
@@ -238,7 +238,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             index.occupy(ii, is_resizing).unwrap();
             // These fields will be overwritten after allocation by callers.
             // Since this part of the mmapped file could have previously been used by someone else, there can be garbage here.
-            IndexEntryPlaceInBucket::<T>::new(ii).init(index, key);
+            IndexEntryPlaceInBucket::new(ii).init(index, key);
             //debug!(                "INDEX ALLOC {:?} {} {} {}",                key, ii, index.capacity, elem_uid            );
             m.stop();
             index
