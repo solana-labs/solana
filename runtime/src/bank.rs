@@ -8200,13 +8200,14 @@ impl Bank {
     }
 
     pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<()>) {
-        self.wait_for_scheduler::<false, false, false>()
-            .unwrap_or((ExecuteTimings::default(), Ok(())))
+        let maybe_timings_and_result = self.wait_for_scheduler::<false, false, false>();
+        maybe_timings_and_result.unwrap_or((ExecuteTimings::default(), Ok(())))
     }
 
-    fn wait_for_completed_scheduler_via_drop(&self) -> (ExecuteTimings, Result<()>) {
-        self.wait_for_scheduler::<true, false, false>()
-            .unwrap_or((ExecuteTimings::default(), Ok(())))
+    fn wait_for_completed_scheduler_via_drop(&self) -> Option<Result<()>> {
+        let maybe_timings_and_result = self.wait_for_scheduler::<true, false, false>();
+
+        maybe_timings_and_result.map(|(_timings, result) result)
     }
 
     fn wait_for_completed_scheduler_via_internal_drop(self) {
@@ -8434,17 +8435,11 @@ impl TotalAccountsStats {
 impl Drop for Bank {
     fn drop(&mut self) {
         if self.with_scheduler() {
-            let (_t, r) = self.wait_for_completed_scheduler_via_drop();
-            if let Err(err) = r {
+            let Some(Err(err)) = self.wait_for_completed_scheduler_via_drop() {
                 warn!(
                     "Bank::drop(): slot: {} discarding error from scheduler: {:?}",
                     self.slot(),
                     err
-                );
-            } else {
-                trace!(
-                    "Bank::drop(): slot: {} scheduler is returned to the pool",
-                    self.slot()
                 );
             }
         }
