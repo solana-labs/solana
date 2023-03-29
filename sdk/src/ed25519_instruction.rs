@@ -1,10 +1,13 @@
+//! Instructions for the [ed25519 native program][np].
+//!
+//! [np]: https://docs.solana.com/developing/runtime-facilities/programs#ed25519-program
+
 #![cfg(feature = "full")]
 
 use {
     crate::{feature_set::FeatureSet, instruction::Instruction, precompiles::PrecompileError},
     bytemuck::{bytes_of, Pod, Zeroable},
     ed25519_dalek::{ed25519::signature::Signature, Signer, Verifier},
-    std::sync::Arc,
 };
 
 pub const PUBKEY_SERIALIZED_SIZE: usize = 32;
@@ -14,7 +17,7 @@ pub const SIGNATURE_OFFSETS_SERIALIZED_SIZE: usize = 14;
 pub const SIGNATURE_OFFSETS_START: usize = 2;
 pub const DATA_START: usize = SIGNATURE_OFFSETS_SERIALIZED_SIZE + SIGNATURE_OFFSETS_START;
 
-#[derive(Default, Debug, Copy, Clone, Zeroable, Pod)]
+#[derive(Default, Debug, Copy, Clone, Zeroable, Pod, Eq, PartialEq)]
 #[repr(C)]
 pub struct Ed25519SignatureOffsets {
     signature_offset: u16,             // offset to ed25519 signature of 64 bytes
@@ -82,7 +85,7 @@ pub fn new_ed25519_instruction(keypair: &ed25519_dalek::Keypair, message: &[u8])
 pub fn verify(
     data: &[u8],
     instruction_datas: &[&[u8]],
-    _feature_set: &Arc<FeatureSet>,
+    _feature_set: &FeatureSet,
 ) -> Result<(), PrecompileError> {
     if data.len() < SIGNATURE_OFFSETS_START {
         return Err(PrecompileError::InvalidInstructionDataSize);
@@ -186,7 +189,6 @@ pub mod test {
             transaction::Transaction,
         },
         rand::{thread_rng, Rng},
-        std::sync::Arc,
     };
 
     fn test_case(
@@ -205,7 +207,7 @@ pub mod test {
         verify(
             &instruction_data,
             &[&[0u8; 100]],
-            &Arc::new(FeatureSet::all_enabled()),
+            &FeatureSet::all_enabled(),
         )
     }
 
@@ -223,7 +225,7 @@ pub mod test {
             verify(
                 &instruction_data,
                 &[&[0u8; 100]],
-                &Arc::new(FeatureSet::all_enabled()),
+                &FeatureSet::all_enabled(),
             ),
             Err(PrecompileError::InvalidInstructionDataSize)
         );
@@ -349,7 +351,7 @@ pub mod test {
         let message_arr = b"hello";
         let mut instruction = new_ed25519_instruction(&privkey, message_arr);
         let mint_keypair = Keypair::new();
-        let feature_set = Arc::new(FeatureSet::all_enabled());
+        let feature_set = FeatureSet::all_enabled();
 
         let tx = Transaction::new_signed_with_payer(
             &[instruction.clone()],

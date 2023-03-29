@@ -48,7 +48,7 @@ impl SlotStatusObserver {
         slot_status_notifier: SlotStatusNotifier,
     ) -> JoinHandle<()> {
         Builder::new()
-            .name("bank_notification_receiver".to_string())
+            .name("solBankNotif".to_string())
             .spawn(move || {
                 while !exit.load(Ordering::Relaxed) {
                     if let Ok(slot) = bank_notification_receiver.recv() {

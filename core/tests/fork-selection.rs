@@ -488,7 +488,7 @@ fn test_no_partitions() {
             for tower in towers.iter_mut() {
                 assert!(tower.push_vote(vote.clone(), &tree, &bmap));
             }
-            println!("{} {}", time, calc_tip_converged(&towers, &bmap));
+            //println!("{} {}", time, calc_tip_converged(&towers, &bmap));
         }
     }
     let bmap = calc_fork_map(&towers, &tree);

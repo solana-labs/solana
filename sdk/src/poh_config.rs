@@ -1,9 +1,11 @@
+//! Definitions of Solana's proof of history.
+
 use {
     crate::{clock::DEFAULT_TICKS_PER_SECOND, unchecked_div_by_const},
     std::time::Duration,
 };
 
-#[derive(Serialize, Deserialize, Clone, Debug, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug, AbiExample, Eq, PartialEq)]
 pub struct PohConfig {
     /// The target tick rate of the cluster.
     pub target_tick_duration: Duration,

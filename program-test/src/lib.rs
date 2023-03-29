@@ -1,4 +1,4 @@
-//! The solana-program-test provides a BanksClient-based test framework BPF programs
+//! The solana-program-test provides a BanksClient-based test framework SBF programs
 #![allow(clippy::integer_arithmetic)]
 
 // Export tokio for test clients
@@ -9,22 +9,26 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
+    solana_bpf_loader_program::serialization::serialize_parameters,
     solana_program_runtime::{
         compute_budget::ComputeBudget, ic_msg, invoke_context::ProcessInstructionWithContext,
         stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
+        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
         bank::Bank,
         bank_forks::BankForks,
         builtins::Builtin,
         commitment::BlockCommitmentCache,
+        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
+        runtime_config::RuntimeConfig,
     },
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        account::{Account, AccountSharedData},
         account_info::AccountInfo,
         clock::Slot,
-        entrypoint::{ProgramResult, SUCCESS},
+        entrypoint::{deserialize, ProgramResult, SUCCESS},
         feature_set::FEATURE_NAMES,
         fee_calculator::{FeeCalculator, FeeRateGovernor, DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE},
         genesis_config::{ClusterType, GenesisConfig},
@@ -32,22 +36,22 @@ use {
         instruction::{Instruction, InstructionError},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
-        program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
+        program_error::{ProgramError, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
+        stable_layout::stable_instruction::StableInstruction,
         sysvar::{Sysvar, SysvarId},
     },
-    solana_vote_program::vote_state::{VoteState, VoteStateVersions},
+    solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
     std::{
         cell::RefCell,
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         convert::TryFrom,
         fs::File,
         io::{self, Read},
         mem::transmute,
         path::{Path, PathBuf},
-        rc::Rc,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -60,7 +64,9 @@ use {
 // Export types so test clients can limit their solana crate dependencies
 pub use {
     solana_banks_client::{BanksClient, BanksClientError},
+    solana_banks_interface::BanksTransactionResultWithMetadata,
     solana_program_runtime::invoke_context::InvokeContext,
+    solana_sdk::transaction_context::IndexOfAccount,
 };
 
 pub mod programs;
@@ -93,7 +99,6 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
 
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
-    _first_instruction_account: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
@@ -101,11 +106,10 @@ pub fn builtin_process_instruction(
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
-    let indices_in_instruction = instruction_context.get_number_of_program_accounts()
-        ..instruction_context.get_number_of_accounts();
+    let instruction_account_indices = 0..instruction_context.get_number_of_instruction_accounts();
 
     let log_collector = invoke_context.get_log_collector();
-    let program_id = instruction_context.get_program_key(transaction_context)?;
+    let program_id = instruction_context.get_last_program_key(transaction_context)?;
     stable_log::program_invoke(
         &log_collector,
         program_id,
@@ -113,58 +117,20 @@ pub fn builtin_process_instruction(
     );
 
     // Copy indices_in_instruction into a HashSet to ensure there are no duplicates
-    let deduplicated_indices: HashSet<usize> = indices_in_instruction.clone().collect();
+    let deduplicated_indices: HashSet<IndexOfAccount> = instruction_account_indices.collect();
 
-    // Create copies of the accounts
-    let mut account_copies = deduplicated_indices
-        .iter()
-        .map(|index_in_instruction| {
-            let borrowed_account = instruction_context
-                .try_borrow_account(transaction_context, *index_in_instruction)?;
-            Ok((
-                *borrowed_account.get_key(),
-                *borrowed_account.get_owner(),
-                borrowed_account.get_lamports(),
-                borrowed_account.get_data().to_vec(),
-            ))
-        })
-        .collect::<Result<Vec<_>, InstructionError>>()?;
+    // Serialize entrypoint parameters with SBF ABI
+    let (mut parameter_bytes, _regions, _account_lengths) = serialize_parameters(
+        invoke_context.transaction_context,
+        invoke_context
+            .transaction_context
+            .get_current_instruction_context()?,
+        true,
+    )?;
 
-    // Create shared references to account_copies
-    let account_refs: Vec<_> = account_copies
-        .iter_mut()
-        .map(|(key, owner, lamports, data)| {
-            (
-                key,
-                owner,
-                Rc::new(RefCell::new(lamports)),
-                Rc::new(RefCell::new(data.as_mut())),
-            )
-        })
-        .collect();
-
-    // Create AccountInfos
-    let account_infos = indices_in_instruction
-        .map(|index_in_instruction| {
-            let account_copy_index = deduplicated_indices
-                .iter()
-                .position(|index| *index == index_in_instruction)
-                .unwrap();
-            let (key, owner, lamports, data) = &account_refs[account_copy_index];
-            let borrowed_account = instruction_context
-                .try_borrow_account(transaction_context, index_in_instruction)?;
-            Ok(AccountInfo {
-                key,
-                is_signer: borrowed_account.is_signer(),
-                is_writable: borrowed_account.is_writable(),
-                lamports: lamports.clone(),
-                data: data.clone(),
-                owner,
-                executable: borrowed_account.is_executable(),
-                rent_epoch: borrowed_account.get_rent_epoch(),
-            })
-        })
-        .collect::<Result<Vec<AccountInfo>, InstructionError>>()?;
+    // Deserialize data back into instruction params
+    let (program_id, account_infos, _input) =
+        unsafe { deserialize(&mut parameter_bytes.as_slice_mut()[0] as *mut u8) };
 
     // Execute the program
     process_instruction(program_id, &account_infos, instruction_data).map_err(|err| {
@@ -174,16 +140,35 @@ pub fn builtin_process_instruction(
     })?;
     stable_log::program_success(&log_collector, program_id);
 
+    // Lookup table for AccountInfo
+    let account_info_map: HashMap<_, _> = account_infos.into_iter().map(|a| (a.key, a)).collect();
+
+    // Re-fetch the instruction context. The previous reference may have been
+    // invalidated due to the `set_invoke_context` in a CPI.
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+
     // Commit AccountInfo changes back into KeyedAccounts
-    for (index_in_instruction, (_key, _owner, lamports, data)) in deduplicated_indices
-        .into_iter()
-        .zip(account_copies.into_iter())
-    {
+    for i in deduplicated_indices.into_iter() {
         let mut borrowed_account =
-            instruction_context.try_borrow_account(transaction_context, index_in_instruction)?;
+            instruction_context.try_borrow_instruction_account(transaction_context, i)?;
         if borrowed_account.is_writable() {
-            borrowed_account.set_lamports(lamports)?;
-            borrowed_account.set_data(&data)?;
+            if let Some(account_info) = account_info_map.get(borrowed_account.get_key()) {
+                if borrowed_account.get_lamports() != account_info.lamports() {
+                    borrowed_account.set_lamports(account_info.lamports())?;
+                }
+
+                if borrowed_account
+                    .can_data_be_resized(account_info.data_len())
+                    .is_ok()
+                    && borrowed_account.can_data_be_changed().is_ok()
+                {
+                    borrowed_account.set_data_from_slice(&account_info.data.borrow())?;
+                }
+                if borrowed_account.get_owner() != account_info.owner {
+                    borrowed_account.set_owner(account_info.owner.as_ref())?;
+                }
+            }
         }
     }
 
@@ -195,16 +180,9 @@ pub fn builtin_process_instruction(
 #[macro_export]
 macro_rules! processor {
     ($process_instruction:expr) => {
-        Some(
-            |first_instruction_account: usize,
-             invoke_context: &mut solana_program_test::InvokeContext| {
-                $crate::builtin_process_instruction(
-                    $process_instruction,
-                    first_instruction_account,
-                    invoke_context,
-                )
-            },
-        )
+        Some(|invoke_context: &mut solana_program_test::InvokeContext| {
+            $crate::builtin_process_instruction($process_instruction, invoke_context)
+        })
     };
 }
 
@@ -214,11 +192,7 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned + Clone>
 ) -> u64 {
     let invoke_context = get_invoke_context();
     if invoke_context
-        .get_compute_meter()
-        .try_borrow_mut()
-        .map_err(|_| ACCOUNT_BORROW_FAILED)
-        .unwrap()
-        .consume(invoke_context.get_compute_budget().sysvar_base_cost + T::size_of() as u64)
+        .consume_checked(invoke_context.get_compute_budget().sysvar_base_cost + T::size_of() as u64)
         .is_err()
     {
         panic!("Exceeded compute budget");
@@ -246,6 +220,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         account_infos: &[AccountInfo],
         signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
+        let instruction = StableInstruction::from(instruction.clone());
         let invoke_context = get_invoke_context();
         let log_collector = invoke_context.get_log_collector();
         let transaction_context = &invoke_context.transaction_context;
@@ -253,7 +228,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .get_current_instruction_context()
             .unwrap();
         let caller = instruction_context
-            .get_program_key(transaction_context)
+            .get_last_program_key(transaction_context)
             .unwrap();
 
         stable_log::program_invoke(
@@ -266,15 +241,19 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .iter()
             .map(|seeds| Pubkey::create_program_address(seeds, caller).unwrap())
             .collect::<Vec<_>>();
+
         let (instruction_accounts, program_indices) = invoke_context
-            .prepare_instruction(instruction, &signers)
+            .prepare_instruction(&instruction, &signers)
             .unwrap();
 
         // Copy caller's account_info modifications into invoke_context accounts
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
+            .unwrap();
         let mut account_indices = Vec::with_capacity(instruction_accounts.len());
         for instruction_account in instruction_accounts.iter() {
-            let account_key = invoke_context
-                .transaction_context
+            let account_key = transaction_context
                 .get_key_of_account_at_index(instruction_account.index_in_transaction)
                 .unwrap();
             let account_info_index = account_infos
@@ -283,19 +262,39 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 .ok_or(InstructionError::MissingAccount)
                 .unwrap();
             let account_info = &account_infos[account_info_index];
-            let mut account = invoke_context
-                .transaction_context
-                .get_account_at_index(instruction_account.index_in_transaction)
-                .unwrap()
-                .borrow_mut();
-            account.copy_into_owner_from_slice(account_info.owner.as_ref());
-            account.set_data_from_slice(&account_info.try_borrow_data().unwrap());
-            account.set_lamports(account_info.lamports());
-            account.set_executable(account_info.executable);
-            account.set_rent_epoch(account_info.rent_epoch);
+            let mut borrowed_account = instruction_context
+                .try_borrow_instruction_account(
+                    transaction_context,
+                    instruction_account.index_in_caller,
+                )
+                .unwrap();
+            if borrowed_account.get_lamports() != account_info.lamports() {
+                borrowed_account
+                    .set_lamports(account_info.lamports())
+                    .unwrap();
+            }
+            let account_info_data = account_info.try_borrow_data().unwrap();
+            // The redundant check helps to avoid the expensive data comparison if we can
+            match borrowed_account
+                .can_data_be_resized(account_info_data.len())
+                .and_then(|_| borrowed_account.can_data_be_changed())
+            {
+                Ok(()) => borrowed_account
+                    .set_data_from_slice(&account_info_data)
+                    .unwrap(),
+                Err(err) if borrowed_account.get_data() != *account_info_data => {
+                    panic!("{err:?}");
+                }
+                _ => {}
+            }
+            // Change the owner at the end so that we are allowed to change the lamports and data before
+            if borrowed_account.get_owner() != account_info.owner {
+                borrowed_account
+                    .set_owner(account_info.owner.as_ref())
+                    .unwrap();
+            }
             if instruction_account.is_writable {
-                account_indices
-                    .push((instruction_account.index_in_transaction, account_info_index));
+                account_indices.push((instruction_account.index_in_caller, account_info_index));
             }
         }
 
@@ -311,32 +310,35 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy invoke_context accounts modifications into caller's account_info
-        for (index_in_transaction, account_info_index) in account_indices.into_iter() {
-            let account = invoke_context
-                .transaction_context
-                .get_account_at_index(index_in_transaction)
-                .unwrap()
-                .borrow_mut();
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+        for (index_in_caller, account_info_index) in account_indices.into_iter() {
+            let borrowed_account = instruction_context
+                .try_borrow_instruction_account(transaction_context, index_in_caller)
+                .unwrap();
             let account_info = &account_infos[account_info_index];
-            **account_info.try_borrow_mut_lamports().unwrap() = account.lamports();
-            let mut data = account_info.try_borrow_mut_data()?;
-            let new_data = account.data();
-            if account_info.owner != account.owner() {
+            **account_info.try_borrow_mut_lamports().unwrap() = borrowed_account.get_lamports();
+            if account_info.owner != borrowed_account.get_owner() {
                 // TODO Figure out a better way to allow the System Program to set the account owner
                 #[allow(clippy::transmute_ptr_to_ptr)]
                 #[allow(mutable_transmutes)]
                 let account_info_mut =
                     unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
-                *account_info_mut = *account.owner();
+                *account_info_mut = *borrowed_account.get_owner();
             }
-            // TODO: Figure out how to allow the System Program to resize the account data
-            assert!(
-                data.len() == new_data.len(),
-                "Account data resizing not supported yet: {} -> {}. \
-                    Consider making this test conditional on `#[cfg(feature = \"test-bpf\")]`",
-                data.len(),
-                new_data.len()
-            );
+
+            let new_data = borrowed_account.get_data();
+            let new_len = new_data.len();
+
+            // Resize account_info data (grow-only)
+            if account_info.data_len() < new_len {
+                account_info.realloc(new_len, false)?;
+            }
+
+            // Clone the data
+            let mut data = account_info.try_borrow_mut_data()?;
             data.clone_from_slice(new_data);
         }
 
@@ -379,17 +381,22 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .get_current_instruction_context()
             .unwrap();
         let caller = *instruction_context
-            .get_program_key(transaction_context)
+            .get_last_program_key(transaction_context)
             .unwrap();
         transaction_context
             .set_return_data(caller, data.to_vec())
             .unwrap();
     }
+
+    fn sol_get_stack_height(&self) -> u64 {
+        let invoke_context = get_invoke_context();
+        invoke_context.get_stack_height().try_into().unwrap()
+    }
 }
 
 pub fn find_file(filename: &str) -> Option<PathBuf> {
     for dir in default_shared_object_dirs() {
-        let candidate = dir.join(&filename);
+        let candidate = dir.join(filename);
         if candidate.exists() {
             return Some(candidate);
         }
@@ -408,7 +415,7 @@ fn default_shared_object_dirs() -> Vec<PathBuf> {
     if let Ok(dir) = std::env::current_dir() {
         search_path.push(dir);
     }
-    trace!("BPF .so search path: {:?}", search_path);
+    trace!("SBF .so search path: {:?}", search_path);
     search_path
 }
 
@@ -430,6 +437,7 @@ pub struct ProgramTest {
     prefer_bpf: bool,
     use_bpf_jit: bool,
     deactivate_feature_set: HashSet<Pubkey>,
+    transaction_account_lock_limit: Option<usize>,
 }
 
 impl Default for ProgramTest {
@@ -440,7 +448,7 @@ impl Default for ProgramTest {
     /// used to override this preference at runtime.  `cargo test-bpf` will set `BPF_OUT_DIR`
     /// automatically.
     ///
-    /// BPF program shared objects and account data files are searched for in
+    /// SBF program shared objects and account data files are searched for in
     /// * the value of the `BPF_OUT_DIR` environment variable
     /// * the `tests/fixtures` sub-directory
     /// * the current working directory
@@ -455,13 +463,19 @@ impl Default for ProgramTest {
         let prefer_bpf =
             std::env::var("BPF_OUT_DIR").is_ok() || std::env::var("SBF_OUT_DIR").is_ok();
 
+        // deactivate feature `native_program_consume_cu` to continue support existing mock/test
+        // programs that do not consume units.
+        let deactivate_feature_set =
+            HashSet::from([solana_sdk::feature_set::native_programs_consume_cu::id()]);
+
         Self {
             accounts: vec![],
             builtins: vec![],
             compute_max_units: None,
             prefer_bpf,
             use_bpf_jit: false,
-            deactivate_feature_set: HashSet::default(),
+            deactivate_feature_set,
+            transaction_account_lock_limit: None,
         }
     }
 }
@@ -484,7 +498,7 @@ impl ProgramTest {
         me
     }
 
-    /// Override default BPF program selection
+    /// Override default SBF program selection
     pub fn prefer_bpf(&mut self, prefer_bpf: bool) {
         self.prefer_bpf = prefer_bpf;
     }
@@ -494,14 +508,19 @@ impl ProgramTest {
         self.compute_max_units = Some(compute_max_units);
     }
 
-    /// Override the BPF compute budget
+    /// Override the default transaction account lock limit
+    pub fn set_transaction_account_lock_limit(&mut self, transaction_account_lock_limit: usize) {
+        self.transaction_account_lock_limit = Some(transaction_account_lock_limit);
+    }
+
+    /// Override the SBF compute budget
     #[allow(deprecated)]
     #[deprecated(since = "1.8.0", note = "please use `set_compute_max_units` instead")]
     pub fn set_bpf_compute_max_units(&mut self, bpf_compute_max_units: u64) {
         self.compute_max_units = Some(bpf_compute_max_units);
     }
 
-    /// Execute the BPF program with JIT if true, interpreted if false
+    /// Execute the SBF program with JIT if true, interpreted if false
     pub fn use_bpf_jit(&mut self, use_bpf_jit: bool) {
         self.use_bpf_jit = use_bpf_jit;
     }
@@ -525,7 +544,7 @@ impl ProgramTest {
             Account {
                 lamports,
                 data: read_file(find_file(filename).unwrap_or_else(|| {
-                    panic!("Unable to locate {}", filename);
+                    panic!("Unable to locate {filename}");
                 })),
                 owner,
                 executable: false,
@@ -548,7 +567,7 @@ impl ProgramTest {
             Account {
                 lamports,
                 data: base64::decode(data_base64)
-                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
+                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -556,13 +575,13 @@ impl ProgramTest {
         );
     }
 
-    /// Add a BPF program to the test environment.
+    /// Add a SBF program to the test environment.
     ///
-    /// `program_name` will also be used to locate the BPF shared object in the current or fixtures
+    /// `program_name` will also be used to locate the SBF shared object in the current or fixtures
     /// directory.
     ///
     /// If `process_instruction` is provided, the natively built-program may be used instead of the
-    /// BPF shared object depending on the `BPF_OUT_DIR` environment variable.
+    /// SBF shared object depending on the `BPF_OUT_DIR` environment variable.
     pub fn add_program(
         &mut self,
         program_name: &str,
@@ -572,7 +591,7 @@ impl ProgramTest {
         let add_bpf = |this: &mut ProgramTest, program_file: PathBuf| {
             let data = read_file(&program_file);
             info!(
-                "\"{}\" BPF program from {}{}",
+                "\"{}\" SBF program from {}{}",
                 program_name,
                 program_file.display(),
                 std::fs::metadata(&program_file)
@@ -590,13 +609,13 @@ impl ProgramTest {
                     })
                     .ok()
                     .flatten()
-                    .unwrap_or_else(|| "".to_string())
+                    .unwrap_or_default()
             );
 
             this.add_account(
                 program_id,
                 Account {
-                    lamports: Rent::default().minimum_balance(data.len()).min(1),
+                    lamports: Rent::default().minimum_balance(data.len()).max(1),
                     data,
                     owner: solana_sdk::bpf_loader::id(),
                     executable: true,
@@ -632,7 +651,7 @@ impl ProgramTest {
             if valid_program_names.is_empty() {
                 // This should be unreachable as `test-bpf` should guarantee at least one shared
                 // object exists somewhere.
-                warn!("No BPF shared objects found.");
+                warn!("No SBF shared objects found.");
                 return;
             }
 
@@ -646,33 +665,27 @@ impl ProgramTest {
             }
         };
 
-        let program_file = find_file(&format!("{}.so", program_name));
+        let program_file = find_file(&format!("{program_name}.so"));
         match (self.prefer_bpf, program_file, process_instruction) {
-            // If BPF is preferred (i.e., `test-bpf` is invoked) and a BPF shared object exists,
+            // If SBF is preferred (i.e., `test-sbf` is invoked) and a BPF shared object exists,
             // use that as the program data.
             (true, Some(file), _) => add_bpf(self, file),
 
-            // If BPF is not required (i.e., we were invoked with `test`), use the provided
+            // If SBF is not required (i.e., we were invoked with `test`), use the provided
             // processor function as is.
             //
             // TODO: figure out why tests hang if a processor panics when running native code.
             (false, _, Some(process)) => add_native(self, process),
 
-            // Invalid: `test-bpf` invocation with no matching BPF shared object.
+            // Invalid: `test-sbf` invocation with no matching SBF shared object.
             (true, None, _) => {
                 warn_invalid_program_name();
-                panic!(
-                    "Program file data not available for {} ({})",
-                    program_name, program_id
-                );
+                panic!("Program file data not available for {program_name} ({program_id})");
             }
 
             // Invalid: regular `test` invocation without a processor.
             (false, _, None) => {
-                panic!(
-                    "Program processor not available for {} ({})",
-                    program_name, program_id
-                );
+                panic!("Program processor not available for {program_name} ({program_id})");
             }
         }
     }
@@ -765,7 +778,18 @@ impl ProgramTest {
         debug!("Payer address: {}", mint_keypair.pubkey());
         debug!("Genesis config: {}", genesis_config);
 
-        let mut bank = Bank::new_for_tests(&genesis_config);
+        let mut bank = Bank::new_with_runtime_config_for_tests(
+            &genesis_config,
+            Arc::new(RuntimeConfig {
+                bpf_jit: self.use_bpf_jit,
+                compute_budget: self.compute_max_units.map(|max_units| ComputeBudget {
+                    compute_unit_limit: max_units,
+                    ..ComputeBudget::default()
+                }),
+                transaction_account_lock_limit: self.transaction_account_lock_limit,
+                ..RuntimeConfig::default()
+            }),
+        );
 
         // Add loaders
         macro_rules! add_builtin {
@@ -803,12 +827,6 @@ impl ProgramTest {
             bank.store_account(address, account);
         }
         bank.set_capitalization();
-        if let Some(max_units) = self.compute_max_units {
-            bank.set_compute_budget(Some(ComputeBudget {
-                compute_unit_limit: max_units,
-                ..ComputeBudget::default()
-            }));
-        }
         // Advance beyond slot 0 for a slightly more realistic test environment
         let bank = {
             let bank = Arc::new(bank);
@@ -849,7 +867,7 @@ impl ProgramTest {
         .await;
         let banks_client = start_client(transport)
             .await
-            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {err}"));
 
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
@@ -883,7 +901,7 @@ impl ProgramTest {
         .await;
         let banks_client = start_client(transport)
             .await
-            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {err}"));
 
         ProgramTestContext::new(
             bank_forks,
@@ -1044,14 +1062,14 @@ impl ProgramTestContext {
 
         // generate some vote activity for rewards
         let mut vote_account = bank.get_account(vote_account_address).unwrap();
-        let mut vote_state = VoteState::from(&vote_account).unwrap();
+        let mut vote_state = vote_state::from(&vote_account).unwrap();
 
         let epoch = bank.epoch();
         for _ in 0..number_of_credits {
             vote_state.increment_credits(epoch, 1);
         }
         let versioned = VoteStateVersions::new_current(vote_state);
-        VoteState::to(&versioned, &mut vote_account).unwrap();
+        vote_state::to(&versioned, &mut vote_account).unwrap();
         bank.store_account(vote_account_address, &vote_account);
     }
 
@@ -1106,13 +1124,36 @@ impl ProgramTestContext {
                 &bank,
                 &Pubkey::default(),
                 pre_warp_slot,
+                // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
+                solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
             ))
         };
-        bank_forks.set_root(
-            pre_warp_slot,
-            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
-            Some(pre_warp_slot),
-        );
+
+        let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+        let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
+
+        bank_forks.set_root(pre_warp_slot, &abs_request_sender, Some(pre_warp_slot));
+
+        // The call to `set_root()` above will send an EAH request.  Need to intercept and handle
+        // all EpochAccountsHash requests so future rooted banks do not hang in Bank::freeze()
+        // waiting for an in-flight EAH calculation to complete.
+        snapshot_request_receiver
+            .try_iter()
+            .filter(|snapshot_request| {
+                snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+            })
+            .for_each(|snapshot_request| {
+                snapshot_request
+                    .snapshot_root_bank
+                    .rc
+                    .accounts
+                    .accounts_db
+                    .epoch_accounts_hash_manager
+                    .set_valid(
+                        EpochAccountsHash::new(Hash::new_unique()),
+                        snapshot_request.snapshot_root_bank.slot(),
+                    )
+            });
 
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
         bank_forks.insert(Bank::new_from_parent(
@@ -1133,5 +1174,15 @@ impl ProgramTestContext {
         let bank = bank_forks.working_bank();
         self.last_blockhash = bank.last_blockhash();
         Ok(())
+    }
+
+    /// Get a new latest blockhash, similar in spirit to RpcClient::get_latest_blockhash()
+    pub async fn get_new_latest_blockhash(&mut self) -> io::Result<Hash> {
+        let blockhash = self
+            .banks_client
+            .get_new_latest_blockhash(&self.last_blockhash)
+            .await?;
+        self.last_blockhash = blockhash;
+        Ok(blockhash)
     }
 }

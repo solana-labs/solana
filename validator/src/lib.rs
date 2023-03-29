@@ -4,7 +4,6 @@ use {
     console::style,
     fd_lock::{RwLock, RwLockWriteGuard},
     indicatif::{ProgressDrawTarget, ProgressStyle},
-    solana_net_utils::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH,
     std::{
         borrow::Cow,
         env,
@@ -13,11 +12,13 @@ use {
         path::Path,
         process::exit,
         thread::JoinHandle,
+        time::Duration,
     },
 };
 
 pub mod admin_rpc_service;
 pub mod bootstrap;
+pub mod cli;
 pub mod dashboard;
 
 #[cfg(unix)]
@@ -32,7 +33,7 @@ fn redirect_stderr(filename: &str) {
         Ok(file) => unsafe {
             libc::dup2(file.as_raw_fd(), libc::STDERR_FILENO);
         },
-        Err(err) => eprintln!("Unable to open {}: {}", filename, err),
+        Err(err) => eprintln!("Unable to open {filename}: {err}"),
     }
 }
 
@@ -56,23 +57,28 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
             {
                 use log::info;
                 let mut signals =
-                    signal_hook::iterator::Signals::new(&[signal_hook::consts::SIGUSR1])
+                    signal_hook::iterator::Signals::new([signal_hook::consts::SIGUSR1])
                         .unwrap_or_else(|err| {
-                            eprintln!("Unable to register SIGUSR1 handler: {:?}", err);
+                            eprintln!("Unable to register SIGUSR1 handler: {err:?}");
                             exit(1);
                         });
 
                 solana_logger::setup_with_default(filter);
                 redirect_stderr(&logfile);
-                Some(std::thread::spawn(move || {
-                    for signal in signals.forever() {
-                        info!(
-                            "received SIGUSR1 ({}), reopening log file: {:?}",
-                            signal, logfile
-                        );
-                        redirect_stderr(&logfile);
-                    }
-                }))
+                Some(
+                    std::thread::Builder::new()
+                        .name("solSigUsr1".into())
+                        .spawn(move || {
+                            for signal in signals.forever() {
+                                info!(
+                                    "received SIGUSR1 ({}), reopening log file: {:?}",
+                                    signal, logfile
+                                );
+                                redirect_stderr(&logfile);
+                            }
+                        })
+                        .unwrap(),
+                )
             }
             #[cfg(not(unix))]
             {
@@ -81,28 +87,6 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
                 None
             }
         }
-    }
-}
-
-pub fn port_validator(port: String) -> Result<(), String> {
-    port.parse::<u16>()
-        .map(|_| ())
-        .map_err(|e| format!("{:?}", e))
-}
-
-pub fn port_range_validator(port_range: String) -> Result<(), String> {
-    if let Some((start, end)) = solana_net_utils::parse_port_range(&port_range) {
-        if end - start < MINIMUM_VALIDATOR_PORT_RANGE_WIDTH {
-            Err(format!(
-                "Port range is too small.  Try --dynamic-port-range {}-{}",
-                start,
-                start + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH
-            ))
-        } else {
-            Ok(())
-        }
-    } else {
-        Err("Invalid port range".to_string())
     }
 }
 
@@ -118,9 +102,12 @@ pub fn println_name_value(name: &str, value: &str) {
 pub fn new_spinner_progress_bar() -> ProgressBar {
     let progress_bar = indicatif::ProgressBar::new(42);
     progress_bar.set_draw_target(ProgressDrawTarget::stdout());
-    progress_bar
-        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
-    progress_bar.enable_steady_tick(100);
+    progress_bar.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .expect("ProgresStyle::template direct input to be correct"),
+    );
+    progress_bar.enable_steady_tick(Duration::from_millis(100));
 
     ProgressBar {
         progress_bar,
@@ -138,7 +125,7 @@ impl ProgressBar {
         if self.is_term {
             self.progress_bar.set_message(msg);
         } else {
-            println!("{}", msg);
+            println!("{msg}");
         }
     }
 
@@ -150,7 +137,7 @@ impl ProgressBar {
         if self.is_term {
             self.progress_bar.abandon_with_message(msg);
         } else {
-            println!("{}", msg);
+            println!("{msg}");
         }
     }
 }
@@ -161,13 +148,13 @@ pub fn ledger_lockfile(ledger_path: &Path) -> RwLock<File> {
         OpenOptions::new()
             .write(true)
             .create(true)
-            .open(&lockfile)
+            .open(lockfile)
             .unwrap(),
     )
 }
 
-pub fn lock_ledger<'path, 'lock>(
-    ledger_path: &'path Path,
+pub fn lock_ledger<'lock>(
+    ledger_path: &Path,
     ledger_lockfile: &'lock mut RwLock<File>,
 ) -> RwLockWriteGuard<'lock, File> {
     ledger_lockfile.try_write().unwrap_or_else(|_| {

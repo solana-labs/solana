@@ -72,7 +72,7 @@ solana --version
   installer into a temporary directory:
 
 ```bash
-curl https://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/solana-install-init-x86_64-pc-windows-msvc.exe --output C:\solana-install-tmp\solana-install-init.exe --create-dirs
+cmd /c "curl https://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/solana-install-init-x86_64-pc-windows-msvc.exe --output C:\solana-install-tmp\solana-install-init.exe --create-dirs"
 ```
 
 - Copy and paste the following command, then press Enter to install the latest

@@ -1,0 +1,101 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getInflationReward
+
+Returns the inflation / staking reward for a list of addresses for an epoch
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"array"} optional={true}>
+  An array of addresses to query, as base-58 encoded strings
+</Parameter>
+
+<Parameter type={"object"} optional={true}>
+
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  href="/api/http#configuring-state-commitment"
+></Field>
+
+<Field name="epoch" type="u64" optional={true}>
+  An epoch for which the reward occurs. If omitted, the previous epoch will be
+  used
+</Field>
+
+<Field name="minContextSlot" type="number" optional={true}>
+  The minimum slot that the request can be evaluated at
+</Field>
+
+</Parameter>
+
+### Result:
+
+The result field will be a JSON array with the following fields:
+
+- `epoch: <u64>` - epoch for which reward occured
+- `effectiveSlot: <u64>` - the slot in which the rewards are effective
+- `amount: <u64>` - reward amount in lamports
+- `postBalance: <u64>` - post balance of the account in lamports
+- `commission: <u8|undefined>` - vote account commission when the reward was credited
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getInflationReward",
+    "params": [
+      [
+        "6dmNQ5jwLeLk5REvio1JcMshcbvkYMwy26sJ8pbkvStu",
+        "BGsqMegLpV6n6Ve146sSX2dTjUMj3M92HnU8BbNRMhF2"
+      ],
+      {"epoch": 2}
+    ]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "amount": 2500,
+      "effectiveSlot": 224,
+      "epoch": 2,
+      "postBalance": 499999442500
+    },
+    null
+  ],
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

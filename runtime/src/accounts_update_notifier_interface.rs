@@ -1,6 +1,8 @@
 use {
-    crate::append_vec::{StoredAccountMeta, StoredMeta},
-    solana_sdk::{account::AccountSharedData, clock::Slot, signature::Signature},
+    crate::account_storage::meta::StoredAccountMeta,
+    solana_sdk::{
+        account::AccountSharedData, clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction,
+    },
     std::sync::{Arc, RwLock},
 };
 
@@ -9,9 +11,10 @@ pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
     fn notify_account_update(
         &self,
         slot: Slot,
-        meta: &StoredMeta,
         account: &AccountSharedData,
-        txn_signature: &Option<&Signature>,
+        txn: &Option<&SanitizedTransaction>,
+        pubkey: &Pubkey,
+        write_version: u64,
     );
 
     /// Notified when the AccountsDb is initialized at start when restored

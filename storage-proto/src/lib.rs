@@ -176,6 +176,8 @@ pub struct StoredTransactionStatusMeta {
     pub rewards: Option<Vec<StoredExtendedReward>>,
     #[serde(deserialize_with = "default_on_eof")]
     pub return_data: Option<TransactionReturnData>,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub compute_units_consumed: Option<u64>,
 }
 
 impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
@@ -191,6 +193,7 @@ impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
             post_token_balances,
             rewards,
             return_data,
+            compute_units_consumed,
         } = value;
         Self {
             status,
@@ -207,6 +210,7 @@ impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
                 .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
             loaded_addresses: LoadedAddresses::default(),
             return_data,
+            compute_units_consumed,
         }
     }
 }
@@ -226,6 +230,7 @@ impl TryFrom<TransactionStatusMeta> for StoredTransactionStatusMeta {
             rewards,
             loaded_addresses,
             return_data,
+            compute_units_consumed,
         } = value;
 
         if !loaded_addresses.is_empty() {
@@ -250,6 +255,7 @@ impl TryFrom<TransactionStatusMeta> for StoredTransactionStatusMeta {
             rewards: rewards
                 .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
             return_data,
+            compute_units_consumed,
         })
     }
 }

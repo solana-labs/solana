@@ -17,11 +17,11 @@ use {
 
 #[cfg(not(target_os = "linux"))]
 pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num packets:*/ usize> {
-    debug_assert!(packets.iter().all(|pkt| pkt.meta == Meta::default()));
+    debug_assert!(packets.iter().all(|pkt| pkt.meta() == &Meta::default()));
     let mut i = 0;
     let count = cmp::min(NUM_RCVMMSGS, packets.len());
     for p in packets.iter_mut().take(count) {
-        p.meta.size = 0;
+        p.meta_mut().size = 0;
         match socket.recv_from(p.buffer_mut()) {
             Err(_) if i > 0 => {
                 break;
@@ -30,8 +30,8 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num
                 return Err(e);
             }
             Ok((nrecv, from)) => {
-                p.meta.size = nrecv;
-                p.meta.set_socket_addr(&from);
+                p.meta_mut().size = nrecv;
+                p.meta_mut().set_socket_addr(&from);
                 if i == 0 {
                     socket.set_nonblocking(true)?;
                 }
@@ -71,11 +71,12 @@ fn cast_socket_addr(addr: &sockaddr_storage, hdr: &mmsghdr) -> Option<InetAddr> 
 #[allow(clippy::uninit_assumed_init)]
 pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num packets:*/ usize> {
     // Assert that there are no leftovers in packets.
-    debug_assert!(packets.iter().all(|pkt| pkt.meta == Meta::default()));
+    debug_assert!(packets.iter().all(|pkt| pkt.meta() == &Meta::default()));
     const SOCKADDR_STORAGE_SIZE: usize = mem::size_of::<sockaddr_storage>();
 
     let mut hdrs: [mmsghdr; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
-    let mut iovs: [iovec; NUM_RCVMMSGS] = unsafe { mem::MaybeUninit::uninit().assume_init() };
+    let iovs = mem::MaybeUninit::<[iovec; NUM_RCVMMSGS]>::uninit();
+    let mut iovs: [iovec; NUM_RCVMMSGS] = unsafe { iovs.assume_init() };
     let mut addrs: [sockaddr_storage; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
 
     let sock_fd = sock.as_raw_fd();
@@ -98,17 +99,26 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num p
         tv_sec: 1,
         tv_nsec: 0,
     };
-    let nrecv =
-        unsafe { libc::recvmmsg(sock_fd, &mut hdrs[0], count as u32, MSG_WAITFORONE, &mut ts) };
+    // TODO: remove .try_into().unwrap() once rust libc fixes recvmmsg types for musl
+    #[allow(clippy::useless_conversion)]
+    let nrecv = unsafe {
+        libc::recvmmsg(
+            sock_fd,
+            &mut hdrs[0],
+            count as u32,
+            MSG_WAITFORONE.try_into().unwrap(),
+            &mut ts,
+        )
+    };
     let nrecv = if nrecv < 0 {
         return Err(io::Error::last_os_error());
     } else {
         usize::try_from(nrecv).unwrap()
     };
     for (addr, hdr, pkt) in izip!(addrs, hdrs, packets.iter_mut()).take(nrecv) {
-        pkt.meta.size = hdr.msg_len as usize;
+        pkt.meta_mut().size = hdr.msg_len as usize;
         if let Some(addr) = cast_socket_addr(&addr, &hdr) {
-            pkt.meta.set_socket_addr(&addr.to_std());
+            pkt.meta_mut().set_socket_addr(&addr.to_std());
         }
     }
     Ok(nrecv)
@@ -141,15 +151,15 @@ mod tests {
             let sent = TEST_NUM_MSGS - 1;
             for _ in 0..sent {
                 let data = [0; PACKET_DATA_SIZE];
-                sender.send_to(&data[..], &addr).unwrap();
+                sender.send_to(&data[..], addr).unwrap();
             }
 
             let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
             let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
             assert_eq!(sent, recv);
             for packet in packets.iter().take(recv) {
-                assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-                assert_eq!(packet.meta.socket_addr(), saddr);
+                assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+                assert_eq!(packet.meta().socket_addr(), saddr);
             }
         };
 
@@ -167,25 +177,25 @@ mod tests {
             let sent = TEST_NUM_MSGS + 10;
             for _ in 0..sent {
                 let data = [0; PACKET_DATA_SIZE];
-                sender.send_to(&data[..], &addr).unwrap();
+                sender.send_to(&data[..], addr).unwrap();
             }
 
             let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
             let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
             assert_eq!(TEST_NUM_MSGS, recv);
             for packet in packets.iter().take(recv) {
-                assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-                assert_eq!(packet.meta.socket_addr(), saddr);
+                assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+                assert_eq!(packet.meta().socket_addr(), saddr);
             }
 
             packets
                 .iter_mut()
-                .for_each(|pkt| pkt.meta = Meta::default());
+                .for_each(|pkt| *pkt.meta_mut() = Meta::default());
             let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
             assert_eq!(sent - TEST_NUM_MSGS, recv);
             for packet in packets.iter().take(recv) {
-                assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-                assert_eq!(packet.meta.socket_addr(), saddr);
+                assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+                assert_eq!(packet.meta().socket_addr(), saddr);
             }
         };
 
@@ -208,7 +218,7 @@ mod tests {
         let sent = TEST_NUM_MSGS;
         for _ in 0..sent {
             let data = [0; PACKET_DATA_SIZE];
-            sender.send_to(&data[..], &addr).unwrap();
+            sender.send_to(&data[..], addr).unwrap();
         }
 
         let start = Instant::now();
@@ -216,14 +226,14 @@ mod tests {
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
-            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.socket_addr(), saddr);
+            assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta().socket_addr(), saddr);
         }
         reader.set_nonblocking(true).unwrap();
 
         packets
             .iter_mut()
-            .for_each(|pkt| pkt.meta = Meta::default());
+            .for_each(|pkt| *pkt.meta_mut() = Meta::default());
         let _recv = recv_mmsg(&reader, &mut packets[..]);
         assert!(start.elapsed().as_secs() < 5);
     }
@@ -243,12 +253,12 @@ mod tests {
 
         for _ in 0..sent1 {
             let data = [0; PACKET_DATA_SIZE];
-            sender1.send_to(&data[..], &addr).unwrap();
+            sender1.send_to(&data[..], addr).unwrap();
         }
 
         for _ in 0..sent2 {
             let data = [0; PACKET_DATA_SIZE];
-            sender2.send_to(&data[..], &addr).unwrap();
+            sender2.send_to(&data[..], addr).unwrap();
         }
 
         let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
@@ -256,22 +266,22 @@ mod tests {
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(sent1) {
-            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.socket_addr(), saddr1);
+            assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta().socket_addr(), saddr1);
         }
         for packet in packets.iter().skip(sent1).take(recv - sent1) {
-            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.socket_addr(), saddr2);
+            assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta().socket_addr(), saddr2);
         }
 
         packets
             .iter_mut()
-            .for_each(|pkt| pkt.meta = Meta::default());
+            .for_each(|pkt| *pkt.meta_mut() = Meta::default());
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
         assert_eq!(sent1 + sent2 - TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
-            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.socket_addr(), saddr2);
+            assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta().socket_addr(), saddr2);
         }
     }
 }

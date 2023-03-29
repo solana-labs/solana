@@ -3,7 +3,7 @@ use {
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
     solana_sdk::timing::timestamp,
-    solana_streamer::streamer::{self, StreamerError},
+    solana_streamer::streamer::{self, StakedNodes, StreamerError},
     std::{
         collections::HashMap,
         net::IpAddr,
@@ -79,12 +79,12 @@ impl FindPacketSenderStakeStage {
     pub fn new(
         packet_receiver: streamer::PacketBatchReceiver,
         sender: FindPacketSenderStakeSender,
-        staked_nodes: Arc<RwLock<HashMap<IpAddr, u64>>>,
+        staked_nodes: Arc<RwLock<StakedNodes>>,
         name: &'static str,
     ) -> Self {
         let mut stats = FindPacketSenderStakeStats::default();
         let thread_hdl = Builder::new()
-            .name("find-packet-sender-stake".to_string())
+            .name("solPktStake".to_string())
             .spawn(move || loop {
                 match streamer::recv_packet_batches(&packet_receiver) {
                     Ok((mut batches, num_packets, recv_duration)) => {
@@ -105,7 +105,7 @@ impl FindPacketSenderStakeStage {
                             Measure::start("apply_sender_stakes_time");
                         let mut apply_stake = || {
                             let ip_to_stake = staked_nodes.read().unwrap();
-                            Self::apply_sender_stakes(&mut batches, &ip_to_stake);
+                            Self::apply_sender_stakes(&mut batches, &ip_to_stake.ip_stake_map);
                         };
                         apply_stake();
                         apply_sender_stakes_time.stop();
@@ -150,8 +150,8 @@ impl FindPacketSenderStakeStage {
             .iter_mut()
             .flat_map(|batch| batch.iter_mut())
             .for_each(|packet| {
-                packet.meta.sender_stake = ip_to_stake
-                    .get(&packet.meta.addr)
+                packet.meta_mut().sender_stake = ip_to_stake
+                    .get(&packet.meta().addr)
                     .copied()
                     .unwrap_or_default();
             });

@@ -125,7 +125,7 @@ macro_rules! create_datapoint {
         $crate::create_datapoint!(@tag $point $tag_name, $tag_value);
         $crate::create_datapoint!(@fields $point $($rest)*);
     };
-    (@fields $point:ident $tag_name:expr => $tag_value:expr) => {
+    (@fields $point:ident $tag_name:expr => $tag_value:expr $(,)?) => {
         $crate::create_datapoint!(@tag $point $tag_name, $tag_value);
     };
 
@@ -134,7 +134,7 @@ macro_rules! create_datapoint {
         $crate::create_datapoint!(@field $point $name, $value, $type);
         $crate::create_datapoint!(@fields $point $($rest)*);
     };
-    (@fields $point:ident ($name:expr, $value:expr, $type:ident)) => {
+    (@fields $point:ident ($name:expr, $value:expr, $type:ident) $(,)?) => {
         $crate::create_datapoint!(@field $point $name, $value, $type);
     };
 
@@ -145,14 +145,14 @@ macro_rules! create_datapoint {
             point
         }
     };
-    (@point $name:expr) => {
+    (@point $name:expr $(,)?) => {
         $crate::datapoint::DataPoint::new(&$name)
     };
 }
 
 #[macro_export]
 macro_rules! datapoint {
-    ($level:expr, $name:expr) => {
+    ($level:expr, $name:expr $(,)?) => {
         if log::log_enabled!($level) {
             $crate::submit($crate::create_datapoint!(@point $name), $level);
         }
@@ -165,7 +165,7 @@ macro_rules! datapoint {
 }
 #[macro_export]
 macro_rules! datapoint_error {
-    ($name:expr) => {
+    ($name:expr $(,)?) => {
         $crate::datapoint!(log::Level::Error, $name);
     };
     ($name:expr, $($fields:tt)+) => {
@@ -175,7 +175,7 @@ macro_rules! datapoint_error {
 
 #[macro_export]
 macro_rules! datapoint_warn {
-    ($name:expr) => {
+    ($name:expr $(,)?) => {
         $crate::datapoint!(log::Level::Warn, $name);
     };
     ($name:expr, $($fields:tt)+) => {

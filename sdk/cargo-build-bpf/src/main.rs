@@ -1,11 +1,15 @@
-use std::{
-    env,
-    path::PathBuf,
-    process::{exit, Command, Stdio},
+use {
+    log::*,
+    std::{
+        env,
+        path::PathBuf,
+        process::{exit, Command, Stdio},
+    },
 };
 
 fn main() {
-    println!("Warning: cargo-build-bpf is deprecated. Please, use cargo-build-sbf");
+    solana_logger::setup();
+    warn!("cargo-build-bpf is deprecated. Please, use cargo-build-sbf");
     let mut args = env::args()
         .map(|x| {
             let s = x;
@@ -21,27 +25,26 @@ fn main() {
     };
     // When run as a cargo subcommand, the first program argument is the subcommand name.
     // Remove it
-    if let Some(arg1) = args.get(1) {
-        if arg1 == "build-bpf" {
-            args.remove(1);
+    if let Some(arg0) = args.get(0) {
+        if arg0 == "build-bpf" {
+            args.remove(0);
         }
     }
-    print!("cargo-build-bpf child: {}", program.display());
+    info!("cargo-build-bpf child: {}", program.display());
     for a in &args {
-        print!(" {}", a);
+        info!(" {}", a);
     }
-    println!();
     let child = Command::new(&program)
         .args(&args)
         .stdout(Stdio::piped())
         .spawn()
         .unwrap_or_else(|err| {
-            eprintln!("Failed to execute {}: {}", program.display(), err);
+            error!("Failed to execute {}: {}", program.display(), err);
             exit(1);
         });
 
     let output = child.wait_with_output().expect("failed to wait on child");
-    println!(
+    info!(
         "{}",
         output
             .stdout

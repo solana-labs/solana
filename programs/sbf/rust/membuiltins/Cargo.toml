@@ -1,0 +1,20 @@
+[package]
+name = "solana-sbf-rust-membuiltins"
+documentation = "https://docs.rs/solana-sbf-rust-mem"
+version = { workspace = true }
+description = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-program = { workspace = true }
+solana-sbf-rust-mem = { workspace = true, features = ["no-entrypoint"] }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

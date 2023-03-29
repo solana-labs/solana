@@ -6,10 +6,13 @@ use {
         SubCommand,
     },
     solana_clap_utils::{
+        hidden_unless_forced,
         input_parsers::keypair_of,
         input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
     },
-    solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
+    solana_gossip::{
+        gossip_service::discover, legacy_contact_info::LegacyContactInfo as ContactInfo,
+    },
     solana_sdk::pubkey::Pubkey,
     solana_streamer::socket::SocketAddrSpace,
     std::{
@@ -37,7 +40,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("allow-private-addr")
                 .takes_value(false)
                 .help("Allow contacting private ip addresses")
-                .hidden(true),
+                .hidden(hidden_unless_forced()),
         )
         .subcommand(
             SubCommand::with_name("rpc-url")
@@ -158,21 +161,18 @@ fn parse_gossip_host(matches: &ArgMatches, entrypoint_addr: Option<SocketAddr>) 
         .value_of("gossip_host")
         .map(|gossip_host| {
             solana_net_utils::parse_host(gossip_host).unwrap_or_else(|e| {
-                eprintln!("failed to parse gossip-host: {}", e);
+                eprintln!("failed to parse gossip-host: {e}");
                 exit(1);
             })
         })
         .unwrap_or_else(|| {
             if let Some(entrypoint_addr) = entrypoint_addr {
                 solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-                    eprintln!(
-                        "Failed to contact cluster entrypoint {}: {}",
-                        entrypoint_addr, err
-                    );
+                    eprintln!("Failed to contact cluster entrypoint {entrypoint_addr}: {err}");
                     exit(1);
                 })
             } else {
-                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))
+                IpAddr::V4(Ipv4Addr::LOCALHOST)
             }
         })
 }
@@ -192,26 +192,20 @@ fn process_spy_results(
                 } else {
                     " or more"
                 };
-                eprintln!(
-                    "Error: Insufficient validators discovered.  Expecting {}{}",
-                    num, add,
-                );
+                eprintln!("Error: Insufficient validators discovered.  Expecting {num}{add}",);
                 exit(1);
             }
         }
         if let Some(node) = pubkey {
             if !validators.iter().any(|x| x.id == node) {
-                eprintln!("Error: Could not find node {:?}", node);
+                eprintln!("Error: Could not find node {node:?}");
                 exit(1);
             }
         }
     }
     if let Some(num_nodes_exactly) = num_nodes_exactly {
         if validators.len() > num_nodes_exactly {
-            eprintln!(
-                "Error: Extra nodes discovered.  Expecting exactly {}",
-                num_nodes_exactly
-            );
+            eprintln!("Error: Extra nodes discovered.  Expecting exactly {num_nodes_exactly}");
             exit(1);
         }
     }
@@ -242,7 +236,7 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
             solana_net_utils::find_available_port_in_range(
-                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                IpAddr::V4(Ipv4Addr::UNSPECIFIED),
                 (0, 1),
             )
             .expect("unable to find an available gossip port")
@@ -269,7 +263,7 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
 fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
     matches.value_of("entrypoint").map(|entrypoint| {
         solana_net_utils::parse_host_port(entrypoint).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
+            eprintln!("failed to parse entrypoint address: {e}");
             exit(1);
         })
     })
@@ -314,7 +308,7 @@ fn process_rpc_url(
     }
 
     for rpc_addr in rpc_addrs {
-        println!("http://{}", rpc_addr);
+        println!("http://{rpc_addr}");
         if any {
             break;
         }

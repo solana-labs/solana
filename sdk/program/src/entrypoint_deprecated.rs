@@ -1,4 +1,4 @@
-//! The Rust-based BPF program entry point supported by the original BPF loader.
+//! The Rust-based BPF program entrypoint supported by the original BPF loader.
 //!
 //! The original BPF loader is deprecated and exists for backwards-compatibility
 //! reasons. This module should not be used by new programs.
@@ -35,11 +35,11 @@ pub type ProcessInstruction =
 /// Programs indicate success with a return value of 0
 pub const SUCCESS: u64 = 0;
 
-/// Declare the program entry point.
+/// Declare the program entrypoint.
 ///
 /// Deserialize the program input arguments and call
 /// the user defined `process_instruction` function.
-/// Users must call this macro otherwise an entry point for
+/// Users must call this macro otherwise an entrypoint for
 /// their program will not be created.
 #[macro_export]
 macro_rules! entrypoint_deprecated {

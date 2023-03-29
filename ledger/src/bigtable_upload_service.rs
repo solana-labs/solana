@@ -26,6 +26,7 @@ impl BigTableUploadService {
         blockstore: Arc<Blockstore>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_rewards_slot: Arc<AtomicU64>,
         exit: Arc<AtomicBool>,
     ) -> Self {
         Self::new_with_config(
@@ -34,6 +35,7 @@ impl BigTableUploadService {
             blockstore,
             block_commitment_cache,
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             ConfirmedBlockUploadConfig::default(),
             exit,
         )
@@ -45,12 +47,13 @@ impl BigTableUploadService {
         blockstore: Arc<Blockstore>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_rewards_slot: Arc<AtomicU64>,
         config: ConfirmedBlockUploadConfig,
         exit: Arc<AtomicBool>,
     ) -> Self {
         info!("Starting BigTable upload service");
         let thread = Builder::new()
-            .name("bigtable-upload".to_string())
+            .name("solBigTUpload".to_string())
             .spawn(move || {
                 Self::run(
                     runtime,
@@ -58,6 +61,7 @@ impl BigTableUploadService {
                     blockstore,
                     block_commitment_cache,
                     max_complete_transaction_status_slot,
+                    max_complete_rewards_slot,
                     config,
                     exit,
                 )
@@ -73,6 +77,7 @@ impl BigTableUploadService {
         blockstore: Arc<Blockstore>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_rewards_slot: Arc<AtomicU64>,
         config: ConfirmedBlockUploadConfig,
         exit: Arc<AtomicBool>,
     ) {
@@ -83,11 +88,15 @@ impl BigTableUploadService {
             }
 
             // The highest slot eligible for upload is the highest root that has complete
-            // transaction-status metadata
-            let highest_complete_root = min(
+            // transaction-status metadata and rewards
+            let highest_complete_root = [
                 max_complete_transaction_status_slot.load(Ordering::SeqCst),
+                max_complete_rewards_slot.load(Ordering::SeqCst),
                 block_commitment_cache.read().unwrap().root(),
-            );
+            ]
+            .into_iter()
+            .min()
+            .expect("root and max_complete slots exist");
             let end_slot = min(
                 highest_complete_root,
                 start_slot.saturating_add(config.max_num_slots_to_check as u64 * 2),
@@ -102,7 +111,7 @@ impl BigTableUploadService {
                 blockstore.clone(),
                 bigtable_ledger_storage.clone(),
                 start_slot,
-                Some(end_slot),
+                end_slot,
                 config.clone(),
                 exit.clone(),
             ));
@@ -112,6 +121,9 @@ impl BigTableUploadService {
                 Err(err) => {
                     warn!("bigtable: upload_confirmed_blocks: {}", err);
                     std::thread::sleep(std::time::Duration::from_secs(2));
+                    if start_slot == 0 {
+                        start_slot = blockstore.get_first_available_block().unwrap_or_default();
+                    }
                 }
             }
         }

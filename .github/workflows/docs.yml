@@ -13,7 +13,9 @@ on:
       - v[0-9]+.[0-9]+
 
 jobs:
-  docs-build:
+  check:
+    outputs:
+      continue: ${{ steps.check.outputs.need_to_build }}
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -21,46 +23,80 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Get commit range (push)
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          echo "COMMIT_RANGE=${{ github.event.before }}..$GITHUB_SHA" >> $GITHUB_ENV
+
+      - name: Get commit range (pull_request)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "COMMIT_RANGE=${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+
+      - name: Get file status
+        run: |
+          set +e
+          git diff --name-only $COMMIT_RANGE | grep \
+            -e '.github/workflows/docs.yml' \
+            -e 'docs/**'
+          echo "FILE_CHANGED=$?" >> $GITHUB_ENV
+
       - name: Check
         id: check
+        shell: bash
         run: |
           source ci/env.sh
-          echo "::set-output name=tag::$CI_TAG"
           eval "$(ci/channel-info.sh)"
-          echo "::set-output name=channel::$CHANNEL"
+          TAG=$CI_TAG
 
-      - name: Get specific changed files
-        id: changed-files-specific
-        uses: tj-actions/changed-files@v19
-        with:
-          files: |
-            docs/**
+          echo "TAG: $TAG"
+          echo "CHANNEL: $CHANNEL"
+          echo "FILE_CHANGED: $FILE_CHANGED"
 
-      - name: Pre Build
-        id: prebuild
-        run: |
-          echo "::set-output name=need_to_build::${{
-            steps.check.outputs.tag != ''
-            ||
-            (
-              (steps.check.outputs.channel == 'edge' || steps.check.outputs.channel == 'beta')
-              &&
-              steps.changed-files-specific.outputs.any_change != ''
-            )
-          }}"
-        shell: bash
+          echo need_to_build="$(
+            if [ "$TAG" != '' ]
+            then
+              echo 1
+            elif [ $FILE_CHANGED = 0 ] && ( [ "$CHANNEL" = "beta" ] || [ "$CHANNEL" = "edge" ] )
+            then
+              echo 1
+            else
+              echo 0
+            fi
+          )" >> $GITHUB_OUTPUT
+
+  build_and_deploy:
+    needs:
+      - check
+    if: >
+      github.repository == 'solana-labs/solana' &&
+      needs.check.outputs.continue == 1
+    # the name is used by .mergify.yml as well
+    name: build & deploy docs
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
 
       - name: Setup Node
-        if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
         uses: actions/setup-node@v3
         with:
-          node-version: 14
+          node-version: 16
 
       - name: Build
-        if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
         working-directory: docs
         run: |
           npm install
           ./build.sh
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
+
+  error_reporting:
+    needs:
+      - check
+      - build_and_deploy
+    if: failure() && github.event_name == 'push'
+    uses: ./.github/workflows/error-reporting.yml
+    secrets:
+      WEBHOOK: ${{ secrets.SLACK_ERROR_REPORTING_WEBHOOK }}

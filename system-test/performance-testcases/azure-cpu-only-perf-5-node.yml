@@ -3,6 +3,7 @@ steps:
     label: "Azure - CPU Only 5 Node"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "azure"
       TESTNET_TAG: "azure-perf-cpu-only"
       TEST_DURATION_SECONDS: 600
@@ -16,4 +17,4 @@ steps:
       ADDITIONAL_FLAGS: ""
       TEST_TYPE: "fixed_duration"
     agents:
-      - "queue=azure-deploy"
+      queue: "azure-deploy"

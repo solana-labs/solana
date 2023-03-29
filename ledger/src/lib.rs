@@ -28,6 +28,7 @@ mod shredder;
 pub mod sigverify_shreds;
 pub mod slot_stats;
 mod staking_utils;
+pub mod token_balances;
 
 #[macro_use]
 extern crate solana_metrics;

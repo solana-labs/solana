@@ -236,7 +236,7 @@ fn do_derive_abi_enum_visitor(input: ItemEnum) -> TokenStream {
         });
     }
 
-    let type_str = format!("{}", type_name);
+    let type_str = format!("{type_name}");
     (quote! {
         impl #impl_generics ::solana_frozen_abi::abi_example::AbiEnumVisitor for #type_name #ty_generics #where_clause {
             fn visit_for_abi(&self, digester: &mut ::solana_frozen_abi::abi_digester::AbiDigester) -> ::solana_frozen_abi::abi_digester::DigestResult {
@@ -298,7 +298,7 @@ fn quote_for_test(
                     ::log::warn!("Not testing the abi digest under SOLANA_ABI_BULK_UPDATE!");
                 } else {
                     if let Ok(dir) = ::std::env::var("SOLANA_ABI_DUMP_DIR") {
-                        assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Examine the diff in SOLANA_ABI_DUMP_DIR!: $ diff -u {}/*{}* {}/*{}*", dir, #expected_digest, dir, actual_digest);
+                        assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Examine the diff in SOLANA_ABI_DUMP_DIR!: \n$ diff -u {}/*{}* {}/*{}*", dir, #expected_digest, dir, actual_digest);
                     } else {
                         assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Confirm the diff by rerunning before and after this test failed with SOLANA_ABI_DUMP_DIR!");
                     }
@@ -310,7 +310,7 @@ fn quote_for_test(
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 fn test_mod_name(type_name: &Ident) -> Ident {
-    Ident::new(&format!("{}_frozen_abi", type_name), Span::call_site())
+    Ident::new(&format!("{type_name}_frozen_abi"), Span::call_site())
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]

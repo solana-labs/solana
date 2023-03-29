@@ -16,9 +16,10 @@ use {
 
 pub type StakeActivationStatus = StakeHistoryEntry;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub enum StakeState {
+    #[default]
     Uninitialized,
     Initialized(Meta),
     Stake(Meta, Stake),
@@ -63,12 +64,6 @@ impl BorshSerialize for StakeState {
             }
             StakeState::RewardsPool => writer.write_all(&3u32.to_le_bytes()),
         }
-    }
-}
-
-impl Default for StakeState {
-    fn default() -> Self {
-        StakeState::Uninitialized
     }
 }
 

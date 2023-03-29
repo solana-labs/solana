@@ -26,6 +26,7 @@ typedef struct {
  *
  * @param key The public key to print
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/pubkey.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
 void sol_log_pubkey(const SolPubkey *);
 #else
@@ -77,6 +78,7 @@ typedef struct {
  * @param program_id Program id of the signer
  * @param program_address Program address created, filled on return
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/pubkey.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
 uint64_t sol_create_program_address(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *);
 #else
@@ -96,6 +98,7 @@ static uint64_t sol_create_program_address(const SolSignerSeed * arg1, int arg2,
  * @param program_address Program address created, filled on return
  * @param bump_seed Bump seed required to create a valid program address
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/pubkey.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
 uint64_t sol_try_find_program_address(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *, uint8_t *);
 #else

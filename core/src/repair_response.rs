@@ -32,17 +32,21 @@ pub fn repair_response_packet_from_bytes(
     if size > packet.buffer_mut().len() {
         return None;
     }
-    packet.meta.size = size;
-    packet.meta.set_socket_addr(dest);
+    packet.meta_mut().size = size;
+    packet.meta_mut().set_socket_addr(dest);
     packet.buffer_mut()[..bytes.len()].copy_from_slice(&bytes);
     let mut wr = io::Cursor::new(&mut packet.buffer_mut()[bytes.len()..]);
     bincode::serialize_into(&mut wr, &nonce).expect("Buffer not large enough to fit nonce");
     Some(packet)
 }
 
-pub fn nonce(packet: &Packet) -> Option<Nonce> {
-    let nonce_start = packet.meta.size.checked_sub(SIZE_OF_NONCE)?;
-    packet.deserialize_slice(nonce_start..).ok()
+pub(crate) fn nonce(packet: &Packet) -> Option<Nonce> {
+    // Nonces are attached to both repair and ancestor hashes responses.
+    let data = packet.data(..)?;
+    let offset = data.len().checked_sub(SIZE_OF_NONCE)?;
+    <[u8; SIZE_OF_NONCE]>::try_from(&data[offset..])
+        .map(Nonce::from_le_bytes)
+        .ok()
 }
 
 #[cfg(test)]
@@ -82,11 +86,11 @@ mod test {
         let nonce = 9;
         let mut packet = repair_response_packet_from_bytes(
             shred.into_payload(),
-            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
             nonce,
         )
         .unwrap();
-        packet.meta.flags |= PacketFlags::REPAIR;
+        packet.meta_mut().flags |= PacketFlags::REPAIR;
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()

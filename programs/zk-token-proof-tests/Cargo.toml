@@ -1,0 +1,15 @@
+[package]
+name = "solana-zk-token-proof-program-tests"
+publish = false
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dev-dependencies]
+bytemuck = { workspace = true, features = ["derive"] }
+solana-program-runtime = { workspace = true }
+solana-program-test = { workspace = true }
+solana-sdk = { workspace = true }
+solana-zk-token-sdk = { workspace = true }

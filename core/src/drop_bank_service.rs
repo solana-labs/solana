@@ -15,7 +15,7 @@ pub struct DropBankService {
 impl DropBankService {
     pub fn new(bank_receiver: Receiver<Vec<Arc<Bank>>>) -> Self {
         let thread_hdl = Builder::new()
-            .name("sol-drop-b-service".to_string())
+            .name("solDropBankSrvc".to_string())
             .spawn(move || {
                 for banks in bank_receiver.iter() {
                     let len = banks.len();

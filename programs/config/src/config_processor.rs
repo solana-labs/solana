@@ -6,25 +6,28 @@ use {
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
         feature_set, instruction::InstructionError, program_utils::limited_deserialize,
-        pubkey::Pubkey,
+        pubkey::Pubkey, transaction_context::IndexOfAccount,
     },
     std::collections::BTreeSet,
 };
 
-pub fn process_instruction(
-    _first_instruction_account: usize,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
 
+    // Consume compute units if feature `native_programs_consume_cu` is activated,
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::native_programs_consume_cu::id())
+    {
+        invoke_context.consume_checked(450)?;
+    }
+
     let key_list: ConfigKeys = limited_deserialize(data)?;
-    let config_account_key =
-        transaction_context
-            .get_key_of_account_at_index(instruction_context.get_index_in_transaction(
-                instruction_context.get_number_of_program_accounts(),
-            )?)?;
+    let config_account_key = transaction_context.get_key_of_account_at_index(
+        instruction_context.get_index_of_instruction_account_in_transaction(0)?,
+    )?;
     let config_account =
         instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
     let is_config_account_signer = config_account.is_signer();
@@ -63,7 +66,7 @@ pub fn process_instruction(
         counter += 1;
         if signer != config_account_key {
             let signer_account = instruction_context
-                .try_borrow_instruction_account(transaction_context, counter)
+                .try_borrow_instruction_account(transaction_context, counter as IndexOfAccount)
                 .map_err(|_| {
                     ic_msg!(
                         invoke_context,
@@ -220,7 +223,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: config_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
         );
@@ -252,7 +255,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: config_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
         );
@@ -278,7 +281,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: config_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::InvalidInstructionData),
         );
@@ -300,7 +303,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: config_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -335,7 +338,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -406,7 +409,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer1_pubkey,
@@ -428,7 +431,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -471,7 +474,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -502,7 +505,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -538,7 +541,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -572,7 +575,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -616,7 +619,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -662,7 +665,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -696,7 +699,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -744,7 +747,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -769,7 +772,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -795,7 +798,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: config_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -842,7 +845,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,

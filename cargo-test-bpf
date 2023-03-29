@@ -12,9 +12,9 @@ done
 export CARGO_BUILD_BPF="$here"/cargo-build-bpf
 set -x
 if [[ ! -f "$here"/target/debug/cargo-build-sbf ]]; then
-    "$here"/cargo build --manifest-path "$here"/sdk/cargo-build-sbf/Cargo.toml
+    cargo build --manifest-path "$here"/sdk/cargo-build-sbf/Cargo.toml
 fi
 if [[ ! -f "$here"/target/debug/cargo-test-sbf ]]; then
-    "$here"/cargo build --manifest-path "$here"/sdk/cargo-test-sbf/Cargo.toml
+    cargo build --manifest-path "$here"/sdk/cargo-test-sbf/Cargo.toml
 fi
-exec "$here"/cargo run --manifest-path "$here"/sdk/cargo-test-bpf/Cargo.toml -- $maybe_bpf_sdk "$@"
+exec cargo run --manifest-path "$here"/sdk/cargo-test-bpf/Cargo.toml -- $maybe_bpf_sdk "$@"

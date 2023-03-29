@@ -1,4 +1,5 @@
-//! useful extras for Account state
+//! Useful extras for `Account` state.
+
 use {
     crate::{
         account::{Account, AccountSharedData},

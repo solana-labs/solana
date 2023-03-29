@@ -3,17 +3,58 @@
 use {
     crate::{
         bucket::Bucket,
-        bucket_storage::{BucketStorage, Uid},
+        bucket_storage::{BucketOccupied, BucketStorage},
         RefCount,
     },
+    bv::BitVec,
     modular_bitfield::prelude::*,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
-    std::{
-        collections::hash_map::DefaultHasher,
-        fmt::Debug,
-        hash::{Hash, Hasher},
-    },
+    std::fmt::Debug,
 };
+
+/// in use/occupied
+const OCCUPIED_OCCUPIED: u64 = 1;
+/// free, ie. not occupied
+const OCCUPIED_FREE: u64 = 0;
+
+/// header for elements in a bucket
+/// needs to be multiple of size_of::<u64>()
+#[repr(C)]
+struct OccupiedHeader {
+    /// OCCUPIED_OCCUPIED or OCCUPIED_FREE
+    occupied: u64,
+}
+
+/// allocated in `contents` in a BucketStorage
+pub struct BucketWithBitVec {
+    pub occupied: BitVec,
+}
+
+impl BucketOccupied for BucketWithBitVec {
+    fn occupy(&mut self, element: &mut [u8], ix: usize) {
+        assert!(self.is_free(element, ix));
+        self.occupied.set(ix as u64, true);
+    }
+    fn free(&mut self, element: &mut [u8], ix: usize) {
+        assert!(!self.is_free(element, ix));
+        self.occupied.set(ix as u64, false);
+    }
+    fn is_free(&self, _element: &[u8], ix: usize) -> bool {
+        !self.occupied.get(ix as u64)
+    }
+    fn offset_to_first_data() -> usize {
+        // no header, nothing stored in data stream
+        0
+    }
+    fn new(num_elements: usize) -> Self {
+        Self {
+            occupied: BitVec::new_fill(false, num_elements as u64),
+        }
+    }
+}
+
+pub type DataBucket = BucketWithBitVec;
+pub type IndexBucket = BucketWithBitVec;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -90,30 +131,22 @@ impl IndexEntry {
 
     // This function maps the original data location into an index in the current bucket storage.
     // This is coupled with how we resize bucket storages.
-    pub fn data_loc(&self, storage: &BucketStorage) -> u64 {
+    pub fn data_loc(&self, storage: &BucketStorage<DataBucket>) -> u64 {
         self.storage_offset() << (storage.capacity_pow2 - self.storage_capacity_when_created_pow2())
     }
 
-    pub fn read_value<'a, T>(&self, bucket: &'a Bucket<T>) -> Option<(&'a [T], RefCount)> {
-        let data_bucket_ix = self.data_bucket_ix();
-        let data_bucket = &bucket.data[data_bucket_ix as usize];
+    pub fn read_value<'a, T: 'static>(&self, bucket: &'a Bucket<T>) -> Option<(&'a [T], RefCount)> {
         let slice = if self.num_slots > 0 {
+            let data_bucket_ix = self.data_bucket_ix();
+            let data_bucket = &bucket.data[data_bucket_ix as usize];
             let loc = self.data_loc(data_bucket);
-            let uid = Self::key_uid(&self.key);
-            assert_eq!(Some(uid), bucket.data[data_bucket_ix as usize].uid(loc));
-            bucket.data[data_bucket_ix as usize].get_cell_slice(loc, self.num_slots)
+            assert!(!data_bucket.is_free(loc));
+            data_bucket.get_cell_slice(loc, self.num_slots)
         } else {
             // num_slots is 0. This means we don't have an actual allocation.
-            // can we trust that the data_bucket is even safe?
-            bucket.data[data_bucket_ix as usize].get_empty_cell_slice()
+            &[]
         };
         Some((slice, self.ref_count))
-    }
-
-    pub fn key_uid(key: &Pubkey) -> Uid {
-        let mut s = DefaultHasher::new();
-        key.hash(&mut s);
-        s.finish().max(1u64)
     }
 }
 

@@ -7,7 +7,7 @@ use {
         },
         UiAccount, UiAccountData, UiAccountEncoding,
     },
-    solana_client::rpc_response::RpcKeyedAccount,
+    solana_rpc_client_api::response::RpcKeyedAccount,
     solana_runtime::bank::Bank,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},

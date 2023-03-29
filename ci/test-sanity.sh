@@ -7,47 +7,50 @@ source ci/_
 
 (
   echo --- git diff --check
-  set -x
 
-  if [[ -n $CI_BASE_BRANCH ]]
-  then branch="$CI_BASE_BRANCH"
-  else branch="master"
+  if [[ -n "$CI_BASE_BRANCH" ]]; then
+    branch="$CI_BASE_BRANCH"
+    remote=origin
+  else
+    IFS='/' read -r remote branch < <(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null) || true
+    if [[ -z "$branch" ]]; then
+      branch="$remote"
+      remote=
+    fi
+  fi
+
+  if [[ -n "$remote" ]] && ! git remote | grep --quiet "^$remote\$" 2>/dev/null; then
+    echo "WARNING: Remote \`$remote\` not configured for this working directory. Assuming it is actually part of the branch name"
+    branch="$remote"/"$branch"
+    remote=
+  fi
+
+  if [[ -z "$branch" || -z "$remote" ]]; then
+    msg="Cannot determine remote target branch. Set one with \`git branch --set-upstream-to=TARGET\`"
+    if [[ -n "$CI" ]]; then
+      echo "ERROR: $msg" 1>&2
+      exit 1
+    else
+      echo "WARNING: $msg" 1>&2
+    fi
   fi
 
   # Look for failed mergify.io backports by searching leftover conflict markers
   # Also check for any trailing whitespaces!
-  git fetch origin "$branch"
-  git diff "$(git merge-base HEAD "origin/$branch")" --check --oneline
+  if [[ -n "$remote" ]]; then
+    echo "Checking remote \`$remote\` for updates to target branch \`$branch\`"
+    git fetch --quiet "$remote" "$branch"
+    target="$remote"/"$branch"
+  else
+    echo "WARNING: Target branch \`$branch\` appears to be local. No remote updates will be considered."
+    target="$branch"
+  fi
+  set -x
+  git diff "$target" --check --oneline
 )
 
-echo
-
+_ ci/check-channel-version.sh
 _ ci/nits.sh
 _ ci/check-ssh-keys.sh
-
-
-# Ensure the current channel version is not equal ("greater") than
-# the version of the latest tag
-if [[ -z $CI_TAG ]]; then
-  echo "--- channel version check"
-  (
-    eval "$(ci/channel-info.sh)"
-
-    if [[ -n $CHANNEL_LATEST_TAG ]]; then
-      source scripts/read-cargo-variable.sh
-
-      version=$(readCargoVariable version "version/Cargo.toml")
-      echo "version: v$version"
-      echo "latest channel tag: $CHANNEL_LATEST_TAG"
-
-      if [[ $CHANNEL_LATEST_TAG = v$version ]]; then
-        echo "Error: please run ./scripts/increment-cargo-version.sh"
-        exit 1
-      fi
-    else
-      echo "Skipped. CHANNEL_LATEST_TAG (CHANNEL=$CHANNEL) unset"
-    fi
-  )
-fi
 
 echo --- ok

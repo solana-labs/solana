@@ -3,7 +3,8 @@ use {
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
     extension::{
-        default_account_state::*, memo_transfer::*, mint_close_authority::*, reallocate::*,
+        confidential_transfer::*, cpi_guard::*, default_account_state::*, interest_bearing_mint::*,
+        memo_transfer::*, mint_close_authority::*, permanent_delegate::*, reallocate::*,
         transfer_fee::*,
     },
     serde_json::{json, Map, Value},
@@ -227,7 +228,10 @@ pub fn parse_token(
                 | AuthorityType::FreezeAccount
                 | AuthorityType::TransferFeeConfig
                 | AuthorityType::WithheldWithdraw
-                | AuthorityType::CloseMint => "mint",
+                | AuthorityType::CloseMint
+                | AuthorityType::InterestRate
+                | AuthorityType::PermanentDelegate
+                | AuthorityType::ConfidentialTransferMint => "mint",
                 AuthorityType::AccountOwner | AuthorityType::CloseAccount => "account",
             };
             let mut value = json!({
@@ -509,8 +513,10 @@ pub fn parse_token(
                 account_keys,
             )
         }
-        TokenInstruction::ConfidentialTransferExtension => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
+        TokenInstruction::ConfidentialTransferExtension => parse_confidential_transfer_instruction(
+            &instruction.data[1..],
+            &instruction.accounts,
+            account_keys,
         ),
         TokenInstruction::DefaultAccountStateExtension => {
             if instruction.data.len() <= 2 {
@@ -550,6 +556,42 @@ pub fn parse_token(
                 }),
             })
         }
+        TokenInstruction::InitializeNonTransferableMint => {
+            check_num_token_accounts(&instruction.accounts, 1)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeNonTransferableMint".to_string(),
+                info: json!({
+                    "mint": account_keys[instruction.accounts[0] as usize].to_string(),
+                }),
+            })
+        }
+        TokenInstruction::InterestBearingMintExtension => {
+            if instruction.data.len() < 2 {
+                return Err(ParseInstructionError::InstructionNotParsable(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            parse_interest_bearing_mint_instruction(
+                &instruction.data[1..],
+                &instruction.accounts,
+                account_keys,
+            )
+        }
+        TokenInstruction::CpiGuardExtension => {
+            if instruction.data.len() < 2 {
+                return Err(ParseInstructionError::InstructionNotParsable(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            parse_cpi_guard_instruction(&instruction.data[1..], &instruction.accounts, account_keys)
+        }
+        TokenInstruction::InitializePermanentDelegate { delegate } => {
+            parse_initialize_permanent_delegate_instruction(
+                delegate,
+                &instruction.accounts,
+                account_keys,
+            )
+        }
     }
 }
 
@@ -563,6 +605,9 @@ pub enum UiAuthorityType {
     TransferFeeConfig,
     WithheldWithdraw,
     CloseMint,
+    InterestRate,
+    PermanentDelegate,
+    ConfidentialTransferMint,
 }
 
 impl From<AuthorityType> for UiAuthorityType {
@@ -575,6 +620,9 @@ impl From<AuthorityType> for UiAuthorityType {
             AuthorityType::TransferFeeConfig => UiAuthorityType::TransferFeeConfig,
             AuthorityType::WithheldWithdraw => UiAuthorityType::WithheldWithdraw,
             AuthorityType::CloseMint => UiAuthorityType::CloseMint,
+            AuthorityType::InterestRate => UiAuthorityType::InterestRate,
+            AuthorityType::PermanentDelegate => UiAuthorityType::PermanentDelegate,
+            AuthorityType::ConfidentialTransferMint => UiAuthorityType::ConfidentialTransferMint,
         }
     }
 }
@@ -591,6 +639,11 @@ pub enum UiExtensionType {
     DefaultAccountState,
     ImmutableOwner,
     MemoTransfer,
+    NonTransferable,
+    InterestBearingConfig,
+    CpiGuard,
+    PermanentDelegate,
+    NonTransferableAccount,
 }
 
 impl From<ExtensionType> for UiExtensionType {
@@ -607,6 +660,11 @@ impl From<ExtensionType> for UiExtensionType {
             ExtensionType::DefaultAccountState => UiExtensionType::DefaultAccountState,
             ExtensionType::ImmutableOwner => UiExtensionType::ImmutableOwner,
             ExtensionType::MemoTransfer => UiExtensionType::MemoTransfer,
+            ExtensionType::NonTransferable => UiExtensionType::NonTransferable,
+            ExtensionType::InterestBearingConfig => UiExtensionType::InterestBearingConfig,
+            ExtensionType::CpiGuard => UiExtensionType::CpiGuard,
+            ExtensionType::PermanentDelegate => UiExtensionType::PermanentDelegate,
+            ExtensionType::NonTransferableAccount => UiExtensionType::NonTransferableAccount,
         }
     }
 }
@@ -676,7 +734,7 @@ mod test {
                 pubkey::Pubkey as SplTokenPubkey,
             },
         },
-        std::str::FromStr,
+        std::{iter::repeat_with, str::FromStr},
     };
 
     pub(super) fn convert_pubkey(pubkey: Pubkey) -> SplTokenPubkey {
@@ -1658,13 +1716,11 @@ mod test {
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_parse_token_v3() {
         test_parse_token(&spl_token::id());
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_parse_token_2022() {
         test_parse_token(&spl_token_2022::id());
     }
@@ -1694,10 +1750,7 @@ mod test {
     }
 
     fn test_token_ix_not_enough_keys(program_id: &SplTokenPubkey) {
-        let mut keys: Vec<Pubkey> = vec![];
-        for _ in 0..10 {
-            keys.push(solana_sdk::pubkey::new_rand());
-        }
+        let keys: Vec<Pubkey> = repeat_with(solana_sdk::pubkey::new_rand).take(10).collect();
 
         // Test InitializeMint variations
         let initialize_mint_ix = initialize_mint(
@@ -2172,13 +2225,11 @@ mod test {
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_not_enough_keys_token_v3() {
         test_token_ix_not_enough_keys(&spl_token::id());
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_not_enough_keys_token_2022() {
         test_token_ix_not_enough_keys(&spl_token_2022::id());
     }

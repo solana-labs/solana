@@ -55,8 +55,6 @@ pub fn setup() {
 }
 
 // Configures file logging with a default filter if RUST_LOG is not set
-//
-// NOTE: This does not work at the moment, pending the resolution of https://github.com/env-logger-rs/env_logger/issues/208
 pub fn setup_file_with_default(logfile: &str, filter: &str) {
     use std::fs::OpenOptions;
     let file = OpenOptions::new()

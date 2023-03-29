@@ -28,7 +28,7 @@ fn get_minimum_delegation_return_data() -> Result<u64, ProgramError> {
         .ok_or(ProgramError::InvalidInstructionData)
         .and_then(|(program_id, return_data)| {
             (program_id == super::program::id())
-                .then(|| return_data)
+                .then_some(return_data)
                 .ok_or(ProgramError::IncorrectProgramId)
         })
         .and_then(|return_data| {

@@ -17,7 +17,6 @@ use {
 #[bench]
 fn bench_write_points(bencher: &mut Bencher) {
     let points = (0..10)
-        .into_iter()
         .map(|_| {
             DataPoint::new("measurement")
                 .add_field_i64("i", 0)

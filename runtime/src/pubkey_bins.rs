@@ -30,14 +30,14 @@ impl PubkeyBinCalculator24 {
 
     pub fn bin_from_pubkey(&self, pubkey: &Pubkey) -> usize {
         let as_ref = pubkey.as_ref();
-        (((as_ref[0] as usize * 256 + as_ref[1] as usize) * 256 + as_ref[2] as usize) as usize)
+        ((as_ref[0] as usize * 256 + as_ref[1] as usize) * 256 + as_ref[2] as usize)
             >> self.shift_bits
     }
 
     pub fn lowest_pubkey_from_bin(&self, mut bin: usize, bins: usize) -> Pubkey {
         assert!(bin < bins);
         bin <<= self.shift_bits;
-        let mut pubkey = Pubkey::new(&[0; 32]);
+        let mut pubkey = Pubkey::from([0; 32]);
         pubkey.as_mut()[0] = ((bin / 256 / 256) & 0xff) as u8;
         pubkey.as_mut()[1] = ((bin / 256) & 0xff) as u8;
         pubkey.as_mut()[2] = (bin & 0xff) as u8;
@@ -63,7 +63,7 @@ pub mod tests {
         for i in 0..=24 {
             let bins = 2u32.pow(i);
             let calc = PubkeyBinCalculator24::new(bins as usize);
-            assert_eq!(calc.shift_bits, 24 - i, "i: {}", i);
+            assert_eq!(calc.shift_bits, 24 - i, "i: {i}");
             for bin in 0..bins {
                 assert_eq!(
                     bin as usize,
@@ -75,7 +75,7 @@ pub mod tests {
 
     #[test]
     fn test_pubkey_bins_pubkeys() {
-        let mut pk = Pubkey::new(&[0; 32]);
+        let mut pk = Pubkey::from([0; 32]);
         for i in 0..=8 {
             let bins = 2usize.pow(i);
             let calc = PubkeyBinCalculator24::new(bins);
@@ -106,7 +106,7 @@ pub mod tests {
         }
 
         for i in 9..=16 {
-            let mut pk = Pubkey::new(&[0; 32]);
+            let mut pk = Pubkey::from([0; 32]);
             let bins = 2usize.pow(i);
             let calc = PubkeyBinCalculator24::new(bins);
 
@@ -118,7 +118,7 @@ pub mod tests {
             pk.as_mut()[1] = 0xff;
             assert_eq!(bins - 1, calc.bin_from_pubkey(&pk));
 
-            let mut pk = Pubkey::new(&[0; 32]);
+            let mut pk = Pubkey::from([0; 32]);
             for bin in 0..bins {
                 let mut target = (bin << shift_bits) as u16;
                 pk.as_mut()[0] = (target / 256) as u8;
@@ -142,7 +142,7 @@ pub mod tests {
         }
 
         for i in 17..=24 {
-            let mut pk = Pubkey::new(&[0; 32]);
+            let mut pk = Pubkey::from([0; 32]);
             let bins = 2usize.pow(i);
             let calc = PubkeyBinCalculator24::new(bins);
 
@@ -155,7 +155,7 @@ pub mod tests {
             pk.as_mut()[2] = 0xff;
             assert_eq!(bins - 1, calc.bin_from_pubkey(&pk));
 
-            let mut pk = Pubkey::new(&[0; 32]);
+            let mut pk = Pubkey::from([0; 32]);
             for bin in 0..bins {
                 let mut target = (bin << shift_bits) as u32;
                 pk.as_mut()[0] = (target / 256 / 256) as u8;

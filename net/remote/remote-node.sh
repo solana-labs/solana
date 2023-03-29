@@ -28,6 +28,9 @@ maybeFullRpc="${19}"
 waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
+disableQuic="${23}"
+enableUdp="${24}"
+
 set +x
 
 missing() {
@@ -263,7 +266,7 @@ EOF
       solana-ledger-tool -l config/bootstrap-validator shred-version --max-genesis-archive-unpacked-size 1073741824 | tee config/shred-version
 
       if [[ -n "$maybeWaitForSupermajority" ]]; then
-        bankHash=$(solana-ledger-tool -l config/bootstrap-validator bank-hash)
+        bankHash=$(solana-ledger-tool -l config/bootstrap-validator bank-hash --halt-at-slot 0)
         extraNodeArgs="$extraNodeArgs --expected-bank-hash $bankHash"
         echo "$bankHash" > config/bank-hash
       fi
@@ -281,6 +284,15 @@ EOF
     if $maybeFullRpc; then
       args+=(--enable-rpc-transaction-history)
       args+=(--enable-extended-tx-metadata-storage)
+    fi
+
+
+    if $disableQuic; then
+      args+=(--tpu-disable-quic)
+    fi
+
+    if $enableUdp; then
+      args+=(--tpu-enable-udp)
     fi
 
     if [[ $airdropsEnabled = true ]]; then
@@ -411,6 +423,14 @@ EOF
       args+=(--enable-extended-tx-metadata-storage)
     fi
 
+    if $disableQuic; then
+      args+=(--tpu-disable-quic)
+    fi
+
+    if $enableUdp; then
+      args+=(--tpu-enable-udp)
+    fi
+
 cat >> ~/solana/on-reboot <<EOF
     $maybeSkipAccountsCreation
     nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
@@ -443,6 +463,7 @@ EOF
         echo "0 Primordial stakes, staking with $internalNodesStakeLamports"
         multinode-demo/delegate-stake.sh --vote-account "$SOLANA_CONFIG_DIR"/vote-account.json \
                                          --stake-account "$SOLANA_CONFIG_DIR"/stake-account.json \
+                                         --force \
                                          "${args[@]}" "$internalNodesStakeLamports"
       else
         echo "Skipping staking with extra stakes: ${extraPrimordialStakes}"

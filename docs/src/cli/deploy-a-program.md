@@ -6,7 +6,7 @@ Developers can deploy on-chain [programs](terminology.md#program) (often called
 smart contracts elsewhere) with the Solana tools.
 
 To learn about developing and executing programs on Solana, start with the
-[overview](developing/programming-model/overview.md) and then dig into the
+[intro to Solana programs](developing/intro/programs.md) and then dig into the
 details of [on-chain programs](developing/on-chain-programs/overview.md).
 
 To deploy a program, use the Solana tools to interact with the on-chain loader
@@ -284,7 +284,7 @@ solana program write-buffer <PROGRAM_FILEPATH>
 Buffer accounts support authorities like program accounts:
 
 ```bash
-solana program set-buffer-authority <BUFFER_ADDRESS> --new-upgrade-authority <NEW_UPGRADE_AUTHORITY>
+solana program set-buffer-authority <BUFFER_ADDRESS> --new-buffer-authority <NEW_BUFFER_AUTHORITY>
 ```
 
 One exception is that buffer accounts cannot be marked immutable like program

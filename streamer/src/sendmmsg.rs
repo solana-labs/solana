@@ -29,7 +29,7 @@ pub enum SendPktsError {
 
 impl From<SendPktsError> for TransportError {
     fn from(err: SendPktsError) -> Self {
-        Self::Custom(format!("{:?}", err))
+        Self::Custom(format!("{err:?}"))
     }
 }
 
@@ -134,7 +134,8 @@ where
 {
     let size = packets.len();
     #[allow(clippy::uninit_assumed_init)]
-    let mut iovs = vec![unsafe { std::mem::MaybeUninit::uninit().assume_init() }; size];
+    let iovec = std::mem::MaybeUninit::<iovec>::uninit();
+    let mut iovs = vec![unsafe { iovec.assume_init() }; size];
     let mut addrs = vec![unsafe { std::mem::zeroed() }; size];
     let mut hdrs = vec![unsafe { std::mem::zeroed() }; size];
     for ((pkt, dest), hdr, iov, addr) in izip!(packets, &mut hdrs, &mut iovs, &mut addrs) {

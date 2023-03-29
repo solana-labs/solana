@@ -1,5 +1,10 @@
 pub use bytemuck::{Pod, Zeroable};
-use std::fmt;
+use {
+    crate::zk_token_proof_instruction::ProofType,
+    num_traits::{FromPrimitive, ToPrimitive},
+    solana_program::instruction::InstructionError,
+    std::fmt,
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
@@ -29,6 +34,22 @@ impl From<PodU64> for u64 {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct PodProofType(u8);
+impl From<ProofType> for PodProofType {
+    fn from(proof_type: ProofType) -> Self {
+        Self(ToPrimitive::to_u8(&proof_type).unwrap())
+    }
+}
+impl TryFrom<PodProofType> for ProofType {
+    type Error = InstructionError;
+
+    fn try_from(pod: PodProofType) -> Result<Self, Self::Error> {
+        FromPrimitive::from_u8(pod.0).ok_or(Self::Error::InvalidAccountData)
+    }
+}
+
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct CompressedRistretto(pub [u8; 32]);
@@ -40,6 +61,12 @@ pub struct ElGamalCiphertext(pub [u8; 64]);
 impl fmt::Debug for ElGamalCiphertext {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
+    }
+}
+
+impl fmt::Display for ElGamalCiphertext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.0))
     }
 }
 
@@ -56,6 +83,12 @@ pub struct ElGamalPubkey(pub [u8; 32]);
 impl fmt::Debug for ElGamalPubkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
+    }
+}
+
+impl fmt::Display for ElGamalPubkey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.0))
     }
 }
 
@@ -134,6 +167,11 @@ unsafe impl Pod for ZeroBalanceProof {}
 #[repr(transparent)]
 pub struct FeeSigmaProof(pub [u8; 256]);
 
+/// Serialization of public-key sigma proof
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct PubkeySigmaProof(pub [u8; 64]);
+
 /// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
 #[derive(Clone, Copy)]
 #[repr(transparent)]
@@ -177,6 +215,12 @@ unsafe impl Pod for AeCiphertext {}
 impl fmt::Debug for AeCiphertext {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
+    }
+}
+
+impl fmt::Display for AeCiphertext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.0))
     }
 }
 

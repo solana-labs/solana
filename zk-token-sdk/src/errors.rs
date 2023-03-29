@@ -10,26 +10,46 @@ pub enum ProofError {
     TransferAmount,
     #[error("proof generation failed")]
     Generation,
-    #[error("proof failed to verify")]
-    Verification,
-    #[error("range proof failed to verify")]
-    RangeProof,
-    #[error("equality proof failed to verify")]
-    EqualityProof,
-    #[error("fee proof failed to verify")]
-    FeeProof,
-    #[error("zero-balance proof failed to verify")]
-    ZeroBalanceProof,
-    #[error("validity proof failed to verify")]
-    ValidityProof,
-    #[error(
-        "`zk_token_elgamal::pod::ElGamalCiphertext` contains invalid ElGamalCiphertext ciphertext"
-    )]
-    InconsistentCTData,
-    #[error("failed to decrypt ciphertext from transfer data")]
+    #[error("proof verification failed")]
+    VerificationError(ProofType, ProofVerificationError),
+    #[error("failed to decrypt ciphertext")]
     Decryption,
-    #[error("discrete log number of threads not power-of-two")]
-    DiscreteLogThreads,
+    #[error("invalid ciphertext data")]
+    CiphertextDeserialization,
+    #[error("invalid pubkey data")]
+    PubkeyDeserialization,
+    #[error("ciphertext does not exist in instruction data")]
+    MissingCiphertext,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProofType {
+    EqualityProof,
+    ValidityProof,
+    ZeroBalanceProof,
+    FeeSigmaProof,
+    PubkeyValidityProof,
+    RangeProof,
+}
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum ProofVerificationError {
+    #[error("required algebraic relation does not hold")]
+    AlgebraicRelation,
+    #[error("malformed proof")]
+    Deserialization,
+    #[error("multiscalar multiplication failed")]
+    MultiscalarMul,
+    #[error("transcript failed to produce a challenge")]
+    Transcript(#[from] TranscriptError),
+    #[error(
+        "attempted to verify range proof with a non-power-of-two bit size or bit size is too big"
+    )]
+    InvalidBitSize,
+    #[error("insufficient generators for the proof")]
+    InvalidGeneratorsLength,
+    #[error("number of blinding factors do not match the number of values")]
+    WrongNumBlindingFactors,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
@@ -39,30 +59,36 @@ pub enum TranscriptError {
 }
 
 impl From<RangeProofError> for ProofError {
-    fn from(_err: RangeProofError) -> Self {
-        Self::RangeProof
+    fn from(err: RangeProofError) -> Self {
+        Self::VerificationError(ProofType::RangeProof, err.0)
     }
 }
 
 impl From<EqualityProofError> for ProofError {
-    fn from(_err: EqualityProofError) -> Self {
-        Self::EqualityProof
+    fn from(err: EqualityProofError) -> Self {
+        Self::VerificationError(ProofType::EqualityProof, err.0)
     }
 }
 
 impl From<FeeSigmaProofError> for ProofError {
-    fn from(_err: FeeSigmaProofError) -> Self {
-        Self::FeeProof
+    fn from(err: FeeSigmaProofError) -> Self {
+        Self::VerificationError(ProofType::FeeSigmaProof, err.0)
     }
 }
 
 impl From<ZeroBalanceProofError> for ProofError {
-    fn from(_err: ZeroBalanceProofError) -> Self {
-        Self::ZeroBalanceProof
+    fn from(err: ZeroBalanceProofError) -> Self {
+        Self::VerificationError(ProofType::ZeroBalanceProof, err.0)
     }
 }
 impl From<ValidityProofError> for ProofError {
-    fn from(_err: ValidityProofError) -> Self {
-        Self::ValidityProof
+    fn from(err: ValidityProofError) -> Self {
+        Self::VerificationError(ProofType::ValidityProof, err.0)
+    }
+}
+
+impl From<PubkeyValidityProofError> for ProofError {
+    fn from(err: PubkeyValidityProofError) -> Self {
+        Self::VerificationError(ProofType::PubkeyValidityProof, err.0)
     }
 }

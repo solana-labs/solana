@@ -23,11 +23,9 @@ use {
 
 /// Reasons the runtime might have rejected an instruction.
 ///
-/// Instructions errors are included in the bank hashes and therefore are
-/// included as part of the transaction results when determining consensus.
-/// Because of this, members of this enum must not be removed, but new ones can
-/// be added.  Also, it is crucial that meta-information if any that comes along
-/// with an error be consistent across software versions.  For example, it is
+/// Members of this enum must not be removed, but new ones can be added.
+/// Also, it is crucial that meta-information if any that comes along with
+/// an error be consistent across software versions.  For example, it is
 /// dangerous to include error strings from 3rd party crates because they could
 /// change at any time and changes to them are difficult to detect.
 #[derive(
@@ -249,13 +247,21 @@ pub enum InstructionError {
     #[error("Provided owner is not allowed")]
     IllegalOwner,
 
-    /// Account data allocation exceeded the maximum accounts data size limit
-    #[error("Account data allocation exceeded the maximum accounts data size limit")]
-    MaxAccountsDataSizeExceeded,
+    /// Accounts data allocations exceeded the maximum allowed per transaction
+    #[error("Accounts data allocations exceeded the maximum allowed per transaction")]
+    MaxAccountsDataAllocationsExceeded,
 
-    /// Active vote account close
-    #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
-    ActiveVoteAccountClose,
+    /// Max accounts exceeded
+    #[error("Max accounts exceeded")]
+    MaxAccountsExceeded,
+
+    /// Max instruction trace length exceeded
+    #[error("Max instruction trace length exceeded")]
+    MaxInstructionTraceLengthExceeded,
+
+    /// Builtin programs must consume compute units
+    #[error("Builtin programs must consume compute units")]
+    BuiltinProgramsMustConsumeComputeUnits,
     // Note: For any new error added here an equivalent ProgramError and its
     // conversions must also be added
 }
@@ -661,12 +667,12 @@ impl CompiledInstruction {
 /// Use to query and convey information about the sibling instruction components
 /// when calling the `sol_get_processed_sibling_instruction` syscall.
 #[repr(C)]
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
 pub struct ProcessedSiblingInstruction {
     /// Length of the instruction data
-    pub data_len: usize,
+    pub data_len: u64,
     /// Number of AccountMeta structures
-    pub accounts_len: usize,
+    pub accounts_len: u64,
 }
 
 /// Returns a sibling instruction from the processed sibling instruction list.
@@ -698,8 +704,8 @@ pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
         } {
             let mut data = Vec::new();
             let mut accounts = Vec::new();
-            data.resize_with(meta.data_len, u8::default);
-            accounts.resize_with(meta.accounts_len, AccountMeta::default);
+            data.resize_with(meta.data_len as usize, u8::default);
+            accounts.resize_with(meta.accounts_len as usize, AccountMeta::default);
 
             let _ = unsafe {
                 crate::syscalls::sol_get_processed_sibling_instruction(

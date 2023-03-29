@@ -3,12 +3,14 @@ use {
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
+        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     },
     solana_sdk::{
         account::from_account,
         account_utils::StateMut,
         client::SyncClient,
+        hash::Hash,
         message::Message,
         pubkey::Pubkey,
         rent::Rent,
@@ -61,7 +63,7 @@ fn fill_epoch_with_votes(
             &[vote_instruction::vote(
                 &vote_pubkey,
                 &vote_pubkey,
-                Vote::new(vec![parent.slot() as u64], parent.hash()),
+                Vote::new(vec![parent.slot()], parent.hash()),
             )],
             Some(&mint_pubkey),
         );
@@ -282,6 +284,13 @@ fn test_stake_account_lifetime() {
     let bank = Bank::new_for_tests(&genesis_config);
     let mint_pubkey = mint_keypair.pubkey();
     let mut bank = Arc::new(bank);
+    // Need to set the EAH to Valid so that `Bank::new_from_parent()` doesn't panic during freeze
+    // when parent is in the EAH calculation window.
+    bank.rc
+        .accounts
+        .accounts_db
+        .epoch_accounts_hash_manager
+        .set_valid(EpochAccountsHash::new(Hash::new_unique()), bank.slot());
     let bank_client = BankClient::new_shared(&bank);
 
     let (vote_balance, stake_rent_exempt_reserve, stake_minimum_delegation) = {

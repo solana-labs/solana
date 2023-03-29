@@ -10,7 +10,7 @@ lazy_static! {
     static ref MAX_RAYON_THREADS: usize =
             env::var("SOLANA_RAYON_THREADS").ok()
             .and_then(|num_threads| num_threads.parse().ok())
-            .unwrap_or_else(|| num_cpus::get() as usize / 2)
+            .unwrap_or_else(|| num_cpus::get() / 2)
             .max(1);
 }
 

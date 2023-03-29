@@ -4,7 +4,7 @@
 //!
 //! The sysvar ID is declared in [`sysvar::slot_hashes`].
 //!
-//! [`sysvar::slot_hashes`]: crate::slot_hashes
+//! [`sysvar::slot_hashes`]: crate::sysvar::slot_hashes
 
 pub use crate::clock::Slot;
 use {

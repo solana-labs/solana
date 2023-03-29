@@ -1,4 +1,5 @@
 use {
+    solana_poh::poh_recorder::RecordTransactionsTimings,
     solana_program_runtime::timings::ExecuteTimings,
     solana_sdk::{clock::Slot, saturating_add_assign},
     std::time::Instant,
@@ -67,24 +68,6 @@ impl LeaderExecuteAndCommitTimings {
                 i64
             ),
         );
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct RecordTransactionsTimings {
-    pub execution_results_to_transactions_us: u64,
-    pub hash_us: u64,
-    pub poh_record_us: u64,
-}
-
-impl RecordTransactionsTimings {
-    pub fn accumulate(&mut self, other: &RecordTransactionsTimings) {
-        saturating_add_assign!(
-            self.execution_results_to_transactions_us,
-            other.execution_results_to_transactions_us
-        );
-        saturating_add_assign!(self.hash_us, other.hash_us);
-        saturating_add_assign!(self.poh_record_us, other.poh_record_us);
     }
 }
 
@@ -224,12 +207,6 @@ impl ProcessBufferedPacketsTimings {
 
 #[derive(Debug, Default)]
 pub(crate) struct ConsumeBufferedPacketsTimings {
-    // Time spent grabbing poh recorder lock
-    pub poh_recorder_lock_us: u64,
-
-    // Time spent filtering invalid packets after leader slot has ended
-    pub end_of_slot_filtering_us: u64,
-
     // Time spent processing transactions
     pub process_packets_transactions_us: u64,
 }
@@ -240,16 +217,6 @@ impl ConsumeBufferedPacketsTimings {
             "banking_stage-leader_slot_consume_buffered_packets_timings",
             ("id", id as i64, i64),
             ("slot", slot as i64, i64),
-            (
-                "poh_recorder_lock_us",
-                self.poh_recorder_lock_us as i64,
-                i64
-            ),
-            (
-                "end_of_slot_filtering_us",
-                self.end_of_slot_filtering_us as i64,
-                i64
-            ),
             (
                 "process_packets_transactions_us",
                 self.process_packets_transactions_us as i64,

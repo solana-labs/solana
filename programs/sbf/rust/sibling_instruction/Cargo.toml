@@ -1,0 +1,23 @@
+[package]
+name = "solana-sbf-rust-sibling-instructions"
+documentation = "https://docs.rs/solana-sbf-rust-log-data"
+version = { workspace = true }
+description = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-program = { workspace = true }
+
+[features]
+default = ["program"]
+program = []
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

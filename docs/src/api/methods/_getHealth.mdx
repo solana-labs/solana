@@ -1,0 +1,88 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getHealth
+
+Returns the current health of the node.
+
+:::caution
+If one or more `--known-validator` arguments are provided to `solana-validator` - "ok" is returned
+when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest known validator,
+otherwise an error is returned. "ok" is always returned if no known validators are provided.
+:::
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+**None**
+
+### Result:
+
+If the node is healthy: "ok"
+
+If the node is unhealthy, a JSON RPC error response is returned. The specifics of the error response are **UNSTABLE** and may change in the future
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getHealth"}
+'
+```
+
+### Response:
+
+Healthy Result:
+
+```json
+{ "jsonrpc": "2.0", "result": "ok", "id": 1 }
+```
+
+Unhealthy Result (generic):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32005,
+    "message": "Node is unhealthy",
+    "data": {}
+  },
+  "id": 1
+}
+```
+
+Unhealthy Result (if additional information is available)
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32005,
+    "message": "Node is behind by 42 slots",
+    "data": {
+      "numSlotsBehind": 42
+    }
+  },
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

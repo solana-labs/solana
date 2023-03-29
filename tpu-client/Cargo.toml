@@ -1,0 +1,41 @@
+[package]
+name = "solana-tpu-client"
+description = "Solana TPU Client"
+documentation = "https://docs.rs/solana-tpu-client"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+bincode = { workspace = true }
+futures-util = { workspace = true }
+indexmap = { workspace = true }
+indicatif = { workspace = true, optional = true }
+log = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+solana-connection-cache = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-pubsub-client = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-sdk = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+rand_chacha = { workspace = true }
+
+[features]
+default = ["spinner"]
+# Support tpu-client methods that feature a spinner progress bar for
+# command-line interfaces
+spinner = ["dep:indicatif", "solana-rpc-client/spinner"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

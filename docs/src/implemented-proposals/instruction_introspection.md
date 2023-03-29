@@ -25,4 +25,4 @@ for it and also write the current instruction index and then the bpf program can
 necessary information from there.
 
 Note: custom serialization of instructions is used because bincode is about 10x slower
-in native code and exceeds current BPF instruction limits.
+in native code and exceeds current SBF instruction limits.

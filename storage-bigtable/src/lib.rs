@@ -4,7 +4,7 @@ use {
     crate::bigtable::RowKey,
     log::*,
     serde::{Deserialize, Serialize},
-    solana_metrics::inc_new_counter_debug,
+    solana_metrics::{datapoint_info, inc_new_counter_debug},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,
@@ -24,6 +24,7 @@ use {
     std::{
         collections::{HashMap, HashSet},
         convert::TryInto,
+        time::Duration,
     },
     thiserror::Error,
     tokio::task::JoinError,
@@ -78,7 +79,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 // Convert a slot to its bucket representation whereby lower slots are always lexically ordered
 // before higher slots
 fn slot_to_key(slot: Slot) -> String {
-    format!("{:016x}", slot)
+    format!("{slot:016x}")
 }
 
 fn slot_to_blocks_key(slot: Slot) -> String {
@@ -244,6 +245,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             rewards: None,
             loaded_addresses: LoadedAddresses::default(),
             return_data: None,
+            compute_units_consumed: None,
         }
     }
 }
@@ -368,6 +370,7 @@ impl From<LegacyTransactionByAddrInfo> for TransactionByAddrInfo {
 }
 
 pub const DEFAULT_INSTANCE_NAME: &str = "solana-ledger";
+pub const DEFAULT_APP_PROFILE_ID: &str = "default";
 
 #[derive(Debug)]
 pub enum CredentialType {
@@ -381,6 +384,7 @@ pub struct LedgerStorageConfig {
     pub timeout: Option<std::time::Duration>,
     pub credential_type: CredentialType,
     pub instance_name: String,
+    pub app_profile_id: String,
 }
 
 impl Default for LedgerStorageConfig {
@@ -390,6 +394,7 @@ impl Default for LedgerStorageConfig {
             timeout: None,
             credential_type: CredentialType::Filepath(None),
             instance_name: DEFAULT_INSTANCE_NAME.to_string(),
+            app_profile_id: DEFAULT_APP_PROFILE_ID.to_string(),
         }
     }
 }
@@ -414,15 +419,33 @@ impl LedgerStorage {
         .await
     }
 
+    pub fn new_for_emulator(
+        instance_name: &str,
+        app_profile_id: &str,
+        endpoint: &str,
+        timeout: Option<Duration>,
+    ) -> Result<Self> {
+        Ok(Self {
+            connection: bigtable::BigTableConnection::new_for_emulator(
+                instance_name,
+                app_profile_id,
+                endpoint,
+                timeout,
+            )?,
+        })
+    }
+
     pub async fn new_with_config(config: LedgerStorageConfig) -> Result<Self> {
         let LedgerStorageConfig {
             read_only,
             timeout,
             instance_name,
+            app_profile_id,
             credential_type,
         } = config;
         let connection = bigtable::BigTableConnection::new(
             instance_name.as_str(),
+            app_profile_id.as_str(),
             read_only,
             timeout,
             credential_type,
@@ -454,8 +477,7 @@ impl LedgerStorage {
     /// Fetch the next slots after the provided slot that contains a block
     ///
     /// start_slot: slot to start the search from (inclusive)
-    /// limit: stop after this many slots have been found; if limit==0, all records in the table
-    /// after start_slot will be read
+    /// limit: stop after this many slots have been found
     pub async fn get_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<Vec<Slot>> {
         debug!(
             "LedgerStorage::get_confirmed_blocks request received: {:?} {:?}",
@@ -530,6 +552,22 @@ impl LedgerStorage {
         })
     }
 
+    /// Does the confirmed block exist in the Bigtable
+    pub async fn confirmed_block_exists(&self, slot: Slot) -> Result<bool> {
+        debug!(
+            "LedgerStorage::confirmed_block_exists request received: {:?}",
+            slot
+        );
+        inc_new_counter_debug!("storage-bigtable-query", 1);
+        let mut bigtable = self.connection.client();
+
+        let block_exists = bigtable
+            .row_key_exists("blocks", slot_to_blocks_key(slot))
+            .await?;
+
+        Ok(block_exists)
+    }
+
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {
         debug!(
             "LedgerStorage::get_signature_status request received: {:?}",
@@ -545,6 +583,68 @@ impl LedgerStorage {
                 _ => err.into(),
             })?;
         Ok(transaction_info.into())
+    }
+
+    // Fetches and gets a vector of confirmed transactions via a multirow fetch
+    pub async fn get_confirmed_transactions(
+        &self,
+        signatures: &[Signature],
+    ) -> Result<Vec<ConfirmedTransactionWithStatusMeta>> {
+        debug!(
+            "LedgerStorage::get_confirmed_transactions request received: {:?}",
+            signatures
+        );
+        inc_new_counter_debug!("storage-bigtable-query", 1);
+        let mut bigtable = self.connection.client();
+
+        // Fetch transactions info
+        let keys = signatures.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let cells = bigtable
+            .get_bincode_cells::<TransactionInfo>("tx", &keys)
+            .await?;
+
+        // Collect by slot
+        let mut order: Vec<(Slot, u32, String)> = Vec::new();
+        let mut slots: HashSet<Slot> = HashSet::new();
+        for cell in cells {
+            if let (signature, Ok(TransactionInfo { slot, index, .. })) = cell {
+                order.push((slot, index, signature));
+                slots.insert(slot);
+            }
+        }
+
+        // Fetch blocks
+        let blocks = self
+            .get_confirmed_blocks_with_data(&slots.into_iter().collect::<Vec<_>>())
+            .await?
+            .collect::<HashMap<_, _>>();
+
+        // Extract transactions
+        Ok(order
+            .into_iter()
+            .filter_map(|(slot, index, signature)| {
+                blocks.get(&slot).and_then(|block| {
+                    block
+                        .transactions
+                        .get(index as usize)
+                        .and_then(|tx_with_meta| {
+                            if tx_with_meta.transaction_signature().to_string() != *signature {
+                                warn!(
+                                    "Transaction info or confirmed block for {} is corrupt",
+                                    signature
+                                );
+                                None
+                            } else {
+                                Some(ConfirmedTransactionWithStatusMeta {
+                                    slot,
+                                    tx_with_meta: tx_with_meta.clone(),
+                                    block_time: block.block_time,
+                                })
+                            }
+                        })
+                })
+            })
+            .collect::<Vec<_>>())
     }
 
     /// Fetch a confirmed transaction
@@ -618,7 +718,7 @@ impl LedgerStorage {
         );
         inc_new_counter_debug!("storage-bigtable-query", 1);
         let mut bigtable = self.connection.client();
-        let address_prefix = format!("{}/", address);
+        let address_prefix = format!("{address}/");
 
         // Figure out where to start listing from based on `before_signature`
         let (first_slot, before_transaction_index) = match before_signature {
@@ -682,8 +782,7 @@ impl LedgerStorage {
         'outer: for (row_key, data) in tx_by_addr_data {
             let slot = !key_to_slot(&row_key[address_prefix.len()..]).ok_or_else(|| {
                 bigtable::Error::ObjectCorrupt(format!(
-                    "Failed to convert key to slot: tx-by-addr/{}",
-                    row_key
+                    "Failed to convert key to slot: tx-by-addr/{row_key}"
                 ))
             })?;
 
@@ -850,11 +949,12 @@ impl LedgerStorage {
             .connection
             .put_protobuf_cells_with_retry::<generated::ConfirmedBlock>("blocks", &blocks_cells)
             .await?;
-        info!(
-            "uploaded block for slot {}: {} transactions, {} bytes",
-            slot, num_transactions, bytes_written
+        datapoint_info!(
+            "storage-bigtable-upload-block",
+            ("slot", slot, i64),
+            ("transactions", num_transactions, i64),
+            ("bytes", bytes_written, i64),
         );
-
         Ok(())
     }
 
@@ -907,11 +1007,7 @@ impl LedgerStorage {
             .collect();
 
         let tx_deletion_rows = if !expected_tx_infos.is_empty() {
-            let signatures = expected_tx_infos
-                .iter()
-                .map(|(signature, _info)| signature)
-                .cloned()
-                .collect::<Vec<_>>();
+            let signatures = expected_tx_infos.keys().cloned().collect::<Vec<_>>();
             let fetched_tx_infos: HashMap<String, std::result::Result<UploadedTransaction, _>> =
                 self.connection
                     .get_bincode_cells_with_retry::<TransactionInfo>("tx", &signatures)

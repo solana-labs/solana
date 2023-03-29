@@ -28,21 +28,21 @@ lazy_static::lazy_static! {
 /// Algorithm handle for the Pedersen commitment scheme.
 pub struct Pedersen;
 impl Pedersen {
-    /// On input a message, the function returns a Pedersen commitment of the message and the
-    /// corresponding opening.
+    /// On input a message (numeric amount), the function returns a Pedersen commitment of the
+    /// message and the corresponding opening.
     ///
     /// This function is randomized. It internally samples a Pedersen opening using `OsRng`.
     #[cfg(not(target_os = "solana"))]
     #[allow(clippy::new_ret_no_self)]
-    pub fn new<T: Into<Scalar>>(message: T) -> (PedersenCommitment, PedersenOpening) {
+    pub fn new<T: Into<Scalar>>(amount: T) -> (PedersenCommitment, PedersenOpening) {
         let opening = PedersenOpening::new_rand();
-        let commitment = Pedersen::with(message, &opening);
+        let commitment = Pedersen::with(amount, &opening);
 
         (commitment, opening)
     }
 
-    /// On input a message and a Pedersen opening, the function returns the corresponding Pedersen
-    /// commitment.
+    /// On input a message (numeric amount) and a Pedersen opening, the function returns the
+    /// corresponding Pedersen commitment.
     ///
     /// This function is deterministic.
     #[allow(non_snake_case)]
@@ -53,7 +53,8 @@ impl Pedersen {
         PedersenCommitment(RistrettoPoint::multiscalar_mul(&[x, *r], &[*G, *H]))
     }
 
-    /// On input a message, the function returns a Pedersen commitment with zero as the opening.
+    /// On input a message (numeric amount), the function returns a Pedersen commitment with zero
+    /// as the opening.
     ///
     /// This function is deterministic.
     pub fn encode<T: Into<Scalar>>(amount: T) -> PedersenCommitment {
@@ -77,12 +78,10 @@ impl PedersenOpening {
         PedersenOpening(Scalar::random(&mut OsRng))
     }
 
-    #[allow(clippy::wrong_self_convention)]
     pub fn as_bytes(&self) -> &[u8; 32] {
         self.0.as_bytes()
     }
 
-    #[allow(clippy::wrong_self_convention)]
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.to_bytes()
     }
@@ -170,12 +169,15 @@ impl PedersenCommitment {
         &self.0
     }
 
-    #[allow(clippy::wrong_self_convention)]
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.compress().to_bytes()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<PedersenCommitment> {
+        if bytes.len() != 32 {
+            return None;
+        }
+
         Some(PedersenCommitment(
             CompressedRistretto::from_slice(bytes).decompress()?,
         ))
@@ -296,6 +298,9 @@ mod tests {
         let decoded = PedersenCommitment::from_bytes(&encoded).unwrap();
 
         assert_eq!(comm, decoded);
+
+        // incorrect length encoding
+        assert_eq!(PedersenCommitment::from_bytes(&[0; 33]), None);
     }
 
     #[test]
@@ -306,6 +311,9 @@ mod tests {
         let decoded = PedersenOpening::from_bytes(&encoded).unwrap();
 
         assert_eq!(open, decoded);
+
+        // incorrect length encoding
+        assert_eq!(PedersenOpening::from_bytes(&[0; 33]), None);
     }
 
     #[test]

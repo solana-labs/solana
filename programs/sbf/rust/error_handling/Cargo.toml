@@ -1,0 +1,22 @@
+[package]
+name = "solana-sbf-rust-error-handling"
+documentation = "https://docs.rs/solana-sbf-rust-error-handling"
+version = { workspace = true }
+description = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+num-derive = { workspace = true }
+num-traits = { workspace = true }
+solana-program = { workspace = true }
+thiserror = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

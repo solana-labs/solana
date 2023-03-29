@@ -53,12 +53,8 @@ impl Data {
 }
 
 impl DurableNonce {
-    pub fn from_blockhash(blockhash: &Hash, separate_domains: bool) -> Self {
-        Self(if separate_domains {
-            hashv(&[DURABLE_NONCE_HASH_PREFIX, blockhash.as_ref()])
-        } else {
-            *blockhash
-        })
+    pub fn from_blockhash(blockhash: &Hash) -> Self {
+        Self(hashv(&[DURABLE_NONCE_HASH_PREFIX, blockhash.as_ref()]))
     }
 
     /// Hash value used as recent_blockhash field in Transactions.
@@ -71,16 +67,11 @@ impl DurableNonce {
 ///
 /// When created in memory with [`State::default`] or when deserialized from an
 /// uninitialized account, a nonce account will be [`State::Uninitialized`].
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum State {
+    #[default]
     Uninitialized,
     Initialized(Data),
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State::Uninitialized
-    }
 }
 
 impl State {
@@ -110,10 +101,7 @@ mod test {
 
     #[test]
     fn test_nonce_state_size() {
-        let data = Versions::new(
-            State::Initialized(Data::default()),
-            true, // separate_domains
-        );
+        let data = Versions::new(State::Initialized(Data::default()));
         let size = bincode::serialized_size(&data).unwrap();
         assert_eq!(State::size() as u64, size);
     }

@@ -63,7 +63,7 @@ impl AsRef<str> for Manufacturer {
 impl std::fmt::Display for Manufacturer {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s: &str = self.as_ref();
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -108,7 +108,7 @@ impl std::fmt::Display for Locator {
             .unwrap();
 
         let uri = builder.build().unwrap();
-        write!(f, "{}", uri)
+        write!(f, "{uri}")
     }
 }
 
@@ -344,11 +344,11 @@ mod tests {
     fn test_locator_new_from_path() {
         let manufacturer = Manufacturer::Ledger;
         let pubkey = Pubkey::new_unique();
-        let path = format!("usb://ledger/{}?key=0/0", pubkey);
+        let path = format!("usb://ledger/{pubkey}?key=0/0");
         Locator::new_from_path(path).unwrap();
 
         // usb://ledger/{PUBKEY}?key=0'/0'
-        let path = format!("usb://ledger/{}?key=0'/0'", pubkey);
+        let path = format!("usb://ledger/{pubkey}?key=0'/0'");
         let expect = Locator {
             manufacturer,
             pubkey: Some(pubkey),
@@ -356,7 +356,7 @@ mod tests {
         assert_eq!(Locator::new_from_path(path), Ok(expect));
 
         // usb://ledger/{PUBKEY}
-        let path = format!("usb://ledger/{}", pubkey);
+        let path = format!("usb://ledger/{pubkey}");
         let expect = Locator {
             manufacturer,
             pubkey: Some(pubkey),

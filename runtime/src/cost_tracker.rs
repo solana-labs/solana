@@ -5,7 +5,9 @@
 //!
 use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
-    solana_sdk::{clock::Slot, pubkey::Pubkey, saturating_add_assign},
+    solana_sdk::{
+        clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::TransactionError,
+    },
     std::{cmp::Ordering, collections::HashMap},
 };
 
@@ -27,6 +29,22 @@ pub enum CostTrackerError {
 
     /// would exceed account data total limit
     WouldExceedAccountDataTotalLimit,
+}
+
+impl From<CostTrackerError> for TransactionError {
+    fn from(err: CostTrackerError) -> Self {
+        match err {
+            CostTrackerError::WouldExceedBlockMaxLimit => Self::WouldExceedMaxBlockCostLimit,
+            CostTrackerError::WouldExceedVoteMaxLimit => Self::WouldExceedMaxVoteCostLimit,
+            CostTrackerError::WouldExceedAccountMaxLimit => Self::WouldExceedMaxAccountCostLimit,
+            CostTrackerError::WouldExceedAccountDataBlockLimit => {
+                Self::WouldExceedAccountDataBlockLimit
+            }
+            CostTrackerError::WouldExceedAccountDataTotalLimit => {
+                Self::WouldExceedAccountDataTotalLimit
+            }
+        }
+    }
 }
 
 #[derive(AbiExample, Debug)]
@@ -77,7 +95,7 @@ impl CostTracker {
         }
     }
 
-    // bench tests needs to reset limits
+    /// allows to adjust limits initiated during construction
     pub fn set_limits(
         &mut self,
         account_cost_limit: u64,
@@ -152,21 +170,15 @@ impl CostTracker {
     }
 
     fn find_costliest_account(&self) -> (Pubkey, u64) {
-        let mut costliest_account = Pubkey::default();
-        let mut costliest_account_cost = 0;
-        for (key, cost) in self.cost_by_writable_accounts.iter() {
-            if *cost > costliest_account_cost {
-                costliest_account = *key;
-                costliest_account_cost = *cost;
-            }
-        }
-
-        (costliest_account, costliest_account_cost)
+        self.cost_by_writable_accounts
+            .iter()
+            .max_by_key(|(_, &cost)| cost)
+            .map(|(&pubkey, &cost)| (pubkey, cost))
+            .unwrap_or_default()
     }
 
     fn would_fit(&self, tx_cost: &TransactionCost) -> Result<(), CostTrackerError> {
-        let writable_accounts = &tx_cost.writable_accounts;
-        let cost = tx_cost.sum();
+        let cost: u64 = tx_cost.sum();
         let vote_cost = if tx_cost.is_simple_vote { cost } else { 0 };
 
         // check against the total package cost
@@ -195,12 +207,12 @@ impl CostTracker {
             }
         }
 
-        if account_data_size > MAX_ACCOUNT_DATA_BLOCK_LEN {
+        if account_data_size > MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA {
             return Err(CostTrackerError::WouldExceedAccountDataBlockLimit);
         }
 
         // check each account against account_cost_limit,
-        for account_key in writable_accounts.iter() {
+        for account_key in tx_cost.writable_accounts.iter() {
             match self.cost_by_writable_accounts.get(account_key) {
                 Some(chained_cost) => {
                     if chained_cost.saturating_add(cost) > self.account_cost_limit {
@@ -217,8 +229,7 @@ impl CostTracker {
     }
 
     fn add_transaction_cost(&mut self, tx_cost: &TransactionCost) {
-        let cost = tx_cost.sum();
-        self.add_transaction_execution_cost(tx_cost, cost);
+        self.add_transaction_execution_cost(tx_cost, tx_cost.sum());
         saturating_add_assign!(self.account_data_size, tx_cost.account_data_size);
         saturating_add_assign!(self.transaction_count, 1);
     }
@@ -247,7 +258,7 @@ impl CostTracker {
         }
     }
 
-    /// Substract extra execution units from cost_tracker
+    /// Subtract extra execution units from cost_tracker
     fn sub_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: u64) {
         for account_key in tx_cost.writable_accounts.iter() {
             let account_cost = self
@@ -265,9 +276,9 @@ impl CostTracker {
     /// count number of none-zero CU accounts
     fn number_of_accounts(&self) -> usize {
         self.cost_by_writable_accounts
-            .iter()
-            .map(|(_key, units)| if *units > 0 { 1 } else { 0 })
-            .sum()
+            .values()
+            .filter(|units| **units > 0)
+            .count()
     }
 }
 
@@ -568,8 +579,8 @@ mod tests {
         let second_account = Keypair::new();
         let (_tx1, mut tx_cost1) = build_simple_transaction(&mint_keypair, &start_hash);
         let (_tx2, mut tx_cost2) = build_simple_transaction(&second_account, &start_hash);
-        tx_cost1.account_data_size = MAX_ACCOUNT_DATA_BLOCK_LEN;
-        tx_cost2.account_data_size = MAX_ACCOUNT_DATA_BLOCK_LEN + 1;
+        tx_cost1.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA;
+        tx_cost2.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA + 1;
         let cost1 = tx_cost1.sum();
         let cost2 = tx_cost2.sum();
 

@@ -1,0 +1,31 @@
+[package]
+name = "solana-rpc-client-api"
+description = "Solana Client Common Utilities"
+documentation = "https://docs.rs/solana-rpc-client-api"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+base64 = { workspace = true }
+bs58 = { workspace = true }
+jsonrpc-core = { workspace = true }
+reqwest = { workspace = true, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
+semver = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+solana-account-decoder = { workspace = true }
+solana-sdk = { workspace = true }
+solana-transaction-status = { workspace = true }
+solana-version = { workspace = true }
+spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

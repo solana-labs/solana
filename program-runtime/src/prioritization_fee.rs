@@ -5,6 +5,7 @@ type MicroLamports = u128;
 
 pub enum PrioritizationFeeType {
     ComputeUnitPrice(u64),
+    // TODO: remove 'Deprecated' after feature remove_deprecated_request_unit_ix::id() is activated
     Deprecated(u64),
 }
 
@@ -17,6 +18,7 @@ pub struct PrioritizationFeeDetails {
 impl PrioritizationFeeDetails {
     pub fn new(fee_type: PrioritizationFeeType, compute_unit_limit: u64) -> Self {
         match fee_type {
+            // TODO: remove support of 'Deprecated' after feature remove_deprecated_request_unit_ix::id() is activated
             PrioritizationFeeType::Deprecated(fee) => {
                 let priority = if compute_unit_limit == 0 {
                     0

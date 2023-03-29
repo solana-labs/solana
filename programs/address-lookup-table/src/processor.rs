@@ -9,6 +9,7 @@ use {
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
         clock::Slot,
+        feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::{Pubkey, PUBKEY_BYTES},
@@ -17,10 +18,14 @@ use {
     std::convert::TryFrom,
 };
 
-pub fn process_instruction(
-    first_instruction_account: usize,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+    // Consume compute units if feature `native_programs_consume_cu` is activated,
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::native_programs_consume_cu::id())
+    {
+        invoke_context.consume_checked(750)?;
+    }
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -28,24 +33,15 @@ pub fn process_instruction(
         ProgramInstruction::CreateLookupTable {
             recent_slot,
             bump_seed,
-        } => Processor::create_lookup_table(
-            invoke_context,
-            first_instruction_account,
-            recent_slot,
-            bump_seed,
-        ),
-        ProgramInstruction::FreezeLookupTable => {
-            Processor::freeze_lookup_table(invoke_context, first_instruction_account)
-        }
+        } => Processor::create_lookup_table(invoke_context, recent_slot, bump_seed),
+        ProgramInstruction::FreezeLookupTable => Processor::freeze_lookup_table(invoke_context),
         ProgramInstruction::ExtendLookupTable { new_addresses } => {
-            Processor::extend_lookup_table(invoke_context, first_instruction_account, new_addresses)
+            Processor::extend_lookup_table(invoke_context, new_addresses)
         }
         ProgramInstruction::DeactivateLookupTable => {
-            Processor::deactivate_lookup_table(invoke_context, first_instruction_account)
+            Processor::deactivate_lookup_table(invoke_context)
         }
-        ProgramInstruction::CloseLookupTable => {
-            Processor::close_lookup_table(invoke_context, first_instruction_account)
-        }
+        ProgramInstruction::CloseLookupTable => Processor::close_lookup_table(invoke_context),
     }
 }
 
@@ -57,7 +53,6 @@ pub struct Processor;
 impl Processor {
     fn create_lookup_table(
         invoke_context: &mut InvokeContext,
-        _first_instruction_account: usize,
         untrusted_recent_slot: Slot,
         bump_seed: u8,
     ) -> Result<(), InstructionError> {
@@ -68,7 +63,12 @@ impl Processor {
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
         let lookup_table_lamports = lookup_table_account.get_lamports();
         let table_key = *lookup_table_account.get_key();
-        if !lookup_table_account.get_data().is_empty() {
+        let lookup_table_owner = *lookup_table_account.get_owner();
+        if !invoke_context
+            .feature_set
+            .is_active(&feature_set::relax_authority_signer_check_for_lookup_table_creation::id())
+            && !lookup_table_account.get_data().is_empty()
+        {
             ic_msg!(invoke_context, "Table account must not be allocated");
             return Err(InstructionError::AccountAlreadyInitialized);
         }
@@ -77,7 +77,11 @@ impl Processor {
         let authority_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
         let authority_key = *authority_account.get_key();
-        if !authority_account.is_signer() {
+        if !invoke_context
+            .feature_set
+            .is_active(&feature_set::relax_authority_signer_check_for_lookup_table_creation::id())
+            && !authority_account.is_signer()
+        {
             ic_msg!(invoke_context, "Authority account must be a signer");
             return Err(InstructionError::MissingRequiredSignature);
         }
@@ -126,6 +130,14 @@ impl Processor {
             return Err(InstructionError::InvalidArgument);
         }
 
+        if invoke_context
+            .feature_set
+            .is_active(&feature_set::relax_authority_signer_check_for_lookup_table_creation::id())
+            && crate::check_id(&lookup_table_owner)
+        {
+            return Ok(());
+        }
+
         let table_account_data_len = LOOKUP_TABLE_META_SIZE;
         let rent = invoke_context.get_sysvar_cache().get_rent()?;
         let required_lamports = rent
@@ -135,18 +147,18 @@ impl Processor {
 
         if required_lamports > 0 {
             invoke_context.native_invoke(
-                system_instruction::transfer(&payer_key, &table_key, required_lamports),
+                system_instruction::transfer(&payer_key, &table_key, required_lamports).into(),
                 &[payer_key],
             )?;
         }
 
         invoke_context.native_invoke(
-            system_instruction::allocate(&table_key, table_account_data_len as u64),
+            system_instruction::allocate(&table_key, table_account_data_len as u64).into(),
             &[table_key],
         )?;
 
         invoke_context.native_invoke(
-            system_instruction::assign(&table_key, &crate::id()),
+            system_instruction::assign(&table_key, &crate::id()).into(),
             &[table_key],
         )?;
 
@@ -161,10 +173,7 @@ impl Processor {
         Ok(())
     }
 
-    fn freeze_lookup_table(
-        invoke_context: &mut InvokeContext,
-        _first_instruction_account: usize,
-    ) -> Result<(), InstructionError> {
+    fn freeze_lookup_table(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
 
@@ -217,7 +226,6 @@ impl Processor {
 
     fn extend_lookup_table(
         invoke_context: &mut InvokeContext,
-        _first_instruction_account: usize,
         new_addresses: Vec<Pubkey>,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
@@ -299,14 +307,14 @@ impl Processor {
             LOOKUP_TABLE_META_SIZE,
             new_table_addresses_len.saturating_mul(PUBKEY_BYTES),
         )?;
-
         {
-            let mut table_data = lookup_table_account.get_data_mut()?.to_vec();
-            AddressLookupTable::overwrite_meta_data(&mut table_data, lookup_table_meta)?;
+            AddressLookupTable::overwrite_meta_data(
+                lookup_table_account.get_data_mut()?,
+                lookup_table_meta,
+            )?;
             for new_address in new_addresses {
-                table_data.extend_from_slice(new_address.as_ref());
+                lookup_table_account.extend_from_slice(new_address.as_ref())?;
             }
-            lookup_table_account.set_data(&table_data)?;
         }
         drop(lookup_table_account);
 
@@ -327,7 +335,7 @@ impl Processor {
             drop(payer_account);
 
             invoke_context.native_invoke(
-                system_instruction::transfer(&payer_key, &table_key, required_lamports),
+                system_instruction::transfer(&payer_key, &table_key, required_lamports).into(),
                 &[payer_key],
             )?;
         }
@@ -335,10 +343,7 @@ impl Processor {
         Ok(())
     }
 
-    fn deactivate_lookup_table(
-        invoke_context: &mut InvokeContext,
-        _first_instruction_account: usize,
-    ) -> Result<(), InstructionError> {
+    fn deactivate_lookup_table(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
 
@@ -387,10 +392,7 @@ impl Processor {
         Ok(())
     }
 
-    fn close_lookup_table(
-        invoke_context: &mut InvokeContext,
-        _first_instruction_account: usize,
-    ) -> Result<(), InstructionError> {
+    fn close_lookup_table(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
 
@@ -411,13 +413,8 @@ impl Processor {
         drop(authority_account);
 
         instruction_context.check_number_of_instruction_accounts(3)?;
-        if instruction_context
-            .get_index_in_transaction(instruction_context.get_number_of_program_accounts())?
-            == instruction_context.get_index_in_transaction(
-                instruction_context
-                    .get_number_of_program_accounts()
-                    .saturating_add(2),
-            )?
+        if instruction_context.get_index_of_instruction_account_in_transaction(0)?
+            == instruction_context.get_index_of_instruction_account_in_transaction(2)?
         {
             ic_msg!(
                 invoke_context,
@@ -468,7 +465,7 @@ impl Processor {
 
         let mut lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        lookup_table_account.set_data(&[])?;
+        lookup_table_account.set_data_length(0)?;
         lookup_table_account.set_lamports(0)?;
 
         Ok(())

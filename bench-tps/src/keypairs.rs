@@ -18,7 +18,7 @@ pub fn get_keypairs<T>(
     read_from_client_file: bool,
 ) -> Vec<Keypair>
 where
-    T: 'static + BenchTpsClient + Send + Sync,
+    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
 {
     if read_from_client_file {
         let path = Path::new(client_ids_and_stake_file);
@@ -58,14 +58,14 @@ where
             last_balance,
         )
         .unwrap_or_else(|e| {
-            eprintln!("Error could not fund keys: {:?}", e);
+            eprintln!("Error could not fund keys: {e:?}");
             exit(1);
         });
         keypairs
     } else {
         generate_and_fund_keypairs(client, id, keypair_count, num_lamports_per_account)
             .unwrap_or_else(|e| {
-                eprintln!("Error could not fund keys: {:?}", e);
+                eprintln!("Error could not fund keys: {e:?}");
                 exit(1);
             })
     }

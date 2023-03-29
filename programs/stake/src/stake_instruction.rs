@@ -3,7 +3,7 @@ use {
         config,
         stake_state::{
             authorize, authorize_with_seed, deactivate, deactivate_delinquent, delegate,
-            initialize, merge, set_lockup, split, withdraw,
+            initialize, merge, redelegate, set_lockup, split, withdraw,
         },
     },
     log::*,
@@ -21,39 +21,50 @@ use {
             state::{Authorized, Lockup},
         },
         sysvar::clock::Clock,
-        transaction_context::{InstructionContext, TransactionContext},
+        transaction_context::{IndexOfAccount, InstructionContext, TransactionContext},
     },
 };
 
 fn get_optional_pubkey<'a>(
     transaction_context: &'a TransactionContext,
     instruction_context: &'a InstructionContext,
-    index_in_instruction: usize,
+    instruction_account_index: IndexOfAccount,
     should_be_signer: bool,
 ) -> Result<Option<&'a Pubkey>, InstructionError> {
     Ok(
-        if instruction_context.get_number_of_accounts() > index_in_instruction {
-            if should_be_signer && !instruction_context.is_signer(index_in_instruction)? {
+        if instruction_account_index < instruction_context.get_number_of_instruction_accounts() {
+            if should_be_signer
+                && !instruction_context.is_instruction_account_signer(instruction_account_index)?
+            {
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            Some(transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(index_in_instruction)?,
-            )?)
+            Some(
+                transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_of_instruction_account_in_transaction(
+                        instruction_account_index,
+                    )?,
+                )?,
+            )
         } else {
             None
         },
     )
 }
 
-pub fn process_instruction(
-    first_instruction_account: usize,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
 
     trace!("process_instruction: {:?}", data);
+
+    // Consume compute units if feature `native_programs_consume_cu` is activated,
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::native_programs_consume_cu::id())
+    {
+        invoke_context.consume_checked(750)?;
+    }
 
     let get_stake_account = || {
         let me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
@@ -63,7 +74,7 @@ pub fn process_instruction(
         Ok(me)
     };
 
-    let signers = instruction_context.get_signers(transaction_context);
+    let signers = instruction_context.get_signers(transaction_context)?;
     match limited_deserialize(data) {
         Ok(StakeInstruction::Initialize(authorized, lockup)) => {
             let mut me = get_stake_account()?;
@@ -86,12 +97,8 @@ pub fn process_instruction(
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
                 instruction_context.check_number_of_instruction_accounts(3)?;
-                let custodian_pubkey = get_optional_pubkey(
-                    transaction_context,
-                    instruction_context,
-                    first_instruction_account + 3,
-                    false,
-                )?;
+                let custodian_pubkey =
+                    get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
 
                 authorize(
                     &mut me,
@@ -123,18 +130,14 @@ pub fn process_instruction(
             if require_custodian_for_locked_stake_authorize {
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                let custodian_pubkey = get_optional_pubkey(
-                    transaction_context,
-                    instruction_context,
-                    first_instruction_account + 3,
-                    false,
-                )?;
+                let custodian_pubkey =
+                    get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
 
                 authorize_with_seed(
                     transaction_context,
                     instruction_context,
                     &mut me,
-                    first_instruction_account + 1,
+                    1,
                     &args.authority_seed,
                     &args.authority_owner,
                     &args.new_authorized_pubkey,
@@ -148,7 +151,7 @@ pub fn process_instruction(
                     transaction_context,
                     instruction_context,
                     &mut me,
-                    first_instruction_account + 1,
+                    1,
                     &args.authority_seed,
                     &args.authority_owner,
                     &args.new_authorized_pubkey,
@@ -179,10 +182,11 @@ pub fn process_instruction(
             let config = config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
             drop(config_account);
             delegate(
+                invoke_context,
                 transaction_context,
                 instruction_context,
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 &clock,
                 &stake_history,
                 &config,
@@ -198,9 +202,9 @@ pub fn process_instruction(
                 invoke_context,
                 transaction_context,
                 instruction_context,
-                first_instruction_account,
+                0,
                 lamports,
-                first_instruction_account + 1,
+                1,
                 &signers,
             )
         }
@@ -219,8 +223,8 @@ pub fn process_instruction(
                 invoke_context,
                 transaction_context,
                 instruction_context,
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 &clock,
                 &stake_history,
                 &signers,
@@ -241,14 +245,14 @@ pub fn process_instruction(
             withdraw(
                 transaction_context,
                 instruction_context,
-                first_instruction_account,
+                0,
                 lamports,
-                first_instruction_account + 1,
+                1,
                 &clock,
                 &stake_history,
-                first_instruction_account + 4,
+                4,
                 if instruction_context.get_number_of_instruction_accounts() >= 6 {
-                    Some(first_instruction_account + 5)
+                    Some(5)
                 } else {
                     None
                 },
@@ -274,12 +278,12 @@ pub fn process_instruction(
             {
                 instruction_context.check_number_of_instruction_accounts(4)?;
                 let staker_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 2)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(2)?,
                 )?;
                 let withdrawer_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
                 )?;
-                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                if !instruction_context.is_instruction_account_signer(3)? {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
 
@@ -311,17 +315,13 @@ pub fn process_instruction(
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
                 instruction_context.check_number_of_instruction_accounts(4)?;
                 let authorized_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
                 )?;
-                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                if !instruction_context.is_instruction_account_signer(3)? {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
-                let custodian_pubkey = get_optional_pubkey(
-                    transaction_context,
-                    instruction_context,
-                    first_instruction_account + 4,
-                    false,
-                )?;
+                let custodian_pubkey =
+                    get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
 
                 authorize(
                     &mut me,
@@ -347,23 +347,19 @@ pub fn process_instruction(
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
                 instruction_context.check_number_of_instruction_accounts(4)?;
                 let authorized_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
                 )?;
-                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                if !instruction_context.is_instruction_account_signer(3)? {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
-                let custodian_pubkey = get_optional_pubkey(
-                    transaction_context,
-                    instruction_context,
-                    first_instruction_account + 4,
-                    false,
-                )?;
+                let custodian_pubkey =
+                    get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
 
                 authorize_with_seed(
                     transaction_context,
                     instruction_context,
                     &mut me,
-                    first_instruction_account + 1,
+                    1,
                     &args.authority_seed,
                     &args.authority_owner,
                     authorized_pubkey,
@@ -382,12 +378,8 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                let custodian_pubkey = get_optional_pubkey(
-                    transaction_context,
-                    instruction_context,
-                    first_instruction_account + 2,
-                    true,
-                )?;
+                let custodian_pubkey =
+                    get_optional_pubkey(transaction_context, instruction_context, 2, true)?;
 
                 let lockup = LockupArgs {
                     unix_timestamp: lockup_checked.unix_timestamp,
@@ -430,14 +422,58 @@ pub fn process_instruction(
                     transaction_context,
                     instruction_context,
                     &mut me,
-                    first_instruction_account + 1,
-                    first_instruction_account + 2,
+                    1,
+                    2,
                     clock.epoch,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
         }
+        Ok(StakeInstruction::Redelegate) => {
+            let mut me = get_stake_account()?;
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::stake_redelegate_instruction::id())
+            {
+                instruction_context.check_number_of_instruction_accounts(3)?;
+                let config_account =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
+                if !config::check_id(config_account.get_key()) {
+                    return Err(InstructionError::InvalidArgument);
+                }
+                let config =
+                    config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
+                drop(config_account);
+
+                redelegate(
+                    invoke_context,
+                    transaction_context,
+                    instruction_context,
+                    &mut me,
+                    1,
+                    2,
+                    &config,
+                    &signers,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+        // In order to prevent consensus issues, any new StakeInstruction variant added before the
+        // `add_get_minimum_delegation_instruction_to_stake_program` is activated needs to check
+        // the validity of the stake account by calling the `get_stake_account()` method outside
+        // its own feature gate, as per the following pattern:
+        //  ```
+        //  Ok(StakeInstruction::Variant) -> {
+        //      let mut me = get_stake_account()?;
+        //      if invoke_context
+        //         .feature_set
+        //         .is_active(&feature_set::stake_variant_feature::id()) { .. }
+        //  }
+        // ```
+        // TODO: Remove this comment when `add_get_minimum_delegation_instruction_to_stake_program`
+        // is cleaned up
         Err(err) => {
             if !invoke_context.feature_set.is_active(
                 &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
@@ -477,15 +513,41 @@ mod tests {
                     set_lockup_checked, AuthorizeCheckedWithSeedArgs, AuthorizeWithSeedArgs,
                     LockupArgs, StakeError,
                 },
-                state::{Authorized, Lockup, StakeAuthorize},
+                state::{Authorized, Lockup, StakeActivationStatus, StakeAuthorize},
                 MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION,
             },
             stake_history::{StakeHistory, StakeHistoryEntry},
             system_program, sysvar,
         },
         solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
-        std::{borrow::BorrowMut, collections::HashSet, str::FromStr, sync::Arc},
+        std::{
+            borrow::{Borrow, BorrowMut},
+            collections::HashSet,
+            str::FromStr,
+            sync::Arc,
+        },
+        test_case::test_case,
     };
+
+    /// The "new" behavior enables all features
+    fn feature_set_new_behavior() -> FeatureSet {
+        FeatureSet::all_enabled()
+    }
+
+    /// The "old" behavior is before the stake minimum delegation was raised
+    fn feature_set_old_behavior() -> FeatureSet {
+        let mut feature_set = feature_set_new_behavior();
+        feature_set.deactivate(&feature_set::stake_raise_minimum_delegation_to_1_sol::id());
+        feature_set
+    }
+
+    /// The "old old" behavior is both before the stake minimum delegation was raised *and* before
+    /// undelegated stake accounts could have zero lamports beyond rent
+    fn feature_set_old_old_behavior() -> FeatureSet {
+        let mut feature_set = feature_set_old_behavior();
+        feature_set.deactivate(&feature_set::stake_allow_zero_undelegated_amount::id());
+        feature_set
+    }
 
     fn create_default_account() -> AccountSharedData {
         AccountSharedData::new(0, 0, &Pubkey::new_unique())
@@ -613,7 +675,9 @@ mod tests {
         )
     }
 
-    fn do_test_stake_process_instruction(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_stake_process_instruction(feature_set: FeatureSet) {
         process_instruction_as_one_arg(
             &feature_set,
             &instruction::initialize(
@@ -728,7 +792,9 @@ mod tests {
         );
     }
 
-    fn do_test_spoofed_stake_accounts(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_spoofed_stake_accounts(feature_set: FeatureSet) {
         process_instruction_as_one_arg(
             &feature_set,
             &instruction::initialize(
@@ -842,9 +908,21 @@ mod tests {
             ),
             Err(InstructionError::InvalidAccountOwner),
         );
+        process_instruction_as_one_arg(
+            &feature_set,
+            &instruction::redelegate(
+                &spoofed_stake_state_pubkey(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+            )[2],
+            Err(InstructionError::InvalidAccountOwner),
+        );
     }
 
-    fn do_test_stake_process_instruction_decode_bail(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_stake_process_instruction_decode_bail(feature_set: FeatureSet) {
         // these will not call stake_state, have bogus contents
         let stake_address = Pubkey::new_unique();
         let stake_account = create_default_stake_account();
@@ -893,7 +971,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -914,7 +992,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: rent_address,
@@ -933,7 +1011,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -946,7 +1024,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -966,7 +1044,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -1006,7 +1084,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -1035,7 +1113,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1052,7 +1130,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: rewards_address,
@@ -1087,7 +1165,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1099,7 +1177,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -1111,7 +1189,9 @@ mod tests {
         );
     }
 
-    fn do_test_stake_checked_instructions(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_stake_checked_instructions(feature_set: FeatureSet) {
         let stake_address = Pubkey::new_unique();
         let staker = Pubkey::new_unique();
         let staker_account = create_default_account();
@@ -1159,7 +1239,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: rent_address,
@@ -1230,7 +1310,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: clock_address,
@@ -1267,7 +1347,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: clock_address,
@@ -1353,7 +1433,7 @@ mod tests {
                 AccountMeta {
                     pubkey: address_with_seed,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: authorized_owner,
@@ -1394,7 +1474,7 @@ mod tests {
                 AccountMeta {
                     pubkey: address_with_seed,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: authorized_owner,
@@ -1454,7 +1534,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: withdrawer,
@@ -1471,7 +1551,9 @@ mod tests {
         );
     }
 
-    fn do_test_stake_initialize(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_stake_initialize(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let stake_lamports = rent_exempt_reserve;
@@ -1499,7 +1581,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::rent::id(),
@@ -1577,7 +1659,9 @@ mod tests {
         );
     }
 
-    fn do_test_authorize(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_authorize(feature_set: FeatureSet) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let authority_address_2 = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -1608,7 +1692,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -1713,12 +1797,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -1756,7 +1840,9 @@ mod tests {
         );
     }
 
-    fn do_test_authorize_override(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_authorize_override(feature_set: FeatureSet) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let mallory_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -1780,7 +1866,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -1873,7 +1959,9 @@ mod tests {
         );
     }
 
-    fn do_test_authorize_with_seed(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_authorize_with_seed(feature_set: FeatureSet) {
         let authority_base_address = solana_sdk::pubkey::new_rand();
         let authority_address = solana_sdk::pubkey::new_rand();
         let seed = "42";
@@ -1898,7 +1986,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: authority_base_address,
@@ -1988,7 +2076,9 @@ mod tests {
         );
     }
 
-    fn do_test_authorize_delegated_stake(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_authorize_delegated_stake(feature_set: FeatureSet) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -2032,7 +2122,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: vote_address,
@@ -2075,7 +2165,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -2100,7 +2190,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -2160,7 +2250,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -2177,10 +2267,12 @@ mod tests {
         );
     }
 
-    fn do_test_stake_delegate(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_stake_delegate(feature_set: FeatureSet) {
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
-            vote_state.process_slot_vote_unchecked(i);
+            vote_state::process_slot_vote_unchecked(&mut vote_state, i);
         }
         let vote_state_credits = vote_state.credits();
         let vote_address = solana_sdk::pubkey::new_rand();
@@ -2236,7 +2328,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: vote_address,
@@ -2318,7 +2410,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -2425,7 +2517,9 @@ mod tests {
         );
     }
 
-    fn do_test_redelegate_consider_balance_changes(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_redelegate_consider_balance_changes(feature_set: FeatureSet) {
         let mut clock = Clock::default();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -2472,7 +2566,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: vote_address,
@@ -2504,7 +2598,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -2556,12 +2650,12 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: recipient_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -2641,7 +2735,9 @@ mod tests {
         );
     }
 
-    fn do_test_split(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = minimum_delegation * 2;
@@ -2661,12 +2757,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -2749,7 +2845,9 @@ mod tests {
         );
     }
 
-    fn do_test_withdraw_stake(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_withdraw_stake(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let authority_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
@@ -2799,12 +2897,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: recipient_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -2863,7 +2961,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::rent::id(),
@@ -2893,7 +2991,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -2950,7 +3048,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -3038,7 +3136,9 @@ mod tests {
         );
     }
 
-    fn do_test_withdraw_stake_before_warmup(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_withdraw_stake_before_warmup(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -3082,7 +3182,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: recipient_address,
@@ -3115,7 +3215,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -3169,7 +3269,9 @@ mod tests {
         );
     }
 
-    fn do_test_withdraw_lockup(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_withdraw_lockup(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -3207,12 +3309,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: recipient_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -3293,7 +3395,9 @@ mod tests {
         assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
     }
 
-    fn do_test_withdraw_rent_exempt(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_withdraw_rent_exempt(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -3328,12 +3432,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: recipient_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -3383,7 +3487,9 @@ mod tests {
         );
     }
 
-    fn do_test_deactivate(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_deactivate(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = minimum_delegation;
@@ -3420,7 +3526,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -3458,7 +3564,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -3505,7 +3611,9 @@ mod tests {
         );
     }
 
-    fn do_test_set_lockup(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_set_lockup(feature_set: FeatureSet) {
         let custodian_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -3556,7 +3664,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -3597,7 +3705,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::rent::id(),
@@ -3638,7 +3746,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -3721,7 +3829,7 @@ mod tests {
             epoch: Epoch::MAX,
             ..Clock::default()
         };
-        transaction_accounts[3] = (
+        transaction_accounts[4] = (
             sysvar::clock::id(),
             account::create_account_shared_data_for_test(&clock),
         );
@@ -3759,7 +3867,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -3789,7 +3897,9 @@ mod tests {
     /// Ensure that `initialize()` respects the minimum balance requirements
     /// - Assert 1: accounts with a balance equal-to the rent exemption initialize OK
     /// - Assert 2: accounts with a balance less-than the rent exemption do not initialize
-    fn do_test_initialize_minimum_balance(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_initialize_minimum_balance(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -3802,7 +3912,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::rent::id(),
@@ -3845,7 +3955,9 @@ mod tests {
     /// withdrawing below the minimum delegation, then re-delegating successfully (see
     /// `test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation()` for
     /// more information.)
-    fn do_test_delegate_minimum_stake_delegation(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_delegate_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -3861,7 +3973,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: vote_address,
@@ -3938,7 +4050,9 @@ mod tests {
     ///  EQ     | LT   | Err
     ///  LT     | EQ   | Err
     ///  LT     | LT   | Err
-    fn do_test_split_minimum_stake_delegation(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -3959,12 +4073,12 @@ mod tests {
             AccountMeta {
                 pubkey: source_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: dest_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
         for (source_reserve, dest_reserve, expected_result) in [
@@ -4031,7 +4145,9 @@ mod tests {
     ///             delegation is OK
     /// - Assert 2: splitting the full amount from an account that has less than the minimum
     ///             delegation is not OK
-    fn do_test_split_full_amount_minimum_stake_delegation(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_full_amount_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4052,12 +4168,12 @@ mod tests {
             AccountMeta {
                 pubkey: source_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: dest_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
         for (reserve, expected_result) in [
@@ -4102,7 +4218,9 @@ mod tests {
     /// Ensure that `split()` correctly handles prefunded destination accounts from
     /// initialized stakes.  When a destination account already has funds, ensure
     /// the minimum split amount reduces accordingly.
-    fn do_test_initialized_split_destination_minimum_balance(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_initialized_split_destination_minimum_balance(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let source_address = Pubkey::new_unique();
@@ -4111,12 +4229,12 @@ mod tests {
             AccountMeta {
                 pubkey: source_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: destination_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
         for (destination_starting_balance, split_amount, expected_result) in [
@@ -4197,7 +4315,9 @@ mod tests {
     /// Ensure that `split()` correctly handles prefunded destination accounts from staked stakes.
     /// When a destination account already has funds, ensure the minimum split amount reduces
     /// accordingly.
-    fn do_test_staked_split_destination_minimum_balance(
+    #[test_case(feature_set_old_behavior(), &[Ok(()), Ok(())]; "old_behavior")]
+    #[test_case(feature_set_new_behavior(), &[ Err(InstructionError::InsufficientFunds), Err(InstructionError::InsufficientFunds) ] ; "new_behavior")]
+    fn test_staked_split_destination_minimum_balance(
         feature_set: FeatureSet,
         expected_results: &[Result<(), InstructionError>],
     ) {
@@ -4210,12 +4330,12 @@ mod tests {
             AccountMeta {
                 pubkey: source_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: destination_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
         for (destination_starting_balance, split_amount, expected_result) in [
@@ -4348,7 +4468,9 @@ mod tests {
     /// Ensure that `withdraw()` respects the minimum delegation requirements
     /// - Assert 1: withdrawing so remaining stake is equal-to the minimum is OK
     /// - Assert 2: withdrawing so remaining stake is less-than the minimum is not OK
-    fn do_test_withdraw_minimum_stake_delegation(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_withdraw_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4362,12 +4484,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: recipient_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -4451,7 +4573,14 @@ mod tests {
     /// 3. Deactives the delegation
     /// 4. Withdraws from the account such that the ending balance is *below* rent + minimum delegation
     /// 5. Re-delegates, now with less than the minimum delegation, but it still succeeds
-    fn do_test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
+    //
+    // The "old old" behavior relies on `validate_delegated_amount()` *not* checking if the
+    // stake amount meets the minimum delegation.  Once the
+    // `stake_allow_zero_undelegated_amount` feature is activated, `the expected_result`
+    // parameter can be removed and consolidated.
+    #[test_case(feature_set_old_old_behavior(), Ok(()); "old_old_behavior")]
+    #[test_case(feature_set_new_behavior(), Err(StakeError::InsufficientDelegation.into()); "new_behavior")]
+    fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
         feature_set: FeatureSet,
         expected_result: Result<(), InstructionError>,
     ) {
@@ -4497,7 +4626,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: vote_address,
@@ -4533,7 +4662,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::rent::id(),
@@ -4568,7 +4697,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -4595,12 +4724,12 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: recipient_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -4631,7 +4760,9 @@ mod tests {
         );
     }
 
-    fn do_test_split_source_uninitialized(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_source_uninitialized(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -4660,12 +4791,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -4729,7 +4860,9 @@ mod tests {
         );
     }
 
-    fn do_test_split_split_not_uninitialized(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_split_not_uninitialized(feature_set: FeatureSet) {
         let stake_lamports = 42;
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account = AccountSharedData::new_data_with_space(
@@ -4744,12 +4877,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -4778,7 +4911,9 @@ mod tests {
         }
     }
 
-    fn do_test_split_more_than_staked(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_more_than_staked(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -4817,12 +4952,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -4835,7 +4970,9 @@ mod tests {
         );
     }
 
-    fn do_test_split_with_rent(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_with_rent(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -4852,12 +4989,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
         let meta = Meta {
@@ -4943,7 +5080,9 @@ mod tests {
         }
     }
 
-    fn do_test_split_to_account_with_rent_exempt_reserve(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_to_account_with_rent_exempt_reserve(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -4967,12 +5106,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5066,7 +5205,9 @@ mod tests {
         }
     }
 
-    fn do_test_split_from_larger_sized_account(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_from_larger_sized_account(feature_set: FeatureSet) {
         let rent = Rent::default();
         let source_larger_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
         let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5091,12 +5232,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5195,7 +5336,9 @@ mod tests {
         }
     }
 
-    fn do_test_split_from_smaller_sized_account(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_from_smaller_sized_account(feature_set: FeatureSet) {
         let rent = Rent::default();
         let source_smaller_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
@@ -5219,12 +5362,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5272,7 +5415,9 @@ mod tests {
         }
     }
 
-    fn do_test_split_100_percent_of_source(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_100_percent_of_source(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -5295,12 +5440,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5366,7 +5511,9 @@ mod tests {
         }
     }
 
-    fn do_test_split_100_percent_of_source_to_account_with_lamports(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_100_percent_of_source_to_account_with_lamports(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -5390,12 +5537,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5460,7 +5607,9 @@ mod tests {
         }
     }
 
-    fn do_test_split_rent_exemptness(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_split_rent_exemptness(feature_set: FeatureSet) {
         let rent = Rent::default();
         let source_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
         let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5477,12 +5626,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5596,7 +5745,9 @@ mod tests {
         }
     }
 
-    fn do_test_merge(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_merge(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -5606,12 +5757,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: merge_from_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -5724,7 +5875,9 @@ mod tests {
         }
     }
 
-    fn do_test_merge_self_fails(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_merge_self_fails(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
@@ -5766,12 +5919,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -5799,7 +5952,9 @@ mod tests {
         );
     }
 
-    fn do_test_merge_incorrect_authorized_staker(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_merge_incorrect_authorized_staker(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -5809,12 +5964,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: merge_from_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -5891,7 +6046,9 @@ mod tests {
         }
     }
 
-    fn do_test_merge_invalid_account_data(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_merge_invalid_account_data(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -5900,12 +6057,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: merge_from_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -5970,7 +6127,9 @@ mod tests {
         }
     }
 
-    fn do_test_merge_fake_stake_source(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_merge_fake_stake_source(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -6006,12 +6165,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: merge_from_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -6039,7 +6198,9 @@ mod tests {
         );
     }
 
-    fn do_test_merge_active_stake(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_merge_active_stake(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -6115,12 +6276,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: merge_from_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -6297,7 +6458,9 @@ mod tests {
         );
     }
 
-    fn do_test_stake_get_minimum_delegation(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_stake_get_minimum_delegation(feature_set: FeatureSet) {
         let stake_address = Pubkey::new_unique();
         let stake_account = create_default_stake_account();
         let instruction_data = serialize(&StakeInstruction::GetMinimumDelegation).unwrap();
@@ -6305,7 +6468,7 @@ mod tests {
         let instruction_accounts = vec![AccountMeta {
             pubkey: stake_address,
             is_signer: false,
-            is_writable: false,
+            is_writable: true,
         }];
 
         mock_process_instruction(
@@ -6317,8 +6480,8 @@ mod tests {
             None,
             Some(Arc::new(feature_set)),
             Ok(()),
-            |first_instruction_account, invoke_context| {
-                super::process_instruction(first_instruction_account, invoke_context)?;
+            |invoke_context| {
+                super::process_instruction(invoke_context)?;
                 let expected_minimum_delegation =
                     crate::get_minimum_delegation(&invoke_context.feature_set).to_le_bytes();
                 let actual_minimum_delegation =
@@ -6350,7 +6513,9 @@ mod tests {
     // disabled | bad         | some    || Err InvalidInstructionData
     // disabled | good        | none    || Err NotEnoughAccountKeys
     // disabled | bad         | none    || Err NotEnoughAccountKeys
-    fn do_test_stake_process_instruction_error_ordering(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_stake_process_instruction_error_ordering(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_address = sysvar::rent::id();
         let rent_account = account::create_account_shared_data_for_test(&rent);
@@ -6370,7 +6535,7 @@ mod tests {
             AccountMeta {
                 pubkey: good_stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: rent_address,
@@ -6454,7 +6619,9 @@ mod tests {
         }
     }
 
-    fn do_test_deactivate_delinquent(feature_set: FeatureSet) {
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_deactivate_delinquent(feature_set: FeatureSet) {
         let feature_set = Arc::new(feature_set);
         let mut sysvar_cache_override = SysvarCache::default();
 
@@ -6722,397 +6889,608 @@ mod tests {
         );
     }
 
-    mod old_behavior {
-        use super::*;
+    #[test_case(feature_set_old_behavior(); "old_behavior")]
+    #[test_case(feature_set_new_behavior(); "new_behavior")]
+    fn test_redelegate(feature_set: FeatureSet) {
+        let feature_set = Arc::new(feature_set);
 
-        fn new_feature_set() -> FeatureSet {
-            let mut feature_set = FeatureSet::all_enabled();
-            feature_set.deactivate(&feature_set::stake_raise_minimum_delegation_to_1_sol::id());
-            feature_set
-        }
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let stake_history = StakeHistory::default();
+        let current_epoch = 100;
 
-        #[test]
-        fn test_stake_process_instruction() {
-            do_test_stake_process_instruction(new_feature_set());
-        }
-        #[test]
-        fn test_stake_process_instruction_decode_bail() {
-            do_test_stake_process_instruction_decode_bail(new_feature_set());
-        }
-        #[test]
-        fn test_stake_checked_instructions() {
-            do_test_stake_checked_instructions(new_feature_set());
-        }
-        #[test]
-        fn test_stake_initialize() {
-            do_test_stake_initialize(new_feature_set());
-        }
-        #[test]
-        fn test_authorize() {
-            do_test_authorize(new_feature_set());
-        }
-        #[test]
-        fn test_authorize_override() {
-            do_test_authorize_override(new_feature_set());
-        }
-        #[test]
-        fn test_authorize_with_seed() {
-            do_test_authorize_with_seed(new_feature_set());
-        }
-        #[test]
-        fn test_authorize_delegated_stake() {
-            do_test_authorize_delegated_stake(new_feature_set());
-        }
-        #[test]
-        fn test_stake_delegate() {
-            do_test_stake_delegate(new_feature_set());
-        }
-        #[test]
-        fn test_redelegate_consider_balance_changes() {
-            do_test_redelegate_consider_balance_changes(new_feature_set());
-        }
-        #[test]
-        fn test_split() {
-            do_test_split(new_feature_set());
-        }
-        #[test]
-        fn test_withdraw_stake() {
-            do_test_withdraw_stake(new_feature_set());
-        }
-        #[test]
-        fn test_withdraw_stake_before_warmup() {
-            do_test_withdraw_stake_before_warmup(new_feature_set());
-        }
-        #[test]
-        fn test_withdraw_lockup() {
-            do_test_withdraw_lockup(new_feature_set());
-        }
-        #[test]
-        fn test_withdraw_rent_exempt() {
-            do_test_withdraw_rent_exempt(new_feature_set());
-        }
-        #[test]
-        fn test_deactivate() {
-            do_test_deactivate(new_feature_set());
-        }
-        #[test]
-        fn test_set_lockup() {
-            do_test_set_lockup(new_feature_set());
-        }
-        #[test]
-        fn test_initialize_minimum_balance() {
-            do_test_initialize_minimum_balance(new_feature_set());
-        }
-        #[test]
-        fn test_delegate_minimum_stake_delegation() {
-            do_test_delegate_minimum_stake_delegation(new_feature_set());
-        }
-        #[test]
-        fn test_split_minimum_stake_delegation() {
-            do_test_split_minimum_stake_delegation(new_feature_set());
-        }
-        #[test]
-        fn test_split_full_amount_minimum_stake_delegation() {
-            do_test_split_full_amount_minimum_stake_delegation(new_feature_set());
-        }
-        #[test]
-        fn test_initialized_split_destination_minimum_balance() {
-            do_test_initialized_split_destination_minimum_balance(new_feature_set());
-        }
-        #[test]
-        fn test_staked_split_destination_minimum_balance() {
-            do_test_staked_split_destination_minimum_balance(new_feature_set(), &[Ok(()), Ok(())]);
-        }
-        #[test]
-        fn test_withdraw_minimum_stake_delegation() {
-            do_test_withdraw_minimum_stake_delegation(new_feature_set());
-        }
-        #[test]
-        fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
-            let mut feature_set = new_feature_set();
-            // The "old" behavior relies on `validate_delegated_amount()` *not* checking if the
-            // stake amount meets the minimum delegation.  Once the
-            // `stake_allow_zero_undelegated_amount` feature is activated, `the expected_result`
-            // parameter can be removed and consolidated.
-            feature_set.deactivate(&feature_set::stake_allow_zero_undelegated_amount::id());
-            do_test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
-                feature_set,
-                Ok(()),
+        let mut sysvar_cache_override = SysvarCache::default();
+        sysvar_cache_override.set_stake_history(stake_history.clone());
+        sysvar_cache_override.set_rent(rent);
+        sysvar_cache_override.set_clock(Clock {
+            epoch: current_epoch,
+            ..Clock::default()
+        });
+
+        let authorized_staker = Pubkey::new_unique();
+        let vote_address = Pubkey::new_unique();
+        let new_vote_address = Pubkey::new_unique();
+        let stake_address = Pubkey::new_unique();
+        let uninitialized_stake_address = Pubkey::new_unique();
+
+        let prepare_stake_account = |activation_epoch, expected_stake_activation_status| {
+            let initial_stake_delegation = minimum_delegation + rent_exempt_reserve;
+            let initial_stake_state = StakeState::Stake(
+                Meta {
+                    authorized: Authorized {
+                        staker: authorized_staker,
+                        withdrawer: Pubkey::new_unique(),
+                    },
+                    rent_exempt_reserve,
+                    ..Meta::default()
+                },
+                new_stake(
+                    initial_stake_delegation,
+                    &vote_address,
+                    &VoteState::default(),
+                    activation_epoch,
+                    &stake_config::Config::default(),
+                ),
             );
-        }
-        #[test]
-        fn test_split_source_uninitialized() {
-            do_test_split_source_uninitialized(new_feature_set());
-        }
-        #[test]
-        fn test_split_split_not_uninitialized() {
-            do_test_split_split_not_uninitialized(new_feature_set());
-        }
-        #[test]
-        fn test_split_more_than_staked() {
-            do_test_split_more_than_staked(new_feature_set());
-        }
-        #[test]
-        fn test_split_with_rent() {
-            do_test_split_with_rent(new_feature_set());
-        }
-        #[test]
-        fn test_split_to_account_with_rent_exempt_reserve() {
-            do_test_split_to_account_with_rent_exempt_reserve(new_feature_set());
-        }
-        #[test]
-        fn test_split_from_larger_sized_account() {
-            do_test_split_from_larger_sized_account(new_feature_set());
-        }
-        #[test]
-        fn test_split_from_smaller_sized_account() {
-            do_test_split_from_smaller_sized_account(new_feature_set());
-        }
-        #[test]
-        fn test_split_100_percent_of_source() {
-            do_test_split_100_percent_of_source(new_feature_set());
-        }
-        #[test]
-        fn test_split_100_percent_of_source_to_account_with_lamports() {
-            do_test_split_100_percent_of_source_to_account_with_lamports(new_feature_set());
-        }
-        #[test]
-        fn test_split_rent_exemptness() {
-            do_test_split_rent_exemptness(new_feature_set());
-        }
-        #[test]
-        fn test_merge() {
-            do_test_merge(new_feature_set());
-        }
-        #[test]
-        fn test_merge_self_fails() {
-            do_test_merge_self_fails(new_feature_set());
-        }
-        #[test]
-        fn test_merge_incorrect_authorized_staker() {
-            do_test_merge_incorrect_authorized_staker(new_feature_set());
-        }
-        #[test]
-        fn test_merge_invalid_account_data() {
-            do_test_merge_invalid_account_data(new_feature_set());
-        }
-        #[test]
-        fn test_merge_fake_stake_source() {
-            do_test_merge_fake_stake_source(new_feature_set());
-        }
-        #[test]
-        fn test_merge_active_stake() {
-            do_test_merge_active_stake(new_feature_set());
-        }
-        #[test]
-        fn test_stake_get_minimum_delegation() {
-            do_test_stake_get_minimum_delegation(new_feature_set());
-        }
-        #[test]
-        fn test_stake_process_instruction_error_ordering() {
-            do_test_stake_process_instruction_error_ordering(new_feature_set());
-        }
-        #[test]
-        fn test_deactivate_delinquent() {
-            do_test_deactivate_delinquent(new_feature_set());
-        }
-    }
 
-    mod new_behavior {
-        use super::*;
+            if let Some(expected_stake_activation_status) = expected_stake_activation_status {
+                assert_eq!(
+                    expected_stake_activation_status,
+                    initial_stake_state
+                        .delegation()
+                        .unwrap()
+                        .stake_activating_and_deactivating(current_epoch, Some(&stake_history))
+                );
+            }
 
-        fn new_feature_set() -> FeatureSet {
-            FeatureSet::all_enabled()
-        }
+            AccountSharedData::new_data_with_space(
+                rent_exempt_reserve + initial_stake_delegation, /* lamports */
+                &initial_stake_state,
+                StakeState::size_of(),
+                &id(),
+            )
+            .unwrap()
+        };
 
-        #[test]
-        fn test_stake_process_instruction() {
-            do_test_stake_process_instruction(new_feature_set());
-        }
-        #[test]
-        fn test_spoofed_stake_accounts() {
-            do_test_spoofed_stake_accounts(new_feature_set());
-        }
-        #[test]
-        fn test_stake_process_instruction_decode_bail() {
-            do_test_stake_process_instruction_decode_bail(new_feature_set());
-        }
-        #[test]
-        fn test_stake_checked_instructions() {
-            do_test_stake_checked_instructions(new_feature_set());
-        }
-        #[test]
-        fn test_stake_initialize() {
-            do_test_stake_initialize(new_feature_set());
-        }
-        #[test]
-        fn test_authorize() {
-            do_test_authorize(new_feature_set());
-        }
-        #[test]
-        fn test_authorize_override() {
-            do_test_authorize_override(new_feature_set());
-        }
-        #[test]
-        fn test_authorize_with_seed() {
-            do_test_authorize_with_seed(new_feature_set());
-        }
-        #[test]
-        fn test_authorize_delegated_stake() {
-            do_test_authorize_delegated_stake(new_feature_set());
-        }
-        #[test]
-        fn test_stake_delegate() {
-            do_test_stake_delegate(new_feature_set());
-        }
-        #[test]
-        fn test_redelegate_consider_balance_changes() {
-            do_test_redelegate_consider_balance_changes(new_feature_set());
-        }
-        #[test]
-        fn test_split() {
-            do_test_split(new_feature_set());
-        }
-        #[test]
-        fn test_withdraw_stake() {
-            do_test_withdraw_stake(new_feature_set());
-        }
-        #[test]
-        fn test_withdraw_stake_before_warmup() {
-            do_test_withdraw_stake_before_warmup(new_feature_set());
-        }
-        #[test]
-        fn test_withdraw_lockup() {
-            do_test_withdraw_lockup(new_feature_set());
-        }
-        #[test]
-        fn test_withdraw_rent_exempt() {
-            do_test_withdraw_rent_exempt(new_feature_set());
-        }
-        #[test]
-        fn test_deactivate() {
-            do_test_deactivate(new_feature_set());
-        }
-        #[test]
-        fn test_set_lockup() {
-            do_test_set_lockup(new_feature_set());
-        }
-        #[test]
-        fn test_initialize_minimum_balance() {
-            do_test_initialize_minimum_balance(new_feature_set());
-        }
-        #[test]
-        fn test_delegate_minimum_stake_delegation() {
-            do_test_delegate_minimum_stake_delegation(new_feature_set());
-        }
-        #[test]
-        fn test_split_minimum_stake_delegation() {
-            do_test_split_minimum_stake_delegation(new_feature_set());
-        }
-        #[test]
-        fn test_split_full_amount_minimum_stake_delegation() {
-            do_test_split_full_amount_minimum_stake_delegation(new_feature_set());
-        }
-        #[test]
-        fn test_initialized_split_destination_minimum_balance() {
-            do_test_initialized_split_destination_minimum_balance(new_feature_set());
-        }
-        #[test]
-        fn test_staked_split_destination_minimum_balance() {
-            do_test_staked_split_destination_minimum_balance(
-                new_feature_set(),
-                &[
-                    Err(InstructionError::InsufficientFunds),
-                    Err(InstructionError::InsufficientFunds),
-                ],
+        let new_vote_account = AccountSharedData::new_data_with_space(
+            1, /* lamports */
+            &VoteStateVersions::new_current(VoteState::default()),
+            VoteState::size_of(),
+            &solana_vote_program::id(),
+        )
+        .unwrap();
+
+        let process_instruction_redelegate =
+            |stake_address: &Pubkey,
+             stake_account: &AccountSharedData,
+             authorized_staker: &Pubkey,
+             vote_address: &Pubkey,
+             vote_account: &AccountSharedData,
+             uninitialized_stake_address: &Pubkey,
+             uninitialized_stake_account: &AccountSharedData,
+             expected_result| {
+                process_instruction_with_overrides(
+                    &serialize(&StakeInstruction::Redelegate).unwrap(),
+                    vec![
+                        (*stake_address, stake_account.clone()),
+                        (
+                            *uninitialized_stake_address,
+                            uninitialized_stake_account.clone(),
+                        ),
+                        (*vote_address, vote_account.clone()),
+                        (
+                            stake_config::id(),
+                            config::create_account(0, &stake_config::Config::default()),
+                        ),
+                        (*authorized_staker, AccountSharedData::default()),
+                    ],
+                    vec![
+                        AccountMeta {
+                            pubkey: *stake_address,
+                            is_signer: false,
+                            is_writable: true,
+                        },
+                        AccountMeta {
+                            pubkey: *uninitialized_stake_address,
+                            is_signer: false,
+                            is_writable: true,
+                        },
+                        AccountMeta {
+                            pubkey: *vote_address,
+                            is_signer: false,
+                            is_writable: false,
+                        },
+                        AccountMeta {
+                            pubkey: stake_config::id(),
+                            is_signer: false,
+                            is_writable: false,
+                        },
+                        AccountMeta {
+                            pubkey: *authorized_staker,
+                            is_signer: true,
+                            is_writable: false,
+                        },
+                    ],
+                    Some(&sysvar_cache_override),
+                    Some(Arc::clone(&feature_set)),
+                    expected_result,
+                )
+            };
+
+        //
+        // Failure: incorrect authorized staker
+        //
+        let stake_account = prepare_stake_account(0 /*activation_epoch*/, None);
+        let uninitialized_stake_account =
+            AccountSharedData::new(0 /* lamports */, StakeState::size_of(), &id());
+
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &stake_account,
+            &Pubkey::new_unique(), // <-- Incorrect authorized staker
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &uninitialized_stake_account,
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        //
+        // Success: normal case
+        //
+        let output_accounts = process_instruction_redelegate(
+            &stake_address,
+            &stake_account,
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &uninitialized_stake_account,
+            Ok(()),
+        );
+
+        assert_eq!(output_accounts[0].lamports(), rent_exempt_reserve);
+        if let StakeState::Stake(meta, stake) =
+            output_accounts[0].borrow().deserialize_data().unwrap()
+        {
+            assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
+            assert_eq!(
+                stake.delegation.stake,
+                minimum_delegation + rent_exempt_reserve
             );
+            assert_eq!(stake.delegation.activation_epoch, 0);
+            assert_eq!(stake.delegation.deactivation_epoch, current_epoch);
+        } else {
+            panic!("Invalid output_accounts[0] data");
         }
-        #[test]
-        fn test_withdraw_minimum_stake_delegation() {
-            do_test_withdraw_minimum_stake_delegation(new_feature_set());
+        assert_eq!(
+            output_accounts[1].lamports(),
+            minimum_delegation + rent_exempt_reserve
+        );
+        if let StakeState::Stake(meta, stake) =
+            output_accounts[1].borrow().deserialize_data().unwrap()
+        {
+            assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
+            assert_eq!(stake.delegation.stake, minimum_delegation);
+            assert_eq!(stake.delegation.activation_epoch, current_epoch);
+            assert_eq!(stake.delegation.deactivation_epoch, u64::MAX);
+        } else {
+            panic!("Invalid output_accounts[1] data");
         }
-        #[test]
-        fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
-            do_test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
-                new_feature_set(),
+
+        //
+        // Variations of rescinding the deactivation of `stake_account`
+        //
+        let deactivated_stake_accounts = [
+            (
+                // Failure: insufficient stake in `stake_account` to even delegate normally
+                {
+                    let mut deactivated_stake_account = output_accounts[0].clone();
+                    deactivated_stake_account
+                        .checked_add_lamports(minimum_delegation - 1)
+                        .unwrap();
+                    deactivated_stake_account
+                },
                 Err(StakeError::InsufficientDelegation.into()),
+            ),
+            (
+                // Failure: `stake_account` holds the "virtual stake" that's cooling now, with the
+                //          real stake now warming up in `uninitialized_stake_account`
+                {
+                    let mut deactivated_stake_account = output_accounts[0].clone();
+                    deactivated_stake_account
+                        .checked_add_lamports(minimum_delegation)
+                        .unwrap();
+                    deactivated_stake_account
+                },
+                Err(StakeError::TooSoonToRedelegate.into()),
+            ),
+            (
+                // Success: `stake_account` has been replenished with additional lamports to
+                // fully realize its "virtual stake"
+                {
+                    let mut deactivated_stake_account = output_accounts[0].clone();
+                    deactivated_stake_account
+                        .checked_add_lamports(minimum_delegation + rent_exempt_reserve)
+                        .unwrap();
+                    deactivated_stake_account
+                },
+                Ok(()),
+            ),
+            (
+                // Failure: `stake_account` has been replenished with 1 lamport less than what's
+                // necessary to fully realize its "virtual stake"
+                {
+                    let mut deactivated_stake_account = output_accounts[0].clone();
+                    deactivated_stake_account
+                        .checked_add_lamports(minimum_delegation + rent_exempt_reserve - 1)
+                        .unwrap();
+                    deactivated_stake_account
+                },
+                Err(StakeError::TooSoonToRedelegate.into()),
+            ),
+        ];
+        for (deactivated_stake_account, expected_result) in deactivated_stake_accounts {
+            let _ = process_instruction_with_overrides(
+                &serialize(&StakeInstruction::DelegateStake).unwrap(),
+                vec![
+                    (stake_address, deactivated_stake_account),
+                    (vote_address, new_vote_account.clone()),
+                    (
+                        sysvar::clock::id(),
+                        account::create_account_shared_data_for_test(&Clock::default()),
+                    ),
+                    (
+                        sysvar::stake_history::id(),
+                        account::create_account_shared_data_for_test(&StakeHistory::default()),
+                    ),
+                    (
+                        stake_config::id(),
+                        config::create_account(0, &stake_config::Config::default()),
+                    ),
+                    (authorized_staker, AccountSharedData::default()),
+                ],
+                vec![
+                    AccountMeta {
+                        pubkey: stake_address,
+                        is_signer: false,
+                        is_writable: true,
+                    },
+                    AccountMeta {
+                        pubkey: vote_address,
+                        is_signer: false,
+                        is_writable: false,
+                    },
+                    AccountMeta {
+                        pubkey: sysvar::clock::id(),
+                        is_signer: false,
+                        is_writable: false,
+                    },
+                    AccountMeta {
+                        pubkey: sysvar::stake_history::id(),
+                        is_signer: false,
+                        is_writable: false,
+                    },
+                    AccountMeta {
+                        pubkey: stake_config::id(),
+                        is_signer: false,
+                        is_writable: false,
+                    },
+                    AccountMeta {
+                        pubkey: authorized_staker,
+                        is_signer: true,
+                        is_writable: false,
+                    },
+                ],
+                Some(&sysvar_cache_override),
+                Some(Arc::clone(&feature_set)),
+                expected_result,
             );
         }
-        #[test]
-        fn test_split_source_uninitialized() {
-            do_test_split_source_uninitialized(new_feature_set());
+
+        //
+        // Success: `uninitialized_stake_account` starts with 42 extra lamports
+        //
+        let uninitialized_stake_account_with_extra_lamports =
+            AccountSharedData::new(42 /* lamports */, StakeState::size_of(), &id());
+        let output_accounts = process_instruction_redelegate(
+            &stake_address,
+            &stake_account,
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &uninitialized_stake_account_with_extra_lamports,
+            Ok(()),
+        );
+
+        assert_eq!(output_accounts[0].lamports(), rent_exempt_reserve);
+        assert_eq!(
+            output_accounts[1].lamports(),
+            minimum_delegation + rent_exempt_reserve + 42
+        );
+        if let StakeState::Stake(meta, stake) =
+            output_accounts[1].borrow().deserialize_data().unwrap()
+        {
+            assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
+            assert_eq!(stake.delegation.stake, minimum_delegation + 42);
+            assert_eq!(stake.delegation.activation_epoch, current_epoch);
+            assert_eq!(stake.delegation.deactivation_epoch, u64::MAX);
+        } else {
+            panic!("Invalid output_accounts[1] data");
         }
-        #[test]
-        fn test_split_split_not_uninitialized() {
-            do_test_split_split_not_uninitialized(new_feature_set());
+
+        //
+        // Success: `stake_account` is over-allocated and holds a greater than required `rent_exempt_reserve`
+        //
+        let mut stake_account_over_allocated =
+            prepare_stake_account(0 /*activation_epoch:*/, None);
+        if let StakeState::Stake(mut meta, stake) = stake_account_over_allocated
+            .borrow_mut()
+            .deserialize_data()
+            .unwrap()
+        {
+            meta.rent_exempt_reserve += 42;
+            stake_account_over_allocated
+                .set_state(&StakeState::Stake(meta, stake))
+                .unwrap();
         }
-        #[test]
-        fn test_split_more_than_staked() {
-            do_test_split_more_than_staked(new_feature_set());
+        stake_account_over_allocated
+            .checked_add_lamports(42)
+            .unwrap();
+        assert_eq!(
+            stake_account_over_allocated.lamports(),
+            (minimum_delegation + rent_exempt_reserve) + (rent_exempt_reserve + 42),
+        );
+        assert_eq!(uninitialized_stake_account.lamports(), 0);
+        let output_accounts = process_instruction_redelegate(
+            &stake_address,
+            &stake_account_over_allocated,
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &uninitialized_stake_account,
+            Ok(()),
+        );
+
+        assert_eq!(output_accounts[0].lamports(), rent_exempt_reserve + 42);
+        if let StakeState::Stake(meta, _stake) =
+            output_accounts[0].borrow().deserialize_data().unwrap()
+        {
+            assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve + 42);
+        } else {
+            panic!("Invalid output_accounts[0] data");
         }
-        #[test]
-        fn test_split_with_rent() {
-            do_test_split_with_rent(new_feature_set());
+        assert_eq!(
+            output_accounts[1].lamports(),
+            minimum_delegation + rent_exempt_reserve,
+        );
+        if let StakeState::Stake(meta, stake) =
+            output_accounts[1].borrow().deserialize_data().unwrap()
+        {
+            assert_eq!(meta.rent_exempt_reserve, rent_exempt_reserve);
+            assert_eq!(stake.delegation.stake, minimum_delegation);
+        } else {
+            panic!("Invalid output_accounts[1] data");
         }
-        #[test]
-        fn test_split_to_account_with_rent_exempt_reserve() {
-            do_test_split_to_account_with_rent_exempt_reserve(new_feature_set());
+
+        //
+        // Failure: `uninitialized_stake_account` with invalid program id
+        //
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &stake_account,
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &AccountSharedData::new(
+                0, /* lamports */
+                StakeState::size_of(),
+                &Pubkey::new_unique(), // <-- Invalid program id
+            ),
+            Err(InstructionError::IncorrectProgramId),
+        );
+
+        //
+        // Failure: `uninitialized_stake_account` with size too small
+        //
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &stake_account,
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &AccountSharedData::new(0 /* lamports */, StakeState::size_of() - 1, &id()), // <-- size too small
+            Err(InstructionError::InvalidAccountData),
+        );
+
+        //
+        // Failure: `uninitialized_stake_account` with size too large
+        //
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &stake_account,
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &AccountSharedData::new(0 /* lamports */, StakeState::size_of() + 1, &id()), // <-- size too large
+            Err(InstructionError::InvalidAccountData),
+        );
+
+        //
+        // Failure: `uninitialized_stake_account` with initialized stake account
+        //
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &stake_account,
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &stake_account.clone(), // <-- Initialized stake account
+            Err(InstructionError::AccountAlreadyInitialized),
+        );
+
+        //
+        // Failure: invalid `new_vote_account`
+        //
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &stake_account,
+            &authorized_staker,
+            &new_vote_address,
+            &uninitialized_stake_account, // <-- Invalid vote account
+            &uninitialized_stake_address,
+            &uninitialized_stake_account,
+            Err(InstructionError::IncorrectProgramId),
+        );
+
+        //
+        // Failure: invalid `stake_account`
+        //
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &uninitialized_stake_account, // <-- Uninitialized stake account
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &uninitialized_stake_account,
+            Err(InstructionError::InvalidAccountData),
+        );
+
+        //
+        // Failure: stake is inactive, activating or deactivating
+        //
+        let inactive_stake_account = prepare_stake_account(
+            current_epoch + 1, /*activation_epoch*/
+            Some(StakeActivationStatus {
+                effective: 0,
+                activating: 0,
+                deactivating: 0,
+            }),
+        );
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &inactive_stake_account,
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &uninitialized_stake_account,
+            Err(StakeError::RedelegateTransientOrInactiveStake.into()),
+        );
+
+        let activating_stake_account = prepare_stake_account(
+            current_epoch, /*activation_epoch*/
+            Some(StakeActivationStatus {
+                effective: 0,
+                activating: minimum_delegation + rent_exempt_reserve,
+                deactivating: 0,
+            }),
+        );
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &activating_stake_account,
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &uninitialized_stake_account,
+            Err(StakeError::RedelegateTransientOrInactiveStake.into()),
+        );
+
+        let mut deactivating_stake_account =
+            prepare_stake_account(0 /*activation_epoch:*/, None);
+        if let StakeState::Stake(meta, mut stake) = deactivating_stake_account
+            .borrow_mut()
+            .deserialize_data()
+            .unwrap()
+        {
+            stake.deactivate(current_epoch).unwrap();
+            assert_eq!(
+                StakeActivationStatus {
+                    effective: minimum_delegation + rent_exempt_reserve,
+                    activating: 0,
+                    deactivating: minimum_delegation + rent_exempt_reserve,
+                },
+                stake
+                    .delegation
+                    .stake_activating_and_deactivating(current_epoch, Some(&stake_history))
+            );
+
+            deactivating_stake_account
+                .set_state(&StakeState::Stake(meta, stake))
+                .unwrap();
         }
-        #[test]
-        fn test_split_from_larger_sized_account() {
-            do_test_split_from_larger_sized_account(new_feature_set());
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &deactivating_stake_account,
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &uninitialized_stake_account,
+            Err(StakeError::RedelegateTransientOrInactiveStake.into()),
+        );
+
+        //
+        // Failure: `stake_account` has insufficient stake
+        //          (less than `minimum_delegation + rent_exempt_reserve`)
+        //
+        let mut stake_account_too_few_lamports = stake_account.clone();
+        if let StakeState::Stake(meta, mut stake) = stake_account_too_few_lamports
+            .borrow_mut()
+            .deserialize_data()
+            .unwrap()
+        {
+            stake.delegation.stake -= 1;
+            assert_eq!(
+                stake.delegation.stake,
+                minimum_delegation + rent_exempt_reserve - 1
+            );
+            stake_account_too_few_lamports
+                .set_state(&StakeState::Stake(meta, stake))
+                .unwrap();
+        } else {
+            panic!("Invalid stake_account");
         }
-        #[test]
-        fn test_split_from_smaller_sized_account() {
-            do_test_split_from_smaller_sized_account(new_feature_set());
-        }
-        #[test]
-        fn test_split_100_percent_of_source() {
-            do_test_split_100_percent_of_source(new_feature_set());
-        }
-        #[test]
-        fn test_split_100_percent_of_source_to_account_with_lamports() {
-            do_test_split_100_percent_of_source_to_account_with_lamports(new_feature_set());
-        }
-        #[test]
-        fn test_split_rent_exemptness() {
-            do_test_split_rent_exemptness(new_feature_set());
-        }
-        #[test]
-        fn test_merge() {
-            do_test_merge(new_feature_set());
-        }
-        #[test]
-        fn test_merge_self_fails() {
-            do_test_merge_self_fails(new_feature_set());
-        }
-        #[test]
-        fn test_merge_incorrect_authorized_staker() {
-            do_test_merge_incorrect_authorized_staker(new_feature_set());
-        }
-        #[test]
-        fn test_merge_invalid_account_data() {
-            do_test_merge_invalid_account_data(new_feature_set());
-        }
-        #[test]
-        fn test_merge_fake_stake_source() {
-            do_test_merge_fake_stake_source(new_feature_set());
-        }
-        #[test]
-        fn test_merge_active_stake() {
-            do_test_merge_active_stake(new_feature_set());
-        }
-        #[test]
-        fn test_stake_get_minimum_delegation() {
-            do_test_stake_get_minimum_delegation(new_feature_set());
-        }
-        #[test]
-        fn test_stake_process_instruction_error_ordering() {
-            do_test_stake_process_instruction_error_ordering(new_feature_set());
-        }
-        #[test]
-        fn test_deactivate_delinquent() {
-            do_test_deactivate_delinquent(new_feature_set());
-        }
+        stake_account_too_few_lamports
+            .checked_sub_lamports(1)
+            .unwrap();
+        assert_eq!(
+            stake_account_too_few_lamports.lamports(),
+            minimum_delegation + 2 * rent_exempt_reserve - 1
+        );
+
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &stake_account_too_few_lamports,
+            &authorized_staker,
+            &new_vote_address,
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &uninitialized_stake_account,
+            Err(StakeError::InsufficientDelegation.into()),
+        );
+
+        //
+        // Failure: redelegate to same vote addresss
+        //
+        let _ = process_instruction_redelegate(
+            &stake_address,
+            &stake_account,
+            &authorized_staker,
+            &vote_address, // <-- Same vote address
+            &new_vote_account,
+            &uninitialized_stake_address,
+            &uninitialized_stake_account,
+            Err(StakeError::RedelegateToSameVoteAccount.into()),
+        );
     }
 }

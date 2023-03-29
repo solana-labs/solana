@@ -28,9 +28,11 @@ use {
             tools::{acceptable_reference_epoch_credits, eligible_for_deactivate_delinquent},
         },
         stake_history::{StakeHistory, StakeHistoryEntry},
-        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
+        transaction_context::{
+            BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
+        },
     },
-    solana_vote_program::vote_state::{VoteState, VoteStateVersions},
+    solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
     std::{collections::HashSet, convert::TryFrom},
 };
 
@@ -94,7 +96,8 @@ pub fn meta_from(account: &AccountSharedData) -> Option<Meta> {
     from(account).and_then(|state: StakeState| state.meta())
 }
 
-fn redelegate(
+fn redelegate_stake(
+    invoke_context: &InvokeContext,
     stake: &mut Stake,
     stake_lamports: u64,
     voter_pubkey: &Pubkey,
@@ -105,11 +108,25 @@ fn redelegate(
 ) -> Result<(), StakeError> {
     // If stake is currently active:
     if stake.stake(clock.epoch, Some(stake_history)) != 0 {
+        let stake_lamports_ok = if invoke_context
+            .feature_set
+            .is_active(&feature_set::stake_redelegate_instruction::id())
+        {
+            // When a stake account is redelegated, the delegated lamports from the source stake
+            // account are transferred to a new stake account. Do not permit the deactivation of
+            // the source stake account to be rescinded, by more generally requiring the delegation
+            // be configured with the expected amount of stake lamports before rescinding.
+            stake_lamports >= stake.delegation.stake
+        } else {
+            true
+        };
+
         // If pubkey of new voter is the same as current,
         // and we are scheduled to start deactivating this epoch,
         // we rescind deactivation
         if stake.delegation.voter_pubkey == *voter_pubkey
             && clock.epoch == stake.delegation.deactivation_epoch
+            && stake_lamports_ok
         {
             stake.delegation.deactivation_epoch = std::u64::MAX;
             return Ok(());
@@ -524,7 +541,7 @@ pub fn authorize_with_seed(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     stake_account: &mut BorrowedAccount,
-    authority_base_index: usize,
+    authority_base_index: IndexOfAccount,
     authority_seed: &str,
     authority_owner: &Pubkey,
     new_authority: &Pubkey,
@@ -534,9 +551,10 @@ pub fn authorize_with_seed(
     custodian: Option<&Pubkey>,
 ) -> Result<(), InstructionError> {
     let mut signers = HashSet::default();
-    if instruction_context.is_signer(authority_base_index)? {
+    if instruction_context.is_instruction_account_signer(authority_base_index)? {
         let base_pubkey = transaction_context.get_key_of_account_at_index(
-            instruction_context.get_index_in_transaction(authority_base_index)?,
+            instruction_context
+                .get_index_of_instruction_account_in_transaction(authority_base_index)?,
         )?;
         signers.insert(Pubkey::create_with_seed(
             base_pubkey,
@@ -555,19 +573,21 @@ pub fn authorize_with_seed(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn delegate(
+    invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-    stake_account_index: usize,
-    vote_account_index: usize,
+    stake_account_index: IndexOfAccount,
+    vote_account_index: IndexOfAccount,
     clock: &Clock,
     stake_history: &StakeHistory,
     config: &Config,
     signers: &HashSet<Pubkey>,
     feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
-    let vote_account =
-        instruction_context.try_borrow_account(transaction_context, vote_account_index)?;
+    let vote_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, vote_account_index)?;
     if *vote_account.get_owner() != solana_vote_program::id() {
         return Err(InstructionError::IncorrectProgramId);
     }
@@ -575,8 +595,8 @@ pub fn delegate(
     let vote_state = vote_account.get_state::<VoteStateVersions>();
     drop(vote_account);
 
-    let mut stake_account =
-        instruction_context.try_borrow_account(transaction_context, stake_account_index)?;
+    let mut stake_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, stake_account_index)?;
     match stake_account.get_state()? {
         StakeState::Initialized(meta) => {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
@@ -595,7 +615,8 @@ pub fn delegate(
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
             let ValidatedDelegatedInfo { stake_amount } =
                 validate_delegated_amount(&stake_account, &meta, feature_set)?;
-            redelegate(
+            redelegate_stake(
+                invoke_context,
                 &mut stake,
                 stake_amount,
                 &vote_pubkey,
@@ -648,12 +669,13 @@ pub fn split(
     invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-    stake_account_index: usize,
+    stake_account_index: IndexOfAccount,
     lamports: u64,
-    split_index: usize,
+    split_index: IndexOfAccount,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
-    let split = instruction_context.try_borrow_account(transaction_context, split_index)?;
+    let split =
+        instruction_context.try_borrow_instruction_account(transaction_context, split_index)?;
     if *split.get_owner() != id() {
         return Err(InstructionError::IncorrectProgramId);
     }
@@ -665,8 +687,8 @@ pub fn split(
     }
     let split_lamport_balance = split.get_lamports();
     drop(split);
-    let stake_account =
-        instruction_context.try_borrow_account(transaction_context, stake_account_index)?;
+    let stake_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, stake_account_index)?;
     if lamports > stake_account.get_lamports() {
         return Err(InstructionError::InsufficientFunds);
     }
@@ -724,12 +746,12 @@ pub fn split(
             let mut split_meta = meta;
             split_meta.rent_exempt_reserve = validated_split_info.destination_rent_exempt_reserve;
 
-            let mut stake_account =
-                instruction_context.try_borrow_account(transaction_context, stake_account_index)?;
+            let mut stake_account = instruction_context
+                .try_borrow_instruction_account(transaction_context, stake_account_index)?;
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
             drop(stake_account);
-            let mut split =
-                instruction_context.try_borrow_account(transaction_context, split_index)?;
+            let mut split = instruction_context
+                .try_borrow_instruction_account(transaction_context, split_index)?;
             split.set_state(&StakeState::Stake(split_meta, split_stake))?;
         }
         StakeState::Initialized(meta) => {
@@ -755,13 +777,14 @@ pub fn split(
             )?;
             let mut split_meta = meta;
             split_meta.rent_exempt_reserve = validated_split_info.destination_rent_exempt_reserve;
-            let mut split =
-                instruction_context.try_borrow_account(transaction_context, split_index)?;
+            let mut split = instruction_context
+                .try_borrow_instruction_account(transaction_context, split_index)?;
             split.set_state(&StakeState::Initialized(split_meta))?;
         }
         StakeState::Uninitialized => {
             let stake_pubkey = transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(stake_account_index)?,
+                instruction_context
+                    .get_index_of_instruction_account_in_transaction(stake_account_index)?,
             )?;
             if !signers.contains(stake_pubkey) {
                 return Err(InstructionError::MissingRequiredSignature);
@@ -771,18 +794,19 @@ pub fn split(
     }
 
     // Deinitialize state upon zero balance
-    let mut stake_account =
-        instruction_context.try_borrow_account(transaction_context, stake_account_index)?;
+    let mut stake_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, stake_account_index)?;
     if lamports == stake_account.get_lamports() {
         stake_account.set_state(&StakeState::Uninitialized)?;
     }
     drop(stake_account);
 
-    let mut split = instruction_context.try_borrow_account(transaction_context, split_index)?;
+    let mut split =
+        instruction_context.try_borrow_instruction_account(transaction_context, split_index)?;
     split.checked_add_lamports(lamports)?;
     drop(split);
-    let mut stake_account =
-        instruction_context.try_borrow_account(transaction_context, stake_account_index)?;
+    let mut stake_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, stake_account_index)?;
     stake_account.checked_sub_lamports(lamports)?;
     Ok(())
 }
@@ -791,26 +815,27 @@ pub fn merge(
     invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-    stake_account_index: usize,
-    source_account_index: usize,
+    stake_account_index: IndexOfAccount,
+    source_account_index: IndexOfAccount,
     clock: &Clock,
     stake_history: &StakeHistory,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
-    let mut source_account =
-        instruction_context.try_borrow_account(transaction_context, source_account_index)?;
+    let mut source_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, source_account_index)?;
     // Ensure source isn't spoofed
     if *source_account.get_owner() != id() {
         return Err(InstructionError::IncorrectProgramId);
     }
     // Close the stake_account-reference loophole
-    if instruction_context.get_index_in_transaction(stake_account_index)?
-        == instruction_context.get_index_in_transaction(source_account_index)?
+    if instruction_context.get_index_of_instruction_account_in_transaction(stake_account_index)?
+        == instruction_context
+            .get_index_of_instruction_account_in_transaction(source_account_index)?
     {
         return Err(InstructionError::InvalidArgument);
     }
-    let mut stake_account =
-        instruction_context.try_borrow_account(transaction_context, stake_account_index)?;
+    let mut stake_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, stake_account_index)?;
 
     ic_msg!(invoke_context, "Checking if destination stake is mergeable");
     let stake_merge_kind = MergeKind::get_if_mergeable(
@@ -851,30 +876,152 @@ pub fn merge(
     Ok(())
 }
 
+pub fn redelegate(
+    invoke_context: &InvokeContext,
+    transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
+    stake_account: &mut BorrowedAccount,
+    uninitialized_stake_account_index: IndexOfAccount,
+    vote_account_index: IndexOfAccount,
+    config: &Config,
+    signers: &HashSet<Pubkey>,
+) -> Result<(), InstructionError> {
+    let clock = invoke_context.get_sysvar_cache().get_clock()?;
+
+    // ensure `uninitialized_stake_account_index` is in the uninitialized state
+    let mut uninitialized_stake_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, uninitialized_stake_account_index)?;
+    if *uninitialized_stake_account.get_owner() != id() {
+        ic_msg!(
+            invoke_context,
+            "expected uninitialized stake account owner to be {}, not {}",
+            id(),
+            *uninitialized_stake_account.get_owner()
+        );
+        return Err(InstructionError::IncorrectProgramId);
+    }
+    if uninitialized_stake_account.get_data().len() != StakeState::size_of() {
+        ic_msg!(
+            invoke_context,
+            "expected uninitialized stake account data len to be {}, not {}",
+            StakeState::size_of(),
+            uninitialized_stake_account.get_data().len()
+        );
+        return Err(InstructionError::InvalidAccountData);
+    }
+    if !matches!(
+        uninitialized_stake_account.get_state()?,
+        StakeState::Uninitialized
+    ) {
+        ic_msg!(
+            invoke_context,
+            "expected uninitialized stake account to be uninitialized",
+        );
+        return Err(InstructionError::AccountAlreadyInitialized);
+    }
+
+    // validate the provided vote account
+    let vote_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, vote_account_index)?;
+    if *vote_account.get_owner() != solana_vote_program::id() {
+        ic_msg!(
+            invoke_context,
+            "expected vote account owner to be {}, not {}",
+            solana_vote_program::id(),
+            *vote_account.get_owner()
+        );
+        return Err(InstructionError::IncorrectProgramId);
+    }
+    let vote_pubkey = *vote_account.get_key();
+    let vote_state = vote_account.get_state::<VoteStateVersions>()?;
+
+    let (stake_meta, effective_stake) =
+        if let StakeState::Stake(meta, stake) = stake_account.get_state()? {
+            let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
+            let status = stake
+                .delegation
+                .stake_activating_and_deactivating(clock.epoch, Some(&stake_history));
+            if status.effective == 0 || status.activating != 0 || status.deactivating != 0 {
+                ic_msg!(invoke_context, "stake is not active");
+                return Err(StakeError::RedelegateTransientOrInactiveStake.into());
+            }
+
+            // Deny redelegating to the same vote account. This is nonsensical and could be used to
+            // grief the global stake warm-up/cool-down rate
+            if stake.delegation.voter_pubkey == vote_pubkey {
+                ic_msg!(
+                    invoke_context,
+                    "redelegating to the same vote account not permitted"
+                );
+                return Err(StakeError::RedelegateToSameVoteAccount.into());
+            }
+
+            (meta, status.effective)
+        } else {
+            ic_msg!(invoke_context, "invalid stake account data",);
+            return Err(InstructionError::InvalidAccountData);
+        };
+
+    // deactivate `stake_account`
+    //
+    // Note: This function also ensures `signers` contains the `StakeAuthorize::Staker`
+    deactivate(stake_account, &clock, signers)?;
+
+    // transfer the effective stake to the uninitialized stake account
+    stake_account.checked_sub_lamports(effective_stake)?;
+    uninitialized_stake_account.checked_add_lamports(effective_stake)?;
+
+    // initialize and schedule `uninitialized_stake_account` for activation
+    let sysvar_cache = invoke_context.get_sysvar_cache();
+    let rent = sysvar_cache.get_rent()?;
+    let mut uninitialized_stake_meta = stake_meta;
+    uninitialized_stake_meta.rent_exempt_reserve =
+        rent.minimum_balance(uninitialized_stake_account.get_data().len());
+
+    let ValidatedDelegatedInfo { stake_amount } = validate_delegated_amount(
+        &uninitialized_stake_account,
+        &uninitialized_stake_meta,
+        &invoke_context.feature_set,
+    )?;
+    uninitialized_stake_account.set_state(&StakeState::Stake(
+        uninitialized_stake_meta,
+        new_stake(
+            stake_amount,
+            &vote_pubkey,
+            &vote_state.convert_to_current(),
+            clock.epoch,
+            config,
+        ),
+    ))?;
+
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn withdraw(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-    stake_account_index: usize,
+    stake_account_index: IndexOfAccount,
     lamports: u64,
-    to_index: usize,
+    to_index: IndexOfAccount,
     clock: &Clock,
     stake_history: &StakeHistory,
-    withdraw_authority_index: usize,
-    custodian_index: Option<usize>,
+    withdraw_authority_index: IndexOfAccount,
+    custodian_index: Option<IndexOfAccount>,
     feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let withdraw_authority_pubkey = transaction_context.get_key_of_account_at_index(
-        instruction_context.get_index_in_transaction(withdraw_authority_index)?,
+        instruction_context
+            .get_index_of_instruction_account_in_transaction(withdraw_authority_index)?,
     )?;
-    if !instruction_context.is_signer(withdraw_authority_index)? {
+    if !instruction_context.is_instruction_account_signer(withdraw_authority_index)? {
         return Err(InstructionError::MissingRequiredSignature);
     }
     let mut signers = HashSet::new();
     signers.insert(*withdraw_authority_pubkey);
 
-    let mut stake_account =
-        instruction_context.try_borrow_account(transaction_context, stake_account_index)?;
+    let mut stake_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, stake_account_index)?;
     let (lockup, reserve, is_staked) = match stake_account.get_state()? {
         StakeState::Stake(meta, stake) => {
             meta.authorized
@@ -919,10 +1066,13 @@ pub fn withdraw(
     // verify that lockup has expired or that the withdrawal is signed by
     //   the custodian, both epoch and unix_timestamp must have passed
     let custodian_pubkey = if let Some(custodian_index) = custodian_index {
-        if instruction_context.is_signer(custodian_index)? {
-            Some(transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(custodian_index)?,
-            )?)
+        if instruction_context.is_instruction_account_signer(custodian_index)? {
+            Some(
+                transaction_context.get_key_of_account_at_index(
+                    instruction_context
+                        .get_index_of_instruction_account_in_transaction(custodian_index)?,
+                )?,
+            )
         } else {
             None
         }
@@ -955,7 +1105,8 @@ pub fn withdraw(
 
     stake_account.checked_sub_lamports(lamports)?;
     drop(stake_account);
-    let mut to = instruction_context.try_borrow_account(transaction_context, to_index)?;
+    let mut to =
+        instruction_context.try_borrow_instruction_account(transaction_context, to_index)?;
     to.checked_add_lamports(lamports)?;
     Ok(())
 }
@@ -964,15 +1115,16 @@ pub(crate) fn deactivate_delinquent(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     stake_account: &mut BorrowedAccount,
-    delinquent_vote_account_index: usize,
-    reference_vote_account_index: usize,
+    delinquent_vote_account_index: IndexOfAccount,
+    reference_vote_account_index: IndexOfAccount,
     current_epoch: Epoch,
 ) -> Result<(), InstructionError> {
     let delinquent_vote_account_pubkey = transaction_context.get_key_of_account_at_index(
-        instruction_context.get_index_in_transaction(delinquent_vote_account_index)?,
+        instruction_context
+            .get_index_of_instruction_account_in_transaction(delinquent_vote_account_index)?,
     )?;
     let delinquent_vote_account = instruction_context
-        .try_borrow_account(transaction_context, delinquent_vote_account_index)?;
+        .try_borrow_instruction_account(transaction_context, delinquent_vote_account_index)?;
     if *delinquent_vote_account.get_owner() != solana_vote_program::id() {
         return Err(InstructionError::IncorrectProgramId);
     }
@@ -981,7 +1133,7 @@ pub(crate) fn deactivate_delinquent(
         .convert_to_current();
 
     let reference_vote_account = instruction_context
-        .try_borrow_account(transaction_context, reference_vote_account_index)?;
+        .try_borrow_instruction_account(transaction_context, reference_vote_account_index)?;
     if *reference_vote_account.get_owner() != solana_vote_program::id() {
         return Err(InstructionError::IncorrectProgramId);
     }
@@ -1055,20 +1207,20 @@ fn validate_split_amount(
     invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-    source_account_index: usize,
-    destination_account_index: usize,
+    source_account_index: IndexOfAccount,
+    destination_account_index: IndexOfAccount,
     lamports: u64,
     source_meta: &Meta,
     source_stake: Option<&Stake>,
     additional_required_lamports: u64,
 ) -> Result<ValidatedSplitInfo, InstructionError> {
-    let source_account =
-        instruction_context.try_borrow_account(transaction_context, source_account_index)?;
+    let source_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, source_account_index)?;
     let source_lamports = source_account.get_lamports();
     let source_data_len = source_account.get_data().len();
     drop(source_account);
-    let destination_account =
-        instruction_context.try_borrow_account(transaction_context, destination_account_index)?;
+    let destination_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, destination_account_index)?;
     let destination_lamports = destination_account.get_lamports();
     let destination_data_len = destination_account.get_data().len();
     drop(destination_account);
@@ -1537,9 +1689,7 @@ pub fn create_lockup_stake_account(
     let rent_exempt_reserve = rent.minimum_balance(stake_account.data().len());
     assert!(
         lamports >= rent_exempt_reserve,
-        "lamports: {} is less than rent_exempt_reserve {}",
-        lamports,
-        rent_exempt_reserve
+        "lamports: {lamports} is less than rent_exempt_reserve {rent_exempt_reserve}"
     );
 
     stake_account
@@ -1600,7 +1750,7 @@ fn do_create_account(
 ) -> AccountSharedData {
     let mut stake_account = AccountSharedData::new(lamports, StakeState::size_of(), &id());
 
-    let vote_state = VoteState::from(vote_account).expect("vote_state");
+    let vote_state = vote_state::from(vote_account).expect("vote_state");
 
     let rent_exempt_reserve = rent.minimum_balance(stake_account.data().len());
 
@@ -2772,6 +2922,7 @@ mod tests {
                 Rent::id(),
                 create_account_shared_data_for_test(&Rent::default()),
             )],
+            Some(Rent::default()),
             1,
             1,
         )
@@ -2883,7 +3034,8 @@ mod tests {
 
     #[test]
     fn test_things_can_merge() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let good_stake = Stake {
             credits_observed: 4242,
@@ -2982,7 +3134,8 @@ mod tests {
 
     #[test]
     fn test_metas_can_merge() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Identical Metas can merge
         assert!(MergeKind::metas_can_merge(
@@ -3129,7 +3282,8 @@ mod tests {
 
     #[test]
     fn test_merge_kind_get_if_mergeable() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let authority_pubkey = Pubkey::new_unique();
         let initial_lamports = 4242424242;
@@ -3368,7 +3522,8 @@ mod tests {
 
     #[test]
     fn test_merge_kind_merge() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let clock = Clock::default();
         let lamports = 424242;

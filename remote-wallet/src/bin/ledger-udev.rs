@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Command::new("udevadm").arg("trigger").output().unwrap();
 
             Command::new("udevadm")
-                .args(&["control", "--reload-rules"])
+                .args(["control", "--reload-rules"])
                 .output()
                 .unwrap();
 

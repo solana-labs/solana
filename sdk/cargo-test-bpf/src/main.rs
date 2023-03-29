@@ -27,14 +27,14 @@ fn main() {
     };
     // When run as a cargo subcommand, the first program argument is the subcommand name.
     // Remove it
-    if let Some(arg1) = args.get(1) {
-        if arg1 == "test-bpf" {
-            args.remove(1);
+    if let Some(arg0) = args.get(0) {
+        if arg0 == "test-bpf" {
+            args.remove(0);
         }
     }
     print!("cargo-test-bpf child: {}", program.display());
     for a in &args {
-        print!(" {}", a);
+        print!(" {a}");
     }
     println!();
     let child = Command::new(&program)

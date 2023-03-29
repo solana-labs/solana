@@ -1,3 +1,5 @@
+//! Serde helpers.
+
 use serde::{Deserialize, Deserializer};
 
 /// This helper function enables successful deserialization of versioned structs; new structs may
@@ -10,6 +12,14 @@ where
     T: Deserialize<'de> + Default,
 {
     let result = T::deserialize(d);
+    ignore_eof_error::<'de, T, D::Error>(result)
+}
+
+pub fn ignore_eof_error<'de, T, D>(result: Result<T, D>) -> Result<T, D>
+where
+    T: Deserialize<'de> + Default,
+    D: std::fmt::Display,
+{
     match result {
         Err(err) if err.to_string() == "io error: unexpected end of file" => Ok(T::default()),
         Err(err) if err.to_string() == "io error: failed to fill whole buffer" => Ok(T::default()),

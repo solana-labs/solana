@@ -23,7 +23,7 @@
 //! Two important fields of `Config` are
 //!
 //! - [`json_rpc_url`], the URL to pass to
-//!   `solana_client::rpc_client::RpcClient`.
+//!   `solana_rpc_client::rpc_client::RpcClient`.
 //! - [`keypair_path`], a signing source, which may be a keypair file, but
 //!   may also represent several other types of signers, as described in
 //!   the documentation for `solana_clap_utils::keypair::signer_from_path`.
@@ -83,7 +83,7 @@ where
 {
     let file = File::open(config_file)?;
     let config = serde_yaml::from_reader(file)
-        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
+        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{err:?}")))?;
     Ok(config)
 }
 
@@ -106,12 +106,13 @@ where
     P: AsRef<Path>,
 {
     let serialized = serde_yaml::to_string(config)
-        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
+        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{err:?}")))?;
 
     if let Some(outdir) = config_file.as_ref().parent() {
         create_dir_all(outdir)?;
     }
     let mut file = File::create(config_file)?;
+    file.write_all(b"---\n")?;
     file.write_all(&serialized.into_bytes())?;
 
     Ok(())

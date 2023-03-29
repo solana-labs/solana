@@ -156,11 +156,17 @@ We recommend using a unique deposit account for each of your users.
 Solana accounts must be made rent-exempt by containing 2-years worth of
 [rent](developing/programming-model/accounts.md#rent) in SOL. In order to find
 the minimum rent-exempt balance for your deposit accounts, query the
-[`getMinimumBalanceForRentExemption` endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption):
+[`getMinimumBalanceForRentExemption` endpoint](../api/http#getminimumbalanceforrentexemption):
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[0]}' localhost:8899
+curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "getMinimumBalanceForRentExemption",
+  "params":[0]
+}'
 
+# Result
 {"jsonrpc":"2.0","result":890880,"id":1}
 ```
 
@@ -175,83 +181,151 @@ greater security. If so, you will need to move SOL to hot accounts using our
 When a user wants to deposit SOL into your exchange, instruct them to send a
 transfer to the appropriate deposit address.
 
+### Versioned Transaction Migration
+
+When the Mainnet Beta network starts processing versioned transactions, exchanges
+**MUST** make changes. If no changes are made, deposit detection will no longer
+work properly because fetching a versioned transaction or a block containing
+versioned transactions will return an error.
+
+- `{"maxSupportedTransactionVersion": 0}`
+
+  The `maxSupportedTransactionVersion` parameter must be added to `getBlock` and
+  `getTransaction` requests to avoid disruption to deposit detection. The latest
+  transaction version is `0` and should be specified as the max supported
+  transaction version value.
+
+It's important to understand that versioned transactions allow users to create
+transactions that use another set of account keys loaded from on-chain address
+lookup tables.
+
+- `{"encoding": "jsonParsed"}`
+
+  When fetching blocks and transactions, it's now recommended to use the
+  `"jsonParsed"` encoding because it includes all transaction account keys
+  (including those from lookup tables) in the message `"accountKeys"` list.
+  This makes it straightforward to resolve balance changes detailed in
+  `preBalances` / `postBalances` and `preTokenBalances` / `postTokenBalances`.
+
+  If the `"json"` encoding is used instead, entries in `preBalances` /
+  `postBalances` and `preTokenBalances` / `postTokenBalances` may refer to
+  account keys that are **NOT** in the `"accountKeys"` list and need to be
+  resolved using `"loadedAddresses"` entries in the transaction metadata.
+
 ### Poll for Blocks
 
 To track all the deposit accounts for your exchange, poll for each confirmed
 block and inspect for addresses of interest, using the JSON-RPC service of your
 Solana API node.
 
-- To identify which blocks are available, send a [`getBlocks` request](developing/clients/jsonrpc-api.md#getblocks),
+- To identify which blocks are available, send a [`getBlocks`](../api/http#getblocks) request,
   passing the last block you have already processed as the start-slot parameter:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getBlocks","params":[5]}' localhost:8899
+curl https://api.devnet.solana.com -X POST -H "Content-Type: application/json" -d '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "getBlocks",
+  "params": [160017005, 160017015]
+}'
 
-{"jsonrpc":"2.0","result":[5,6,8,9,11],"id":1}
+# Result
+{"jsonrpc":"2.0","result":[160017005,160017006,160017007,160017012,160017013,160017014,160017015],"id":1}
 ```
 
 Not every slot produces a block, so there may be gaps in the sequence of integers.
 
-- For each block, request its contents with a [`getBlock` request](developing/clients/jsonrpc-api.md#getblock):
+- For each block, request its contents with a [`getBlock`](../api/http#getblock) request:
+
+### Block Fetching Tips
+
+- `{"rewards": false}`
+
+By default, fetched blocks will return information about validator fees on each
+block and staking rewards on epoch boundaries. If you don't need this
+information, disable it with the "rewards" parameter.
+
+- `{"transactionDetails": "accounts"}`
+
+By default, fetched blocks will return a lot of transaction info and metadata
+that isn't necessary for tracking account balances. Set the "transactionDetails"
+parameter to speed up block fetching.
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getBlock","params":[5, "json"]}' localhost:8899
+curl https://api.devnet.solana.com -X POST -H 'Content-Type: application/json' -d '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "getBlock",
+  "params": [
+    166974442,
+    {
+      "encoding": "jsonParsed",
+      "maxSupportedTransactionVersion": 0,
+      "transactionDetails": "accounts",
+      "rewards": false
+    }
+  ]
+}'
 
+# Result
 {
   "jsonrpc": "2.0",
   "result": {
-    "blockhash": "2WcrsKSVANoe6xQHKtCcqNdUpCQPQ3vb6QTgi1dcE2oL",
-    "parentSlot": 4,
-    "previousBlockhash": "7ZDoGW83nXgP14vnn9XhGSaGjbuLdLWkQAoUQ7pg6qDZ",
-    "rewards": [],
+    "blockHeight": 157201607,
+    "blockTime": 1665070281,
+    "blockhash": "HKhao674uvFc4wMK1Cm3UyuuGbKExdgPFjXQ5xtvsG3o",
+    "parentSlot": 166974441,
+    "previousBlockhash": "98CNLU4rsYa2HDUyp7PubU4DhwYJJhSX9v6pvE7SWsAo",
     "transactions": [
+      ... (omit)
       {
         "meta": {
           "err": null,
           "fee": 5000,
           "postBalances": [
-            2033973061360,
-            218099990000,
-            42000000003
+            1110663066,
+            1,
+            1040000000
           ],
+          "postTokenBalances": [],
           "preBalances": [
-            2044973066360,
-            207099990000,
-            42000000003
+            1120668066,
+            1,
+            1030000000
           ],
+          "preTokenBalances": [],
           "status": {
             "Ok": null
           }
         },
         "transaction": {
-          "message": {
-            "accountKeys": [
-              "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
-              "47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi",
-              "11111111111111111111111111111111"
-            ],
-            "header": {
-              "numReadonlySignedAccounts": 0,
-              "numReadonlyUnsignedAccounts": 1,
-              "numRequiredSignatures": 1
+          "accountKeys": [
+            {
+              "pubkey": "9aE476sH92Vz7DMPyq5WLPkrKWivxeuTKEFKd2sZZcde",
+              "signer": true,
+              "source": "transaction",
+              "writable": true
             },
-            "instructions": [
-              {
-                "accounts": [
-                  0,
-                  1
-                ],
-                "data": "3Bxs3zyH82bhpB8j",
-                "programIdIndex": 2
-              }
-            ],
-            "recentBlockhash": "7GytRgrWXncJWKhzovVoP9kjfLwoiuDb3cWjpXGnmxWh"
-          },
+            {
+              "pubkey": "11111111111111111111111111111111",
+              "signer": false,
+              "source": "transaction",
+              "writable": false
+            },
+            {
+              "pubkey": "G1wZ113tiUHdSpQEBcid8n1x8BAvcWZoZgxPKxgE5B7o",
+              "signer": false,
+              "source": "lookupTable",
+              "writable": true
+            }
+          ],
           "signatures": [
-            "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"
+            "2CxNRsyRT7y88GBwvAB3hRg8wijMSZh3VNYXAdUesGSyvbRJbRR2q9G1KSEpQENmXHmmMLHiXumw4dp8CvzQMjrM"
           ]
-        }
-      }
+        },
+        "version": 0
+      },
+      ... (omit)
     ]
   },
   "id": 1
@@ -262,9 +336,9 @@ The `preBalances` and `postBalances` fields allow you to track the balance
 changes in every account without having to parse the entire transaction. They
 list the starting and ending balances of each account in
 [lamports](../terminology.md#lamport), indexed to the `accountKeys` list. For
-example, if the deposit address if interest is
-`47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi`, this transaction represents a
-transfer of 218099990000 - 207099990000 = 11000000000 lamports = 11 SOL
+example, if the deposit address of interest is
+`G1wZ113tiUHdSpQEBcid8n1x8BAvcWZoZgxPKxgE5B7o`, this transaction represents a
+transfer of 1040000000 - 1030000000 = 10,000,000 lamports = 0.01 SOL
 
 If you need more information about the transaction type or other specifics, you
 can request the block from RPC in binary format, and parse it using either our
@@ -278,32 +352,49 @@ generally _not_ a viable method for tracking all your deposit addresses over all
 slots, but may be useful for examining a few accounts for a specific period of
 time.
 
-- Send a [`getSignaturesForAddress`](developing/clients/jsonrpc-api.md#getsignaturesforaddress)
+- Send a [`getSignaturesForAddress`](../api/http#getsignaturesforaddress)
   request to the api node:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getSignaturesForAddress","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", {"limit": 3}]}' localhost:8899
+curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "getSignaturesForAddress",
+  "params": [
+    "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
+    {
+      "limit": 3
+    }
+  ]
+}'
 
+# Result
 {
   "jsonrpc": "2.0",
   "result": [
     {
+      "blockTime": 1662064640,
+      "confirmationStatus": "finalized",
       "err": null,
       "memo": null,
-      "signature": "35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby",
-      "slot": 114
+      "signature": "3EDRvnD5TbbMS2mCusop6oyHLD8CgnjncaYQd5RXpgnjYUXRCYwiNPmXb6ZG5KdTK4zAaygEhfdLoP7TDzwKBVQp",
+      "slot": 148697216
     },
     {
+      "blockTime": 1662064434,
+      "confirmationStatus": "finalized",
       "err": null,
       "memo": null,
-      "signature": "4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr",
-      "slot": 112
+      "signature": "4rPQ5wthgSP1kLdLqcRgQnkYkPAZqjv5vm59LijrQDSKuL2HLmZHoHjdSLDXXWFwWdaKXUuryRBGwEvSxn3TQckY",
+      "slot": 148696843
     },
     {
+      "blockTime": 1662064341,
+      "confirmationStatus": "finalized",
       "err": null,
       "memo": null,
-      "signature": "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6",
-      "slot": 108
+      "signature": "36Q383JMiqiobuPV9qBqy41xjMsVnQBm9rdZSdpbrLTGhSQDTGZJnocM4TQTVfUGfV2vEX9ZB3sex6wUBUWzjEvs",
+      "slot": 148696677
     }
   ],
   "id": 1
@@ -311,61 +402,105 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 ```
 
 - For each signature returned, get the transaction details by sending a
-  [`getTransaction`](developing/clients/jsonrpc-api.md#gettransaction) request:
+  [`getTransaction`](../api/http#gettransaction) request:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8899
+curl https://api.devnet.solana.com -X POST -H 'Content-Type: application/json' -d '{
+  "jsonrpc":"2.0",
+  "id":1,
+  "method":"getTransaction",
+  "params":[
+    "2CxNRsyRT7y88GBwvAB3hRg8wijMSZh3VNYXAdUesGSyvbRJbRR2q9G1KSEpQENmXHmmMLHiXumw4dp8CvzQMjrM",
+    {
+      "encoding":"jsonParsed",
+      "maxSupportedTransactionVersion":0
+    }
+  ]
+}'
 
-// Result
+# Result
 {
   "jsonrpc": "2.0",
   "result": {
-    "slot": 5,
-    "transaction": {
-      "message": {
-        "accountKeys": [
-          "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
-          "47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi",
-          "11111111111111111111111111111111"
-        ],
-        "header": {
-          "numReadonlySignedAccounts": 0,
-          "numReadonlyUnsignedAccounts": 1,
-          "numRequiredSignatures": 1
-        },
-        "instructions": [
-          {
-            "accounts": [
-              0,
-              1
-            ],
-            "data": "3Bxs3zyH82bhpB8j",
-            "programIdIndex": 2
-          }
-        ],
-        "recentBlockhash": "7GytRgrWXncJWKhzovVoP9kjfLwoiuDb3cWjpXGnmxWh"
-      },
-      "signatures": [
-        "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"
-      ]
-    },
+    "blockTime": 1665070281,
     "meta": {
       "err": null,
       "fee": 5000,
+      "innerInstructions": [],
+      "logMessages": [
+        "Program 11111111111111111111111111111111 invoke [1]",
+        "Program 11111111111111111111111111111111 success"
+      ],
       "postBalances": [
-        2033973061360,
-        218099990000,
-        42000000003
+        1110663066,
+        1,
+        1040000000
       ],
+      "postTokenBalances": [],
       "preBalances": [
-        2044973066360,
-        207099990000,
-        42000000003
+        1120668066,
+        1,
+        1030000000
       ],
+      "preTokenBalances": [],
+      "rewards": [],
       "status": {
         "Ok": null
       }
-    }
+    },
+    "slot": 166974442,
+    "transaction": {
+      "message": {
+        "accountKeys": [
+          {
+            "pubkey": "9aE476sH92Vz7DMPyq5WLPkrKWivxeuTKEFKd2sZZcde",
+            "signer": true,
+            "source": "transaction",
+            "writable": true
+          },
+          {
+            "pubkey": "11111111111111111111111111111111",
+            "signer": false,
+            "source": "transaction",
+            "writable": false
+          },
+          {
+            "pubkey": "G1wZ113tiUHdSpQEBcid8n1x8BAvcWZoZgxPKxgE5B7o",
+            "signer": false,
+            "source": "lookupTable",
+            "writable": true
+          }
+        ],
+        "addressTableLookups": [
+          {
+            "accountKey": "4syr5pBaboZy4cZyF6sys82uGD7jEvoAP2ZMaoich4fZ",
+            "readonlyIndexes": [],
+            "writableIndexes": [
+              3
+            ]
+          }
+        ],
+        "instructions": [
+          {
+            "parsed": {
+              "info": {
+                "destination": "G1wZ113tiUHdSpQEBcid8n1x8BAvcWZoZgxPKxgE5B7o",
+                "lamports": 10000000,
+                "source": "9aE476sH92Vz7DMPyq5WLPkrKWivxeuTKEFKd2sZZcde"
+              },
+              "type": "transfer"
+            },
+            "program": "system",
+            "programId": "11111111111111111111111111111111"
+          }
+        ],
+        "recentBlockhash": "BhhivDNgoy4L5tLtHb1s3TP19uUXqKiy4FfUR34d93eT"
+      },
+      "signatures": [
+        "2CxNRsyRT7y88GBwvAB3hRg8wijMSZh3VNYXAdUesGSyvbRJbRR2q9G1KSEpQENmXHmmMLHiXumw4dp8CvzQMjrM"
+      ]
+    },
+    "version": 0
   },
   "id": 1
 }
@@ -409,8 +544,7 @@ before retrying a withdrawal transfer that does not appear to have been
 confirmed or finalized by the cluster. Otherwise, you risk a double spend. See
 more on [blockhash expiration](#blockhash-expiration) below.
 
-First, get a recent blockhash using the [`getFees` endpoint](developing/clients/jsonrpc-api.md#getfees)
-or the CLI command:
+First, get a recent blockhash using the [`getFees`](../api/http#getfees) endpoint or the CLI command:
 
 ```bash
 solana fees --url http://localhost:8899
@@ -424,19 +558,30 @@ solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --b
 ```
 
 You can also build, sign, and serialize the transaction manually, and fire it off to
-the cluster using the JSON-RPC [`sendTransaction` endpoint](developing/clients/jsonrpc-api.md#sendtransaction).
+the cluster using the JSON-RPC [`sendTransaction`](../api/http#sendtransaction) endpoint.
 
 #### Transaction Confirmations & Finality
 
 Get the status of a batch of transactions using the
-[`getSignatureStatuses` JSON-RPC endpoint](developing/clients/jsonrpc-api.md#getsignaturestatuses).
+[`getSignatureStatuses`](../api/http#getsignaturestatuses) JSON-RPC endpoint.
 The `confirmations` field reports how many
 [confirmed blocks](../terminology.md#confirmed-block) have elapsed since the
 transaction was processed. If `confirmations: null`, it is [finalized](../terminology.md#finality).
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]}' http://localhost:8899
+curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
+  "jsonrpc":"2.0",
+  "id":1,
+  "method":"getSignatureStatuses",
+  "params":[
+    [
+      "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW",
+      "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"
+    ]
+  ]
+}'
 
+# Result
 {
   "jsonrpc": "2.0",
   "result": {
@@ -469,7 +614,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 #### Blockhash Expiration
 
 You can check whether a particular blockhash is still valid by sending a
-[`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash)
+[`getFeeCalculatorForBlockhash`](../api/http#getfeecalculatorforblockhash)
 request with the blockhash as a parameter. If the response value is `null`, the
 blockhash is expired, and the withdrawal transaction using that blockhash should
 never succeed.
@@ -480,7 +625,7 @@ As withdrawals are irreversible, it may be a good practice to validate a
 user-supplied account address before authorizing a withdrawal in order to
 prevent accidental loss of user funds.
 
-#### Basic verfication
+#### Basic verification
 
 Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This
 results in an ASCII text string matching the following regular expression:
@@ -575,8 +720,14 @@ holding no data), currently: 0.000890880 SOL
 Similarly, every deposit account must contain at least this balance.
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[0]}' localhost:8899
+curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "getMinimumBalanceForRentExemption",
+  "params": [0]
+}'
 
+# Result
 {"jsonrpc":"2.0","result":890880,"id":1}
 ```
 
@@ -722,7 +873,7 @@ identify the token mint and account owner (main wallet address) of the affected
 account.
 
 Note that if a receiving account is created during the transaction, it will have no
-`preTokenBalance` entry as there is no existing account state.  In this
+`preTokenBalance` entry as there is no existing account state. In this
 case, the initial balance can be assumed to be zero.
 
 ### Withdrawing
@@ -734,7 +885,7 @@ the exchange should check the address as
 [described above](#validating-user-supplied-account-addresses-for-withdrawals).
 Additionally this address must be owned by the System Program and have no
 account data. If the address has no SOL balance, user confirmation should be
-obtained before proceeding with the withdrawal.  All other withdrawal addresses
+obtained before proceeding with the withdrawal. All other withdrawal addresses
 must be rejected.
 
 From the withdrawal address, the [Associated Token Account](https://spl.solana.com/associated-token-account)

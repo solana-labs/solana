@@ -1,5 +1,6 @@
 use {
     crate::{
+        errors::ProofVerificationError,
         range_proof::{errors::RangeProofError, util},
         transcript::TranscriptProtocol,
     },
@@ -7,7 +8,7 @@ use {
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
-        traits::VartimeMultiscalarMul,
+        traits::{MultiscalarMul, VartimeMultiscalarMul},
     },
     merlin::Transcript,
     std::borrow::Borrow,
@@ -34,7 +35,7 @@ impl InnerProductProof {
     /// protocols).
     ///
     /// The lengths of the vectors must all be the same, and must all be
-    /// either 0 or a power of 2.
+    /// a power of 2.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         Q: &RistrettoPoint,
@@ -85,7 +86,7 @@ impl InnerProductProof {
             let c_L = util::inner_product(a_L, b_R);
             let c_R = util::inner_product(a_R, b_L);
 
-            let L = RistrettoPoint::vartime_multiscalar_mul(
+            let L = RistrettoPoint::multiscalar_mul(
                 a_L.iter()
                     .zip(G_factors[n..2 * n].iter())
                     .map(|(a_L_i, g)| a_L_i * g)
@@ -99,7 +100,7 @@ impl InnerProductProof {
             )
             .compress();
 
-            let R = RistrettoPoint::vartime_multiscalar_mul(
+            let R = RistrettoPoint::multiscalar_mul(
                 a_R.iter()
                     .zip(G_factors[0..n].iter())
                     .map(|(a_R_i, g)| a_R_i * g)
@@ -125,11 +126,11 @@ impl InnerProductProof {
             for i in 0..n {
                 a_L[i] = a_L[i] * u + u_inv * a_R[i];
                 b_L[i] = b_L[i] * u_inv + u * b_R[i];
-                G_L[i] = RistrettoPoint::vartime_multiscalar_mul(
+                G_L[i] = RistrettoPoint::multiscalar_mul(
                     &[u_inv * G_factors[i], u * G_factors[n + i]],
                     &[G_L[i], G_R[i]],
                 );
-                H_L[i] = RistrettoPoint::vartime_multiscalar_mul(
+                H_L[i] = RistrettoPoint::multiscalar_mul(
                     &[u * H_factors[i], u_inv * H_factors[n + i]],
                     &[H_L[i], H_R[i]],
                 )
@@ -151,13 +152,13 @@ impl InnerProductProof {
             let c_L = util::inner_product(a_L, b_R);
             let c_R = util::inner_product(a_R, b_L);
 
-            let L = RistrettoPoint::vartime_multiscalar_mul(
+            let L = RistrettoPoint::multiscalar_mul(
                 a_L.iter().chain(b_R.iter()).chain(iter::once(&c_L)),
                 G_R.iter().chain(H_L.iter()).chain(iter::once(Q)),
             )
             .compress();
 
-            let R = RistrettoPoint::vartime_multiscalar_mul(
+            let R = RistrettoPoint::multiscalar_mul(
                 a_R.iter().chain(b_L.iter()).chain(iter::once(&c_R)),
                 G_L.iter().chain(H_R.iter()).chain(iter::once(Q)),
             )
@@ -175,8 +176,8 @@ impl InnerProductProof {
             for i in 0..n {
                 a_L[i] = a_L[i] * u + u_inv * a_R[i];
                 b_L[i] = b_L[i] * u_inv + u * b_R[i];
-                G_L[i] = RistrettoPoint::vartime_multiscalar_mul(&[u_inv, u], &[G_L[i], G_R[i]]);
-                H_L[i] = RistrettoPoint::vartime_multiscalar_mul(&[u, u_inv], &[H_L[i], H_R[i]]);
+                G_L[i] = RistrettoPoint::multiscalar_mul(&[u_inv, u], &[G_L[i], G_R[i]]);
+                H_L[i] = RistrettoPoint::multiscalar_mul(&[u, u_inv], &[H_L[i], H_R[i]]);
             }
 
             a = a_L;
@@ -208,10 +209,10 @@ impl InnerProductProof {
         if lg_n >= 32 {
             // 4 billion multiplications should be enough for anyone
             // and this check prevents overflow in 1<<lg_n below.
-            return Err(RangeProofError::InvalidBitsize);
+            return Err(ProofVerificationError::InvalidBitSize.into());
         }
         if n != (1 << lg_n) {
-            return Err(RangeProofError::InvalidBitsize);
+            return Err(ProofVerificationError::InvalidBitSize.into());
         }
 
         transcript.innerproduct_domain_sep(n as u64);
@@ -298,13 +299,19 @@ impl InnerProductProof {
         let Ls = self
             .L_vec
             .iter()
-            .map(|p| p.decompress().ok_or(RangeProofError::Format))
+            .map(|p| {
+                p.decompress()
+                    .ok_or(ProofVerificationError::Deserialization)
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let Rs = self
             .R_vec
             .iter()
-            .map(|p| p.decompress().ok_or(RangeProofError::Format))
+            .map(|p| {
+                p.decompress()
+                    .ok_or(ProofVerificationError::Deserialization)
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let expect_P = RistrettoPoint::vartime_multiscalar_mul(
@@ -323,7 +330,7 @@ impl InnerProductProof {
         if expect_P == *P {
             Ok(())
         } else {
-            Err(RangeProofError::AlgebraicRelation)
+            Err(ProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -360,18 +367,18 @@ impl InnerProductProof {
     pub fn from_bytes(slice: &[u8]) -> Result<InnerProductProof, RangeProofError> {
         let b = slice.len();
         if b % 32 != 0 {
-            return Err(RangeProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
         let num_elements = b / 32;
         if num_elements < 2 {
-            return Err(RangeProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
         if (num_elements - 2) % 2 != 0 {
-            return Err(RangeProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
         let lg_n = (num_elements - 2) / 2;
         if lg_n >= 32 {
-            return Err(RangeProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let mut L_vec: Vec<CompressedRistretto> = Vec::with_capacity(lg_n);
@@ -384,9 +391,9 @@ impl InnerProductProof {
 
         let pos = 2 * lg_n * 32;
         let a = Scalar::from_canonical_bytes(util::read32(&slice[pos..]))
-            .ok_or(RangeProofError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
         let b = Scalar::from_canonical_bytes(util::read32(&slice[pos + 32..]))
-            .ok_or(RangeProofError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(InnerProductProof { L_vec, R_vec, a, b })
     }

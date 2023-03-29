@@ -75,7 +75,7 @@ impl SharedBuffer {
         let bg_reader_data = instance.bg_reader_data.clone();
 
         let handle = Builder::new()
-            .name("solana-compressed_file_reader".to_string())
+            .name("solCompFileRead".to_string())
             .spawn(move || {
                 // importantly, this thread does NOT hold a refcount on the arc of 'instance'
                 bg_reader_data.read_entire_file_in_bg(reader, total_buffer_budget, chunk_size);
@@ -237,9 +237,9 @@ impl SharedBufferBgReader {
                         bytes_read += size;
                         // loop to read some more. Underlying reader does not usually read all we ask for.
                     }
-                    Err(mut err) => {
+                    Err(err) => {
                         error_received = true;
-                        std::mem::swap(&mut error, &mut err);
+                        error = err;
                         break;
                     }
                 }
@@ -297,8 +297,7 @@ impl SharedBufferInternal {
             return false;
         }
         // grab all data from bg
-        let mut newly_read_data: Vec<OneSharedBuffer> = vec![];
-        std::mem::swap(&mut *from_lock, &mut newly_read_data);
+        let mut newly_read_data: Vec<OneSharedBuffer> = std::mem::take(&mut *from_lock);
         // append all data to fg
         let mut to_lock = self.data.write().unwrap();
         // from_lock has to be held until we have the to_lock lock. Otherwise, we can race with another reader and append to to_lock out of order.
@@ -367,10 +366,10 @@ impl SharedBufferReader {
             let eof = self.instance.has_reached_eof();
 
             for recycle in previous_buffer_index..new_min {
-                let mut remove = self.empty_buffer.clone();
-                let mut data = self.instance.data.write().unwrap();
-                std::mem::swap(&mut remove, &mut data[recycle]);
-                drop(data);
+                let remove = {
+                    let mut data = self.instance.data.write().unwrap();
+                    std::mem::replace(&mut data[recycle], self.empty_buffer.clone())
+                };
                 if remove.is_empty() {
                     continue; // another thread beat us swapping out this buffer, so nothing to recycle here
                 }
@@ -463,10 +462,8 @@ impl Read for SharedBufferReader {
                     let mut error = instance.bg_reader_data.error.write().unwrap();
                     if error.is_err() {
                         // replace the current error (with AN error instead of ok)
-                        let mut stored_error = Err(Self::default_error());
-                        std::mem::swap(&mut *error, &mut stored_error);
                         // return the original error
-                        return stored_error;
+                        return std::mem::replace(&mut *error, Err(Self::default_error()));
                     }
                 }
 
@@ -703,8 +700,8 @@ pub mod tests {
         let expected_len = 1;
         for i in 0..sent.len() {
             let len = reader2.read(&mut data[i..=i]);
-            assert!(len.is_ok(), "{:?}, progress: {}", len, i);
-            assert_eq!(len.unwrap(), expected_len, "progress: {}", i);
+            assert!(len.is_ok(), "{len:?}, progress: {i}");
+            assert_eq!(len.unwrap(), expected_len, "progress: {i}");
         }
         assert_eq!(sent, data);
         assert_eq!(
@@ -758,7 +755,6 @@ pub mod tests {
         let reader2 = SharedBufferReader::new(&shared_buffer);
 
         let sent = (0..size)
-            .into_iter()
             .map(|i| ((i + size) % 256) as u8)
             .collect::<Vec<_>>();
 
@@ -838,7 +834,6 @@ pub mod tests {
                                 None
                             };
                             let sent = (0..data_size)
-                                .into_iter()
                                 .map(|i| ((i + data_size) % 256) as u8)
                                 .collect::<Vec<_>>();
 
@@ -849,7 +844,6 @@ pub mod tests {
                                 let threads = std::cmp::min(8, rayon::current_num_threads());
                                 Some({
                                     let parallel = (0..threads)
-                                        .into_iter()
                                         .map(|_| {
                                             // create before any reading starts
                                             let reader_ = SharedBufferReader::new(&shared_buffer);

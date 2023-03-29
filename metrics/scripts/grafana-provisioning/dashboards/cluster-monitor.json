@@ -251,7 +251,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT LAST(median) FROM ( SELECT median(live_count) FROM \"$testnet\".\"autogen\".\"cluster_info-num_nodes\" WHERE $timeFilter AND live_count > 0 GROUP BY time(5s) )\n",
+          "query": "SELECT LAST(median) FROM ( SELECT median(num_nodes) - median(num_nodes_dead) as median FROM \"$testnet\".\"autogen\".\"cluster_nodes_broadcast\" WHERE $timeFilter AND live_count > 0 GROUP BY time(5s) )\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",

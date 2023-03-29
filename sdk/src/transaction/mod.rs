@@ -42,21 +42,21 @@
 //! transaction nonce]_ mechanism instead of a recent blockhash to ensure unique
 //! transactions.
 //!
-//! [`RpcClient::get_latest_blockhash`]: https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html#method.get_latest_blockhash
+//! [`RpcClient::get_latest_blockhash`]: https://docs.rs/solana-rpc-client/latest/solana_rpc_client/rpc_client/struct.RpcClient.html#method.get_latest_blockhash
 //! [durable transaction nonce]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
 //!
 //! # Examples
 //!
-//! This example uses the [`solana_client`] and [`anyhow`] crates.
+//! This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
 //!
-//! [`solana_client`]: https://docs.rs/solana-client
+//! [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
 //! [`anyhow`]: https://docs.rs/anyhow
 //!
 //! ```
-//! # use solana_sdk::example_mocks::solana_client;
+//! # use solana_sdk::example_mocks::solana_rpc_client;
 //! use anyhow::Result;
 //! use borsh::{BorshSerialize, BorshDeserialize};
-//! use solana_client::rpc_client::RpcClient;
+//! use solana_rpc_client::rpc_client::RpcClient;
 //! use solana_sdk::{
 //!      instruction::Instruction,
 //!      message::Message,
@@ -129,7 +129,7 @@ use {
     serde::Serialize,
     solana_program::{system_instruction::SystemInstruction, system_program},
     solana_sdk::feature_set,
-    std::{result, sync::Arc},
+    std::result,
 };
 
 mod error;
@@ -206,16 +206,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -285,16 +285,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -364,16 +364,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -440,16 +440,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -648,16 +648,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -707,7 +707,7 @@ impl Transaction {
     /// ```
     pub fn sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         if let Err(e) = self.try_sign(keypairs, recent_blockhash) {
-            panic!("Transaction::sign failed with error {:?}", e);
+            panic!("Transaction::sign failed with error {e:?}");
         }
     }
 
@@ -733,7 +733,7 @@ impl Transaction {
     /// conditions.
     pub fn partial_sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         if let Err(e) = self.try_partial_sign(keypairs, recent_blockhash) {
-            panic!("Transaction::partial_sign failed with error {:?}", e);
+            panic!("Transaction::partial_sign failed with error {e:?}");
         }
     }
 
@@ -757,10 +757,7 @@ impl Transaction {
         recent_blockhash: Hash,
     ) {
         if let Err(e) = self.try_partial_sign_unchecked(keypairs, positions, recent_blockhash) {
-            panic!(
-                "Transaction::partial_sign_unchecked failed with error {:?}",
-                e
-            );
+            panic!("Transaction::partial_sign_unchecked failed with error {e:?}");
         }
     }
 
@@ -789,16 +786,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -1014,7 +1011,7 @@ impl Transaction {
     }
 
     /// Verify the precompiled programs in this transaction.
-    pub fn verify_precompiles(&self, feature_set: &Arc<feature_set::FeatureSet>) -> Result<()> {
+    pub fn verify_precompiles(&self, feature_set: &feature_set::FeatureSet) -> Result<()> {
         for instruction in &self.message().instructions {
             // The Transaction may not be sanitized at this point
             if instruction.program_id_index as usize >= self.message().account_keys.len() {
@@ -1095,7 +1092,7 @@ pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
             )
             // Nonce account is writable
             && matches!(
-                instruction.accounts.get(0),
+                instruction.accounts.first(),
                 Some(index) if message.is_writable(*index as usize)
             )
         })
@@ -1106,7 +1103,7 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
     ix: &CompiledInstruction,
     tx: &'a Transaction,
 ) -> Option<&'a Pubkey> {
-    ix.accounts.get(0).and_then(|idx| {
+    ix.accounts.first().and_then(|idx| {
         let idx = *idx as usize;
         tx.message().account_keys.get(idx)
     })
@@ -1273,12 +1270,12 @@ mod tests {
             62, 89, 99,
         ])
         .unwrap();
-        let to = Pubkey::new(&[
+        let to = Pubkey::from([
             1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4,
             1, 1, 1,
         ]);
 
-        let program_id = Pubkey::new(&[
+        let program_id = Pubkey::from([
             2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4,
             2, 2, 2,
         ]);

@@ -76,16 +76,14 @@ fn ip_echo_server_request(
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         format!(
-                            "Invalid gossip entrypoint. {} looks to be an HTTP port: {}",
-                            ip_echo_server_addr, http_response
+                            "Invalid gossip entrypoint. {ip_echo_server_addr} looks to be an HTTP port: {http_response}"
                         ),
                     ));
                 }
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     format!(
-                        "Invalid gossip entrypoint. {} provided an invalid response header: '{}'",
-                        ip_echo_server_addr, response_header
+                        "Invalid gossip entrypoint. {ip_echo_server_addr} provided an invalid response header: '{response_header}'"
                     ),
                 ));
             }
@@ -93,7 +91,7 @@ fn ip_echo_server_request(
             bincode::deserialize(&data[HEADER_LENGTH..]).map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("Failed to deserialize: {:?}", err),
+                    format!("Failed to deserialize: {err:?}"),
                 )
             })
         })
@@ -144,15 +142,18 @@ fn do_verify_reachable_ports(
     for (port, tcp_listener) in tcp_listeners {
         let (sender, receiver) = unbounded();
         let listening_addr = tcp_listener.local_addr().unwrap();
-        let thread_handle = std::thread::spawn(move || {
-            debug!("Waiting for incoming connection on tcp/{}", port);
-            match tcp_listener.incoming().next() {
-                Some(_) => sender
-                    .send(())
-                    .unwrap_or_else(|err| warn!("send failure: {}", err)),
-                None => warn!("tcp incoming failed"),
-            }
-        });
+        let thread_handle = std::thread::Builder::new()
+            .name(format!("solVrfyTcp{port:05}"))
+            .spawn(move || {
+                debug!("Waiting for incoming connection on tcp/{}", port);
+                match tcp_listener.incoming().next() {
+                    Some(_) => sender
+                        .send(())
+                        .unwrap_or_else(|err| warn!("send failure: {}", err)),
+                    None => warn!("tcp incoming failed"),
+                }
+            })
+            .unwrap();
         match receiver.recv_timeout(timeout) {
             Ok(_) => {
                 info!("tcp/{} is reachable", port);
@@ -162,7 +163,7 @@ fn do_verify_reachable_ports(
                     "Received no response at tcp/{}, check your port configuration: {}",
                     port, err
                 );
-                // Ugh, std rustc doesn't provide acceptng with timeout or restoring original
+                // Ugh, std rustc doesn't provide accepting with timeout or restoring original
                 // nonblocking-status of sockets because of lack of getter, only the setter...
                 // So, to close the thread cleanly, just connect from here.
                 // ref: https://github.com/rust-lang/rust/issues/31615
@@ -222,33 +223,37 @@ fn do_verify_reachable_ports(
                     let port = udp_socket.local_addr().unwrap().port();
                     let udp_socket = udp_socket.try_clone().expect("Unable to clone udp socket");
                     let reachable_ports = reachable_ports.clone();
-                    std::thread::spawn(move || {
-                        let start = Instant::now();
 
-                        let original_read_timeout = udp_socket.read_timeout().unwrap();
-                        udp_socket
-                            .set_read_timeout(Some(Duration::from_millis(250)))
-                            .unwrap();
-                        loop {
-                            if reachable_ports.read().unwrap().contains(&port)
-                                || Instant::now().duration_since(start) >= timeout
-                            {
-                                break;
+                    std::thread::Builder::new()
+                        .name(format!("solVrfyUdp{port:05}"))
+                        .spawn(move || {
+                            let start = Instant::now();
+
+                            let original_read_timeout = udp_socket.read_timeout().unwrap();
+                            udp_socket
+                                .set_read_timeout(Some(Duration::from_millis(250)))
+                                .unwrap();
+                            loop {
+                                if reachable_ports.read().unwrap().contains(&port)
+                                    || Instant::now().duration_since(start) >= timeout
+                                {
+                                    break;
+                                }
+
+                                let recv_result = udp_socket.recv(&mut [0; 1]);
+                                debug!(
+                                    "Waited for incoming datagram on udp/{}: {:?}",
+                                    port, recv_result
+                                );
+
+                                if recv_result.is_ok() {
+                                    reachable_ports.write().unwrap().insert(port);
+                                    break;
+                                }
                             }
-
-                            let recv_result = udp_socket.recv(&mut [0; 1]);
-                            debug!(
-                                "Waited for incoming datagram on udp/{}: {:?}",
-                                port, recv_result
-                            );
-
-                            if recv_result.is_ok() {
-                                reachable_ports.write().unwrap().insert(port);
-                                break;
-                            }
-                        }
-                        udp_socket.set_read_timeout(original_read_timeout).unwrap();
-                    })
+                            udp_socket.set_read_timeout(original_read_timeout).unwrap();
+                        })
+                        .unwrap()
                 })
                 .collect();
 
@@ -338,9 +343,9 @@ pub fn parse_port_range(port_range: &str) -> Option<PortRange> {
 pub fn parse_host(host: &str) -> Result<IpAddr, String> {
     // First, check if the host syntax is valid. This check is needed because addresses
     // such as `("localhost:1234", 0)` will resolve to IPs on some networks.
-    let parsed_url = Url::parse(&format!("http://{}", host)).map_err(|e| e.to_string())?;
+    let parsed_url = Url::parse(&format!("http://{host}")).map_err(|e| e.to_string())?;
     if parsed_url.port().is_some() {
-        return Err(format!("Expected port in URL: {}", host));
+        return Err(format!("Expected port in URL: {host}"));
     }
 
     // Next, check to see if it resolves to an IP address
@@ -350,7 +355,7 @@ pub fn parse_host(host: &str) -> Result<IpAddr, String> {
         .map(|socket_address| socket_address.ip())
         .collect();
     if ips.is_empty() {
-        Err(format!("Unable to resolve host: {}", host))
+        Err(format!("Unable to resolve host: {host}"))
     } else {
         Ok(ips[0])
     }
@@ -363,10 +368,10 @@ pub fn is_host(string: String) -> Result<(), String> {
 pub fn parse_host_port(host_port: &str) -> Result<SocketAddr, String> {
     let addrs: Vec<_> = host_port
         .to_socket_addrs()
-        .map_err(|err| format!("Unable to resolve host {}: {}", host_port, err))?
+        .map_err(|err| format!("Unable to resolve host {host_port}: {err}"))?
         .collect();
     if addrs.is_empty() {
-        Err(format!("Unable to resolve host: {}", host_port))
+        Err(format!("Unable to resolve host: {host_port}"))
     } else {
         Ok(addrs[0])
     }
@@ -417,7 +422,7 @@ pub fn bind_common_in_range(
 
     Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("No available TCP/UDP ports in {:?}", range),
+        format!("No available TCP/UDP ports in {range:?}"),
     ))
 }
 
@@ -435,12 +440,20 @@ pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpS
 
     Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("No available UDP ports in {:?}", range),
+        format!("No available UDP ports in {range:?}"),
     ))
 }
 
-pub fn bind_in_validator_port_range(ip_addr: IpAddr) -> io::Result<UdpSocket> {
-    bind_in_range(ip_addr, VALIDATOR_PORT_RANGE).map(|(_, socket)| socket)
+pub fn bind_with_any_port(ip_addr: IpAddr) -> io::Result<UdpSocket> {
+    let sock = udp_socket(false)?;
+    let addr = SocketAddr::new(ip_addr, 0);
+    match sock.bind(&SockAddr::from(addr)) {
+        Ok(_) => Result::Ok(sock.into()),
+        Err(err) => Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("No available UDP port: {err}"),
+        )),
+    }
 }
 
 // binds many sockets to the same port in a range
@@ -508,34 +521,37 @@ pub fn bind_common(
     let addr = SocketAddr::new(ip_addr, port);
     let sock_addr = SockAddr::from(addr);
     sock.bind(&sock_addr)
-        .and_then(|_| TcpListener::bind(&addr).map(|listener| (sock.into(), listener)))
+        .and_then(|_| TcpListener::bind(addr).map(|listener| (sock.into(), listener)))
 }
 
-pub fn bind_two_consecutive_in_range(
+pub fn bind_two_in_range_with_offset(
     ip_addr: IpAddr,
     range: PortRange,
+    offset: u16,
 ) -> io::Result<((u16, UdpSocket), (u16, UdpSocket))> {
-    let mut first: Option<UdpSocket> = None;
+    if range.1.saturating_sub(range.0) < offset {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "range too small to find two ports with the correct offset".to_string(),
+        ));
+    }
     for port in range.0..range.1 {
-        if let Ok(bind) = bind_to(ip_addr, port, false) {
-            match first {
-                Some(first_bind) => {
+        if let Ok(first_bind) = bind_to(ip_addr, port, false) {
+            if range.1.saturating_sub(port) >= offset {
+                if let Ok(second_bind) = bind_to(ip_addr, port + offset, false) {
                     return Ok((
                         (first_bind.local_addr().unwrap().port(), first_bind),
-                        (bind.local_addr().unwrap().port(), bind),
+                        (second_bind.local_addr().unwrap().port(), second_bind),
                     ));
                 }
-                None => {
-                    first = Some(bind);
-                }
+            } else {
+                break;
             }
-        } else {
-            first = None;
         }
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "couldn't find two consecutive ports in range".to_string(),
+        "couldn't find two ports with the correct offset in range".to_string(),
     ))
 }
 
@@ -662,9 +678,9 @@ mod tests {
 
     #[test]
     fn test_bind() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         assert_eq!(bind_in_range(ip_addr, (2000, 2001)).unwrap().0, 2000);
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let x = bind_to(ip_addr, 2002, true).unwrap();
         let y = bind_to(ip_addr, 2002, true).unwrap();
         assert_eq!(
@@ -681,15 +697,26 @@ mod tests {
     }
 
     #[test]
+    fn test_bind_with_any_port() {
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+        let x = bind_with_any_port(ip_addr).unwrap();
+        let y = bind_with_any_port(ip_addr).unwrap();
+        assert_ne!(
+            x.local_addr().unwrap().port(),
+            y.local_addr().unwrap().port()
+        );
+    }
+
+    #[test]
     fn test_bind_in_range_nil() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         bind_in_range(ip_addr, (2000, 2000)).unwrap_err();
         bind_in_range(ip_addr, (2000, 1999)).unwrap_err();
     }
 
     #[test]
     fn test_find_available_port_in_range() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         assert_eq!(
             find_available_port_in_range(ip_addr, (3000, 3001)).unwrap(),
             3000
@@ -703,7 +730,7 @@ mod tests {
 
     #[test]
     fn test_bind_common_in_range() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (port, _sockets) = bind_common_in_range(ip_addr, (3100, 3150)).unwrap();
         assert!((3100..3150).contains(&port));
 
@@ -713,7 +740,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_none() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
@@ -731,7 +758,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_reachable() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
         let (client_port, (client_udp_socket, client_tcp_listener)) =
@@ -755,7 +782,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_tcp_unreachable() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, _server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
@@ -778,7 +805,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_udp_unreachable() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, _server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
@@ -799,12 +826,21 @@ mod tests {
     }
 
     #[test]
-    fn test_bind_two_consecutive_in_range() {
+    fn test_bind_two_in_range_with_offset() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-        if let Ok(((port1, _), (port2, _))) = bind_two_consecutive_in_range(ip_addr, (1024, 65535))
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+        let offset = 6;
+        if let Ok(((port1, _), (port2, _))) =
+            bind_two_in_range_with_offset(ip_addr, (1024, 65535), offset)
         {
-            assert!(port2 == port1 + 1);
+            assert!(port2 == port1 + offset);
         }
+        let offset = 42;
+        if let Ok(((port1, _), (port2, _))) =
+            bind_two_in_range_with_offset(ip_addr, (1024, 65535), offset)
+        {
+            assert!(port2 == port1 + offset);
+        }
+        assert!(bind_two_in_range_with_offset(ip_addr, (1024, 1044), offset).is_err());
     }
 }

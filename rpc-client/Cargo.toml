@@ -1,0 +1,46 @@
+[package]
+name = "solana-rpc-client"
+description = "Solana RPC Client"
+documentation = "https://docs.rs/solana-rpc-client"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+base64 = { workspace = true }
+bincode = { workspace = true }
+bs58 = { workspace = true }
+indicatif = { workspace = true, optional = true }
+log = { workspace = true }
+reqwest = { workspace = true, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
+semver = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+solana-account-decoder = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-sdk = { workspace = true }
+solana-transaction-status = { workspace = true }
+solana-version = { workspace = true }
+solana-vote-program = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
+crossbeam-channel = { workspace = true }
+futures = { workspace = true }
+jsonrpc-core = { workspace = true }
+jsonrpc-http-server = { workspace = true }
+
+[features]
+default = ["spinner"]
+# Support rpc-client methods that feature a spinner progress bar for
+# command-line interfaces
+spinner = ["dep:indicatif"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

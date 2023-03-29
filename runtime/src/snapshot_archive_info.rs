@@ -1,8 +1,11 @@
 //! Information about snapshot archives
 
 use {
-    crate::snapshot_utils::{self, ArchiveFormat, Result},
-    solana_sdk::{clock::Slot, hash::Hash},
+    crate::{
+        snapshot_hash::SnapshotHash,
+        snapshot_utils::{self, ArchiveFormat, Result},
+    },
+    solana_sdk::clock::Slot,
     std::{cmp::Ordering, path::PathBuf},
 };
 
@@ -18,7 +21,7 @@ pub trait SnapshotArchiveInfoGetter {
         self.snapshot_archive_info().slot
     }
 
-    fn hash(&self) -> &Hash {
+    fn hash(&self) -> &SnapshotHash {
         &self.snapshot_archive_info().hash
     }
 
@@ -45,8 +48,8 @@ pub struct SnapshotArchiveInfo {
     /// Slot that the snapshot was made
     pub slot: Slot,
 
-    /// Hash of the accounts at this slot
-    pub hash: Hash,
+    /// Hash for the snapshot
+    pub hash: SnapshotHash,
 
     /// Archive format for the snapshot file
     pub archive_format: ArchiveFormat,

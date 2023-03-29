@@ -1,3 +1,6 @@
+//! Authenticated encryption implementation.
+//!
+//! This module is a simple wrapper of the `Aes128GcmSiv` implementation.
 #[cfg(not(target_os = "solana"))]
 use {
     aes_gcm_siv::{
@@ -15,7 +18,8 @@ use {
         signature::Signature,
         signer::{Signer, SignerError},
     },
-    std::convert::TryInto,
+    std::{convert::TryInto, fmt},
+    subtle::ConstantTimeEq,
     zeroize::Zeroize,
 };
 
@@ -71,7 +75,7 @@ impl AeKey {
 
         // Some `Signer` implementations return the default signature, which is not suitable for
         // use as key material
-        if signature == Signature::default() {
+        if bool::from(signature.as_ref().ct_eq(Signature::default().as_ref())) {
             Err(SignerError::Custom("Rejecting default signature".into()))
         } else {
             Ok(AeKey(signature.as_ref()[..16].try_into().unwrap()))
@@ -91,8 +95,8 @@ impl AeKey {
     }
 }
 
-/// For the purpose of encrypting balances for ZK-Token accounts, the nonce and ciphertext sizes
-/// should always be fixed.
+/// For the purpose of encrypting balances for the spl token accounts, the nonce and ciphertext
+/// sizes should always be fixed.
 pub type Nonce = [u8; 12];
 pub type Ciphertext = [u8; 24];
 
@@ -126,6 +130,12 @@ impl AeCiphertext {
             nonce: *nonce,
             ciphertext: *ciphertext,
         })
+    }
+}
+
+impl fmt::Display for AeCiphertext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.to_bytes()))
     }
 }
 

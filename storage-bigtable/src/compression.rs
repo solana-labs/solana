@@ -1,9 +1,9 @@
 use {
-    enum_iterator::IntoEnumIterator,
+    enum_iterator::{all, Sequence},
     std::io::{self, BufReader, Read, Write},
 };
 
-#[derive(Debug, Serialize, Deserialize, IntoEnumIterator)]
+#[derive(Debug, Serialize, Deserialize, Sequence)]
 pub enum CompressionMethod {
     NoCompression,
     Bzip2,
@@ -36,7 +36,7 @@ pub fn decompress(data: &[u8]) -> Result<Vec<u8>, io::Error> {
     let method = bincode::deserialize(&data[..method_size as usize]).map_err(|err| {
         io::Error::new(
             io::ErrorKind::Other,
-            format!("method deserialize failed: {}", err),
+            format!("method deserialize failed: {err}"),
         )
     })?;
 
@@ -76,7 +76,7 @@ pub fn compress(method: CompressionMethod, data: &[u8]) -> Result<Vec<u8>, io::E
 
 pub fn compress_best(data: &[u8]) -> Result<Vec<u8>, io::Error> {
     let mut candidates = vec![];
-    for method in CompressionMethod::into_enum_iter() {
+    for method in all::<CompressionMethod>() {
         candidates.push(compress(method, data)?);
     }
 

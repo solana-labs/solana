@@ -1,0 +1,24 @@
+[package]
+name = "solana-sbf-rust-realloc-invoke"
+documentation = "https://docs.rs/solana-sbf-rust-realloc-invoke"
+version = { workspace = true }
+description = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[features]
+default = ["program"]
+program = []
+
+[dependencies]
+solana-program = { workspace = true }
+solana-sbf-rust-realloc = { workspace = true }
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

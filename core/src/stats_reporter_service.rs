@@ -22,7 +22,7 @@ impl StatsReporterService {
     ) -> Self {
         let exit = exit.clone();
         let thread_hdl = Builder::new()
-            .name("solana-stats-reporter".to_owned())
+            .name("solStatsReport".to_owned())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     return;

@@ -234,6 +234,6 @@ mod test {
     #[test]
     fn test_slot_poh_timestamp_fmt() {
         let t = SlotPohTimestamp::default();
-        assert_eq!(format!("{}", t), "SlotPohTimestamp: start=0 end=0 full=0");
+        assert_eq!(format!("{t}"), "SlotPohTimestamp: start=0 end=0 full=0");
     }
 }

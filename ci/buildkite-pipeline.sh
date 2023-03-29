@@ -9,7 +9,13 @@ cd "$(dirname "$0")"/..
 output_file=${1:-/dev/stderr}
 
 if [[ -n $CI_PULL_REQUEST ]]; then
-  IFS=':' read -ra affected_files <<< "$(buildkite-agent meta-data get affected_files)"
+  # filter pr number from ci branch.
+  [[ $CI_BRANCH =~ pull/([0-9]+)/head ]]
+  pr_number=${BASH_REMATCH[1]}
+  echo "get affected files from PR: $pr_number"
+
+  # get affected files
+  readarray -t affected_files < <(gh pr diff --name-only "$pr_number")
   if [[ ${#affected_files[*]} -eq 0 ]]; then
     echo "Unable to determine the files affected by this PR"
     exit 1
@@ -23,6 +29,12 @@ annotate() {
     buildkite-agent annotate "$@"
   fi
 }
+
+# Assume everyting needs to be tested when this file or any Dockerfile changes
+mandatory_affected_files=()
+mandatory_affected_files+=(^ci/buildkite-pipeline.sh)
+mandatory_affected_files+=(^ci/docker-rust/Dockerfile)
+mandatory_affected_files+=(^ci/docker-rust-nightly/Dockerfile)
 
 # Checks if a CI pull request affects one or more path patterns.  Each
 # pattern argument is checked in series. If one of them found to be affected,
@@ -42,8 +54,7 @@ affects() {
     # the worse (affected)
     return 0
   fi
-  # Assume everyting needs to be tested when any Dockerfile changes
-  for pattern in ^ci/docker-rust/Dockerfile ^ci/docker-rust-nightly/Dockerfile "$@"; do
+  for pattern in "${mandatory_affected_files[@]}" "$@"; do
     if [[ ${pattern:0:1} = "!" ]]; then
       for file in "${affected_files[@]}"; do
         if [[ ! $file =~ ${pattern:1} ]]; then
@@ -103,14 +114,15 @@ command_step() {
     timeout_in_minutes: $3
     artifact_paths: "log-*.txt"
     agents:
-      - "queue=solana"
+      queue: "${4:-solana}"
 EOF
 }
 
 
 trigger_secondary_step() {
   cat  >> "$output_file" <<"EOF"
-  - trigger: "solana-secondary"
+  - name: "Trigger Build on solana-secondary"
+    trigger: "solana-secondary"
     branches: "!pull/*"
     async: true
     build:
@@ -127,7 +139,7 @@ wait_step() {
 }
 
 all_test_steps() {
-  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
+  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20 check
   wait_step
 
   # Coverage...
@@ -139,7 +151,7 @@ all_test_steps() {
              ^ci/test-coverage.sh \
              ^scripts/coverage.sh \
       ; then
-    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 50
+    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 80
     wait_step
   else
     annotate --style info --context test-coverage \
@@ -162,31 +174,35 @@ all_test_steps() {
   fi
   wait_step
 
-  # BPF test suite
+  # SBF test suite
   if affects \
              .rs$ \
              Cargo.lock$ \
              Cargo.toml$ \
              ^ci/rust-version.sh \
-             ^ci/test-stable-bpf.sh \
+             ^ci/test-stable-sbf.sh \
              ^ci/test-stable.sh \
              ^ci/test-local-cluster.sh \
              ^core/build.rs \
              ^fetch-perf-libs.sh \
              ^programs/ \
              ^sdk/ \
+             cargo-build-bpf$ \
+             cargo-test-bpf$ \
+             cargo-build-sbf$ \
+             cargo-test-sbf$ \
       ; then
     cat >> "$output_file" <<"EOF"
-  - command: "ci/test-stable-bpf.sh"
-    name: "stable-bpf"
+  - command: "ci/test-stable-sbf.sh"
+    name: "stable-sbf"
     timeout_in_minutes: 35
-    artifact_paths: "bpf-dumps.tar.bz2"
+    artifact_paths: "sbf-dumps.tar.bz2"
     agents:
-      - "queue=gcp"
+      queue: "solana"
 EOF
   else
     annotate --style info \
-      "Stable-BPF skipped as no relevant files were modified"
+      "Stable-SBF skipped as no relevant files were modified"
   fi
 
   # Perf test suite
@@ -206,10 +222,10 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-perf.sh"
     name: "stable-perf"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 35
     artifact_paths: "log-*.txt"
     agents:
-      - "queue=cuda"
+      queue: "cuda"
 EOF
   else
     annotate --style info \
@@ -229,15 +245,14 @@ EOF
              ^fetch-perf-libs.sh \
              ^programs/ \
              ^sdk/ \
-             ^scripts/build-downstream-projects.sh \
+             cargo-build-bpf$ \
+             cargo-test-bpf$ \
+             cargo-build-sbf$ \
+             cargo-test-sbf$ \
+             ^ci/downstream-projects \
+             .buildkite/scripts/build-downstream-projects.sh \
       ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "scripts/build-downstream-projects.sh"
-    name: "downstream-projects"
-    timeout_in_minutes: 30
-    agents:
-      - "queue=solana"
-EOF
+    .buildkite/scripts/build-downstream-projects.sh >> "$output_file"
   else
     annotate --style info \
       "downstream-projects skipped as no relevant files were modified"
@@ -288,22 +303,45 @@ EOF
 }
 
 pull_or_push_steps() {
-  command_step sanity "ci/test-sanity.sh" 5
+  command_step sanity "ci/test-sanity.sh" 5 check
   wait_step
 
   # Check for any .sh file changes
   if affects .sh$; then
-    command_step shellcheck "ci/shellcheck.sh" 5
+    command_step shellcheck "ci/shellcheck.sh" 5 check
     wait_step
+  fi
+
+  # Version bump PRs are an edge case that can skip most of the CI steps
+  if affects .toml$ && affects .lock$ && ! affects_other_than .toml$ .lock$; then
+    optional_old_version_number=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
+      grep -e "^-version" | sed  's/-version = "\(.*\)"/\1/')
+    echo "optional_old_version_number: ->$optional_old_version_number<-"
+    new_version_number=$(grep -e  "^version = " validator/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+    echo "new_version_number: ->$new_version_number<-"
+
+    # Every line in a version bump diff will match one of these patterns. Since we're using grep -v the output is the
+    # lines that don't match. Any diff that produces output here is not a version bump.
+    # | cat is a no-op. If this pull request is a version bump then grep will output no lines and have an exit code of 1.
+    # Piping the output to cat prevents that non-zero exit code from exiting this script
+    diff_other_than_version_bump=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD | \
+      grep -vE "^ |^@@ |^--- |^\+\+\+ |^index |^diff |^-( \")?solana.*$optional_old_version_number|^\+( \")?solana.*$new_version_number|^-version|^\+version"|cat)
+    echo "diff_other_than_version_bump: ->$diff_other_than_version_bump<-"
+
+    if [ -z "$diff_other_than_version_bump" ]; then
+      echo "Diff only contains version bump."
+      command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
+      exit 0
+    fi
   fi
 
   # Run the full test suite by default, skipping only if modifications are local
   # to some particular areas of the tree
-  if affects_other_than ^.buildkite ^.mergify .md$ ^docs/ ^web3.js/ ^explorer/ ^.gitbook; then
+  if affects_other_than ^.buildkite ^.mergify .md$ ^docs/ ^.gitbook; then
     all_test_steps
   fi
 
-  # web3.js, explorer and docs changes run on Travis or Github actions...
+  # docs changes run on Travis or Github actions...
 }
 
 

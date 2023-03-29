@@ -1,0 +1,28 @@
+[package]
+name = "solana-sbf-rust-simulation"
+description = "Solana SBF Program Simulation Differences"
+documentation = "https://docs.rs/solana-sbf-rust-simulation"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[features]
+test-bpf = []
+
+[dependencies]
+solana-program = { workspace = true }
+
+[dev-dependencies]
+solana-logger = { workspace = true }
+solana-program-test = { workspace = true }
+solana-sdk = { workspace = true }
+solana-validator = { workspace = true }
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

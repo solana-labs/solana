@@ -16,7 +16,7 @@ use {
 
 type LockedBucket<T> = RwLock<Option<Bucket<T>>>;
 
-pub struct BucketApi<T: Clone + Copy> {
+pub struct BucketApi<T: Clone + Copy + 'static> {
     drives: Arc<Vec<PathBuf>>,
     max_search: MaxSearch,
     pub stats: Arc<BucketMapStats>,
@@ -137,6 +137,9 @@ impl<T: Clone + Copy> BucketApi<T> {
         value: (&[T], RefCount),
     ) -> Result<(), BucketMapError> {
         let mut bucket = self.get_write_bucket();
-        bucket.as_mut().unwrap().try_write(pubkey, value.0, value.1)
+        bucket
+            .as_mut()
+            .unwrap()
+            .try_write(pubkey, value.0.iter(), value.0.len(), value.1)
     }
 }

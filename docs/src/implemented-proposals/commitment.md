@@ -4,7 +4,7 @@ title: Commitment
 
 The commitment metric aims to give clients a measure of the network confirmation
 and stake levels on a particular block. Clients can then use this information to
-derive their own measures of commitment.
+derive their own [measures of commitment](../cluster/commitments.md).
 
 # Calculation RPC
 
@@ -40,7 +40,7 @@ This computation is performed on a votable candidate bank `b` as follows.
    }
 ```
 
-where `f` is some accumulation function that modifies the `Stake` entry
+Where `f` is some accumulation function that modifies the `Stake` entry
 for slot `a` with some data derivable from vote `v` and `vote_account`
 (stake, lockout, etc.). Note here that the `ancestors` here only includes
 slots that are present in the current status cache. Signatures for banks earlier

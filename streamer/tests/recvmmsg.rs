@@ -22,7 +22,7 @@ pub fn test_recv_mmsg_batch_size() {
     (0..1000).for_each(|_| {
         for _ in 0..sent {
             let data = [0; PACKET_DATA_SIZE];
-            sender.send_to(&data[..], &addr).unwrap();
+            sender.send_to(&data[..], addr).unwrap();
         }
         let mut packets = vec![Packet::default(); TEST_BATCH_SIZE];
         let now = Instant::now();
@@ -38,7 +38,7 @@ pub fn test_recv_mmsg_batch_size() {
     (0..1000).for_each(|_| {
         for _ in 0..sent {
             let data = [0; PACKET_DATA_SIZE];
-            sender.send_to(&data[..], &addr).unwrap();
+            sender.send_to(&data[..], addr).unwrap();
         }
         let mut packets = vec![Packet::default(); 4];
         let mut recv = 0;
@@ -50,7 +50,7 @@ pub fn test_recv_mmsg_batch_size() {
             }
             packets
                 .iter_mut()
-                .for_each(|pkt| pkt.meta = Meta::default());
+                .for_each(|pkt| *pkt.meta_mut() = Meta::default());
         }
         elapsed_in_small_batch += now.elapsed().as_nanos();
         assert_eq!(TEST_BATCH_SIZE, recv);

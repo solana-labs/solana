@@ -3,8 +3,8 @@ use {
     solana_sdk::{
         clock::{Epoch, Slot},
         pubkey::Pubkey,
+        vote::state::{BlockTimestamp, Lockout, VoteState},
     },
-    solana_vote_program::vote_state::{BlockTimestamp, Lockout, VoteState},
 };
 
 pub fn parse_vote(data: &[u8]) -> Result<VoteAccountType, ParseAccountError> {
@@ -22,8 +22,8 @@ pub fn parse_vote(data: &[u8]) -> Result<VoteAccountType, ParseAccountError> {
         .votes
         .iter()
         .map(|lockout| UiLockout {
-            slot: lockout.slot,
-            confirmation_count: lockout.confirmation_count,
+            slot: lockout.slot(),
+            confirmation_count: lockout.confirmation_count(),
         })
         .collect();
     let authorized_voters = vote_state
@@ -92,8 +92,8 @@ struct UiLockout {
 impl From<&Lockout> for UiLockout {
     fn from(lockout: &Lockout) -> Self {
         Self {
-            slot: lockout.slot,
-            confirmation_count: lockout.confirmation_count,
+            slot: lockout.slot(),
+            confirmation_count: lockout.confirmation_count(),
         }
     }
 }
@@ -123,7 +123,7 @@ struct UiEpochCredits {
 
 #[cfg(test)]
 mod test {
-    use {super::*, solana_vote_program::vote_state::VoteStateVersions};
+    use {super::*, solana_sdk::vote::state::VoteStateVersions};
 
     #[test]
     fn test_parse_vote() {

@@ -2,6 +2,8 @@
 title: Embedding the Move Language
 ---
 
+### This document is outdated and a new approach to support 'move' is in the works.
+
 ## Problem
 
 Solana enables developers to write on-chain programs in general purpose programming languages such as C or Rust, but those programs contain Solana-specific mechanisms. For example, there isn't another chain that asks developers to create a Rust module with a `process_instruction(KeyedAccounts)` function. Whenever practical, Solana should offer application developers more portable options.
@@ -34,4 +36,4 @@ All data accounts owned by Move modules must set their owners to the loader, `MO
 
 ### Interacting with Solana programs
 
-To invoke instructions in non-Move programs, Solana would need to extend the Move VM with a `process_instruction()` system call. It would work the same as `process_instruction()` Rust BPF programs.
+To invoke instructions in non-Move programs, Solana would need to extend the Move VM with a `process_instruction()` system call. It would work the same as `process_instruction()` Rust SBF programs.

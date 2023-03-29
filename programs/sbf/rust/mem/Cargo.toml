@@ -1,0 +1,29 @@
+[package]
+name = "solana-sbf-rust-mem"
+documentation = "https://docs.rs/solana-sbf-rust-mem"
+version = { workspace = true }
+description = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[features]
+no-entrypoint = []
+test-bpf = []
+dummy-for-ci-check = ["test-bpf"]
+
+[dependencies]
+solana-program = { workspace = true }
+
+[dev-dependencies]
+solana-program-runtime = { workspace = true }
+solana-program-test = { workspace = true }
+solana-sdk = { workspace = true }
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

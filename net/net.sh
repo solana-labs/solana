@@ -72,7 +72,8 @@ Operate a configured testnet
    --faucet-lamports NUM_LAMPORTS_TO_MINT
                                       - Override the default 500000000000000000 lamports minted in genesis
    --extra-primordial-stakes NUM_EXTRA_PRIMORDIAL_STAKES
-                                      - Number of extra nodes to be initially staked in genesis.
+                                      - Number of nodes to be initially staked in genesis.
+                                        Gives extra stake in genesis to NUM_EXTRA_PRIMORDIAL_STAKES many nodes.
                                         Implies --wait-for-supermajority 1 --async-node-init and the supermajority
                                         wait slot may be overridden with the corresponding flag
    --internal-nodes-stake-lamports NUM_LAMPORTS_PER_NODE
@@ -107,6 +108,16 @@ Operate a configured testnet
                                       - Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis.
    --full-rpc
                                       - Support full RPC services on all nodes
+
+   --tpu-disable-quic
+                                      - Disable quic for tpu packet forwarding
+
+   --tpu-enable-udp
+                                      - Enable UDP for tpu transactions
+
+   --client-type
+                                      - Specify backend client type for bench-tps. Valid options are (thin-client|rpc-client|tpu-client), thin-client is default
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -135,7 +146,7 @@ Operate a configured testnet
  startclients-specific options:
    $CLIENT_OPTIONS
 
-Note: if RUST_LOG is set in the environment it will be propogated into the
+Note: if RUST_LOG is set in the environment it will be propagated into the
       network nodes.
 EOF
   exit $exitcode
@@ -193,9 +204,13 @@ build() {
       buildVariant=--debug
     fi
 
+    if $profileBuild; then
+      profilerFlags="RUSTFLAGS='-C force-frame-pointers=y -g ${RUSTFLAGS}'"
+    fi
+
     $MAYBE_DOCKER bash -c "
       set -ex
-      scripts/cargo-install-all.sh farf $buildVariant --validator-only
+      $profilerFlags scripts/cargo-install-all.sh farf $buildVariant --validator-only
     "
   )
 
@@ -309,13 +324,15 @@ startBootstrapLeader() {
          $nodeIndex \
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAllowPrivateAddr $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$maybeFullRpc\" \
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+         \"$disableQuic\" \
+         \"$enableUdp\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -358,7 +375,7 @@ startNode() {
         timeout 30s scp "${sshOptions[@]}" "$localArchive" "$ipAddress:letsencrypt.tgz"
       fi
       ssh "${sshOptions[@]}" -n "$ipAddress" \
-        "sudo -H /certbot-restore.sh $letsEncryptDomainName maintainers@solana.foundation"
+        "sudo -H /certbot-restore.sh $letsEncryptDomainName maintainers@solanalabs.com"
       rm -f letsencrypt.tgz
       timeout 30s scp "${sshOptions[@]}" "$ipAddress:/letsencrypt.tgz" letsencrypt.tgz
       test -s letsencrypt.tgz # Ensure non-empty before overwriting $localArchive
@@ -381,13 +398,15 @@ startNode() {
          $nodeIndex \
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAllowPrivateAddr $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$maybeFullRpc\" \
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+         \"$disableQuic\" \
+         \"$enableUdp\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -410,7 +429,7 @@ startClient() {
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
-      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" $clientIndex"
+      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" $clientIndex $clientType"
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -591,7 +610,7 @@ deploy() {
     if $bootstrapLeader; then
       SECONDS=0
       declare bootstrapNodeDeployTime=
-      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-validator-$ipAddress.log"
+      startBootstrapLeader "$nodeAddress" "$nodeIndex" "$netLogDir/bootstrap-validator-$ipAddress.log"
       bootstrapNodeDeployTime=$SECONDS
       $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
 
@@ -599,7 +618,7 @@ deploy() {
       SECONDS=0
       pids=()
     else
-      startNode "$ipAddress" $nodeType $nodeIndex
+      startNode "$ipAddress" "$nodeType" "$nodeIndex"
 
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
@@ -779,10 +798,10 @@ maybeLimitLedgerSize=""
 maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
 maybeWaitForSupermajority=""
-maybeAllowPrivateAddr=""
 maybeAccountsDbSkipShrink=""
 maybeSkipRequireTower=""
 debugBuild=false
+profileBuild=false
 doBuild=true
 gpuMode=auto
 netemPartition=""
@@ -795,6 +814,9 @@ maybeWarpSlot=
 maybeFullRpc=false
 waitForNodeInit=true
 extraPrimordialStakes=0
+disableQuic=false
+enableUdp=false
+clientType=thin-client
 
 command=$1
 [[ -n $command ]] || usage
@@ -869,6 +891,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --debug ]]; then
       debugBuild=true
       shift 1
+    elif [[ $1 = --profile ]]; then
+      profileBuild=true
+      shift 1
     elif [[ $1 = --partition ]]; then
       netemPartition=$2
       shift 2
@@ -904,6 +929,12 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --full-rpc ]]; then
       maybeFullRpc=true
       shift 1
+    elif [[ $1 == --tpu-disable-quic ]]; then
+      disableQuic=true
+      shift 1
+    elif [[ $1 == --tpu-enable-udp ]]; then
+      enableUdp=true
+      shift 1
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false
       shift 1
@@ -911,9 +942,7 @@ while [[ -n $1 ]]; do
       extraPrimordialStakes=$2
       shift 2
     elif [[ $1 = --allow-private-addr ]]; then
-      # May also be added by loadConfigFile if 'gce.sh create' was invoked
-      # without -P.
-      maybeAllowPrivateAddr="$1"
+      echo "--allow-private-addr is a default value"
       shift 1
     elif [[ $1 = --accounts-db-skip-shrink ]]; then
       maybeAccountsDbSkipShrink="$1"
@@ -921,6 +950,17 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-require-tower ]]; then
       maybeSkipRequireTower="$1"
       shift 1
+    elif [[ $1 = --client-type ]]; then
+      clientType=$2
+      case "$clientType" in
+        thin-client|tpu-client|rpc-client)
+          ;;
+        *)
+          echo "Unexpected client type: \"$clientType\""
+          exit 1
+          ;;
+      esac
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -1106,7 +1146,7 @@ startnode)
   nodeType=
   nodeIndex=
   getNodeType
-  startNode "$nodeAddress" $nodeType $nodeIndex
+  startNode "$nodeAddress" "$nodeType" "$nodeIndex"
   ;;
 startclients)
   startClients

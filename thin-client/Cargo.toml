@@ -1,0 +1,25 @@
+[package]
+name = "solana-thin-client"
+description = "Solana Thin Client"
+documentation = "https://docs.rs/solana-thin-client"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bincode = { workspace = true }
+log = { workspace = true }
+rayon = { workspace = true }
+solana-connection-cache = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-sdk = { workspace = true }
+
+[dev-dependencies]
+solana-logger = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

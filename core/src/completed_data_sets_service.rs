@@ -1,3 +1,9 @@
+//! [`CompletedDataSetsService`] is a hub, that runs different operations when a "completed data
+//! set", also known as a [`Vec<Entry>`], is received by the validator.
+//!
+//! Currently, `WindowService` sends [`CompletedDataSetInfo`]s via a `completed_sets_receiver`
+//! provided to the [`CompletedDataSetsService`].
+
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_entry::entry::Entry,
@@ -31,7 +37,7 @@ impl CompletedDataSetsService {
     ) -> Self {
         let exit = exit.clone();
         let thread_hdl = Builder::new()
-            .name("completed-data-set-service".to_string())
+            .name("solComplDataSet".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     break;

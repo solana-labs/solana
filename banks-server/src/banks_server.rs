@@ -3,12 +3,13 @@ use {
     crossbeam_channel::{unbounded, Receiver, Sender},
     futures::{future, prelude::stream::StreamExt},
     solana_banks_interface::{
-        Banks, BanksRequest, BanksResponse, BanksTransactionResultWithSimulation,
-        TransactionConfirmationStatus, TransactionSimulationDetails, TransactionStatus,
+        Banks, BanksRequest, BanksResponse, BanksTransactionResultWithMetadata,
+        BanksTransactionResultWithSimulation, TransactionConfirmationStatus, TransactionMetadata,
+        TransactionSimulationDetails, TransactionStatus,
     },
     solana_client::connection_cache::ConnectionCache,
     solana_runtime::{
-        bank::{Bank, TransactionSimulationResult},
+        bank::{Bank, TransactionExecutionResult, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
     },
@@ -22,7 +23,7 @@ use {
         message::{Message, SanitizedMessage},
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, SanitizedTransaction, Transaction},
+        transaction::{self, MessageHash, SanitizedTransaction, VersionedTransaction},
     },
     solana_send_transaction_service::{
         send_transaction_service::{SendTransactionService, TransactionInfo},
@@ -105,7 +106,7 @@ impl BanksServer {
         }
         let server_bank_forks = bank_forks.clone();
         Builder::new()
-            .name("solana-bank-forks-client".to_string())
+            .name("solBankForksCli".to_string())
             .spawn(move || Self::run(server_bank_forks, transaction_receiver))
             .unwrap();
         Self::new(
@@ -150,24 +151,25 @@ impl BanksServer {
 }
 
 fn verify_transaction(
-    transaction: &Transaction,
+    transaction: &SanitizedTransaction,
     feature_set: &Arc<FeatureSet>,
 ) -> transaction::Result<()> {
-    if let Err(err) = transaction.verify() {
-        Err(err)
-    } else if let Err(err) = transaction.verify_precompiles(feature_set) {
-        Err(err)
-    } else {
-        Ok(())
-    }
+    transaction.verify()?;
+    transaction.verify_precompiles(feature_set)?;
+    Ok(())
 }
 
 fn simulate_transaction(
     bank: &Bank,
-    transaction: Transaction,
+    transaction: VersionedTransaction,
 ) -> BanksTransactionResultWithSimulation {
-    let sanitized_transaction = match SanitizedTransaction::try_from_legacy_transaction(transaction)
-    {
+    let sanitized_transaction = match SanitizedTransaction::try_create(
+        transaction,
+        MessageHash::Compute,
+        Some(false), // is_simple_vote_tx
+        bank,
+        true, // require_static_program_ids
+    ) {
         Err(err) => {
             return BanksTransactionResultWithSimulation {
                 result: Some(Err(err)),
@@ -196,8 +198,8 @@ fn simulate_transaction(
 
 #[tarpc::server]
 impl Banks for BanksServer {
-    async fn send_transaction_with_context(self, _: Context, transaction: Transaction) {
-        let blockhash = &transaction.message.recent_blockhash;
+    async fn send_transaction_with_context(self, _: Context, transaction: VersionedTransaction) {
+        let blockhash = transaction.message.recent_blockhash();
         let last_valid_block_height = self
             .bank_forks
             .read()
@@ -282,7 +284,7 @@ impl Banks for BanksServer {
     async fn process_transaction_with_preflight_and_commitment_and_context(
         self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> BanksTransactionResultWithSimulation {
         let mut simulation_result =
@@ -300,7 +302,7 @@ impl Banks for BanksServer {
     async fn simulate_transaction_with_commitment_and_context(
         self,
         _: Context,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> BanksTransactionResultWithSimulation {
         simulate_transaction(&self.bank(commitment), transaction)
@@ -309,21 +311,33 @@ impl Banks for BanksServer {
     async fn process_transaction_with_commitment_and_context(
         self,
         _: Context,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>> {
-        if let Err(err) = verify_transaction(&transaction, &self.bank(commitment).feature_set) {
+        let bank = self.bank(commitment);
+        let sanitized_transaction = match SanitizedTransaction::try_create(
+            transaction.clone(),
+            MessageHash::Compute,
+            Some(false), // is_simple_vote_tx
+            bank.as_ref(),
+            true, // require_static_program_ids
+        ) {
+            Ok(tx) => tx,
+            Err(err) => return Some(Err(err)),
+        };
+
+        if let Err(err) = verify_transaction(&sanitized_transaction, &bank.feature_set) {
             return Some(Err(err));
         }
 
-        let blockhash = &transaction.message.recent_blockhash;
+        let blockhash = transaction.message.recent_blockhash();
         let last_valid_block_height = self
             .bank(commitment)
             .get_blockhash_last_valid_block_height(blockhash)
             .unwrap();
-        let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
+        let signature = sanitized_transaction.signature();
         let info = TransactionInfo::new(
-            signature,
+            *signature,
             serialize(&transaction).unwrap(),
             last_valid_block_height,
             None,
@@ -331,8 +345,32 @@ impl Banks for BanksServer {
             None,
         );
         self.transaction_sender.send(info).unwrap();
-        self.poll_signature_status(&signature, blockhash, last_valid_block_height, commitment)
+        self.poll_signature_status(signature, blockhash, last_valid_block_height, commitment)
             .await
+    }
+
+    async fn process_transaction_with_metadata_and_context(
+        self,
+        _: Context,
+        transaction: VersionedTransaction,
+    ) -> BanksTransactionResultWithMetadata {
+        let bank = self.bank_forks.read().unwrap().working_bank();
+        match bank.process_transaction_with_metadata(transaction) {
+            TransactionExecutionResult::NotExecuted(error) => BanksTransactionResultWithMetadata {
+                result: Err(error),
+                metadata: None,
+            },
+            TransactionExecutionResult::Executed { details, .. } => {
+                BanksTransactionResultWithMetadata {
+                    result: details.status,
+                    metadata: Some(TransactionMetadata {
+                        compute_units_consumed: details.executed_units,
+                        log_messages: details.log_messages.unwrap_or_default(),
+                        return_data: details.return_data,
+                    }),
+                }
+            }
+        }
     }
 
     async fn get_account_with_commitment_and_context(
@@ -407,7 +445,7 @@ pub async fn start_tcp_server(
             t.as_ref()
                 .peer_addr()
                 .map(|x| x.ip())
-                .unwrap_or_else(|_| Ipv4Addr::new(0, 0, 0, 0).into())
+                .unwrap_or_else(|_| Ipv4Addr::UNSPECIFIED.into())
         })
         // serve is generated by the service attribute. It takes as input any type implementing
         // the generated Banks trait.

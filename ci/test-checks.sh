@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# To prevent usange of `./cargo` without `nightly`
+# Introduce cargoNighlty and disable warning to use word splitting
+# shellcheck disable=SC2086
 
 set -e
 
@@ -8,7 +11,7 @@ source ci/_
 source ci/rust-version.sh stable
 source ci/rust-version.sh nightly
 eval "$(ci/channel-info.sh)"
-cargo="$(readlink -f "./cargo")"
+cargoNightly="$(readlink -f "./cargo") nightly"
 
 scripts/increment-cargo-version.sh check
 
@@ -17,7 +20,11 @@ scripts/increment-cargo-version.sh check
   _ scripts/cargo-for-all-lock-files.sh tree >/dev/null
   set +e
   if ! _ git diff --exit-code; then
-    echo -e "\nError: Uncommitted Cargo.lock changes" 1>&2
+    cat <<EOF 1>&2
+
+Error: Uncommitted Cargo.lock changes.
+Run './scripts/cargo-for-all-lock-files.sh tree' and commit the result.
+EOF
     exit 1
   fi
 )
@@ -29,14 +36,14 @@ echo --- build environment
   rustup run "$rust_stable" rustc --version --verbose
   rustup run "$rust_nightly" rustc --version --verbose
 
-  "$cargo" stable --version --verbose
-  "$cargo" nightly --version --verbose
+  cargo --version --verbose
+  $cargoNightly --version --verbose
 
-  "$cargo" stable clippy --version --verbose
-  "$cargo" nightly clippy --version --verbose
+  cargo clippy --version --verbose
+  $cargoNightly clippy --version --verbose
 
   # audit is done only with "$cargo stable"
-  "$cargo" stable audit --version
+  cargo audit --version
 
   grcov --version
 )
@@ -44,10 +51,12 @@ echo --- build environment
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings -A incomplete_features"
 
+# run cargo check for all rust files in this monorepo for faster turnaround in
+# case of any compilation/build error for nightly
+
 # Only force up-to-date lock files on edge
 if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
-  # Exclude --benches as it's not available in rust stable yet
-  if _ scripts/cargo-for-all-lock-files.sh stable check --locked --tests --bins --examples; then
+  if _ scripts/cargo-for-all-lock-files.sh "+${rust_nightly}" check --locked --workspace --all-targets --features dummy-for-ci-check; then
     true
   else
     check_status=$?
@@ -56,20 +65,28 @@ if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
     echo "$0:   [tree (for outdated Cargo.lock sync)|check (for compilation error)|update -p foo --precise x.y.z (for your Cargo.toml update)] ..." >&2
     exit "$check_status"
   fi
-
-   # Ensure nightly and --benches
-  _ scripts/cargo-for-all-lock-files.sh nightly check --locked --all-targets
 else
   echo "Note: cargo-for-all-lock-files.sh skipped because $CI_BASE_BRANCH != $EDGE_CHANNEL"
 fi
 
  _ ci/order-crates-for-publishing.py
 
-# -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
-# run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
- _ scripts/cargo-for-all-lock-files.sh -- nightly clippy -Zunstable-options --all-targets -- --deny=warnings --deny=clippy::integer_arithmetic
+nightly_clippy_allows=()
 
-_ scripts/cargo-for-all-lock-files.sh -- nightly fmt --all -- --check
+# run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
+ _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
+   --deny=warnings \
+   --deny=clippy::integer_arithmetic \
+   "${nightly_clippy_allows[@]}"
+
+if [[ -n $CI ]]; then
+  # exclude from printing "Checking xxx ..."
+  _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" sort --workspace --check > /dev/null
+else
+  _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" sort --workspace --check
+fi
+
+_ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" fmt --all -- --check
 
  _ ci/do-audit.sh
 

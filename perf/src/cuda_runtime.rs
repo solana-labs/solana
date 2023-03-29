@@ -12,6 +12,7 @@ use {
     },
     rand::{seq::SliceRandom, Rng},
     rayon::prelude::*,
+    serde::{Deserialize, Serialize},
     std::{
         ops::{Index, IndexMut},
         os::raw::c_int,
@@ -33,10 +34,7 @@ fn pin<T>(_mem: &mut Vec<T>) {
         };
         assert!(
             err == CUDA_SUCCESS,
-            "cudaHostRegister error: {} ptr: {:?} bytes: {}",
-            err,
-            ptr,
-            size
+            "cudaHostRegister error: {err} ptr: {ptr:?} bytes: {size}"
         );
     }
 }
@@ -48,9 +46,7 @@ fn unpin<T>(_mem: *mut T) {
         let err = unsafe { (api.cuda_host_unregister)(_mem as *mut c_void) };
         assert!(
             err == CUDA_SUCCESS,
-            "cudaHostUnregister returned: {} ptr: {:?}",
-            err,
-            _mem
+            "cudaHostUnregister returned: {err} ptr: {_mem:?}"
         );
     }
 }
@@ -58,11 +54,12 @@ fn unpin<T>(_mem: *mut T) {
 // A vector wrapper where the underlying memory can be
 // page-pinned. Controlled by flags in case user only wants
 // to pin in certain circumstances.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct PinnedVec<T: Default + Clone + Sized> {
     x: Vec<T>,
     pinned: bool,
     pinnable: bool,
+    #[serde(skip)]
     recycler: Weak<RecyclerX<PinnedVec<T>>>,
 }
 

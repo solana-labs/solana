@@ -15,7 +15,7 @@ use {
     solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule_cache::LeaderScheduleCache,
-        shred::Shredder,
+        shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
     },
     solana_measure::measure::Measure,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -28,7 +28,8 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        net::UdpSocket,
+        iter::repeat_with,
+        net::{Ipv4Addr, UdpSocket},
         sync::{
             atomic::{AtomicUsize, Ordering},
             Arc, RwLock,
@@ -47,28 +48,30 @@ use {
 // threads loop indefinitely.
 #[ignore]
 #[bench]
-#[allow(clippy::same_item_push)]
 fn bench_retransmitter(bencher: &mut Bencher) {
     solana_logger::setup();
-    let cluster_info = ClusterInfo::new(
-        Node::new_localhost().info,
-        Arc::new(Keypair::new()),
-        SocketAddrSpace::Unspecified,
-    );
+    let cluster_info = {
+        let keypair = Arc::new(Keypair::new());
+        let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+        ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+    };
     const NUM_PEERS: usize = 4;
-    let mut peer_sockets = Vec::new();
-    for _ in 0..NUM_PEERS {
+    let peer_sockets: Vec<_> = repeat_with(|| {
         let id = Pubkey::new_unique();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
-        contact_info.tvu = socket.local_addr().unwrap();
-        contact_info.tvu.set_ip("127.0.0.1".parse().unwrap());
-        contact_info.tvu_forwards = contact_info.tvu;
-        info!("local: {:?}", contact_info.tvu);
+        let port = socket.local_addr().unwrap().port();
+        contact_info.set_tvu((Ipv4Addr::LOCALHOST, port)).unwrap();
+        contact_info
+            .set_tvu_forwards(contact_info.tvu().unwrap())
+            .unwrap();
+        info!("local: {:?}", contact_info.tvu().unwrap());
         cluster_info.insert_info(contact_info);
         socket.set_nonblocking(true).unwrap();
-        peer_sockets.push(socket);
-    }
+        socket
+    })
+    .take(NUM_PEERS)
+    .collect();
     let peer_sockets = Arc::new(peer_sockets);
     let cluster_info = Arc::new(cluster_info);
 
@@ -85,7 +88,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
 
     let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
-    // To work reliably with higher values, this needs larger udp rmem size
+    // To work reliably with higher values, this needs larger udp mem size
     let entries: Vec<_> = (0..5)
         .map(|_| {
             let keypair0 = Keypair::new();
@@ -101,9 +104,14 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let parent = 0;
     let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
     let (mut data_shreds, _) = shredder.entries_to_shreds(
-        &keypair, &entries, true, // is_last_in_slot
+        &keypair,
+        &entries,
+        true, // is_last_in_slot
         0,    // next_shred_index
         0,    // next_code_index
+        true, // merkle_variant
+        &ReedSolomonCache::default(),
+        &mut ProcessShredsStats::default(),
     );
 
     let num_packets = data_shreds.len();
@@ -152,7 +160,8 @@ fn bench_retransmitter(bencher: &mut Bencher) {
             shred.set_index(index);
             index += 1;
             index %= 200;
-            let _ = shreds_sender.send(vec![shred.clone()]);
+            let shred = shred.payload().clone();
+            let _ = shreds_sender.send(vec![shred]);
         }
         slot += 1;
 

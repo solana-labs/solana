@@ -23,12 +23,12 @@ fn bucket_map_test_mt() {
         drives: Some(paths.clone()),
         ..BucketMapConfig::default()
     });
-    (0..threads).into_iter().into_par_iter().for_each(|_| {
+    (0..threads).into_par_iter().for_each(|_| {
         let key = Pubkey::new_unique();
         index.update(&key, |_| Some((vec![0u64], 0)));
     });
     let mut timer = Measure::start("bucket_map_test_mt");
-    (0..threads).into_iter().into_par_iter().for_each(|_| {
+    (0..threads).into_par_iter().for_each(|_| {
         for _ in 0..items {
             let key = Pubkey::new_unique();
             let ix: u64 = index.bucket_ix(&key) as u64;

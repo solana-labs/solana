@@ -80,20 +80,20 @@ impl CompiledKeys {
             .chain(
                 key_meta_map
                     .iter()
-                    .filter_map(|(key, meta)| (meta.is_signer && meta.is_writable).then(|| *key)),
+                    .filter_map(|(key, meta)| (meta.is_signer && meta.is_writable).then_some(*key)),
             )
             .collect();
         let readonly_signer_keys: Vec<Pubkey> = key_meta_map
             .iter()
-            .filter_map(|(key, meta)| (meta.is_signer && !meta.is_writable).then(|| *key))
+            .filter_map(|(key, meta)| (meta.is_signer && !meta.is_writable).then_some(*key))
             .collect();
         let writable_non_signer_keys: Vec<Pubkey> = key_meta_map
             .iter()
-            .filter_map(|(key, meta)| (!meta.is_signer && meta.is_writable).then(|| *key))
+            .filter_map(|(key, meta)| (!meta.is_signer && meta.is_writable).then_some(*key))
             .collect();
         let readonly_non_signer_keys: Vec<Pubkey> = key_meta_map
             .iter()
-            .filter_map(|(key, meta)| (!meta.is_signer && !meta.is_writable).then(|| *key))
+            .filter_map(|(key, meta)| (!meta.is_signer && !meta.is_writable).then_some(*key))
             .collect();
 
         let signers_len = writable_signer_keys
@@ -160,7 +160,7 @@ impl CompiledKeys {
         for search_key in self
             .key_meta_map
             .iter()
-            .filter_map(|(key, meta)| key_meta_filter(meta).then(|| key))
+            .filter_map(|(key, meta)| key_meta_filter(meta).then_some(key))
         {
             for (key_index, key) in lookup_table_addresses.iter().enumerate() {
                 if key == search_key {

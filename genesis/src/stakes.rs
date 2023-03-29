@@ -183,8 +183,8 @@ mod tests {
         assert_eq!(
             genesis_config
                 .accounts
-                .iter()
-                .map(|(_pubkey, account)| account.lamports)
+                .values()
+                .map(|account| account.lamports)
                 .sum::<u64>(),
             total_lamports,
         );
@@ -216,7 +216,7 @@ mod tests {
     //        print(
     //            "\n\"{}\", // {:?}",
     //            hex,
-    //            Pubkey::new(&hex::decode(hex).unwrap())
+    //            Pubkey::try_from(&hex::decode(hex).unwrap()).unwrap()
     //        );
     //    });
     //    println();

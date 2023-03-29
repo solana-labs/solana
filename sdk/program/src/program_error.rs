@@ -17,7 +17,7 @@ pub enum ProgramError {
     /// or serialized to a u32 integer.
     #[error("Custom program error: {0:#x}")]
     Custom(u32),
-    #[error("The arguments provided to a program instruction where invalid")]
+    #[error("The arguments provided to a program instruction were invalid")]
     InvalidArgument,
     #[error("An instruction's data contents was invalid")]
     InvalidInstructionData,
@@ -51,10 +51,14 @@ pub enum ProgramError {
     UnsupportedSysvar,
     #[error("Provided owner is not allowed")]
     IllegalOwner,
-    #[error("Account data allocation exceeded the maximum accounts data size limit")]
-    MaxAccountsDataSizeExceeded,
-    #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
-    ActiveVoteAccountClose,
+    #[error("Accounts data allocations exceeded the maximum allowed per transaction")]
+    MaxAccountsDataAllocationsExceeded,
+    #[error("Account data reallocation was invalid")]
+    InvalidRealloc,
+    #[error("Instruction trace length exceeded the maximum allowed per transaction")]
+    MaxInstructionTraceLengthExceeded,
+    #[error("Builtin programs must consume compute units")]
+    BuiltinProgramsMustConsumeComputeUnits,
 }
 
 pub trait PrintProgramError {
@@ -93,8 +97,16 @@ impl PrintProgramError for ProgramError {
             Self::AccountNotRentExempt => msg!("Error: AccountNotRentExempt"),
             Self::UnsupportedSysvar => msg!("Error: UnsupportedSysvar"),
             Self::IllegalOwner => msg!("Error: IllegalOwner"),
-            Self::MaxAccountsDataSizeExceeded => msg!("Error: MaxAccountsDataSizeExceeded"),
-            Self::ActiveVoteAccountClose => msg!("Error: ActiveVoteAccountClose"),
+            Self::MaxAccountsDataAllocationsExceeded => {
+                msg!("Error: MaxAccountsDataAllocationsExceeded")
+            }
+            Self::InvalidRealloc => msg!("Error: InvalidRealloc"),
+            Self::MaxInstructionTraceLengthExceeded => {
+                msg!("Error: MaxInstructionTraceLengthExceeded")
+            }
+            Self::BuiltinProgramsMustConsumeComputeUnits => {
+                msg!("Error: BuiltinProgramsMustConsumeComputeUnits")
+            }
         }
     }
 }
@@ -125,8 +137,10 @@ pub const BORSH_IO_ERROR: u64 = to_builtin!(15);
 pub const ACCOUNT_NOT_RENT_EXEMPT: u64 = to_builtin!(16);
 pub const UNSUPPORTED_SYSVAR: u64 = to_builtin!(17);
 pub const ILLEGAL_OWNER: u64 = to_builtin!(18);
-pub const MAX_ACCOUNTS_DATA_SIZE_EXCEEDED: u64 = to_builtin!(19);
-pub const ACTIVE_VOTE_ACCOUNT_CLOSE: u64 = to_builtin!(20);
+pub const MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED: u64 = to_builtin!(19);
+pub const INVALID_ACCOUNT_DATA_REALLOC: u64 = to_builtin!(20);
+pub const MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED: u64 = to_builtin!(21);
+pub const BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS: u64 = to_builtin!(22);
 // Warning: Any new program errors added here must also be:
 // - Added to the below conversions
 // - Added as an equivalent to InstructionError
@@ -153,8 +167,16 @@ impl From<ProgramError> for u64 {
             ProgramError::AccountNotRentExempt => ACCOUNT_NOT_RENT_EXEMPT,
             ProgramError::UnsupportedSysvar => UNSUPPORTED_SYSVAR,
             ProgramError::IllegalOwner => ILLEGAL_OWNER,
-            ProgramError::MaxAccountsDataSizeExceeded => MAX_ACCOUNTS_DATA_SIZE_EXCEEDED,
-            ProgramError::ActiveVoteAccountClose => ACTIVE_VOTE_ACCOUNT_CLOSE,
+            ProgramError::MaxAccountsDataAllocationsExceeded => {
+                MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED
+            }
+            ProgramError::InvalidRealloc => INVALID_ACCOUNT_DATA_REALLOC,
+            ProgramError::MaxInstructionTraceLengthExceeded => {
+                MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED
+            }
+            ProgramError::BuiltinProgramsMustConsumeComputeUnits => {
+                BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS
+            }
             ProgramError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -187,8 +209,12 @@ impl From<u64> for ProgramError {
             ACCOUNT_NOT_RENT_EXEMPT => Self::AccountNotRentExempt,
             UNSUPPORTED_SYSVAR => Self::UnsupportedSysvar,
             ILLEGAL_OWNER => Self::IllegalOwner,
-            MAX_ACCOUNTS_DATA_SIZE_EXCEEDED => Self::MaxAccountsDataSizeExceeded,
-            ACTIVE_VOTE_ACCOUNT_CLOSE => Self::ActiveVoteAccountClose,
+            MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED => Self::MaxAccountsDataAllocationsExceeded,
+            INVALID_ACCOUNT_DATA_REALLOC => Self::InvalidRealloc,
+            MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED => Self::MaxInstructionTraceLengthExceeded,
+            BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS => {
+                Self::BuiltinProgramsMustConsumeComputeUnits
+            }
             _ => Self::Custom(error as u32),
         }
     }
@@ -217,8 +243,16 @@ impl TryFrom<InstructionError> for ProgramError {
             Self::Error::AccountNotRentExempt => Ok(Self::AccountNotRentExempt),
             Self::Error::UnsupportedSysvar => Ok(Self::UnsupportedSysvar),
             Self::Error::IllegalOwner => Ok(Self::IllegalOwner),
-            Self::Error::MaxAccountsDataSizeExceeded => Ok(Self::MaxAccountsDataSizeExceeded),
-            Self::Error::ActiveVoteAccountClose => Ok(Self::ActiveVoteAccountClose),
+            Self::Error::MaxAccountsDataAllocationsExceeded => {
+                Ok(Self::MaxAccountsDataAllocationsExceeded)
+            }
+            Self::Error::InvalidRealloc => Ok(Self::InvalidRealloc),
+            Self::Error::MaxInstructionTraceLengthExceeded => {
+                Ok(Self::MaxInstructionTraceLengthExceeded)
+            }
+            Self::Error::BuiltinProgramsMustConsumeComputeUnits => {
+                Ok(Self::BuiltinProgramsMustConsumeComputeUnits)
+            }
             _ => Err(error),
         }
     }
@@ -249,8 +283,12 @@ where
             ACCOUNT_NOT_RENT_EXEMPT => Self::AccountNotRentExempt,
             UNSUPPORTED_SYSVAR => Self::UnsupportedSysvar,
             ILLEGAL_OWNER => Self::IllegalOwner,
-            MAX_ACCOUNTS_DATA_SIZE_EXCEEDED => Self::MaxAccountsDataSizeExceeded,
-            ACTIVE_VOTE_ACCOUNT_CLOSE => Self::ActiveVoteAccountClose,
+            MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED => Self::MaxAccountsDataAllocationsExceeded,
+            INVALID_ACCOUNT_DATA_REALLOC => Self::InvalidRealloc,
+            MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED => Self::MaxInstructionTraceLengthExceeded,
+            BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS => {
+                Self::BuiltinProgramsMustConsumeComputeUnits
+            }
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {
@@ -275,6 +313,6 @@ impl From<PubkeyError> for ProgramError {
 
 impl From<BorshIoError> for ProgramError {
     fn from(error: BorshIoError) -> Self {
-        Self::BorshIoError(format!("{}", error))
+        Self::BorshIoError(format!("{error}"))
     }
 }

@@ -58,34 +58,29 @@ sudo $(command -v solana-sys-tuner) --user $(whoami) > sys-tuner.log 2>&1 &
 If you would prefer to manage system settings on your own, you may do so with
 the following commands.
 
-##### **Increase UDP buffers**
+##### **Optimize sysctl knobs**
 
 ```bash
-sudo bash -c "cat >/etc/sysctl.d/20-solana-udp-buffers.conf <<EOF
-# Increase UDP buffer size
+sudo bash -c "cat >/etc/sysctl.d/21-solana-validator.conf <<EOF
+# Increase UDP buffer sizes
 net.core.rmem_default = 134217728
 net.core.rmem_max = 134217728
 net.core.wmem_default = 134217728
 net.core.wmem_max = 134217728
-EOF"
-```
 
-```bash
-sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
-```
-
-##### **Increased memory mapped files limit**
-
-```bash
-sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
 vm.max_map_count = 1000000
+
+# Increase number of allowed open file descriptors
+fs.nr_open = 1000000
 EOF"
 ```
 
 ```bash
-sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
+sudo sysctl -p /etc/sysctl.d/21-solana-validator.conf
 ```
+
+##### **Increase systemd and session file limits**
 
 Add
 
@@ -232,14 +227,14 @@ Read more about the [difference between SOL and lamports here](../introduction.m
 ## Create Authorized Withdrawer Account
 
 If you haven't already done so, create an authorized-withdrawer keypair to be used
-as the ultimate authority over your validator.  This keypair will have the
+as the ultimate authority over your validator. This keypair will have the
 authority to withdraw from your vote account, and will have the additional
-authority to change all other aspects of your vote account.  Needless to say,
+authority to change all other aspects of your vote account. Needless to say,
 this is a very important keypair as anyone who possesses it can make any
 changes to your vote account, including taking ownership of it permanently.
 So it is very important to keep your authorized-withdrawer keypair in a safe
-location.  It does not need to be stored on your validator, and should not be
-stored anywhere from where it could be accessed by unauthorized parties.  To
+location. It does not need to be stored on your validator, and should not be
+stored anywhere from where it could be accessed by unauthorized parties. To
 create your authorized-withdrawer keypair:
 
 ```bash
@@ -328,15 +323,23 @@ the validator to ports 11000-11020.
 
 The `--limit-ledger-size` parameter allows you to specify how many ledger
 [shreds](../terminology.md#shred) your node retains on disk. If you do not
-include this parameter, the validator will keep the entire ledger until it runs
-out of disk space.
+include this parameter, the validator will keep all received ledger data
+until it runs out of disk space. Otherwise, the validator will continually
+purge the oldest data once to stay under the specified `--limit-ledger-size`
+value.
 
-The default value attempts to keep the ledger disk usage under 500GB. More or
-less disk usage may be requested by adding an argument to `--limit-ledger-size`
-if desired. Check `solana-validator --help` for the default limit value used by
-`--limit-ledger-size`. More information about
-selecting a custom limit value is [available
-here](https://github.com/solana-labs/solana/blob/36167b032c03fc7d1d8c288bb621920aaf903311/core/src/ledger_cleanup_service.rs#L23-L34).
+The default value attempts to keep the blockstore (data within the rocksdb
+directory) disk usage under 500 GB. More or less disk usage may be requested
+by adding an argument to `--limit-ledger-size` if desired. More information
+about selecting a custom limit value is [available
+here](https://github.com/solana-labs/solana/blob/aa72aa87790277619d12c27f1ebc864d23739557/core/src/ledger_cleanup_service.rs#L26-L37).
+
+Note that the above target of 500 GB does not account for other items that
+may reside in the `ledger` directory, depending on validator configuration.
+These items may include (but are not limited to):
+- Persistent accounts data
+- Persistent accounts index
+- Snapshots
 
 ### Systemd Unit
 
@@ -369,7 +372,7 @@ WantedBy=multi-user.target
 
 Now create `/home/sol/bin/validator.sh` to include the desired
 `solana-validator` command-line. Ensure that the 'exec' command is used to
-start the validator process (i.e. "exec solana-validator ...").  This is
+start the validator process (i.e. "exec solana-validator ..."). This is
 important because without it, logrotate will end up killing the validator
 every time the logs are rotated.
 
@@ -399,7 +402,7 @@ to be reverted and the issue reproduced before help can be provided.
 The validator log file, as specified by `--log ~/solana-validator.log`, can get
 very large over time and it's recommended that log rotation be configured.
 
-The validator will re-open its when it receives the `USR1` signal, which is the
+The validator will re-open its log file when it receives the `USR1` signal, which is the
 basic primitive that enables log rotation.
 
 If the validator is being started by a wrapper shell script, it is important to
@@ -435,12 +438,6 @@ which starts the solana validator process uses "exec" to do so (example: "exec
 solana-validator ..."); otherwise, when logrotate sends its signal to the
 validator, the enclosing script will die and take the validator process with
 it.
-
-### Disable port checks to speed up restarts
-
-Once your validator is operating normally, you can reduce the time it takes to
-restart your validator by adding the `--no-port-check` flag to your
-`solana-validator` command-line.
 
 ### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear
 
@@ -480,13 +477,13 @@ command-line arguments and restart the validator.
 
 As the number of populated accounts on the cluster grows, account-data RPC
 requests that scan the entire account set -- like
-[`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) and
-[SPL-token-specific requests](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) --
+[`getProgramAccounts`](../api/http#getprogramaccounts) and
+[SPL-token-specific requests](../api/http#gettokenaccountsbydelegate) --
 may perform poorly. If your validator needs to support any of these requests,
 you can use the `--account-index` parameter to activate one or more in-memory
 account indexes that significantly improve RPC performance by indexing accounts
 by the key field. Currently supports the following parameter values:
 
-- `program-id`: each account indexed by its owning program; used by [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts)
-- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate), and [getTokenLargestAccounts](developing/clients/jsonrpc-api.md#gettokenlargestaccounts)
-- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](developing/clients/jsonrpc-api.md#gettokenaccountsbyowner), and [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) requests that include an spl-token-owner filter.
+- `program-id`: each account indexed by its owning program; used by [getProgramAccounts](../api/http#getprogramaccounts)
+- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](../api/http#gettokenaccountsbydelegate), and [getTokenLargestAccounts](../api/http#gettokenlargestaccounts)
+- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](../api/http#gettokenaccountsbyowner), and [getProgramAccounts](../api/http#getprogramaccounts) requests that include an spl-token-owner filter.

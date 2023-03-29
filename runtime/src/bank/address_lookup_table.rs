@@ -2,8 +2,11 @@ use {
     super::Bank,
     solana_address_lookup_table_program::error::AddressLookupError,
     solana_sdk::{
-        message::v0::{LoadedAddresses, MessageAddressTableLookup},
-        transaction::{AddressLoader, Result as TransactionResult, TransactionError},
+        message::{
+            v0::{LoadedAddresses, MessageAddressTableLookup},
+            AddressLoaderError,
+        },
+        transaction::AddressLoader,
     },
 };
 
@@ -11,9 +14,9 @@ impl AddressLoader for &Bank {
     fn load_addresses(
         self,
         address_table_lookups: &[MessageAddressTableLookup],
-    ) -> TransactionResult<LoadedAddresses> {
+    ) -> Result<LoadedAddresses, AddressLoaderError> {
         if !self.versioned_tx_message_enabled() {
-            return Err(TransactionError::UnsupportedVersion);
+            return Err(AddressLoaderError::Disabled);
         }
 
         let slot_hashes = self
@@ -21,7 +24,7 @@ impl AddressLoader for &Bank {
             .read()
             .unwrap()
             .get_slot_hashes()
-            .map_err(|_| TransactionError::AccountNotFound)?;
+            .map_err(|_| AddressLoaderError::SlotHashesSysvarNotFound)?;
 
         Ok(address_table_lookups
             .iter()

@@ -69,7 +69,7 @@ impl AggregateCommitmentService {
             sender,
             Self {
                 t_commitment: Builder::new()
-                    .name("solana-aggregate-stake-lockouts".to_string())
+                    .name("solAggCommitSvc".to_string())
                     .spawn(move || loop {
                         if exit_.load(Ordering::Relaxed) {
                             break;
@@ -167,7 +167,7 @@ impl AggregateCommitmentService {
         );
         new_block_commitment.set_highest_confirmed_root(highest_confirmed_root);
 
-        std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
+        *w_block_commitment_cache = new_block_commitment;
         w_block_commitment_cache.commitment_slots()
     }
 
@@ -227,11 +227,11 @@ impl AggregateCommitmentService {
         }
 
         for vote in &vote_state.votes {
-            while ancestors[ancestors_index] <= vote.slot {
+            while ancestors[ancestors_index] <= vote.slot() {
                 commitment
                     .entry(ancestors[ancestors_index])
                     .or_insert_with(BlockCommitment::default)
-                    .increase_confirmation_stake(vote.confirmation_count as usize, lamports);
+                    .increase_confirmation_stake(vote.confirmation_count() as usize, lamports);
                 ancestors_index += 1;
 
                 if ancestors_index == ancestors.len() {
@@ -259,7 +259,7 @@ mod tests {
         solana_sdk::{account::Account, pubkey::Pubkey, signature::Signer},
         solana_stake_program::stake_state,
         solana_vote_program::{
-            vote_state::{self, VoteStateVersions},
+            vote_state::{self, process_slot_vote_unchecked, VoteStateVersions},
             vote_transaction,
         },
     };
@@ -309,7 +309,7 @@ mod tests {
 
         let root = ancestors[2];
         vote_state.root_slot = Some(root);
-        vote_state.process_slot_vote_unchecked(*ancestors.last().unwrap());
+        process_slot_vote_unchecked(&mut vote_state, *ancestors.last().unwrap());
         AggregateCommitmentService::aggregate_commitment_for_vote_account(
             &mut commitment,
             &mut rooted_stake,
@@ -341,8 +341,8 @@ mod tests {
         let root = ancestors[2];
         vote_state.root_slot = Some(root);
         assert!(ancestors[4] + 2 >= ancestors[6]);
-        vote_state.process_slot_vote_unchecked(ancestors[4]);
-        vote_state.process_slot_vote_unchecked(ancestors[6]);
+        process_slot_vote_unchecked(&mut vote_state, ancestors[4]);
+        process_slot_vote_unchecked(&mut vote_state, ancestors[6]);
         AggregateCommitmentService::aggregate_commitment_for_vote_account(
             &mut commitment,
             &mut rooted_stake,
@@ -431,30 +431,30 @@ mod tests {
         // Create bank
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
-        let mut vote_state1 = VoteState::from(&vote_account1).unwrap();
-        vote_state1.process_slot_vote_unchecked(3);
-        vote_state1.process_slot_vote_unchecked(5);
+        let mut vote_state1 = vote_state::from(&vote_account1).unwrap();
+        process_slot_vote_unchecked(&mut vote_state1, 3);
+        process_slot_vote_unchecked(&mut vote_state1, 5);
         let versioned = VoteStateVersions::new_current(vote_state1);
-        VoteState::to(&versioned, &mut vote_account1).unwrap();
+        vote_state::to(&versioned, &mut vote_account1).unwrap();
         bank.store_account(&pk1, &vote_account1);
 
-        let mut vote_state2 = VoteState::from(&vote_account2).unwrap();
-        vote_state2.process_slot_vote_unchecked(9);
-        vote_state2.process_slot_vote_unchecked(10);
+        let mut vote_state2 = vote_state::from(&vote_account2).unwrap();
+        process_slot_vote_unchecked(&mut vote_state2, 9);
+        process_slot_vote_unchecked(&mut vote_state2, 10);
         let versioned = VoteStateVersions::new_current(vote_state2);
-        VoteState::to(&versioned, &mut vote_account2).unwrap();
+        vote_state::to(&versioned, &mut vote_account2).unwrap();
         bank.store_account(&pk2, &vote_account2);
 
-        let mut vote_state3 = VoteState::from(&vote_account3).unwrap();
+        let mut vote_state3 = vote_state::from(&vote_account3).unwrap();
         vote_state3.root_slot = Some(1);
         let versioned = VoteStateVersions::new_current(vote_state3);
-        VoteState::to(&versioned, &mut vote_account3).unwrap();
+        vote_state::to(&versioned, &mut vote_account3).unwrap();
         bank.store_account(&pk3, &vote_account3);
 
-        let mut vote_state4 = VoteState::from(&vote_account4).unwrap();
+        let mut vote_state4 = vote_state::from(&vote_account4).unwrap();
         vote_state4.root_slot = Some(2);
         let versioned = VoteStateVersions::new_current(vote_state4);
-        VoteState::to(&versioned, &mut vote_account4).unwrap();
+        vote_state::to(&versioned, &mut vote_account4).unwrap();
         bank.store_account(&pk4, &vote_account4);
 
         let (commitment, rooted_stake) =
@@ -489,7 +489,7 @@ mod tests {
     #[test]
     fn test_highest_confirmed_root_advance() {
         fn get_vote_account_root_slot(vote_pubkey: Pubkey, bank: &Arc<Bank>) -> Slot {
-            let (_stake, vote_account) = bank.get_vote_account(&vote_pubkey).unwrap();
+            let vote_account = bank.get_vote_account(&vote_pubkey).unwrap();
             let slot = vote_account
                 .vote_state()
                 .as_ref()

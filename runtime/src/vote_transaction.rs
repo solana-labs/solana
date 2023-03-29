@@ -19,7 +19,7 @@ impl VoteTransaction {
             VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update
                 .lockouts
                 .iter()
-                .map(|lockout| lockout.slot)
+                .map(|lockout| lockout.slot())
                 .collect(),
         }
     }
@@ -51,7 +51,7 @@ impl VoteTransaction {
         match self {
             VoteTransaction::Vote(vote) => vote.slots.last().copied(),
             VoteTransaction::VoteStateUpdate(vote_state_update) => {
-                Some(vote_state_update.lockouts.back()?.slot)
+                Some(vote_state_update.lockouts.back()?.slot())
             }
         }
     }

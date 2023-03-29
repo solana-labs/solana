@@ -182,7 +182,7 @@ cloud_CreateInstances() {
     imageName="ubuntu-2004-focal-v20201211-with-cuda-10-2 --image-project principal-lane-200702"
   else
     # Upstream Ubuntu 20.04 LTS image
-    imageName="ubuntu-2004-focal-v20201201 --image-project ubuntu-os-cloud"
+    imageName="ubuntu-2004-focal-v20220419 --image-project ubuntu-os-cloud"
   fi
 
   declare -a nodes

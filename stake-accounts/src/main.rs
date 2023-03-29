@@ -11,7 +11,8 @@ use {
         },
     },
     solana_cli_config::Config,
-    solana_client::{client_error::ClientError, rpc_client::RpcClient},
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::client_error::Error as ClientError,
     solana_sdk::{
         message::Message,
         native_token::lamports_to_sol,
@@ -227,7 +228,7 @@ fn send_and_confirm_messages<S: Signers>(
     for message in messages {
         let signature = send_and_confirm_message(client, message, signers, no_wait)?;
         signatures.push(signature);
-        println!("{}", signature);
+        println!("{signature}");
     }
     Ok(signatures)
 }
@@ -244,7 +245,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         Command::Count(args) => {
             let num_accounts = count_stake_accounts(&client, &args.base_pubkey)?;
-            println!("{}", num_accounts);
+            println!("{num_accounts}");
         }
         Command::Addresses(args) => {
             let addresses = stake_accounts::derive_stake_account_addresses(
@@ -252,7 +253,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 args.num_accounts,
             );
             for address in addresses {
-                println!("{:?}", address);
+                println!("{address:?}");
             }
         }
         Command::Balance(args) => {
@@ -263,7 +264,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let balances = get_balances(&client, addresses)?;
             let lamports: u64 = balances.into_iter().map(|(_, bal)| bal).sum();
             let sol = lamports_to_sol(lamports);
-            println!("{} SOL", sol);
+            println!("{sol} SOL");
         }
         Command::Authorize(args) => {
             process_authorize_stake_accounts(&client, &args)?;

@@ -1,0 +1,36 @@
+[package]
+name = "solana-quic-client"
+description = "Solana Quic Client"
+documentation = "https://docs.rs/solana-quic-client"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+async-mutex = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+itertools = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+quinn = { workspace = true }
+quinn-proto = { workspace = true }
+quinn-udp = { workspace = true }
+rustls = { workspace = true, features = ["dangerous_configuration"] }
+solana-connection-cache = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-net-utils = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-sdk = { workspace = true }
+solana-streamer = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+crossbeam-channel = { workspace = true }
+solana-logger = { workspace = true }
+solana-perf = { workspace = true }

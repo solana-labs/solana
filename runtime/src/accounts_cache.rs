@@ -1,4 +1,5 @@
 use {
+    crate::accounts_db::IncludeSlotInHash,
     dashmap::DashMap,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -71,6 +72,7 @@ impl SlotCacheInner {
         account: AccountSharedData,
         hash: Option<impl Borrow<Hash>>,
         slot: Slot,
+        include_slot_in_hash: IncludeSlotInHash,
     ) -> CachedAccount {
         let data_len = account.data().len() as u64;
         let item = Arc::new(CachedAccountInner {
@@ -78,6 +80,7 @@ impl SlotCacheInner {
             hash: RwLock::new(hash.map(|h| *h.borrow())),
             slot,
             pubkey: *pubkey,
+            include_slot_in_hash,
         });
         if let Some(old) = self.cache.insert(*pubkey, item.clone()) {
             self.same_account_writes.fetch_add(1, Ordering::Relaxed);
@@ -143,6 +146,9 @@ pub struct CachedAccountInner {
     hash: RwLock<Option<Hash>>,
     slot: Slot,
     pubkey: Pubkey,
+    /// temporarily here during feature activation
+    /// since we calculate the hash later, or in the background, we need knowledge of whether this slot uses the slot in the hash or not
+    pub include_slot_in_hash: IncludeSlotInHash,
 }
 
 impl CachedAccountInner {
@@ -156,6 +162,7 @@ impl CachedAccountInner {
                     self.slot,
                     &self.account,
                     &self.pubkey,
+                    self.include_slot_in_hash,
                 );
                 *self.hash.write().unwrap() = Some(hash);
                 hash
@@ -227,6 +234,7 @@ impl AccountsCache {
         pubkey: &Pubkey,
         account: AccountSharedData,
         hash: Option<impl Borrow<Hash>>,
+        include_slot_in_hash: IncludeSlotInHash,
     ) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
@@ -239,7 +247,7 @@ impl AccountsCache {
                 .or_insert(self.new_inner())
                 .clone());
 
-        slot_cache.insert(pubkey, account, hash, slot)
+        slot_cache.insert(pubkey, account, hash, slot, include_slot_in_hash)
     }
 
     pub fn load(&self, slot: Slot, pubkey: &Pubkey) -> Option<CachedAccount> {
@@ -277,6 +285,10 @@ impl AccountsCache {
         }
     }
 
+    pub fn contains_any_slots(&self, max_slot_inclusive: Slot) -> bool {
+        self.cache.iter().any(|e| e.key() <= &max_slot_inclusive)
+    }
+
     // Removes slots less than or equal to `max_root`. Only safe to pass in a rooted slot,
     // otherwise the slot removed could still be undergoing replay!
     pub fn remove_slots_le(&self, max_root: Slot) -> Vec<(Slot, SlotCache)> {
@@ -308,6 +320,10 @@ impl AccountsCache {
         slots
     }
 
+    pub fn contains(&self, slot: Slot) -> bool {
+        self.cache.contains_key(&slot)
+    }
+
     pub fn num_slots(&self) -> usize {
         self.cache.len()
     }
@@ -323,7 +339,7 @@ impl AccountsCache {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
+    use {super::*, crate::accounts_db::INCLUDE_SLOT_IN_HASH_TESTS};
 
     #[test]
     fn test_remove_slots_le() {
@@ -336,6 +352,7 @@ pub mod tests {
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
             Some(&Hash::default()),
+            INCLUDE_SLOT_IN_HASH_TESTS,
         );
         // If the cache is told the size limit is 0, it should return the one slot
         let removed = cache.remove_slots_le(0);
@@ -354,6 +371,7 @@ pub mod tests {
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
             Some(&Hash::default()),
+            INCLUDE_SLOT_IN_HASH_TESTS,
         );
 
         // If the cache is told the size limit is 0, it should return nothing, because there's no

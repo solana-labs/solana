@@ -266,18 +266,26 @@ impl<'de> Deserialize<'de> for VersionedMessage {
                         }))
                     }
                     MessagePrefix::Versioned(version) => {
-                        if version == 0 {
-                            Ok(VersionedMessage::V0(seq.next_element()?.ok_or_else(
-                                || {
-                                    // will never happen since tuple length is always 2
-                                    de::Error::invalid_length(1, &self)
-                                },
-                            )?))
-                        } else {
-                            Err(de::Error::invalid_value(
+                        match version {
+                            0 => {
+                                Ok(VersionedMessage::V0(seq.next_element()?.ok_or_else(
+                                    || {
+                                        // will never happen since tuple length is always 2
+                                        de::Error::invalid_length(1, &self)
+                                    },
+                                )?))
+                            }
+                            127 => {
+                                // 0xff is used as the first byte of the off-chain messages
+                                // which corresponds to version 127 of the versioned messages.
+                                // This explicit check is added to prevent the usage of version 127
+                                // in the runtime as a valid transaction.
+                                Err(de::Error::custom("off-chain messages are not accepted"))
+                            }
+                            _ => Err(de::Error::invalid_value(
                                 de::Unexpected::Unsigned(version as u64),
-                                &"supported versions: [0]",
-                            ))
+                                &"a valid transaction message version",
+                            )),
                         }
                     }
                 }

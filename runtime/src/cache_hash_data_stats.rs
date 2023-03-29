@@ -18,7 +18,7 @@ pub struct CacheHashDataStats {
 }
 
 impl CacheHashDataStats {
-    pub fn merge(&mut self, other: &CacheHashDataStats) {
+    pub fn accumulate(&mut self, other: &CacheHashDataStats) {
         self.cache_file_size += other.cache_file_size;
         self.total_entries += other.total_entries;
         self.loaded_from_cache += other.loaded_from_cache;

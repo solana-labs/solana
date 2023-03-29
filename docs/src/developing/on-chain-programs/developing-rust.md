@@ -39,28 +39,27 @@ using the `no-entrypoint` feature.
 At a minimum, Solana Rust programs must pull in the
 [solana-program](https://crates.io/crates/solana-program) crate.
 
-Solana BPF programs have some [restrictions](#restrictions) that may prevent the
+Solana SBF programs have some [restrictions](#restrictions) that may prevent the
 inclusion of some crates as dependencies or require special handling.
 
 For example:
 
 - Crates that require the architecture be a subset of the ones supported by the
   official toolchain. There is no workaround for this unless that crate is
-  forked and BPF added to that those architecture checks.
+  forked and SBF added to that those architecture checks.
 - Crates may depend on `rand` which is not supported in Solana's deterministic
   program environment. To include a `rand` dependent crate refer to [Depending
   on Rand](#depending-on-rand).
 - Crates may overflow the stack even if the stack overflowing code isn't
   included in the program itself. For more information refer to
-  [Stack](overview.md#stack).
+  [Stack](./faq.md#stack).
 
 ## How to Build
 
 First setup the environment:
 
 - Install the latest Rust stable from https://rustup.rs/
-- Install the latest Solana command-line tools from
-  https://docs.solana.com/cli/install-solana-cli-tools
+- Install the latest [Solana command-line tools](../../cli/install-solana-cli-tools.md)
 
 The normal cargo build is available for building programs against your host
 machine which can be used for unit testing:
@@ -69,7 +68,7 @@ machine which can be used for unit testing:
 $ cargo build
 ```
 
-To build a specific program, such as SPL Token, for the Solana BPF target which
+To build a specific program, such as SPL Token, for the Solana SBF target which
 can be deployed to the cluster:
 
 ```bash
@@ -96,10 +95,10 @@ program.
 ## Program Entrypoint
 
 Programs export a known entrypoint symbol which the Solana runtime looks up and
-calls when invoking a program. Solana supports multiple [versions of the BPF
-loader](overview.md#versions) and the entrypoints may vary between them.
+calls when invoking a program. Solana supports multiple versions of the BPF
+loader and the entrypoints may vary between them.
 Programs must be written for and deployed to the same loader. For more details
-see the [overview](overview#loaders).
+see the [FAQ section on Loaders](./faq.md#loaders).
 
 Currently there are two supported loaders [BPF
 Loader](https://github.com/solana-labs/solana/blob/d9b0fc0e3eec67dfe4a97d9298b15969b2804fab/sdk/program/src/bpf_loader.rs#L17)
@@ -160,7 +159,7 @@ their own deserialization function they need to ensure that any modifications
 the program wishes to commit be written back into the input byte array.
 
 Details on how the loader serializes the program inputs can be found in the
-[Input Parameter Serialization](overview.md#input-parameter-serialization) docs.
+[Input Parameter Serialization](./faq.md#input-parameter-serialization) docs.
 
 ### Data Types
 
@@ -212,7 +211,7 @@ On-chain Rust programs support most of Rust's libstd, libcore, and liballoc, as
 well as many 3rd party crates.
 
 There are some limitations since these programs run in a resource-constrained,
-single-threaded environment, and must be deterministic:
+single-threaded environment, as well as being deterministic:
 
 - No access to
   - `rand`
@@ -306,12 +305,12 @@ Rust's `panic!`, `assert!`, and internal panic results are printed to the
 
 ```
 INFO  solana_runtime::message_processor] Finalized account CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
-INFO  solana_runtime::message_processor] Call BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
+INFO  solana_runtime::message_processor] Call SBF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
 INFO  solana_runtime::message_processor] Program log: Panicked at: 'assertion failed: `(left == right)`
       left: `1`,
      right: `2`', rust/panic/src/lib.rs:22:5
-INFO  solana_runtime::message_processor] BPF program consumed 5453 of 200000 units
-INFO  solana_runtime::message_processor] BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ failed: BPF program panicked
+INFO  solana_runtime::message_processor] SBF program consumed 5453 of 200000 units
+INFO  solana_runtime::message_processor] SBF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ failed: BPF program panicked
 ```
 
 ### Custom Panic Handler
@@ -370,7 +369,7 @@ for more information.
 
 ## ELF Dump
 
-The BPF shared object internals can be dumped to a text file to gain more
+The SBF shared object internals can be dumped to a text file to gain more
 insight into a program's composition and what it may be doing at runtime. The
 dump will contain both the ELF information as well as a list of all the symbols
 and the instructions that implement them. Some of the BPF loader's error log

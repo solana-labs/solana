@@ -1,9 +1,11 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! multi-stage transaction processing pipeline in software.
 
+pub use solana_sdk::net::DEFAULT_TPU_COALESCE_MS;
 use {
     crate::{
         banking_stage::BankingStage,
+        banking_trace::{BankingTracer, TracerThread},
         broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
         cluster_info_vote_listener::{
             ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender,
@@ -15,7 +17,7 @@ use {
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
     },
-    crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
+    crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
@@ -26,29 +28,25 @@ use {
     },
     solana_runtime::{
         bank_forks::BankForks,
-        cost_model::CostModel,
+        prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
-    solana_sdk::signature::Keypair,
-    solana_streamer::quic::{
-        spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS,
+    solana_sdk::{pubkey::Pubkey, signature::Keypair},
+    solana_streamer::{
+        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+        quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+        streamer::StakedNodes,
     },
     std::{
         collections::HashMap,
         net::UdpSocket,
-        sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
+        sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
-        time::Duration,
     },
 };
 
-pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
-
-/// Timeout interval when joining threads during TPU close
-const TPU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
-
 // allow multiple connections for NAT and any open/close overlap
-pub const MAX_QUIC_CONNECTIONS_PER_IP: usize = 8;
+pub const MAX_QUIC_CONNECTIONS_PER_PEER: usize = 8;
 
 pub struct TpuSockets {
     pub transactions: Vec<UdpSocket>,
@@ -71,13 +69,14 @@ pub struct Tpu {
     find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     staked_nodes_updater_service: StakedNodesUpdaterService,
+    tracer_thread_hdl: TracerThread,
 }
 
 impl Tpu {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         sockets: TpuSockets,
@@ -96,9 +95,15 @@ impl Tpu {
         bank_notification_sender: Option<BankNotificationSender>,
         tpu_coalesce_ms: u64,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
-        cost_model: &Arc<RwLock<CostModel>>,
         connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
+        log_messages_bytes_limit: Option<usize>,
+        staked_nodes: &Arc<RwLock<StakedNodes>>,
+        shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
+        banking_tracer: Arc<BankingTracer>,
+        tracer_thread_hdl: TracerThread,
+        tpu_enable_udp: bool,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -124,14 +129,15 @@ impl Tpu {
             poh_recorder,
             tpu_coalesce_ms,
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
+            tpu_enable_udp,
         );
 
-        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(
             exit.clone(),
             cluster_info.clone(),
             bank_forks.clone(),
             staked_nodes.clone(),
+            shared_staked_nodes_overrides,
         );
 
         let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
@@ -140,7 +146,7 @@ impl Tpu {
             packet_receiver,
             find_packet_sender_stake_sender,
             staked_nodes.clone(),
-            "tpu-find-packet-sender-stake",
+            "Tpu",
         );
 
         let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
@@ -150,50 +156,61 @@ impl Tpu {
             vote_packet_receiver,
             vote_find_packet_sender_stake_sender,
             staked_nodes.clone(),
-            "tpu-vote-find-packet-sender-stake",
+            "Vote",
         );
 
-        let (verified_sender, verified_receiver) = unbounded();
+        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
 
         let stats = Arc::new(StreamStats::default());
-        let tpu_quic_t = spawn_server(
+        let (_, tpu_quic_t) = spawn_server(
             transactions_quic_sockets,
             keypair,
-            cluster_info.my_contact_info().tpu.ip(),
+            cluster_info
+                .my_contact_info()
+                .tpu_quic()
+                .expect("Operator must spin up node with valid (QUIC) TPU address")
+                .ip(),
             packet_sender,
             exit.clone(),
-            MAX_QUIC_CONNECTIONS_PER_IP,
+            MAX_QUIC_CONNECTIONS_PER_PEER,
             staked_nodes.clone(),
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            tpu_coalesce_ms,
         )
         .unwrap();
 
-        let tpu_forwards_quic_t = spawn_server(
+        let (_, tpu_forwards_quic_t) = spawn_server(
             transactions_forwards_quic_sockets,
             keypair,
-            cluster_info.my_contact_info().tpu_forwards.ip(),
+            cluster_info
+                .my_contact_info()
+                .tpu_forwards_quic()
+                .expect("Operator must spin up node with valid (QUIC) TPU-forwards address")
+                .ip(),
             forwarded_packet_sender,
             exit.clone(),
-            MAX_QUIC_CONNECTIONS_PER_IP,
-            staked_nodes,
+            MAX_QUIC_CONNECTIONS_PER_PEER,
+            staked_nodes.clone(),
             MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
             0, // Prevent unstaked nodes from forwarding transactions
             stats,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            tpu_coalesce_ms,
         )
         .unwrap();
 
         let sigverify_stage = {
-            let verifier = TransactionSigVerifier::new(verified_sender);
+            let verifier = TransactionSigVerifier::new(non_vote_sender);
             SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, "tpu-verifier")
         };
 
-        let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
 
         let vote_sigverify_stage = {
-            let verifier =
-                TransactionSigVerifier::new_reject_non_vote(verified_tpu_vote_packets_sender);
+            let verifier = TransactionSigVerifier::new_reject_non_vote(tpu_vote_sender);
             SigVerifyStage::new(
                 vote_find_packet_sender_stake_receiver,
                 verifier,
@@ -201,12 +218,12 @@ impl Tpu {
             )
         };
 
-        let (verified_gossip_vote_packets_sender, verified_gossip_vote_packets_receiver) =
-            unbounded();
+        let (gossip_vote_sender, gossip_vote_receiver) =
+            banking_tracer.create_channel_gossip_vote();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
             exit.clone(),
             cluster_info.clone(),
-            verified_gossip_vote_packets_sender,
+            gossip_vote_sender,
             poh_recorder.clone(),
             vote_tracker,
             bank_forks.clone(),
@@ -222,13 +239,15 @@ impl Tpu {
         let banking_stage = BankingStage::new(
             cluster_info,
             poh_recorder,
-            verified_receiver,
-            verified_tpu_vote_packets_receiver,
-            verified_gossip_vote_packets_receiver,
+            non_vote_receiver,
+            tpu_vote_receiver,
+            gossip_vote_receiver,
             transaction_status_sender,
             replay_vote_sender,
-            cost_model.clone(),
+            log_messages_bytes_limit,
             connection_cache.clone(),
+            bank_forks.clone(),
+            prioritization_fee_cache,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
@@ -236,9 +255,9 @@ impl Tpu {
             cluster_info.clone(),
             entry_receiver,
             retransmit_slots_receiver,
-            exit,
-            blockstore,
-            &bank_forks,
+            exit.clone(),
+            blockstore.clone(),
+            bank_forks,
             shred_version,
         );
 
@@ -254,26 +273,11 @@ impl Tpu {
             find_packet_sender_stake_stage,
             vote_find_packet_sender_stake_stage,
             staked_nodes_updater_service,
+            tracer_thread_hdl,
         }
     }
 
     pub fn join(self) -> thread::Result<()> {
-        // spawn a new thread to wait for tpu close
-        let (sender, receiver) = bounded(0);
-        let _ = thread::spawn(move || {
-            let _ = self.do_join();
-            sender.send(()).unwrap();
-        });
-
-        // exit can deadlock. put an upper-bound on how long we wait for it
-        let timeout = Duration::from_secs(TPU_THREADS_JOIN_TIMEOUT_SECONDS);
-        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
-            error!("timeout for closing tpu");
-        }
-        Ok(())
-    }
-
-    fn do_join(self) -> thread::Result<()> {
         let results = vec![
             self.fetch_stage.join(),
             self.sigverify_stage.join(),
@@ -283,14 +287,22 @@ impl Tpu {
             self.find_packet_sender_stake_stage.join(),
             self.vote_find_packet_sender_stake_stage.join(),
             self.staked_nodes_updater_service.join(),
+            self.tpu_quic_t.join(),
+            self.tpu_forwards_quic_t.join(),
         ];
-        self.tpu_quic_t.join()?;
-        self.tpu_forwards_quic_t.join()?;
         let broadcast_result = self.broadcast_stage.join();
         for result in results {
             result?;
         }
         let _ = broadcast_result?;
+        if let Some(tracer_thread_hdl) = self.tracer_thread_hdl {
+            if let Err(tracer_result) = tracer_thread_hdl.join()? {
+                error!(
+                    "banking tracer thread returned error after successful thread join: {:?}",
+                    tracer_result
+                );
+            }
+        }
         Ok(())
     }
 }

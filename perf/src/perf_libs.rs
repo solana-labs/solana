@@ -3,7 +3,6 @@ use {
     dlopen::symbor::{Container, SymBorApi, Symbol},
     dlopen_derive::SymBorApi,
     log::*,
-    solana_sdk::packet::Packet,
     std::{
         env,
         ffi::OsStr,
@@ -16,7 +15,7 @@ use {
 
 #[repr(C)]
 pub struct Elems {
-    pub elems: *const Packet,
+    pub elems: *const u8,
     pub num: u32,
 }
 
@@ -121,7 +120,7 @@ fn find_cuda_home(perf_libs_path: &Path) -> Option<PathBuf> {
     }
 
     // Search /usr/local for a `cuda-` directory that matches a perf-libs subdirectory
-    for entry in fs::read_dir(&perf_libs_path).unwrap().flatten() {
+    for entry in fs::read_dir(perf_libs_path).unwrap().flatten() {
         let path = entry.path();
         if !path.is_dir() {
             continue;

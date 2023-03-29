@@ -1,0 +1,21 @@
+[package]
+name = "solana-sbf-rust-rand"
+documentation = "https://docs.rs/solana-sbf-rust-rand"
+version = { workspace = true }
+description = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+getrandom = { workspace = true, features = ["dummy"] }
+rand = { workspace = true }
+solana-program = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

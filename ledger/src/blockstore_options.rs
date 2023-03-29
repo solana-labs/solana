@@ -1,4 +1,7 @@
-use rocksdb::{DBCompressionType as RocksCompressionType, DBRecoveryMode};
+use {
+    rocksdb::{DBCompressionType as RocksCompressionType, DBRecoveryMode},
+    std::path::Path,
+};
 
 pub struct BlockstoreOptions {
     // The access type of blockstore. Default: Primary
@@ -53,7 +56,7 @@ impl From<&str> for BlockstoreRecoveryMode {
             "absolute_consistency" => BlockstoreRecoveryMode::AbsoluteConsistency,
             "point_in_time" => BlockstoreRecoveryMode::PointInTime,
             "skip_any_corrupted_record" => BlockstoreRecoveryMode::SkipAnyCorruptedRecord,
-            bad_mode => panic!("Invalid recovery mode: {}", bad_mode),
+            bad_mode => panic!("Invalid recovery mode: {bad_mode}"),
         }
     }
 }
@@ -135,12 +138,54 @@ impl Default for ShredStorageType {
     }
 }
 
+pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
+pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
+
 impl ShredStorageType {
-    /// Returns ShredStorageType::RocksFifo where the specified
-    /// `shred_storage_size` is equally allocated to shred_data_cf_size
-    /// and shred_code_cf_size.
-    pub fn rocks_fifo(shred_storage_size: u64) -> ShredStorageType {
-        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::new(shred_storage_size))
+    /// Returns a ShredStorageType::RocksFifo, see BlockstoreRocksFifoOptions
+    /// for more details on how `max_shred_storage_size` is interpreted.
+    pub fn rocks_fifo(max_shred_storage_size: Option<u64>) -> ShredStorageType {
+        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::new(max_shred_storage_size))
+    }
+
+    /// The directory under `ledger_path` to the underlying blockstore.
+    pub fn blockstore_directory(&self) -> &str {
+        match self {
+            ShredStorageType::RocksLevel => BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
+            ShredStorageType::RocksFifo(_) => BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
+        }
+    }
+
+    /// Returns the ShredStorageType that is used under the specified
+    /// ledger_path.
+    ///
+    /// None will be returned if the ShredStorageType cannot be inferred.
+    pub fn from_ledger_path(
+        ledger_path: &Path,
+        max_fifo_shred_storage_size: Option<u64>,
+    ) -> Option<ShredStorageType> {
+        let mut result: Option<ShredStorageType> = None;
+
+        if Path::new(ledger_path)
+            .join(BLOCKSTORE_DIRECTORY_ROCKS_LEVEL)
+            .exists()
+        {
+            result = Some(ShredStorageType::RocksLevel);
+        }
+
+        if Path::new(ledger_path)
+            .join(BLOCKSTORE_DIRECTORY_ROCKS_FIFO)
+            .exists()
+        {
+            if result.is_none() {
+                result = Some(ShredStorageType::RocksFifo(
+                    BlockstoreRocksFifoOptions::new(max_fifo_shred_storage_size),
+                ));
+            } else {
+                result = None;
+            }
+        }
+        result
     }
 }
 
@@ -166,22 +211,32 @@ pub struct BlockstoreRocksFifoOptions {
     pub shred_code_cf_size: u64,
 }
 
-// The default storage size for storing shreds when `rocksdb-shred-compaction`
-// is set to `fifo` in the validator arguments.  This amount of storage size
-// in bytes will equally allocated to both data shreds and coding shreds.
-pub const DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = 250 * 1024 * 1024 * 1024;
-
-impl Default for BlockstoreRocksFifoOptions {
-    fn default() -> Self {
-        BlockstoreRocksFifoOptions::new(DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES)
-    }
-}
+pub const MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = std::u64::MAX;
 
 impl BlockstoreRocksFifoOptions {
-    fn new(shred_storage_size: u64) -> Self {
+    /// Returns a BlockstoreRocksFifoOptions where the specified
+    /// `max_shred_storage_size` is equally split between shred_data_cf_size
+    /// and shred_code_cf_size. A `None` value for `max_shred_storage_size`
+    /// will (functionally) allow unbounded growth in these two columns. Once
+    /// a column's total size exceeds the configured value, the oldest file(s)
+    /// will be purged to get back within the limit.
+    fn new(max_shred_storage_size: Option<u64>) -> Self {
+        match max_shred_storage_size {
+            Some(size) => Self {
+                shred_data_cf_size: size / 2,
+                shred_code_cf_size: size / 2,
+            },
+            None => Self {
+                shred_data_cf_size: MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+                shred_code_cf_size: MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+            },
+        }
+    }
+
+    pub fn new_for_tests() -> Self {
         Self {
-            shred_data_cf_size: shred_storage_size / 2,
-            shred_code_cf_size: shred_storage_size / 2,
+            shred_data_cf_size: 150_000_000_000,
+            shred_code_cf_size: 150_000_000_000,
         }
     }
 }
@@ -209,4 +264,20 @@ impl BlockstoreCompressionType {
             Self::Zlib => RocksCompressionType::Zlib,
         }
     }
+}
+
+#[test]
+fn test_rocksdb_directory() {
+    assert_eq!(
+        ShredStorageType::RocksLevel.blockstore_directory(),
+        BLOCKSTORE_DIRECTORY_ROCKS_LEVEL
+    );
+    assert_eq!(
+        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
+            shred_code_cf_size: 0,
+            shred_data_cf_size: 0
+        })
+        .blockstore_directory(),
+        BLOCKSTORE_DIRECTORY_ROCKS_FIFO
+    );
 }

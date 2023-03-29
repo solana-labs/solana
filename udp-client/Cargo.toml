@@ -1,0 +1,19 @@
+[package]
+name = "solana-udp-client"
+description = "Solana UDP Client"
+documentation = "https://docs.rs/solana-udp-client"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+solana-connection-cache = { workspace = true }
+solana-net-utils = { workspace = true }
+solana-sdk = { workspace = true }
+solana-streamer = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }

@@ -2,7 +2,7 @@
 title: Ledger Nano
 ---
 
-This page describes how to use a Ledger Nano S or Nano X to interact with Solana
+This page describes how to use a Ledger Nano S, Nano S Plus, or Nano X to interact with Solana
 using the command line tools.
 
 ## Before You Begin
@@ -201,7 +201,7 @@ source ~/.zshrc
 ```
 
 If you would prefer not to disable zsh's special handling of the question mark
-character, you can disable it explictly with a backslash in your keypair URLs.
+character, you can disable it explicitly with a backslash in your keypair URLs.
 For example:
 
 ```bash

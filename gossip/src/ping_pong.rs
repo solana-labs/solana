@@ -16,6 +16,8 @@ use {
     },
 };
 
+const PING_PONG_HASH_PREFIX: &[u8] = "SOLANA_PING_PONG".as_bytes();
+
 #[derive(AbiExample, Debug, Deserialize, Serialize)]
 pub struct Ping<T> {
     from: Pubkey,
@@ -36,6 +38,8 @@ pub struct Pong {
 pub struct PingCache {
     // Time-to-live of received pong messages.
     ttl: Duration,
+    // Rate limit delay to generate pings for a given address
+    rate_limit_delay: Duration,
     // Timestamp of last ping message sent to a remote node.
     // Used to rate limit pings to remote nodes.
     pings: LruCache<(Pubkey, SocketAddr), Instant>,
@@ -101,13 +105,18 @@ impl<T: Serialize> Signable for Ping<T> {
 
 impl Pong {
     pub fn new<T: Serialize>(ping: &Ping<T>, keypair: &Keypair) -> Result<Self, Error> {
-        let hash = hash::hash(&serialize(&ping.token)?);
+        let token = serialize(&ping.token)?;
+        let hash = hash::hashv(&[PING_PONG_HASH_PREFIX, &token]);
         let pong = Pong {
             from: keypair.pubkey(),
             hash,
             signature: keypair.sign_message(hash.as_ref()),
         };
         Ok(pong)
+    }
+
+    pub fn from(&self) -> &Pubkey {
+        &self.from
     }
 }
 
@@ -138,9 +147,12 @@ impl Signable for Pong {
 }
 
 impl PingCache {
-    pub fn new(ttl: Duration, cap: usize) -> Self {
+    pub fn new(ttl: Duration, rate_limit_delay: Duration, cap: usize) -> Self {
+        // Sanity check ttl/rate_limit_delay
+        assert!(rate_limit_delay <= ttl / 2);
         Self {
             ttl,
+            rate_limit_delay,
             pings: LruCache::new(cap),
             pongs: LruCache::new(cap),
             pending_cache: LruCache::new(cap),
@@ -177,15 +189,15 @@ impl PingCache {
         T: Serialize,
         F: FnMut() -> Option<Ping<T>>,
     {
-        // Rate limit consecutive pings sent to a remote node.
-        let delay = self.ttl / 64;
         match self.pings.peek(&node) {
-            Some(t) if now.saturating_duration_since(*t) < delay => None,
+            // Rate limit consecutive pings sent to a remote node.
+            Some(t) if now.saturating_duration_since(*t) < self.rate_limit_delay => None,
             _ => {
                 let ping = pingf()?;
-                let hash = hash::hash(&serialize(&ping.token).ok()?);
-                self.pings.put(node, now);
+                let token = serialize(&ping.token).ok()?;
+                let hash = hash::hashv(&[PING_PONG_HASH_PREFIX, &token]);
                 self.pending_cache.put(hash, node);
+                self.pings.put(node, now);
                 Some(ping)
             }
         }
@@ -230,26 +242,6 @@ impl PingCache {
         (check, ping)
     }
 
-    // Only for tests and simulations.
-    pub(crate) fn mock_clone(&self) -> Self {
-        let mut clone = Self {
-            ttl: self.ttl,
-            pings: LruCache::new(self.pings.cap()),
-            pongs: LruCache::new(self.pongs.cap()),
-            pending_cache: LruCache::new(self.pending_cache.cap()),
-        };
-        for (k, v) in self.pongs.iter().rev() {
-            clone.pings.put(*k, *v);
-        }
-        for (k, v) in self.pongs.iter().rev() {
-            clone.pongs.put(*k, *v);
-        }
-        for (k, v) in self.pending_cache.iter().rev() {
-            clone.pending_cache.put(*k, *v);
-        }
-        clone
-    }
-
     /// Only for tests and simulations.
     pub fn mock_pong(&mut self, node: Pubkey, socket: SocketAddr, now: Instant) {
         self.pongs.put((node, socket), now);
@@ -280,7 +272,10 @@ mod tests {
         let pong = Pong::new(&ping, &keypair).unwrap();
         assert!(pong.verify());
         assert!(pong.sanitize().is_ok());
-        assert_eq!(hash::hash(&ping.token), pong.hash);
+        assert_eq!(
+            hash::hashv(&[PING_PONG_HASH_PREFIX, &ping.token]),
+            pong.hash
+        );
     }
 
     #[test]
@@ -288,7 +283,8 @@ mod tests {
         let now = Instant::now();
         let mut rng = rand::thread_rng();
         let ttl = Duration::from_millis(256);
-        let mut cache = PingCache::new(ttl, /*cap=*/ 1000);
+        let delay = ttl / 64;
+        let mut cache = PingCache::new(ttl, delay, /*cap=*/ 1000);
         let this_node = Keypair::new();
         let keypairs: Vec<_> = repeat_with(Keypair::new).take(8).collect();
         let sockets: Vec<_> = repeat_with(|| {

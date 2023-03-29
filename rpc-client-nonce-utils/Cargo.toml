@@ -1,0 +1,28 @@
+[package]
+name = "solana-rpc-client-nonce-utils"
+description = "Solana RPC Client Nonce Utilities"
+documentation = "https://docs.rs/solana-nonce-client"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+clap = "2.33.0"
+solana-clap-utils = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-sdk = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+futures = { workspace = true }
+serde_json = { workspace = true }
+solana-account-decoder = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

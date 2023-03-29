@@ -32,6 +32,7 @@ extern "C" {
  * @param result 64 byte array to hold the result. A recovered public key
  * @return 0 if executed successfully
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/secp256k1.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
 uint64_t sol_secp256k1_recover(const uint8_t *, uint64_t, const uint8_t *, uint8_t *);
 #else

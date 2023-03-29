@@ -6,7 +6,7 @@ use {
         replay_stage::SUPERMINORITY_THRESHOLD,
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
-    solana_program_runtime::timings::ExecuteTimingType,
+    solana_program_runtime::{report_execute_timings, timings::ExecuteTimingType},
     solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccountsHashMap},
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
@@ -39,226 +39,53 @@ impl ReplaySlotStats {
     pub fn report_stats(
         &self,
         slot: Slot,
+        num_txs: usize,
         num_entries: usize,
         num_shreds: u64,
         bank_complete_time_us: u64,
     ) {
-        datapoint_info!(
-            "replay-slot-stats",
-            ("slot", slot as i64, i64),
-            ("fetch_entries_time", self.fetch_elapsed as i64, i64),
-            (
-                "fetch_entries_fail_time",
-                self.fetch_fail_elapsed as i64,
-                i64
-            ),
-            (
-                "entry_poh_verification_time",
-                self.poh_verify_elapsed as i64,
-                i64
-            ),
-            (
-                "entry_transaction_verification_time",
-                self.transaction_verify_elapsed as i64,
-                i64
-            ),
-            ("replay_time", self.replay_elapsed as i64, i64),
-            (
-                "replay_total_elapsed",
-                self.started.elapsed().as_micros() as i64,
-                i64
-            ),
-            ("total_entries", num_entries as i64, i64),
-            ("total_shreds", num_shreds as i64, i64),
-            (
-                "check_us",
-                *self
-                    .execute_timings
-                    .metrics
-                    .index(ExecuteTimingType::CheckUs),
-                i64
-            ),
-            (
-                "load_us",
-                *self
-                    .execute_timings
-                    .metrics
-                    .index(ExecuteTimingType::LoadUs),
-                i64
-            ),
-            (
-                "execute_us",
-                *self
-                    .execute_timings
-                    .metrics
-                    .index(ExecuteTimingType::ExecuteUs),
-                i64
-            ),
-            (
-                "store_us",
-                *self
-                    .execute_timings
-                    .metrics
-                    .index(ExecuteTimingType::StoreUs),
-                i64
-            ),
-            (
-                "update_stakes_cache_us",
-                *self
-                    .execute_timings
-                    .metrics
-                    .index(ExecuteTimingType::UpdateStakesCacheUs),
-                i64
-            ),
-            ("bank_complete_time_us", bank_complete_time_us, i64),
-            (
-                "total_batches_len",
-                *self
-                    .execute_timings
-                    .metrics
-                    .index(ExecuteTimingType::TotalBatchesLen),
-                i64
-            ),
-            (
-                "num_execute_batches",
-                *self
-                    .execute_timings
-                    .metrics
-                    .index(ExecuteTimingType::NumExecuteBatches),
-                i64
-            ),
-            (
-                "execute_details_serialize_us",
-                self.execute_timings.details.serialize_us,
-                i64
-            ),
-            (
-                "execute_details_create_vm_us",
-                self.execute_timings.details.create_vm_us,
-                i64
-            ),
-            (
-                "execute_details_execute_inner_us",
-                self.execute_timings.details.execute_us,
-                i64
-            ),
-            (
-                "execute_details_deserialize_us",
-                self.execute_timings.details.deserialize_us,
-                i64
-            ),
-            (
-                "execute_details_get_or_create_executor_us",
-                self.execute_timings.details.get_or_create_executor_us,
-                i64
-            ),
-            (
-                "execute_details_changed_account_count",
-                self.execute_timings.details.changed_account_count,
-                i64
-            ),
-            (
-                "execute_details_total_account_count",
-                self.execute_timings.details.total_account_count,
-                i64
-            ),
-            (
-                "execute_details_total_data_size",
-                self.execute_timings.details.total_data_size,
-                i64
-            ),
-            (
-                "execute_details_data_size_changed",
-                self.execute_timings.details.data_size_changed,
-                i64
-            ),
-            (
-                "execute_details_create_executor_register_syscalls_us",
-                self.execute_timings
-                    .details
-                    .create_executor_register_syscalls_us,
-                i64
-            ),
-            (
-                "execute_details_create_executor_load_elf_us",
-                self.execute_timings.details.create_executor_load_elf_us,
-                i64
-            ),
-            (
-                "execute_details_create_executor_verify_code_us",
-                self.execute_timings.details.create_executor_verify_code_us,
-                i64
-            ),
-            (
-                "execute_details_create_executor_jit_compile_us",
-                self.execute_timings.details.create_executor_jit_compile_us,
-                i64
-            ),
-            (
-                "execute_accessories_feature_set_clone_us",
-                self.execute_timings
-                    .execute_accessories
-                    .feature_set_clone_us,
-                i64
-            ),
-            (
-                "execute_accessories_compute_budget_process_transaction_us",
-                self.execute_timings
-                    .execute_accessories
-                    .compute_budget_process_transaction_us,
-                i64
-            ),
-            (
-                "execute_accessories_get_executors_us",
-                self.execute_timings.execute_accessories.get_executors_us,
-                i64
-            ),
-            (
-                "execute_accessories_process_message_us",
-                self.execute_timings.execute_accessories.process_message_us,
-                i64
-            ),
-            (
-                "execute_accessories_update_executors_us",
-                self.execute_timings.execute_accessories.update_executors_us,
-                i64
-            ),
-            (
-                "execute_accessories_process_instructions_total_us",
-                self.execute_timings
-                    .execute_accessories
-                    .process_instructions
-                    .total_us,
-                i64
-            ),
-            (
-                "execute_accessories_process_instructions_verify_caller_us",
-                self.execute_timings
-                    .execute_accessories
-                    .process_instructions
-                    .verify_caller_us,
-                i64
-            ),
-            (
-                "execute_accessories_process_instructions_process_executable_chain_us",
-                self.execute_timings
-                    .execute_accessories
-                    .process_instructions
-                    .process_executable_chain_us,
-                i64
-            ),
-            (
-                "execute_accessories_process_instructions_verify_callee_us",
-                self.execute_timings
-                    .execute_accessories
-                    .process_instructions
-                    .verify_callee_us,
-                i64
-            ),
-        );
+        lazy! {
+            datapoint_info!(
+                "replay-slot-stats",
+                ("slot", slot as i64, i64),
+                ("fetch_entries_time", self.fetch_elapsed as i64, i64),
+                (
+                    "fetch_entries_fail_time",
+                    self.fetch_fail_elapsed as i64,
+                    i64
+                ),
+                (
+                    "entry_poh_verification_time",
+                    self.poh_verify_elapsed as i64,
+                    i64
+                ),
+                (
+                    "entry_transaction_verification_time",
+                    self.transaction_verify_elapsed as i64,
+                    i64
+                ),
+                ("replay_time", self.replay_elapsed as i64, i64),
+                ("execute_batches_us", self.batch_execute.wall_clock_us as i64, i64),
+                (
+                    "replay_total_elapsed",
+                    self.started.elapsed().as_micros() as i64,
+                    i64
+                ),
+                ("bank_complete_time_us", bank_complete_time_us, i64),
+                ("total_transactions", num_txs as i64, i64),
+                ("total_entries", num_entries as i64, i64),
+                ("total_shreds", num_shreds as i64, i64),
+                // Everything inside the `eager!` block will be eagerly expanded before
+                // evaluation of the rest of the surrounding macro.
+                eager!{report_execute_timings!(self.batch_execute.totals)}
+            );
+        };
+
+        self.batch_execute.slowest_thread.report_stats(slot);
 
         let mut per_pubkey_timings: Vec<_> = self
-            .execute_timings
+            .batch_execute
+            .totals
             .details
             .per_program_timings
             .iter()
@@ -337,26 +164,22 @@ impl ValidatorStakeInfo {
 pub const RETRANSMIT_BASE_DELAY_MS: u64 = 5_000;
 pub const RETRANSMIT_BACKOFF_CAP: u32 = 6;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RetransmitInfo {
-    pub retry_time: Option<Instant>,
-    pub retry_iteration: u32,
+    pub(crate) retry_time: Instant,
+    pub(crate) retry_iteration: u32,
 }
 
 impl RetransmitInfo {
     pub fn reached_retransmit_threshold(&self) -> bool {
         let backoff = std::cmp::min(self.retry_iteration, RETRANSMIT_BACKOFF_CAP);
         let backoff_duration_ms = (1_u64 << backoff) * RETRANSMIT_BASE_DELAY_MS;
-        self.retry_time
-            .map(|time| time.elapsed().as_millis() > backoff_duration_ms.into())
-            .unwrap_or(true)
+        self.retry_time.elapsed().as_millis() > u128::from(backoff_duration_ms)
     }
 
     pub fn increment_retry_iteration(&mut self) {
-        if self.retry_time.is_some() {
-            self.retry_iteration += 1;
-        }
-        self.retry_time = Some(Instant::now());
+        self.retry_iteration = self.retry_iteration.saturating_add(1);
+        self.retry_time = Instant::now();
     }
 }
 
@@ -364,8 +187,8 @@ pub struct ForkProgress {
     pub is_dead: bool,
     pub fork_stats: ForkStats,
     pub propagated_stats: PropagatedStats,
-    pub replay_stats: ReplaySlotStats,
-    pub replay_progress: ConfirmationProgress,
+    pub replay_stats: Arc<RwLock<ReplaySlotStats>>,
+    pub replay_progress: Arc<RwLock<ConfirmationProgress>>,
     pub retransmit_info: RetransmitInfo,
     // Note `num_blocks_on_fork` and `num_dropped_blocks_on_fork` only
     // count new blocks replayed since last restart, which won't include
@@ -411,8 +234,8 @@ impl ForkProgress {
         Self {
             is_dead: false,
             fork_stats: ForkStats::default(),
-            replay_stats: ReplaySlotStats::default(),
-            replay_progress: ConfirmationProgress::new(last_entry),
+            replay_stats: Arc::new(RwLock::new(ReplaySlotStats::default())),
+            replay_progress: Arc::new(RwLock::new(ConfirmationProgress::new(last_entry))),
             num_blocks_on_fork,
             num_dropped_blocks_on_fork,
             propagated_stats: PropagatedStats {
@@ -424,7 +247,10 @@ impl ForkProgress {
                 total_epoch_stake,
                 ..PropagatedStats::default()
             },
-            retransmit_info: RetransmitInfo::default(),
+            retransmit_info: RetransmitInfo {
+                retry_time: Instant::now(),
+                retry_iteration: 0u32,
+            },
         }
     }
 
@@ -573,7 +399,7 @@ impl ProgressMap {
 
     pub fn get_propagated_stats_must_exist(&self, slot: Slot) -> &PropagatedStats {
         self.get_propagated_stats(slot)
-            .unwrap_or_else(|| panic!("slot={} must exist in ProgressMap", slot))
+            .unwrap_or_else(|| panic!("slot={slot} must exist in ProgressMap"))
     }
 
     pub fn get_fork_stats(&self, slot: Slot) -> Option<&ForkStats> {
@@ -702,13 +528,17 @@ impl ProgressMap {
 
 #[cfg(test)]
 mod test {
-    use {super::*, solana_runtime::vote_account::VoteAccount, solana_sdk::account::Account};
+    use {
+        super::*,
+        solana_runtime::vote_account::VoteAccount,
+        solana_sdk::account::{Account, AccountSharedData},
+    };
 
     fn new_test_vote_account() -> VoteAccount {
-        let account = Account {
+        let account = AccountSharedData::from(Account {
             owner: solana_vote_program::id(),
             ..Account::default()
-        };
+        });
         VoteAccount::try_from(account).unwrap()
     }
 

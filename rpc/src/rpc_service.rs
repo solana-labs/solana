@@ -6,9 +6,10 @@ use {
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         rpc::{
-            rpc_accounts::*, rpc_bank::*, rpc_deprecated_v1_7::*, rpc_deprecated_v1_9::*,
-            rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *,
+            rpc_accounts::*, rpc_accounts_scan::*, rpc_bank::*, rpc_deprecated_v1_7::*,
+            rpc_deprecated_v1_9::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *,
         },
+        rpc_cache::LargestAccountsCache,
         rpc_health::*,
     },
     crossbeam_channel::unbounded,
@@ -18,7 +19,7 @@ use {
         RequestMiddlewareAction, ServerBuilder,
     },
     regex::Regex,
-    solana_client::{connection_cache::ConnectionCache, rpc_cache::LargestAccountsCache},
+    solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         bigtable_upload::ConfirmedBlockUploadConfig,
@@ -30,6 +31,7 @@ use {
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::{
         bank_forks::BankForks, commitment::BlockCommitmentCache,
+        prioritization_fee_cache::PrioritizationFeeCache,
         snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
@@ -45,7 +47,7 @@ use {
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
     },
@@ -120,6 +122,10 @@ impl RpcRequestMiddleware {
             .unwrap()
     }
 
+    fn strip_leading_slash(path: &str) -> Option<&str> {
+        path.strip_prefix('/')
+    }
+
     fn is_file_get_path(&self, path: &str) -> bool {
         if path == DEFAULT_GENESIS_DOWNLOAD_PATH {
             return true;
@@ -129,12 +135,9 @@ impl RpcRequestMiddleware {
             return false;
         }
 
-        let starting_character = '/';
-        if !path.starts_with(starting_character) {
+        let Some(path) = Self::strip_leading_slash(path) else {
             return false;
-        }
-
-        let path = path.trim_start_matches(starting_character);
+        };
 
         self.full_snapshot_archive_path_regex.is_match(path)
             || self.incremental_snapshot_archive_path_regex.is_match(path)
@@ -187,8 +190,8 @@ impl RpcRequestMiddleware {
     }
 
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
-        let stem = path.split_at(1).1; // Drop leading '/' from path
         let filename = {
+            let stem = Self::strip_leading_slash(path).expect("path already verified");
             match path {
                 DEFAULT_GENESIS_DOWNLOAD_PATH => {
                     inc_new_counter_info!("rpc-get_genesis", 1);
@@ -342,18 +345,21 @@ impl JsonRpcService {
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
         cluster_info: Arc<ClusterInfo>,
-        poh_recorder: Option<Arc<Mutex<PohRecorder>>>,
+        poh_recorder: Option<Arc<RwLock<PohRecorder>>>,
         genesis_hash: Hash,
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Exit>>,
         known_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
+        startup_verification_complete: Arc<AtomicBool>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
         send_transaction_service_config: send_transaction_service::Config,
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         connection_cache: Arc<ConnectionCache>,
-        current_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_rewards_slot: Arc<AtomicU64>,
+        prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Result<Self, String> {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
@@ -365,13 +371,17 @@ impl JsonRpcService {
             known_validators,
             config.health_check_slot_distance,
             override_health_check,
+            startup_verification_complete,
         ));
 
         let largest_accounts_cache = Arc::new(RwLock::new(LargestAccountsCache::new(
             LARGEST_ACCOUNTS_CACHE_DURATION,
         )));
 
-        let tpu_address = cluster_info.my_contact_info().tpu;
+        let tpu_address = cluster_info
+            .my_contact_info()
+            .tpu()
+            .map_err(|err| format!("{err}"))?;
 
         // sadly, some parts of our current rpc implemention block the jsonrpc's
         // _socket-listening_ event loop for too long, due to (blocking) long IO or intesive CPU,
@@ -383,7 +393,7 @@ impl JsonRpcService {
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(rpc_threads)
                 .on_thread_start(move || renice_this_thread(rpc_niceness_adj).unwrap())
-                .thread_name("sol-rpc-el")
+                .thread_name("solRpcEl")
                 .enable_all()
                 .build()
                 .expect("Runtime"),
@@ -395,6 +405,7 @@ impl JsonRpcService {
             if let Some(RpcBigtableConfig {
                 enable_bigtable_ledger_upload,
                 ref bigtable_instance_name,
+                ref bigtable_app_profile_id,
                 timeout,
             }) = config.rpc_bigtable_config
             {
@@ -403,6 +414,7 @@ impl JsonRpcService {
                     timeout,
                     credential_type: CredentialType::Filepath(None),
                     instance_name: bigtable_instance_name.clone(),
+                    app_profile_id: bigtable_app_profile_id.clone(),
                 };
                 runtime
                     .block_on(solana_storage_bigtable::LedgerStorage::new_with_config(
@@ -417,7 +429,8 @@ impl JsonRpcService {
                                 bigtable_ledger_storage.clone(),
                                 blockstore.clone(),
                                 block_commitment_cache.clone(),
-                                current_transaction_status_slot.clone(),
+                                max_complete_transaction_status_slot.clone(),
+                                max_complete_rewards_slot.clone(),
                                 ConfirmedBlockUploadConfig::default(),
                                 exit_bigtable_ledger_upload_service.clone(),
                             )))
@@ -440,6 +453,9 @@ impl JsonRpcService {
 
         let full_api = config.full_api;
         let obsolete_v1_7_api = config.obsolete_v1_7_api;
+        let max_request_body_size = config
+            .max_request_body_size
+            .unwrap_or(MAX_REQUEST_BODY_SIZE);
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
             snapshot_config.clone(),
@@ -455,7 +471,9 @@ impl JsonRpcService {
             largest_accounts_cache,
             max_slots,
             leader_schedule_cache,
-            current_transaction_status_slot,
+            max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
+            prioritization_fee_cache,
         );
 
         let leader_info =
@@ -476,7 +494,7 @@ impl JsonRpcService {
 
         let (close_handle_sender, close_handle_receiver) = unbounded();
         let thread_hdl = Builder::new()
-            .name("solana-jsonrpc".to_string())
+            .name("solJsonRpcSvc".to_string())
             .spawn(move || {
                 renice_this_thread(rpc_niceness_adj).unwrap();
 
@@ -486,6 +504,7 @@ impl JsonRpcService {
                 if full_api {
                     io.extend_with(rpc_bank::BankDataImpl.to_delegate());
                     io.extend_with(rpc_accounts::AccountsDataImpl.to_delegate());
+                    io.extend_with(rpc_accounts_scan::AccountsScanImpl.to_delegate());
                     io.extend_with(rpc_full::FullImpl.to_delegate());
                     io.extend_with(rpc_deprecated_v1_7::DeprecatedV1_7Impl.to_delegate());
                     io.extend_with(rpc_deprecated_v1_9::DeprecatedV1_9Impl.to_delegate());
@@ -511,7 +530,7 @@ impl JsonRpcService {
                 ]))
                 .cors_max_age(86400)
                 .request_middleware(request_middleware)
-                .max_request_body_size(MAX_REQUEST_PAYLOAD_SIZE)
+                .max_request_body_size(max_request_body_size)
                 .start_http(&rpc_addr);
 
                 if let Err(e) = server {
@@ -561,10 +580,8 @@ impl JsonRpcService {
 mod tests {
     use {
         super::*,
-        crate::rpc::create_validator_exit,
-        solana_client::rpc_config::RpcContextConfig,
+        crate::rpc::{create_validator_exit, tests::new_test_cluster_info},
         solana_gossip::{
-            contact_info::ContactInfo,
             crds::GossipRoute,
             crds_value::{CrdsData, CrdsValue, SnapshotHashes},
         },
@@ -572,13 +589,12 @@ mod tests {
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             get_tmp_ledger_path,
         },
+        solana_rpc_client_api::config::RpcContextConfig,
         solana_runtime::bank::Bank,
         solana_sdk::{
             genesis_config::{ClusterType, DEFAULT_GENESIS_ARCHIVE},
             signature::Signer,
-            signer::keypair::Keypair,
         },
-        solana_streamer::socket::SocketAddrSpace,
         std::{
             io::Write,
             net::{IpAddr, Ipv4Addr},
@@ -596,12 +612,8 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let bank = Bank::new_for_tests(&genesis_config);
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::default(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let cluster_info = Arc::new(new_test_cluster_info());
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let rpc_addr = SocketAddr::new(
             ip_addr,
             solana_net_utils::find_available_port_in_range(ip_addr, (10000, 65535)).unwrap(),
@@ -627,6 +639,7 @@ mod tests {
             validator_exit,
             None,
             Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(true)),
             optimistically_confirmed_bank,
             send_transaction_service::Config {
                 retry_rate_ms: 1000,
@@ -637,10 +650,12 @@ mod tests {
             Arc::new(LeaderScheduleCache::default()),
             connection_cache,
             Arc::new(AtomicU64::default()),
+            Arc::new(AtomicU64::default()),
+            Arc::new(PrioritizationFeeCache::default()),
         )
-        .unwrap();
+        .expect("assume successful JsonRpcService start");
         let thread = rpc_service.thread_hdl.thread();
-        assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
+        assert_eq!(thread.name().unwrap(), "solJsonRpcSvc");
 
         assert_eq!(
             10_000,
@@ -675,6 +690,35 @@ mod tests {
     }
 
     #[test]
+    fn test_strip_prefix() {
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("/"), Some(""));
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("//"), Some("/"));
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("/abc"),
+            Some("abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("//abc"),
+            Some("/abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("/./abc"),
+            Some("./abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("/../abc"),
+            Some("../abc")
+        );
+
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash(""), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("./"), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("../"), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("."), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash(".."), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("abc"), None);
+    }
+
+    #[test]
     fn test_is_file_get_path() {
         let bank_forks = create_bank_forks();
         let rrm = RpcRequestMiddleware::new(
@@ -692,6 +736,8 @@ mod tests {
 
         assert!(rrm.is_file_get_path(DEFAULT_GENESIS_DOWNLOAD_PATH));
         assert!(!rrm.is_file_get_path(DEFAULT_GENESIS_ARCHIVE));
+        assert!(!rrm.is_file_get_path("//genesis.tar.bz2"));
+        assert!(!rrm.is_file_get_path("/../genesis.tar.bz2"));
 
         assert!(!rrm.is_file_get_path("/snapshot.tar.bz2")); // This is a redirect
 
@@ -741,8 +787,34 @@ mod tests {
             .is_file_get_path("../../../test/incremental-snapshot-123-456-xxx.tar"));
 
         assert!(!rrm.is_file_get_path("/"));
+        assert!(!rrm.is_file_get_path("//"));
+        assert!(!rrm.is_file_get_path("/."));
+        assert!(!rrm.is_file_get_path("/./"));
+        assert!(!rrm.is_file_get_path("/.."));
+        assert!(!rrm.is_file_get_path("/../"));
+        assert!(!rrm.is_file_get_path("."));
+        assert!(!rrm.is_file_get_path("./"));
+        assert!(!rrm.is_file_get_path(".//"));
         assert!(!rrm.is_file_get_path(".."));
+        assert!(!rrm.is_file_get_path("../"));
+        assert!(!rrm.is_file_get_path("..//"));
         assert!(!rrm.is_file_get_path("🎣"));
+
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("//snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("/./snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("/../snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "//incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "/./incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "/../incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
     }
 
     #[test]
@@ -819,13 +891,10 @@ mod tests {
 
     #[test]
     fn test_health_check_with_known_validators() {
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::default(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let health_check_slot_distance = 123;
         let override_health_check = Arc::new(AtomicBool::new(false));
+        let startup_verification_complete = Arc::new(AtomicBool::new(true));
         let known_validators = vec![
             solana_sdk::pubkey::new_rand(),
             solana_sdk::pubkey::new_rand(),
@@ -837,6 +906,7 @@ mod tests {
             Some(known_validators.clone().into_iter().collect()),
             health_check_slot_distance,
             override_health_check.clone(),
+            startup_verification_complete,
         ));
 
         let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);

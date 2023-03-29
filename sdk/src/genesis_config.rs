@@ -1,4 +1,4 @@
-//! The `genesis_config` module is a library for generating the chain's genesis config.
+//! The chain's genesis config.
 
 #![cfg(feature = "full")]
 
@@ -62,13 +62,13 @@ impl FromStr for ClusterType {
             "devnet" => Ok(ClusterType::Devnet),
             "testnet" => Ok(ClusterType::Testnet),
             "mainnet-beta" => Ok(ClusterType::MainnetBeta),
-            _ => Err(format!("{} is unrecognized for cluster type", s)),
+            _ => Err(format!("{s} is unrecognized for cluster type")),
         }
     }
 }
 
 #[frozen_abi(digest = "3V3ZVRyzNhRfe8RJwDeGpeTP8xBWGGFBEbwTkvKKVjEa")]
-#[derive(Serialize, Deserialize, Debug, Clone, AbiExample)]
+#[derive(Serialize, Deserialize, Debug, Clone, AbiExample, PartialEq)]
 pub struct GenesisConfig {
     /// when the network (bootstrap validator) was started relative to the UNIX Epoch
     pub creation_time: UnixTimestamp,
@@ -168,7 +168,7 @@ impl GenesisConfig {
             .map_err(|err| {
                 std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    format!("Unable to open {:?}: {:?}", filename, err),
+                    format!("Unable to open {filename:?}: {err:?}"),
                 )
             })?;
 
@@ -176,14 +176,14 @@ impl GenesisConfig {
         let mem = unsafe { Mmap::map(&file) }.map_err(|err| {
             std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("Unable to map {:?}: {:?}", filename, err),
+                format!("Unable to map {filename:?}: {err:?}"),
             )
         })?;
 
         let genesis_config = deserialize(&mem).map_err(|err| {
             std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("Unable to deserialize {:?}: {:?}", filename, err),
+                format!("Unable to deserialize {filename:?}: {err:?}"),
             )
         })?;
         Ok(genesis_config)
@@ -193,11 +193,11 @@ impl GenesisConfig {
         let serialized = serialize(&self).map_err(|err| {
             std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("Unable to serialize: {:?}", err),
+                format!("Unable to serialize: {err:?}"),
             )
         })?;
 
-        std::fs::create_dir_all(&ledger_path)?;
+        std::fs::create_dir_all(ledger_path)?;
 
         let mut file = File::create(Self::genesis_filename(ledger_path))?;
         file.write_all(&serialized)
@@ -257,7 +257,9 @@ impl fmt::Display for GenesisConfig {
              Native instruction processors: {:#?}\n\
              Rewards pool: {:#?}\n\
              ",
-            Utc.timestamp(self.creation_time, 0).to_rfc3339(),
+            Utc.timestamp_opt(self.creation_time, 0)
+                .unwrap()
+                .to_rfc3339(),
             self.cluster_type,
             self.hash(),
             compute_shred_version(&self.hash(), None),
@@ -343,6 +345,6 @@ mod tests {
         config.write(path).expect("write");
         let loaded_config = GenesisConfig::load(path).expect("load");
         assert_eq!(config.hash(), loaded_config.hash());
-        let _ignored = std::fs::remove_file(&path);
+        let _ignored = std::fs::remove_file(path);
     }
 }
