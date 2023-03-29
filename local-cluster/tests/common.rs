@@ -36,6 +36,7 @@ use {
     std::{
         collections::HashSet,
         fs, iter,
+        num::NonZeroUsize,
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -498,8 +499,8 @@ impl SnapshotValidatorConfig {
                 .path()
                 .to_path_buf(),
             bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
-            maximum_full_snapshot_archives_to_retain: usize::MAX,
-            maximum_incremental_snapshot_archives_to_retain: usize::MAX,
+            maximum_full_snapshot_archives_to_retain: NonZeroUsize::new(usize::MAX).unwrap(),
+            maximum_incremental_snapshot_archives_to_retain: NonZeroUsize::new(usize::MAX).unwrap(),
             ..SnapshotConfig::default()
         };
 
