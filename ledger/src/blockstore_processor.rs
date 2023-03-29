@@ -319,7 +319,7 @@ fn send_batches_to_scheduler_for_execution(
             batch,
             transaction_indexes,
         } = batch;
-        bank.schedule_transactions_to_commit(
+        bank.schedule_transaction_executions(
             batch.sanitized_transactions(),
             transaction_indexes.iter(),
         );
