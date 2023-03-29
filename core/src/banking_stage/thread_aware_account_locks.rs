@@ -1,6 +1,9 @@
 use {
     solana_sdk::pubkey::Pubkey,
-    std::{collections::HashMap, ops::BitAndAssign},
+    std::{
+        collections::HashMap,
+        ops::{BitAndAssign, Sub},
+    },
 };
 
 pub const MAX_THREADS: usize = 64;
@@ -12,12 +15,6 @@ pub type ThreadId = usize; // 0..MAX_THREADS-1
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ThreadSet(u64);
-
-impl BitAndAssign for ThreadSet {
-    fn bitand_assign(&mut self, rhs: Self) {
-        self.0 &= rhs.0;
-    }
-}
 
 /// Thread-aware account locks which allows for scheduling on threads
 /// that already hold locks on the account. This is useful for allowing
@@ -262,6 +259,20 @@ impl ThreadAwareAccountLocks {
     }
 }
 
+impl BitAndAssign for ThreadSet {
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.0 &= rhs.0;
+    }
+}
+
+impl Sub for ThreadSet {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 & !rhs.0)
+    }
+}
+
 impl ThreadSet {
     #[inline(always)]
     pub fn none() -> Self {
@@ -321,6 +332,11 @@ mod tests {
     const TEST_NUM_THREADS: usize = 4;
     const TEST_SEQ_LIMIT: u32 = 2;
 
+    // Simple thread selector to select the first schedulable thread
+    fn test_thread_selector(thread_set: ThreadSet) -> ThreadId {
+        thread_set.threads_iter().next().unwrap()
+    }
+
     #[test]
     #[should_panic]
     fn test_too_few_num_threads() {
@@ -337,6 +353,57 @@ mod tests {
     #[should_panic]
     fn test_invalid_sequential_limit() {
         ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 0);
+    }
+
+    #[test]
+    fn test_try_lock_accounts_none() {
+        let pk1 = Pubkey::new_unique();
+        let pk2 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
+        locks.read_lock_account(&pk1, 2);
+        locks.read_lock_account(&pk1, 3);
+        assert_eq!(
+            locks.try_lock_accounts([&pk1].into_iter(), [&pk2].into_iter(), test_thread_selector),
+            None
+        );
+    }
+
+    #[test]
+    fn test_try_lock_accounts_one() {
+        let pk1 = Pubkey::new_unique();
+        let pk2 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
+        locks.write_lock_account(&pk2, 3);
+
+        assert_eq!(
+            locks.try_lock_accounts([&pk1].into_iter(), [&pk2].into_iter(), test_thread_selector),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn test_try_lock_accounts_multiple() {
+        let pk1 = Pubkey::new_unique();
+        let pk2 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
+        locks.read_lock_account(&pk2, 0);
+        locks.read_lock_account(&pk2, 0);
+
+        assert_eq!(
+            locks.try_lock_accounts([&pk1].into_iter(), [&pk2].into_iter(), test_thread_selector),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn test_try_lock_accounts_any() {
+        let pk1 = Pubkey::new_unique();
+        let pk2 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
+        assert_eq!(
+            locks.try_lock_accounts([&pk1].into_iter(), [&pk2].into_iter(), test_thread_selector),
+            Some(0)
+        );
     }
 
     #[test]
@@ -396,7 +463,7 @@ mod tests {
         );
         assert_eq!(
             locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
-            ThreadSet::any(TEST_NUM_THREADS)
+            ThreadSet::any(TEST_NUM_THREADS) - ThreadSet::only(2)
         );
     }
 
