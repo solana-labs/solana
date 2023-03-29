@@ -80,6 +80,7 @@ use {
         transaction_error_metrics::TransactionErrorMetrics,
         vote_account::{VoteAccount, VoteAccountsHashMap},
     },
+    assert_matches::assert_matches,
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
     itertools::Itertools,
@@ -183,7 +184,6 @@ use {
         time::{Duration, Instant},
     },
 };
-use assert_matches::assert_matches;
 
 /// params to `verify_accounts_hash`
 pub struct VerifyAccountsHashConfig {
