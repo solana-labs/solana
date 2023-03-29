@@ -95,9 +95,7 @@ use {
         compute_budget::{self, ComputeBudget},
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
-        loaded_programs::{
-            LoadedProgram, LoadedProgramEntry, LoadedProgramType, LoadedPrograms, WorkingSlot,
-        },
+        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -4422,19 +4420,12 @@ impl Bank {
                     LoadedProgramType::FailedVerification,
                 ))
             });
-            match self
+            let (_was_occupied, entry) = self
                 .loaded_programs_cache
                 .write()
                 .unwrap()
-                .replenish(*pubkey, program)
-            {
-                LoadedProgramEntry::WasOccupied(entry) => {
-                    loaded_programs_for_txs.insert(*pubkey, entry);
-                }
-                LoadedProgramEntry::WasVacant(new_entry) => {
-                    loaded_programs_for_txs.insert(*pubkey, new_entry);
-                }
-            }
+                .replenish(*pubkey, program);
+            loaded_programs_for_txs.insert(*pubkey, entry);
         });
 
         (program_accounts_map, loaded_programs_for_txs)
