@@ -1044,9 +1044,11 @@ impl ServeRepair {
             identity_keypair,
         )?;
         debug!(
-            "Sending repair request from {} for {:?}",
+            "Sending repair request from {} for {:?} peer {:?} peer addr {:?}",
             identity_keypair.pubkey(),
-            repair_request
+            repair_request,
+            peer,
+            addr,
         );
 
         Ok((addr, out))
@@ -1198,6 +1200,7 @@ impl ServeRepair {
             }
         }
         if !pending_pongs.is_empty() {
+            let pongs_len =  pending_pongs.len();
             match repair_socket {
                 RepairTransportConfig::Udp(repair_socket) => {
                     if let Err(SendPktsError::IoError(err, num_failed)) =
@@ -1218,12 +1221,12 @@ impl ServeRepair {
                 }
                 RepairTransportConfig::Quic(connection_cache) => {
                     if let Err(QuicSendPktsError::TransportError(err, num_failed)) =
-                        batch_send_quic(connection_cache.as_ref(), &pending_pongs)
+                        batch_send_quic(connection_cache.as_ref(), pending_pongs)
                     {
                         warn!(
                             "batch_send failed to send {}/{} packets using connection cache. First error {:?}",
                             num_failed,
-                            pending_pongs.len(),
+                            pongs_len,
                             err
                         );
                     } else {

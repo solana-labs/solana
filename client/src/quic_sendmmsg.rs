@@ -19,20 +19,17 @@ impl From<SendPktsError> for TransportError {
     }
 }
 
-pub fn batch_send<S, T>(
+pub fn batch_send(
     connection_cache: &ConnectionCache,
-    packets: &[(T, S)],
+    packets: Vec<(Vec<u8>, SocketAddr)>,
 ) -> Result<(), SendPktsError>
-where
-    S: Borrow<SocketAddr>,
-    T: AsRef<[u8]>,
 {
     let mut num_failed = 0;
     let mut erropt = None;
-    for (p, a) in packets {
+    for (p, a) in  packets {
         let address = a.borrow();
         let connection = connection_cache.get_connection(address);
-        if let Err(e) = connection.send_data(p.as_ref()) {
+        if let Err(e) = connection.send_data_async(p) {
             num_failed += 1;
             if erropt.is_none() {
                 erropt = Some(e);
