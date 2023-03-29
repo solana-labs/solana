@@ -4000,7 +4000,6 @@ mod tests {
         );
 
         // Ensure correct number of full snapshot archives are purged/retained
-        // NOTE: One extra full snapshot is always kept (the oldest), hence the `+1`
         let mut remaining_full_snapshot_archives =
             get_full_snapshot_archives(full_snapshot_archives_dir.path());
         assert_eq!(
@@ -4012,6 +4011,9 @@ mod tests {
             remaining_full_snapshot_archives.last().unwrap().slot();
 
         // Ensure correct number of incremental snapshot archives are purged/retained
+        // For each additional full snapshot archive, one additional (the newest)
+        // incremental snapshot archive is retained. This is accounted for by the
+        // `+ maximum_full_snapshot_archives_to_retain.saturating_sub(1)`
         let mut remaining_incremental_snapshot_archives =
             get_incremental_snapshot_archives(incremental_snapshot_archives_dir.path());
         assert_eq!(
