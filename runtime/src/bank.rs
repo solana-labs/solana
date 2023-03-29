@@ -95,9 +95,7 @@ use {
         compute_budget::{self, ComputeBudget},
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
-        loaded_programs::{
-            LoadedProgram, LoadedProgramEntry, LoadedProgramType, LoadedPrograms, WorkingSlot,
-        },
+        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -4386,88 +4384,47 @@ impl Bank {
     }
 
     #[allow(dead_code)] // Preparation for BankExecutorCache rework
-    fn load_and_get_programs_from_cache<'a>(
+    fn load_and_get_programs_from_cache(
         &self,
-        program_owners: &[&'a Pubkey],
-        sanitized_txs: &[SanitizedTransaction],
-        check_results: &mut [TransactionCheckResult],
-    ) -> (
-        HashMap<Pubkey, &'a Pubkey>,
-        HashMap<Pubkey, Arc<LoadedProgram>>,
-    ) {
-        let mut filter_programs_time = Measure::start("filter_programs_accounts");
-        let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
-            &self.ancestors,
-            sanitized_txs,
-            check_results,
-            program_owners,
-            &self.blockhash_queue.read().unwrap(),
-        );
-        filter_programs_time.stop();
+        program_accounts_map: &HashMap<Pubkey, &Pubkey>,
+    ) -> HashMap<Pubkey, Arc<LoadedProgram>> {
+        let (mut loaded_programs_for_txs, missing_programs) = {
+            // Lock the global cache to figure out which programs need to be loaded
+            let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
+            loaded_programs_cache.extract(self, program_accounts_map.keys().cloned())
+        };
 
-        let mut filter_missing_programs_time = Measure::start("filter_missing_programs_accounts");
-        let (mut loaded_programs_for_txs, missing_programs) = self
-            .loaded_programs_cache
-            .read()
-            .unwrap()
-            .extract(self, program_accounts_map.keys().cloned());
-        filter_missing_programs_time.stop();
-
-        missing_programs
+        // Load missing programs while global cache is unlocked
+        let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
             .iter()
-            .for_each(|pubkey| match self.load_program(pubkey) {
-                Ok(program) => {
-                    match self
-                        .loaded_programs_cache
-                        .write()
-                        .unwrap()
-                        .replenish(*pubkey, program)
-                    {
-                        LoadedProgramEntry::WasOccupied(entry) => {
-                            loaded_programs_for_txs.insert(*pubkey, entry);
-                        }
-                        LoadedProgramEntry::WasVacant(new_entry) => {
-                            loaded_programs_for_txs.insert(*pubkey, new_entry);
-                        }
-                    }
-                }
-
-                Err(e) => {
+            .map(|key| {
+                let program = self.load_program(key).unwrap_or_else(|err| {
                     // Create a tombstone for the program in the cache
-                    debug!("Failed to load program {}, error {:?}", pubkey, e);
-                    let tombstone = self.loaded_programs_cache.write().unwrap().assign_program(
-                        *pubkey,
-                        Arc::new(LoadedProgram::new_tombstone(
-                            self.slot,
-                            LoadedProgramType::FailedVerification,
-                        )),
-                    );
-                    loaded_programs_for_txs.insert(*pubkey, tombstone);
-                }
-            });
+                    debug!("Failed to load program {}, error {:?}", key, err);
+                    Arc::new(LoadedProgram::new_tombstone(
+                        self.slot,
+                        LoadedProgramType::FailedVerification,
+                    ))
+                });
+                (*key, program)
+            })
+            .collect();
 
-        (program_accounts_map, loaded_programs_for_txs)
+        // Lock the global cache again to replenish the missing programs
+        let mut loaded_programs_cache = self.loaded_programs_cache.write().unwrap();
+        for (key, program) in missing_programs {
+            let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
+            // Use the returned entry as that might have been deduplicated globally
+            loaded_programs_for_txs.insert(key, entry);
+        }
+
+        loaded_programs_for_txs
     }
 
-    fn replenish_executor_cache<'a>(
+    fn replenish_executor_cache(
         &self,
-        program_owners: &[&'a Pubkey],
-        sanitized_txs: &[SanitizedTransaction],
-        check_results: &mut [TransactionCheckResult],
-    ) -> (
-        HashMap<Pubkey, &'a Pubkey>,
-        HashMap<Pubkey, Arc<LoadedProgram>>,
-    ) {
-        let mut filter_programs_time = Measure::start("filter_programs_accounts");
-        let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
-            &self.ancestors,
-            sanitized_txs,
-            check_results,
-            program_owners,
-            &self.blockhash_queue.read().unwrap(),
-        );
-        filter_programs_time.stop();
-
+        program_accounts_map: &HashMap<Pubkey, &Pubkey>,
+    ) -> HashMap<Pubkey, Arc<LoadedProgram>> {
         let mut loaded_programs_for_txs = HashMap::new();
         let mut filter_missing_programs_time = Measure::start("filter_missing_programs_accounts");
         let missing_executors = program_accounts_map
@@ -4487,30 +4444,25 @@ impl Bank {
             .collect::<Vec<_>>();
         filter_missing_programs_time.stop();
 
-        let executors = missing_executors
-            .iter()
-            .map(|pubkey| match self.load_program(pubkey) {
-                Ok(program) => {
-                    loaded_programs_for_txs.insert(**pubkey, program.clone());
-                    (**pubkey, program)
-                }
-                // Create a tombstone for the programs that failed to load
-                Err(_) => {
-                    let tombstone = Arc::new(LoadedProgram::new_tombstone(
-                        self.slot,
-                        LoadedProgramType::FailedVerification,
-                    ));
-                    loaded_programs_for_txs.insert(**pubkey, tombstone.clone());
-                    (**pubkey, tombstone)
-                }
+        let executors = missing_executors.iter().map(|pubkey| {
+            let program = self.load_program(pubkey).unwrap_or_else(|err| {
+                // Create a tombstone for the program in the cache
+                debug!("Failed to load program {}, error {:?}", pubkey, err);
+                Arc::new(LoadedProgram::new_tombstone(
+                    self.slot,
+                    LoadedProgramType::FailedVerification,
+                ))
             });
+            loaded_programs_for_txs.insert(**pubkey, program.clone());
+            (**pubkey, program)
+        });
 
         // avoid locking the cache if there are no new executors
         if executors.len() > 0 {
             self.executor_cache.write().unwrap().put(executors);
         }
 
-        (program_accounts_map, loaded_programs_for_txs)
+        loaded_programs_for_txs
     }
 
     #[allow(clippy::type_complexity)]
@@ -4580,19 +4532,22 @@ impl Bank {
             bpf_loader::id(),
             bpf_loader_deprecated::id(),
         ];
-
         let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
+        let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
+            &self.ancestors,
+            sanitized_txs,
+            &mut check_results,
+            &program_owners_refs,
+            &self.blockhash_queue.read().unwrap(),
+        );
+
         // The following code is currently commented out. This is how the new cache will
         // finally be used, once rest of the code blocks are in place.
         /*
-        let (program_accounts_map, loaded_programs_map) = self.load_and_get_programs_from_cache(
-            &program_owners_refs,
-            sanitized_txs,
-            &check_results,
-        );
+        let loaded_programs_map =
+            self.load_and_get_programs_from_cache(&program_accounts_map);
         */
-        let (executable_programs_in_tx_batch, loaded_programs_map) =
-            self.replenish_executor_cache(&program_owners_refs, sanitized_txs, &mut check_results);
+        let loaded_programs_map = self.replenish_executor_cache(&program_accounts_map);
 
         let tx_executor_cache = Rc::new(RefCell::new(TransactionExecutorCache::new(
             loaded_programs_map.clone().into_iter(),
@@ -4609,7 +4564,7 @@ impl Bank {
             &self.feature_set,
             &self.fee_structure,
             account_overrides,
-            &executable_programs_in_tx_batch,
+            &program_accounts_map,
             &loaded_programs_map,
         );
         load_time.stop();

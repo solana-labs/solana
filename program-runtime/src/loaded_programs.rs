@@ -237,63 +237,37 @@ impl solana_frozen_abi::abi_example::AbiExample for LoadedPrograms {
     }
 }
 
-pub enum LoadedProgramEntry {
-    WasOccupied(Arc<LoadedProgram>),
-    WasVacant(Arc<LoadedProgram>),
-}
-
 impl LoadedPrograms {
-    /// Refill the cache with a single entry. It's typically called during transaction processing,
+    /// Refill the cache with a single entry. It's typically called during transaction loading,
     /// when the cache doesn't contain the entry corresponding to program `key`.
-    /// The function dedupes the cache, in case some other thread replenished the the entry in parallel.
-    pub fn replenish(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> LoadedProgramEntry {
+    /// The function dedupes the cache, in case some other thread replenished the entry in parallel.
+    pub fn replenish(
+        &mut self,
+        key: Pubkey,
+        entry: Arc<LoadedProgram>,
+    ) -> (bool, Arc<LoadedProgram>) {
         let second_level = self.entries.entry(key).or_insert_with(Vec::new);
         let index = second_level
             .iter()
             .position(|at| at.effective_slot >= entry.effective_slot);
-        if let Some(index) = index {
-            let existing = second_level
-                .get(index)
-                .expect("Missing entry, even though position was found");
+        if let Some(existing) = index.and_then(|index| second_level.get(index)) {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
-                return LoadedProgramEntry::WasOccupied(existing.clone());
+                return (true, existing.clone());
             }
         }
         second_level.insert(index.unwrap_or(second_level.len()), entry.clone());
-        LoadedProgramEntry::WasVacant(entry)
+        (false, entry)
     }
 
     /// Assign the program `entry` to the given `key` in the cache.
-    /// This is typically called when a deployed program is managed (upgraded/un/reddeployed) via
-    /// bpf loader instructions.
-    /// The program management is not expected to overlap with initial program deployment slot.
-    /// Note: Do not call this function to replenish cache with a missing entry. As that use-case can
-    ///       cause the cache to have duplicates. Use `replenish()` API for that use-case.
+    /// This is typically called when a deployed program is managed (un-/re-/deployed) via
+    /// loader instructions. Because of the cooldown, entires can not have the same
+    /// deployment_slot and effective_slot.
     pub fn assign_program(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> Arc<LoadedProgram> {
-        let second_level = self.entries.entry(key).or_insert_with(Vec::new);
-        let index = second_level
-            .iter()
-            .position(|at| at.effective_slot >= entry.effective_slot);
-        if let Some(index) = index {
-            let existing = second_level
-                .get(index)
-                .expect("Missing entry, even though position was found");
-            if existing.is_tombstone()
-                && entry.is_tombstone()
-                && existing.deployment_slot == entry.deployment_slot
-            {
-                // If there's already a tombstone for the program at the given slot, let's return
-                // the existing entry instead of adding another.
-                return existing.clone();
-            }
-            debug_assert!(
-                existing.deployment_slot != entry.deployment_slot
-                    || existing.effective_slot != entry.effective_slot
-            );
-        }
-        second_level.insert(index.unwrap_or(second_level.len()), entry.clone());
+        let (was_occupied, entry) = self.replenish(key, entry);
+        debug_assert!(!was_occupied);
         entry
     }
 
@@ -391,8 +365,7 @@ impl LoadedPrograms {
 mod tests {
     use {
         crate::loaded_programs::{
-            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramEntry, LoadedProgramType,
-            LoadedPrograms, WorkingSlot,
+            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot,
         },
         solana_rbpf::vm::BuiltInProgram,
         solana_sdk::{clock::Slot, pubkey::Pubkey},
@@ -694,10 +667,11 @@ mod tests {
 
         // Add a program at slot 50, and a tombstone for the program at slot 60
         let program2 = Pubkey::new_unique();
-        assert!(matches!(
-            cache.replenish(program2, new_test_builtin_program(50, 51)),
-            LoadedProgramEntry::WasVacant(_)
-        ));
+        assert!(
+            !cache
+                .replenish(program2, new_test_builtin_program(50, 51))
+                .0
+        );
         let second_level = &cache
             .entries
             .get(&program2)
@@ -910,55 +884,25 @@ mod tests {
         fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
 
         let program1 = Pubkey::new_unique();
-        assert!(matches!(
-            cache.replenish(program1, new_test_loaded_program(0, 1)),
-            LoadedProgramEntry::WasVacant(_)
-        ));
-        assert!(matches!(
-            cache.replenish(program1, new_test_loaded_program(10, 11)),
-            LoadedProgramEntry::WasVacant(_)
-        ));
-        assert!(matches!(
-            cache.replenish(program1, new_test_loaded_program(20, 21)),
-            LoadedProgramEntry::WasVacant(_)
-        ));
+        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(10, 11)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(20, 21)).0);
 
         // Test: inserting duplicate entry return pre existing entry from the cache
-        assert!(matches!(
-            cache.replenish(program1, new_test_loaded_program(20, 21)),
-            LoadedProgramEntry::WasOccupied(_)
-        ));
+        assert!(cache.replenish(program1, new_test_loaded_program(20, 21)).0);
 
         let program2 = Pubkey::new_unique();
-        assert!(matches!(
-            cache.replenish(program2, new_test_loaded_program(5, 6)),
-            LoadedProgramEntry::WasVacant(_)
-        ));
-        assert!(matches!(
-            cache.replenish(program2, new_test_loaded_program(11, 12)),
-            LoadedProgramEntry::WasVacant(_)
-        ));
+        assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
+        assert!(!cache.replenish(program2, new_test_loaded_program(11, 12)).0);
 
         let program3 = Pubkey::new_unique();
-        assert!(matches!(
-            cache.replenish(program3, new_test_loaded_program(25, 26)),
-            LoadedProgramEntry::WasVacant(_)
-        ));
+        assert!(!cache.replenish(program3, new_test_loaded_program(25, 26)).0);
 
         let program4 = Pubkey::new_unique();
-        assert!(matches!(
-            cache.replenish(program4, new_test_loaded_program(0, 1)),
-            LoadedProgramEntry::WasVacant(_)
-        ));
-        assert!(matches!(
-            cache.replenish(program4, new_test_loaded_program(5, 6)),
-            LoadedProgramEntry::WasVacant(_)
-        ));
+        assert!(!cache.replenish(program4, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program4, new_test_loaded_program(5, 6)).0);
         // The following is a special case, where effective slot is 4 slots in the future
-        assert!(matches!(
-            cache.replenish(program4, new_test_loaded_program(15, 19)),
-            LoadedProgramEntry::WasVacant(_)
-        ));
+        assert!(!cache.replenish(program4, new_test_loaded_program(15, 19)).0);
 
         // Current fork graph
         //                   0
