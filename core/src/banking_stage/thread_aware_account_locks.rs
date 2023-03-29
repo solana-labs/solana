@@ -320,45 +320,82 @@ mod tests {
     }
 
     #[test]
-    fn test_accounts_schedulable_threads() {
+    fn test_accounts_schedulable_threads_no_outstanding_locks() {
         let pk1 = Pubkey::new_unique();
-        let pk2 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        let locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
 
-        // No locks - all threads are schedulable
         assert_eq!(
-            locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
+            locks.accounts_schedulable_threads([&pk1].into_iter(), std::iter::empty()),
             ThreadSet::any(TEST_NUM_THREADS)
         );
 
-        // Write lock on pk1 on thread 0 - now only thread 0 is schedulable
-        locks.write_lock_account(&pk1, 0);
+        assert_eq!(
+            locks.accounts_schedulable_threads(std::iter::empty(), [&pk1].into_iter()),
+            ThreadSet::any(TEST_NUM_THREADS)
+        );
+    }
+
+    #[test]
+    fn test_accounts_schedulable_threads_outstanding_write_only() {
+        let pk1 = Pubkey::new_unique();
+        let pk2 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        locks.write_lock_account(&pk1, 2);
+
         assert_eq!(
             locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
-            ThreadSet::only(0)
+            ThreadSet::only(2)
         );
 
-        // Write lock pk2 on thread 0 - can still schedule on thread 0
-        locks.write_lock_account(&pk2, 0);
+        assert_eq!(
+            locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
+            ThreadSet::only(2)
+        );
+    }
+
+    #[test]
+    fn test_accounts_schedulable_threads_outstanding_read_only() {
+        let pk1 = Pubkey::new_unique();
+        let pk2 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        locks.read_lock_account(&pk1, 2);
+
         assert_eq!(
             locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
-            ThreadSet::only(0)
+            ThreadSet::only(2)
+        );
+        assert_eq!(
+            locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
+            ThreadSet::any(TEST_NUM_THREADS)
         );
 
-        // Move pk2 lock to thread 1 - cannot schedule on any threads
-        locks.write_unlock_account(&pk2, 0);
-        locks.write_lock_account(&pk2, 1);
+        locks.read_lock_account(&pk2, 0);
         assert_eq!(
             locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
             ThreadSet::none()
         );
+        assert_eq!(
+            locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
+            ThreadSet::any(TEST_NUM_THREADS)
+        );
+    }
 
-        // Remove pk2 lock, add another lock for pk1 on thread 0 - at `write_queue_limit` so cannot schedule on any threads
-        locks.write_unlock_account(&pk2, 1);
-        locks.write_lock_account(&pk1, 0);
+    #[test]
+    fn test_accounts_schedulable_threads_outstanding_mixed() {
+        let pk1 = Pubkey::new_unique();
+        let pk2 = Pubkey::new_unique();
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 2);
+        locks.read_lock_account(&pk1, 2);
+        locks.write_lock_account(&pk2, 2);
+
         assert_eq!(
             locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
-            ThreadSet::none()
+            ThreadSet::only(2)
+        );
+
+        assert_eq!(
+            locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
+            ThreadSet::only(2)
         );
     }
 
