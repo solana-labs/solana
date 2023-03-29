@@ -8207,7 +8207,7 @@ impl Bank {
     fn wait_for_completed_scheduler_via_drop(&self) -> Option<Result<()>> {
         let maybe_timings_and_result = self.wait_for_scheduler::<true, false, false>();
 
-        maybe_timings_and_result.map(|(_timings, result) result)
+        maybe_timings_and_result.map(|(_timings, result)| result)
     }
 
     fn wait_for_completed_scheduler_via_internal_drop(self) {
