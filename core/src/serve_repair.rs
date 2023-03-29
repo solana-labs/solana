@@ -203,7 +203,7 @@ struct ServeRepairStats {
     err_id_mismatch: usize,
 }
 
-#[derive(Debug, AbiExample, Deserialize, Serialize)]
+#[derive(Debug, Default, AbiExample, Deserialize, Serialize)]
 pub struct RepairRequestHeader {
     signature: Signature,
     sender: Pubkey,
@@ -256,6 +256,62 @@ pub enum RepairProtocol {
         header: RepairRequestHeader,
         slot: Slot,
     },
+}
+
+const REPAIR_REQUEST_PONG_SERIALIZED_BYTES: usize = PUBKEY_BYTES + HASH_BYTES + SIGNATURE_BYTES;
+const REPAIR_REQUEST_HEADER_SERIALIZED_BYTES: usize =
+    SIGNATURE_BYTES + PUBKEY_BYTES + PUBKEY_BYTES + 8 + 4;
+
+fn check_well_formed_repair_request(packet: &Packet, stats: &mut ServeRepairStats) -> Result<()> {
+    if let Some(discriminator) = packet
+        .data(..4)
+        .and_then(|data| <[u8; 4]>::try_from(data).ok())
+        .map(u32::from_le_bytes)
+    {
+        let expected_size = match discriminator {
+            0..=6 => {
+                // deprecated requests
+                stats.err_unsigned += 1;
+                return Err(Error::from(RepairVerifyError::Unsigned));
+            }
+            7 => 4 + REPAIR_REQUEST_PONG_SERIALIZED_BYTES, // Pong
+            8 => 4 + REPAIR_REQUEST_HEADER_SERIALIZED_BYTES + 8 + 8, // WindowIndex
+            9 => 4 + REPAIR_REQUEST_HEADER_SERIALIZED_BYTES + 8 + 8, // HighestWindowIndex
+            10 => 4 + REPAIR_REQUEST_HEADER_SERIALIZED_BYTES + 8, // Orphan
+            11 => 4 + REPAIR_REQUEST_HEADER_SERIALIZED_BYTES + 8, // AncestorHashes
+            _ => {
+                // invalid repair request type
+                stats.err_malformed += 1;
+                return Err(Error::from(RepairVerifyError::Malformed));
+            }
+        };
+        if packet.meta().size == expected_size {
+            return Ok(());
+        }
+    }
+    stats.err_malformed += 1;
+    Err(Error::from(RepairVerifyError::Malformed))
+}
+
+fn discard_malformed_repair_requests(
+    batch: &mut PacketBatch,
+    stats: &mut ServeRepairStats,
+    cluster_type: ClusterType,
+) -> usize {
+    let mut retained = 0;
+    for packet in batch.iter_mut() {
+        match check_well_formed_repair_request(packet, stats) {
+            Ok(()) => retained += 1,
+            Err(Error::RepairVerify(RepairVerifyError::Unsigned)) => match cluster_type {
+                ClusterType::Testnet | ClusterType::Development => {
+                    packet.meta_mut().set_discard(true)
+                }
+                ClusterType::MainnetBeta | ClusterType::Devnet => retained += 1,
+            },
+            Err(_) => packet.meta_mut().set_discard(true),
+        }
+    }
+    retained
 }
 
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
@@ -599,7 +655,12 @@ impl ServeRepair {
             }
             result.ok()
         };
-        reqs_v.iter().flatten().filter_map(decode_packet).collect()
+        reqs_v
+            .iter()
+            .flatten()
+            .filter(|packet| !packet.meta().discard())
+            .filter_map(decode_packet)
+            .collect()
     }
 
     /// Process messages from the network
@@ -633,12 +694,18 @@ impl ServeRepair {
         };
 
         let mut dropped_requests = 0;
-        while let Ok(more) = requests_receiver.try_recv() {
+        let mut accepted_requests =
+            discard_malformed_repair_requests(&mut reqs_v[0], stats, cluster_type);
+        while let Ok(mut more) = requests_receiver.try_recv() {
             total_requests += more.len();
-            if total_requests > max_buffered_packets {
+            if accepted_requests > max_buffered_packets {
                 dropped_requests += more.len();
             } else {
-                reqs_v.push(more);
+                let retained = discard_malformed_repair_requests(&mut more, stats, cluster_type);
+                if retained > 0 {
+                    reqs_v.push(more);
+                }
+                accepted_requests += retained;
             }
         }
 
@@ -1393,6 +1460,50 @@ mod tests {
         } else {
             assert!(res.is_err());
         }
+    }
+
+    #[test]
+    fn test_check_well_formed_repair_request() {
+        let request = RepairProtocol::WindowIndex {
+            header: RepairRequestHeader::default(),
+            slot: 123,
+            shred_index: 456,
+        };
+        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut stats = ServeRepairStats::default();
+        let res = check_well_formed_repair_request(&pkt, &mut stats);
+        assert!(res.is_ok());
+        pkt.meta_mut().size = 8;
+        let mut stats = ServeRepairStats::default();
+        let res = check_well_formed_repair_request(&pkt, &mut stats);
+        assert!(res.is_err());
+        assert_eq!(stats.err_malformed, 1);
+
+        let request = RepairProtocol::AncestorHashes {
+            header: RepairRequestHeader::default(),
+            slot: 123,
+        };
+        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut stats = ServeRepairStats::default();
+        let res = check_well_formed_repair_request(&pkt, &mut stats);
+        assert!(res.is_ok());
+        pkt.meta_mut().size = 8;
+        let mut stats = ServeRepairStats::default();
+        let res = check_well_formed_repair_request(&pkt, &mut stats);
+        assert!(res.is_err());
+        assert_eq!(stats.err_malformed, 1);
+
+        let request = RepairProtocol::LegacyOrphan(LegacyContactInfo::default(), 123);
+        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut stats = ServeRepairStats::default();
+        let res = check_well_formed_repair_request(&pkt, &mut stats);
+        assert!(res.is_err());
+        assert_eq!(stats.err_unsigned, 1);
+        pkt.meta_mut().size = 3;
+        let mut stats = ServeRepairStats::default();
+        let res = check_well_formed_repair_request(&pkt, &mut stats);
+        assert!(res.is_err());
+        assert_eq!(stats.err_malformed, 1);
     }
 
     #[test]
