@@ -114,8 +114,10 @@ where
 }
 
 impl EncodableKey for Keypair {
-    fn pubkey_string(&self) -> Result<String, Box<dyn error::Error>> {
-        Ok(self.pubkey().to_string())
+    type Pubkey = Pubkey;
+
+    fn get_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+        Ok(self.pubkey())
     }
 
     fn read_key<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {

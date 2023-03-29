@@ -12,6 +12,7 @@ use {
     itertools::Itertools,
     std::{
         error,
+        fs::{self, File, OpenOptions},
         io::{Read, Write},
         path::Path,
     },
@@ -112,11 +113,39 @@ pub fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
 /// The `EncodableKey` trait defines the interface by which cryptographic keys/keypairs are read,
 /// written, and derived from sources.
 pub trait EncodableKey: Sized {
-    fn pubkey_string(&self) -> Result<String, Box<dyn error::Error>>;
+    type Pubkey: ToString;
+    fn get_pubkey(&self) -> Result<Self::Pubkey, Box<dyn error::Error>>;
     fn read_key<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>>;
-    fn read_key_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>>;
+    fn read_key_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
+        let mut file = File::open(path.as_ref())?;
+        Self::read_key(&mut file)
+    }
     fn write_key<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>>;
-    fn write_key_file<F: AsRef<Path>>(&self, outfile: F) -> Result<String, Box<dyn error::Error>>;
+    fn write_key_file<F: AsRef<Path>>(&self, outfile: F) -> Result<String, Box<dyn error::Error>> {
+        let outfile = outfile.as_ref();
+
+        if let Some(outdir) = outfile.parent() {
+            fs::create_dir_all(outdir)?;
+        }
+
+        let mut f = {
+            #[cfg(not(unix))]
+            {
+                OpenOptions::new()
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                OpenOptions::new().mode(0o600)
+            }
+        }
+        .write(true)
+        .truncate(true)
+        .create(true)
+        .open(outfile)?;
+
+        self.write_key(&mut f)
+    }
     fn key_from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>>;
     fn key_from_seed_and_derivation_path(
         seed: &[u8],

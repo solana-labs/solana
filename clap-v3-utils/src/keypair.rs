@@ -1068,19 +1068,19 @@ pub fn keypair_from_seed_phrase(
 }
 
 fn encodable_key_from_seed_phrase<K: EncodableKey>(
-    keypair_name: &str,
+    key_name: &str,
     skip_validation: bool,
     confirm_pubkey: bool,
     derivation_path: Option<DerivationPath>,
     legacy: bool,
 ) -> Result<K, Box<dyn error::Error>> {
-    let seed_phrase = prompt_password(format!("[{keypair_name}] seed phrase: "))?;
+    let seed_phrase = prompt_password(format!("[{key_name}] seed phrase: "))?;
     let seed_phrase = seed_phrase.trim();
     let passphrase_prompt = format!(
-        "[{keypair_name}] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue: ",
+        "[{key_name}] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue: ",
     );
 
-    let keypair = if skip_validation {
+    let key = if skip_validation {
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         if legacy {
             K::key_from_seed_phrase_and_passphrase(seed_phrase, &passphrase)?
@@ -1118,7 +1118,7 @@ fn encodable_key_from_seed_phrase<K: EncodableKey>(
     };
 
     if confirm_pubkey {
-        let pubkey = keypair.pubkey_string()?;
+        let pubkey = key.get_pubkey()?.to_string();
         print!("Recovered pubkey `{pubkey:?}`. Continue? (y/n): ");
         let _ignored = stdout().flush();
         let mut input = String::new();
@@ -1129,7 +1129,7 @@ fn encodable_key_from_seed_phrase<K: EncodableKey>(
         }
     }
 
-    Ok(keypair)
+    Ok(key)
 }
 
 fn sanitize_seed_phrase(seed_phrase: &str) -> String {
