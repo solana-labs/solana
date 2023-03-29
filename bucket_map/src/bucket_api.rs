@@ -98,18 +98,6 @@ impl<T: Clone + Copy> BucketApi<T> {
         bucket
     }
 
-    pub fn addref(&self, key: &Pubkey) -> Option<RefCount> {
-        self.get_write_bucket()
-            .as_mut()
-            .and_then(|bucket| bucket.addref(key))
-    }
-
-    pub fn unref(&self, key: &Pubkey) -> Option<RefCount> {
-        self.get_write_bucket()
-            .as_mut()
-            .and_then(|bucket| bucket.unref(key))
-    }
-
     pub fn insert(&self, pubkey: &Pubkey, value: (&[T], RefCount)) {
         let mut bucket = self.get_write_bucket();
         bucket.as_mut().unwrap().insert(pubkey, value)
