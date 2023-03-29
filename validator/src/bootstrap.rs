@@ -369,6 +369,16 @@ pub fn fail_rpc_node(
     blacklisted_rpc_nodes.insert(*rpc_id);
 }
 
+fn shutdown_gossip_service(
+    gossip: &mut Option<(Arc<ClusterInfo>, Arc<AtomicBool>, GossipService)>,
+) {
+    if let Some((cluster_info, gossip_exit_flag, gossip_service)) = gossip.take() {
+        cluster_info.save_contact_info();
+        gossip_exit_flag.store(true, Ordering::Relaxed);
+        gossip_service.join().unwrap();
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn attempt_download_genesis_and_snapshot(
     rpc_contact_info: &ContactInfo,
@@ -421,10 +431,7 @@ pub fn attempt_download_genesis_and_snapshot(
         }
     }
 
-    let (cluster_info, gossip_exit_flag, gossip_service) = gossip.take().unwrap();
-    cluster_info.save_contact_info();
-    gossip_exit_flag.store(true, Ordering::Relaxed);
-    gossip_service.join().unwrap();
+    shutdown_gossip_service(gossip);
 
     let rpc_client_slot = rpc_client
         .get_slot_with_commitment(CommitmentConfig::finalized())
@@ -629,11 +636,7 @@ pub fn rpc_bootstrap(
         }
     }
 
-    if let Some((cluster_info, gossip_exit_flag, gossip_service)) = gossip.take() {
-        cluster_info.save_contact_info();
-        gossip_exit_flag.store(true, Ordering::Relaxed);
-        gossip_service.join().unwrap();
-    }
+    shutdown_gossip_service(&mut gossip);
 }
 
 /// Get RPC peer node candidates to download from.
