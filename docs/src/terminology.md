@@ -80,6 +80,10 @@ See [vote credit](#vote-credit).
 
 A call from one smart contract program to another. For more information, see [calling between programs](developing/programming-model/calling-between-programs.md).
 
+## dApps
+
+Decentralised apps, web apps that can interface with blockchains, for the purposes of authentication, token transfer, encryption and decryption, and more.
+
 ## data plane
 
 A multicast network used to efficiently validate [entries](#entry) and gain consensus.
@@ -231,7 +235,7 @@ A [block](#block) or [slot](#slot) that has reached maximum [lockout](#lockout) 
 
 The component of a [validator](#validator) responsible for [program](#program) execution.
 
-## SBF / Solana Bytecode Format
+## Solana Bytecode Format (SBF)
 
 Solana's variation of the Berkeley Packet Filter (BPF) bytecode used for on-chain programs. SBF allows arbitrary memory access, indirect jumps, loops, and other useful behavior, and also removes unused BPF features.
 
@@ -343,7 +347,27 @@ A reward tally for [validators](#validator). A vote credit is awarded to a valid
 
 ## wallet
 
-A collection of [keypairs](#keypair) that allows users to manage their funds.
+A collection of [keypairs](#keypair) that allows users to manage their funds. As the term 'wallet' is often overloaded, it may be preferable to use a more specific term like [wallet address](#wallet-address), [wallet app](#wallet-app), or [wallet name](#wallet-name) depending on what's being referred to. 
+
+## wallet standard
+
+A cross-chain method for [dApps](#dApp) to connect to user's wallet. See [Wallet Standard](https://github.com/wallet-standard/wallet-standard)  documentation. The [Solana Wallet Standard](https://github.com/solana-labs/wallet-standard) includes Solana-specific features.
+
+## wallet adapter
+
+A mechanism [dApps](#dApp) use to connect to [wallet apps](#wallet-app). See [Wallet Adapter](https://solana-labs.github.io/wallet-adapter/) documentation.
+
+## wallet app
+
+User-facing apps that allow people to interface with the blockchain. For example, Phantom is a well known Solana wallet app.
+
+## wallet address
+
+The user's address on Solana, typically shown as a base58 set of characters. `4CELBDjufFArduqxF5Z8TzqMaoSLTscvsghVZa9DWTBc` is an example of a wallet address.
+
+## wallet name
+
+A memorable name that can be used to refer to a [wallet address](#wallet-address), typically using SNS or ANS or similar. `username.sol` or `username.abc` are examples of wallet names.
 
 ## warmup period
 
