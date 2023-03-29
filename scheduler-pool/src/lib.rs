@@ -975,7 +975,7 @@ impl InstalledScheduler for Scheduler {
         timings_and_result
     }
 
-    fn trigger_termination(&mut self) {
+    fn schedule_termination(&mut self) {
         self.do_trigger_stop(false);
     }
 
