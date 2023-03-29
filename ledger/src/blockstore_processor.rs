@@ -1040,6 +1040,7 @@ pub fn confirm_slot(
     }?;
 
     confirm_slot_entries(
+        blockstore,
         bank,
         slot_entries_load_result,
         timing,
@@ -1055,6 +1056,7 @@ pub fn confirm_slot(
 
 #[allow(clippy::too_many_arguments)]
 fn confirm_slot_entries(
+    blockstore: &Blockstore,
     bank: &Arc<Bank>,
     slot_entries_load_result: (Vec<Entry>, u64, bool),
     timing: &mut ConfirmationTiming,
@@ -1082,12 +1084,13 @@ fn confirm_slot_entries(
         })
         .sum::<usize>();
     debug!(
-        "Fetched entries for slot {}, num_entries: {}, num_shreds: {}, num_txs: {}, slot_full: {}",
+        "Fetched entries for slot {}, num_entries: {}, num_shreds: {}, num_txs: {}, slot_full: {} at {:?}",
         slot,
         num_entries,
         num_shreds,
         num_txs,
         slot_full,
+        blockstore.ledger_path()
     );
 
     if !skip_verification {
