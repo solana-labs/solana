@@ -6238,7 +6238,6 @@ dependencies = [
  "bincode",
  "chrono-humanize",
  "crossbeam-channel",
- "futures 0.3.24",
  "log",
  "serde",
  "solana-banks-client",
@@ -6251,7 +6250,6 @@ dependencies = [
  "solana-sdk 1.16.0",
  "solana-stake-program",
  "solana-vote-program",
- "tarpc",
  "thiserror",
  "tokio",
 ]
