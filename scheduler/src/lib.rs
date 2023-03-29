@@ -363,7 +363,7 @@ pub struct Page {
 impl Page {
     fn new(address: &Pubkey, current_usage: Usage) -> Self {
         Self {
-            address_str: format!("{}", address),
+            address_str: format!("{address}"),
             current_usage,
             next_usage: Usage::Unused,
             provisional_task_ids: Default::default(),
