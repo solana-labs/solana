@@ -169,17 +169,21 @@ impl<O: BucketOccupied> BucketStorage<O> {
         self.count.fetch_sub(1, Ordering::Relaxed);
     }
 
-    pub fn get<T: Sized>(&self, ix: u64) -> &T {
-        &self.get_cell_slice::<T>(ix, 1)[0]
-    }
-
-    pub(crate) fn get_start_offset_with_header(&self, ix: u64) -> usize {
+    fn get_start_offset_with_header(&self, ix: u64) -> usize {
         assert!(ix < self.capacity(), "bad index size");
         (self.cell_size * ix) as usize
     }
 
-    pub(crate) fn get_start_offset_no_header(&self, ix: u64) -> usize {
+    fn get_start_offset_no_header(&self, ix: u64) -> usize {
         self.get_start_offset_with_header(ix) + O::offset_to_first_data()
+    }
+
+    pub fn get<T: Sized>(&self, ix: u64) -> &T {
+        &self.get_cell_slice::<T>(ix, 1)[0]
+    }
+
+    pub fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
+        &mut self.get_mut_cell_slice::<T>(ix, 1)[0]
     }
 
     pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
@@ -198,16 +202,6 @@ impl<O: BucketOccupied> BucketStorage<O> {
         unsafe { std::slice::from_raw_parts(ptr, len) }
     }
 
-    pub(crate) fn get_mut_from_parts<T: Sized>(item_slice: &mut [u8]) -> &mut T {
-        assert!(std::mem::size_of::<T>() <= item_slice.len());
-        let item = item_slice.as_mut_ptr() as *mut T;
-        unsafe { &mut *item }
-    }
-
-    pub fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
-        &mut self.get_mut_cell_slice::<T>(ix, 1)[0]
-    }
-
     pub fn get_mut_cell_slice<T: Sized>(&mut self, ix: u64, len: u64) -> &mut [T] {
         let start = self.get_start_offset_no_header(ix);
         let len = std::mem::size_of::<T>() * len as usize;
@@ -222,6 +216,18 @@ impl<O: BucketOccupied> BucketStorage<O> {
             ptr
         };
         unsafe { std::slice::from_raw_parts_mut(ptr, len) }
+    }
+
+    pub(crate) fn get_from_parts<T: Sized>(item_slice: &[u8]) -> &T {
+        assert!(std::mem::size_of::<T>() <= item_slice.len());
+        let item = item_slice.as_ptr() as *const T;
+        unsafe { &*item }
+    }
+
+    pub(crate) fn get_mut_from_parts<T: Sized>(item_slice: &mut [u8]) -> &mut T {
+        assert!(std::mem::size_of::<T>() <= item_slice.len());
+        let item = item_slice.as_mut_ptr() as *mut T;
+        unsafe { &mut *item }
     }
 
     fn new_map(
