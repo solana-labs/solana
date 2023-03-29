@@ -8180,7 +8180,8 @@ impl Bank {
         if s.0.is_some() {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
-            let timings_and_result = s.0
+            let timings_and_result = s
+                .0
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART));
             if !IS_RESTART {
