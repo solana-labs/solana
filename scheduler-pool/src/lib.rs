@@ -970,7 +970,7 @@ impl InstalledScheduler for Scheduler {
         info!(
             "Scheduler::gracefully_stop(): {} waiting done.. from_internal: {from_internal} is_restart: {is_restart}", label,
         );
-        
+
         timings_and_result
     }
 
