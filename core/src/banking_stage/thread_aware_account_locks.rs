@@ -1,9 +1,6 @@
 use {
     solana_sdk::pubkey::Pubkey,
-    std::{
-        collections::HashMap,
-        ops::{BitAnd, BitAndAssign},
-    },
+    std::{collections::HashMap, ops::BitAndAssign},
 };
 
 pub const MAX_THREADS: usize = 64;
@@ -19,14 +16,6 @@ pub struct ThreadSet(u64);
 impl BitAndAssign for ThreadSet {
     fn bitand_assign(&mut self, rhs: Self) {
         self.0 &= rhs.0;
-    }
-}
-
-impl BitAnd for ThreadSet {
-    type Output = Self;
-
-    fn bitand(self, rhs: Self) -> Self::Output {
-        Self(self.0 & rhs.0)
     }
 }
 
