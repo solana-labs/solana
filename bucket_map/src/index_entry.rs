@@ -133,6 +133,12 @@ impl MultipleSlots {
             (Slot::BITS - (num_slots - 1).leading_zeros()) as u64
         }
     }
+
+    /// This function maps the original data location into an index in the current bucket storage.
+    /// This is coupled with how we resize bucket storages.
+    pub(crate) fn data_loc(&self, storage: &BucketStorage<DataBucket>) -> u64 {
+        self.storage_offset() << (storage.capacity_pow2 - self.storage_capacity_when_created_pow2())
+    }
 }
 
 /// Pack the storage offset and capacity-when-crated-pow2 fields into a single u64
@@ -191,18 +197,6 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_entry.ref_count
     }
 
-    /// This function maps the original data location into an index in the current bucket storage.
-    /// This is coupled with how we resize bucket storages.
-    pub fn data_loc(
-        &self,
-        index_bucket: &BucketStorage<IndexBucket<T>>,
-        storage: &BucketStorage<DataBucket>,
-    ) -> u64 {
-        let multiple_slots = self.get_multiple_slots(index_bucket);
-        multiple_slots.storage_offset()
-            << (storage.capacity_pow2 - multiple_slots.storage_capacity_when_created_pow2())
-    }
-
     pub fn read_value<'a>(
         &self,
         index_bucket: &BucketStorage<IndexBucket<T>>,
@@ -213,7 +207,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
         let slice = if num_slots > 0 {
             let data_bucket_ix = multiple_slots.data_bucket_ix();
             let data_bucket = &data_buckets[data_bucket_ix as usize];
-            let loc = self.data_loc(index_bucket, data_bucket);
+            let loc = multiple_slots.data_loc(data_bucket);
             assert!(!data_bucket.is_free(loc));
             data_bucket.get_cell_slice(loc, num_slots)
         } else {
