@@ -289,13 +289,13 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
         elem.set_ref_count(&mut self.index, ref_count);
         let bucket_ix = elem.data_bucket_ix(&self.index);
-        let current_bucket = &self.data[bucket_ix as usize];
         let num_slots = data_len as u64;
         if best_fit_bucket == bucket_ix && elem.num_slots(&self.index) > 0 {
+            let current_bucket = &mut self.data[bucket_ix as usize];
             // in place update
             let elem_loc = elem.data_loc(&self.index, current_bucket);
-            let slice: &mut [T] = current_bucket.get_mut_cell_slice(elem_loc, data_len as u64);
             assert!(!current_bucket.is_free(elem_loc));
+            let slice: &mut [T] = current_bucket.get_mut_cell_slice(elem_loc, data_len as u64);
             elem.set_num_slots(&mut self.index, num_slots);
 
             slice.iter_mut().zip(data).for_each(|(dest, src)| {
@@ -305,6 +305,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         } else {
             // need to move the allocation to a best fit spot
             let best_bucket = &self.data[best_fit_bucket as usize];
+            let current_bucket = &self.data[bucket_ix as usize];
             let cap_power = best_bucket.capacity_pow2;
             let cap = best_bucket.capacity();
             let pos = thread_rng().gen_range(0, cap);
