@@ -107,6 +107,14 @@ impl MultipleSlots {
     fn storage_offset(&self) -> u64 {
         self.storage_cap_and_offset.offset()
     }
+
+    pub(crate) fn num_slots(&self) -> Slot {
+        self.num_slots
+    }
+
+    pub(crate) fn set_num_slots(&mut self, num_slots: Slot) {
+        self.num_slots = num_slots;
+    }
 }
 
 /// Pack the storage offset and capacity-when-crated-pow2 fields into a single u64
@@ -143,10 +151,12 @@ impl<T> IndexEntryPlaceInBucket<T> {
     }
 
     pub fn data_bucket_ix(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> u64 {
-        IndexEntry::<T>::data_bucket_from_num_slots(self.num_slots(index_bucket))
+        IndexEntry::<T>::data_bucket_from_num_slots(
+            self.get_multiple_slots(index_bucket).num_slots(),
+        )
     }
 
-    fn get_multiple_slots<'a>(
+    pub(crate) fn get_multiple_slots<'a>(
         &self,
         index_bucket: &'a BucketStorage<IndexBucket<T>>,
     ) -> &'a MultipleSlots {
@@ -184,7 +194,8 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_bucket: &BucketStorage<IndexBucket<T>>,
         data_buckets: &'a [BucketStorage<DataBucket>],
     ) -> Option<(&'a [T], RefCount)> {
-        let num_slots = self.num_slots(index_bucket);
+        let multiple_slots = self.get_multiple_slots(index_bucket);
+        let num_slots = multiple_slots.num_slots();
         let slice = if num_slots > 0 {
             let data_bucket_ix = self.data_bucket_ix(index_bucket);
             let data_bucket = &data_buckets[data_bucket_ix as usize];
@@ -217,14 +228,6 @@ impl<T> IndexEntryPlaceInBucket<T> {
     ) {
         let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
         index_entry.ref_count = ref_count;
-    }
-
-    pub fn num_slots(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> Slot {
-        self.get_multiple_slots(index_bucket).num_slots
-    }
-
-    pub fn set_num_slots(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, num_slots: Slot) {
-        self.get_multiple_slots_mut(index_bucket).num_slots = num_slots;
     }
 }
 
