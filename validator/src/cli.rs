@@ -612,8 +612,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        Reads/writes perf samples are collected in 1 / ROCKS_PERF_SAMPLE_INTERVAL sampling rate."),
         )
         .arg(
-            Arg::with_name("skip_verification")
-                .long("skip-verification")
+            Arg::with_name("skip_startup_ledger_verification")
+                .long("skip-startup-ledger-verification")
                 .takes_value(false)
                 .help("Skip ledger verification at validator bootup."),
         )
@@ -1751,7 +1751,7 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .long("skip-poh-verify")
             .takes_value(false)
             .help("Skip ledger verification at validator bootup."),
-        replaced_by: "skip-verification",
+        replaced_by: "skip-startup-ledger-verification",
     );
 
     res

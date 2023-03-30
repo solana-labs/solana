@@ -1276,7 +1276,7 @@ pub fn main() {
         gossip_validators,
         wal_recovery_mode,
         run_verification: !(matches.is_present("skip_poh_verify")
-            || matches.is_present("skip_verification")),
+            || matches.is_present("skip_startup_ledger_verification")),
         debug_keys,
         contact_debug_interval,
         send_transaction_service_config: send_transaction_service::Config {
