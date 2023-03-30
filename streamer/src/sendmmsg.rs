@@ -16,6 +16,7 @@ use {
             ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig,
         },
     },
+    solana_perf::packet::PacketBatch,
     solana_sdk::transport::TransportError,
     std::{
         borrow::Borrow,
@@ -159,26 +160,26 @@ fn transport_error_to_io_error(err: TransportError) -> io::Error {
     }
 }
 
-pub fn batch_send_with_connection_cache<P, M, C, S, T>(
-    packets: &[(T, S)],
+pub fn batch_send_with_connection_cache<P, M, C>(
+    packets: PacketBatch,
     connection_cache: &Arc<ConnectionCache<P, M, C>>,
 ) -> Result<(), SendPktsError>
 where
     P: ConnectionPool<NewConnectionConfig = C>,
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
     C: NewConnectionConfig,
-    S: Borrow<SocketAddr>,
-    T: AsRef<[u8]>,
 {
     let mut num_failed = 0;
     let mut erropt = None;
-    for (p, a) in packets {
+    for packet in packets.iter() {
+        let a = packet.meta().socket_addr();
+        let p = packet.data(..).unwrap();
         info!(
             "Sending response back to batch_send_with_connection_cache {:?} via quic",
             a.borrow()
         );
-        let connection = connection_cache.get_connection(a.borrow());
-        let e = connection.send_data(p.as_ref());
+        let connection = connection_cache.get_connection(&a);
+        let e = connection.send_data_async(p.to_vec());
         if let Err(e) = e {
             num_failed += 1;
             if erropt.is_none() {

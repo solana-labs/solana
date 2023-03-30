@@ -956,7 +956,12 @@ impl ServeRepair {
             }
             stats.processed += 1;
             let rsp = match Self::handle_repair(
-                recycler, &from_addr, blockstore, request.clone(), stats, ping_cache,
+                recycler,
+                &from_addr,
+                blockstore,
+                request.clone(),
+                stats,
+                ping_cache,
             ) {
                 None => continue,
                 Some(rsp) => rsp,
@@ -1200,7 +1205,7 @@ impl ServeRepair {
             }
         }
         if !pending_pongs.is_empty() {
-            let pongs_len =  pending_pongs.len();
+            let pongs_len = pending_pongs.len();
             match repair_socket {
                 RepairTransportConfig::Udp(repair_socket) => {
                     if let Err(SendPktsError::IoError(err, num_failed)) =
