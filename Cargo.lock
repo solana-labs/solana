@@ -4982,6 +4982,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bench-tps-transfer-program"
+version = "1.16.0"
+dependencies = [
+ "solana-program 1.16.0",
+]
+
+[[package]]
 name = "solana-bloom"
 version = "1.16.0"
 dependencies = [
