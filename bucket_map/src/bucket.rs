@@ -78,10 +78,10 @@ impl<I: BucketOccupied, D: BucketOccupied> Reallocated<I, D> {
 }
 
 // >= 2 instances of BucketStorage per 'bucket' in the bucket map. 1 for index, >= 1 for data
-pub struct Bucket<T> {
+pub struct Bucket<T: 'static> {
     drives: Arc<Vec<PathBuf>>,
     //index
-    pub index: BucketStorage<IndexBucket>,
+    pub index: BucketStorage<IndexBucket<T>>,
     //random offset for the index
     random: u64,
     //storage buckets to store SlotSlice up to a power of 2 in len
@@ -89,7 +89,7 @@ pub struct Bucket<T> {
     _phantom: PhantomData<T>,
     stats: Arc<BucketMapStats>,
 
-    pub reallocated: Reallocated<IndexBucket, DataBucket>,
+    pub reallocated: Reallocated<IndexBucket<T>, DataBucket>,
 }
 
 impl<'b, T: Clone + Copy + 'static> Bucket<T> {
@@ -156,7 +156,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         result
     }
 
-    pub fn find_index_entry(&self, key: &Pubkey) -> Option<(IndexEntryPlaceInBucket, u64)> {
+    pub fn find_index_entry(&self, key: &Pubkey) -> Option<(IndexEntryPlaceInBucket<T>, u64)> {
         Self::bucket_find_index_entry(&self.index, key, self.random)
     }
 
@@ -165,10 +165,10 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     /// if entry does not exist, return just the index of an empty entry appropriate for this key
     /// returns (existing entry, index of the found or empty entry)
     fn find_index_entry_mut(
-        index: &mut BucketStorage<IndexBucket>,
+        index: &mut BucketStorage<IndexBucket<T>>,
         key: &Pubkey,
         random: u64,
-    ) -> Result<(Option<IndexEntryPlaceInBucket>, u64), BucketMapError> {
+    ) -> Result<(Option<IndexEntryPlaceInBucket<T>>, u64), BucketMapError> {
         let ix = Self::bucket_index_ix(index, key, random);
         let mut first_free = None;
         let mut m = Measure::start("bucket_find_index_entry_mut");
@@ -204,10 +204,10 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     fn bucket_find_index_entry(
-        index: &BucketStorage<IndexBucket>,
+        index: &BucketStorage<IndexBucket<T>>,
         key: &Pubkey,
         random: u64,
-    ) -> Option<(IndexEntryPlaceInBucket, u64)> {
+    ) -> Option<(IndexEntryPlaceInBucket<T>, u64)> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
             let ii = i % index.capacity();
@@ -223,7 +223,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     fn bucket_create_key(
-        index: &mut BucketStorage<IndexBucket>,
+        index: &mut BucketStorage<IndexBucket<T>>,
         key: &Pubkey,
         random: u64,
         is_resizing: bool,
@@ -421,7 +421,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         }
     }
 
-    pub fn apply_grow_index(&mut self, random: u64, index: BucketStorage<IndexBucket>) {
+    pub fn apply_grow_index(&mut self, random: u64, index: BucketStorage<IndexBucket<T>>) {
         self.stats
             .index
             .resize_grow(self.index.capacity_bytes(), index.capacity_bytes());
@@ -480,7 +480,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         items.data = Some((data_index, new_bucket));
     }
 
-    fn bucket_index_ix(index: &BucketStorage<IndexBucket>, key: &Pubkey, random: u64) -> u64 {
+    fn bucket_index_ix(index: &BucketStorage<IndexBucket<T>>, key: &Pubkey, random: u64) -> u64 {
         let mut s = DefaultHasher::new();
         key.hash(&mut s);
         //the locally generated random will make it hard for an attacker

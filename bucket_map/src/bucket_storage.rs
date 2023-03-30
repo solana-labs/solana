@@ -370,7 +370,7 @@ mod test {
         let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
         assert!(!paths.is_empty());
 
-        let mut storage = BucketStorage::<IndexBucket>::new(
+        let mut storage = BucketStorage::<IndexBucket<u64>>::new(
             Arc::new(paths),
             1,
             1,
