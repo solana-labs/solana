@@ -369,14 +369,11 @@ pub fn fail_rpc_node(
     blacklisted_rpc_nodes.insert(*rpc_id);
 }
 
-fn shutdown_gossip_service(
-    gossip: &mut Option<(Arc<ClusterInfo>, Arc<AtomicBool>, GossipService)>,
-) {
-    if let Some((cluster_info, gossip_exit_flag, gossip_service)) = gossip.take() {
-        cluster_info.save_contact_info();
-        gossip_exit_flag.store(true, Ordering::Relaxed);
-        gossip_service.join().unwrap();
-    }
+fn shutdown_gossip_service(gossip: (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService)) {
+    let (cluster_info, gossip_exit_flag, gossip_service) = gossip;
+    cluster_info.save_contact_info();
+    gossip_exit_flag.store(true, Ordering::Relaxed);
+    gossip_service.join().unwrap();
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -431,7 +428,9 @@ pub fn attempt_download_genesis_and_snapshot(
         }
     }
 
-    shutdown_gossip_service(gossip);
+    if let Some(gossip) = gossip.take() {
+        shutdown_gossip_service(gossip);
+    }
 
     let rpc_client_slot = rpc_client
         .get_slot_with_commitment(CommitmentConfig::finalized())
@@ -658,7 +657,9 @@ pub fn rpc_bootstrap(
         }
     }
 
-    shutdown_gossip_service(&mut gossip);
+    if let Some(gossip) = gossip.take() {
+        shutdown_gossip_service(gossip);
+    }
 }
 
 /// Get RPC peer node candidates to download from.
