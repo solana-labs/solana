@@ -122,6 +122,7 @@ pub struct StreamStats {
     pub(crate) total_invalid_chunks: AtomicUsize,
     pub(crate) total_invalid_chunk_size: AtomicUsize,
     pub(crate) total_packets_allocated: AtomicUsize,
+    pub(crate) total_packet_batches_allocated: AtomicUsize,
     pub(crate) total_chunks_received: AtomicUsize,
     pub(crate) total_staked_chunks_received: AtomicUsize,
     pub(crate) total_unstaked_chunks_received: AtomicUsize,
@@ -131,8 +132,10 @@ pub struct StreamStats {
     pub(crate) total_packet_batches_none: AtomicUsize,
     pub(crate) total_packets_sent_for_batching: AtomicUsize,
     pub(crate) total_bytes_sent_for_batching: AtomicUsize,
+    pub(crate) total_chunks_sent_for_batching: AtomicUsize,
     pub(crate) total_packets_sent_to_consumer: AtomicUsize,
     pub(crate) total_bytes_sent_to_consumer: AtomicUsize,
+    pub(crate) total_chunks_processed_by_batcher: AtomicUsize,
     pub(crate) total_stream_read_errors: AtomicUsize,
     pub(crate) total_stream_read_timeouts: AtomicUsize,
     pub(crate) num_evictions: AtomicUsize,
@@ -255,6 +258,12 @@ impl StreamStats {
                 i64
             ),
             (
+                "packet_batches_allocated",
+                self.total_packet_batches_allocated
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
                 "packets_sent_for_batching",
                 self.total_packets_sent_for_batching
                     .swap(0, Ordering::Relaxed),
@@ -267,6 +276,12 @@ impl StreamStats {
                 i64
             ),
             (
+                "chunks_sent_for_batching",
+                self.total_chunks_sent_for_batching
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
                 "packets_sent_to_consumer",
                 self.total_packets_sent_to_consumer
                     .swap(0, Ordering::Relaxed),
@@ -275,6 +290,12 @@ impl StreamStats {
             (
                 "bytes_sent_to_consumer",
                 self.total_bytes_sent_to_consumer.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "chunks_processed_by_batcher",
+                self.total_chunks_processed_by_batcher
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
