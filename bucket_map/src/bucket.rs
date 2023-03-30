@@ -13,7 +13,6 @@ use {
     std::{
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
-        marker::PhantomData,
         ops::RangeBounds,
         path::PathBuf,
         sync::{
@@ -86,7 +85,6 @@ pub struct Bucket<T: 'static> {
     random: u64,
     //storage buckets to store SlotSlice up to a power of 2 in len
     pub data: Vec<BucketStorage<DataBucket>>,
-    _phantom: PhantomData<T>,
     stats: Arc<BucketMapStats>,
 
     pub reallocated: Reallocated<IndexBucket<T>, DataBucket>,
@@ -114,7 +112,6 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             drives,
             index,
             data: vec![],
-            _phantom: PhantomData,
             stats,
             reallocated: Reallocated::default(),
         }
