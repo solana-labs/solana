@@ -312,18 +312,20 @@ where
     if let Some(stats) = stats {
         packet_batch.iter().for_each(|p| stats.record(p));
     }
-    let packets = packet_batch.iter().filter_map(|pkt| {
-        let addr = pkt.meta().socket_addr();
-        let data = pkt.data(..)?;
-        socket_addr_space.check(&addr).then_some((data, addr))
-    });
 
     match sock {
         ResponderOption::Socket(sock) => {
-            batch_send(sock, &packets.collect::<Vec<_>>())?;
+            let packets = packet_batch.iter().filter_map(|pkt| {
+                let addr = pkt.meta().socket_addr();
+                let data = pkt.data(..)?;
+                socket_addr_space.check(&addr).then_some((data, addr))
+            });
+
+            let packets = packets.collect::<Vec<_>>();
+            batch_send(sock, &packets)?;
         }
         ResponderOption::ConnectionCache(connection_cache) => {
-            batch_send_with_connection_cache(&packets.collect::<Vec<_>>(), connection_cache)?;
+            batch_send_with_connection_cache(packet_batch, connection_cache)?;
         }
     }
 
