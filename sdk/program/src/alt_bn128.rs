@@ -243,37 +243,39 @@ mod target_arch {
 
         let ele_len = input.len().saturating_div(ALT_BN128_PAIRING_ELEMENT_LEN);
 
-        let mut vec_a: Vec<G1> = Vec::new();
-        let mut vec_b: Vec<G2> = Vec::new();
+        let mut vec_pairs: Vec<(G1, G2)> = Vec::new();
         for i in 0..ele_len {
-            let g1: G1 = PodG1(
-                convert_edianness_64(
-                    &input[i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
-                        ..i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
-                            .saturating_add(ALT_BN128_POINT_SIZE)],
+            vec_pairs.push((
+                PodG1(
+                    convert_edianness_64(
+                        &input[i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
+                            ..i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
+                                .saturating_add(ALT_BN128_POINT_SIZE)],
+                    )
+                    .try_into()
+                    .map_err(AltBn128Error::TryIntoVecError)?,
                 )
-                .try_into()
-                .map_err(AltBn128Error::TryIntoVecError)?,
-            )
-            .try_into()?;
-            vec_a.push(g1);
-            let g2: G2 = PodG2(
-                convert_edianness_128(
-                    &input[i
-                        .saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
-                        .saturating_add(ALT_BN128_POINT_SIZE)
-                        ..i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
-                            .saturating_add(ALT_BN128_PAIRING_ELEMENT_LEN)],
+                .try_into()?,
+                PodG2(
+                    convert_edianness_128(
+                        &input[i
+                            .saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
+                            .saturating_add(ALT_BN128_POINT_SIZE)
+                            ..i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
+                                .saturating_add(ALT_BN128_PAIRING_ELEMENT_LEN)],
+                    )
+                    .try_into()
+                    .map_err(AltBn128Error::TryIntoVecError)?,
                 )
-                .try_into()
-                .map_err(AltBn128Error::TryIntoVecError)?,
-            )
-            .try_into()?;
-            vec_b.push(g2);
+                .try_into()?,
+            ));
         }
 
         let mut result = BigInteger256::from(0u64);
-        let res = <Bn<Config> as Pairing>::multi_pairing(vec_a.iter(), vec_b.iter());
+        let res = <Bn<Config> as Pairing>::multi_pairing(
+            vec_pairs.iter().map(|pair| pair.0),
+            vec_pairs.iter().map(|pair| pair.1),
+        );
 
         if res.0 == ark_bn254::Fq12::one() {
             result = BigInteger256::from(1u64);
