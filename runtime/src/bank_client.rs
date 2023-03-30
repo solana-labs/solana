@@ -51,7 +51,7 @@ impl AsyncClient for BankClient {
 }
 
 impl SyncClient for BankClient {
-    fn send_and_confirm_message<T: Signers>(
+    fn send_and_confirm_message<T: Signers + ?Sized>(
         &self,
         keypairs: &T,
         message: Message,
