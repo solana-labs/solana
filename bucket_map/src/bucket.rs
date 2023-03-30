@@ -13,7 +13,6 @@ use {
     std::{
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
-        marker::PhantomData,
         ops::RangeBounds,
         path::PathBuf,
         sync::{
@@ -86,7 +85,6 @@ pub struct Bucket<T: 'static> {
     random: u64,
     //storage buckets to store SlotSlice up to a power of 2 in len
     pub data: Vec<BucketStorage<DataBucket>>,
-    _phantom: PhantomData<T>,
     stats: Arc<BucketMapStats>,
 
     pub reallocated: Reallocated<IndexBucket<T>, DataBucket>,
@@ -102,7 +100,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         let index = BucketStorage::new(
             Arc::clone(&drives),
             1,
-            std::mem::size_of::<IndexEntry>() as u64,
+            std::mem::size_of::<IndexEntry<T>>() as u64,
             max_search,
             Arc::clone(&stats.index),
             count,
@@ -114,7 +112,6 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             drives,
             index,
             data: vec![],
-            _phantom: PhantomData,
             stats,
             reallocated: Reallocated::default(),
         }
@@ -126,7 +123,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             if self.index.is_free(i) {
                 continue;
             }
-            let ix: &IndexEntry = self.index.get(i);
+            let ix: &IndexEntry<T> = self.index.get(i);
             rv.push(ix.key);
         }
         rv
@@ -268,7 +265,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         data_len: usize,
         ref_count: RefCount,
     ) -> Result<(), BucketMapError> {
-        let best_fit_bucket = IndexEntry::data_bucket_from_num_slots(data_len as u64);
+        let best_fit_bucket = IndexEntry::<T>::data_bucket_from_num_slots(data_len as u64);
         if self.data.get(best_fit_bucket as usize).is_none() {
             // fail early if the data bucket we need doesn't exist - we don't want the index entry partially allocated
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
@@ -375,7 +372,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 let mut index = BucketStorage::new_with_capacity(
                     Arc::clone(&self.drives),
                     1,
-                    std::mem::size_of::<IndexEntry>() as u64,
+                    std::mem::size_of::<IndexEntry<T>>() as u64,
                     // *2 causes rapid growth of index buckets
                     self.index.capacity_pow2 + i, // * 2,
                     self.index.max_search,
@@ -386,14 +383,14 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 let mut valid = true;
                 for ix in 0..self.index.capacity() {
                     if !self.index.is_free(ix) {
-                        let elem: &IndexEntry = self.index.get(ix);
+                        let elem: &IndexEntry<T> = self.index.get(ix);
                         let new_ix = Self::bucket_create_key(&mut index, &elem.key, random, true);
                         if new_ix.is_err() {
                             valid = false;
                             break;
                         }
                         let new_ix = new_ix.unwrap();
-                        let new_elem: &mut IndexEntry = index.get_mut(new_ix);
+                        let new_elem: &mut IndexEntry<T> = index.get_mut(new_ix);
                         *new_elem = *elem;
                         /*
                         let dbg_elem: IndexEntry = *new_elem;

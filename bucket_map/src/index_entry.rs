@@ -68,12 +68,13 @@ pub struct IndexEntryPlaceInBucket<T: 'static> {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 // one instance of this per item in the index
 // stored in the index bucket
-pub struct IndexEntry {
+pub struct IndexEntry<T: 'static> {
     pub key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
     ref_count: RefCount, // can this be smaller? Do we ever need more than 4B refcounts?
     storage_cap_and_offset: PackedStorage,
     // if the bucket doubled, the index can be recomputed using create_bucket_capacity_pow2
     num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
+    _phantom: PhantomData<&'static T>,
 }
 
 /// Pack the storage offset and capacity-when-crated-pow2 fields into a single u64
@@ -85,7 +86,7 @@ struct PackedStorage {
     offset: B56,
 }
 
-impl IndexEntry {
+impl<T> IndexEntry<T> {
     /// return closest bucket index fit for the slot slice.
     /// Since bucket size is 2^index, the return value is
     ///     min index, such that 2^index >= num_slots
@@ -103,7 +104,7 @@ impl IndexEntry {
 
 impl<T> IndexEntryPlaceInBucket<T> {
     pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
-        let index_entry = index_bucket.get_mut::<IndexEntry>(self.ix);
+        let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
         index_entry.key = *pubkey;
         index_entry.ref_count = 0;
         index_entry.storage_cap_and_offset = PackedStorage::default();
@@ -116,7 +117,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
         storage_capacity_when_created_pow2: u8,
     ) {
         index_bucket
-            .get_mut::<IndexEntry>(self.ix)
+            .get_mut::<IndexEntry<T>>(self.ix)
             .storage_cap_and_offset
             .set_capacity_when_created_pow2(storage_capacity_when_created_pow2)
     }
@@ -127,18 +128,18 @@ impl<T> IndexEntryPlaceInBucket<T> {
         storage_offset: u64,
     ) {
         index_bucket
-            .get_mut::<IndexEntry>(self.ix)
+            .get_mut::<IndexEntry<T>>(self.ix)
             .storage_cap_and_offset
             .set_offset_checked(storage_offset)
             .expect("New storage offset must fit into 7 bytes!");
     }
 
     pub fn data_bucket_ix(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> u64 {
-        IndexEntry::data_bucket_from_num_slots(self.num_slots(index_bucket))
+        IndexEntry::<T>::data_bucket_from_num_slots(self.num_slots(index_bucket))
     }
 
     pub fn ref_count(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> RefCount {
-        let index_entry = index_bucket.get::<IndexEntry>(self.ix);
+        let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
         index_entry.ref_count
     }
 
@@ -146,7 +147,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
         &self,
         index_bucket: &BucketStorage<IndexBucket<T>>,
     ) -> u8 {
-        let index_entry = index_bucket.get::<IndexEntry>(self.ix);
+        let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
         index_entry
             .storage_cap_and_offset
             .capacity_when_created_pow2()
@@ -154,7 +155,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
 
     pub fn storage_offset(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> u64 {
         index_bucket
-            .get::<IndexEntry>(self.ix)
+            .get::<IndexEntry<T>>(self.ix)
             .storage_cap_and_offset
             .offset()
     }
@@ -166,7 +167,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_bucket: &BucketStorage<IndexBucket<T>>,
         storage: &BucketStorage<DataBucket>,
     ) -> u64 {
-        let index_entry = index_bucket.get::<IndexEntry>(self.ix);
+        let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
         self.storage_offset(index_bucket)
             << (storage.capacity_pow2
                 - index_entry
@@ -201,7 +202,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
     }
 
     pub fn key<'a>(&self, index_bucket: &'a BucketStorage<IndexBucket<T>>) -> &'a Pubkey {
-        let entry: &IndexEntry = index_bucket.get(self.ix);
+        let entry: &IndexEntry<T> = index_bucket.get(self.ix);
         &entry.key
     }
 
@@ -210,16 +211,16 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_bucket: &mut BucketStorage<IndexBucket<T>>,
         ref_count: RefCount,
     ) {
-        let index_entry = index_bucket.get_mut::<IndexEntry>(self.ix);
+        let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
         index_entry.ref_count = ref_count;
     }
 
     pub fn num_slots(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> Slot {
-        index_bucket.get::<IndexEntry>(self.ix).num_slots
+        index_bucket.get::<IndexEntry<T>>(self.ix).num_slots
     }
 
     pub fn set_num_slots(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, num_slots: Slot) {
-        index_bucket.get_mut::<IndexEntry>(self.ix).num_slots = num_slots;
+        index_bucket.get_mut::<IndexEntry<T>>(self.ix).num_slots = num_slots;
     }
 }
 
@@ -231,13 +232,14 @@ mod tests {
         tempfile::tempdir,
     };
 
-    impl IndexEntry {
+    impl<T> IndexEntry<T> {
         pub fn new(key: Pubkey) -> Self {
             IndexEntry {
                 key,
                 ref_count: 0,
                 storage_cap_and_offset: PackedStorage::default(),
                 num_slots: 0,
+                _phantom: PhantomData,
             }
         }
     }
@@ -267,7 +269,7 @@ mod tests {
     #[test]
     fn test_size() {
         assert_eq!(std::mem::size_of::<PackedStorage>(), 1 + 7);
-        assert_eq!(std::mem::size_of::<IndexEntry>(), 32 + 8 + 8 + 8);
+        assert_eq!(std::mem::size_of::<IndexEntry<u64>>(), 32 + 8 + 8 + 8);
     }
 
     fn index_bucket_for_testing() -> BucketStorage<IndexBucket<u64>> {
@@ -279,7 +281,7 @@ mod tests {
         BucketStorage::<IndexBucket<u64>>::new(
             Arc::new(paths),
             1,
-            std::mem::size_of::<IndexEntry>() as u64,
+            std::mem::size_of::<IndexEntry<u64>>() as u64,
             1,
             Arc::default(),
             Arc::default(),
@@ -305,17 +307,20 @@ mod tests {
     fn test_data_bucket_from_num_slots() {
         for n in 0..512 {
             assert_eq!(
-                IndexEntry::data_bucket_from_num_slots(n),
+                IndexEntry::<u64>::data_bucket_from_num_slots(n),
                 (n as f64).log2().ceil() as u64
             );
         }
-        assert_eq!(IndexEntry::data_bucket_from_num_slots(u32::MAX as u64), 32);
         assert_eq!(
-            IndexEntry::data_bucket_from_num_slots(u32::MAX as u64 + 1),
+            IndexEntry::<u64>::data_bucket_from_num_slots(u32::MAX as u64),
             32
         );
         assert_eq!(
-            IndexEntry::data_bucket_from_num_slots(u32::MAX as u64 + 2),
+            IndexEntry::<u64>::data_bucket_from_num_slots(u32::MAX as u64 + 1),
+            32
+        );
+        assert_eq!(
+            IndexEntry::<u64>::data_bucket_from_num_slots(u32::MAX as u64 + 2),
             33
         );
     }
