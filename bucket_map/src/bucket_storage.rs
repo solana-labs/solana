@@ -179,43 +179,47 @@ impl<O: BucketOccupied> BucketStorage<O> {
     }
 
     pub fn get<T: Sized>(&self, ix: u64) -> &T {
-        &self.get_cell_slice::<T>(ix, 1)[0]
+        let slice = self.get_cell_slice::<T>(ix, 1);
+        // SAFETY: `get_cell_slice` ensures there's at least one element in the slice
+        unsafe { slice.get_unchecked(0) }
     }
 
     pub fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
-        &mut self.get_mut_cell_slice::<T>(ix, 1)[0]
+        let slice = self.get_mut_cell_slice::<T>(ix, 1);
+        // SAFETY: `get_mut_cell_slice` ensures there's at least one element in the slice
+        unsafe { slice.get_unchecked_mut(0) }
     }
 
     pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
         let start = self.get_start_offset_no_header(ix);
-        let len = std::mem::size_of::<T>() * len as usize;
         let slice = {
+            let size = std::mem::size_of::<T>() * len as usize;
             let slice = &self.mmap[start..];
-            debug_assert!(slice.len() >= len);
-            &slice[..len]
+            debug_assert!(slice.len() >= size);
+            &slice[..size]
         };
         let ptr = {
             let ptr = slice.as_ptr() as *const T;
             debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
             ptr
         };
-        unsafe { std::slice::from_raw_parts(ptr, len) }
+        unsafe { std::slice::from_raw_parts(ptr, len as usize) }
     }
 
     pub fn get_mut_cell_slice<T: Sized>(&mut self, ix: u64, len: u64) -> &mut [T] {
         let start = self.get_start_offset_no_header(ix);
-        let len = std::mem::size_of::<T>() * len as usize;
         let slice = {
+            let size = std::mem::size_of::<T>() * len as usize;
             let slice = &mut self.mmap[start..];
-            debug_assert!(slice.len() >= len);
-            &mut slice[..len]
+            debug_assert!(slice.len() >= size);
+            &mut slice[..size]
         };
         let ptr = {
             let ptr = slice.as_mut_ptr() as *mut T;
             debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
             ptr
         };
-        unsafe { std::slice::from_raw_parts_mut(ptr, len) }
+        unsafe { std::slice::from_raw_parts_mut(ptr, len as usize) }
     }
 
     fn new_map(
