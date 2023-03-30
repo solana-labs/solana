@@ -115,6 +115,24 @@ impl MultipleSlots {
     pub(crate) fn set_num_slots(&mut self, num_slots: Slot) {
         self.num_slots = num_slots;
     }
+
+    pub(crate) fn data_bucket_ix(&self) -> u64 {
+        Self::data_bucket_from_num_slots(self.num_slots())
+    }
+
+    /// return closest bucket index fit for the slot slice.
+    /// Since bucket size is 2^index, the return value is
+    ///     min index, such that 2^index >= num_slots
+    ///     index = ceiling(log2(num_slots))
+    /// special case, when slot slice empty, return 0th index.
+    pub(crate) fn data_bucket_from_num_slots(num_slots: Slot) -> u64 {
+        // Compute the ceiling of log2 for integer
+        if num_slots == 0 {
+            0
+        } else {
+            (Slot::BITS - (num_slots - 1).leading_zeros()) as u64
+        }
+    }
 }
 
 /// Pack the storage offset and capacity-when-crated-pow2 fields into a single u64
@@ -126,22 +144,6 @@ struct PackedStorage {
     offset: B56,
 }
 
-impl<T> IndexEntry<T> {
-    /// return closest bucket index fit for the slot slice.
-    /// Since bucket size is 2^index, the return value is
-    ///     min index, such that 2^index >= num_slots
-    ///     index = ceiling(log2(num_slots))
-    /// special case, when slot slice empty, return 0th index.
-    pub fn data_bucket_from_num_slots(num_slots: Slot) -> u64 {
-        // Compute the ceiling of log2 for integer
-        if num_slots == 0 {
-            0
-        } else {
-            (Slot::BITS - (num_slots - 1).leading_zeros()) as u64
-        }
-    }
-}
-
 impl<T> IndexEntryPlaceInBucket<T> {
     pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
         let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
@@ -150,10 +152,22 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_entry.multiple_slots = MultipleSlots::default();
     }
 
-    pub fn data_bucket_ix(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> u64 {
-        IndexEntry::<T>::data_bucket_from_num_slots(
-            self.get_multiple_slots(index_bucket).num_slots(),
-        )
+    pub fn set_storage_capacity_when_created_pow2(
+        &self,
+        index_bucket: &mut BucketStorage<IndexBucket<T>>,
+        storage_capacity_when_created_pow2: u8,
+    ) {
+        self.get_multiple_slots_mut(index_bucket)
+            .set_storage_capacity_when_created_pow2(storage_capacity_when_created_pow2);
+    }
+
+    pub fn set_storage_offset(
+        &self,
+        index_bucket: &mut BucketStorage<IndexBucket<T>>,
+        storage_offset: u64,
+    ) {
+        self.get_multiple_slots_mut(index_bucket)
+            .set_storage_offset(storage_offset);
     }
 
     pub(crate) fn get_multiple_slots<'a>(
@@ -197,7 +211,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
         let multiple_slots = self.get_multiple_slots(index_bucket);
         let num_slots = multiple_slots.num_slots();
         let slice = if num_slots > 0 {
-            let data_bucket_ix = self.data_bucket_ix(index_bucket);
+            let data_bucket_ix = multiple_slots.data_bucket_ix();
             let data_bucket = &data_buckets[data_bucket_ix as usize];
             let loc = self.data_loc(index_bucket, data_bucket);
             assert!(!data_bucket.is_free(loc));
@@ -311,20 +325,20 @@ mod tests {
     fn test_data_bucket_from_num_slots() {
         for n in 0..512 {
             assert_eq!(
-                IndexEntry::<u64>::data_bucket_from_num_slots(n),
+                MultipleSlots::data_bucket_from_num_slots(n),
                 (n as f64).log2().ceil() as u64
             );
         }
         assert_eq!(
-            IndexEntry::<u64>::data_bucket_from_num_slots(u32::MAX as u64),
+            MultipleSlots::data_bucket_from_num_slots(u32::MAX as u64),
             32
         );
         assert_eq!(
-            IndexEntry::<u64>::data_bucket_from_num_slots(u32::MAX as u64 + 1),
+            MultipleSlots::data_bucket_from_num_slots(u32::MAX as u64 + 1),
             32
         );
         assert_eq!(
-            IndexEntry::<u64>::data_bucket_from_num_slots(u32::MAX as u64 + 2),
+            MultipleSlots::data_bucket_from_num_slots(u32::MAX as u64 + 2),
             33
         );
     }
