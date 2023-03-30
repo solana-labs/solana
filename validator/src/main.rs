@@ -70,6 +70,7 @@ use {
         env,
         fs::{self, File},
         net::{IpAddr, Ipv4Addr, SocketAddr},
+        num::NonZeroUsize,
         path::{Path, PathBuf},
         process::exit,
         str::FromStr,
@@ -1276,7 +1277,7 @@ pub fn main() {
         gossip_validators,
         wal_recovery_mode,
         run_verification: !(matches.is_present("skip_poh_verify")
-            || matches.is_present("skip_verification")),
+            || matches.is_present("skip_startup_ledger_verification")),
         debug_keys,
         contact_debug_interval,
         send_transaction_service_config: send_transaction_service::Config {
@@ -1394,9 +1395,12 @@ pub fn main() {
 
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let maximum_full_snapshot_archives_to_retain =
-        value_t_or_exit!(matches, "maximum_full_snapshots_to_retain", usize);
-    let maximum_incremental_snapshot_archives_to_retain =
-        value_t_or_exit!(matches, "maximum_incremental_snapshots_to_retain", usize);
+        value_t_or_exit!(matches, "maximum_full_snapshots_to_retain", NonZeroUsize);
+    let maximum_incremental_snapshot_archives_to_retain = value_t_or_exit!(
+        matches,
+        "maximum_incremental_snapshots_to_retain",
+        NonZeroUsize
+    );
     let snapshot_packager_niceness_adj =
         value_t_or_exit!(matches, "snapshot_packager_niceness_adj", i8);
     let minimal_snapshot_download_speed =

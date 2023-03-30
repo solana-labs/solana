@@ -22,6 +22,8 @@ use {
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
+            validate_maximum_full_snapshot_archives_to_retain,
+            validate_maximum_incremental_snapshot_archives_to_retain,
         },
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
@@ -106,6 +108,7 @@ use {
         ffi::OsStr,
         fs::File,
         io::{self, stdout, BufRead, BufReader, Write},
+        num::NonZeroUsize,
         path::{Path, PathBuf},
         process::{exit, Command, Stdio},
         str::FromStr,
@@ -1613,6 +1616,7 @@ fn main() {
     .value_name("NUMBER")
     .takes_value(true)
     .default_value(default_max_full_snapshot_archives_to_retain)
+    .validator(validate_maximum_full_snapshot_archives_to_retain)
     .help(
         "The maximum number of full snapshot archives to hold on to when purging older snapshots.",
     );
@@ -1626,6 +1630,7 @@ fn main() {
     .value_name("NUMBER")
     .takes_value(true)
     .default_value(default_max_incremental_snapshot_archives_to_retain)
+    .validator(validate_maximum_incremental_snapshot_archives_to_retain)
     .help("The maximum number of incremental snapshot archives to hold on to when purging older snapshots.");
 
     let geyser_plugin_args = Arg::with_name("geyser_plugin_config")
@@ -3099,12 +3104,15 @@ fn main() {
                     })
                 };
 
-                let maximum_full_snapshot_archives_to_retain =
-                    value_t_or_exit!(arg_matches, "maximum_full_snapshots_to_retain", usize);
+                let maximum_full_snapshot_archives_to_retain = value_t_or_exit!(
+                    arg_matches,
+                    "maximum_full_snapshots_to_retain",
+                    NonZeroUsize
+                );
                 let maximum_incremental_snapshot_archives_to_retain = value_t_or_exit!(
                     arg_matches,
                     "maximum_incremental_snapshots_to_retain",
-                    usize
+                    NonZeroUsize
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore = Arc::new(open_blockstore(

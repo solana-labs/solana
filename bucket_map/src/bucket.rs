@@ -4,7 +4,9 @@ use {
         bucket_map::BucketMapError,
         bucket_stats::BucketMapStats,
         bucket_storage::{BucketOccupied, BucketStorage, DEFAULT_CAPACITY_POW2},
-        index_entry::{DataBucket, IndexBucket, IndexEntry, IndexEntryPlaceInBucket},
+        index_entry::{
+            DataBucket, IndexBucket, IndexEntry, IndexEntryPlaceInBucket, MultipleSlots,
+        },
         MaxSearch, RefCount,
     },
     rand::{thread_rng, Rng},
@@ -13,7 +15,6 @@ use {
     std::{
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
-        marker::PhantomData,
         ops::RangeBounds,
         path::PathBuf,
         sync::{
@@ -78,18 +79,17 @@ impl<I: BucketOccupied, D: BucketOccupied> Reallocated<I, D> {
 }
 
 // >= 2 instances of BucketStorage per 'bucket' in the bucket map. 1 for index, >= 1 for data
-pub struct Bucket<T> {
+pub struct Bucket<T: 'static> {
     drives: Arc<Vec<PathBuf>>,
     //index
-    pub index: BucketStorage<IndexBucket>,
+    pub index: BucketStorage<IndexBucket<T>>,
     //random offset for the index
     random: u64,
     //storage buckets to store SlotSlice up to a power of 2 in len
     pub data: Vec<BucketStorage<DataBucket>>,
-    _phantom: PhantomData<T>,
     stats: Arc<BucketMapStats>,
 
-    pub reallocated: Reallocated<IndexBucket, DataBucket>,
+    pub reallocated: Reallocated<IndexBucket<T>, DataBucket>,
 }
 
 impl<'b, T: Clone + Copy + 'static> Bucket<T> {
@@ -102,7 +102,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         let index = BucketStorage::new(
             Arc::clone(&drives),
             1,
-            std::mem::size_of::<IndexEntry>() as u64,
+            std::mem::size_of::<IndexEntry<T>>() as u64,
             max_search,
             Arc::clone(&stats.index),
             count,
@@ -114,7 +114,6 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             drives,
             index,
             data: vec![],
-            _phantom: PhantomData,
             stats,
             reallocated: Reallocated::default(),
         }
@@ -126,7 +125,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             if self.index.is_free(i) {
                 continue;
             }
-            let ix: &IndexEntry = self.index.get(i);
+            let ix: &IndexEntry<T> = self.index.get(i);
             rv.push(ix.key);
         }
         rv
@@ -156,7 +155,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         result
     }
 
-    pub fn find_index_entry(&self, key: &Pubkey) -> Option<(IndexEntryPlaceInBucket, u64)> {
+    pub fn find_index_entry(&self, key: &Pubkey) -> Option<(IndexEntryPlaceInBucket<T>, u64)> {
         Self::bucket_find_index_entry(&self.index, key, self.random)
     }
 
@@ -165,10 +164,10 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     /// if entry does not exist, return just the index of an empty entry appropriate for this key
     /// returns (existing entry, index of the found or empty entry)
     fn find_index_entry_mut(
-        index: &mut BucketStorage<IndexBucket>,
+        index: &mut BucketStorage<IndexBucket<T>>,
         key: &Pubkey,
         random: u64,
-    ) -> Result<(Option<IndexEntryPlaceInBucket>, u64), BucketMapError> {
+    ) -> Result<(Option<IndexEntryPlaceInBucket<T>>, u64), BucketMapError> {
         let ix = Self::bucket_index_ix(index, key, random);
         let mut first_free = None;
         let mut m = Measure::start("bucket_find_index_entry_mut");
@@ -204,10 +203,10 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     fn bucket_find_index_entry(
-        index: &BucketStorage<IndexBucket>,
+        index: &BucketStorage<IndexBucket<T>>,
         key: &Pubkey,
         random: u64,
-    ) -> Option<(IndexEntryPlaceInBucket, u64)> {
+    ) -> Option<(IndexEntryPlaceInBucket<T>, u64)> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
             let ii = i % index.capacity();
@@ -223,7 +222,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     fn bucket_create_key(
-        index: &mut BucketStorage<IndexBucket>,
+        index: &mut BucketStorage<IndexBucket<T>>,
         key: &Pubkey,
         random: u64,
         is_resizing: bool,
@@ -268,7 +267,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         data_len: usize,
         ref_count: RefCount,
     ) -> Result<(), BucketMapError> {
-        let best_fit_bucket = IndexEntry::data_bucket_from_num_slots(data_len as u64);
+        let best_fit_bucket = MultipleSlots::data_bucket_from_num_slots(data_len as u64);
         if self.data.get(best_fit_bucket as usize).is_none() {
             // fail early if the data bucket we need doesn't exist - we don't want the index entry partially allocated
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
@@ -288,15 +287,17 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         };
 
         elem.set_ref_count(&mut self.index, ref_count);
-        let bucket_ix = elem.data_bucket_ix(&self.index);
-        let current_bucket = &self.data[bucket_ix as usize];
+        let current_multiple_slots = elem.get_multiple_slots(&self.index);
+        let bucket_ix = current_multiple_slots.data_bucket_ix();
         let num_slots = data_len as u64;
-        if best_fit_bucket == bucket_ix && elem.num_slots(&self.index) > 0 {
+        if best_fit_bucket == bucket_ix && current_multiple_slots.num_slots() > 0 {
+            let current_bucket = &mut self.data[bucket_ix as usize];
             // in place update
             let elem_loc = elem.data_loc(&self.index, current_bucket);
-            let slice: &mut [T] = current_bucket.get_mut_cell_slice(elem_loc, data_len as u64);
             assert!(!current_bucket.is_free(elem_loc));
-            elem.set_num_slots(&mut self.index, num_slots);
+            let slice: &mut [T] = current_bucket.get_mut_cell_slice(elem_loc, data_len as u64);
+            let current_multiple_slots = elem.get_multiple_slots_mut(&mut self.index);
+            current_multiple_slots.set_num_slots(num_slots);
 
             slice.iter_mut().zip(data).for_each(|(dest, src)| {
                 *dest = *src;
@@ -305,6 +306,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         } else {
             // need to move the allocation to a best fit spot
             let best_bucket = &self.data[best_fit_bucket as usize];
+            let current_bucket = &self.data[bucket_ix as usize];
             let cap_power = best_bucket.capacity_pow2;
             let cap = best_bucket.capacity();
             let pos = thread_rng().gen_range(0, cap);
@@ -320,13 +322,12 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 let ix = i % cap;
                 if best_bucket.is_free(ix) {
                     let elem_loc = elem.data_loc(&self.index, current_bucket);
-                    let old_slots = elem.num_slots(&self.index);
-                    elem.set_storage_offset(&mut self.index, ix);
-                    elem.set_storage_capacity_when_created_pow2(
-                        &mut self.index,
-                        best_bucket.capacity_pow2,
-                    );
-                    elem.set_num_slots(&mut self.index, num_slots);
+                    let old_slots = current_multiple_slots.num_slots();
+                    let multiple_slots = elem.get_multiple_slots_mut(&mut self.index);
+                    multiple_slots.set_storage_offset(ix);
+                    multiple_slots
+                        .set_storage_capacity_when_created_pow2(best_bucket.capacity_pow2);
+                    multiple_slots.set_num_slots(num_slots);
                     if old_slots > 0 {
                         let current_bucket = &mut self.data[bucket_ix as usize];
                         current_bucket.free(elem_loc);
@@ -349,8 +350,9 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
     pub fn delete_key(&mut self, key: &Pubkey) {
         if let Some((elem, elem_ix)) = self.find_index_entry(key) {
-            if elem.num_slots(&self.index) > 0 {
-                let ix = elem.data_bucket_ix(&self.index) as usize;
+            let multiple_slots = elem.get_multiple_slots_mut(&mut self.index);
+            if multiple_slots.num_slots() > 0 {
+                let ix = multiple_slots.data_bucket_ix() as usize;
                 let data_bucket = &self.data[ix];
                 let loc = elem.data_loc(&self.index, data_bucket);
                 let data_bucket = &mut self.data[ix];
@@ -374,7 +376,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 let mut index = BucketStorage::new_with_capacity(
                     Arc::clone(&self.drives),
                     1,
-                    std::mem::size_of::<IndexEntry>() as u64,
+                    std::mem::size_of::<IndexEntry<T>>() as u64,
                     // *2 causes rapid growth of index buckets
                     self.index.capacity_pow2 + i, // * 2,
                     self.index.max_search,
@@ -385,14 +387,14 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 let mut valid = true;
                 for ix in 0..self.index.capacity() {
                     if !self.index.is_free(ix) {
-                        let elem: &IndexEntry = self.index.get(ix);
+                        let elem: &IndexEntry<T> = self.index.get(ix);
                         let new_ix = Self::bucket_create_key(&mut index, &elem.key, random, true);
                         if new_ix.is_err() {
                             valid = false;
                             break;
                         }
                         let new_ix = new_ix.unwrap();
-                        let new_elem: &mut IndexEntry = index.get_mut(new_ix);
+                        let new_elem: &mut IndexEntry<T> = index.get_mut(new_ix);
                         *new_elem = *elem;
                         /*
                         let dbg_elem: IndexEntry = *new_elem;
@@ -420,7 +422,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         }
     }
 
-    pub fn apply_grow_index(&mut self, random: u64, index: BucketStorage<IndexBucket>) {
+    pub fn apply_grow_index(&mut self, random: u64, index: BucketStorage<IndexBucket<T>>) {
         self.stats
             .index
             .resize_grow(self.index.capacity_bytes(), index.capacity_bytes());
@@ -479,7 +481,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         items.data = Some((data_index, new_bucket));
     }
 
-    fn bucket_index_ix(index: &BucketStorage<IndexBucket>, key: &Pubkey, random: u64) -> u64 {
+    fn bucket_index_ix(index: &BucketStorage<IndexBucket<T>>, key: &Pubkey, random: u64) -> u64 {
         let mut s = DefaultHasher::new();
         key.hash(&mut s);
         //the locally generated random will make it hard for an attacker

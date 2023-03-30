@@ -574,8 +574,12 @@ async fn packet_batch_sender(
         let mut total_bytes: usize = 0;
 
         stats
+            .total_packet_batches_allocated
+            .fetch_add(1, Ordering::Relaxed);
+        stats
             .total_packets_allocated
             .fetch_add(PACKETS_PER_BATCH, Ordering::Relaxed);
+
         loop {
             if exit.load(Ordering::Relaxed) {
                 return;
@@ -622,12 +626,17 @@ async fn packet_batch_sender(
 
                 let i = packet_batch.len() - 1;
                 *packet_batch[i].meta_mut() = packet_accumulator.meta;
+                let num_chunks = packet_accumulator.chunks.len();
                 for chunk in packet_accumulator.chunks {
                     packet_batch[i].buffer_mut()[chunk.offset..chunk.end_of_chunk]
                         .copy_from_slice(&chunk.bytes);
                 }
 
                 total_bytes += packet_batch[i].meta().size;
+
+                stats
+                    .total_chunks_processed_by_batcher
+                    .fetch_add(num_chunks, Ordering::Relaxed);
             }
         }
     }
@@ -815,11 +824,9 @@ async fn handle_chunk(
                 // done receiving chunks
                 trace!("chunk is none");
                 if let Some(accum) = packet_accum.take() {
-                    let len = accum
-                        .chunks
-                        .iter()
-                        .map(|packet_bytes| packet_bytes.bytes.len())
-                        .sum::<usize>();
+                    let bytes_sent = accum.meta.size;
+                    let chunks_sent = accum.chunks.len();
+
                     if let Err(err) = packet_sender.send(accum).await {
                         stats
                             .total_handle_chunk_to_packet_batcher_send_err
@@ -831,8 +838,12 @@ async fn handle_chunk(
                             .fetch_add(1, Ordering::Relaxed);
                         stats
                             .total_bytes_sent_for_batching
-                            .fetch_add(len, Ordering::Relaxed);
-                        trace!("sent {} byte packet for batching", len);
+                            .fetch_add(bytes_sent, Ordering::Relaxed);
+                        stats
+                            .total_chunks_sent_for_batching
+                            .fetch_add(chunks_sent, Ordering::Relaxed);
+
+                        trace!("sent {} byte packet for batching", bytes_sent);
                     }
                 } else {
                     stats

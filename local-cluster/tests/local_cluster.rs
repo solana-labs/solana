@@ -67,6 +67,7 @@ use {
         fs,
         io::Read,
         iter,
+        num::NonZeroUsize,
         path::Path,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -2185,8 +2186,8 @@ fn create_snapshot_to_hard_fork(
         ledger_path,
         ledger_path,
         ArchiveFormat::TarZstd,
-        1,
-        1,
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
     )
     .unwrap();
     info!(

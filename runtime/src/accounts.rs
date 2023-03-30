@@ -300,9 +300,7 @@ impl Accounts {
         program_accounts: &HashMap<Pubkey, &Pubkey>,
     ) -> Result<AccountSharedData> {
         // Check for tombstone
-        // Ignoring the tombstone here for now. The loader will catch this condition and return
-        // error.
-        let _ignore = match &program.program {
+        let result = match &program.program {
             LoadedProgramType::FailedVerification | LoadedProgramType::Closed => {
                 Err(TransactionError::InvalidProgramForExecution)
             }
@@ -312,6 +310,12 @@ impl Accounts {
             }
             _ => Ok(()),
         };
+        if feature_set.is_active(&simplify_writable_program_account_check::id()) {
+            // Currently CPI only fails if an execution is actually attempted. With this check it
+            // would also fail if a transaction just references an invalid program. So the checking
+            // of the result is being feature gated.
+            result?;
+        }
         // It's an executable program account. The program is already loaded in the cache.
         // So the account data is not needed. Return a dummy AccountSharedData with meta
         // information.

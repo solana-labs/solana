@@ -7,6 +7,8 @@ use {
             is_keypair, is_keypair_or_ask_keyword, is_niceness_adjustment_valid, is_parsable,
             is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
             is_valid_percentage, is_within_range,
+            validate_maximum_full_snapshot_archives_to_retain,
+            validate_maximum_incremental_snapshot_archives_to_retain,
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
@@ -443,6 +445,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(&default_args.maximum_full_snapshot_archives_to_retain)
+                .validator(validate_maximum_full_snapshot_archives_to_retain)
                 .help("The maximum number of full snapshot archives to hold on to when purging older snapshots.")
         )
         .arg(
@@ -451,6 +454,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(&default_args.maximum_incremental_snapshot_archives_to_retain)
+                .validator(validate_maximum_incremental_snapshot_archives_to_retain)
                 .help("The maximum number of incremental snapshot archives to hold on to when purging older snapshots.")
         )
         .arg(
@@ -612,8 +616,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        Reads/writes perf samples are collected in 1 / ROCKS_PERF_SAMPLE_INTERVAL sampling rate."),
         )
         .arg(
-            Arg::with_name("skip_verification")
-                .long("skip-verification")
+            Arg::with_name("skip_startup_ledger_verification")
+                .long("skip-startup-ledger-verification")
                 .takes_value(false)
                 .help("Skip ledger verification at validator bootup."),
         )
@@ -1751,7 +1755,7 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .long("skip-poh-verify")
             .takes_value(false)
             .help("Skip ledger verification at validator bootup."),
-        replaced_by: "skip-verification",
+        replaced_by: "skip-startup-ledger-verification",
     );
 
     res

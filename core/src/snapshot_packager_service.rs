@@ -47,11 +47,15 @@ impl SnapshotPackagerService {
         let cluster_info = cluster_info.clone();
         let max_full_snapshot_hashes = std::cmp::min(
             MAX_SNAPSHOT_HASHES,
-            snapshot_config.maximum_full_snapshot_archives_to_retain,
+            snapshot_config
+                .maximum_full_snapshot_archives_to_retain
+                .get(),
         );
         let max_incremental_snapshot_hashes = std::cmp::min(
             MAX_INCREMENTAL_SNAPSHOT_HASHES,
-            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+            snapshot_config
+                .maximum_incremental_snapshot_archives_to_retain
+                .get(),
         );
 
         let t_snapshot_packager = Builder::new()
