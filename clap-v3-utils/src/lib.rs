@@ -28,5 +28,6 @@ pub mod input_parsers;
 pub mod input_validators;
 pub mod keypair;
 pub mod memo;
+pub mod mnemonic;
 pub mod nonce;
 pub mod offline;

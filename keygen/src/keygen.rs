@@ -1,13 +1,17 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    bip39::{Language, Mnemonic, MnemonicType, Seed},
+    bip39::{Mnemonic, MnemonicType, Seed},
     clap::{crate_description, crate_name, Arg, ArgMatches, Command},
     solana_clap_v3_utils::{
         input_parsers::STDOUT_OUTFILE_TOKEN,
         input_validators::{is_parsable, is_prompt_signer_source},
         keypair::{
-            keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
+            keypair_from_path, keypair_from_seed_phrase, signer_from_path,
             SKIP_SEED_PHRASE_VALIDATION_ARG,
+        },
+        mnemonic::{
+            acquire_language, acquire_passphrase_and_message, language_arg,
+            no_passphrase_and_message, no_passphrase_arg, word_count_arg, WORD_COUNT_ARG,
         },
         ArgConstant, DisplayError,
     },
@@ -57,65 +61,11 @@ struct GrindMatch {
     count: AtomicU64,
 }
 
-const WORD_COUNT_ARG: ArgConstant<'static> = ArgConstant {
-    long: "word-count",
-    name: "word_count",
-    help: "Specify the number of words that will be present in the generated seed phrase",
-};
-
-const LANGUAGE_ARG: ArgConstant<'static> = ArgConstant {
-    long: "language",
-    name: "language",
-    help: "Specify the mnemonic language that will be present in the generated seed phrase",
-};
-
-const NO_PASSPHRASE_ARG: ArgConstant<'static> = ArgConstant {
-    long: "no-bip39-passphrase",
-    name: "no_passphrase",
-    help: "Do not prompt for a BIP39 passphrase",
-};
-
 const NO_OUTFILE_ARG: ArgConstant<'static> = ArgConstant {
     long: "no-outfile",
     name: "no_outfile",
     help: "Only print a seed phrase and pubkey. Do not output a keypair file",
 };
-
-fn word_count_arg<'a>() -> Arg<'a> {
-    Arg::new(WORD_COUNT_ARG.name)
-        .long(WORD_COUNT_ARG.long)
-        .possible_values(["12", "15", "18", "21", "24"])
-        .default_value("12")
-        .value_name("NUMBER")
-        .takes_value(true)
-        .help(WORD_COUNT_ARG.help)
-}
-
-fn language_arg<'a>() -> Arg<'a> {
-    Arg::new(LANGUAGE_ARG.name)
-        .long(LANGUAGE_ARG.long)
-        .possible_values([
-            "english",
-            "chinese-simplified",
-            "chinese-traditional",
-            "japanese",
-            "spanish",
-            "korean",
-            "french",
-            "italian",
-        ])
-        .default_value("english")
-        .value_name("LANGUAGE")
-        .takes_value(true)
-        .help(LANGUAGE_ARG.help)
-}
-
-fn no_passphrase_arg<'a>() -> Arg<'a> {
-    Arg::new(NO_PASSPHRASE_ARG.name)
-        .long(NO_PASSPHRASE_ARG.long)
-        .alias("no-passphrase")
-        .help(NO_PASSPHRASE_ARG.help)
-}
 
 fn no_outfile_arg<'a>() -> Arg<'a> {
     Arg::new(NO_OUTFILE_ARG.name)
@@ -224,45 +174,6 @@ fn grind_validator_starts_and_ends_with(v: &str) -> Result<(), String> {
         return Err(String::from("Expected COUNT to be a u64"));
     }
     Ok(())
-}
-
-fn acquire_language(matches: &ArgMatches) -> Language {
-    match matches.value_of(LANGUAGE_ARG.name).unwrap() {
-        "english" => Language::English,
-        "chinese-simplified" => Language::ChineseSimplified,
-        "chinese-traditional" => Language::ChineseTraditional,
-        "japanese" => Language::Japanese,
-        "spanish" => Language::Spanish,
-        "korean" => Language::Korean,
-        "french" => Language::French,
-        "italian" => Language::Italian,
-        _ => unreachable!(),
-    }
-}
-
-fn no_passphrase_and_message() -> (String, String) {
-    (NO_PASSPHRASE.to_string(), "".to_string())
-}
-
-fn acquire_passphrase_and_message(
-    matches: &ArgMatches,
-) -> Result<(String, String), Box<dyn error::Error>> {
-    if matches.is_present(NO_PASSPHRASE_ARG.name) {
-        Ok(no_passphrase_and_message())
-    } else {
-        match prompt_passphrase(
-            "\nFor added security, enter a BIP39 passphrase\n\
-             \nNOTE! This passphrase improves security of the recovery seed phrase NOT the\n\
-             keypair file itself, which is stored as insecure plain text\n\
-             \nBIP39 Passphrase (empty for none): ",
-        ) {
-            Ok(passphrase) => {
-                println!();
-                Ok((passphrase, " and your BIP39 passphrase".to_string()))
-            }
-            Err(e) => Err(e),
-        }
-    }
 }
 
 fn grind_print_info(grind_matches: &[GrindMatch], num_threads: usize) {
