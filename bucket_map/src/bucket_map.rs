@@ -365,7 +365,7 @@ mod tests {
             let v = (0..count)
                 .map(|x| (x as usize, x as usize /*thread_rng().gen::<usize>()*/))
                 .collect::<Vec<_>>();
-            let rc = thread_rng().gen::<RefCount>();
+            let rc = thread_rng().gen_range(0, RefCount::MAX >> 2);
             (v, rc)
         };
 

@@ -68,21 +68,31 @@ pub struct IndexEntryPlaceInBucket<T: 'static> {
 #[derive(Copy, Clone)]
 // one instance of this per item in the index
 // stored in the index bucket
-pub struct IndexEntry<T: 'static> {
-    pub key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
-    ref_count: RefCount, // can this be smaller? Do we ever need more than 4B refcounts?
-    multiple_slots: MultipleSlots,
-    _phantom: PhantomData<&'static T>,
+pub struct IndexEntry<T: Clone + Copy> {
+    pub(crate) key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
+    packed_ref_count: PackedRefCount,
+    /// depends on the contents of ref_count.slot_count_enum
+    pub(crate) contents: SingleElementOrMultipleSlots<T>,
+}
+
+#[bitfield(bits = 64)]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+pub(crate) struct PackedRefCount {
+    /// tag for `SlotCountEnum`
+    pub(crate) slot_count_enum: B2,
+    /// ref_count of this entry. We don't need any where near 62 bits for this value
+    pub(crate) ref_count: B62,
 }
 
 /// required fields when an index element references the data file
 #[repr(C)]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 pub(crate) struct MultipleSlots {
     // if the bucket doubled, the index can be recomputed using storage_cap_and_offset.create_bucket_capacity_pow2
     storage_cap_and_offset: PackedStorage,
     /// num elements in the slot list
-    num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
+    num_slots: Slot,
 }
 
 impl MultipleSlots {
@@ -141,6 +151,69 @@ impl MultipleSlots {
     }
 }
 
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub(crate) union SingleElementOrMultipleSlots<T: Clone + Copy> {
+    /// the slot list contains a single element. No need for an entry in the data file.
+    /// The element itself is stored in place in the index entry
+    pub(crate) single_element: T,
+    /// the slot list ocntains more than one element. This contains the reference to the data file.
+    pub(crate) multiple_slots: MultipleSlots,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum SlotCountEnum<'a, T> {
+    /// this spot is not allocated
+    Free = 0,
+    /// zero slots in the slot list
+    ZeroSlots = 1,
+    /// one slot in the slot list, it is stored in the index
+    OneSlotInIndex(&'a T) = 2,
+    /// > 1 slots, slots are stored in data file
+    MultipleSlots(&'a MultipleSlots) = 3,
+}
+
+impl<T: Copy> IndexEntry<T> {
+    pub(crate) fn get_slot_count_enum(&self) -> SlotCountEnum<'_, T> {
+        unsafe {
+            match self.packed_ref_count.slot_count_enum() {
+                0 => SlotCountEnum::Free,
+                1 => SlotCountEnum::ZeroSlots,
+                2 => SlotCountEnum::OneSlotInIndex(&self.contents.single_element),
+                3 => SlotCountEnum::MultipleSlots(&self.contents.multiple_slots),
+                _ => {
+                    panic!("unexpected value");
+                }
+            }
+        }
+    }
+
+    pub(crate) fn get_multiple_slots_mut(&mut self) -> Option<&mut MultipleSlots> {
+        unsafe {
+            match self.packed_ref_count.slot_count_enum() {
+                3 => Some(&mut self.contents.multiple_slots),
+                _ => None,
+            }
+        }
+    }
+
+    pub(crate) fn set_slot_count_enum_value<'a>(&'a mut self, value: SlotCountEnum<'a, T>) {
+        self.packed_ref_count.set_slot_count_enum(match value {
+            SlotCountEnum::Free => 0,
+            SlotCountEnum::ZeroSlots => 1,
+            SlotCountEnum::OneSlotInIndex(single_element) => {
+                self.contents.single_element = *single_element;
+                2
+            }
+            SlotCountEnum::MultipleSlots(multiple_slots) => {
+                self.contents.multiple_slots = *multiple_slots;
+                3
+            }
+        });
+    }
+}
+
 /// Pack the storage offset and capacity-when-crated-pow2 fields into a single u64
 #[bitfield(bits = 64)]
 #[repr(C)]
@@ -150,71 +223,72 @@ struct PackedStorage {
     offset: B56,
 }
 
-impl<T> IndexEntryPlaceInBucket<T> {
-    pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
-        let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
-        index_entry.key = *pubkey;
-        index_entry.ref_count = 0;
-        index_entry.multiple_slots = MultipleSlots::default();
-    }
-
-    pub fn set_storage_capacity_when_created_pow2(
-        &self,
-        index_bucket: &mut BucketStorage<IndexBucket<T>>,
-        storage_capacity_when_created_pow2: u8,
-    ) {
-        self.get_multiple_slots_mut(index_bucket)
-            .set_storage_capacity_when_created_pow2(storage_capacity_when_created_pow2);
-    }
-
-    pub fn set_storage_offset(
-        &self,
-        index_bucket: &mut BucketStorage<IndexBucket<T>>,
-        storage_offset: u64,
-    ) {
-        self.get_multiple_slots_mut(index_bucket)
-            .set_storage_offset(storage_offset);
-    }
-
-    pub(crate) fn get_multiple_slots<'a>(
+impl<T: Copy + 'static> IndexEntryPlaceInBucket<T> {
+    pub(crate) fn get_slot_count_enum<'a>(
         &self,
         index_bucket: &'a BucketStorage<IndexBucket<T>>,
-    ) -> &'a MultipleSlots {
-        &index_bucket.get::<IndexEntry<T>>(self.ix).multiple_slots
+    ) -> SlotCountEnum<'a, T> {
+        let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
+        index_entry.get_slot_count_enum()
     }
 
     pub(crate) fn get_multiple_slots_mut<'a>(
         &self,
         index_bucket: &'a mut BucketStorage<IndexBucket<T>>,
-    ) -> &'a mut MultipleSlots {
-        &mut index_bucket
-            .get_mut::<IndexEntry<T>>(self.ix)
-            .multiple_slots
+    ) -> Option<&'a mut MultipleSlots> {
+        let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
+        index_entry.get_multiple_slots_mut()
+    }
+
+    pub(crate) fn set_slot_count_enum_value<'a>(
+        &self,
+        index_bucket: &'a mut BucketStorage<IndexBucket<T>>,
+        value: SlotCountEnum<'a, T>,
+    ) {
+        let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
+        index_entry.set_slot_count_enum_value(value);
+    }
+
+    pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
+        self.set_slot_count_enum_value(index_bucket, SlotCountEnum::ZeroSlots);
+        let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
+        index_entry.key = *pubkey;
+        index_entry.packed_ref_count.set_ref_count(0);
     }
 
     pub fn ref_count(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> RefCount {
         let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
-        index_entry.ref_count
+        index_entry.packed_ref_count.ref_count()
     }
 
     pub fn read_value<'a>(
         &self,
-        index_bucket: &BucketStorage<IndexBucket<T>>,
+        index_bucket: &'a BucketStorage<IndexBucket<T>>,
         data_buckets: &'a [BucketStorage<DataBucket>],
     ) -> Option<(&'a [T], RefCount)> {
-        let multiple_slots = self.get_multiple_slots(index_bucket);
-        let num_slots = multiple_slots.num_slots();
-        let slice = if num_slots > 0 {
-            let data_bucket_ix = multiple_slots.data_bucket_ix();
-            let data_bucket = &data_buckets[data_bucket_ix as usize];
-            let loc = multiple_slots.data_loc(data_bucket);
-            assert!(!data_bucket.is_free(loc));
-            data_bucket.get_cell_slice(loc, num_slots)
-        } else {
-            // num_slots is 0. This means we don't have an actual allocation.
-            &[]
-        };
-        Some((slice, self.ref_count(index_bucket)))
+        Some((
+            match self.get_slot_count_enum(index_bucket) {
+                SlotCountEnum::ZeroSlots => {
+                    // num_slots is 0. This means we don't have an actual allocation.
+                    &[]
+                }
+                SlotCountEnum::OneSlotInIndex(single_element) => {
+                    // only element is stored in the index entry
+                    std::slice::from_ref(single_element)
+                }
+                SlotCountEnum::MultipleSlots(multiple_slots) => {
+                    let data_bucket_ix = multiple_slots.data_bucket_ix();
+                    let data_bucket = &data_buckets[data_bucket_ix as usize];
+                    let loc = multiple_slots.data_loc(data_bucket);
+                    assert!(!data_bucket.is_free(loc));
+                    data_bucket.get_cell_slice::<T>(loc, multiple_slots.num_slots)
+                }
+                _ => {
+                    unimplemented!();
+                }
+            },
+            self.ref_count(index_bucket),
+        ))
     }
 
     pub fn new(ix: u64) -> Self {
@@ -235,7 +309,10 @@ impl<T> IndexEntryPlaceInBucket<T> {
         ref_count: RefCount,
     ) {
         let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
-        index_entry.ref_count = ref_count;
+        index_entry
+            .packed_ref_count
+            .set_ref_count_checked(ref_count)
+            .expect("ref count must fit into 62 bits!")
     }
 }
 
@@ -247,13 +324,14 @@ mod tests {
         tempfile::tempdir,
     };
 
-    impl<T> IndexEntry<T> {
+    impl<T: Clone + Copy> IndexEntry<T> {
         pub fn new(key: Pubkey) -> Self {
             IndexEntry {
                 key,
-                ref_count: 0,
-                multiple_slots: MultipleSlots::default(),
-                _phantom: PhantomData,
+                packed_ref_count: PackedRefCount::default(),
+                contents: SingleElementOrMultipleSlots {
+                    multiple_slots: MultipleSlots::default(),
+                },
             }
         }
     }
@@ -281,7 +359,10 @@ mod tests {
     #[test]
     fn test_size() {
         assert_eq!(std::mem::size_of::<PackedStorage>(), 1 + 7);
-        assert_eq!(std::mem::size_of::<IndexEntry<u64>>(), 32 + 8 + 8 + 8);
+        assert_eq!(
+            std::mem::size_of::<IndexEntry::<u64>>(),
+            32 + 8 + (8 + 8).max(std::mem::size_of::<u64>())
+        );
     }
 
     fn index_bucket_for_testing() -> BucketStorage<IndexBucket<u64>> {

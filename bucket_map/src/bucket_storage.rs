@@ -372,7 +372,7 @@ mod test {
         let mut storage = BucketStorage::<IndexBucket<u64>>::new(
             Arc::new(paths),
             1,
-            1,
+            std::mem::size_of::<crate::index_entry::IndexEntry<u64>>() as u64,
             1,
             Arc::default(),
             Arc::default(),
