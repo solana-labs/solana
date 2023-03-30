@@ -285,15 +285,18 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         };
 
         elem.set_ref_count(&mut self.index, ref_count);
-        let bucket_ix = elem.data_bucket_ix(&self.index);
+        let current_multiple_slots = elem.get_multiple_slots(&self.index);
+        let bucket_ix =
+            IndexEntry::<T>::data_bucket_from_num_slots(current_multiple_slots.num_slots());
         let num_slots = data_len as u64;
-        if best_fit_bucket == bucket_ix && elem.num_slots(&self.index) > 0 {
+        if best_fit_bucket == bucket_ix && current_multiple_slots.num_slots() > 0 {
             let current_bucket = &mut self.data[bucket_ix as usize];
             // in place update
             let elem_loc = elem.data_loc(&self.index, current_bucket);
             assert!(!current_bucket.is_free(elem_loc));
             let slice: &mut [T] = current_bucket.get_mut_cell_slice(elem_loc, data_len as u64);
-            elem.set_num_slots(&mut self.index, num_slots);
+            let current_multiple_slots = elem.get_multiple_slots_mut(&mut self.index);
+            current_multiple_slots.set_num_slots(num_slots);
 
             slice.iter_mut().zip(data).for_each(|(dest, src)| {
                 *dest = *src;
@@ -318,12 +321,12 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 let ix = i % cap;
                 if best_bucket.is_free(ix) {
                     let elem_loc = elem.data_loc(&self.index, current_bucket);
-                    let old_slots = elem.num_slots(&self.index);
+                    let old_slots = current_multiple_slots.num_slots();
                     let multiple_slots = elem.get_multiple_slots_mut(&mut self.index);
                     multiple_slots.set_storage_offset(ix);
                     multiple_slots
                         .set_storage_capacity_when_created_pow2(best_bucket.capacity_pow2);
-                    elem.set_num_slots(&mut self.index, num_slots);
+                    multiple_slots.set_num_slots(num_slots);
                     if old_slots > 0 {
                         let current_bucket = &mut self.data[bucket_ix as usize];
                         current_bucket.free(elem_loc);
@@ -346,7 +349,8 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
     pub fn delete_key(&mut self, key: &Pubkey) {
         if let Some((elem, elem_ix)) = self.find_index_entry(key) {
-            if elem.num_slots(&self.index) > 0 {
+            let multiple_slots = elem.get_multiple_slots_mut(&mut self.index);
+            if multiple_slots.num_slots() > 0 {
                 let ix = elem.data_bucket_ix(&self.index) as usize;
                 let data_bucket = &self.data[ix];
                 let loc = elem.data_loc(&self.index, data_bucket);
