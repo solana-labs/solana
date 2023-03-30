@@ -1671,11 +1671,6 @@ mod tests {
 
     #[test]
     fn test_unsized_signers() {
-        use crate::{
-            hash::Hash, instruction::Instruction, message::Message, signer::keypair::Keypair,
-            transaction::Transaction,
-        };
-
         fn instructions_to_tx(
             instructions: &[Instruction],
             signers: Box<dyn Signers>,
