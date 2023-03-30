@@ -487,7 +487,7 @@ fn get_vetted_rpc_nodes(
     cluster_info: &Arc<ClusterInfo>,
     cluster_entrypoints: &[ContactInfo],
     validator_config: &ValidatorConfig,
-    blacklisted_rpc_nodes: &RwLock<HashSet<Pubkey>>,
+    blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     bootstrap_config: &RpcBootstrapConfig,
 ) {
     while vetted_rpc_nodes.is_empty() {
@@ -495,7 +495,7 @@ fn get_vetted_rpc_nodes(
             cluster_info,
             cluster_entrypoints,
             validator_config,
-            &mut blacklisted_rpc_nodes.write().unwrap(),
+            blacklisted_rpc_nodes,
             bootstrap_config,
         ) {
             Ok(rpc_node_details) => rpc_node_details,
@@ -509,6 +509,7 @@ fn get_vetted_rpc_nodes(
             }
         };
 
+        let newly_blacklisted_rpc_nodes = RwLock::new(HashSet::new());
         vetted_rpc_nodes.extend(
             rpc_node_details
                 .into_par_iter()
@@ -540,7 +541,7 @@ fn get_vetted_rpc_nodes(
                                 format!("Failed to get RPC node version: {err}"),
                                 &validator_config.known_validators,
                                 &rpc_contact_info.id,
-                                &mut blacklisted_rpc_nodes.write().unwrap(),
+                                &mut newly_blacklisted_rpc_nodes.write().unwrap(),
                             );
                             false
                         }
@@ -548,6 +549,7 @@ fn get_vetted_rpc_nodes(
                 })
                 .collect::<Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)>>(),
         );
+        blacklisted_rpc_nodes.extend(newly_blacklisted_rpc_nodes.into_inner().unwrap());
     }
 }
 
@@ -591,7 +593,7 @@ pub fn rpc_bootstrap(
         return;
     }
 
-    let blacklisted_rpc_nodes = RwLock::new(HashSet::new());
+    let mut blacklisted_rpc_nodes = HashSet::new();
     let mut gossip = None;
     let mut vetted_rpc_nodes = vec![];
     let mut download_abort_count = 0;
@@ -620,7 +622,7 @@ pub fn rpc_bootstrap(
             &gossip.as_ref().unwrap().0,
             cluster_entrypoints,
             validator_config,
-            &blacklisted_rpc_nodes,
+            &mut blacklisted_rpc_nodes,
             &bootstrap_config,
         );
         let (rpc_contact_info, snapshot_hash, rpc_client) = vetted_rpc_nodes.pop().unwrap();
@@ -651,7 +653,7 @@ pub fn rpc_bootstrap(
                     err,
                     &validator_config.known_validators,
                     &rpc_contact_info.id,
-                    &mut blacklisted_rpc_nodes.write().unwrap(),
+                    &mut blacklisted_rpc_nodes,
                 );
             }
         }
