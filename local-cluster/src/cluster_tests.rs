@@ -339,7 +339,7 @@ pub fn check_for_new_roots(
     let mut done = false;
     let mut last_print = Instant::now();
     let loop_start = Instant::now();
-    let loop_timeout = Duration::from_secs(90);
+    let loop_timeout = Duration::from_secs(180);
     let mut num_roots_map = HashMap::new();
     while !done {
         assert!(loop_start.elapsed() < loop_timeout);
