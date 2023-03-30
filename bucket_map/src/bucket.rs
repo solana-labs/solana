@@ -319,11 +319,10 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 if best_bucket.is_free(ix) {
                     let elem_loc = elem.data_loc(&self.index, current_bucket);
                     let old_slots = elem.num_slots(&self.index);
-                    elem.set_storage_offset(&mut self.index, ix);
-                    elem.set_storage_capacity_when_created_pow2(
-                        &mut self.index,
-                        best_bucket.capacity_pow2,
-                    );
+                    let multiple_slots = elem.get_multiple_slots_mut(&mut self.index);
+                    multiple_slots.set_storage_offset(ix);
+                    multiple_slots
+                        .set_storage_capacity_when_created_pow2(best_bucket.capacity_pow2);
                     elem.set_num_slots(&mut self.index, num_slots);
                     if old_slots > 0 {
                         let current_bucket = &mut self.data[bucket_ix as usize];

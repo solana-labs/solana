@@ -78,7 +78,7 @@ pub struct IndexEntry<T: 'static> {
 /// required fields when an index element references the data file
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
-struct MultipleSlots {
+pub(crate) struct MultipleSlots {
     // if the bucket doubled, the index can be recomputed using storage_cap_and_offset.create_bucket_capacity_pow2
     storage_cap_and_offset: PackedStorage,
     /// num elements in the slot list
@@ -86,12 +86,15 @@ struct MultipleSlots {
 }
 
 impl MultipleSlots {
-    fn set_storage_capacity_when_created_pow2(&mut self, storage_capacity_when_created_pow2: u8) {
+    pub(crate) fn set_storage_capacity_when_created_pow2(
+        &mut self,
+        storage_capacity_when_created_pow2: u8,
+    ) {
         self.storage_cap_and_offset
             .set_capacity_when_created_pow2(storage_capacity_when_created_pow2)
     }
 
-    fn set_storage_offset(&mut self, storage_offset: u64) {
+    pub(crate) fn set_storage_offset(&mut self, storage_offset: u64) {
         self.storage_cap_and_offset
             .set_offset_checked(storage_offset)
             .expect("New storage offset must fit into 7 bytes!")
@@ -139,24 +142,6 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_entry.multiple_slots = MultipleSlots::default();
     }
 
-    pub fn set_storage_capacity_when_created_pow2(
-        &self,
-        index_bucket: &mut BucketStorage<IndexBucket<T>>,
-        storage_capacity_when_created_pow2: u8,
-    ) {
-        self.get_multiple_slots_mut(index_bucket)
-            .set_storage_capacity_when_created_pow2(storage_capacity_when_created_pow2);
-    }
-
-    pub fn set_storage_offset(
-        &self,
-        index_bucket: &mut BucketStorage<IndexBucket<T>>,
-        storage_offset: u64,
-    ) {
-        self.get_multiple_slots_mut(index_bucket)
-            .set_storage_offset(storage_offset);
-    }
-
     pub fn data_bucket_ix(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> u64 {
         IndexEntry::<T>::data_bucket_from_num_slots(self.num_slots(index_bucket))
     }
@@ -168,7 +153,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
         &index_bucket.get::<IndexEntry<T>>(self.ix).multiple_slots
     }
 
-    fn get_multiple_slots_mut<'a>(
+    pub(crate) fn get_multiple_slots_mut<'a>(
         &self,
         index_bucket: &'a mut BucketStorage<IndexBucket<T>>,
     ) -> &'a mut MultipleSlots {
@@ -182,18 +167,6 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_entry.ref_count
     }
 
-    fn storage_capacity_when_created_pow2(
-        &self,
-        index_bucket: &BucketStorage<IndexBucket<T>>,
-    ) -> u8 {
-        self.get_multiple_slots(index_bucket)
-            .storage_capacity_when_created_pow2()
-    }
-
-    pub fn storage_offset(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> u64 {
-        self.get_multiple_slots(index_bucket).storage_offset()
-    }
-
     /// This function maps the original data location into an index in the current bucket storage.
     /// This is coupled with how we resize bucket storages.
     pub fn data_loc(
@@ -201,8 +174,9 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_bucket: &BucketStorage<IndexBucket<T>>,
         storage: &BucketStorage<DataBucket>,
     ) -> u64 {
-        self.storage_offset(index_bucket)
-            << (storage.capacity_pow2 - self.storage_capacity_when_created_pow2(index_bucket))
+        let multiple_slots = self.get_multiple_slots(index_bucket);
+        multiple_slots.storage_offset()
+            << (storage.capacity_pow2 - multiple_slots.storage_capacity_when_created_pow2())
     }
 
     pub fn read_value<'a>(
@@ -278,19 +252,17 @@ mod tests {
     #[test]
     fn test_api() {
         for offset in [0, 1, u32::MAX as u64] {
-            let (mut index_bucket, index) = index_entry_for_testing();
+            let mut multiple_slots = MultipleSlots::default();
+
             if offset != 0 {
-                index.set_storage_offset(&mut index_bucket, offset);
+                multiple_slots.set_storage_offset(offset);
             }
-            assert_eq!(index.storage_offset(&index_bucket,), offset);
-            assert_eq!(index.storage_capacity_when_created_pow2(&index_bucket,), 0);
+            assert_eq!(multiple_slots.storage_offset(), offset);
+            assert_eq!(multiple_slots.storage_capacity_when_created_pow2(), 0);
             for pow in [1, 255, 0] {
-                index.set_storage_capacity_when_created_pow2(&mut index_bucket, pow);
-                assert_eq!(index.storage_offset(&index_bucket,), offset);
-                assert_eq!(
-                    index.storage_capacity_when_created_pow2(&index_bucket,),
-                    pow
-                );
+                multiple_slots.set_storage_capacity_when_created_pow2(pow);
+                assert_eq!(multiple_slots.storage_offset(), offset);
+                assert_eq!(multiple_slots.storage_capacity_when_created_pow2(), pow);
             }
         }
     }
@@ -328,8 +300,8 @@ mod tests {
     #[should_panic(expected = "New storage offset must fit into 7 bytes!")]
     fn test_set_storage_offset_value_too_large() {
         let too_big = 1 << 56;
-        let (mut index_bucket, index) = index_entry_for_testing();
-        index.set_storage_offset(&mut index_bucket, too_big);
+        let mut multiple_slots = MultipleSlots::default();
+        multiple_slots.set_storage_offset(too_big);
     }
 
     #[test]
