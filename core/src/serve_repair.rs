@@ -298,20 +298,20 @@ fn discard_malformed_repair_requests(
     stats: &mut ServeRepairStats,
     cluster_type: ClusterType,
 ) -> usize {
-    let mut retained = 0;
+    let mut well_formed_requests = 0;
     for packet in batch.iter_mut() {
         match check_well_formed_repair_request(packet, stats) {
-            Ok(()) => retained += 1,
+            Ok(()) => well_formed_requests += 1,
             Err(Error::RepairVerify(RepairVerifyError::Unsigned)) => match cluster_type {
                 ClusterType::Testnet | ClusterType::Development => {
                     packet.meta_mut().set_discard(true)
                 }
-                ClusterType::MainnetBeta | ClusterType::Devnet => retained += 1,
+                ClusterType::MainnetBeta | ClusterType::Devnet => well_formed_requests += 1,
             },
             Err(_) => packet.meta_mut().set_discard(true),
         }
     }
-    retained
+    well_formed_requests
 }
 
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
@@ -694,18 +694,18 @@ impl ServeRepair {
         };
 
         let mut dropped_requests = 0;
-        let mut accepted_requests =
+        let mut well_formed_requests =
             discard_malformed_repair_requests(&mut reqs_v[0], stats, cluster_type);
         while let Ok(mut more) = requests_receiver.try_recv() {
             total_requests += more.len();
-            if accepted_requests > max_buffered_packets {
+            if well_formed_requests > max_buffered_packets {
                 dropped_requests += more.len();
             } else {
                 let retained = discard_malformed_repair_requests(&mut more, stats, cluster_type);
                 if retained > 0 {
                     reqs_v.push(more);
                 }
-                accepted_requests += retained;
+                well_formed_requests += retained;
             }
         }
 
