@@ -3,6 +3,7 @@ use {
     bip39::{Mnemonic, MnemonicType, Seed},
     clap::{crate_description, crate_name, Arg, ArgMatches, Command},
     solana_clap_v3_utils::{
+        derivation_path::{acquire_derivation_path, derivation_path_arg},
         input_parsers::STDOUT_OUTFILE_TOKEN,
         input_validators::{is_parsable, is_prompt_signer_source},
         keypair::{
@@ -18,7 +19,6 @@ use {
     solana_cli_config::{Config, CONFIG_FILE},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
-        derivation_path::DerivationPath,
         instruction::{AccountMeta, Instruction},
         message::Message,
         pubkey::{write_pubkey_file, Pubkey},
@@ -251,33 +251,6 @@ fn grind_parse_args(
     }
     grind_print_info(&grind_matches, num_threads);
     grind_matches
-}
-
-fn derivation_path_arg<'a>() -> Arg<'a> {
-    Arg::new("derivation_path")
-        .long("derivation-path")
-        .value_name("DERIVATION_PATH")
-        .takes_value(true)
-        .min_values(0)
-        .max_values(1)
-        .help("Derivation path. All indexes will be promoted to hardened. \
-            If arg is not presented then derivation path will not be used. \
-            If arg is presented with empty DERIVATION_PATH value then m/44'/501'/0'/0' will be used."
-        )
-}
-
-fn acquire_derivation_path(
-    matches: &ArgMatches,
-) -> Result<Option<DerivationPath>, Box<dyn error::Error>> {
-    if matches.is_present("derivation_path") {
-        Ok(Some(DerivationPath::from_absolute_path_str(
-            matches
-                .value_of("derivation_path")
-                .unwrap_or(DEFAULT_DERIVATION_PATH),
-        )?))
-    } else {
-        Ok(None)
-    }
 }
 
 fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
