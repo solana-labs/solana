@@ -169,58 +169,57 @@ impl<O: BucketOccupied> BucketStorage<O> {
         self.count.fetch_sub(1, Ordering::Relaxed);
     }
 
-    pub fn get<T: Sized>(&self, ix: u64) -> &T {
-        let start = self.get_start_offset_no_header(ix);
-        let end = start + std::mem::size_of::<T>();
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *const T;
-            &*item
-        }
-    }
-
-    pub(crate) fn get_start_offset_with_header(&self, ix: u64) -> usize {
+    fn get_start_offset_with_header(&self, ix: u64) -> usize {
         assert!(ix < self.capacity(), "bad index size");
         (self.cell_size * ix) as usize
     }
 
-    pub(crate) fn get_start_offset_no_header(&self, ix: u64) -> usize {
+    fn get_start_offset_no_header(&self, ix: u64) -> usize {
         self.get_start_offset_with_header(ix) + O::offset_to_first_data()
+    }
+
+    pub fn get<T: Sized>(&self, ix: u64) -> &T {
+        let slice = self.get_cell_slice::<T>(ix, 1);
+        // SAFETY: `get_cell_slice` ensures there's at least one element in the slice
+        unsafe { slice.get_unchecked(0) }
+    }
+
+    pub fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
+        let slice = self.get_mut_cell_slice::<T>(ix, 1);
+        // SAFETY: `get_mut_cell_slice` ensures there's at least one element in the slice
+        unsafe { slice.get_unchecked_mut(0) }
     }
 
     pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
         let start = self.get_start_offset_no_header(ix);
-        let end = start + std::mem::size_of::<T>() * len as usize;
-        //debug!("GET slice {} {}", start, end);
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *const T;
-            std::slice::from_raw_parts(item, len as usize)
-        }
-    }
-
-    pub(crate) fn get_mut_from_parts<T: Sized>(item_slice: &mut [u8]) -> &mut T {
-        assert!(std::mem::size_of::<T>() <= item_slice.len());
-        let item = item_slice.as_mut_ptr() as *mut T;
-        unsafe { &mut *item }
-    }
-
-    pub fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
-        let start = self.get_start_offset_no_header(ix);
-        let item_slice = &mut self.mmap[start..];
-        let item_slice = &mut item_slice[..std::mem::size_of::<T>()];
-        Self::get_mut_from_parts(item_slice)
+        let slice = {
+            let size = std::mem::size_of::<T>() * len as usize;
+            let slice = &self.mmap[start..];
+            debug_assert!(slice.len() >= size);
+            &slice[..size]
+        };
+        let ptr = {
+            let ptr = slice.as_ptr() as *const T;
+            debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
+            ptr
+        };
+        unsafe { std::slice::from_raw_parts(ptr, len as usize) }
     }
 
     pub fn get_mut_cell_slice<T: Sized>(&mut self, ix: u64, len: u64) -> &mut [T] {
         let start = self.get_start_offset_no_header(ix);
-        let end = start + std::mem::size_of::<T>() * len as usize;
-        //debug!("GET mut slice {} {}", start, end);
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *mut T;
-            std::slice::from_raw_parts_mut(item, len as usize)
-        }
+        let slice = {
+            let size = std::mem::size_of::<T>() * len as usize;
+            let slice = &mut self.mmap[start..];
+            debug_assert!(slice.len() >= size);
+            &mut slice[..size]
+        };
+        let ptr = {
+            let ptr = slice.as_mut_ptr() as *mut T;
+            debug_assert!(ptr as usize % std::mem::align_of::<T>() == 0);
+            ptr
+        };
+        unsafe { std::slice::from_raw_parts_mut(ptr, len as usize) }
     }
 
     fn new_map(
