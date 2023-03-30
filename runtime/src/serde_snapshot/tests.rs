@@ -31,6 +31,7 @@ use {
     },
     std::{
         io::{BufReader, Cursor},
+        num::NonZeroUsize,
         ops::RangeFull,
         path::Path,
         sync::{Arc, RwLock},
@@ -609,8 +610,8 @@ fn test_extra_fields_full_snapshot_archive() {
         full_snapshot_archives_dir.path(),
         incremental_snapshot_archives_dir.path(),
         ArchiveFormat::TarBzip2,
-        1,
-        0,
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
     )
     .unwrap();
 

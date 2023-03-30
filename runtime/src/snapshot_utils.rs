@@ -53,6 +53,7 @@ use {
         fmt,
         fs::{self, File},
         io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
+        num::NonZeroUsize,
         path::{Path, PathBuf},
         process::ExitStatus,
         str::FromStr,
@@ -84,9 +85,16 @@ const VERSION_STRING_V1_2_0: &str = "1.2.0";
 pub(crate) const TMP_BANK_SNAPSHOT_PREFIX: &str = "tmp-bank-snapshot-";
 pub const TMP_SNAPSHOT_ARCHIVE_PREFIX: &str = "tmp-snapshot-archive-";
 pub const BANK_SNAPSHOT_PRE_FILENAME_EXTENSION: &str = "pre";
-pub const MAX_BANK_SNAPSHOTS_TO_RETAIN: usize = 8; // Save some bank snapshots but not too many
-pub const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = 2;
-pub const DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = 4;
+// Save some bank snapshots but not too many
+pub const MAX_BANK_SNAPSHOTS_TO_RETAIN: usize = 8;
+// The following unsafes are
+// - Safe because the values are fixed, known non-zero constants
+// - Necessary in order to have a plain NonZeroUsize as the constant, NonZeroUsize
+//   returns an Option<NonZeroUsize> and we can't .unwrap() at compile time
+pub const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: NonZeroUsize =
+    unsafe { NonZeroUsize::new_unchecked(2) };
+pub const DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN: NonZeroUsize =
+    unsafe { NonZeroUsize::new_unchecked(4) };
 pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^snapshot-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz|tar\.lz4)$";
 pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-snapshot-(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz|tar\.lz4)$";
 
@@ -574,8 +582,8 @@ pub fn archive_snapshot_package(
     snapshot_package: &SnapshotPackage,
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
-    maximum_full_snapshot_archives_to_retain: usize,
-    maximum_incremental_snapshot_archives_to_retain: usize,
+    maximum_full_snapshot_archives_to_retain: NonZeroUsize,
+    maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 ) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
@@ -2258,8 +2266,8 @@ pub fn get_highest_incremental_snapshot_archive_info(
 pub fn purge_old_snapshot_archives(
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
-    maximum_full_snapshot_archives_to_retain: usize,
-    maximum_incremental_snapshot_archives_to_retain: usize,
+    maximum_full_snapshot_archives_to_retain: NonZeroUsize,
+    maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 ) {
     info!(
         "Purging old full snapshot archives in {}, retaining up to {} full snapshots",
@@ -2271,10 +2279,9 @@ pub fn purge_old_snapshot_archives(
     full_snapshot_archives.sort_unstable();
     full_snapshot_archives.reverse();
 
-    let num_to_retain = full_snapshot_archives.len().min(
-        maximum_full_snapshot_archives_to_retain
-            .max(1 /* Always keep at least one full snapshot */),
-    );
+    let num_to_retain = full_snapshot_archives
+        .len()
+        .min(maximum_full_snapshot_archives_to_retain.get());
     trace!(
         "There are {} full snapshot archives, retaining {}",
         full_snapshot_archives.len(),
@@ -2323,7 +2330,7 @@ pub fn purge_old_snapshot_archives(
     {
         incremental_snapshot_archives.sort_unstable();
         let num_to_retain = if Some(base_slot) == highest_full_snapshot_slot {
-            maximum_incremental_snapshot_archives_to_retain
+            maximum_incremental_snapshot_archives_to_retain.get()
         } else {
             usize::from(retained_full_snapshot_slots.contains(&base_slot))
         };
@@ -2912,8 +2919,8 @@ pub fn bank_to_full_snapshot_archive(
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
     archive_format: ArchiveFormat,
-    maximum_full_snapshot_archives_to_retain: usize,
-    maximum_incremental_snapshot_archives_to_retain: usize,
+    maximum_full_snapshot_archives_to_retain: NonZeroUsize,
+    maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 ) -> Result<FullSnapshotArchiveInfo> {
     let snapshot_version = snapshot_version.unwrap_or_default();
 
@@ -2964,8 +2971,8 @@ pub fn bank_to_incremental_snapshot_archive(
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
     archive_format: ArchiveFormat,
-    maximum_full_snapshot_archives_to_retain: usize,
-    maximum_incremental_snapshot_archives_to_retain: usize,
+    maximum_full_snapshot_archives_to_retain: NonZeroUsize,
+    maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
     let snapshot_version = snapshot_version.unwrap_or_default();
 
@@ -3021,8 +3028,8 @@ pub fn package_and_archive_full_snapshot(
     snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
-    maximum_full_snapshot_archives_to_retain: usize,
-    maximum_incremental_snapshot_archives_to_retain: usize,
+    maximum_full_snapshot_archives_to_retain: NonZeroUsize,
+    maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 ) -> Result<FullSnapshotArchiveInfo> {
     let accounts_package = AccountsPackage::new_for_snapshot(
         AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
@@ -3073,8 +3080,8 @@ pub fn package_and_archive_incremental_snapshot(
     snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
-    maximum_full_snapshot_archives_to_retain: usize,
-    maximum_incremental_snapshot_archives_to_retain: usize,
+    maximum_full_snapshot_archives_to_retain: NonZeroUsize,
+    maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
     let accounts_package = AccountsPackage::new_for_snapshot(
         AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(
@@ -3818,8 +3825,8 @@ mod tests {
 
     fn common_test_purge_old_snapshot_archives(
         snapshot_names: &[&String],
-        maximum_full_snapshot_archives_to_retain: usize,
-        maximum_incremental_snapshot_archives_to_retain: usize,
+        maximum_full_snapshot_archives_to_retain: NonZeroUsize,
+        maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
         expected_snapshots: &[&String],
     ) {
         let temp_snap_dir = tempfile::TempDir::new().unwrap();
@@ -3868,15 +3875,7 @@ mod tests {
         let expected_snapshots = vec![&snap3_name];
         common_test_purge_old_snapshot_archives(
             &snapshot_names,
-            1,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            &expected_snapshots,
-        );
-
-        // retaining 0, but minimum to retain is 1
-        common_test_purge_old_snapshot_archives(
-            &snapshot_names,
-            0,
+            NonZeroUsize::new(1).unwrap(),
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             &expected_snapshots,
         );
@@ -3885,7 +3884,7 @@ mod tests {
         let expected_snapshots = vec![&snap2_name, &snap3_name];
         common_test_purge_old_snapshot_archives(
             &snapshot_names,
-            2,
+            NonZeroUsize::new(2).unwrap(),
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             &expected_snapshots,
         );
@@ -3894,7 +3893,7 @@ mod tests {
         let expected_snapshots = vec![&snap1_name, &snap2_name, &snap3_name];
         common_test_purge_old_snapshot_archives(
             &snapshot_names,
-            3,
+            NonZeroUsize::new(3).unwrap(),
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             &expected_snapshots,
         );
@@ -3907,7 +3906,7 @@ mod tests {
     fn test_purge_old_full_snapshot_archives_in_the_loop() {
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
-        let maximum_snapshots_to_retain = 5;
+        let maximum_snapshots_to_retain = NonZeroUsize::new(5).unwrap();
         let starting_slot: Slot = 42;
 
         for slot in (starting_slot..).take(100) {
@@ -3919,12 +3918,12 @@ mod tests {
             File::create(full_snapshot_archive_path).unwrap();
 
             // don't purge-and-check until enough snapshot archives have been created
-            if slot < starting_slot + maximum_snapshots_to_retain as Slot {
+            if slot < starting_slot + maximum_snapshots_to_retain.get() as Slot {
                 continue;
             }
 
             // purge infrequently, so there will always be snapshot archives to purge
-            if slot % (maximum_snapshots_to_retain as Slot * 2) != 0 {
+            if slot % (maximum_snapshots_to_retain.get() as Slot * 2) != 0 {
                 continue;
             }
 
@@ -3932,12 +3931,15 @@ mod tests {
                 &full_snapshot_archives_dir,
                 &incremental_snapshot_archives_dir,
                 maximum_snapshots_to_retain,
-                usize::MAX,
+                NonZeroUsize::new(usize::MAX).unwrap(),
             );
             let mut full_snapshot_archives =
                 get_full_snapshot_archives(&full_snapshot_archives_dir);
             full_snapshot_archives.sort_unstable();
-            assert_eq!(full_snapshot_archives.len(), maximum_snapshots_to_retain);
+            assert_eq!(
+                full_snapshot_archives.len(),
+                maximum_snapshots_to_retain.get()
+            );
             assert_eq!(full_snapshot_archives.last().unwrap().slot(), slot);
             for (i, full_snapshot_archive) in full_snapshot_archives.iter().rev().enumerate() {
                 assert_eq!(full_snapshot_archive.slot(), slot - i as Slot);
@@ -3958,14 +3960,19 @@ mod tests {
 
         let incremental_snapshot_interval = 100;
         let num_incremental_snapshots_per_full_snapshot =
-            maximum_incremental_snapshot_archives_to_retain * 2;
+            maximum_incremental_snapshot_archives_to_retain.get() * 2;
         let full_snapshot_interval =
             incremental_snapshot_interval * num_incremental_snapshots_per_full_snapshot;
 
         let mut snapshot_filenames = vec![];
         (starting_slot..)
             .step_by(full_snapshot_interval)
-            .take(maximum_full_snapshot_archives_to_retain * 2)
+            .take(
+                maximum_full_snapshot_archives_to_retain
+                    .checked_mul(NonZeroUsize::new(2).unwrap())
+                    .unwrap()
+                    .get(),
+            )
             .for_each(|full_snapshot_slot| {
                 let snapshot_filename =
                     format!("snapshot-{}-{}.tar", full_snapshot_slot, Hash::default());
@@ -4004,7 +4011,7 @@ mod tests {
             get_full_snapshot_archives(full_snapshot_archives_dir.path());
         assert_eq!(
             remaining_full_snapshot_archives.len(),
-            maximum_full_snapshot_archives_to_retain,
+            maximum_full_snapshot_archives_to_retain.get(),
         );
         remaining_full_snapshot_archives.sort_unstable();
         let latest_full_snapshot_archive_slot =
@@ -4019,13 +4026,18 @@ mod tests {
         assert_eq!(
             remaining_incremental_snapshot_archives.len(),
             maximum_incremental_snapshot_archives_to_retain
-                + maximum_full_snapshot_archives_to_retain.saturating_sub(1)
+                .get()
+                .saturating_add(
+                    maximum_full_snapshot_archives_to_retain
+                        .get()
+                        .saturating_sub(1)
+                )
         );
         remaining_incremental_snapshot_archives.sort_unstable();
         remaining_incremental_snapshot_archives.reverse();
 
         // Ensure there exists one incremental snapshot all but the latest full snapshot
-        for i in (1..maximum_full_snapshot_archives_to_retain).rev() {
+        for i in (1..maximum_full_snapshot_archives_to_retain.get()).rev() {
             let incremental_snapshot_archive =
                 remaining_incremental_snapshot_archives.pop().unwrap();
 
@@ -4052,7 +4064,7 @@ mod tests {
                 .take(num_incremental_snapshots_per_full_snapshot)
                 .skip(
                     num_incremental_snapshots_per_full_snapshot
-                        - maximum_incremental_snapshot_archives_to_retain,
+                        - maximum_incremental_snapshot_archives_to_retain.get(),
                 )
                 .collect::<HashSet<_>>();
 
@@ -4091,8 +4103,8 @@ mod tests {
         purge_old_snapshot_archives(
             full_snapshot_archives_dir.path(),
             incremental_snapshot_archives_dir.path(),
-            usize::MAX,
-            usize::MAX,
+            NonZeroUsize::new(usize::MAX).unwrap(),
+            NonZeroUsize::new(usize::MAX).unwrap(),
         );
 
         let remaining_incremental_snapshot_archives =
