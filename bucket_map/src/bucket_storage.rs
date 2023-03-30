@@ -178,19 +178,19 @@ impl<O: BucketOccupied> BucketStorage<O> {
         self.get_start_offset_with_header(ix) + O::offset_to_first_data()
     }
 
-    pub fn get<T: Sized>(&self, ix: u64) -> &T {
+    pub fn get<T>(&self, ix: u64) -> &T {
         let slice = self.get_cell_slice::<T>(ix, 1);
         // SAFETY: `get_cell_slice` ensures there's at least one element in the slice
         unsafe { slice.get_unchecked(0) }
     }
 
-    pub fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
+    pub fn get_mut<T>(&mut self, ix: u64) -> &mut T {
         let slice = self.get_mut_cell_slice::<T>(ix, 1);
         // SAFETY: `get_mut_cell_slice` ensures there's at least one element in the slice
         unsafe { slice.get_unchecked_mut(0) }
     }
 
-    pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
+    pub fn get_cell_slice<T>(&self, ix: u64, len: u64) -> &[T] {
         let start = self.get_start_offset_no_header(ix);
         let slice = {
             let size = std::mem::size_of::<T>() * len as usize;
@@ -206,7 +206,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         unsafe { std::slice::from_raw_parts(ptr, len as usize) }
     }
 
-    pub fn get_mut_cell_slice<T: Sized>(&mut self, ix: u64, len: u64) -> &mut [T] {
+    pub fn get_mut_cell_slice<T>(&mut self, ix: u64, len: u64) -> &mut [T] {
         let start = self.get_start_offset_no_header(ix);
         let slice = {
             let size = std::mem::size_of::<T>() * len as usize;
