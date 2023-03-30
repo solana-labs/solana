@@ -86,21 +86,18 @@ struct MultipleSlots {
 }
 
 impl MultipleSlots {
-    pub(crate) fn set_storage_capacity_when_created_pow2(
-        &mut self,
-        storage_capacity_when_created_pow2: u8,
-    ) {
+    fn set_storage_capacity_when_created_pow2(&mut self, storage_capacity_when_created_pow2: u8) {
         self.storage_cap_and_offset
             .set_capacity_when_created_pow2(storage_capacity_when_created_pow2)
     }
 
-    pub(crate) fn set_storage_offset(&mut self, storage_offset: u64) {
+    fn set_storage_offset(&mut self, storage_offset: u64) {
         self.storage_cap_and_offset
             .set_offset_checked(storage_offset)
             .expect("New storage offset must fit into 7 bytes!")
     }
 
-    pub(crate) fn storage_capacity_when_created_pow2(&self) -> u8 {
+    fn storage_capacity_when_created_pow2(&self) -> u8 {
         self.storage_cap_and_offset.capacity_when_created_pow2()
     }
 
@@ -270,10 +267,7 @@ mod tests {
             IndexEntry {
                 key,
                 ref_count: 0,
-                multiple_slots: MultipleSlots {
-                    storage_cap_and_offset: PackedStorage::default(),
-                    num_slots: 0,
-                },
+                multiple_slots: MultipleSlots::default(),
                 _phantom: PhantomData,
             }
         }
