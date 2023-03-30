@@ -835,12 +835,12 @@ pub fn main() {
                 _ => unreachable!(),
             }
         }
-        ("set-tpu-host-address", Some(subcommand_matches)) => {
-            let tpu_addr: SocketAddr = subcommand_matches
-                .value_of("tpu_host_port")
-                .map(|tpu_host_port| {
-                    solana_net_utils::parse_host_port(tpu_host_port).unwrap_or_else(|err| {
-                        eprintln!("Failed to parse --set-tpu-host-address HOST:PORT {err}");
+        ("set-public-tpu-address", Some(subcommand_matches)) => {
+            let public_tpu_addr: SocketAddr = subcommand_matches
+                .value_of("public_tpu_addr")
+                .map(|public_tpu_addr| {
+                    solana_net_utils::parse_host_port(public_tpu_addr).unwrap_or_else(|err| {
+                        eprintln!("Failed to parse --set-public-tpu-address HOST:PORT {err}");
                         exit(1);
                     })
                 })
@@ -848,9 +848,14 @@ pub fn main() {
 
             let admin_client = admin_rpc_service::connect(&ledger_path);
             admin_rpc_service::runtime()
-                .block_on(async move { admin_client.await?.set_tpu_host_address(tpu_addr).await })
+                .block_on(async move {
+                    admin_client
+                        .await?
+                        .set_public_tpu_address(public_tpu_addr)
+                        .await
+                })
                 .unwrap_or_else(|err| {
-                    println!("setTpuHostAddress request failed: {err}");
+                    println!("setPublicTpuAddress request failed: {err}");
                     exit(1);
                 });
 
@@ -1697,9 +1702,9 @@ pub fn main() {
         }),
     );
 
-    let overwrite_tpu_addr = matches.value_of("tpu_host_addr").map(|tpu_addr| {
-        solana_net_utils::parse_host_port(tpu_addr).unwrap_or_else(|err| {
-            eprintln!("Failed to parse --overwrite-tpu-addr: {err}");
+    let public_tpu_addr = matches.value_of("public_tpu_addr").map(|public_tpu_addr| {
+        solana_net_utils::parse_host_port(public_tpu_addr).unwrap_or_else(|err| {
+            eprintln!("Failed to parse --public-tpu-address: {err}");
             exit(1);
         })
     });
@@ -1714,7 +1719,7 @@ pub fn main() {
         &gossip_addr,
         dynamic_port_range,
         bind_address,
-        overwrite_tpu_addr,
+        public_tpu_addr,
     );
 
     if restricted_repair_only_mode {

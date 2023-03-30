@@ -372,8 +372,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
         )
         .arg(
-            Arg::with_name("tpu_host_addr")
-                .long("tpu-host-address")
+            Arg::with_name("public_tpu_addr")
+                .long("public-tpu-address")
                 .alias("tpu-host-addr")
                 .value_name("HOST:PORT")
                 .takes_value(true)
@@ -1617,10 +1617,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                          then this not a good time for a restart")
         ).
         subcommand(
-            SubCommand::with_name("set-tpu-host-address")
+            SubCommand::with_name("set-public-tpu-address")
                 .about("Specify TPU address to advertise in gossip")
                 .arg(
-                    Arg::with_name("tpu_host_port")
+                    Arg::with_name("public_tpu_addr")
                         .index(1)
                         .value_name("HOST:PORT")
                         .takes_value(true)

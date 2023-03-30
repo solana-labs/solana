@@ -227,8 +227,12 @@ pub trait AdminRpc {
         max_entries: usize,
     ) -> Result<Vec<(String, usize)>>;
 
-    #[rpc(meta, name = "setTpuHostAddress")]
-    fn set_tpu_host_address(&self, meta: Self::Metadata, tpu_addr: SocketAddr) -> Result<()>;
+    #[rpc(meta, name = "setPublicTpuAddress")]
+    fn set_public_tpu_address(
+        &self,
+        meta: Self::Metadata,
+        public_tpu_addr: SocketAddr,
+    ) -> Result<()>;
 }
 
 pub struct AdminRpcImpl;
@@ -592,16 +596,29 @@ impl AdminRpc for AdminRpcImpl {
         })
     }
 
-    fn set_tpu_host_address(&self, meta: Self::Metadata, tpu_addr: SocketAddr) -> Result<()> {
-        debug!("set_tpu_host_address rpc request received: {:?}", tpu_addr);
+    fn set_public_tpu_address(
+        &self,
+        meta: Self::Metadata,
+        public_tpu_addr: SocketAddr,
+    ) -> Result<()> {
+        debug!(
+            "set_public_tpu_address rpc request received: {:?}",
+            public_tpu_addr
+        );
 
         meta.with_post_init(|post_init| {
-            post_init.cluster_info.set_tpu(tpu_addr).map_err(|err| {
-                error!("Failed to set TPU address to {}: {}", tpu_addr, err);
-                jsonrpc_core::error::Error::internal_error()
-            })?;
+            post_init
+                .cluster_info
+                .set_tpu(public_tpu_addr)
+                .map_err(|err| {
+                    error!(
+                        "Failed to set public TPU address to {}: {}",
+                        public_tpu_addr, err
+                    );
+                    jsonrpc_core::error::Error::internal_error()
+                })?;
             warn!(
-                "TPU address set to {:?}",
+                "Public TPU address set to {:?}",
                 post_init.cluster_info.my_contact_info().tpu()
             );
             Ok(())
