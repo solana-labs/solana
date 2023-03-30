@@ -6,15 +6,16 @@ use {
         derivation_path::{acquire_derivation_path, derivation_path_arg},
         input_parsers::STDOUT_OUTFILE_TOKEN,
         input_validators::{is_parsable, is_prompt_signer_source},
+        keygen::{check_for_overwrite, no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG},
         keypair::{
             keypair_from_path, keypair_from_seed_phrase, signer_from_path,
             SKIP_SEED_PHRASE_VALIDATION_ARG,
         },
         mnemonic::{
-            acquire_language, acquire_passphrase_and_message, language_arg,
-            no_passphrase_and_message, no_passphrase_arg, word_count_arg, WORD_COUNT_ARG,
+            acquire_language, acquire_passphrase_and_message, no_passphrase_and_message,
+            WORD_COUNT_ARG,
         },
-        ArgConstant, DisplayError,
+        DisplayError,
     },
     solana_cli_config::{Config, CONFIG_FILE},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
@@ -30,7 +31,6 @@ use {
     std::{
         collections::HashSet,
         error,
-        path::Path,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
@@ -59,39 +59,6 @@ struct GrindMatch {
     starts: String,
     ends: String,
     count: AtomicU64,
-}
-
-const NO_OUTFILE_ARG: ArgConstant<'static> = ArgConstant {
-    long: "no-outfile",
-    name: "no_outfile",
-    help: "Only print a seed phrase and pubkey. Do not output a keypair file",
-};
-
-fn no_outfile_arg<'a>() -> Arg<'a> {
-    Arg::new(NO_OUTFILE_ARG.name)
-        .long(NO_OUTFILE_ARG.long)
-        .help(NO_OUTFILE_ARG.help)
-}
-
-trait KeyGenerationCommonArgs {
-    fn key_generation_common_args(self) -> Self;
-}
-
-impl KeyGenerationCommonArgs for Command<'_> {
-    fn key_generation_common_args(self) -> Self {
-        self.arg(word_count_arg())
-            .arg(language_arg())
-            .arg(no_passphrase_arg())
-    }
-}
-
-fn check_for_overwrite(outfile: &str, matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
-    let force = matches.is_present("force");
-    if !force && Path::new(outfile).exists() {
-        let err_msg = format!("Refusing to overwrite {outfile} without --force flag");
-        return Err(err_msg.into());
-    }
-    Ok(())
 }
 
 fn get_keypair_from_matches(

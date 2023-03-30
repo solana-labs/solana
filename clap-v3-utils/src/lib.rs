@@ -27,6 +27,7 @@ pub mod derivation_path;
 pub mod fee_payer;
 pub mod input_parsers;
 pub mod input_validators;
+pub mod keygen;
 pub mod keypair;
 pub mod memo;
 pub mod mnemonic;
