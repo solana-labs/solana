@@ -4,7 +4,9 @@ use {
         bucket_map::BucketMapError,
         bucket_stats::BucketMapStats,
         bucket_storage::{BucketOccupied, BucketStorage, DEFAULT_CAPACITY_POW2},
-        index_entry::{DataBucket, IndexBucket, IndexEntry, IndexEntryPlaceInBucket},
+        index_entry::{
+            DataBucket, IndexBucket, IndexEntry, IndexEntryPlaceInBucket, MultipleSlots,
+        },
         MaxSearch, RefCount,
     },
     rand::{thread_rng, Rng},
@@ -265,7 +267,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         data_len: usize,
         ref_count: RefCount,
     ) -> Result<(), BucketMapError> {
-        let best_fit_bucket = IndexEntry::<T>::data_bucket_from_num_slots(data_len as u64);
+        let best_fit_bucket = MultipleSlots::data_bucket_from_num_slots(data_len as u64);
         if self.data.get(best_fit_bucket as usize).is_none() {
             // fail early if the data bucket we need doesn't exist - we don't want the index entry partially allocated
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
@@ -286,8 +288,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
         elem.set_ref_count(&mut self.index, ref_count);
         let current_multiple_slots = elem.get_multiple_slots(&self.index);
-        let bucket_ix =
-            IndexEntry::<T>::data_bucket_from_num_slots(current_multiple_slots.num_slots());
+        let bucket_ix = current_multiple_slots.data_bucket_ix();
         let num_slots = data_len as u64;
         if best_fit_bucket == bucket_ix && current_multiple_slots.num_slots() > 0 {
             let current_bucket = &mut self.data[bucket_ix as usize];
@@ -351,7 +352,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         if let Some((elem, elem_ix)) = self.find_index_entry(key) {
             let multiple_slots = elem.get_multiple_slots_mut(&mut self.index);
             if multiple_slots.num_slots() > 0 {
-                let ix = elem.data_bucket_ix(&self.index) as usize;
+                let ix = multiple_slots.data_bucket_ix() as usize;
                 let data_bucket = &self.data[ix];
                 let loc = elem.data_loc(&self.index, data_bucket);
                 let data_bucket = &mut self.data[ix];
