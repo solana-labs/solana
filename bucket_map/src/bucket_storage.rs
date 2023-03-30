@@ -188,11 +188,16 @@ impl<O: BucketOccupied> BucketStorage<O> {
         self.get_start_offset_with_header(ix) + O::offset_to_first_data()
     }
 
-    pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
-        let start = self.get_start_offset_no_header(ix);
+    pub(crate) fn get_range_no_header<T: Sized>(&self, ix: u64, len: u64) -> std::ops::Range<usize> {
+        let start = self.get_start_offset_with_header(ix) + O::offset_to_first_data();
         let end = start + std::mem::size_of::<T>() * len as usize;
+        start..end
+    }
+
+    pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
+        let range = self.get_range_no_header::<T>(ix, len);
         //debug!("GET slice {} {}", start, end);
-        let item_slice: &[u8] = &self.mmap[start..end];
+        let item_slice: &[u8] = &self.mmap[range];
         unsafe {
             let item = item_slice.as_ptr() as *const T;
             std::slice::from_raw_parts(item, len as usize)
@@ -206,9 +211,8 @@ impl<O: BucketOccupied> BucketStorage<O> {
     }
 
     pub fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
-        let start = self.get_start_offset_no_header(ix);
-        let item_slice = &mut self.mmap[start..];
-        let item_slice = &mut item_slice[..std::mem::size_of::<T>()];
+        let range = self.get_range_no_header::<T>(ix, 1);
+        let item_slice = &mut self.mmap[range];
         Self::get_mut_from_parts(item_slice)
     }
 
@@ -216,11 +220,9 @@ impl<O: BucketOccupied> BucketStorage<O> {
         let start = self.get_start_offset_no_header(ix);
         let end = start + std::mem::size_of::<T>() * len as usize;
         //debug!("GET mut slice {} {}", start, end);
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *mut T;
-            std::slice::from_raw_parts_mut(item, len as usize)
-        }
+        let item_slice = &mut self.mmap[start..end];
+        let item = item_slice.as_mut_ptr() as *mut T;
+        unsafe { std::slice::from_raw_parts_mut(item, len as usize) }
     }
 
     fn new_map(
