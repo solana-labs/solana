@@ -65,16 +65,45 @@ pub struct IndexEntryPlaceInBucket<T: 'static> {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone)]
 // one instance of this per item in the index
 // stored in the index bucket
 pub struct IndexEntry<T: 'static> {
     pub key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
     ref_count: RefCount, // can this be smaller? Do we ever need more than 4B refcounts?
-    storage_cap_and_offset: PackedStorage,
-    // if the bucket doubled, the index can be recomputed using create_bucket_capacity_pow2
-    num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
+    multiple_slots: MultipleSlots,
     _phantom: PhantomData<&'static T>,
+}
+
+/// required fields when an index element references the data file
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+struct MultipleSlots {
+    // if the bucket doubled, the index can be recomputed using storage_cap_and_offset.create_bucket_capacity_pow2
+    storage_cap_and_offset: PackedStorage,
+    /// num elements in the slot list
+    num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
+}
+
+impl MultipleSlots {
+    fn set_storage_capacity_when_created_pow2(&mut self, storage_capacity_when_created_pow2: u8) {
+        self.storage_cap_and_offset
+            .set_capacity_when_created_pow2(storage_capacity_when_created_pow2)
+    }
+
+    fn set_storage_offset(&mut self, storage_offset: u64) {
+        self.storage_cap_and_offset
+            .set_offset_checked(storage_offset)
+            .expect("New storage offset must fit into 7 bytes!")
+    }
+
+    fn storage_capacity_when_created_pow2(&self) -> u8 {
+        self.storage_cap_and_offset.capacity_when_created_pow2()
+    }
+
+    fn storage_offset(&self) -> u64 {
+        self.storage_cap_and_offset.offset()
+    }
 }
 
 /// Pack the storage offset and capacity-when-crated-pow2 fields into a single u64
@@ -107,8 +136,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
         let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
         index_entry.key = *pubkey;
         index_entry.ref_count = 0;
-        index_entry.storage_cap_and_offset = PackedStorage::default();
-        index_entry.num_slots = 0;
+        index_entry.multiple_slots = MultipleSlots::default();
     }
 
     pub fn set_storage_capacity_when_created_pow2(
@@ -116,10 +144,8 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_bucket: &mut BucketStorage<IndexBucket<T>>,
         storage_capacity_when_created_pow2: u8,
     ) {
-        index_bucket
-            .get_mut::<IndexEntry<T>>(self.ix)
-            .storage_cap_and_offset
-            .set_capacity_when_created_pow2(storage_capacity_when_created_pow2)
+        self.get_multiple_slots_mut(index_bucket)
+            .set_storage_capacity_when_created_pow2(storage_capacity_when_created_pow2);
     }
 
     pub fn set_storage_offset(
@@ -127,15 +153,28 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_bucket: &mut BucketStorage<IndexBucket<T>>,
         storage_offset: u64,
     ) {
-        index_bucket
-            .get_mut::<IndexEntry<T>>(self.ix)
-            .storage_cap_and_offset
-            .set_offset_checked(storage_offset)
-            .expect("New storage offset must fit into 7 bytes!");
+        self.get_multiple_slots_mut(index_bucket)
+            .set_storage_offset(storage_offset);
     }
 
     pub fn data_bucket_ix(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> u64 {
         IndexEntry::<T>::data_bucket_from_num_slots(self.num_slots(index_bucket))
+    }
+
+    fn get_multiple_slots<'a>(
+        &self,
+        index_bucket: &'a BucketStorage<IndexBucket<T>>,
+    ) -> &'a MultipleSlots {
+        &index_bucket.get::<IndexEntry<T>>(self.ix).multiple_slots
+    }
+
+    fn get_multiple_slots_mut<'a>(
+        &self,
+        index_bucket: &'a mut BucketStorage<IndexBucket<T>>,
+    ) -> &'a mut MultipleSlots {
+        &mut index_bucket
+            .get_mut::<IndexEntry<T>>(self.ix)
+            .multiple_slots
     }
 
     pub fn ref_count(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> RefCount {
@@ -147,17 +186,12 @@ impl<T> IndexEntryPlaceInBucket<T> {
         &self,
         index_bucket: &BucketStorage<IndexBucket<T>>,
     ) -> u8 {
-        let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
-        index_entry
-            .storage_cap_and_offset
-            .capacity_when_created_pow2()
+        self.get_multiple_slots(index_bucket)
+            .storage_capacity_when_created_pow2()
     }
 
     pub fn storage_offset(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> u64 {
-        index_bucket
-            .get::<IndexEntry<T>>(self.ix)
-            .storage_cap_and_offset
-            .offset()
+        self.get_multiple_slots(index_bucket).storage_offset()
     }
 
     /// This function maps the original data location into an index in the current bucket storage.
@@ -167,12 +201,8 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_bucket: &BucketStorage<IndexBucket<T>>,
         storage: &BucketStorage<DataBucket>,
     ) -> u64 {
-        let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
         self.storage_offset(index_bucket)
-            << (storage.capacity_pow2
-                - index_entry
-                    .storage_cap_and_offset
-                    .capacity_when_created_pow2())
+            << (storage.capacity_pow2 - self.storage_capacity_when_created_pow2(index_bucket))
     }
 
     pub fn read_value<'a>(
@@ -216,11 +246,11 @@ impl<T> IndexEntryPlaceInBucket<T> {
     }
 
     pub fn num_slots(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> Slot {
-        index_bucket.get::<IndexEntry<T>>(self.ix).num_slots
+        self.get_multiple_slots(index_bucket).num_slots
     }
 
     pub fn set_num_slots(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, num_slots: Slot) {
-        index_bucket.get_mut::<IndexEntry<T>>(self.ix).num_slots = num_slots;
+        self.get_multiple_slots_mut(index_bucket).num_slots = num_slots;
     }
 }
 
@@ -237,8 +267,7 @@ mod tests {
             IndexEntry {
                 key,
                 ref_count: 0,
-                storage_cap_and_offset: PackedStorage::default(),
-                num_slots: 0,
+                multiple_slots: MultipleSlots::default(),
                 _phantom: PhantomData,
             }
         }
