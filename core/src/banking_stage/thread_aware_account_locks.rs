@@ -39,8 +39,16 @@ impl ThreadAwareAccountLocks {
     /// Creates a new `ThreadAwareAccountLocks` with the given number of threads
     /// and queue limit.
     pub fn new(num_threads: usize, sequential_queue_limit: u32) -> Self {
-        assert!(num_threads > 0 && num_threads <= MAX_THREADS);
-        assert!(sequential_queue_limit > 0);
+        assert!(num_threads > 0, "num threads must be > 0");
+        assert!(
+            num_threads <= MAX_THREADS,
+            "num threads must be <= {MAX_THREADS}"
+        );
+        assert!(
+            sequential_queue_limit > 0,
+            "sequential queue limit must be > 0"
+        );
+
         Self {
             num_threads,
             sequential_queue_limit,
@@ -166,7 +174,10 @@ impl ThreadAwareAccountLocks {
         read_account_locks: impl Iterator<Item = &'a Pubkey>,
         thread_id: ThreadId,
     ) {
-        assert!(thread_id < self.num_threads);
+        assert!(
+            thread_id < self.num_threads,
+            "thread_id must be < num_threads"
+        );
         for account in write_account_locks {
             self.write_lock_account(account, thread_id);
         }
@@ -182,10 +193,16 @@ impl ThreadAwareAccountLocks {
         match self.write_locks.entry(*account) {
             Entry::Occupied(mut entry) => {
                 let (lock_thread_id, lock_count) = entry.get_mut();
-                assert_eq!(*lock_thread_id, thread_id);
+                assert_eq!(
+                    *lock_thread_id, thread_id,
+                    "outstanding write lock must be on same thread"
+                );
 
                 *lock_count += 1;
-                assert!(*lock_count <= self.sequential_queue_limit);
+                assert!(
+                    *lock_count <= self.sequential_queue_limit,
+                    "sequential queue limit must not be exceeded"
+                );
             }
             Entry::Vacant(entry) => {
                 entry.insert((thread_id, 1));
@@ -194,7 +211,11 @@ impl ThreadAwareAccountLocks {
 
         // Check for outstanding read-locks
         if let Some((read_thread_set, _)) = self.read_locks.get(account) {
-            assert_eq!(read_thread_set, &ThreadSet::only(thread_id));
+            assert_eq!(
+                read_thread_set,
+                &ThreadSet::only(thread_id),
+                "outstanding read lock must be on same thread"
+            );
         }
     }
 
@@ -204,14 +225,17 @@ impl ThreadAwareAccountLocks {
         match self.write_locks.entry(*account) {
             Entry::Occupied(mut entry) => {
                 let (lock_thread_id, lock_count) = entry.get_mut();
-                assert_eq!(*lock_thread_id, thread_id);
+                assert_eq!(
+                    *lock_thread_id, thread_id,
+                    "outstanding write lock must be on same thread"
+                );
                 *lock_count -= 1;
                 if *lock_count == 0 {
                     entry.remove();
                 }
             }
             Entry::Vacant(_) => {
-                panic!("Write lock not found for account: {account}");
+                panic!("write lock must exist for account: {account}");
             }
         }
     }
@@ -223,7 +247,6 @@ impl ThreadAwareAccountLocks {
             Entry::Occupied(mut entry) => {
                 let (thread_set, lock_counts) = entry.get_mut();
                 thread_set.insert(thread_id);
-
                 lock_counts[thread_id] += 1;
             }
             Entry::Vacant(entry) => {
@@ -235,7 +258,10 @@ impl ThreadAwareAccountLocks {
 
         // Check for outstanding write-locks
         if let Some((write_thread_id, _)) = self.write_locks.get(account) {
-            assert_eq!(write_thread_id, &thread_id);
+            assert_eq!(
+                write_thread_id, &thread_id,
+                "outstanding write lock must be on same thread"
+            );
         }
     }
 
@@ -245,7 +271,10 @@ impl ThreadAwareAccountLocks {
         match self.read_locks.entry(*account) {
             Entry::Occupied(mut entry) => {
                 let (thread_set, lock_counts) = entry.get_mut();
-                assert!(thread_set.contains(thread_id));
+                assert!(
+                    thread_set.contains(thread_id),
+                    "outstanding read lock must be on same thread"
+                );
                 lock_counts[thread_id] -= 1;
                 if lock_counts[thread_id] == 0 {
                     thread_set.remove(thread_id);
@@ -255,7 +284,7 @@ impl ThreadAwareAccountLocks {
                 }
             }
             Entry::Vacant(_) => {
-                panic!("Read lock not found for account: {account}");
+                panic!("read lock must exist for account: {account}");
             }
         }
     }
@@ -354,20 +383,20 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "num threads must be > 0")]
     fn test_too_few_num_threads() {
         ThreadAwareAccountLocks::new(0, TEST_SEQ_LIMIT);
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "num threads must be <=")]
     fn test_too_many_num_threads() {
         ThreadAwareAccountLocks::new(MAX_THREADS + 1, TEST_SEQ_LIMIT);
     }
 
     #[test]
-    #[should_panic]
-    fn test_invalid_sequential_limit() {
+    #[should_panic(expected = "sequential queue limit must be > 0")]
+    fn test_invalid_sequential_queue_limit() {
         ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 0);
     }
 
@@ -526,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "outstanding write lock must be on same thread")]
     fn test_write_lock_account_write_conflict_panic() {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
@@ -535,7 +564,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "outstanding read lock must be on same thread")]
     fn test_write_lock_account_read_conflict_panic() {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
@@ -544,7 +573,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "sequential queue limit must not be exceeded")]
     fn test_write_lock_account_limit() {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
@@ -554,7 +583,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "write lock must exist")]
     fn test_write_unlock_account_not_locked() {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
@@ -562,7 +591,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "outstanding write lock must be on same thread")]
     fn test_write_unlock_account_thread_mismatch() {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
@@ -571,7 +600,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "outstanding write lock must be on same thread")]
     fn test_read_lock_account_write_conflict_panic() {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
@@ -580,7 +609,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "read lock must exist")]
     fn test_read_unlock_account_not_locked() {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
@@ -588,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "outstanding read lock must be on same thread")]
     fn test_read_unlock_account_thread_mismatch() {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
@@ -619,7 +648,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "thread_id must be < num_threads")]
     fn test_lock_accounts_invalid_thread() {
         let pk1 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
