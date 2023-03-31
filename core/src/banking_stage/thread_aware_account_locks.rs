@@ -1,13 +1,13 @@
 use {
     solana_sdk::pubkey::Pubkey,
     std::{
-        collections::HashMap,
+        collections::{hash_map::Entry, HashMap},
         fmt::{Debug, Display},
         ops::{BitAndAssign, Sub},
     },
 };
 
-pub const MAX_THREADS: usize = 64;
+pub const MAX_THREADS: usize = u64::BITS as usize;
 
 /// Identifier for a thread
 pub type ThreadId = usize; // 0..MAX_THREADS-1
@@ -180,14 +180,14 @@ impl ThreadAwareAccountLocks {
     /// Panics if the account is already locked for writing on another thread.
     fn write_lock_account(&mut self, account: &Pubkey, thread_id: ThreadId) {
         match self.write_locks.entry(*account) {
-            std::collections::hash_map::Entry::Occupied(mut entry) => {
+            Entry::Occupied(mut entry) => {
                 let (lock_thread_id, lock_count) = entry.get_mut();
                 assert_eq!(*lock_thread_id, thread_id);
 
                 *lock_count += 1;
                 assert!(*lock_count <= self.sequential_queue_limit);
             }
-            std::collections::hash_map::Entry::Vacant(entry) => {
+            Entry::Vacant(entry) => {
                 entry.insert((thread_id, 1));
             }
         }
@@ -202,7 +202,7 @@ impl ThreadAwareAccountLocks {
     /// Panics if the account is not locked for writing on `thread_id`.
     fn write_unlock_account(&mut self, account: &Pubkey, thread_id: ThreadId) {
         match self.write_locks.entry(*account) {
-            std::collections::hash_map::Entry::Occupied(mut entry) => {
+            Entry::Occupied(mut entry) => {
                 let (lock_thread_id, lock_count) = entry.get_mut();
                 assert_eq!(*lock_thread_id, thread_id);
                 *lock_count -= 1;
@@ -210,7 +210,7 @@ impl ThreadAwareAccountLocks {
                     entry.remove();
                 }
             }
-            std::collections::hash_map::Entry::Vacant(_) => {
+            Entry::Vacant(_) => {
                 panic!("Write lock not found for account: {account}");
             }
         }
@@ -220,13 +220,13 @@ impl ThreadAwareAccountLocks {
     /// Panics if the account is already locked for writing on another thread.
     fn read_lock_account(&mut self, account: &Pubkey, thread_id: ThreadId) {
         match self.read_locks.entry(*account) {
-            std::collections::hash_map::Entry::Occupied(mut entry) => {
+            Entry::Occupied(mut entry) => {
                 let (thread_set, lock_counts) = entry.get_mut();
                 thread_set.insert(thread_id);
 
                 lock_counts[thread_id] += 1;
             }
-            std::collections::hash_map::Entry::Vacant(entry) => {
+            Entry::Vacant(entry) => {
                 let mut lock_counts = [0; MAX_THREADS];
                 lock_counts[thread_id] = 1;
                 entry.insert((ThreadSet::only(thread_id), lock_counts));
@@ -243,7 +243,7 @@ impl ThreadAwareAccountLocks {
     /// Panics if the account is not locked for reading on `thread_id`.
     fn read_unlock_account(&mut self, account: &Pubkey, thread_id: ThreadId) {
         match self.read_locks.entry(*account) {
-            std::collections::hash_map::Entry::Occupied(mut entry) => {
+            Entry::Occupied(mut entry) => {
                 let (thread_set, lock_counts) = entry.get_mut();
                 assert!(thread_set.contains(thread_id));
                 lock_counts[thread_id] -= 1;
@@ -254,7 +254,7 @@ impl ThreadAwareAccountLocks {
                     }
                 }
             }
-            std::collections::hash_map::Entry::Vacant(_) => {
+            Entry::Vacant(_) => {
                 panic!("Read lock not found for account: {account}");
             }
         }
