@@ -11,19 +11,6 @@ use {
     std::{fmt::Debug, marker::PhantomData},
 };
 
-/// in use/occupied
-const OCCUPIED_OCCUPIED: u64 = 1;
-/// free, ie. not occupied
-const OCCUPIED_FREE: u64 = 0;
-
-/// header for elements in a bucket
-/// needs to be multiple of size_of::<u64>()
-#[repr(C)]
-struct OccupiedHeader {
-    /// OCCUPIED_OCCUPIED or OCCUPIED_FREE
-    occupied: u64,
-}
-
 /// allocated in `contents` in a BucketStorage
 pub struct BucketWithBitVec<T: 'static> {
     pub occupied: BitVec,
@@ -169,24 +156,6 @@ impl<T> IndexEntryPlaceInBucket<T> {
         index_entry.multiple_slots = MultipleSlots::default();
     }
 
-    pub fn set_storage_capacity_when_created_pow2(
-        &self,
-        index_bucket: &mut BucketStorage<IndexBucket<T>>,
-        storage_capacity_when_created_pow2: u8,
-    ) {
-        self.get_multiple_slots_mut(index_bucket)
-            .set_storage_capacity_when_created_pow2(storage_capacity_when_created_pow2);
-    }
-
-    pub fn set_storage_offset(
-        &self,
-        index_bucket: &mut BucketStorage<IndexBucket<T>>,
-        storage_offset: u64,
-    ) {
-        self.get_multiple_slots_mut(index_bucket)
-            .set_storage_offset(storage_offset);
-    }
-
     pub(crate) fn get_multiple_slots<'a>(
         &self,
         index_bucket: &'a BucketStorage<IndexBucket<T>>,
@@ -255,22 +224,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        std::{path::PathBuf, sync::Arc},
-        tempfile::tempdir,
-    };
-
-    impl<T> IndexEntry<T> {
-        pub fn new(key: Pubkey) -> Self {
-            IndexEntry {
-                key,
-                packed_ref_count: PackedRefCount::default(),
-                multiple_slots: MultipleSlots::default(),
-                _phantom: PhantomData,
-            }
-        }
-    }
+    use super::*;
 
     /// verify that accessors for storage_offset and capacity_when_created are
     /// correct and independent
@@ -296,29 +250,6 @@ mod tests {
     fn test_size() {
         assert_eq!(std::mem::size_of::<PackedStorage>(), 1 + 7);
         assert_eq!(std::mem::size_of::<IndexEntry<u64>>(), 32 + 8 + 8 + 8);
-    }
-
-    fn index_bucket_for_testing() -> BucketStorage<IndexBucket<u64>> {
-        let tmpdir = tempdir().unwrap();
-        let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
-        assert!(!paths.is_empty());
-
-        // `new` here creates a file in `tmpdir`. Once the file is created, `tmpdir` can be dropped without issue.
-        BucketStorage::<IndexBucket<u64>>::new(
-            Arc::new(paths),
-            1,
-            std::mem::size_of::<IndexEntry<u64>>() as u64,
-            1,
-            Arc::default(),
-            Arc::default(),
-        )
-    }
-
-    fn index_entry_for_testing() -> (
-        BucketStorage<IndexBucket<u64>>,
-        IndexEntryPlaceInBucket<u64>,
-    ) {
-        (index_bucket_for_testing(), IndexEntryPlaceInBucket::new(0))
     }
 
     #[test]
