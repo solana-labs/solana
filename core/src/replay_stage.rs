@@ -194,8 +194,8 @@ impl PartitionInfo {
                 ("last_vote_slot", last_voted_slot as i64, i64),
                 ("reset_slot", reset_bank_slot as i64, i64),
                 (
-                    "partition_duration_ms",
-                    self.partition_start_time.unwrap().elapsed().as_millis() as i64,
+                    "partition_duration_secs",
+                    self.partition_start_time.unwrap().elapsed().as_secs() as i64,
                     i64
                 ),
             );
