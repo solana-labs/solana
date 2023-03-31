@@ -3,7 +3,7 @@ use {
         crds::VersionedCrdsValue,
         crds_value::{
             CrdsData, CrdsValue, CrdsValueLabel, IncrementalSnapshotHashes, LegacyVersion,
-            LowestSlot, SnapshotHashes, Version,
+            LowestSlot, SnapshotHashes, SnapshotInfo, Version,
         },
         legacy_contact_info::LegacyContactInfo,
     },
@@ -67,6 +67,11 @@ impl_crds_entry!(
     CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
     incremental_snapshot_hashes
 );
+impl_crds_entry!(
+    SnapshotInfo,
+    CrdsData::SnapshotInfo(snapshot_info),
+    snapshot_info
+);
 
 #[cfg(test)]
 mod tests {
@@ -123,6 +128,9 @@ mod tests {
                 }
                 CrdsData::IncrementalSnapshotHashes(hash) => {
                     assert_eq!(crds.get::<&IncrementalSnapshotHashes>(key), Some(hash))
+                }
+                CrdsData::SnapshotInfo(snapshot_info) => {
+                    assert_eq!(crds.get::<&SnapshotInfo>(key), Some(snapshot_info))
                 }
                 _ => (),
             }

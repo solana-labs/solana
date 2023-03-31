@@ -33,8 +33,8 @@ use {
         },
         crds_value::{
             self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex,
-            IncrementalSnapshotHashes, LowestSlot, NodeInstance, SnapshotHashes, Version, Vote,
-            MAX_WALLCLOCK,
+            IncrementalSnapshotHashes, LowestSlot, NodeInstance, SnapshotHashes, SnapshotInfo,
+            Version, Vote, MAX_WALLCLOCK,
         },
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
@@ -390,7 +390,9 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // Unstaked nodes can still help repair.
             CrdsData::EpochSlots(_, _) => true,
             // Unstaked nodes can still serve snapshots.
-            CrdsData::SnapshotHashes(_) | CrdsData::IncrementalSnapshotHashes(_) => true,
+            CrdsData::SnapshotHashes(_)
+            | CrdsData::IncrementalSnapshotHashes(_)
+            | CrdsData::SnapshotInfo(_) => true,
             // Otherwise unstaked voting nodes will show up with no version in
             // the various dashboards.
             CrdsData::Version(_) => true,
@@ -1015,6 +1017,20 @@ impl ClusterInfo {
         Ok(())
     }
 
+    pub fn push_snapshot_info(
+        &self,
+        full_snapshot_info: (Slot, Hash),
+        incremental_snapshot_info: Option<(Slot, Hash)>,
+    ) {
+        let message = CrdsData::SnapshotInfo(SnapshotInfo {
+            from: self.id(),
+            full: full_snapshot_info,
+            incremental: incremental_snapshot_info,
+            wallclock: timestamp(),
+        });
+        self.push_message(CrdsValue::new_signed(message, &self.keypair()));
+    }
+
     pub fn push_vote_at_index(&self, vote: Transaction, vote_index: u8) {
         assert!((vote_index as usize) < MAX_LOCKOUT_HISTORY);
         let self_pubkey = self.id();
@@ -1212,6 +1228,15 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .get::<&IncrementalSnapshotHashes>(*pubkey)
+            .cloned()
+    }
+
+    pub fn get_snapshot_info_for_node(&self, pubkey: &Pubkey) -> Option<SnapshotInfo> {
+        self.gossip
+            .crds
+            .read()
+            .unwrap()
+            .get::<&SnapshotInfo>(*pubkey)
             .cloned()
     }
 
@@ -3553,6 +3578,38 @@ RPC Enabled Nodes: 1"#;
             CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
             &Keypair::new(),
         );
+        let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
+        let socket = new_rand_socket_addr(&mut rng);
+        assert!(Packet::from_data(Some(&socket), response).is_ok());
+    }
+
+    #[test]
+    fn test_snapshot_info_with_push_messages() {
+        let mut rng = rand::thread_rng();
+        let snapshot_info = SnapshotInfo {
+            from: Pubkey::new_unique(),
+            full: (Slot::default(), Hash::default()),
+            incremental: Some((Slot::default(), Hash::default())),
+            wallclock: timestamp(),
+        };
+        let crds_value =
+            CrdsValue::new_signed(CrdsData::SnapshotInfo(snapshot_info), &Keypair::new());
+        let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
+        let socket = new_rand_socket_addr(&mut rng);
+        assert!(Packet::from_data(Some(&socket), message).is_ok());
+    }
+
+    #[test]
+    fn test_snapshot_info_with_pull_responses() {
+        let mut rng = rand::thread_rng();
+        let snapshot_info = SnapshotInfo {
+            from: Pubkey::new_unique(),
+            full: (Slot::default(), Hash::default()),
+            incremental: Some((Slot::default(), Hash::default())),
+            wallclock: timestamp(),
+        };
+        let crds_value =
+            CrdsValue::new_signed(CrdsData::SnapshotInfo(snapshot_info), &Keypair::new());
         let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
         let socket = new_rand_socket_addr(&mut rng);
         assert!(Packet::from_data(Some(&socket), response).is_ok());

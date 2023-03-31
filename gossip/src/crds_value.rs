@@ -94,6 +94,7 @@ pub enum CrdsData {
     DuplicateShred(DuplicateShredIndex, DuplicateShred),
     IncrementalSnapshotHashes(IncrementalSnapshotHashes),
     ContactInfo(ContactInfo),
+    SnapshotInfo(SnapshotInfo),
 }
 
 impl Sanitize for CrdsData {
@@ -132,6 +133,7 @@ impl Sanitize for CrdsData {
             }
             CrdsData::IncrementalSnapshotHashes(val) => val.sanitize(),
             CrdsData::ContactInfo(node) => node.sanitize(),
+            CrdsData::SnapshotInfo(val) => val.sanitize(),
         }
     }
 }
@@ -233,6 +235,29 @@ impl Sanitize for IncrementalSnapshotHashes {
             }
             if self.base.0 >= *slot {
                 return Err(SanitizeError::InvalidValue);
+            }
+        }
+        self.from.sanitize()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+pub struct SnapshotInfo {
+    pub from: Pubkey,
+    pub full: (Slot, Hash),
+    pub incremental: Option<(Slot, Hash)>,
+    pub wallclock: u64,
+}
+
+impl Sanitize for SnapshotInfo {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        sanitize_wallclock(self.wallclock)?;
+        if self.full.0 >= MAX_SLOT {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        if let Some((incremental_slot, _)) = &self.incremental {
+            if *incremental_slot >= MAX_SLOT {
+                return Err(SanitizeError::ValueOutOfBounds);
             }
         }
         self.from.sanitize()
@@ -502,6 +527,7 @@ pub enum CrdsValueLabel {
     DuplicateShred(DuplicateShredIndex, Pubkey),
     IncrementalSnapshotHashes(Pubkey),
     ContactInfo(Pubkey),
+    SnapshotInfo(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -523,6 +549,7 @@ impl fmt::Display for CrdsValueLabel {
                 write!(f, "IncrementalSnapshotHashes({})", self.pubkey())
             }
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
+            CrdsValueLabel::SnapshotInfo(_) => write!(f, "SnapshotInfo({})", self.pubkey()),
         }
     }
 }
@@ -542,6 +569,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::DuplicateShred(_, p) => *p,
             CrdsValueLabel::IncrementalSnapshotHashes(p) => *p,
             CrdsValueLabel::ContactInfo(pubkey) => *pubkey,
+            CrdsValueLabel::SnapshotInfo(p) => *p,
         }
     }
 }
@@ -592,6 +620,7 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.wallclock,
             CrdsData::IncrementalSnapshotHashes(hash) => hash.wallclock,
             CrdsData::ContactInfo(node) => node.wallclock(),
+            CrdsData::SnapshotInfo(hash) => hash.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -608,6 +637,7 @@ impl CrdsValue {
             CrdsData::DuplicateShred(_, shred) => shred.from,
             CrdsData::IncrementalSnapshotHashes(hash) => hash.from,
             CrdsData::ContactInfo(node) => *node.pubkey(),
+            CrdsData::SnapshotInfo(hash) => hash.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -626,6 +656,7 @@ impl CrdsValue {
                 CrdsValueLabel::IncrementalSnapshotHashes(self.pubkey())
             }
             CrdsData::ContactInfo(node) => CrdsValueLabel::ContactInfo(*node.pubkey()),
+            CrdsData::SnapshotInfo(_) => CrdsValueLabel::SnapshotInfo(self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&LegacyContactInfo> {
