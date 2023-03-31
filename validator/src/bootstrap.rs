@@ -401,11 +401,10 @@ pub fn attempt_download_genesis_and_snapshot(
     download_then_check_genesis_hash(
         &rpc_contact_info.rpc,
         ledger_path,
-        validator_config.expected_genesis_hash,
+        &mut validator_config.expected_genesis_hash,
         bootstrap_config.max_genesis_archive_unpacked_size,
         bootstrap_config.no_genesis_fetch,
         use_progress_bar,
-        validator_config,
         rpc_client,
     )?;
 

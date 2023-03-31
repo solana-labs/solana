@@ -1,6 +1,5 @@
 use {
     log::*,
-    solana_core::validator::ValidatorConfig,
     solana_download_utils::download_genesis_if_missing,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::hardened_unpack::unpack_genesis_archive,
@@ -77,25 +76,25 @@ fn get_genesis_config(
 
 fn set_and_verify_expected_genesis_hash(
     genesis_config: Option<GenesisConfig>,
-    validator_config: &mut ValidatorConfig,
+    expected_genesis_hash: &mut Option<Hash>,
     rpc_client: &RpcClient,
 ) -> Result<(), String> {
     if let Some(genesis_config) = genesis_config {
         let genesis_hash = genesis_config.hash();
-        if validator_config.expected_genesis_hash.is_none() {
+        if expected_genesis_hash.is_none() {
             info!("Expected genesis hash set to {}", genesis_hash);
-            validator_config.expected_genesis_hash = Some(genesis_hash);
+            *expected_genesis_hash = Some(genesis_hash);
         }
     }
 
-    if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
+    if let Some(expected_genesis_hash) = expected_genesis_hash {
         // Sanity check that the RPC node is using the expected genesis hash before
         // downloading a snapshot from it
         let rpc_genesis_hash = rpc_client
             .get_genesis_hash()
             .map_err(|err| format!("Failed to get genesis hash: {err}"))?;
 
-        if expected_genesis_hash != rpc_genesis_hash {
+        if *expected_genesis_hash != rpc_genesis_hash {
             return Err(format!(
                 "Genesis hash mismatch: expected {expected_genesis_hash} but RPC node genesis hash is {rpc_genesis_hash}"
             ));
@@ -108,21 +107,20 @@ fn set_and_verify_expected_genesis_hash(
 pub fn download_then_check_genesis_hash(
     rpc_addr: &SocketAddr,
     ledger_path: &std::path::Path,
-    expected_genesis_hash: Option<Hash>,
+    expected_genesis_hash: &mut Option<Hash>,
     max_genesis_archive_unpacked_size: u64,
     no_genesis_fetch: bool,
     use_progress_bar: bool,
-    validator_config: &mut ValidatorConfig,
     rpc_client: &RpcClient,
 ) -> Result<(), String> {
     let genesis_config = get_genesis_config(
         rpc_addr,
         ledger_path,
-        expected_genesis_hash,
+        *expected_genesis_hash,
         max_genesis_archive_unpacked_size,
         no_genesis_fetch,
         use_progress_bar,
     );
 
-    set_and_verify_expected_genesis_hash(genesis_config.ok(), validator_config, rpc_client)
+    set_and_verify_expected_genesis_hash(genesis_config.ok(), expected_genesis_hash, rpc_client)
 }
