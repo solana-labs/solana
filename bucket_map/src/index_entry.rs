@@ -12,12 +12,11 @@ use {
 };
 
 /// allocated in `contents` in a BucketStorage
-pub struct BucketWithBitVec<T: 'static> {
+pub struct BucketWithBitVec {
     pub occupied: BitVec,
-    _phantom: PhantomData<&'static T>,
 }
 
-impl<T> BucketOccupied for BucketWithBitVec<T> {
+impl BucketOccupied for BucketWithBitVec {
     fn occupy(&mut self, element: &mut [u8], ix: usize) {
         assert!(self.is_free(element, ix));
         self.occupied.set(ix as u64, true);
@@ -36,13 +35,45 @@ impl<T> BucketOccupied for BucketWithBitVec<T> {
     fn new(num_elements: usize) -> Self {
         Self {
             occupied: BitVec::new_fill(false, num_elements as u64),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct IndexBucketUsingRefCountBits<T: 'static> {
+    _phantom: PhantomData<&'static T>,
+}
+
+impl<T: 'static> BucketOccupied for IndexBucketUsingRefCountBits<T> {
+    fn occupy(&mut self, element: &mut [u8], ix: usize) {
+        assert!(self.is_free(element, ix));
+        let entry: &mut IndexEntry<T> =
+            BucketStorage::<IndexBucketUsingRefCountBits<T>>::get_mut_from_parts(element);
+        entry.set_slot_count_enum_value(OccupiedEnum::Occupied);
+    }
+    fn free(&mut self, element: &mut [u8], ix: usize) {
+        assert!(!self.is_free(element, ix));
+        let entry: &mut IndexEntry<T> =
+            BucketStorage::<IndexBucketUsingRefCountBits<T>>::get_mut_from_parts(element);
+        entry.set_slot_count_enum_value(OccupiedEnum::Free);
+    }
+    fn is_free(&self, element: &[u8], _ix: usize) -> bool {
+        let entry: &IndexEntry<T> =
+            BucketStorage::<IndexBucketUsingRefCountBits<T>>::get_from_parts(element);
+        matches!(entry.get_slot_count_enum(), OccupiedEnum::Free)
+    }
+    fn offset_to_first_data() -> usize {
+        0
+    }
+    fn new(_num_elements: usize) -> Self {
+        Self {
             _phantom: PhantomData,
         }
     }
 }
 
-pub type DataBucket = BucketWithBitVec<()>;
-pub type IndexBucket<T> = BucketWithBitVec<T>;
+pub type DataBucket = BucketWithBitVec;
+pub type IndexBucket<T> = IndexBucketUsingRefCountBits<T>;
 
 /// contains the index of an entry in the index bucket.
 /// This type allows us to call methods to interact with the index entry on this type.
@@ -67,15 +98,15 @@ pub struct IndexEntry<T: 'static> {
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 struct PackedRefCount {
-    /// reserved for future use
-    unused: B2,
+    /// tag for Enum
+    slot_count_enum: B2,
     /// ref_count of this entry. We don't need any where near 62 bits for this value
     ref_count: B62,
 }
 
 /// required fields when an index element references the data file
 #[repr(C)]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 pub(crate) struct MultipleSlots {
     // if the bucket doubled, the index can be recomputed using storage_cap_and_offset.create_bucket_capacity_pow2
     storage_cap_and_offset: PackedStorage,
@@ -139,6 +170,36 @@ impl MultipleSlots {
     }
 }
 
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum OccupiedEnum {
+    /// this spot is free (ie. not occupied)
+    Free = 0,
+    /// this spot is occupied
+    Occupied = 1,
+}
+
+impl<T: 'static> IndexEntry<T> {
+    /// enum value stored in 2 spare bits taken from ref_count
+    fn get_slot_count_enum(&self) -> OccupiedEnum {
+        match self.packed_ref_count.slot_count_enum() {
+            0 => OccupiedEnum::Free,
+            1 => OccupiedEnum::Occupied,
+            _ => {
+                panic!("unexpected value");
+            }
+        }
+    }
+
+    /// enum value stored in 2 spare bits taken from ref_count
+    fn set_slot_count_enum_value(&mut self, value: OccupiedEnum) {
+        self.packed_ref_count.set_slot_count_enum(match value {
+            OccupiedEnum::Free => 0,
+            OccupiedEnum::Occupied => 1,
+        });
+    }
+}
+
 /// Pack the storage offset and capacity-when-crated-pow2 fields into a single u64
 #[bitfield(bits = 64)]
 #[repr(C)]
@@ -148,7 +209,7 @@ struct PackedStorage {
     offset: B56,
 }
 
-impl<T> IndexEntryPlaceInBucket<T> {
+impl<T: 'static> IndexEntryPlaceInBucket<T> {
     pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
         let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
         index_entry.key = *pubkey;
@@ -170,6 +231,23 @@ impl<T> IndexEntryPlaceInBucket<T> {
         &mut index_bucket
             .get_mut::<IndexEntry<T>>(self.ix)
             .multiple_slots
+    }
+
+    pub(crate) fn get_slot_count_enum(
+        &self,
+        index_bucket: &BucketStorage<IndexBucket<T>>,
+    ) -> OccupiedEnum {
+        let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
+        index_entry.get_slot_count_enum()
+    }
+
+    pub(crate) fn set_slot_count_enum_value(
+        &self,
+        index_bucket: &mut BucketStorage<IndexBucket<T>>,
+        value: OccupiedEnum,
+    ) {
+        let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
+        index_entry.set_slot_count_enum_value(value);
     }
 
     pub fn ref_count(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> RefCount {
