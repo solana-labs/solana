@@ -34,4 +34,3 @@ for container in "${containers[@]}"; do
     fi
   fi
 done
-
