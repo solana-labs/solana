@@ -86,7 +86,7 @@ pub enum CrdsData {
     Vote(VoteIndex, Vote),
     LowestSlot(/*DEPRECATED:*/ u8, LowestSlot),
     SnapshotHashes(SnapshotHashes),
-    AccountsHashes(SnapshotHashes),
+    AccountsHashes(AccountsHashes),
     EpochSlots(EpochSlotsIndex, EpochSlots),
     LegacyVersion(LegacyVersion),
     Version(Version),
@@ -154,13 +154,59 @@ impl CrdsData {
             // Index for LowestSlot is deprecated and should be zero.
             1 => CrdsData::LowestSlot(0, LowestSlot::new_rand(rng, pubkey)),
             2 => CrdsData::SnapshotHashes(SnapshotHashes::new_rand(rng, pubkey)),
-            3 => CrdsData::AccountsHashes(SnapshotHashes::new_rand(rng, pubkey)),
+            3 => CrdsData::AccountsHashes(AccountsHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
             5 => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
             _ => CrdsData::EpochSlots(
                 rng.gen_range(0, MAX_EPOCH_SLOTS),
                 EpochSlots::new_rand(rng, pubkey),
             ),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+pub struct AccountsHashes {
+    pub from: Pubkey,
+    pub hashes: Vec<(Slot, Hash)>,
+    pub wallclock: u64,
+}
+
+impl Sanitize for AccountsHashes {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        sanitize_wallclock(self.wallclock)?;
+        for (slot, _) in &self.hashes {
+            if *slot >= MAX_SLOT {
+                return Err(SanitizeError::ValueOutOfBounds);
+            }
+        }
+        self.from.sanitize()
+    }
+}
+
+impl AccountsHashes {
+    pub fn new(from: Pubkey, hashes: Vec<(Slot, Hash)>) -> Self {
+        Self {
+            from,
+            hashes,
+            wallclock: timestamp(),
+        }
+    }
+
+    /// New random AccountsHashes for tests and benchmarks.
+    pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+        let num_hashes = rng.gen_range(0, MAX_SNAPSHOT_HASHES) + 1;
+        let hashes = std::iter::repeat_with(|| {
+            let slot = 47825632 + rng.gen_range(0, 512);
+            let hash = solana_sdk::hash::new_rand(rng);
+            (slot, hash)
+        })
+        .take(num_hashes)
+        .collect();
+        Self {
+            from: pubkey.unwrap_or_else(pubkey::new_rand),
+            hashes,
+            wallclock: new_rand_timestamp(rng),
         }
     }
 }
@@ -629,7 +675,7 @@ impl CrdsValue {
         }
     }
 
-    pub(crate) fn accounts_hash(&self) -> Option<&SnapshotHashes> {
+    pub(crate) fn accounts_hash(&self) -> Option<&AccountsHashes> {
         match &self.data {
             CrdsData::AccountsHashes(slots) => Some(slots),
             _ => None,
