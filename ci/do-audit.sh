@@ -44,10 +44,6 @@ cargo_audit_ignores=(
   # Not worth upgrading tokio version on a stable branch
   --ignore RUSTSEC-2023-0001
 )
-<<<<<<< HEAD
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}" | $dep_tree_filter
-=======
-scripts/cargo-for-all-lock-files.sh audit "${cargo_audit_ignores[@]}" | $dep_tree_filter
 # we want the `cargo audit` exit code, not `$dep_tree_filter`'s
 exit "${PIPESTATUS[0]}"
->>>>>>> f8abc8df8 (ci: fix do-audit don't report error (#30728))
