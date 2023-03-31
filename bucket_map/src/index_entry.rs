@@ -93,6 +93,9 @@ pub struct IndexEntry<T: 'static> {
     _phantom: PhantomData<&'static T>,
 }
 
+/// 62 bits available for ref count
+pub(crate) const MAX_LEGAL_REFCOUNT: RefCount = RefCount::MAX >> 2;
+
 /// hold a big `RefCount` while leaving room for extra bits to be used for things like 'Occupied'
 #[bitfield(bits = 64)]
 #[repr(C)]
