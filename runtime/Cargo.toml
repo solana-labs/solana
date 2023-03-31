@@ -59,7 +59,7 @@ strum = { version = "0.24", features = ["derive"] }
 strum_macros = "0.24"
 symlink = "0.1.0"
 tar = "0.4.38"
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 thiserror = "1.0"
 zstd = "0.11.2"
 

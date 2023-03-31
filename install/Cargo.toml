@@ -33,7 +33,7 @@ solana-logger = { path = "../logger", version = "=1.14.18" }
 solana-sdk = { path = "../sdk", version = "=1.14.18" }
 solana-version = { path = "../version", version = "=1.14.18" }
 tar = "0.4.38"
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 url = "2.2.2"
 
 [target."cfg(windows)".dependencies]
