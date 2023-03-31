@@ -1093,10 +1093,8 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
     /// These were collected for this bin when we did batch inserts in the bg flush threads.
     /// Insert these into the in-mem index, then return the duplicate (Slot, Pubkey)
     pub(crate) fn populate_and_retrieve_duplicate_keys_from_startup(&self) -> Vec<(Slot, Pubkey)> {
-        let inserts = self.startup_info.insert.lock().unwrap();
         // in order to return accurate and complete duplicates, we must have nothing left remaining to insert
-        assert!(inserts.is_empty());
-        drop(inserts);
+        assert!(self.startup_info.insert.lock().unwrap().is_empty());
 
         let mut duplicate_items = self.startup_info.duplicates.lock().unwrap();
         let duplicates = std::mem::take(&mut duplicate_items.duplicates);
