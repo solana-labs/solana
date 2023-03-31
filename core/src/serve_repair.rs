@@ -1051,11 +1051,7 @@ impl ServeRepair {
             identity_keypair,
         )?;
         debug!(
-<<<<<<< HEAD
-            "Sending repair request from {} for {:#?}",
-=======
             "Sending repair request from {} for {:?} peer {:?} peer addr {:?}",
->>>>>>> bd73a4a439 (Do async send for quic messages)
             identity_keypair.pubkey(),
             repair_request,
             peer,
@@ -1198,7 +1194,7 @@ impl ServeRepair {
             }
         }
         if !pending_pongs.is_empty() {
-            let pongs_len =  pending_pongs.len();
+            let pongs_len = pending_pongs.len();
             match repair_socket {
                 RepairTransportConfig::Udp(repair_socket) => {
                     if let Err(SendPktsError::IoError(err, num_failed)) =

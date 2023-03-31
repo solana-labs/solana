@@ -1,7 +1,6 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
 
-use solana_sdk::signer::Signer;
 #[cfg(test)]
 use {
     crate::duplicate_repair_status::DuplicateSlotRepairStatus, solana_ledger::shred::Nonce,
@@ -35,7 +34,7 @@ use {
         epoch_schedule::EpochSchedule,
         hash::Hash,
         pubkey::Pubkey,
-        signer::keypair::Keypair,
+        signer::{keypair::Keypair, Signer},
         timing::timestamp,
     },
     solana_streamer::sendmmsg::{batch_send, SendPktsError},
