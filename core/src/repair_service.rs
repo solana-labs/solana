@@ -34,7 +34,7 @@ use {
         epoch_schedule::EpochSchedule,
         hash::Hash,
         pubkey::Pubkey,
-        signer::{keypair::Keypair, Signer},
+        signer::keypair::Keypair,
         timing::timestamp,
     },
     solana_streamer::sendmmsg::{batch_send, SendPktsError},

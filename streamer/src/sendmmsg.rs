@@ -171,9 +171,6 @@ where
 {
     let mut num_failed = 0;
     let mut erropt = None;
-    for (p, a) in packets {
-        let connection = connection_cache.get_connection(a.borrow());
-        let e = connection.send_data(p.as_ref());
 
     for packet in packets.iter() {
         let a = packet.meta().socket_addr();
