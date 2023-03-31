@@ -842,7 +842,8 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             if signature.verify(&pubkey, &simple_message) {
                 println!("Verification for public key: {pubkey_bs58}: Success");
             } else {
-                return Err("Verification to public key: {pubkey_bs58}: Failed".into());
+                let err_msg = format!("Verification for public key: {pubkey_bs58}: Failed");
+                return Err(err_msg.into());
             }
         }
         _ => unreachable!(),
@@ -862,6 +863,18 @@ mod tests {
         do_main(&app_matches)
     }
 
+    fn create_tmp_test_keypair_file() -> (Pubkey, String) {
+        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+        let keypair = Keypair::new();
+        let outfile = format!("{}/tmp/{}", out_dir, keypair.pubkey());
+        write_keypair_file(&keypair, &outfile).unwrap();
+        (keypair.pubkey(), outfile)
+    }
+
+    fn remove_tmp_test_keypair_file(keypair: &str) {
+        std::fs::remove_file(keypair).unwrap();
+    }
+
     #[test]
     fn test_arguments() {
         let default_num_threads = num_cpus::get().to_string();
@@ -873,7 +886,29 @@ mod tests {
 
     #[test]
     fn test_verify() {
-        unimplemented!()
+        let (correct_pubkey, keypair) = create_tmp_test_keypair_file();
+        process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &correct_pubkey.to_string(),
+            &keypair,
+        ])
+        .unwrap();
+
+        let incorrect_pubkey = Pubkey::new_unique();
+        let result = process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &incorrect_pubkey.to_string(),
+            &keypair,
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Verification for public key: {}: Failed", incorrect_pubkey,);
+        assert_eq!(result, expected);
+
+        remove_tmp_test_keypair_file(&keypair);
     }
 
     #[test]
