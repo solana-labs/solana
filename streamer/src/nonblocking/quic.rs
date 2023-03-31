@@ -932,29 +932,19 @@ impl ConnectionTable {
 
     fn prune_oldest(&mut self, max_size: usize) -> usize {
         let mut num_pruned = 0;
-        while self.total_size > max_size {
-            let mut oldest = std::u64::MAX;
-            let mut oldest_index = None;
-            for (index, (_key, connections)) in self.table.iter().enumerate() {
-                for entry in connections {
-                    let last_update = entry.last_update();
-                    if last_update < oldest {
-                        oldest = last_update;
-                        oldest_index = Some(index);
-                    }
+        let key = |(_, connections): &(_, &Vec<_>)| {
+            connections.iter().map(ConnectionEntry::last_update).min()
+        };
+        while self.total_size.saturating_sub(num_pruned) > max_size {
+            match self.table.values().enumerate().min_by_key(key) {
+                None => break,
+                Some((index, connections)) => {
+                    num_pruned += connections.len();
+                    self.table.swap_remove_index(index);
                 }
-            }
-            if let Some(oldest_index) = oldest_index {
-                if let Some((_, removed)) = self.table.swap_remove_index(oldest_index) {
-                    self.total_size -= removed.len();
-                    num_pruned += removed.len();
-                }
-            } else {
-                // No valid entries in the table. Continuing the loop will cause
-                // infinite looping.
-                break;
             }
         }
+        self.total_size = self.total_size.saturating_sub(num_pruned);
         num_pruned
     }
 
