@@ -126,7 +126,8 @@ impl KeyGenerationCommonArgs for Command<'_> {
 fn check_for_overwrite(outfile: &str, matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     let force = matches.is_present("force");
     if !force && Path::new(outfile).exists() {
-        return Err("Refusing to overwrite {outfile} without --force flag".into());
+        let err_msg = format!("Refusing to overwrite {outfile} without --force flag");
+        return Err(err_msg.into());
     }
     Ok(())
 }
@@ -863,16 +864,34 @@ mod tests {
         do_main(&app_matches)
     }
 
-    fn create_tmp_test_keypair_file() -> (Pubkey, String) {
+    fn create_tmp_keypair_and_config_file() -> (Pubkey, String, String) {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
         let keypair = Keypair::new();
-        let outfile = format!("{}/tmp/{}", out_dir, keypair.pubkey());
-        write_keypair_file(&keypair, &outfile).unwrap();
-        (keypair.pubkey(), outfile)
+        let keypair_outfile = format!("{}/tmp/{}-keypair", out_dir, keypair.pubkey());
+        write_keypair_file(&keypair, &keypair_outfile).unwrap();
+
+        let config = Config {
+            keypair_path: keypair_outfile.clone(),
+            ..Default::default()
+        };
+        let config_outfile = format!("{}/tmp/{}-config", out_dir, keypair.pubkey());
+        config.save(&config_outfile).unwrap();
+
+        (keypair.pubkey(), keypair_outfile, config_outfile)
     }
 
-    fn remove_tmp_test_keypair_file(keypair: &str) {
-        std::fs::remove_file(keypair).unwrap();
+    fn remove_tmp_keypair_and_config_file(keypair_path: &str, config_path: &str) {
+        std::fs::remove_file(keypair_path).unwrap();
+        std::fs::remove_file(config_path).unwrap();
+    }
+
+    fn tmp_outfile_path(name: &str) -> String {
+        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+        format!("{}/tmp/{}", out_dir, name)
+    }
+
+    fn remove_tmp_outfile(outfile_path: &str) {
+        std::fs::remove_file(outfile_path).unwrap();
     }
 
     #[test]
@@ -886,12 +905,12 @@ mod tests {
 
     #[test]
     fn test_verify() {
-        let (correct_pubkey, keypair) = create_tmp_test_keypair_file();
+        let (correct_pubkey, keypair_path, config_path) = create_tmp_keypair_and_config_file();
         process_test_command(&[
             "solana-keygen",
             "verify",
             &correct_pubkey.to_string(),
-            &keypair,
+            &keypair_path,
         ])
         .unwrap();
 
@@ -900,7 +919,7 @@ mod tests {
             "solana-keygen",
             "verify",
             &incorrect_pubkey.to_string(),
-            &keypair,
+            &keypair_path,
         ])
         .unwrap_err()
         .to_string();
@@ -908,12 +927,56 @@ mod tests {
         let expected = format!("Verification for public key: {}: Failed", incorrect_pubkey,);
         assert_eq!(result, expected);
 
-        remove_tmp_test_keypair_file(&keypair);
+        remove_tmp_keypair_and_config_file(&keypair_path, &config_path);
     }
 
     #[test]
     fn test_pubkey() {
-        unimplemented!()
+        let (expected_pubkey, keypair_path, config_path) = create_tmp_keypair_and_config_file();
+        let outfile_path = tmp_outfile_path(&expected_pubkey.to_string());
+
+        process_test_command(&[
+            "solana-keygen",
+            "pubkey",
+            "--config",
+            &config_path,
+            "--outfile",
+            &outfile_path,
+        ])
+        .unwrap();
+
+        let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
+        assert_eq!(result_pubkey, expected_pubkey);
+
+        // do not overwrite file
+        let result = process_test_command(&[
+            "solana-keygen",
+            "pubkey",
+            "--config",
+            &config_path,
+            "--outfile",
+            &outfile_path,
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Refusing to overwrite {outfile_path} without --force flag");
+        assert_eq!(result, expected);
+
+        // force overwrite
+        process_test_command(&[
+            "solana-keygen",
+            "pubkey",
+            "--config",
+            &config_path,
+            "--outfile",
+            &outfile_path,
+            "--force",
+        ])
+        .unwrap();
+
+        remove_tmp_outfile(&outfile_path);
+        remove_tmp_keypair_and_config_file(&keypair_path, &config_path);
     }
 
     #[test]
