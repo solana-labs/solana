@@ -4237,7 +4237,7 @@ pub fn make_slot_entries(
     num_entries: u64,
     merkle_variant: bool,
 ) -> (Vec<Shred>, Vec<Entry>) {
-    let entries = create_ticks(num_entries, 0, Hash::default());
+    let entries = create_ticks(num_entries, 1, Hash::new_unique());
     let shreds = entries_to_test_shreds(&entries, slot, parent_slot, true, 0, merkle_variant);
     (shreds, entries)
 }
