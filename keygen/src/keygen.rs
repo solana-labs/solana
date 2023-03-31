@@ -27,7 +27,6 @@ use {
         collections::HashSet,
         error,
         path::Path,
-        process::exit,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
@@ -124,12 +123,12 @@ impl KeyGenerationCommonArgs for Command<'_> {
     }
 }
 
-fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
+fn check_for_overwrite(outfile: &str, matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     let force = matches.is_present("force");
     if !force && Path::new(outfile).exists() {
-        eprintln!("Refusing to overwrite {outfile} without --force flag");
-        exit(1);
+        return Err("Refusing to overwrite {outfile} without --force flag".into());
     }
+    Ok(())
 }
 
 fn get_keypair_from_matches(
@@ -357,11 +356,10 @@ fn acquire_derivation_path(
     }
 }
 
-fn main() -> Result<(), Box<dyn error::Error>> {
-    let default_num_threads = num_cpus::get().to_string();
-    let matches = Command::new(crate_name!())
+fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
+    Command::new(crate_name!())
         .about(crate_description!())
-        .version(solana_version::version!())
+        .version(crate_version)
         .subcommand_required(true)
         .arg_required_else_help(true)
         .arg({
@@ -477,7 +475,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("NUMBER")
                         .takes_value(true)
                         .validator(is_parsable::<usize>)
-                        .default_value(&default_num_threads)
+                        .default_value(num_threads)
                         .help("Specify the number of grind threads"),
                 )
                 .arg(
@@ -561,8 +559,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
 
         )
-        .get_matches();
+}
 
+fn main() -> Result<(), Box<dyn error::Error>> {
+    let default_num_threads = num_cpus::get().to_string();
+    let matches = app(&default_num_threads, solana_version::version!()).get_matches();
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
@@ -584,7 +585,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
             if matches.is_present("outfile") {
                 let outfile = matches.value_of("outfile").unwrap();
-                check_for_overwrite(outfile, matches);
+                check_for_overwrite(outfile, matches)?;
                 write_pubkey_file(outfile, pubkey)?;
             } else {
                 println!("{pubkey}");
@@ -603,7 +604,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
             match outfile {
                 Some(STDOUT_OUTFILE_TOKEN) => (),
-                Some(outfile) => check_for_overwrite(outfile, matches),
+                Some(outfile) => check_for_overwrite(outfile, matches)?,
                 None => (),
             }
 
@@ -651,7 +652,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             };
 
             if outfile != STDOUT_OUTFILE_TOKEN {
-                check_for_overwrite(outfile, matches);
+                check_for_overwrite(outfile, matches)?;
             }
 
             let keypair_name = "recover";
@@ -698,10 +699,9 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 && ends_with_args.is_empty()
                 && starts_and_ends_with_args.is_empty()
             {
-                eprintln!(
-                    "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and-ends-with)"
+                return Err(
+                    "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and-ends-with)".into()
                 );
-                exit(1);
             }
 
             let num_threads: usize = matches.value_of_t_or_exit("num_threads");
@@ -842,12 +842,57 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             if signature.verify(&pubkey, &simple_message) {
                 println!("Verification for public key: {pubkey_bs58}: Success");
             } else {
-                println!("Verification for public key: {pubkey_bs58}: Failed");
-                exit(1);
+                return Err("Verification to public key: {pubkey_bs58}: Failed".into());
             }
         }
         _ => unreachable!(),
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn process_test_command(args: &[&str]) -> Result<(), Box<dyn error::Error>> {
+        let default_num_threads = num_cpus::get().to_string();
+        let solana_version = solana_version::version!();
+        let app_matches = app(&default_num_threads, solana_version).get_matches_from(args);
+        do_main(&app_matches)
+    }
+
+    #[test]
+    fn test_arguments() {
+        let default_num_threads = num_cpus::get().to_string();
+        let solana_version = solana_version::version!();
+
+        // run clap internal assert statements
+        app(&default_num_threads, solana_version).debug_assert();
+    }
+
+    #[test]
+    fn test_verify() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn test_pubkey() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn test_new() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn test_recover() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn test_grind() {
+        unimplemented!()
+    }
 }
