@@ -378,12 +378,7 @@ impl QuicClient {
                                 conn.connection.clone()
                             }
                             Err(err) => {
-                                info!(
-                                    "Cannot make connection to {}, error {:} backtrace {:?}",
-                                    self.addr,
-                                    err,
-                                    backtrace::Backtrace::new()
-                                );
+                                info!("Cannot make connection to {}, error {:}", self.addr, err,);
                                 return Err(err);
                             }
                         }

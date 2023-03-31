@@ -423,12 +423,7 @@ impl BankForks {
         accounts_background_request_sender: &AbsRequestSender,
         highest_confirmed_root: Option<Slot>,
     ) -> Vec<Arc<Bank>> {
-        info!(
-            "set_root called for {:p} root {:?} backtrace: {:?}",
-            self,
-            root,
-            backtrace::Backtrace::new()
-        );
+        info!("set_root called for {:p} root {:?}", self, root,);
         let program_cache_prune_start = Instant::now();
         let root_bank = self
             .banks

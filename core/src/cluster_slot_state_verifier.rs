@@ -715,7 +715,10 @@ fn apply_state_changes(
                 fork_choice.mark_fork_invalid_candidate(&(slot, bank_frozen_hash));
             }
             ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash) => {
-                debug!("Duplicate slot {slot} hash {duplicate_confirmed_hash} detected at {:?} backtrace: {:?}", blockstore.ledger_path(), backtrace::Backtrace::new());
+                debug!(
+                    "Duplicate slot {slot} hash {duplicate_confirmed_hash} detected at {:?}",
+                    blockstore.ledger_path()
+                );
                 duplicate_slots_to_repair.insert(slot, duplicate_confirmed_hash);
             }
             ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(bank_frozen_hash) => {
