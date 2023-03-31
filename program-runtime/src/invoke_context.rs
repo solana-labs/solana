@@ -881,46 +881,6 @@ impl<'a> InvokeContext<'a> {
     }
 }
 
-pub struct MockInvokeContextPreparation {
-    pub transaction_accounts: Vec<TransactionAccount>,
-    pub instruction_accounts: Vec<InstructionAccount>,
-}
-
-pub fn prepare_mock_invoke_context(
-    transaction_accounts: Vec<TransactionAccount>,
-    instruction_account_metas: Vec<AccountMeta>,
-    _program_indices: &[IndexOfAccount],
-) -> MockInvokeContextPreparation {
-    let mut instruction_accounts: Vec<InstructionAccount> =
-        Vec::with_capacity(instruction_account_metas.len());
-    for (instruction_account_index, account_meta) in instruction_account_metas.iter().enumerate() {
-        let index_in_transaction = transaction_accounts
-            .iter()
-            .position(|(key, _account)| *key == account_meta.pubkey)
-            .unwrap_or(transaction_accounts.len())
-            as IndexOfAccount;
-        let index_in_callee = instruction_accounts
-            .get(0..instruction_account_index)
-            .unwrap()
-            .iter()
-            .position(|instruction_account| {
-                instruction_account.index_in_transaction == index_in_transaction
-            })
-            .unwrap_or(instruction_account_index) as IndexOfAccount;
-        instruction_accounts.push(InstructionAccount {
-            index_in_transaction,
-            index_in_caller: index_in_transaction,
-            index_in_callee,
-            is_signer: account_meta.is_signer,
-            is_writable: account_meta.is_writable,
-        });
-    }
-    MockInvokeContextPreparation {
-        transaction_accounts,
-        instruction_accounts,
-    }
-}
-
 #[macro_export]
 macro_rules! with_mock_invoke_context {
     ($invoke_context:ident, $loader_id:expr, $account_size:expr) => {
@@ -972,23 +932,43 @@ pub fn mock_process_instruction(
     loader_id: &Pubkey,
     mut program_indices: Vec<IndexOfAccount>,
     instruction_data: &[u8],
-    transaction_accounts: Vec<TransactionAccount>,
-    instruction_accounts: Vec<AccountMeta>,
+    mut transaction_accounts: Vec<TransactionAccount>,
+    instruction_account_metas: Vec<AccountMeta>,
     sysvar_cache_override: Option<&SysvarCache>,
     feature_set_override: Option<Arc<FeatureSet>>,
     expected_result: Result<(), InstructionError>,
     process_instruction: ProcessInstructionWithContext,
 ) -> Vec<AccountSharedData> {
     program_indices.insert(0, transaction_accounts.len() as IndexOfAccount);
-    let mut preparation =
-        prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
+    let mut instruction_accounts: Vec<InstructionAccount> =
+        Vec::with_capacity(instruction_account_metas.len());
+    for (instruction_account_index, account_meta) in instruction_account_metas.iter().enumerate() {
+        let index_in_transaction = transaction_accounts
+            .iter()
+            .position(|(key, _account)| *key == account_meta.pubkey)
+            .unwrap_or(transaction_accounts.len())
+            as IndexOfAccount;
+        let index_in_callee = instruction_accounts
+            .get(0..instruction_account_index)
+            .unwrap()
+            .iter()
+            .position(|instruction_account| {
+                instruction_account.index_in_transaction == index_in_transaction
+            })
+            .unwrap_or(instruction_account_index) as IndexOfAccount;
+        instruction_accounts.push(InstructionAccount {
+            index_in_transaction,
+            index_in_caller: index_in_transaction,
+            index_in_callee,
+            is_signer: account_meta.is_signer,
+            is_writable: account_meta.is_writable,
+        });
+    }
     let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
-    preparation
-        .transaction_accounts
-        .push((*loader_id, processor_account));
+    transaction_accounts.push((*loader_id, processor_account));
     let compute_budget = ComputeBudget::default();
     let mut transaction_context = TransactionContext::new(
-        preparation.transaction_accounts,
+        transaction_accounts,
         Some(Rent::default()),
         compute_budget.max_invoke_stack_height,
         compute_budget.max_instruction_trace_length,
@@ -1008,7 +988,7 @@ pub fn mock_process_instruction(
     invoke_context.builtin_programs = builtin_programs;
     let result = invoke_context.process_instruction(
         instruction_data,
-        &preparation.instruction_accounts,
+        &instruction_accounts,
         &program_indices,
         &mut 0,
         &mut ExecuteTimings::default(),
