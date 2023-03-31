@@ -55,7 +55,7 @@ impl GossipService {
             request_sender,
             Recycler::default(),
             Arc::new(StreamerReceiveStats::new("gossip_receiver")),
-            1,
+            Duration::from_millis(1), // coalesce
             false,
             None,
         );

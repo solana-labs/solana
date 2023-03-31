@@ -13,7 +13,7 @@ use {
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         system_monitor_service::SystemMonitorService,
         tower_storage,
-        tpu::DEFAULT_TPU_COALESCE_MS,
+        tpu::DEFAULT_TPU_COALESCE,
         validator::{
             is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod, Validator,
             ValidatorConfig, ValidatorStartProgress,
@@ -919,8 +919,9 @@ pub fn main() {
 
     let private_rpc = matches.is_present("private_rpc");
     let do_port_check = !matches.is_present("no_port_check");
-    let tpu_coalesce_ms =
-        value_t!(matches, "tpu_coalesce_ms", u64).unwrap_or(DEFAULT_TPU_COALESCE_MS);
+    let tpu_coalesce = value_t!(matches, "tpu_coalesce_ms", u64)
+        .map(Duration::from_millis)
+        .unwrap_or(DEFAULT_TPU_COALESCE);
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
@@ -1315,7 +1316,7 @@ pub fn main() {
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         accounts_db_config,
         accounts_db_skip_shrink: true,
-        tpu_coalesce_ms,
+        tpu_coalesce,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
         runtime_config: RuntimeConfig {

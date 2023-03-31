@@ -159,7 +159,7 @@ impl AncestorHashesService {
             Arc::new(StreamerReceiveStats::new(
                 "ancestor_hashes_response_receiver",
             )),
-            1,
+            Duration::from_millis(1), // coalesce
             false,
             None,
         );
@@ -1008,7 +1008,7 @@ mod test {
                 Arc::new(StreamerReceiveStats::new(
                     "ancestor_hashes_response_receiver",
                 )),
-                1,
+                Duration::from_millis(1), // coalesce
                 false,
                 None,
             );

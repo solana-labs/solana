@@ -9,7 +9,7 @@ use {
     log::*,
     quinn::{
         ClientConfig, ConnectError, Connection, ConnectionError, Endpoint, EndpointConfig,
-        IdleTimeout, TokioRuntime, TransportConfig, VarInt, WriteError,
+        IdleTimeout, TokioRuntime, TransportConfig, WriteError,
     },
     solana_connection_cache::{
         client_connection::ClientStats, connection_cache_stats::ConnectionCacheStats,
@@ -20,7 +20,7 @@ use {
     solana_rpc_client_api::client_error::ErrorKind as ClientErrorKind,
     solana_sdk::{
         quic::{
-            QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS,
+            QUIC_CONNECTION_HANDSHAKE_TIMEOUT, QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT,
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
         },
         signature::Keypair,
@@ -33,7 +33,6 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc},
         thread,
-        time::Duration,
     },
     thiserror::Error,
     tokio::{sync::RwLock, time::timeout},
@@ -129,9 +128,9 @@ impl QuicLazyInitializedEndpoint {
         let mut config = ClientConfig::new(Arc::new(crypto));
         let mut transport_config = TransportConfig::default();
 
-        let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
+        let timeout = IdleTimeout::try_from(QUIC_MAX_TIMEOUT).unwrap();
         transport_config.max_idle_timeout(Some(timeout));
-        transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
+        transport_config.keep_alive_interval(Some(QUIC_KEEP_ALIVE));
         config.transport_config(Arc::new(transport_config));
 
         endpoint.set_default_client_config(config);
@@ -198,11 +197,7 @@ impl QuicNewConnection {
 
         let connecting = endpoint.connect(addr, "connect")?;
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        if let Ok(connecting_result) = timeout(
-            Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
-            connecting,
-        )
-        .await
+        if let Ok(connecting_result) = timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await
         {
             if connecting_result.is_err() {
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
@@ -239,12 +234,7 @@ impl QuicNewConnection {
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connection = match connecting.into_0rtt() {
             Ok((connection, zero_rtt)) => {
-                if let Ok(zero_rtt) = timeout(
-                    Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
-                    zero_rtt,
-                )
-                .await
-                {
+                if let Ok(zero_rtt) = timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, zero_rtt).await {
                     if zero_rtt {
                         stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
                     } else {
@@ -258,11 +248,8 @@ impl QuicNewConnection {
             Err(connecting) => {
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
 
-                if let Ok(connecting_result) = timeout(
-                    Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
-                    connecting,
-                )
-                .await
+                if let Ok(connecting_result) =
+                    timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await
                 {
                     connecting_result?
                 } else {

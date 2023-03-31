@@ -5,12 +5,12 @@ use {
     },
     crossbeam_channel::Sender,
     pem::Pem,
-    quinn::{Endpoint, IdleTimeout, ServerConfig, VarInt},
+    quinn::{Endpoint, IdleTimeout, ServerConfig},
     rustls::{server::ClientCertVerified, Certificate, DistinguishedNames},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
-        quic::{QUIC_MAX_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
+        quic::{QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
     },
     std::{
@@ -20,7 +20,7 @@ use {
             Arc, RwLock,
         },
         thread,
-        time::SystemTime,
+        time::{Duration, SystemTime},
     },
     tokio::runtime::Runtime,
 };
@@ -85,7 +85,7 @@ pub(crate) fn configure_server(
             .saturating_mul(MAX_CONCURRENT_UNI_STREAMS)
             .into(),
     );
-    let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
+    let timeout = IdleTimeout::try_from(QUIC_MAX_TIMEOUT).unwrap();
     config.max_idle_timeout(Some(timeout));
 
     // disable bidi & datagrams
@@ -361,8 +361,8 @@ pub fn spawn_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
-    wait_for_chunk_timeout_ms: u64,
-    coalesce_ms: u64,
+    wait_for_chunk_timeout: Duration,
+    coalesce: Duration,
 ) -> Result<(Endpoint, thread::JoinHandle<()>), QuicServerError> {
     let runtime = rt();
     let (endpoint, task) = {
@@ -378,8 +378,8 @@ pub fn spawn_server(
             max_staked_connections,
             max_unstaked_connections,
             stats,
-            wait_for_chunk_timeout_ms,
-            coalesce_ms,
+            wait_for_chunk_timeout,
+            coalesce,
         )
     }?;
     let handle = thread::Builder::new()
@@ -397,9 +397,9 @@ pub fn spawn_server(
 mod test {
     use {
         super::*,
-        crate::nonblocking::quic::{test::*, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS},
+        crate::nonblocking::quic::{test::*, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT},
         crossbeam_channel::unbounded,
-        solana_sdk::net::DEFAULT_TPU_COALESCE_MS,
+        solana_sdk::net::DEFAULT_TPU_COALESCE,
         std::net::SocketAddr,
     };
 
@@ -428,8 +428,8 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            DEFAULT_TPU_COALESCE_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
         (t, exit, receiver, server_address)
@@ -485,8 +485,8 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            DEFAULT_TPU_COALESCE_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 
@@ -529,8 +529,8 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            DEFAULT_TPU_COALESCE_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 

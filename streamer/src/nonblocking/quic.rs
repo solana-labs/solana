@@ -19,7 +19,7 @@ use {
         packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,
         quic::{
-            QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_MAX_STAKED_CONCURRENT_STREAMS,
+            QUIC_CONNECTION_HANDSHAKE_TIMEOUT, QUIC_MAX_STAKED_CONCURRENT_STREAMS,
             QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
             QUIC_MIN_STAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO,
             QUIC_TOTAL_STAKED_CONCURRENT_STREAMS, QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO,
@@ -41,8 +41,8 @@ use {
     },
 };
 
-const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 100;
-pub const DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS: u64 = 10000;
+const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_millis(100);
+pub const DEFAULT_WAIT_FOR_CHUNK_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub const ALPN_TPU_PROTOCOL_ID: &[u8] = b"solana-tpu";
 
@@ -94,8 +94,8 @@ pub fn spawn_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
-    wait_for_chunk_timeout_ms: u64,
-    coalesce_ms: u64,
+    wait_for_chunk_timeout: Duration,
+    coalesce: Duration,
 ) -> Result<(Endpoint, JoinHandle<()>), QuicServerError> {
     info!("Start quic server on {:?}", sock);
     let (config, _cert) = configure_server(keypair, gossip_host)?;
@@ -114,8 +114,8 @@ pub fn spawn_server(
         max_staked_connections,
         max_unstaked_connections,
         stats,
-        wait_for_chunk_timeout_ms,
-        coalesce_ms,
+        wait_for_chunk_timeout,
+        coalesce,
     ));
     Ok((endpoint, handle))
 }
@@ -130,9 +130,11 @@ pub async fn run_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
-    wait_for_chunk_timeout_ms: u64,
-    coalesce_ms: u64,
+    wait_for_chunk_timeout: Duration,
+    coalesce: Duration,
 ) {
+    const WAIT_FOR_CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
+    const WAIT_BETWEEN_NEW_CONNECTIONS: Duration = Duration::from_millis(1);
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
@@ -146,16 +148,10 @@ pub async fn run_server(
         receiver,
         exit.clone(),
         stats.clone(),
-        coalesce_ms,
+        coalesce,
     ));
     while !exit.load(Ordering::Relaxed) {
-        const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
-        const WAIT_BETWEEN_NEW_CONNECTIONS_US: u64 = 1000;
-        let timeout_connection = timeout(
-            Duration::from_millis(WAIT_FOR_CONNECTION_TIMEOUT_MS),
-            incoming.accept(),
-        )
-        .await;
+        let timeout_connection = timeout(WAIT_FOR_CONNECTION_TIMEOUT, incoming.accept()).await;
 
         if last_datapoint.elapsed().as_secs() >= 5 {
             stats.report();
@@ -174,9 +170,9 @@ pub async fn run_server(
                 max_staked_connections,
                 max_unstaked_connections,
                 stats.clone(),
-                wait_for_chunk_timeout_ms,
+                wait_for_chunk_timeout,
             ));
-            sleep(Duration::from_micros(WAIT_BETWEEN_NEW_CONNECTIONS_US)).await;
+            sleep(WAIT_BETWEEN_NEW_CONNECTIONS).await;
         } else {
             debug!("accept(): Timed out waiting for connection");
         }
@@ -303,7 +299,7 @@ fn handle_and_cache_new_connection(
     mut connection_table_l: MutexGuard<ConnectionTable>,
     connection_table: Arc<Mutex<ConnectionTable>>,
     params: &NewConnectionHandlerParams,
-    wait_for_chunk_timeout_ms: u64,
+    wait_for_chunk_timeout: Duration,
 ) -> Result<(), ConnectionHandlerError> {
     if let Ok(max_uni_streams) = VarInt::from_u64(compute_max_allowed_uni_streams(
         connection_table_l.peer_type,
@@ -356,7 +352,7 @@ fn handle_and_cache_new_connection(
                 params.stats.clone(),
                 params.stake,
                 peer_type,
-                wait_for_chunk_timeout_ms,
+                wait_for_chunk_timeout,
             ));
             Ok(())
         } else {
@@ -385,7 +381,7 @@ fn prune_unstaked_connections_and_add_new_connection(
     connection_table: Arc<Mutex<ConnectionTable>>,
     max_connections: usize,
     params: &NewConnectionHandlerParams,
-    wait_for_chunk_timeout_ms: u64,
+    wait_for_chunk_timeout: Duration,
 ) -> Result<(), ConnectionHandlerError> {
     let stats = params.stats.clone();
     if max_connections > 0 {
@@ -395,7 +391,7 @@ fn prune_unstaked_connections_and_add_new_connection(
             connection_table_l,
             connection_table,
             params,
-            wait_for_chunk_timeout_ms,
+            wait_for_chunk_timeout,
         )
     } else {
         connection.close(
@@ -461,14 +457,9 @@ async fn setup_connection(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
-    wait_for_chunk_timeout_ms: u64,
+    wait_for_chunk_timeout: Duration,
 ) {
-    if let Ok(connecting_result) = timeout(
-        Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
-        connecting,
-    )
-    .await
-    {
+    if let Ok(connecting_result) = timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await {
         if let Ok(new_connection) = connecting_result {
             stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
 
@@ -503,7 +494,7 @@ async fn setup_connection(
                         connection_table_l,
                         staked_connection_table.clone(),
                         &params,
-                        wait_for_chunk_timeout_ms,
+                        wait_for_chunk_timeout,
                     ) {
                         stats
                             .connection_added_from_staked_peer
@@ -519,7 +510,7 @@ async fn setup_connection(
                         unstaked_connection_table.clone(),
                         max_unstaked_connections,
                         &params,
-                        wait_for_chunk_timeout_ms,
+                        wait_for_chunk_timeout,
                     ) {
                         stats
                             .connection_added_from_staked_peer
@@ -539,7 +530,7 @@ async fn setup_connection(
                 unstaked_connection_table.clone(),
                 max_unstaked_connections,
                 &params,
-                wait_for_chunk_timeout_ms,
+                wait_for_chunk_timeout,
             ) {
                 stats
                     .connection_added_from_unstaked_peer
@@ -564,10 +555,9 @@ async fn packet_batch_sender(
     packet_receiver: AsyncReceiver<PacketAccumulator>,
     exit: Arc<AtomicBool>,
     stats: Arc<StreamStats>,
-    coalesce_ms: u64,
+    coalesce: Duration,
 ) {
     trace!("enter packet_batch_sender");
-    let coalesce_ms = coalesce_ms as u128;
     let mut batch_start_time = Instant::now();
     loop {
         let mut packet_batch = PacketBatch::with_capacity(PACKETS_PER_BATCH);
@@ -586,7 +576,7 @@ async fn packet_batch_sender(
             }
             let elapsed = batch_start_time.elapsed();
             if packet_batch.len() >= PACKETS_PER_BATCH
-                || (!packet_batch.is_empty() && elapsed.as_millis() >= coalesce_ms)
+                || (!packet_batch.is_empty() && elapsed >= coalesce)
             {
                 let len = packet_batch.len();
                 if let Err(e) = packet_sender.send(packet_batch) {
@@ -654,7 +644,7 @@ async fn handle_connection(
     stats: Arc<StreamStats>,
     stake: u64,
     peer_type: ConnectionPeerType,
-    wait_for_chunk_timeout_ms: u64,
+    wait_for_chunk_timeout: Duration,
 ) {
     debug!(
         "quic new connection {} streams: {} connections: {}",
@@ -665,11 +655,8 @@ async fn handle_connection(
     let stable_id = connection.stable_id();
     stats.total_connections.fetch_add(1, Ordering::Relaxed);
     while !stream_exit.load(Ordering::Relaxed) {
-        if let Ok(stream) = tokio::time::timeout(
-            Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
-            connection.accept_uni(),
-        )
-        .await
+        if let Ok(stream) =
+            tokio::time::timeout(WAIT_FOR_STREAM_TIMEOUT, connection.accept_uni()).await
         {
             match stream {
                 Ok(mut stream) => {
@@ -686,11 +673,12 @@ async fn handle_connection(
                         // which delay exit and cause some test failures when the timeout value is large.
                         // Within this value, the heuristic is to wake up 10 times to check for exit
                         // for the set timeout if there are no data.
-                        let exit_check_interval = (wait_for_chunk_timeout_ms / 10).clamp(10, 1000);
+                        let exit_check_interval = (wait_for_chunk_timeout / 10)
+                            .clamp(Duration::from_millis(10), Duration::from_secs(1));
                         let mut start = Instant::now();
                         while !stream_exit.load(Ordering::Relaxed) {
                             if let Ok(chunk) = tokio::time::timeout(
-                                Duration::from_millis(exit_check_interval),
+                                exit_check_interval,
                                 stream.read_chunk(PACKET_DATA_SIZE, false),
                             )
                             .await
@@ -710,15 +698,12 @@ async fn handle_connection(
                                     break;
                                 }
                                 start = Instant::now();
-                            } else {
-                                let elapse = Instant::now() - start;
-                                if elapse.as_millis() as u64 > wait_for_chunk_timeout_ms {
-                                    debug!("Timeout in receiving on stream");
-                                    stats
-                                        .total_stream_read_timeouts
-                                        .fetch_add(1, Ordering::Relaxed);
-                                    break;
-                                }
+                            } else if start.elapsed() > wait_for_chunk_timeout {
+                                debug!("Timeout in receiving on stream");
+                                stats
+                                    .total_stream_read_timeouts
+                                    .fetch_add(1, Ordering::Relaxed);
+                                break;
                             }
                         }
                         stats.total_streams.fetch_sub(1, Ordering::Relaxed);
@@ -1090,10 +1075,10 @@ pub mod test {
         },
         async_channel::unbounded as async_unbounded,
         crossbeam_channel::{unbounded, Receiver},
-        quinn::{ClientConfig, IdleTimeout, TransportConfig, VarInt},
+        quinn::{ClientConfig, IdleTimeout, TransportConfig},
         solana_sdk::{
-            net::DEFAULT_TPU_COALESCE_MS,
-            quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS},
+            net::DEFAULT_TPU_COALESCE,
+            quic::{QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT},
             signature::Keypair,
             signer::Signer,
         },
@@ -1140,9 +1125,9 @@ pub mod test {
         let mut config = ClientConfig::new(Arc::new(crypto));
 
         let mut transport_config = TransportConfig::default();
-        let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
+        let timeout = IdleTimeout::try_from(QUIC_MAX_TIMEOUT).unwrap();
         transport_config.max_idle_timeout(Some(timeout));
-        transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
+        transport_config.keep_alive_interval(Some(QUIC_KEEP_ALIVE));
         config.transport_config(Arc::new(transport_config));
 
         config
@@ -1177,8 +1162,8 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            2000,
-            DEFAULT_TPU_COALESCE_MS,
+            Duration::from_secs(2),
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
         (t, exit, receiver, server_address, stats)
@@ -1370,7 +1355,7 @@ pub mod test {
             pkt_receiver,
             exit.clone(),
             stats,
-            DEFAULT_TPU_COALESCE_MS,
+            DEFAULT_TPU_COALESCE,
         ));
 
         let num_packets = 1000;
@@ -1419,8 +1404,8 @@ pub mod test {
         s1.write_all(&[0u8]).await.unwrap_or_default();
 
         // Wait long enough for the stream to timeout in receiving chunks
-        let sleep_time = (WAIT_FOR_STREAM_TIMEOUT_MS * 1000).min(3000);
-        sleep(Duration::from_millis(sleep_time)).await;
+        let sleep_time = Duration::from_secs(3).min(WAIT_FOR_STREAM_TIMEOUT * 1000);
+        sleep(sleep_time).await;
 
         // Test that the stream was created, but timed out in read
         assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
@@ -1477,8 +1462,8 @@ pub mod test {
             CONNECTION_CLOSE_REASON_DROPPED_ENTRY,
         );
         // Wait long enough for the stream to timeout in receiving chunks
-        let sleep_time = (WAIT_FOR_STREAM_TIMEOUT_MS * 1000).min(1000);
-        sleep(Duration::from_millis(sleep_time)).await;
+        let sleep_time = Duration::from_secs(1).min(WAIT_FOR_STREAM_TIMEOUT * 1000);
+        sleep(sleep_time).await;
 
         assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
 
@@ -1490,8 +1475,8 @@ pub mod test {
             CONNECTION_CLOSE_REASON_DROPPED_ENTRY,
         );
         // Wait long enough for the stream to timeout in receiving chunks
-        let sleep_time = (WAIT_FOR_STREAM_TIMEOUT_MS * 1000).min(1000);
-        sleep(Duration::from_millis(sleep_time)).await;
+        let sleep_time = Duration::from_secs(1).min(WAIT_FOR_STREAM_TIMEOUT * 1000);
+        sleep(sleep_time).await;
 
         assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 2);
 
@@ -1601,8 +1586,8 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            DEFAULT_TPU_COALESCE_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 
@@ -1633,8 +1618,8 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            DEFAULT_TPU_COALESCE_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 
