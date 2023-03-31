@@ -55,7 +55,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.14.18" }
 spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
 spl-token-2022 = { version = "=0.6.1", features = ["no-entrypoint"] }
 static_assertions = "1.1.0"
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
