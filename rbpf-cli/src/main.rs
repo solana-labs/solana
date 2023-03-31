@@ -20,7 +20,7 @@ use {
     std::{
         fmt::{Debug, Formatter},
         fs::File,
-        io::{Read, Seek},
+        io::{Read, Seek, Write},
         path::Path,
         time::{Duration, Instant},
     },
@@ -309,27 +309,29 @@ before execting it in the virtual machine.",
     let (instruction_count, result) = vm.execute_program(matches.value_of("use").unwrap() != "jit");
     let duration = Instant::now() - start_time;
     if matches.occurrences_of("trace") > 0 {
-        let trace_log = vm
+        for (frame, trace) in vm
             .env
             .context_object_pointer
             .trace_log_stack
-            .last()
-            .expect("Inconsistent trace log stack")
-            .trace_log
-            .as_slice();
-        if matches.value_of("trace").unwrap() == "stdout" {
-            analysis
-                .analyze()
-                .disassemble_trace_log(&mut std::io::stdout(), trace_log)
-                .unwrap();
-        } else {
-            analysis
-                .analyze()
-                .disassemble_trace_log(
-                    &mut File::create(matches.value_of("trace").unwrap()).unwrap(),
-                    trace_log,
-                )
-                .unwrap();
+            .iter()
+            .enumerate()
+        {
+            let trace_log = trace.trace_log.as_slice();
+            if matches.value_of("trace").unwrap() == "stdout" {
+                writeln!(&mut std::io::stdout(), "Frame {frame}").unwrap();
+                analysis
+                    .analyze()
+                    .disassemble_trace_log(&mut std::io::stdout(), trace_log)
+                    .unwrap();
+            } else {
+                let filename = format!("{}.{}", matches.value_of("trace").unwrap(), frame);
+                let mut fd = File::create(filename).unwrap();
+                writeln!(&fd, "Frame {frame}").unwrap();
+                analysis
+                    .analyze()
+                    .disassemble_trace_log(&mut fd, trace_log)
+                    .unwrap();
+            }
         }
     }
     drop(vm);
