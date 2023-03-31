@@ -6,10 +6,18 @@ containers=("chronograf_8889" "grafana" "alertmanager" "alertmanager-discord" "p
 # Discord webhook
 discord_webhook="$DISCORD_WEBHOOK"
 
+# PagerDuty webhook
+pagerduty_webhook_url="$PAGERDUTY_WEBHOOK"
 # Send a message to Discord
 send_discord_message() {
   local message="$1"
   curl -sS -H "Content-Type: application/json" -X POST -d "{\"content\": \"$message\"}" "$discord_webhook_url"
+}
+
+# Send a critical alert to PagerDuty
+send_pagerduty_alert() {
+  local description="$1"
+  curl -sS -H "Content-Type: application/json" -X POST -d "{\"event_action\": \"trigger\", \"payload\": {\"summary\": \"$description\", \"source\": \"Docker Monitor\", \"severity\": \"critical\"}}" "$PAGERDUTY_WEBHOOK"
 }
 
 # Iterate over the containers and check their status
@@ -29,6 +37,7 @@ for container in "${containers[@]}"; do
 
     if [ "$container_status" != "running" ]; then
       send_discord_message "$container failed to redeploy and manual intervention is required"
+      send_pagerduty_alert "$container failed to redeploy and manual intervention is required."
     else
       send_discord_message "$container has been redeployed successfully"
     fi
