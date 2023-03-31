@@ -75,6 +75,7 @@ members = [
     "send-transaction-service",
     "stake-accounts",
     "storage-bigtable",
+    "storage-bigtable/build-proto",
     "storage-proto",
     "streamer",
     "sys-tuner",
