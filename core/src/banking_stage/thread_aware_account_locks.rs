@@ -530,10 +530,10 @@ mod tests {
     fn test_accounts_schedulable_threads_outstanding_mixed() {
         let pk1 = Pubkey::new_unique();
         let pk2 = Pubkey::new_unique();
-        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, TEST_SEQ_LIMIT);
+        let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS, 3);
 
         locks.read_lock_account(&pk1, 2);
-        locks.write_lock_account(&pk2, 2);
+        locks.write_lock_account(&pk1, 2);
         assert_eq!(
             locks.accounts_schedulable_threads([&pk1, &pk2].into_iter(), std::iter::empty()),
             ThreadSet::only(2)
