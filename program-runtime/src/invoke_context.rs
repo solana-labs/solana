@@ -169,43 +169,6 @@ impl<'a> InvokeContext<'a> {
         }
     }
 
-    pub fn new_mock(
-        transaction_context: &'a mut TransactionContext,
-        builtin_programs: &'a [BuiltinProgram],
-    ) -> Self {
-        let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.fill_missing_entries(|pubkey, callback| {
-            for index in 0..transaction_context.get_number_of_accounts() {
-                if transaction_context
-                    .get_key_of_account_at_index(index)
-                    .unwrap()
-                    == pubkey
-                {
-                    callback(
-                        transaction_context
-                            .get_account_at_index(index)
-                            .unwrap()
-                            .borrow()
-                            .data(),
-                    );
-                }
-            }
-        });
-        Self::new(
-            transaction_context,
-            Rent::default(),
-            builtin_programs,
-            Cow::Owned(sysvar_cache),
-            Some(LogCollector::new_ref()),
-            ComputeBudget::default(),
-            Rc::new(RefCell::new(TransactionExecutorCache::default())),
-            Arc::new(FeatureSet::all_enabled()),
-            Hash::default(),
-            0,
-            0,
-        )
-    }
-
     /// Push a stack frame onto the invocation stack
     pub fn push(&mut self) -> Result<(), InstructionError> {
         let instruction_context = self
@@ -884,11 +847,18 @@ impl<'a> InvokeContext<'a> {
 #[macro_export]
 macro_rules! with_mock_invoke_context {
     ($invoke_context:ident, $transaction_context:ident, $transaction_accounts:expr) => {
-        use solana_sdk::sysvar::rent::Rent;
-        use solana_sdk::transaction_context::TransactionContext;
-        use $crate::compute_budget::ComputeBudget;
-        use $crate::invoke_context::InvokeContext;
-
+        use {
+            solana_sdk::{
+                account::ReadableAccount, feature_set::FeatureSet, hash::Hash, sysvar::rent::Rent,
+                transaction_context::TransactionContext,
+            },
+            std::{borrow::Cow, cell::RefCell, rc::Rc, sync::Arc},
+            $crate::{
+                compute_budget::ComputeBudget, executor_cache::TransactionExecutorCache,
+                invoke_context::InvokeContext, log_collector::LogCollector,
+                sysvar_cache::SysvarCache,
+            },
+        };
         let compute_budget = ComputeBudget::default();
         let mut $transaction_context = TransactionContext::new(
             $transaction_accounts,
@@ -897,7 +867,37 @@ macro_rules! with_mock_invoke_context {
             compute_budget.max_instruction_trace_length,
         );
         $transaction_context.enable_cap_accounts_data_allocations_per_transaction();
-        let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.fill_missing_entries(|pubkey, callback| {
+            for index in 0..$transaction_context.get_number_of_accounts() {
+                if $transaction_context
+                    .get_key_of_account_at_index(index)
+                    .unwrap()
+                    == pubkey
+                {
+                    callback(
+                        $transaction_context
+                            .get_account_at_index(index)
+                            .unwrap()
+                            .borrow()
+                            .data(),
+                    );
+                }
+            }
+        });
+        let mut $invoke_context = InvokeContext::new(
+            &mut $transaction_context,
+            Rent::default(),
+            &[],
+            Cow::Owned(sysvar_cache),
+            Some(LogCollector::new_ref()),
+            ComputeBudget::default(),
+            Rc::new(RefCell::new(TransactionExecutorCache::default())),
+            Arc::new(FeatureSet::all_enabled()),
+            Hash::default(),
+            0,
+            0,
+        );
     };
 }
 
