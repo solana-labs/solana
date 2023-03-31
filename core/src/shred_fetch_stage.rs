@@ -243,7 +243,6 @@ impl ShredFetchStage {
         (repair_quic_t, modifier_hdl, connection_cache)
     }
 
-
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         sockets: Vec<Arc<UdpSocket>>,

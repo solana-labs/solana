@@ -794,13 +794,11 @@ impl AncestorHashesService {
                     // When using quic, the socket_addr was auto incremented by the QUIC_PORT_OFFSET when we do get_connection
                     // However the returned packet address is the one with the offset already done. To ensure they are matched
                     // We need to do the increment as well when creating DeadSlotAncestorRequestStatus.
-                    let socket_addr = if ancestor_hashes_request_connection_cache.as_ref().is_some()
-                    {
+                    if ancestor_hashes_request_connection_cache.as_ref().is_some() {
                         SocketAddr::new(socket_addr.ip(), socket_addr.port() + QUIC_PORT_OFFSET)
                     } else {
                         socket_addr
-                    };
-                    socket_addr
+                    }
                 }),
                 duplicate_slot,
             );
