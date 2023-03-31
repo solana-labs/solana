@@ -192,9 +192,10 @@ impl CrdsGossipPush {
         let entries = crds
             .get_entries(crds_cursor.deref_mut())
             .filter(|entry| {
-                // Exclude the new ContactInfo from outgoing push messages
-                // until the cluster has upgraded.
+                // Exclude the new ContactInfo and SnapshotInfo from outgoing
+                // push messages until the cluster has upgraded.
                 !matches!(&entry.value.data, CrdsData::ContactInfo(_))
+                    && !matches!(&entry.value.data, CrdsData::SnapshotInfo(_))
             })
             .map(|entry| &entry.value)
             .filter(|value| wallclock_window.contains(&value.wallclock()));
