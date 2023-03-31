@@ -263,8 +263,8 @@ impl StandardBroadcastRun {
                 is_last_in_slot,
                 cluster_type,
                 &mut process_stats,
-                blockstore::MAX_DATA_SHREDS_PER_SLOT as u32,
-                shred_code::MAX_CODE_SHREDS_PER_SLOT as u32,
+                blockstore::MAX_DATA_SHREDS_PER_SLOT,
+                shred_code::MAX_CODE_SHREDS_PER_SLOT,
             )
             .unwrap();
         // Insert the first data shred synchronously so that blockstore stores
@@ -523,7 +523,7 @@ mod test {
 
     #[allow(clippy::type_complexity)]
     fn setup(
-        num_shreds_per_slot: Slot,
+        num_shreds_per_slot: u32,
     ) -> (
         Arc<Blockstore>,
         GenesisConfig,
@@ -633,7 +633,7 @@ mod test {
             )
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
-        assert_eq!(unfinished_slot.next_shred_index as u64, num_shreds_per_slot);
+        assert_eq!(unfinished_slot.next_shred_index, num_shreds_per_slot);
         assert_eq!(unfinished_slot.slot, 0);
         assert_eq!(unfinished_slot.parent, 0);
         // Make sure the slot is not complete
@@ -702,7 +702,7 @@ mod test {
 
         // The shred index should have reset to 0, which makes it possible for the
         // index < the previous shred index for slot 0
-        assert_eq!(unfinished_slot.next_shred_index as u64, num_shreds);
+        assert_eq!(unfinished_slot.next_shred_index, num_shreds);
         assert_eq!(unfinished_slot.slot, 2);
         assert_eq!(unfinished_slot.parent, 0);
 

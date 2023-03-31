@@ -31,7 +31,7 @@ lazy_static! {
 
 // Maps number of data shreds to the optimal erasure batch size which has the
 // same recovery probabilities as a 32:32 erasure batch.
-pub(crate) const ERASURE_BATCH_SIZE: [usize; 33] = [
+pub(crate) const ERASURE_BATCH_SIZE: [u32; 33] = [
     0, 18, 20, 22, 23, 25, 27, 28, 30, // 8
     32, 33, 35, 36, 38, 39, 41, 42, // 16
     43, 45, 46, 48, 49, 51, 52, 53, // 24
@@ -39,7 +39,7 @@ pub(crate) const ERASURE_BATCH_SIZE: [usize; 33] = [
 ];
 
 pub struct ReedSolomonCache(
-    Mutex<LruCache<(/*data_shards:*/ usize, /*parity_shards:*/ usize), Arc<ReedSolomon>>>,
+    Mutex<LruCache<(/*data_shards:*/ u32, /*parity_shards:*/ u32), Arc<ReedSolomon>>>,
 );
 
 #[derive(Debug)]
@@ -160,8 +160,11 @@ impl Shredder {
             shred
         };
         let shreds: Vec<&[u8]> = serialized_shreds.chunks(data_buffer_size).collect();
-        let fec_set_offsets: Vec<usize> =
-            get_fec_set_offsets(shreds.len(), DATA_SHREDS_PER_FEC_BLOCK).collect();
+        let fec_set_offsets: Vec<u32> = get_fec_set_offsets(
+            u32::try_from(shreds.len()).unwrap(),
+            DATA_SHREDS_PER_FEC_BLOCK,
+        )
+        .collect();
         assert_eq!(shreds.len(), fec_set_offsets.len());
         let shreds: Vec<Shred> = PAR_THREAD_POOL.install(|| {
             shreds
@@ -170,7 +173,7 @@ impl Shredder {
                 .enumerate()
                 .map(|(i, (shred, offset))| {
                     let shred_index = next_shred_index + i as u32;
-                    let fec_set_index = next_shred_index + offset as u32;
+                    let fec_set_index = next_shred_index + offset;
                     make_data_shred(shred, shred_index, fec_set_index)
                 })
                 .collect()
@@ -206,9 +209,9 @@ impl Shredder {
                 chunks
                     .iter()
                     .scan(next_code_index, |next_code_index, chunk| {
-                        let num_data_shreds = chunk.len();
+                        let num_data_shreds = u32::try_from(chunk.len()).unwrap();
                         let erasure_batch_size = get_erasure_batch_size(num_data_shreds);
-                        *next_code_index += (erasure_batch_size - num_data_shreds) as u32;
+                        *next_code_index += erasure_batch_size - num_data_shreds;
                         Some(*next_code_index)
                     }),
             )
@@ -275,7 +278,7 @@ impl Shredder {
             .all(|shred| shred.slot() == slot
                 && shred.version() == version
                 && shred.fec_set_index() == fec_set_index));
-        let num_data = data.len();
+        let num_data = u32::try_from(data.len()).unwrap();
         let num_coding = get_erasure_batch_size(num_data)
             .checked_sub(num_data)
             .unwrap();
@@ -286,7 +289,7 @@ impl Shredder {
             .map(Shred::erasure_shard_as_slice)
             .collect::<Result<_, _>>()
             .unwrap();
-        let mut parity = vec![vec![0u8; data[0].len()]; num_coding];
+        let mut parity = vec![vec![0u8; data[0].len()]; num_coding as usize];
         reed_solomon_cache
             .get(num_data, num_coding)
             .unwrap()
@@ -296,9 +299,9 @@ impl Shredder {
         let num_coding = u16::try_from(num_coding).unwrap();
         parity
             .iter()
-            .enumerate()
-            .map(|(i, parity)| {
-                let index = next_code_index + u32::try_from(i).unwrap();
+            .zip(0..)
+            .map(|(parity, i)| {
+                let index = next_code_index + i;
                 Shred::new_from_parity_shard(
                     slot,
                     index,
@@ -337,27 +340,25 @@ impl Shredder {
             .filter(|shred| shred.is_code())
             .all(|shred| shred.num_data_shreds().unwrap() == num_data_shreds
                 && shred.num_coding_shreds().unwrap() == num_coding_shreds));
-        let num_data_shreds = num_data_shreds as usize;
-        let num_coding_shreds = num_coding_shreds as usize;
         let fec_set_size = num_data_shreds + num_coding_shreds;
-        if num_coding_shreds == 0 || shreds.len() >= fec_set_size {
+        if num_coding_shreds == 0 || shreds.len() >= fec_set_size.into() {
             return Ok(Vec::default());
         }
         // Mask to exclude data shreds already received from the return value.
-        let mut mask = vec![false; num_data_shreds];
-        let mut shards = vec![None; fec_set_size];
+        let mut mask = vec![false; num_data_shreds as usize];
+        let mut shards = vec![None; fec_set_size as usize];
         for shred in shreds {
             let index = match shred.erasure_shard_index() {
-                Ok(index) if index < fec_set_size => index,
+                Ok(index) if index < fec_set_size.into() => index,
                 _ => return Err(Error::from(InvalidIndex)),
             };
-            shards[index] = Some(shred.erasure_shard()?);
-            if index < num_data_shreds {
-                mask[index] = true;
+            shards[index as usize] = Some(shred.erasure_shard()?);
+            if index < num_data_shreds.into() {
+                mask[index as usize] = true;
             }
         }
         reed_solomon_cache
-            .get(num_data_shreds, num_coding_shreds)?
+            .get(num_data_shreds.into(), num_coding_shreds.into())?
             .reconstruct_data(&mut shards)?;
         let recovered_data = mask
             .into_iter()
@@ -368,7 +369,7 @@ impl Shredder {
                 shred.slot() == slot
                     && shred.is_data()
                     && match shred.erasure_shard_index() {
-                        Ok(index) => index < num_data_shreds,
+                        Ok(index) => index < num_data_shreds.into(),
                         Err(_) => false,
                     }
             })
@@ -402,12 +403,12 @@ impl Shredder {
 }
 
 impl ReedSolomonCache {
-    const CAPACITY: usize = 4 * DATA_SHREDS_PER_FEC_BLOCK;
+    const CAPACITY: usize = 4 * DATA_SHREDS_PER_FEC_BLOCK as usize;
 
     pub(crate) fn get(
         &self,
-        data_shards: usize,
-        parity_shards: usize,
+        data_shards: u32,
+        parity_shards: u32,
     ) -> Result<Arc<ReedSolomon>, reed_solomon_erasure::Error> {
         let key = (data_shards, parity_shards);
         {
@@ -416,7 +417,7 @@ impl ReedSolomonCache {
                 return Ok(entry.clone());
             }
         }
-        let entry = ReedSolomon::new(data_shards, parity_shards)?;
+        let entry = ReedSolomon::new(data_shards as usize, parity_shards as usize)?;
         let entry = Arc::new(entry);
         {
             let entry = entry.clone();
@@ -434,18 +435,15 @@ impl Default for ReedSolomonCache {
 }
 
 /// Maps number of data shreds in each batch to the erasure batch size.
-pub(crate) fn get_erasure_batch_size(num_data_shreds: usize) -> usize {
+pub(crate) fn get_erasure_batch_size(num_data_shreds: u32) -> u32 {
     ERASURE_BATCH_SIZE
-        .get(num_data_shreds)
+        .get(num_data_shreds as usize)
         .copied()
         .unwrap_or(2 * num_data_shreds)
 }
 
 // Returns offsets to fec_set_index when spliting shreds into erasure batches.
-fn get_fec_set_offsets(
-    mut num_shreds: usize,
-    min_chunk_size: usize,
-) -> impl Iterator<Item = usize> {
+fn get_fec_set_offsets(mut num_shreds: u32, min_chunk_size: u32) -> impl Iterator<Item = u32> {
     let mut offset = 0;
     std::iter::from_fn(move || {
         if num_shreds == 0 {
@@ -453,7 +451,7 @@ fn get_fec_set_offsets(
         }
         let num_chunks = (num_shreds / min_chunk_size).max(1);
         let chunk_size = (num_shreds + num_chunks - 1) / num_chunks;
-        let offsets = std::iter::repeat(offset).take(chunk_size);
+        let offsets = std::iter::repeat(offset).take(chunk_size as usize);
         num_shreds -= chunk_size;
         offset += chunk_size;
         Some(offsets)
@@ -521,7 +519,9 @@ mod tests {
         let size = serialized_size(&entries).unwrap() as usize;
         // Integer division to ensure we have enough shreds to fit all the data
         let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
-        let num_expected_data_shreds = (size + data_buffer_size - 1) / data_buffer_size;
+        let num_expected_data_shreds: u32 = ((size + data_buffer_size - 1) / data_buffer_size)
+            .try_into()
+            .unwrap();
         let num_expected_coding_shreds =
             get_erasure_batch_size(num_expected_data_shreds) - num_expected_data_shreds;
         let start_index = 0;
@@ -536,14 +536,14 @@ mod tests {
             &mut ProcessShredsStats::default(),
         );
         let next_index = data_shreds.last().unwrap().index() + 1;
-        assert_eq!(next_index as usize, num_expected_data_shreds);
+        assert_eq!(next_index, num_expected_data_shreds);
 
         let mut data_shred_indexes = HashSet::new();
         let mut coding_shred_indexes = HashSet::new();
         for shred in data_shreds.iter() {
             assert_eq!(shred.shred_type(), ShredType::Data);
             let index = shred.index();
-            let is_last = index as usize == num_expected_data_shreds - 1;
+            let is_last = index == num_expected_data_shreds - 1;
             verify_test_data_shred(
                 shred,
                 index,
@@ -566,16 +566,19 @@ mod tests {
             coding_shred_indexes.insert(index);
         }
 
-        for i in start_index..start_index + num_expected_data_shreds as u32 {
+        for i in start_index..start_index + num_expected_data_shreds {
             assert!(data_shred_indexes.contains(&i));
         }
 
-        for i in start_index..start_index + num_expected_coding_shreds as u32 {
+        for i in start_index..start_index + num_expected_coding_shreds {
             assert!(coding_shred_indexes.contains(&i));
         }
 
-        assert_eq!(data_shred_indexes.len(), num_expected_data_shreds);
-        assert_eq!(coding_shred_indexes.len(), num_expected_coding_shreds);
+        assert_eq!(data_shred_indexes.len(), num_expected_data_shreds as usize);
+        assert_eq!(
+            coding_shred_indexes.len(),
+            num_expected_coding_shreds as usize
+        );
 
         // Test reassembly
         let deshred_payload = Shredder::deshred(&data_shreds).unwrap();
@@ -760,10 +763,9 @@ mod tests {
         let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
         let entry = Entry::new(&Hash::default(), 1, vec![tx0]);
 
-        let num_data_shreds: usize = 5;
+        let num_data_shreds: u32 = 5;
         let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
-        let num_entries =
-            max_entries_per_n_shred(&entry, num_data_shreds as u64, Some(data_buffer_size));
+        let num_entries = max_entries_per_n_shred(&entry, num_data_shreds, Some(data_buffer_size));
         let entries: Vec<_> = (0..num_entries)
             .map(|_| {
                 let keypair0 = Keypair::new();
@@ -786,10 +788,10 @@ mod tests {
             &reed_solomon_cache,
             &mut ProcessShredsStats::default(),
         );
-        let num_coding_shreds = coding_shreds.len();
+        let num_coding_shreds: u32 = coding_shreds.len().try_into().unwrap();
 
         // We should have 5 data shreds now
-        assert_eq!(data_shreds.len(), num_data_shreds);
+        assert_eq!(data_shreds.len(), num_data_shreds as usize);
         assert_eq!(
             num_coding_shreds,
             get_erasure_batch_size(num_data_shreds) - num_data_shreds
@@ -853,7 +855,7 @@ mod tests {
         );
         shred_info.insert(3, recovered_shred);
 
-        let result = Shredder::deshred(&shred_info[..num_data_shreds]).unwrap();
+        let result = Shredder::deshred(&shred_info[..num_data_shreds as usize]).unwrap();
         assert!(result.len() >= serialized_entries.len());
         assert_eq!(serialized_entries[..], result[..serialized_entries.len()]);
 
@@ -870,7 +872,7 @@ mod tests {
         assert_eq!(recovered_data.len(), 3); // Data shreds 0, 2, 4 were missing
         for (i, recovered_shred) in recovered_data.into_iter().enumerate() {
             let index = i * 2;
-            let is_last_data = recovered_shred.index() as usize == num_data_shreds - 1;
+            let is_last_data = recovered_shred.index() == num_data_shreds - 1;
             verify_test_data_shred(
                 &recovered_shred,
                 index.try_into().unwrap(),
@@ -885,16 +887,16 @@ mod tests {
             shred_info.insert(i * 2, recovered_shred);
         }
 
-        let result = Shredder::deshred(&shred_info[..num_data_shreds]).unwrap();
+        let result = Shredder::deshred(&shred_info[..num_data_shreds as usize]).unwrap();
         assert!(result.len() >= serialized_entries.len());
         assert_eq!(serialized_entries[..], result[..serialized_entries.len()]);
 
         // Test4: Try reassembly with 2 missing data shreds, but keeping the last
         // data shred. Hint: should fail
-        let shreds: Vec<Shred> = all_shreds[..num_data_shreds]
+        let shreds: Vec<Shred> = all_shreds[..num_data_shreds as usize]
             .iter()
-            .enumerate()
-            .filter_map(|(i, s)| {
+            .zip(0..)
+            .filter_map(|(s, i)| {
                 if (i < 4 && i % 2 != 0) || i == num_data_shreds - 1 {
                     // Keep 1, 3, 4
                     Some(s.clone())
@@ -924,7 +926,7 @@ mod tests {
             &mut ProcessShredsStats::default(),
         );
         // We should have 10 shreds now
-        assert_eq!(data_shreds.len(), num_data_shreds);
+        assert_eq!(data_shreds.len(), num_data_shreds as usize);
 
         let all_shreds = data_shreds
             .iter()
@@ -943,10 +945,10 @@ mod tests {
 
         assert_eq!(recovered_data.len(), 3); // Data shreds 25, 27, 29 were missing
         for (i, recovered_shred) in recovered_data.into_iter().enumerate() {
-            let index = 25 + (i * 2);
+            let index: u32 = (25 + (i * 2)).try_into().unwrap();
             verify_test_data_shred(
                 &recovered_shred,
-                index.try_into().unwrap(),
+                index,
                 slot,
                 slot - 5,
                 &keypair.pubkey(),
@@ -958,7 +960,7 @@ mod tests {
             shred_info.insert(i * 2, recovered_shred);
         }
 
-        let result = Shredder::deshred(&shred_info[..num_data_shreds]).unwrap();
+        let result = Shredder::deshred(&shred_info[..num_data_shreds as usize]).unwrap();
         assert!(result.len() >= serialized_entries.len());
         assert_eq!(serialized_entries[..], result[..serialized_entries.len()]);
 
@@ -1115,7 +1117,7 @@ mod tests {
             &ReedSolomonCache::default(),
             &mut ProcessShredsStats::default(),
         );
-        const MIN_CHUNK_SIZE: usize = DATA_SHREDS_PER_FEC_BLOCK;
+        const MIN_CHUNK_SIZE: usize = DATA_SHREDS_PER_FEC_BLOCK as usize;
         let chunks: Vec<_> = data_shreds
             .iter()
             .group_by(|shred| shred.fec_set_index())
@@ -1189,30 +1191,32 @@ mod tests {
                 .iter()
                 .group_by(|shred| shred.fec_set_index())
                 .into_iter()
-                .map(|(_, chunk)| get_erasure_batch_size(chunk.count()))
-                .sum();
+                .map(|(_, chunk)| get_erasure_batch_size(chunk.count().try_into().unwrap()))
+                .sum::<u32>()
+                .try_into()
+                .unwrap();
             assert_eq!(coding_shreds.len(), num_shreds - data_shreds.len());
         }
     }
 
     #[test]
     fn test_get_fec_set_offsets() {
-        const MIN_CHUNK_SIZE: usize = 32usize;
-        for num_shreds in 0usize..MIN_CHUNK_SIZE {
+        const MIN_CHUNK_SIZE: u32 = 32;
+        for num_shreds in 0..MIN_CHUNK_SIZE {
             let offsets: Vec<_> = get_fec_set_offsets(num_shreds, MIN_CHUNK_SIZE).collect();
-            assert_eq!(offsets, vec![0usize; num_shreds]);
+            assert_eq!(offsets, vec![0; num_shreds as usize]);
         }
         for num_shreds in MIN_CHUNK_SIZE..MIN_CHUNK_SIZE * 8 {
             let chunks: Vec<_> = get_fec_set_offsets(num_shreds, MIN_CHUNK_SIZE)
                 .group_by(|offset| *offset)
                 .into_iter()
-                .map(|(offset, chunk)| (offset, chunk.count()))
+                .map(|(offset, chunk)| (offset, chunk.count().try_into().unwrap()))
                 .collect();
             assert_eq!(
                 chunks
                     .iter()
                     .map(|(_offset, chunk_size)| chunk_size)
-                    .sum::<usize>(),
+                    .sum::<u32>(),
                 num_shreds
             );
             assert!(chunks

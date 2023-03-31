@@ -8,7 +8,7 @@ use {
     },
     std::{
         collections::BTreeSet,
-        ops::{Range, RangeBounds},
+        ops::{Bound, Range, RangeBounds},
     },
 };
 
@@ -51,6 +51,15 @@ impl Default for ConnectedFlags {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 /// The Meta column family
+// TODO A number of fields in this struct represent shred indices, using `u64` which is incorrect.
+// All shred indices must be `u32`.  As already encode in the types of `completed_data_indexes`, as
+// well as in the `ShredCommonHeader::index`.  As some shred index values are correctly typed as
+// `u32` and some are incorrectly types as `u64` there is a number of back and forth conversions
+// sprinkled around the codebase.  With call to `unwrap()` in case the value does not fit when
+// narrowed.
+//
+// It would be much better to change all shred indices to be `u32`.  But it would require some data
+// migration.
 pub struct SlotMeta {
     /// The number of slots above the root (the genesis block). The first
     /// slot has slot 0.
@@ -58,15 +67,21 @@ pub struct SlotMeta {
     /// The total number of consecutive shreds starting from index 0 we have received for this slot.
     /// At the same time, it is also an index of the first missing shred for this slot, while the
     /// slot is incomplete.
+    // TODO This should be `u32` as it is used as a shred index in the code.
     pub consumed: u64,
     /// The index *plus one* of the highest shred received for this slot.  Useful
     /// for checking if the slot has received any shreds yet, and to calculate the
     /// range where there is one or more holes: `(consumed..received)`.
+    // TODO This should be `u32` as it is used as a shred index in the code.
     pub received: u64,
     /// The timestamp of the first time a shred was added for this slot
     pub first_shred_timestamp: u64,
     /// The index of the shred that is flagged as the last shred for this slot.
     /// None until the shred with LAST_SHRED_IN_SLOT flag is received.
+    // TODO This should be `Option<u32>`, it is used as a shred index in the code.  Changing this
+    // type should not be very hard - just create a new serialization proxy, similar to
+    // `serde_compat` below, but for `Option<u32>` that still uses 8 bytes, with `u64::MAX` for
+    // `None`.
     #[serde(with = "serde_compat")]
     pub last_index: Option<u64>,
     /// The slot height of the block this one derives from.
@@ -115,6 +130,9 @@ pub struct Index {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ShredIndex {
     /// Map representing presence/absence of shreds
+    // TODO This should have been `BTreeSet<u32>` as shred indices can not exceed a `u32`.  But
+    // changing this type would require data migration in the blockstore.  An exercise for the
+    // future.
     index: BTreeSet<u64>,
 }
 
@@ -204,24 +222,42 @@ impl Index {
     }
 }
 
+// To be replaced by `range.map(Into::into)` when `#![feature(bound_map)]` is stabilized.
+//
+//   https://github.com/rust-lang/rust/issues/86026
+fn bound_into<R, F>(from: Bound<F>) -> Bound<R>
+where
+    F: Into<R>,
+{
+    match from {
+        Bound::Included(x) => Bound::Included(x.into()),
+        Bound::Excluded(x) => Bound::Excluded(x.into()),
+        Bound::Unbounded => Bound::Unbounded,
+    }
+}
+
 impl ShredIndex {
     pub fn num_shreds(&self) -> usize {
         self.index.len()
     }
 
-    pub(crate) fn range<R>(&self, bounds: R) -> impl Iterator<Item = &u64>
+    pub(crate) fn range<R>(&self, bounds: R) -> impl Iterator<Item = u32> + '_
     where
-        R: RangeBounds<u64>,
+        R: RangeBounds<u32>,
     {
-        self.index.range(bounds)
+        let range = (
+            bound_into::<u64, _>(bounds.start_bound().cloned()),
+            bound_into::<u64, _>(bounds.end_bound().cloned()),
+        );
+        self.index.range(range).map(|i| u32::try_from(*i).unwrap())
     }
 
-    pub(crate) fn contains(&self, index: u64) -> bool {
-        self.index.contains(&index)
+    pub(crate) fn contains(&self, index: u32) -> bool {
+        self.index.contains(&u64::from(index))
     }
 
-    pub(crate) fn insert(&mut self, index: u64) {
-        self.index.insert(index);
+    pub(crate) fn insert(&mut self, index: u32) {
+        self.index.insert(u64::from(index));
     }
 }
 
@@ -356,14 +392,16 @@ impl ErasureMeta {
         self.config
     }
 
-    pub(crate) fn data_shreds_indices(&self) -> Range<u64> {
-        let num_data = self.config.num_data as u64;
-        self.set_index..self.set_index + num_data
+    pub(crate) fn data_shreds_indices(&self) -> Range<u32> {
+        let num_data = self.config.num_data as u32;
+        let set_index = self.set_index as u32;
+        set_index..set_index + num_data
     }
 
-    pub(crate) fn coding_shreds_indices(&self) -> Range<u64> {
-        let num_coding = self.config.num_coding as u64;
-        self.first_coding_index..self.first_coding_index + num_coding
+    pub(crate) fn coding_shreds_indices(&self) -> Range<u32> {
+        let num_coding = self.config.num_coding as u32;
+        let first_coding_index = self.first_coding_index as u32;
+        first_coding_index..first_coding_index + num_coding
     }
 
     pub(crate) fn status(&self, index: &Index) -> ErasureMetaStatus {
@@ -511,8 +549,8 @@ mod test {
         let mut rng = thread_rng();
         let mut index = Index::new(0);
 
-        let data_indexes = 0..erasure_config.num_data as u64;
-        let coding_indexes = 0..erasure_config.num_coding as u64;
+        let data_indexes = 0..erasure_config.num_data as u32;
+        let coding_indexes = 0..erasure_config.num_coding as u32;
 
         assert_eq!(e_meta.status(&index), StillNeed(erasure_config.num_data));
 
@@ -531,7 +569,7 @@ mod test {
             .collect::<Vec<_>>()
             .choose_multiple(&mut rng, erasure_config.num_data)
         {
-            index.data_mut().index.remove(&idx);
+            index.data_mut().index.remove(&idx.into());
 
             assert_eq!(e_meta.status(&index), CanRecover);
         }
@@ -544,7 +582,7 @@ mod test {
             .collect::<Vec<_>>()
             .choose_multiple(&mut rng, erasure_config.num_coding)
         {
-            index.coding_mut().index.remove(&idx);
+            index.coding_mut().index.remove(&idx.into());
 
             assert_eq!(e_meta.status(&index), DataFull);
         }

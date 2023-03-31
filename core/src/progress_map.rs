@@ -41,7 +41,7 @@ impl ReplaySlotStats {
         slot: Slot,
         num_txs: usize,
         num_entries: usize,
-        num_shreds: u64,
+        num_shreds: u32,
         bank_complete_time_us: u64,
     ) {
         lazy! {

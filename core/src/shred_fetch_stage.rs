@@ -390,7 +390,7 @@ mod tests {
             &mut stats,
         ));
 
-        let index = MAX_DATA_SHREDS_PER_SLOT as u32;
+        let index = MAX_DATA_SHREDS_PER_SLOT;
         let shred = Shred::new_from_data(5, index, 0, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
         assert!(should_discard_shred(

@@ -80,7 +80,7 @@ impl<'a> Shred<'a> for ShredData {
         shred.sanitize().map(|_| shred)
     }
 
-    fn erasure_shard_index(&self) -> Result<usize, Error> {
+    fn erasure_shard_index(&self) -> Result<u32, Error> {
         shred_data::erasure_shard_index(self).ok_or_else(|| {
             let headers = Box::new((self.common_header, self.data_header));
             Error::InvalidErasureShardIndex(headers)
@@ -142,7 +142,7 @@ impl<'a> Shred<'a> for ShredCode {
         shred.sanitize().map(|_| shred)
     }
 
-    fn erasure_shard_index(&self) -> Result<usize, Error> {
+    fn erasure_shard_index(&self) -> Result<u32, Error> {
         shred_code::erasure_shard_index(self).ok_or_else(|| {
             let headers = Box::new((self.common_header, self.coding_header));
             Error::InvalidErasureShardIndex(headers)
@@ -379,7 +379,7 @@ mod test {
         }
         {
             let mut shred = shred.clone();
-            shred.common_header.index = MAX_DATA_SHREDS_PER_SLOT as u32;
+            shred.common_header.index = MAX_DATA_SHREDS_PER_SLOT;
             assert_matches!(
                 shred.sanitize(),
                 Err(Error::InvalidShredIndex(ShredType::Data, 32768))
@@ -439,7 +439,7 @@ mod test {
         }
         {
             let mut shred = shred.clone();
-            shred.common_header.index = MAX_CODE_SHREDS_PER_SLOT as u32;
+            shred.common_header.index = MAX_CODE_SHREDS_PER_SLOT;
             assert_matches!(
                 shred.sanitize(),
                 Err(Error::InvalidShredIndex(ShredType::Code, 32_768))
@@ -459,11 +459,11 @@ mod test {
         // shred has index > u32::MAX should fail.
         {
             let mut shred = shred.clone();
-            shred.common_header.fec_set_index = MAX_DATA_SHREDS_PER_SLOT as u32 - 2;
+            shred.common_header.fec_set_index = MAX_DATA_SHREDS_PER_SLOT - 2;
             shred.coding_header.num_data_shreds = 3;
             shred.coding_header.num_coding_shreds = 4;
             shred.coding_header.position = 1;
-            shred.common_header.index = MAX_DATA_SHREDS_PER_SLOT as u32 - 2;
+            shred.common_header.index = MAX_DATA_SHREDS_PER_SLOT - 2;
             assert_matches!(
                 shred.sanitize(),
                 Err(Error::InvalidErasureShardIndex { .. })

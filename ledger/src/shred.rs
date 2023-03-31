@@ -109,7 +109,7 @@ const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
 // data shreds per each batch as below. The actual number of data shreds in
 // each erasure batch depends on the number of shreds obtained from serializing
 // a &[Entry].
-pub const DATA_SHREDS_PER_FEC_BLOCK: usize = 32;
+pub const DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
 
 // For legacy tests and benchmarks.
 const_assert_eq!(LEGACY_SHRED_DATA_CAPACITY, 1051);
@@ -156,6 +156,8 @@ pub enum Error {
     InvalidShredFlags(u8),
     #[error("Invalid {0:?} shred index: {1}")]
     InvalidShredIndex(ShredType, /*shred index:*/ u32),
+    #[error("Shred index exceeds u32")]
+    ShredIndexExceeded,
     #[error("Invalid shred type")]
     InvalidShredType,
     #[error("Invalid shred variant")]
@@ -331,7 +333,7 @@ impl Shred {
     // Like Shred::erasure_shard but returning a slice.
     dispatch!(pub(crate) fn erasure_shard_as_slice(&self) -> Result<&[u8], Error>);
     // Returns the shard index within the erasure coding set.
-    dispatch!(pub(crate) fn erasure_shard_index(&self) -> Result<usize, Error>);
+    dispatch!(pub(crate) fn erasure_shard_index(&self) -> Result<u32, Error>);
 
     dispatch!(pub fn into_payload(self) -> Vec<u8>);
     dispatch!(pub fn payload(&self) -> &Vec<u8>);
@@ -944,7 +946,7 @@ pub fn should_discard_shred(
     };
     match ShredType::from(shred_variant) {
         ShredType::Code => {
-            if index >= shred_code::MAX_CODE_SHREDS_PER_SLOT as u32 {
+            if index >= shred_code::MAX_CODE_SHREDS_PER_SLOT {
                 stats.index_out_of_bounds += 1;
                 return true;
             }
@@ -954,7 +956,7 @@ pub fn should_discard_shred(
             }
         }
         ShredType::Data => {
-            if index >= MAX_DATA_SHREDS_PER_SLOT as u32 {
+            if index >= MAX_DATA_SHREDS_PER_SLOT {
                 stats.index_out_of_bounds += 1;
                 return true;
             }
@@ -996,14 +998,14 @@ pub fn should_discard_shred(
     false
 }
 
-pub fn max_ticks_per_n_shreds(num_shreds: u64, shred_data_size: Option<usize>) -> u64 {
+pub fn max_ticks_per_n_shreds(num_shreds: u32, shred_data_size: Option<usize>) -> u64 {
     let ticks = create_ticks(1, 0, Hash::default());
     max_entries_per_n_shred(&ticks[0], num_shreds, shred_data_size)
 }
 
 pub fn max_entries_per_n_shred(
     entry: &Entry,
-    num_shreds: u64,
+    num_shreds: u32,
     shred_data_size: Option<usize>,
 ) -> u64 {
     let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
@@ -1012,7 +1014,7 @@ pub fn max_entries_per_n_shred(
     let entry_size = bincode::serialized_size(entry).unwrap();
     let count_size = vec_size - entry_size;
 
-    (shred_data_size * num_shreds - count_size) / entry_size
+    (shred_data_size * u64::from(num_shreds) - count_size) / entry_size
 }
 
 pub fn verify_test_data_shred(

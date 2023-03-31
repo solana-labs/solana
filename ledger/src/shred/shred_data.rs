@@ -23,7 +23,7 @@ impl ShredData {
     dispatch!(pub(super) fn data(&self) -> Result<&[u8], Error>);
     dispatch!(pub(super) fn erasure_shard(self) -> Result<Vec<u8>, Error>);
     dispatch!(pub(super) fn erasure_shard_as_slice(&self) -> Result<&[u8], Error>);
-    dispatch!(pub(super) fn erasure_shard_index(&self) -> Result<usize, Error>);
+    dispatch!(pub(super) fn erasure_shard_index(&self) -> Result<u32, Error>);
     dispatch!(pub(super) fn into_payload(self) -> Vec<u8>);
     dispatch!(pub(super) fn parent(&self) -> Result<Slot, Error>);
     dispatch!(pub(super) fn payload(&self) -> &Vec<u8>);
@@ -133,10 +133,10 @@ impl From<merkle::ShredData> for ShredData {
 }
 
 #[inline]
-pub(super) fn erasure_shard_index<T: ShredDataTrait>(shred: &T) -> Option<usize> {
+pub(super) fn erasure_shard_index<T: ShredDataTrait>(shred: &T) -> Option<u32> {
     let fec_set_index = shred.common_header().fec_set_index;
     let index = shred.common_header().index.checked_sub(fec_set_index)?;
-    usize::try_from(index).ok()
+    Some(index)
 }
 
 pub(super) fn sanitize<T: ShredDataTrait>(shred: &T) -> Result<(), Error> {
@@ -145,7 +145,7 @@ pub(super) fn sanitize<T: ShredDataTrait>(shred: &T) -> Result<(), Error> {
     }
     let common_header = shred.common_header();
     let data_header = shred.data_header();
-    if common_header.index as usize >= MAX_DATA_SHREDS_PER_SLOT {
+    if common_header.index >= MAX_DATA_SHREDS_PER_SLOT {
         return Err(Error::InvalidShredIndex(
             ShredType::Data,
             common_header.index,

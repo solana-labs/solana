@@ -11,7 +11,7 @@ use {
 };
 
 const_assert_eq!(MAX_CODE_SHREDS_PER_SLOT, 32_768);
-pub const MAX_CODE_SHREDS_PER_SLOT: usize = MAX_DATA_SHREDS_PER_SLOT;
+pub const MAX_CODE_SHREDS_PER_SLOT: u32 = MAX_DATA_SHREDS_PER_SLOT;
 
 const_assert_eq!(ShredCode::SIZE_OF_PAYLOAD, 1228);
 
@@ -29,7 +29,7 @@ impl ShredCode {
     dispatch!(pub(super) fn common_header(&self) -> &ShredCommonHeader);
     dispatch!(pub(super) fn erasure_shard(self) -> Result<Vec<u8>, Error>);
     dispatch!(pub(super) fn erasure_shard_as_slice(&self) -> Result<&[u8], Error>);
-    dispatch!(pub(super) fn erasure_shard_index(&self) -> Result<usize, Error>);
+    dispatch!(pub(super) fn erasure_shard_index(&self) -> Result<u32, Error>);
     dispatch!(pub(super) fn first_coding_index(&self) -> Option<u32>);
     dispatch!(pub(super) fn into_payload(self) -> Vec<u8>);
     dispatch!(pub(super) fn payload(&self) -> &Vec<u8>);
@@ -107,28 +107,28 @@ impl From<merkle::ShredCode> for ShredCode {
 }
 
 #[inline]
-pub(super) fn erasure_shard_index<T: ShredCodeTrait>(shred: &T) -> Option<usize> {
+pub(super) fn erasure_shard_index<T: ShredCodeTrait>(shred: &T) -> Option<u32> {
     // Assert that the last shred index in the erasure set does not
     // overshoot MAX_{DATA,CODE}_SHREDS_PER_SLOT.
     let common_header = shred.common_header();
     let coding_header = shred.coding_header();
     if common_header
         .fec_set_index
-        .checked_add(u32::from(coding_header.num_data_shreds.checked_sub(1)?))? as usize
+        .checked_add(coding_header.num_data_shreds.checked_sub(1)?.into())?
         >= MAX_DATA_SHREDS_PER_SLOT
     {
         return None;
     }
     if shred
         .first_coding_index()?
-        .checked_add(u32::from(coding_header.num_coding_shreds.checked_sub(1)?))? as usize
+        .checked_add(coding_header.num_coding_shreds.checked_sub(1)?.into())?
         >= MAX_CODE_SHREDS_PER_SLOT
     {
         return None;
     }
-    let num_data_shreds = usize::from(coding_header.num_data_shreds);
-    let num_coding_shreds = usize::from(coding_header.num_coding_shreds);
-    let position = usize::from(coding_header.position);
+    let num_data_shreds = u32::from(coding_header.num_data_shreds);
+    let num_coding_shreds = u32::from(coding_header.num_coding_shreds);
+    let position = u32::from(coding_header.position);
     let fec_set_size = num_data_shreds.checked_add(num_coding_shreds)?;
     let index = position.checked_add(num_data_shreds)?;
     (index < fec_set_size).then_some(index)
@@ -140,13 +140,13 @@ pub(super) fn sanitize<T: ShredCodeTrait>(shred: &T) -> Result<(), Error> {
     }
     let common_header = shred.common_header();
     let coding_header = shred.coding_header();
-    if common_header.index as usize >= MAX_CODE_SHREDS_PER_SLOT {
+    if common_header.index >= MAX_CODE_SHREDS_PER_SLOT {
         return Err(Error::InvalidShredIndex(
             ShredType::Code,
             common_header.index,
         ));
     }
-    let num_coding_shreds = usize::from(coding_header.num_coding_shreds);
+    let num_coding_shreds = u32::from(coding_header.num_coding_shreds);
     if num_coding_shreds > 8 * DATA_SHREDS_PER_FEC_BLOCK {
         return Err(Error::InvalidNumCodingShreds(
             coding_header.num_coding_shreds,

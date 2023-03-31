@@ -596,7 +596,11 @@ impl RepairService {
             if let Some(reference_tick) = slot_meta
                 .received
                 .checked_sub(1)
-                .and_then(|index| blockstore.get_data_shred(slot, index).ok()?)
+                .and_then(|index| {
+                    blockstore
+                        .get_data_shred(slot, u32::try_from(index).ok()?)
+                        .ok()?
+                })
                 .and_then(|shred| shred::layout::get_reference_tick(&shred).ok())
                 .map(u64::from)
             {

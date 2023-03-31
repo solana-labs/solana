@@ -10,7 +10,7 @@ use {
 pub fn repair_response_packet(
     blockstore: &Blockstore,
     slot: Slot,
-    shred_index: u64,
+    shred_index: u32,
     dest: &SocketAddr,
     nonce: Nonce,
 ) -> Option<Packet> {

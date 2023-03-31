@@ -32,7 +32,7 @@ mod tests {
     const DEFAULT_BENCHMARK_SLOTS: u64 = 50;
     const DEFAULT_BATCH_SIZE_SLOTS: u64 = 1;
     const DEFAULT_MAX_LEDGER_SHREDS: u64 = 50;
-    const DEFAULT_SHREDS_PER_SLOT: u64 = 25;
+    const DEFAULT_SHREDS_PER_SLOT: u32 = 25;
     const DEFAULT_STOP_SIZE_BYTES: u64 = 0;
     const DEFAULT_STOP_SIZE_ITERATIONS: u64 = 0;
     const DEFAULT_STOP_SIZE_CF_DATA_BYTES: u64 = 0;
@@ -43,7 +43,7 @@ mod tests {
         benchmark_slots: u64,
         batch_size_slots: u64,
         max_ledger_shreds: u64,
-        shreds_per_slot: u64,
+        shreds_per_slot: u32,
         stop_size_bytes: u64,
         stop_size_iterations: u64,
         stop_size_cf_data_bytes: u64,
@@ -244,8 +244,8 @@ mod tests {
         data_shred_storage_previous: &mut u64,
         start_slot: u64,
         batch_size: u64,
-        num_shreds: u64,
-        max_shreds: i64,
+        num_shreds: u32,
+        max_shreds: u64,
         blockstore: &Blockstore,
         cpu: &CpuStatsInner,
     ) {
@@ -261,7 +261,7 @@ mod tests {
             start_slot,
             batch_size,
             num_shreds,
-            max_shreds,
+            max_shreds as i64,
             storage_now,
             storage_now as i64 - *storage_previous as i64,
             data_shred_storage_now,
@@ -360,7 +360,7 @@ mod tests {
         let cleanup_service = config.cleanup_service;
 
         let num_batches = benchmark_slots / batch_size_slots;
-        let num_shreds_total = benchmark_slots * shreds_per_slot;
+        let num_shreds_total = benchmark_slots * u64::from(shreds_per_slot);
 
         let (sender, receiver) = unbounded();
         let exit = Arc::new(AtomicBool::new(false));
@@ -553,7 +553,7 @@ mod tests {
                 finished_slot,
                 batch_size_slots,
                 shreds_per_slot,
-                max_ledger_shreds as i64,
+                max_ledger_shreds,
                 &blockstore,
                 &sys.get_stats(),
             );

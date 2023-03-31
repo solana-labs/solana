@@ -30,13 +30,13 @@ fn bench_write_shreds(bench: &mut Bencher, entries: Vec<Entry>, ledger_path: &Pa
 // Insert some shreds into the ledger in preparation for read benchmarks
 fn setup_read_bench(
     blockstore: &mut Blockstore,
-    num_small_shreds: u64,
-    num_large_shreds: u64,
+    num_small_shreds: u32,
+    num_large_shreds: u32,
     slot: Slot,
 ) {
     // Make some big and small entries
     let entries = create_ticks(
-        num_large_shreds * 4 + num_small_shreds * 2,
+        (num_large_shreds * 4 + num_small_shreds * 2).into(),
         0,
         Hash::default(),
     );
@@ -121,12 +121,12 @@ fn bench_read_random(bench: &mut Bencher) {
     // Generate a num_reads sized random sample of indexes in range [0, total_shreds - 1],
     // simulating random reads
     let mut rng = rand::thread_rng();
-    let indexes: Vec<usize> = (0..num_reads)
-        .map(|_| rng.gen_range(0, total_shreds) as usize)
+    let indexes: Vec<u32> = (0..num_reads)
+        .map(|_| rng.gen_range(0, total_shreds))
         .collect();
     bench.iter(move || {
         for i in indexes.iter() {
-            let _ = blockstore.get_data_shred(slot, *i as u64);
+            let _ = blockstore.get_data_shred(slot, *i);
         }
     });
 
