@@ -906,6 +906,8 @@ mod tests {
     #[test]
     fn test_verify() {
         let (correct_pubkey, keypair_path, config_path) = create_tmp_keypair_and_config_file();
+
+        // success case using a keypair file
         process_test_command(&[
             "solana-keygen",
             "verify",
@@ -914,6 +916,17 @@ mod tests {
         ])
         .unwrap();
 
+        // success case using a config file
+        process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &correct_pubkey.to_string(),
+            "--config",
+            &config_path,
+        ])
+        .unwrap();
+
+        // fail case using a keypair file
         let incorrect_pubkey = Pubkey::new_unique();
         let result = process_test_command(&[
             "solana-keygen",
@@ -927,7 +940,49 @@ mod tests {
         let expected = format!("Verification for public key: {}: Failed", incorrect_pubkey,);
         assert_eq!(result, expected);
 
+        // fail case using a config file
+        process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &incorrect_pubkey.to_string(),
+            "--config",
+            &config_path,
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Verification for public key: {}: Failed", incorrect_pubkey,);
+        assert_eq!(result, expected);
+
+        // keypair file takes precedence over config file
+        let (_, alt_keypair_path, alt_config_path) = create_tmp_keypair_and_config_file();
+
+        process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &correct_pubkey.to_string(),
+            &keypair_path,
+            "--config",
+            &alt_config_path,
+        ])
+        .unwrap();
+
+        process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &correct_pubkey.to_string(),
+            &alt_keypair_path,
+            "--config",
+            &config_path,
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Verification for public key: {}: Failed", incorrect_pubkey,);
+        assert_eq!(result, expected);
+
         remove_tmp_keypair_and_config_file(&keypair_path, &config_path);
+        remove_tmp_keypair_and_config_file(&alt_keypair_path, &alt_config_path);
     }
 
     #[test]
@@ -935,6 +990,21 @@ mod tests {
         let (expected_pubkey, keypair_path, config_path) = create_tmp_keypair_and_config_file();
         let outfile_path = tmp_outfile_path(&expected_pubkey.to_string());
 
+        // success case using a keypair file
+        process_test_command(&[
+            "solana-keygen",
+            "pubkey",
+            &keypair_path,
+            "--outfile",
+            &outfile_path,
+        ])
+        .unwrap();
+
+        let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
+        assert_eq!(result_pubkey, expected_pubkey);
+        remove_tmp_outfile(&outfile_path);
+
+        // success case using a config file
         process_test_command(&[
             "solana-keygen",
             "pubkey",
@@ -947,8 +1017,27 @@ mod tests {
 
         let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
         assert_eq!(result_pubkey, expected_pubkey);
+        remove_tmp_outfile(&outfile_path);
 
-        // do not overwrite file
+        // keypair file takes precedence over config file
+        let (_, alt_keypair_path, alt_config_path) = create_tmp_keypair_and_config_file();
+
+        process_test_command(&[
+            "solana-keygen",
+            "pubkey",
+            &keypair_path,
+            "--config",
+            &alt_config_path,
+            "--outfile",
+            &outfile_path,
+        ])
+        .unwrap();
+
+        let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
+        assert_eq!(result_pubkey, expected_pubkey);
+        remove_tmp_keypair_and_config_file(&alt_keypair_path, &alt_config_path);
+
+        // refuse to overwrite file
         let result = process_test_command(&[
             "solana-keygen",
             "pubkey",
@@ -963,25 +1052,128 @@ mod tests {
         let expected = format!("Refusing to overwrite {outfile_path} without --force flag");
         assert_eq!(result, expected);
 
-        // force overwrite
-        process_test_command(&[
-            "solana-keygen",
-            "pubkey",
-            "--config",
-            &config_path,
-            "--outfile",
-            &outfile_path,
-            "--force",
-        ])
-        .unwrap();
-
         remove_tmp_outfile(&outfile_path);
         remove_tmp_keypair_and_config_file(&keypair_path, &config_path);
     }
 
     #[test]
     fn test_new() {
-        unimplemented!()
+        let (expected_pubkey, keypair_path, config_path) = create_tmp_keypair_and_config_file();
+        let outfile_path = tmp_outfile_path(&expected_pubkey.to_string());
+
+        // general success case
+        process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--config",
+            &config_path,
+            "--outfile",
+            &outfile_path,
+            "--no-bip39-passphrase",
+        ])
+        .unwrap();
+
+        // refuse to overwrite file
+        let result = process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--config",
+            &config_path,
+            "--outfile",
+            &outfile_path,
+            "--no-bip39-passphrase",
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Refusing to overwrite {outfile_path} without --force flag");
+        assert_eq!(result, expected);
+
+        // no outfile
+        process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--config",
+            &config_path,
+            "--no-bip39-passphrase",
+            "--no-outfile",
+        ])
+        .unwrap();
+
+        // sanity check on languages and word count combinations
+        let languages = [
+            "english",
+            "chinese-simplified",
+            "chinese-traditional",
+            "japanese",
+            "spanish",
+            "korean",
+            "french",
+            "italian",
+        ];
+        let word_counts = ["12", "15", "18", "21", "24"];
+
+        for language in languages {
+            for word_count in word_counts {
+                process_test_command(&[
+                    "solana-keygen",
+                    "new",
+                    "--config",
+                    &config_path,
+                    "--no-outfile",
+                    "--no-bip39-passphrase",
+                    "--language",
+                    language,
+                    "--word-count",
+                    word_count,
+                ])
+                .unwrap();
+            }
+        }
+
+        // sanity check derivation path
+        process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--config",
+            &config_path,
+            "--no-bip39-passphrase",
+            "--no-outfile",
+            "--derivation-path",
+            // empty derivation path
+        ])
+        .unwrap();
+
+        process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--config",
+            &config_path,
+            "--no-bip39-passphrase",
+            "--no-outfile",
+            "--derivation-path",
+            "m/44'/501'/0'/0'", // default derivation path
+        ])
+        .unwrap();
+
+        let result = process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--config",
+            &config_path,
+            "--no-bip39-passphrase",
+            "--no-outfile",
+            "--derivation-path",
+            "-", // invalid derivation path
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = "invalid derivation path: invalid prefix: -";
+        assert_eq!(result, expected);
+
+        remove_tmp_outfile(&outfile_path);
+        remove_tmp_keypair_and_config_file(&keypair_path, &config_path);
     }
 
     #[test]
