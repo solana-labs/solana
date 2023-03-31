@@ -73,7 +73,11 @@ impl AccountsPackage {
             }
         }
 
-        let snapshot_links = bank_snapshot_info.snapshot_dir.clone();
+        let snapshot_links = bank_snapshot_info
+            .snapshot_dir
+            .parent()
+            .unwrap()
+            .to_path_buf();
 
         let snapshot_info = SupplementalSnapshotInfo {
             snapshot_links,

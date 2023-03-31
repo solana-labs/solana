@@ -622,16 +622,39 @@ pub fn archive_snapshot_package(
     let staging_accounts_dir = staging_dir.path().join("accounts");
     let staging_snapshots_dir = staging_dir.path().join("snapshots");
     let staging_version_file = staging_dir.path().join(SNAPSHOT_VERSION_FILENAME);
+
+    // Create staging/accounts/
     fs::create_dir_all(&staging_accounts_dir).map_err(|e| {
-        SnapshotError::IoWithSourceAndFile(e, "create staging path", staging_accounts_dir.clone())
+        SnapshotError::IoWithSourceAndFile(
+            e,
+            "create staging accounts path",
+            staging_accounts_dir.clone(),
+        )
     })?;
 
-    // Add the snapshots to the staging directory
-    symlink::symlink_dir(
-        snapshot_package.snapshot_links.as_path(),
-        staging_snapshots_dir,
-    )
-    .map_err(|e| SnapshotError::IoWithSource(e, "create staging symlinks"))?;
+    let slot_str = snapshot_package.slot().to_string();
+    let staging_snapshot_dir = staging_snapshots_dir.join(&slot_str);
+    // Creates staging snapshots/<slot>/
+    fs::create_dir_all(&staging_snapshot_dir).map_err(|e| {
+        SnapshotError::IoWithSourceAndFile(
+            e,
+            "create staging snapshots path",
+            staging_snapshots_dir.clone(),
+        )
+    })?;
+
+    let src_snapshot_dir = snapshot_package.snapshot_links.join(&slot_str);
+    let staging_snapshot_file = staging_snapshot_dir.join(&slot_str);
+    let src_snapshot_file = src_snapshot_dir.join(slot_str);
+    fs::hard_link(src_snapshot_file, staging_snapshot_file)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create snapshot symlink"))?;
+
+    // Following the existing archive format, the status cache is under snapshots/, not under <slot>/
+    // like in the snapshot dir.
+    let staging_status_cache = staging_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    let src_status_cache = src_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    fs::hard_link(src_status_cache, staging_status_cache)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create status cache symlink"))?;
 
     // Add the AppendVecs into the compressible list
     for storage in snapshot_package.snapshot_storages.iter() {
