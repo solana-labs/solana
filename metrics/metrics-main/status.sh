@@ -3,21 +3,16 @@
 # List of containers
 containers=("chronograf_8889" "grafana" "alertmanager" "alertmanager-discord" "prometheus" "chronograf" "kapacitor")
 
-# Discord webhook
-discord_webhook="$DISCORD_WEBHOOK"
-# PagerDuty webhook
-pagerduty_webhook_url="$PAGERDUTY_WEBHOOK"
-
 # Send a message to Discord
 send_discord_message() {
   local message="$1"
-  curl -sS -H "Content-Type: application/json" -X POST -d "{\"content\": \"$message\"}" "$discord_webhook_url"
+  curl -sS -H "Content-Type: application/json" -X POST -d "{\"content\": \"$message\"}" "$DISCORD_WEBHOOK"
 }
 
 # Send a critical alert to PagerDuty
 send_pagerduty_alert() {
   local description="$1"
-  curl -sS -H "Content-Type: application/json" -X POST -d "{\"event_action\": \"trigger\", \"payload\": {\"summary\": \"$description\", \"source\": \"Docker Monitor\", \"severity\": \"critical\"}}" "$pagerduty_webhook_url"
+  curl -sS -H "Content-Type: application/json" -X POST -d "{\"event_action\": \"trigger\", \"payload\": {\"summary\": \"$description\", \"source\": \"Docker Monitor\", \"severity\": \"critical\"}}" "$PAGERDUTY_WEBHOOK"
 }
 
 # Iterate over the containers and check their status
