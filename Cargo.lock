@@ -4982,7 +4982,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-bench-tps-transfer-program"
+name = "solana-bench-tps-onchain-program"
 version = "1.16.0"
 dependencies = [
  "solana-program 1.16.0",

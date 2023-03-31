@@ -1,5 +1,5 @@
 [package]
-name = "solana-bench-tps-transfer-program"
+name = "solana-bench-tps-onchain-program"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
