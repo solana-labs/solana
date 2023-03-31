@@ -441,6 +441,12 @@ impl NodeInstance {
 
     // Returns true if the crds-value is a duplicate instance
     // of this node, with a more recent timestamp.
+    // The older instance is considered the duplicate instance because:
+    // - If a staked node is restarted it will receive its old instance value
+    //   from gossip. Considering the new instance as the duplicate would
+    //   prevent the node from restarting.
+    // - Similarly, hotswap relies on the the old instance being considered the
+    //   duplicate instance.
     pub(crate) fn check_duplicate(&self, other: &CrdsValue) -> bool {
         match &other.data {
             CrdsData::NodeInstance(other) => {
