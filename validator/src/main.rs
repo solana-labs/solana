@@ -16,8 +16,7 @@ use {
         tpu::DEFAULT_TPU_COALESCE,
         validator::{
             is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod, Validator,
-            ValidatorConfig, ValidatorStartProgress,
-            DEFAULT_REPAIR_USE_QUIC,
+            ValidatorConfig, ValidatorStartProgress, DEFAULT_REPAIR_USE_QUIC,
         },
     },
     solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},

@@ -56,6 +56,7 @@ use {
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread::{self, JoinHandle},
+        time::Duration,
     },
 };
 
@@ -108,9 +109,9 @@ pub struct RepairQuicConfig {
     /// Used for QOS control based on stakes using Quic
     pub staked_nodes: Arc<RwLock<StakedNodes>>,
     /// Timeout for the quic server waiting for a chunk.
-    pub wait_for_chunk_timeout_ms: u64,
-    /// Packet batching coalesce timeout in MS
-    pub repair_packet_coalesce_timeout_ms: u64,
+    pub wait_for_chunk_timeout: Duration,
+    /// Packet batching coalesce timeout
+    pub repair_packet_coalesce_timeout: Duration,
 }
 
 impl Tvu {

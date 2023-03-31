@@ -1,9 +1,10 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use {
-<<<<<<< HEAD
-    crate::{cluster_nodes::check_feature_activation, repair_service::RepairTransportConfig, 
-        serve_repair::ServeRepair, tvu::RepairQuicConfig},
+    crate::{
+        cluster_nodes::check_feature_activation, repair_service::RepairTransportConfig,
+        serve_repair::ServeRepair, tpu::MAX_QUIC_CONNECTIONS_PER_PEER, tvu::RepairQuicConfig,
+    },
     crossbeam_channel::{unbounded, Sender},
     solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
@@ -43,9 +44,8 @@ impl ShredFetchStage {
         shred_version: u16,
         name: &'static str,
         flags: PacketFlags,
-        repair_context: Option<(&UdpSocket, &ClusterInfo)>,
-        turbine_disabled: Arc<AtomicBool>,
         repair_context: Option<(RepairTransportConfig, &ClusterInfo)>,
+        turbine_disabled: Arc<AtomicBool>,
     ) {
         const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
         let mut last_updated = Instant::now();
@@ -185,6 +185,7 @@ impl ShredFetchStage {
         flags: PacketFlags,
         cluster_info: Arc<ClusterInfo>,
         repair_quic_config: &RepairQuicConfig,
+        turbine_disabled: Arc<AtomicBool>,
     ) -> (JoinHandle<()>, JoinHandle<()>, Arc<ConnectionCache>) {
         let (packet_sender, packet_receiver) = unbounded();
 
@@ -201,8 +202,8 @@ impl ShredFetchStage {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
-            repair_quic_config.wait_for_chunk_timeout_ms,
-            repair_quic_config.repair_packet_coalesce_timeout_ms,
+            repair_quic_config.wait_for_chunk_timeout,
+            repair_quic_config.repair_packet_coalesce_timeout,
         )
         .unwrap();
 
@@ -234,6 +235,7 @@ impl ShredFetchStage {
                     name,
                     flags,
                     repair_context,
+                    turbine_disabled,
                 )
             })
             .unwrap();
@@ -291,7 +293,7 @@ impl ShredFetchStage {
             "shred_fetch_repair",
             PacketFlags::REPAIR,
             Some((repair_socket, cluster_info.clone())),
-            turbine_disabled,
+            turbine_disabled.clone(),
         );
 
         let (connection_cache, repair_quic_t, quic_repair_modifier_t) =
@@ -306,6 +308,7 @@ impl ShredFetchStage {
                         PacketFlags::REPAIR,
                         cluster_info,
                         repair_quic_config,
+                        turbine_disabled,
                     );
                 (
                     Some(connection_cache),

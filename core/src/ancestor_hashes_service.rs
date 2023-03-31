@@ -840,8 +840,8 @@ fn spawn_ancestor_hashes_quic_server(
                 solana_streamer::quic::MAX_STAKED_CONNECTIONS,
                 MAX_UNSTAKED_CONNECTIONS,
                 stats,
-                repair_quic_config.wait_for_chunk_timeout_ms,
-                repair_quic_config.repair_packet_coalesce_timeout_ms,
+                repair_quic_config.wait_for_chunk_timeout,
+                repair_quic_config.repair_packet_coalesce_timeout,
             )
             .unwrap();
 

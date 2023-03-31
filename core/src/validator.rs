@@ -107,7 +107,7 @@ use {
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{
         nonblocking::quic::{
-            DEFAULT_PACKET_BATCH_COALESCE_TIMEOUT_MS, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_PACKET_BATCH_COALESCE_TIMEOUT, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
         },
         socket::SocketAddrSpace,
         streamer::StakedNodes,
@@ -1021,8 +1021,8 @@ impl Validator {
             serve_repair_address: Arc::new(node.sockets.serve_repair_quic),
             identity_keypair: identity_keypair.clone(),
             staked_nodes: staked_nodes.clone(),
-            wait_for_chunk_timeout_ms: DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            repair_packet_coalesce_timeout_ms: DEFAULT_PACKET_BATCH_COALESCE_TIMEOUT_MS,
+            wait_for_chunk_timeout: DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            repair_packet_coalesce_timeout: DEFAULT_PACKET_BATCH_COALESCE_TIMEOUT,
         };
 
         let serve_repair_quic_service = ServeRepairQuicService::new(
@@ -1339,6 +1339,9 @@ impl Validator {
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
+        self.serve_repair_quic_service
+            .join()
+            .expect("serve_repair_quic_service");
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
