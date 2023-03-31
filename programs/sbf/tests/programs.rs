@@ -1516,7 +1516,7 @@ fn assert_instruction_count() {
         programs.extend_from_slice(&[
             ("solana_sbf_rust_128bit", 1218),
             ("solana_sbf_rust_alloc", 5067),
-            ("solana_sbf_rust_custom_heap", 422),
+            ("solana_sbf_rust_custom_heap", 398),
             ("solana_sbf_rust_dep_crate", 2),
             ("solana_sbf_rust_external_spend", 288),
             ("solana_sbf_rust_iter", 1013),
@@ -1526,9 +1526,9 @@ fn assert_instruction_count() {
             ("solana_sbf_rust_noop", 275),
             ("solana_sbf_rust_param_passing", 146),
             ("solana_sbf_rust_rand", 378),
-            ("solana_sbf_rust_sanity", 51814),
+            ("solana_sbf_rust_sanity", 51931),
             ("solana_sbf_rust_secp256k1_recover", 91185),
-            ("solana_sbf_rust_sha", 24075),
+            ("solana_sbf_rust_sha", 24059),
         ]);
     }
 
