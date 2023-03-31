@@ -447,9 +447,9 @@ pub fn deserialize_parameters_aligned(
 mod tests {
     use {
         super::*,
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::with_mock_invoke_context,
         solana_sdk::{
-            account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+            account::{Account, AccountSharedData, WritableAccount},
             account_info::AccountInfo,
             bpf_loader,
             entrypoint::deserialize,
@@ -702,9 +702,7 @@ mod tests {
         let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
         let program_indices = [0];
         let mut original_accounts = transaction_accounts.clone();
-        let mut transaction_context =
-            TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         invoke_context
             .transaction_context
             .get_next_instruction_context()

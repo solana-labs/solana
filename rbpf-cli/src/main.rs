@@ -5,7 +5,7 @@ use {
     solana_bpf_loader_program::{
         create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
-    solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
+    solana_program_runtime::{invoke_context::InvokeContext, with_mock_invoke_context},
     solana_rbpf::{
         assembler::assemble, elf::Executable, static_analysis::Analysis,
         verifier::RequisiteVerifier, vm::VerifiedExecutable,
@@ -14,8 +14,7 @@ use {
         account::AccountSharedData,
         bpf_loader,
         pubkey::Pubkey,
-        sysvar::rent::Rent,
-        transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
+        transaction_context::{IndexOfAccount, InstructionAccount},
     },
     std::{
         fmt::{Debug, Formatter},
@@ -216,16 +215,13 @@ before execting it in the virtual machine.",
             input.instruction_data
         }
     };
-    let program_indices = [0, 1];
-    let mut transaction_context =
-        TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
-    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+    with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
     invoke_context.enable_instruction_tracing = true;
     invoke_context
         .transaction_context
         .get_next_instruction_context()
         .unwrap()
-        .configure(&program_indices, &instruction_accounts, &instruction_data);
+        .configure(&[0, 1], &instruction_accounts, &instruction_data);
     invoke_context.push().unwrap();
     let (_parameter_bytes, regions, account_lengths) = serialize_parameters(
         invoke_context.transaction_context,

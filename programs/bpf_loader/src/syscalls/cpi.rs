@@ -1123,6 +1123,7 @@ mod tests {
     use {
         super::*,
         crate::allocator_bump::BpfAllocator,
+        solana_program_runtime::with_mock_invoke_context,
         solana_rbpf::{
             aligned_memory::AlignedMemory, ebpf::MM_INPUT_START, memory_region::MemoryRegion,
             vm::Config,
@@ -1131,8 +1132,7 @@ mod tests {
             account::{Account, AccountSharedData},
             clock::Epoch,
             instruction::Instruction,
-            rent::Rent,
-            transaction_context::{TransactionAccount, TransactionContext},
+            transaction_context::TransactionAccount,
         },
         std::{
             cell::{Cell, RefCell},
@@ -1168,12 +1168,7 @@ mod tests {
                 .into_iter()
                 .map(|a| (a.0, a.1))
                 .collect::<Vec<TransactionAccount>>();
-
-            let program_accounts = program_accounts;
-            let mut $transaction_context =
-                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
-
-            let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
+            with_mock_invoke_context!($invoke_context, transaction_context, transaction_accounts);
             $invoke_context
                 .transaction_context
                 .get_next_instruction_context()

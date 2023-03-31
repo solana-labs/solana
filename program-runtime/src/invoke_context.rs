@@ -883,48 +883,21 @@ impl<'a> InvokeContext<'a> {
 
 #[macro_export]
 macro_rules! with_mock_invoke_context {
-    ($invoke_context:ident, $loader_id:expr, $account_size:expr) => {
-        use solana_sdk::account::AccountSharedData;
-        use solana_sdk::native_loader;
-        use solana_sdk::pubkey::Pubkey;
+    ($invoke_context:ident, $transaction_context:ident, $transaction_accounts:expr) => {
         use solana_sdk::sysvar::rent::Rent;
-        use solana_sdk::transaction_context::{InstructionAccount, TransactionContext};
+        use solana_sdk::transaction_context::TransactionContext;
+        use $crate::compute_budget::ComputeBudget;
+        use $crate::invoke_context::InvokeContext;
 
-        let program_indices = vec![0, 1];
-        let program_key = Pubkey::new_unique();
-        let transaction_accounts = vec![
-            (
-                $loader_id,
-                AccountSharedData::new(0, 0, &native_loader::id()),
-            ),
-            (program_key, AccountSharedData::new(1, 0, &$loader_id)),
-            (
-                Pubkey::new_unique(),
-                AccountSharedData::new(2, $account_size, &program_key),
-            ),
-        ];
-        let instruction_accounts = vec![InstructionAccount {
-            index_in_transaction: 2,
-            index_in_caller: 2,
-            index_in_callee: 0,
-            is_signer: false,
-            is_writable: false,
-        }];
         let compute_budget = ComputeBudget::default();
-        let mut transaction_context = TransactionContext::new(
-            transaction_accounts,
+        let mut $transaction_context = TransactionContext::new(
+            $transaction_accounts,
             Some(Rent::default()),
             compute_budget.max_invoke_stack_height,
             compute_budget.max_instruction_trace_length,
         );
-        transaction_context.enable_cap_accounts_data_allocations_per_transaction();
-        let mut $invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        $invoke_context
-            .transaction_context
-            .get_next_instruction_context()
-            .unwrap()
-            .configure(&program_indices, &instruction_accounts, &[]);
-        $invoke_context.push().unwrap();
+        $transaction_context.enable_cap_accounts_data_allocations_per_transaction();
+        let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
     };
 }
 
@@ -966,15 +939,7 @@ pub fn mock_process_instruction(
     }
     let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
     transaction_accounts.push((*loader_id, processor_account));
-    let compute_budget = ComputeBudget::default();
-    let mut transaction_context = TransactionContext::new(
-        transaction_accounts,
-        Some(Rent::default()),
-        compute_budget.max_invoke_stack_height,
-        compute_budget.max_instruction_trace_length,
-    );
-    transaction_context.enable_cap_accounts_data_allocations_per_transaction();
-    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+    with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
     if let Some(sysvar_cache) = sysvar_cache_override {
         invoke_context.sysvar_cache = Cow::Borrowed(sysvar_cache);
     }
@@ -1154,13 +1119,15 @@ mod tests {
 
     #[test]
     fn test_instruction_stack_height() {
-        const MAX_DEPTH: usize = 10;
+        let one_more_than_max_depth = ComputeBudget::default()
+            .max_invoke_stack_height
+            .saturating_add(1);
         let mut invoke_stack = vec![];
-        let mut accounts = vec![];
+        let mut transaction_accounts = vec![];
         let mut instruction_accounts = vec![];
-        for index in 0..MAX_DEPTH {
+        for index in 0..one_more_than_max_depth {
             invoke_stack.push(solana_sdk::pubkey::new_rand());
-            accounts.push((
+            transaction_accounts.push((
                 solana_sdk::pubkey::new_rand(),
                 AccountSharedData::new(index as u64, 1, invoke_stack.get(index).unwrap()),
             ));
@@ -1173,7 +1140,7 @@ mod tests {
             });
         }
         for (index, program_id) in invoke_stack.iter().enumerate() {
-            accounts.push((
+            transaction_accounts.push((
                 *program_id,
                 AccountSharedData::new(1, 1, &solana_sdk::pubkey::Pubkey::default()),
             ));
@@ -1185,13 +1152,7 @@ mod tests {
                 is_writable: false,
             });
         }
-        let mut transaction_context = TransactionContext::new(
-            accounts,
-            Some(Rent::default()),
-            ComputeBudget::default().max_invoke_stack_height,
-            MAX_DEPTH,
-        );
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
 
         // Check call depth increases and has a limit
         let mut depth_reached = 0;
@@ -1201,17 +1162,17 @@ mod tests {
                 .get_next_instruction_context()
                 .unwrap()
                 .configure(
-                    &[(MAX_DEPTH + depth_reached) as IndexOfAccount],
+                    &[one_more_than_max_depth.saturating_add(depth_reached) as IndexOfAccount],
                     &instruction_accounts,
                     &[],
                 );
             if Err(InstructionError::CallDepth) == invoke_context.push() {
                 break;
             }
-            depth_reached += 1;
+            depth_reached = depth_reached.saturating_add(1);
         }
         assert_ne!(depth_reached, 0);
-        assert!(depth_reached < MAX_DEPTH);
+        assert!(depth_reached < one_more_than_max_depth);
     }
 
     #[test]
@@ -1232,18 +1193,13 @@ mod tests {
     #[test]
     fn test_process_instruction() {
         let callee_program_id = solana_sdk::pubkey::new_rand();
-        let builtin_programs = &[BuiltinProgram {
-            program_id: callee_program_id,
-            process_instruction: mock_process_instruction,
-        }];
-
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
         let readonly_account = AccountSharedData::new(168, 1, &solana_sdk::pubkey::new_rand());
         let loader_account = AccountSharedData::new(0, 0, &native_loader::id());
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
         program_account.set_executable(true);
-        let accounts = vec![
+        let transaction_accounts = vec![
             (solana_sdk::pubkey::new_rand(), owned_account),
             (solana_sdk::pubkey::new_rand(), not_owned_account),
             (solana_sdk::pubkey::new_rand(), readonly_account),
@@ -1251,9 +1207,9 @@ mod tests {
             (solana_sdk::pubkey::new_rand(), loader_account),
         ];
         let metas = vec![
-            AccountMeta::new(accounts.get(0).unwrap().0, false),
-            AccountMeta::new(accounts.get(1).unwrap().0, false),
-            AccountMeta::new_readonly(accounts.get(2).unwrap().0, false),
+            AccountMeta::new(transaction_accounts.get(0).unwrap().0, false),
+            AccountMeta::new(transaction_accounts.get(1).unwrap().0, false),
+            AccountMeta::new_readonly(transaction_accounts.get(2).unwrap().0, false),
         ];
         let instruction_accounts = (0..4)
             .map(|instruction_account_index| InstructionAccount {
@@ -1264,10 +1220,12 @@ mod tests {
                 is_writable: instruction_account_index < 2,
             })
             .collect::<Vec<_>>();
-        let mut transaction_context =
-            TransactionContext::new(accounts, Some(Rent::default()), 2, 18);
-        let mut invoke_context =
-            InvokeContext::new_mock(&mut transaction_context, builtin_programs);
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+        let builtin_programs = &[BuiltinProgram {
+            program_id: callee_program_id,
+            process_instruction: mock_process_instruction,
+        }];
+        invoke_context.builtin_programs = builtin_programs;
 
         // Account modification tests
         let cases = vec![
@@ -1347,7 +1305,7 @@ mod tests {
             assert!(compute_units_consumed > 0);
             assert_eq!(
                 compute_units_consumed,
-                compute_units_to_consume + MOCK_BUILTIN_COMPUTE_UNIT_COST
+                compute_units_to_consume.saturating_add(MOCK_BUILTIN_COMPUTE_UNIT_COST),
             );
             assert_eq!(result, expected_result);
 
@@ -1357,11 +1315,10 @@ mod tests {
 
     #[test]
     fn test_invoke_context_compute_budget() {
-        let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
+        let transaction_accounts =
+            vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
 
-        let mut transaction_context =
-            TransactionContext::new(accounts, Some(Rent::default()), 1, 1);
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         invoke_context.compute_budget =
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
 
@@ -1387,22 +1344,11 @@ mod tests {
         let dummy_account = AccountSharedData::new(10, 0, &program_key);
         let mut program_account = AccountSharedData::new(500, 500, &native_loader::id());
         program_account.set_executable(true);
-        let accounts = vec![
+        let transaction_accounts = vec![
             (Pubkey::new_unique(), user_account),
             (Pubkey::new_unique(), dummy_account),
             (program_key, program_account),
         ];
-
-        let builtin_programs = [BuiltinProgram {
-            program_id: program_key,
-            process_instruction: mock_process_instruction,
-        }];
-
-        let mut transaction_context =
-            TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
-        let mut invoke_context =
-            InvokeContext::new_mock(&mut transaction_context, &builtin_programs);
-
         let instruction_accounts = [
             InstructionAccount {
                 index_in_transaction: 0,
@@ -1419,11 +1365,17 @@ mod tests {
                 is_writable: false,
             },
         ];
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+        let builtin_programs = &[BuiltinProgram {
+            program_id: program_key,
+            process_instruction: mock_process_instruction,
+        }];
+        invoke_context.builtin_programs = builtin_programs;
 
         // Test: Resize the account to *the same size*, so not consuming any additional size; this must succeed
         {
             let resize_delta: i64 = 0;
-            let new_len = (user_account_data_len as i64 + resize_delta) as u64;
+            let new_len = (user_account_data_len as i64).saturating_add(resize_delta) as u64;
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1448,7 +1400,7 @@ mod tests {
         // Test: Resize the account larger; this must succeed
         {
             let resize_delta: i64 = 1;
-            let new_len = (user_account_data_len as i64 + resize_delta) as u64;
+            let new_len = (user_account_data_len as i64).saturating_add(resize_delta) as u64;
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1473,7 +1425,7 @@ mod tests {
         // Test: Resize the account smaller; this must succeed
         {
             let resize_delta: i64 = -1;
-            let new_len = (user_account_data_len as i64 + resize_delta) as u64;
+            let new_len = (user_account_data_len as i64).saturating_add(resize_delta) as u64;
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 

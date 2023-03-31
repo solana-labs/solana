@@ -15,9 +15,7 @@ use {
         create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
     solana_measure::measure::Measure,
-    solana_program_runtime::{
-        compute_budget::ComputeBudget, invoke_context::InvokeContext, with_mock_invoke_context,
-    },
+    solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
     solana_rbpf::{
         ebpf::MM_INPUT_START,
         elf::Executable,
@@ -32,13 +30,17 @@ use {
         loader_utils::{load_program, load_program_from_file},
     },
     solana_sdk::{
+        account::AccountSharedData,
         bpf_loader,
         client::SyncClient,
         entrypoint::SUCCESS,
         feature_set::FeatureSet,
         instruction::{AccountMeta, Instruction},
         message::Message,
+        native_loader,
+        pubkey::Pubkey,
         signature::Signer,
+        transaction_context::InstructionAccount,
     },
     std::{mem, sync::Arc},
     test::Bencher,
@@ -46,6 +48,41 @@ use {
 
 const ARMSTRONG_LIMIT: u64 = 500;
 const ARMSTRONG_EXPECTED: u64 = 5;
+
+macro_rules! with_mock_invoke_context {
+    ($invoke_context:ident, $loader_id:expr, $account_size:expr) => {
+        let program_key = Pubkey::new_unique();
+        let transaction_accounts = vec![
+            (
+                $loader_id,
+                AccountSharedData::new(0, 0, &native_loader::id()),
+            ),
+            (program_key, AccountSharedData::new(1, 0, &$loader_id)),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(2, $account_size, &program_key),
+            ),
+        ];
+        let instruction_accounts = vec![InstructionAccount {
+            index_in_transaction: 2,
+            index_in_caller: 2,
+            index_in_callee: 0,
+            is_signer: false,
+            is_writable: false,
+        }];
+        solana_program_runtime::with_mock_invoke_context!(
+            $invoke_context,
+            transaction_context,
+            transaction_accounts
+        );
+        $invoke_context
+            .transaction_context
+            .get_next_instruction_context()
+            .unwrap()
+            .configure(&[0, 1], &instruction_accounts, &[]);
+        $invoke_context.push().unwrap();
+    };
+}
 
 #[bench]
 fn bench_program_create_executable(bencher: &mut Bencher) {
