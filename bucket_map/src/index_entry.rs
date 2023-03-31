@@ -66,13 +66,24 @@ pub struct IndexEntryPlaceInBucket<T: 'static> {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-// one instance of this per item in the index
-// stored in the index bucket
+/// one instance of this per item in the index
+/// stored in the index bucket
 pub struct IndexEntry<T: 'static> {
-    pub key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
-    ref_count: RefCount, // can this be smaller? Do we ever need more than 4B refcounts?
+    pub(crate) key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
+    packed_ref_count: PackedRefCount,
     multiple_slots: MultipleSlots,
     _phantom: PhantomData<&'static T>,
+}
+
+/// hold a big `RefCount` while leaving room for extra bits to be used for things like 'Occupied'
+#[bitfield(bits = 64)]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+struct PackedRefCount {
+    /// reserved for future use
+    unused: B2,
+    /// ref_count of this entry. We don't need any where near 62 bits for this value
+    ref_count: B62,
 }
 
 /// required fields when an index element references the data file
@@ -82,7 +93,7 @@ pub(crate) struct MultipleSlots {
     // if the bucket doubled, the index can be recomputed using storage_cap_and_offset.create_bucket_capacity_pow2
     storage_cap_and_offset: PackedStorage,
     /// num elements in the slot list
-    num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
+    num_slots: Slot,
 }
 
 impl MultipleSlots {
@@ -154,7 +165,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
     pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
         let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
         index_entry.key = *pubkey;
-        index_entry.ref_count = 0;
+        index_entry.packed_ref_count.set_ref_count(0);
         index_entry.multiple_slots = MultipleSlots::default();
     }
 
@@ -194,7 +205,7 @@ impl<T> IndexEntryPlaceInBucket<T> {
 
     pub fn ref_count(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> RefCount {
         let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
-        index_entry.ref_count
+        index_entry.packed_ref_count.ref_count()
     }
 
     pub fn read_value<'a>(
@@ -235,7 +246,10 @@ impl<T> IndexEntryPlaceInBucket<T> {
         ref_count: RefCount,
     ) {
         let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
-        index_entry.ref_count = ref_count;
+        index_entry
+            .packed_ref_count
+            .set_ref_count_checked(ref_count)
+            .expect("ref count must fit into 62 bits!");
     }
 }
 
@@ -251,7 +265,7 @@ mod tests {
         pub fn new(key: Pubkey) -> Self {
             IndexEntry {
                 key,
-                ref_count: 0,
+                packed_ref_count: PackedRefCount::default(),
                 multiple_slots: MultipleSlots::default(),
                 _phantom: PhantomData,
             }
