@@ -45,10 +45,8 @@ use {
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
         feature_set::FeatureSet,
         fee::FeeStructure,
-        fee_calculator::FeeRateGovernor,
         loader_instruction,
         message::{v0::LoadedAddresses, SanitizedMessage},
-        rent::Rent,
         signature::keypair_from_seed,
         stake,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
@@ -59,7 +57,7 @@ use {
         ConfirmedTransactionWithStatusMeta, InnerInstructions, TransactionStatusMeta,
         TransactionWithStatusMeta, VersionedTransactionWithStatusMeta,
     },
-    std::{collections::HashMap, str::FromStr},
+    std::collections::HashMap,
 };
 use {
     solana_bpf_loader_program::{
@@ -72,21 +70,29 @@ use {
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        genesis_utils::{
+            bootstrap_validator_stake_lamports, create_genesis_config,
+            create_genesis_config_with_leader_ex, GenesisConfigInfo,
+        },
     },
     solana_sdk::{
         account::AccountSharedData,
         bpf_loader, bpf_loader_deprecated,
         client::SyncClient,
+        clock::UnixTimestamp,
         entrypoint::SUCCESS,
+        fee_calculator::FeeRateGovernor,
+        genesis_config::ClusterType,
+        hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
         pubkey::Pubkey,
+        rent::Rent,
         signature::{Keypair, Signer},
         system_program,
         transaction::{SanitizedTransaction, Transaction, TransactionError},
     },
-    std::sync::Arc,
+    std::{str::FromStr, sync::Arc, time::Duration},
 };
 
 fn run_program(name: &str) -> u64 {
@@ -1766,6 +1772,221 @@ fn test_program_sbf_upgrade() {
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(42))
     );
+}
+
+fn get_stable_genesis_config() -> GenesisConfigInfo {
+    let validator_pubkey =
+        Pubkey::from_str("GLh546CXmtZdvpEzL8sxzqhhUf7KPvmGaRpFHB5W1sjV").unwrap();
+    let mint_keypair = Keypair::from_base58_string(
+        "4YTH9JSRgZocmK9ezMZeJCCV2LVeR2NatTBA8AFXkg2x83fqrt8Vwyk91961E7ns4vee9yUBzuDfztb8i9iwTLFd",
+    );
+    let voting_keypair = Keypair::from_base58_string(
+        "4EPWEn72zdNY1JSKkzyZ2vTZcKdPW3jM5WjAgUadnoz83FR5cDFApbo7s5mwBcYXn8afVe2syReJaqBi4fkhG3mH",
+    );
+    let stake_pubkey = Pubkey::from_str("HGq9JF77xFXRgWRJy8VQuhdbdugrT856RvQDzr1KJo6E").unwrap();
+
+    let mut genesis_config = create_genesis_config_with_leader_ex(
+        123,
+        &mint_keypair.pubkey(),
+        &validator_pubkey,
+        &voting_keypair.pubkey(),
+        &stake_pubkey,
+        bootstrap_validator_stake_lamports(),
+        42,
+        FeeRateGovernor::new(0, 0), // most tests can't handle transaction fees
+        Rent::free(),               // most tests don't expect rent
+        ClusterType::Development,
+        vec![],
+    );
+    genesis_config.creation_time = Duration::ZERO.as_secs() as UnixTimestamp;
+
+    GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        voting_keypair,
+        validator_pubkey,
+    }
+}
+
+#[test]
+#[ignore]
+#[cfg(feature = "sbf_rust")]
+fn test_program_sbf_invoke_stable_genesis_and_bank() {
+    // The purpose of this test is to exercise various code branches of runtime/VM and
+    // assert that the resulting bank hash matches with the expected value.
+    // The assert check is commented out by default. Please refer to the last few lines
+    // of the test to enable the assertion.
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = get_stable_genesis_config();
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
+    bank.add_builtin(&name, &id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    // Deploy upgradeable program
+    let buffer_keypair = Keypair::from_base58_string(
+        "4q4UvWxh2oMifTGbChDeWCbdN8eJEUQ1E6cuNnmymJ6AN5CMUT2VW5A1RKnG9dy7ypLczB9inMUAafh5TkpXrtxg",
+    );
+    let program_keypair = Keypair::from_base58_string(
+        "3LQpBxgpaFNJPit5a8t51pJKMkUmNUn5PhSTcuuhuuBxe43cTeqVPhMtKkFNr5VpFzCExf4ihibvuZgGxmjy6t8n",
+    );
+    let program_id = program_keypair.pubkey();
+    let authority_keypair = Keypair::from_base58_string(
+        "285XFW2NTWd6CMvtHzvYYS1kWzmzcGBnyEXbH1v8hq6YJqJsLMTYMPkbEQqeE7m7UqhoMeK5V3HMJLf9DdxwU2Gy",
+    );
+
+    let instruction =
+        Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
+
+    // Call program before its deployed
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::ProgramAccountNotFound
+    );
+
+    load_upgradeable_program(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &program_keypair,
+        &authority_keypair,
+        "solana_sbf_rust_noop",
+    );
+
+    // Deploy indirect invocation program
+    let indirect_program_keypair = Keypair::from_base58_string(
+        "2BgE4gD5wUCwiAVPYbmWd2xzXSsD9W2fWgNjwmVkm8WL7i51vK9XAXNnX1VB6oKQZmjaUPRd5RzE6RggB9DeKbZC",
+    );
+    load_upgradeable_program(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &indirect_program_keypair,
+        &authority_keypair,
+        "solana_sbf_rust_invoke_and_return",
+    );
+
+    let invoke_instruction =
+        Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
+    let indirect_invoke_instruction = Instruction::new_with_bytes(
+        indirect_program_keypair.pubkey(),
+        &[0],
+        vec![
+            AccountMeta::new_readonly(program_id, false),
+            AccountMeta::new_readonly(clock::id(), false),
+        ],
+    );
+
+    // Prepare redeployment
+    let buffer_keypair = Keypair::from_base58_string(
+        "5T5L31FiUphXh4N6mxiWhEKPrdLhvMJSbaHo1Ne7zZYkw6YT1fVkqsWdA6pHMtqATiMTc4sfx5yTV9M9AnWDoBkW",
+    );
+    load_upgradeable_buffer(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &authority_keypair,
+        "solana_sbf_rust_panic",
+    );
+    let redeployment_instruction = bpf_loader_upgradeable::upgrade(
+        &program_id,
+        &buffer_keypair.pubkey(),
+        &authority_keypair.pubkey(),
+        &mint_keypair.pubkey(),
+    );
+
+    // Redeployment causes programs to be unavailable to both top-level-instructions and CPI instructions
+    for invoke_instruction in [invoke_instruction, indirect_invoke_instruction] {
+        // Call upgradeable program
+        let result =
+            bank_client.send_and_confirm_instruction(&mint_keypair, invoke_instruction.clone());
+        assert!(result.is_ok());
+
+        // Upgrade the program and invoke in same tx
+        let message = Message::new(
+            &[redeployment_instruction.clone(), invoke_instruction],
+            Some(&mint_keypair.pubkey()),
+        );
+        let tx = Transaction::new(
+            &[&mint_keypair, &authority_keypair],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
+        );
+    }
+
+    // Prepare undeployment
+    let (programdata_address, _) = Pubkey::find_program_address(
+        &[program_keypair.pubkey().as_ref()],
+        &bpf_loader_upgradeable::id(),
+    );
+    let undeployment_instruction = bpf_loader_upgradeable::close_any(
+        &programdata_address,
+        &mint_keypair.pubkey(),
+        Some(&authority_keypair.pubkey()),
+        Some(&program_id),
+    );
+
+    let invoke_instruction =
+        Instruction::new_with_bytes(program_id, &[1], vec![AccountMeta::new(clock::id(), false)]);
+    let indirect_invoke_instruction = Instruction::new_with_bytes(
+        indirect_program_keypair.pubkey(),
+        &[1],
+        vec![
+            AccountMeta::new_readonly(program_id, false),
+            AccountMeta::new_readonly(clock::id(), false),
+        ],
+    );
+
+    // Undeployment is visible to both top-level-instructions and CPI instructions
+    for invoke_instruction in [invoke_instruction, indirect_invoke_instruction] {
+        // Call upgradeable program
+        let result =
+            bank_client.send_and_confirm_instruction(&mint_keypair, invoke_instruction.clone());
+        assert!(result.is_ok());
+
+        // Undeploy the program and invoke in same tx
+        let message = Message::new(
+            &[undeployment_instruction.clone(), invoke_instruction],
+            Some(&mint_keypair.pubkey()),
+        );
+        let tx = Transaction::new(
+            &[&mint_keypair, &authority_keypair],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
+        );
+    }
+
+    bank.freeze();
+    let expected_hash = Hash::from_str("2A2vqbUKExRbnaAzSnDFXdsBZRZSpCjGZCAA3mFZG2sV")
+        .expect("Failed to generate hash");
+    println!("Stable test produced bank hash: {}", bank.hash());
+    println!("Expected hash: {}", expected_hash);
+
+    // Enable the following code to match the bank hash with the expected bank hash.
+    // Follow these steps.
+    // 1. Run this test on the baseline/master commit, and get the expected bank hash.
+    // 2. Update the `expected_hash` to match the expected bank hash.
+    // 3. Run the test in the PR branch that's being tested.
+    // If the hash doesn't match, the PR likely has runtime changes that can lead to
+    // consensus failure.
+    //  assert_eq!(bank.hash(), expected_hash);
 }
 
 #[test]
