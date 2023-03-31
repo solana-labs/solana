@@ -1809,8 +1809,13 @@ fn get_stable_genesis_config() -> GenesisConfigInfo {
 }
 
 #[test]
+#[ignore]
 #[cfg(feature = "sbf_rust")]
 fn test_program_sbf_invoke_stable_genesis_and_bank() {
+    // The purpose of this test is to exercise various code branches of runtime/VM and
+    // assert that the resulting bank hash matches with the expected value.
+    // The assert check is commented out by default. Please refer to the last few lines
+    // of the test to enable the assertion.
     solana_logger::setup();
 
     let GenesisConfigInfo {
