@@ -2,7 +2,7 @@ use {
     solana_sdk::pubkey::Pubkey,
     std::{
         collections::HashMap,
-        fmt::Display,
+        fmt::{Debug, Display},
         ops::{BitAndAssign, Sub},
     },
 };
@@ -283,9 +283,9 @@ impl Display for ThreadSet {
     }
 }
 
-impl std::fmt::Debug for ThreadSet {
+impl Debug for ThreadSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self}")
+        Display::fmt(self, f)
     }
 }
 
