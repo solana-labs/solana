@@ -893,7 +893,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of platform-tools.
-    let platform_tools_version = String::from("v1.36");
+    let platform_tools_version = String::from("v1.37");
     let version = format!(
         "{}\nplatform-tools {}",
         crate_version!(),
