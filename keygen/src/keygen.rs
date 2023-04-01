@@ -1065,8 +1065,6 @@ mod tests {
         process_test_command(&[
             "solana-keygen",
             "new",
-            "--config",
-            &config_path,
             "--outfile",
             &outfile_path,
             "--no-bip39-passphrase",
@@ -1077,8 +1075,6 @@ mod tests {
         let result = process_test_command(&[
             "solana-keygen",
             "new",
-            "--config",
-            &config_path,
             "--outfile",
             &outfile_path,
             "--no-bip39-passphrase",
@@ -1093,8 +1089,6 @@ mod tests {
         process_test_command(&[
             "solana-keygen",
             "new",
-            "--config",
-            &config_path,
             "--no-bip39-passphrase",
             "--no-outfile",
         ])
@@ -1118,8 +1112,6 @@ mod tests {
                 process_test_command(&[
                     "solana-keygen",
                     "new",
-                    "--config",
-                    &config_path,
                     "--no-outfile",
                     "--no-bip39-passphrase",
                     "--language",
@@ -1135,8 +1127,6 @@ mod tests {
         process_test_command(&[
             "solana-keygen",
             "new",
-            "--config",
-            &config_path,
             "--no-bip39-passphrase",
             "--no-outfile",
             "--derivation-path",
@@ -1147,8 +1137,6 @@ mod tests {
         process_test_command(&[
             "solana-keygen",
             "new",
-            "--config",
-            &config_path,
             "--no-bip39-passphrase",
             "--no-outfile",
             "--derivation-path",
@@ -1159,8 +1147,6 @@ mod tests {
         let result = process_test_command(&[
             "solana-keygen",
             "new",
-            "--config",
-            &config_path,
             "--no-bip39-passphrase",
             "--no-outfile",
             "--derivation-path",
@@ -1177,12 +1163,28 @@ mod tests {
     }
 
     #[test]
-    fn test_recover() {
-        unimplemented!()
-    }
-
-    #[test]
     fn test_grind() {
-        unimplemented!()
+        // simple sanity checks
+        process_test_command(&[
+            "solana-keygen",
+            "grind",
+            "--no-outfile",
+            "--no-bip39-passphrase",
+            "--use-mnemonic",
+            "--starts-with",
+            "a:1",
+        ])
+        .unwrap();
+
+        process_test_command(&[
+            "solana-keygen",
+            "grind",
+            "--no-outfile",
+            "--no-bip39-passphrase",
+            "--use-mnemonic",
+            "--ends-with",
+            "b:1",
+        ])
+        .unwrap();
     }
 }
