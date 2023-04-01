@@ -887,7 +887,7 @@ mod tests {
 
     fn tmp_outfile_path(name: &str) -> String {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        format!("{}/tmp/{}", out_dir, name)
+        format!("{out_dir}/tmp/{name}")
     }
 
     fn remove_tmp_outfile(outfile_path: &str) {
@@ -937,7 +937,7 @@ mod tests {
         .unwrap_err()
         .to_string();
 
-        let expected = format!("Verification for public key: {}: Failed", incorrect_pubkey,);
+        let expected = format!("Verification for public key: {incorrect_pubkey}: Failed");
         assert_eq!(result, expected);
 
         // fail case using a config file
@@ -951,7 +951,7 @@ mod tests {
         .unwrap_err()
         .to_string();
 
-        let expected = format!("Verification for public key: {}: Failed", incorrect_pubkey,);
+        let expected = format!("Verification for public key: {incorrect_pubkey}: Failed");
         assert_eq!(result, expected);
 
         // keypair file takes precedence over config file
@@ -978,7 +978,7 @@ mod tests {
         .unwrap_err()
         .to_string();
 
-        let expected = format!("Verification for public key: {}: Failed", incorrect_pubkey,);
+        let expected = format!("Verification for public key: {incorrect_pubkey}: Failed");
         assert_eq!(result, expected);
 
         remove_tmp_keypair_and_config_file(&keypair_path, &config_path);
