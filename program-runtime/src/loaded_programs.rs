@@ -1,6 +1,7 @@
 use {
     crate::{invoke_context::InvokeContext, timings::ExecuteDetailsTimings},
     itertools::Itertools,
+    log::warn,
     solana_measure::measure::Measure,
     solana_rbpf::{
         elf::Executable,
@@ -22,7 +23,11 @@ use {
     },
 };
 
-const MAX_CACHE_ENTRIES: usize = 100; // TODO: Tune to size
+const MAX_NON_TOMBSTONES_COUNT: usize = 100; // TODO: Tune to size
+
+// Each entry can potentially have a tombstone (e.g. during program upgrades).
+// Tombstones are also inserted for closed programs. Tombstones are not memory intensive.
+const MAX_TOMBSTONES_COUNT: usize = MAX_NON_TOMBSTONES_COUNT * 2;
 
 /// Relationship between two fork IDs
 #[derive(Copy, Clone, PartialEq)]
@@ -325,13 +330,25 @@ impl LoadedPrograms {
     /// Evicts programs which were used infrequently
     pub fn sort_and_evict(&mut self, max_cache_entries: Option<usize>) {
         // Find eviction candidates and sort by their usage counters
-        let mut num_cache_entries: usize = 0;
+        let mut num_non_tombstone_entries: usize = 0;
+        let mut num_tombstones = 0;
         let sorted_candidates = self
             .entries
             .iter()
             .filter(|(_key, programs)| {
-                num_cache_entries = num_cache_entries.saturating_add(programs.len());
-                programs.len() == 1
+                // Count non-tombstone entries
+                let num_non_tombstones = programs
+                    .iter()
+                    .filter(|program| !program.is_tombstone())
+                    .count();
+                num_non_tombstone_entries =
+                    num_non_tombstone_entries.saturating_add(num_non_tombstones);
+                num_tombstones = programs.len().saturating_sub(num_non_tombstone_entries);
+                // Evict programs with only 1 active entry, and if it's not a tombstone.
+                // Multiple entries indicate that the entries are being used by different slots/fork.
+                // Tombstones are not memory intensive and it helps to keep them in the cache to
+                // prevent unnecessary compilation/verification of broken programs.
+                programs.len() == 1 && num_non_tombstones == 1
             })
             .sorted_by_cached_key(|(_key, programs)| {
                 programs
@@ -342,9 +359,20 @@ impl LoadedPrograms {
             })
             .map(|(key, _programs)| *key)
             .collect::<Vec<Pubkey>>();
+
+        if num_tombstones > MAX_TOMBSTONES_COUNT {
+            // TODO: Should we evict tombstones?
+            // The tombstones will be removed as part of `prune()`. So, maybe its fine to leave the
+            // tombstones in the cache for now.
+            warn!(
+                "Program cache has excessive number ({}) of tombstones",
+                num_tombstones
+            );
+        }
         // Calculate how many to remove
         let num_to_remove = std::cmp::min(
-            num_cache_entries.saturating_sub(max_cache_entries.unwrap_or(MAX_CACHE_ENTRIES)),
+            num_non_tombstone_entries
+                .saturating_sub(max_cache_entries.unwrap_or(MAX_NON_TOMBSTONES_COUNT)),
             sorted_candidates.len(),
         );
         // Remove selected entries
@@ -434,7 +462,7 @@ mod tests {
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
                         (*deployment_slot) + 2,
-                        AtomicU64::new(*program1_usage_counters.get(i).unwrap_or(&0)),
+                        *program1_usage_counters.get(i).unwrap_or(&0),
                     ),
                 );
                 num_total_programs += 1;
@@ -466,7 +494,7 @@ mod tests {
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
                         (*deployment_slot) + 2,
-                        AtomicU64::new(*program2_usage_counters.get(i).unwrap_or(&0)),
+                        *program2_usage_counters.get(i).unwrap_or(&0),
                     ),
                 );
                 num_total_programs += 1;
@@ -498,7 +526,7 @@ mod tests {
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
                         (*deployment_slot) + 2,
-                        AtomicU64::new(*program3_usage_counters.get(i).unwrap_or(&0)),
+                        *program3_usage_counters.get(i).unwrap_or(&0),
                     ),
                 );
                 num_total_programs += 1;
@@ -539,7 +567,7 @@ mod tests {
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
                         (*deployment_slot) + 2,
-                        AtomicU64::new(*usage_counter),
+                        *usage_counter,
                     ),
                 );
                 num_total_programs += 1;
@@ -832,20 +860,18 @@ mod tests {
     }
 
     fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
-        new_test_loaded_program_with_usage(deployment_slot, effective_slot, AtomicU64::default())
+        new_test_loaded_program_with_usage(deployment_slot, effective_slot, 0)
     }
     fn new_test_loaded_program_with_usage(
         deployment_slot: Slot,
         effective_slot: Slot,
-        usage_counter: AtomicU64,
+        usage_counter: u64,
     ) -> Arc<LoadedProgram> {
-        Arc::new(LoadedProgram {
-            program: LoadedProgramType::FailedVerification,
-            account_size: 0,
-            deployment_slot,
-            effective_slot,
-            usage_counter,
-        })
+        let program = new_test_builtin_program(deployment_slot, effective_slot);
+        program
+            .usage_counter
+            .store(usage_counter, Ordering::Relaxed);
+        program
     }
 
     fn match_slot(
