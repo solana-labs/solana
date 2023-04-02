@@ -872,7 +872,7 @@ mod tests {
 
         let config = Config {
             keypair_path: keypair_outfile.clone(),
-            ..Default::default()
+            ..Config::default()
         };
         let config_outfile = format!("{}/tmp/{}-config", out_dir, keypair.pubkey());
         config.save(&config_outfile).unwrap();
