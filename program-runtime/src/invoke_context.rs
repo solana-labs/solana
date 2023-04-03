@@ -115,7 +115,7 @@ pub struct InvokeContext<'a> {
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
-    pub sysvar_cache: &'a SysvarCache,
+    sysvar_cache: &'a SysvarCache,
     pub trace_log_stack: Vec<TraceLogStackFrame>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
@@ -900,18 +900,16 @@ macro_rules! with_mock_invoke_context {
     };
 }
 
-pub fn mock_process_instruction(
+pub fn mock_process_instruction<F: FnMut(&mut InvokeContext)>(
     loader_id: &Pubkey,
     mut program_indices: Vec<IndexOfAccount>,
     instruction_data: &[u8],
     mut transaction_accounts: Vec<TransactionAccount>,
     instruction_account_metas: Vec<AccountMeta>,
-    sysvar_cache_override: Option<&SysvarCache>,
-    feature_set_override: Option<Arc<FeatureSet>>,
     expected_result: Result<(), InstructionError>,
     process_instruction: ProcessInstructionWithContext,
+    mut pre_adjustments: F,
 ) -> Vec<AccountSharedData> {
-    program_indices.insert(0, transaction_accounts.len() as IndexOfAccount);
     let mut instruction_accounts: Vec<InstructionAccount> =
         Vec::with_capacity(instruction_account_metas.len());
     for (instruction_account_index, account_meta) in instruction_account_metas.iter().enumerate() {
@@ -936,20 +934,16 @@ pub fn mock_process_instruction(
             is_writable: account_meta.is_writable,
         });
     }
+    program_indices.insert(0, transaction_accounts.len() as IndexOfAccount);
     let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
     transaction_accounts.push((*loader_id, processor_account));
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-    if let Some(sysvar_cache) = sysvar_cache_override {
-        invoke_context.sysvar_cache = &sysvar_cache;
-    }
-    if let Some(feature_set) = feature_set_override {
-        invoke_context.feature_set = feature_set;
-    }
     let builtin_programs = &[BuiltinProgram {
         program_id: *loader_id,
         process_instruction,
     }];
     invoke_context.builtin_programs = builtin_programs;
+    pre_adjustments(&mut invoke_context);
     let result = invoke_context.process_instruction(
         instruction_data,
         &instruction_accounts,

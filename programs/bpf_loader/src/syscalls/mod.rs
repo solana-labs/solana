@@ -1820,14 +1820,14 @@ mod tests {
             vm::{BuiltInFunction, Config},
         },
         solana_sdk::{
-            account::AccountSharedData,
+            account::{create_account_shared_data_for_test, AccountSharedData},
             bpf_loader,
             fee_calculator::FeeCalculator,
             hash::hashv,
             instruction::Instruction,
             program::check_type_assumptions,
             stable_layout::stable_instruction::StableInstruction,
-            sysvar::{clock::Clock, epoch_schedule::EpochSchedule},
+            sysvar::{self, clock::Clock, epoch_schedule::EpochSchedule},
         },
         std::{mem, str::FromStr},
     };
@@ -3299,8 +3299,25 @@ mod tests {
         sysvar_cache.set_fees(src_fees.clone());
         sysvar_cache.set_rent(src_rent);
 
-        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
-        invoke_context.sysvar_cache = &sysvar_cache;
+        let transaction_accounts = vec![
+            (
+                sysvar::clock::id(),
+                create_account_shared_data_for_test(&src_clock),
+            ),
+            (
+                sysvar::epoch_schedule::id(),
+                create_account_shared_data_for_test(&src_epochschedule),
+            ),
+            (
+                sysvar::fees::id(),
+                create_account_shared_data_for_test(&src_fees),
+            ),
+            (
+                sysvar::rent::id(),
+                create_account_shared_data_for_test(&src_rent),
+            ),
+        ];
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
 
         // Test clock sysvar
         {

@@ -1433,8 +1433,6 @@ fn assert_instruction_count() {
             &[],
             transaction_accounts,
             instruction_accounts,
-            None,
-            None,
             Ok(()),
             |invoke_context: &mut InvokeContext| {
                 let expected_consumption: u64 = invoke_context
@@ -1458,6 +1456,7 @@ fn assert_instruction_count() {
                 assert_eq!(consumption, expected_consumption);
                 Ok(())
             },
+            |_invoke_context| {},
         );
     }
 }

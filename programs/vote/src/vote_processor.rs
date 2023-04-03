@@ -326,10 +326,9 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            None,
             expected_result,
             super::process_instruction,
+            |_invoke_context| {},
         )
     }
 
@@ -345,10 +344,11 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            Some(std::sync::Arc::new(FeatureSet::default())),
             expected_result,
             super::process_instruction,
+            |invoke_context| {
+                invoke_context.feature_set = std::sync::Arc::new(FeatureSet::default());
+            },
         )
     }
 
