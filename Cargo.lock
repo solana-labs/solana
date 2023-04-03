@@ -6335,6 +6335,7 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "curve25519-dalek",
+ "digest 0.10.6",
  "getrandom 0.2.8",
  "itertools",
  "js-sys",

@@ -18,6 +18,7 @@ borsh-derive = { workspace = true }
 bs58 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
 bytemuck = { workspace = true, features = ["derive"] }
+digest = { workspace = true }
 itertools =  { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }

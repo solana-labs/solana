@@ -6,7 +6,8 @@
 use {
     crate::{sanitize::Sanitize, wasm_bindgen},
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
-    sha2::{Digest, Sha256},
+    digest::{generic_array::GenericArray, Digest, OutputSizeUser},
+    sha2::Sha256,
     std::{convert::TryFrom, fmt, mem, str::FromStr},
     thiserror::Error,
 };
@@ -14,7 +15,9 @@ use {
 /// Size of a hash in bytes.
 pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded hash.
-const MAX_BASE58_LEN: usize = 44;
+pub(crate) const MAX_BASE58_LEN: usize = 44;
+
+pub(crate) type HashArray = [u8; HASH_BYTES];
 
 /// A hash; the 32-byte output of a hashing algorithm.
 ///
@@ -44,14 +47,42 @@ const MAX_BASE58_LEN: usize = 44;
     AbiExample,
 )]
 #[repr(transparent)]
-pub struct Hash(pub(crate) [u8; HASH_BYTES]);
+pub struct Hash(pub(crate) HashArray);
 
+/// A generic hasher that can be used to hash data with different algorithms
+/// supporting the [`Digest`] trait.
+///
+/// When introducing support of a new hash algorithm in Solana SDK, it is
+/// recommended to define a new type alias for the [`GenericHasher`] with the
+/// concrete [`Digest`] type parameter. Direct usage of the [`GenericHasher`] in
+/// Solana programs should be avoided.
+///
+/// # Example
+///
+/// ```rust
+/// use {
+///     sha2::Sha256,
+///     solana_sdk::hash::GenericHasher,
+/// };
+///
+/// pub type Hasher = GenericHasher<Sha256>;
+/// ```
 #[derive(Clone, Default)]
-pub struct Hasher {
-    hasher: Sha256,
+pub struct GenericHasher<D>
+where
+    D: Digest,
+    // This trait bound statically binds the output of `result()` to fit into
+    // `HashArray`.
+    HashArray: From<GenericArray<u8, <D as OutputSizeUser>::OutputSize>>,
+{
+    hasher: D,
 }
 
-impl Hasher {
+impl<D> GenericHasher<D>
+where
+    D: Digest,
+    HashArray: From<GenericArray<u8, <D as OutputSizeUser>::OutputSize>>,
+{
     pub fn hash(&mut self, val: &[u8]) {
         self.hasher.update(val);
     }
@@ -64,6 +95,9 @@ impl Hasher {
         Hash(self.hasher.finalize().into())
     }
 }
+
+/// A Sha256 hasher.
+pub type Hasher = GenericHasher<Sha256>;
 
 impl Sanitize for Hash {}
 

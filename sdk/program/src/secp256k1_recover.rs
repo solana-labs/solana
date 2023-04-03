@@ -315,7 +315,7 @@ impl Secp256k1Pubkey {
 ///     }
 ///
 ///     let recovered_pubkey = secp256k1_recover(
-///         &message_hash.0,
+///         &message_hash.as_ref(),
 ///         instruction.recovery_id,
 ///         &instruction.signature,
 ///     )
@@ -367,7 +367,7 @@ impl Secp256k1Pubkey {
 ///         hasher.result()
 ///     };
 ///
-///     let secp_message = libsecp256k1::Message::parse(&message_hash.0);
+///     let secp_message = libsecp256k1::Message::parse(&message_hash.as_ref());
 ///     let (signature, recovery_id) = libsecp256k1::sign(&secp_message, &secp256k1_secret_key);
 ///
 ///     let signature = signature.serialize();
