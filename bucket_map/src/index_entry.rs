@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        bucket_storage::{BucketOccupied, BucketStorage},
+        bucket_storage::{BucketOccupied, BucketStorage, IncludeHeader},
         RefCount,
     },
     bv::BitVec,
@@ -308,7 +308,11 @@ impl<T: Copy> IndexEntryPlaceInBucket<T> {
                     let data_bucket = &data_buckets[data_bucket_ix as usize];
                     let loc = multiple_slots.data_loc(data_bucket);
                     assert!(!data_bucket.is_free(loc));
-                    data_bucket.get_cell_slice::<T>(loc, multiple_slots.num_slots)
+                    data_bucket.get_cell_slice::<T>(
+                        loc,
+                        multiple_slots.num_slots,
+                        IncludeHeader::NoHeader,
+                    )
                 }
                 _ => {
                     panic!("trying to read data from a free entry");

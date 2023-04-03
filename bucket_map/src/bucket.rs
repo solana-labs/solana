@@ -3,7 +3,7 @@ use {
         bucket_item::BucketItem,
         bucket_map::BucketMapError,
         bucket_stats::BucketMapStats,
-        bucket_storage::{BucketOccupied, BucketStorage, DEFAULT_CAPACITY_POW2},
+        bucket_storage::{BucketOccupied, BucketStorage, IncludeHeader, DEFAULT_CAPACITY_POW2},
         index_entry::{
             DataBucket, IndexBucket, IndexEntry, IndexEntryPlaceInBucket, MultipleSlots,
             OccupiedEnum,
@@ -328,7 +328,11 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             if best_fit_bucket == bucket_ix as u64 {
                 // in place update in same data file
                 assert!(!current_bucket.is_free(elem_loc));
-                let slice: &mut [T] = current_bucket.get_mut_cell_slice(elem_loc, data_len as u64);
+                let slice: &mut [T] = current_bucket.get_mut_cell_slice(
+                    elem_loc,
+                    data_len as u64,
+                    IncludeHeader::NoHeader,
+                );
                 multiple_slots.set_num_slots(num_slots);
 
                 slice.iter_mut().zip(data).for_each(|(dest, src)| {
@@ -375,7 +379,8 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                     // copy slotlist into the data bucket
                     let best_bucket = &mut self.data[best_fit_bucket as usize];
                     best_bucket.occupy(ix, false).unwrap();
-                    let slice = best_bucket.get_mut_cell_slice(ix, num_slots);
+                    let slice =
+                        best_bucket.get_mut_cell_slice(ix, num_slots, IncludeHeader::NoHeader);
                     slice.iter_mut().zip(data).for_each(|(dest, src)| {
                         *dest = *src;
                     });

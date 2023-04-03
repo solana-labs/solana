@@ -86,6 +86,14 @@ impl<O: BucketOccupied> Drop for BucketStorage<O> {
     }
 }
 
+#[allow(dead_code)]
+pub(crate) enum IncludeHeader {
+    /// caller wants header
+    Header,
+    /// caller wants header skipped
+    NoHeader,
+}
+
 impl<O: BucketOccupied> BucketStorage<O> {
     pub fn new_with_capacity(
         drives: Arc<Vec<PathBuf>>,
@@ -198,18 +206,22 @@ impl<O: BucketOccupied> BucketStorage<O> {
         (self.cell_size * ix) as usize
     }
 
-    fn get_start_offset_no_header(&self, ix: u64) -> usize {
-        self.get_start_offset_with_header(ix) + O::offset_to_first_data()
+    fn get_start_offset(&self, ix: u64, header: IncludeHeader) -> usize {
+        self.get_start_offset_with_header(ix)
+            + match header {
+                IncludeHeader::Header => 0,
+                IncludeHeader::NoHeader => O::offset_to_first_data(),
+            }
     }
 
-    pub fn get<T>(&self, ix: u64) -> &T {
-        let slice = self.get_cell_slice::<T>(ix, 1);
+    pub(crate) fn get<T>(&self, ix: u64) -> &T {
+        let slice = self.get_cell_slice::<T>(ix, 1, IncludeHeader::NoHeader);
         // SAFETY: `get_cell_slice` ensures there's at least one element in the slice
         unsafe { slice.get_unchecked(0) }
     }
 
-    pub fn get_mut<T>(&mut self, ix: u64) -> &mut T {
-        let slice = self.get_mut_cell_slice::<T>(ix, 1);
+    pub(crate) fn get_mut<T>(&mut self, ix: u64) -> &mut T {
+        let slice = self.get_mut_cell_slice::<T>(ix, 1, IncludeHeader::NoHeader);
         // SAFETY: `get_mut_cell_slice` ensures there's at least one element in the slice
         unsafe { slice.get_unchecked_mut(0) }
     }
@@ -226,8 +238,8 @@ impl<O: BucketOccupied> BucketStorage<O> {
         unsafe { &*item }
     }
 
-    pub fn get_cell_slice<T>(&self, ix: u64, len: u64) -> &[T] {
-        let start = self.get_start_offset_no_header(ix);
+    pub(crate) fn get_cell_slice<T>(&self, ix: u64, len: u64, header: IncludeHeader) -> &[T] {
+        let start = self.get_start_offset(ix, header);
         let slice = {
             let size = std::mem::size_of::<T>() * len as usize;
             let slice = &self.mmap[start..];
@@ -242,8 +254,13 @@ impl<O: BucketOccupied> BucketStorage<O> {
         unsafe { std::slice::from_raw_parts(ptr, len as usize) }
     }
 
-    pub fn get_mut_cell_slice<T>(&mut self, ix: u64, len: u64) -> &mut [T] {
-        let start = self.get_start_offset_no_header(ix);
+    pub(crate) fn get_mut_cell_slice<T>(
+        &mut self,
+        ix: u64,
+        len: u64,
+        header: IncludeHeader,
+    ) -> &mut [T] {
+        let start = self.get_start_offset(ix, header);
         let slice = {
             let size = std::mem::size_of::<T>() * len as usize;
             let slice = &mut self.mmap[start..];
