@@ -1050,9 +1050,9 @@ mod tests {
         assert!(missing.contains(&program4));
 
         // Remove the expired entry to let the rest of the test continue
-        cache.entries.get_mut(&program4).map(|programs| {
+        if let Some(programs) = cache.entries.get_mut(&program4) {
             programs.pop();
-        });
+        }
 
         cache.prune(&fork_graph, 5);
 
