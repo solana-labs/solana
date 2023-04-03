@@ -855,3 +855,8 @@ authority to an address other than its owner.
 
 And once confirmed by the cluster, we will have successfully transferred a
 compressed NFT.
+
+## Example code repository
+
+You can find an example code repository for this developer guide on the the
+Solana Developers GitHub: https://github.com/solana-developers/compressed-nfts
