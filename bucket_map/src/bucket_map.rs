@@ -53,6 +53,8 @@ pub enum BucketMapError {
     /// (bucket_index, current_capacity_pow2)
     /// Note that this is specific to data buckets
     DataNoSpace((u64, u8)),
+
+    /// current_capacity_pow2
     /// Note that this is specific to index buckets
     IndexNoSpace(u8),
 }

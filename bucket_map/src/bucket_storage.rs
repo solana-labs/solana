@@ -107,21 +107,21 @@ pub(crate) enum IncludeHeader {
 pub enum Capacity {
     /// 1 << Pow2 produces # elements
     Pow2(u8),
-    /// Random IS the # elements
-    Random(u64),
+    /// Actual # elements
+    Actual(u64),
 }
 
 impl BucketCapacity for Capacity {
     fn capacity(&self) -> u64 {
         match self {
             Capacity::Pow2(pow2) => 1 << *pow2,
-            Capacity::Random(elements) => *elements,
+            Capacity::Actual(elements) => *elements,
         }
     }
     fn capacity_pow2(&self) -> u8 {
         match self {
             Capacity::Pow2(pow2) => *pow2,
-            Capacity::Random(_elements) => {
+            Capacity::Actual(_elements) => {
                 panic!("illegal to ask for pow2 from random capacity");
             }
         }
@@ -164,7 +164,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
 
     fn allocate_to_fill_page(capacity: &mut Capacity, cell_size: u64) -> u64 {
         let mut bytes = capacity.capacity() * cell_size;
-        if let Capacity::Random(_) = capacity {
+        if let Capacity::Actual(_) = capacity {
             // maybe bump up allocation to fit a page size
             const PAGE_SIZE: u64 = 4 * 1024;
             let full_page_bytes = bytes / PAGE_SIZE * PAGE_SIZE / cell_size * cell_size;
@@ -173,7 +173,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
                 assert!(bytes_new >= bytes, "allocating less than requested, capacity: {}, bytes: {}, bytes_new: {}, full_page_bytes: {}", capacity.capacity(), bytes, bytes_new, full_page_bytes);
                 assert_eq!(bytes_new % cell_size, 0);
                 bytes = bytes_new;
-                *capacity = Capacity::Random(bytes / cell_size);
+                *capacity = Capacity::Actual(bytes / cell_size);
             }
         }
         bytes
