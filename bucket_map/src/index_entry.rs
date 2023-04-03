@@ -77,7 +77,8 @@ impl BucketOccupied for BucketWithHeader {
 pub struct IndexBucketUsingBitVecBits<T: 'static> {
     /// 2 bits per entry that represent a 4 state enum tag
     pub enum_tag: BitVec,
-    capacity_pow2: Capacity,
+    /// number of elements allocated
+    capacity: u64,
     _phantom: PhantomData<&'static T>,
 }
 
@@ -124,7 +125,7 @@ impl<T: Copy + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
         Self {
             // note: twice as many bits allocated as `num_elements` because we store 2 bits per element
             enum_tag: BitVec::new_fill(false, capacity.capacity() * 2),
-            capacity_pow2: capacity,
+            capacity: capacity.capacity(),
             _phantom: PhantomData,
         }
     }
@@ -144,10 +145,7 @@ impl<T: Copy + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
 
 impl<T> BucketCapacity for IndexBucketUsingBitVecBits<T> {
     fn capacity(&self) -> u64 {
-        self.capacity_pow2.capacity()
-    }
-    fn capacity_pow2(&self) -> u8 {
-        self.capacity_pow2.capacity_pow2()
+        self.capacity
     }
 }
 

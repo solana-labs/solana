@@ -213,7 +213,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             .fetch_add(m.as_us(), Ordering::Relaxed);
         match first_free {
             Some(ii) => Ok((None, ii)),
-            None => Err(BucketMapError::IndexNoSpace(index.contents.capacity_pow2())),
+            None => Err(BucketMapError::IndexNoSpace(index.contents.capacity())),
         }
     }
 
@@ -266,7 +266,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             .stats
             .find_index_entry_mut_us
             .fetch_add(m.as_us(), Ordering::Relaxed);
-        Err(BucketMapError::IndexNoSpace(index.contents.capacity_pow2()))
+        Err(BucketMapError::IndexNoSpace(index.contents.capacity()))
     }
 
     pub fn read_value(&self, key: &Pubkey) -> Option<(&[T], RefCount)> {
@@ -436,29 +436,30 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         self.anticipated_size = count;
     }
 
-    pub fn grow_index(&self, current_capacity_pow2: u8) {
-        if self.index.contents.capacity_pow2() == current_capacity_pow2 {
-            let mut starting_size_pow2 = self.index.contents.capacity_pow2();
-            if self.anticipated_size > 0 {
-                // start the growth at the next pow2 larger than what would be required to hold `anticipated_size`.
-                // This will prevent unnecessary repeated grows at startup.
-                starting_size_pow2 = starting_size_pow2.max(self.anticipated_size.ilog2() as u8);
-            }
+    pub fn grow_index(&self, mut current_capacity: u64) {
+        if self.index.contents.capacity() == current_capacity {
+            // make sure to grow to at least % more than the anticipated size
+            // The indexing algorithm expects to require some over-allocation.
+            let anticipated_size = self.anticipated_size * 140 / 100;
             let mut m = Measure::start("grow_index");
             //debug!("GROW_INDEX: {}", current_capacity_pow2);
             let mut count = 0;
             loop {
                 count += 1;
+                // grow relative to the current capacity
+                let new_capacity = (current_capacity * 110 / 100).max(anticipated_size);
                 let mut index = BucketStorage::new_with_capacity(
                     Arc::clone(&self.drives),
                     1,
                     std::mem::size_of::<IndexEntry<T>>() as u64,
-                    // the subtle `+ i` here causes us to grow from the starting size by a power of 2 on each iteration of the for loop
-                    Capacity::Pow2(starting_size_pow2 + count),
+                    Capacity::Actual(new_capacity),
                     self.index.max_search,
                     Arc::clone(&self.stats.index),
                     Arc::clone(&self.index.count),
                 );
+                // index may have allocated something larger than we asked for,
+                // so, in case we fail to reindex into this larger size, grow from this size next iteration.
+                current_capacity = index.capacity();
                 let random = thread_rng().gen();
                 let mut valid = true;
                 for ix in 0..self.index.capacity() {
@@ -495,7 +496,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 self.stats
                     .index
                     .failed_resizes
-                    .fetch_add(count as u64 - 1, Ordering::Relaxed);
+                    .fetch_add(count - 1, Ordering::Relaxed);
             }
             self.stats.index.resizes.fetch_add(1, Ordering::Relaxed);
             self.stats
@@ -587,9 +588,9 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 //debug!("GROWING SPACE {:?}", (data_index, current_capacity_pow2));
                 self.grow_data(data_index, current_capacity_pow2);
             }
-            BucketMapError::IndexNoSpace(current_capacity_pow2) => {
+            BucketMapError::IndexNoSpace(current_capacity) => {
                 //debug!("GROWING INDEX {}", sz);
-                self.grow_index(current_capacity_pow2);
+                self.grow_index(current_capacity);
             }
         }
     }

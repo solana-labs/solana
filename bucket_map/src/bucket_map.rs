@@ -51,12 +51,12 @@ impl<T: Clone + Copy + Debug> std::fmt::Debug for BucketMap<T> {
 #[derive(Debug)]
 pub enum BucketMapError {
     /// (bucket_index, current_capacity_pow2)
-    /// Note that this is specific to data buckets
+    /// Note that this is specific to data buckets, which grow in powers of 2
     DataNoSpace((u64, u8)),
 
-    /// current_capacity_pow2
-    /// Note that this is specific to index buckets
-    IndexNoSpace(u8),
+    /// current_capacity_entries
+    /// Note that this is specific to index buckets, which can be 'Actual' sizes
+    IndexNoSpace(u64),
 }
 
 impl<T: Clone + Copy + Debug> BucketMap<T> {
