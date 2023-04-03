@@ -113,15 +113,6 @@ pub struct CalcAccountsHashConfig<'a> {
     pub store_detailed_debug_info_on_failure: bool,
 }
 
-impl<'a> CalcAccountsHashConfig<'a> {
-    /// return true if we should cache accounts hash intermediate data between calls
-    pub fn get_should_cache_hash_data() -> bool {
-        // when we are skipping rewrites, we cannot rely on the cached data from old append vecs, so we have to disable caching for now
-        // skipping rewrites is not enabled in this branch. It requires a cli argument.
-        true
-    }
-}
-
 // smallest, 3 quartiles, largest, average
 pub type StorageSizeQuartileStats = [usize; 6];
 
@@ -136,6 +127,7 @@ pub struct HashStats {
     pub hash_total: usize,
     pub unreduced_entries: usize,
     pub num_snapshot_storage: usize,
+    pub scan_chunks: usize,
     pub num_slots: usize,
     pub num_dirty_slots: usize,
     pub collect_snapshots_us: u64,
@@ -215,6 +207,7 @@ impl HashStats {
                 self.num_snapshot_storage as i64,
                 i64
             ),
+            ("scan_chunks", self.scan_chunks as i64, i64),
             ("num_slots", self.num_slots as i64, i64),
             ("num_dirty_slots", self.num_dirty_slots as i64, i64),
             ("min_bin_size", self.min_bin_size as i64, i64),
@@ -1117,11 +1110,40 @@ pub enum ZeroLamportAccounts {
 }
 
 /// Hash of accounts
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, AbiExample)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum AccountsHashEnum {
+    Full(AccountsHash),
+    Incremental(IncrementalAccountsHash),
+}
+impl AccountsHashEnum {
+    pub fn as_hash(&self) -> &Hash {
+        match self {
+            AccountsHashEnum::Full(AccountsHash(hash))
+            | AccountsHashEnum::Incremental(IncrementalAccountsHash(hash)) => hash,
+        }
+    }
+}
+impl From<AccountsHash> for AccountsHashEnum {
+    fn from(accounts_hash: AccountsHash) -> Self {
+        AccountsHashEnum::Full(accounts_hash)
+    }
+}
+impl From<IncrementalAccountsHash> for AccountsHashEnum {
+    fn from(incremental_accounts_hash: IncrementalAccountsHash) -> Self {
+        AccountsHashEnum::Incremental(incremental_accounts_hash)
+    }
+}
+
+/// Hash of accounts
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct AccountsHash(pub Hash);
+/// Hash of accounts that includes zero-lamport accounts
+/// Used with incremental snapshots
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct IncrementalAccountsHash(pub Hash);
 
 /// Hash of accounts written in a single slot
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, AbiExample)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct AccountsDeltaHash(pub Hash);
 
 #[cfg(test)]

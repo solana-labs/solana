@@ -17,7 +17,7 @@ use {
     solana_streamer::sendmmsg::batch_send,
     std::{
         iter::repeat,
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc, RwLock},
     },
 };
@@ -147,41 +147,16 @@ impl Forwarder {
         usize,
         Option<Pubkey>,
     ) {
-        let leader_and_addr = match forward_option {
-            ForwardOption::NotForward => return (Ok(()), 0, None),
-            ForwardOption::ForwardTransaction => {
-                next_leader_tpu_forwards(&self.cluster_info, &self.poh_recorder)
-            }
-
-            ForwardOption::ForwardTpuVote => {
-                next_leader_tpu_vote(&self.cluster_info, &self.poh_recorder)
-            }
-        };
-        let (leader_pubkey, addr) = match leader_and_addr {
-            Some(leader_and_addr) => leader_and_addr,
-            None => return (Ok(()), 0, None),
+        let Some((leader_pubkey, addr)) = self.get_leader_and_addr(forward_option) else {
+            return (Ok(()), 0, None);
         };
 
-        const INTERVAL_MS: u64 = 100;
-        // 12 MB outbound limit per second
-        const MAX_BYTES_PER_SECOND: usize = 12_000_000;
-        const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
-        const MAX_BYTES_BUDGET: usize = MAX_BYTES_PER_INTERVAL * 5;
-        self.data_budget.update(INTERVAL_MS, |bytes| {
-            std::cmp::min(
-                bytes.saturating_add(MAX_BYTES_PER_INTERVAL),
-                MAX_BYTES_BUDGET,
-            )
-        });
+        self.update_data_budget();
 
         let packet_vec: Vec<_> = forwardable_packets
-            .filter_map(|p| {
-                if !p.meta().forwarded() && self.data_budget.take(p.meta().size) {
-                    Some(p.data(..)?.to_vec())
-                } else {
-                    None
-                }
-            })
+            .filter(|p| !p.meta().forwarded())
+            .filter(|p| self.data_budget.take(p.meta().size))
+            .filter_map(|p| p.data(..).map(|data| data.to_vec()))
             .collect();
 
         let packet_vec_len = packet_vec.len();
@@ -226,6 +201,35 @@ impl Forwarder {
         }
 
         (Ok(()), packet_vec_len, Some(leader_pubkey))
+    }
+
+    /// Get the pubkey and socket address for the leader to forward to
+    fn get_leader_and_addr(&self, forward_option: &ForwardOption) -> Option<(Pubkey, SocketAddr)> {
+        match forward_option {
+            ForwardOption::NotForward => None,
+            ForwardOption::ForwardTransaction => {
+                next_leader_tpu_forwards(&self.cluster_info, &self.poh_recorder)
+            }
+
+            ForwardOption::ForwardTpuVote => {
+                next_leader_tpu_vote(&self.cluster_info, &self.poh_recorder)
+            }
+        }
+    }
+
+    /// Re-fill the data budget if enough time has passed
+    fn update_data_budget(&self) {
+        const INTERVAL_MS: u64 = 100;
+        // 12 MB outbound limit per second
+        const MAX_BYTES_PER_SECOND: usize = 12_000_000;
+        const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
+        const MAX_BYTES_BUDGET: usize = MAX_BYTES_PER_INTERVAL * 5;
+        self.data_budget.update(INTERVAL_MS, |bytes| {
+            std::cmp::min(
+                bytes.saturating_add(MAX_BYTES_PER_INTERVAL),
+                MAX_BYTES_BUDGET,
+            )
+        });
     }
 }
 

@@ -253,12 +253,40 @@ impl SlotMeta {
         Some(self.consumed) == self.last_index.map(|ix| ix + 1)
     }
 
+    /// Returns a boolean indicating whether the meta is connected.
     pub fn is_connected(&self) -> bool {
         self.connected_flags.contains(ConnectedFlags::CONNECTED)
     }
 
+    /// Mark the meta as connected.
     pub fn set_connected(&mut self) {
+        assert!(self.is_parent_connected());
         self.connected_flags.set(ConnectedFlags::CONNECTED, true);
+    }
+
+    /// Returns a boolean indicating whether the meta's parent is connected.
+    pub fn is_parent_connected(&self) -> bool {
+        self.connected_flags
+            .contains(ConnectedFlags::PARENT_CONNECTED)
+    }
+
+    /// Mark the meta's parent as connected.
+    /// If the meta is also full, the meta is now connected as well. Return a
+    /// boolean indicating whether the meta becamed connected from this call.
+    pub fn set_parent_connected(&mut self) -> bool {
+        // Already connected so nothing to do, bail early
+        if self.is_connected() {
+            return false;
+        }
+
+        self.connected_flags
+            .set(ConnectedFlags::PARENT_CONNECTED, true);
+
+        if self.is_full() {
+            self.set_connected();
+        }
+
+        self.is_connected()
     }
 
     /// Dangerous. Currently only needed for a local-cluster test
@@ -275,7 +303,7 @@ impl SlotMeta {
         let connected_flags = if slot == 0 {
             // Slot 0 is the start, mark it as having its' parent connected
             // such that slot 0 becoming full will be updated as connected
-            ConnectedFlags::CONNECTED
+            ConnectedFlags::PARENT_CONNECTED
         } else {
             ConnectedFlags::default()
         };
@@ -461,7 +489,8 @@ mod test {
     #[test]
     fn test_slot_meta_slot_zero_connected() {
         let meta = SlotMeta::new(0 /* slot */, None /* parent */);
-        assert!(meta.is_connected());
+        assert!(meta.is_parent_connected());
+        assert!(!meta.is_connected());
     }
 
     #[test]

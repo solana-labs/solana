@@ -4,6 +4,7 @@ use jemallocator::Jemalloc;
 use {
     clap::{crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, ArgMatches},
     console::style,
+    crossbeam_channel::unbounded,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
     solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
@@ -12,8 +13,11 @@ use {
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         system_monitor_service::SystemMonitorService,
         tower_storage,
-        tpu::DEFAULT_TPU_COALESCE_MS,
-        validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
+        tpu::DEFAULT_TPU_COALESCE,
+        validator::{
+            is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod, Validator,
+            ValidatorConfig, ValidatorStartProgress,
+        },
     },
     solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},
     solana_ledger::blockstore_options::{
@@ -39,7 +43,7 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
-            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
+            self, create_all_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
         },
     },
     solana_sdk::{
@@ -49,7 +53,7 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair, Keypair, Signer},
     },
-    solana_send_transaction_service::send_transaction_service::{self},
+    solana_send_transaction_service::send_transaction_service,
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
     solana_validator::{
@@ -66,6 +70,7 @@ use {
         env,
         fs::{self, File},
         net::{IpAddr, Ipv4Addr, SocketAddr},
+        num::NonZeroUsize,
         path::{Path, PathBuf},
         process::exit,
         str::FromStr,
@@ -536,6 +541,79 @@ pub fn main() {
                 _ => unreachable!(),
             }
         }
+        ("plugin", Some(plugin_subcommand_matches)) => {
+            match plugin_subcommand_matches.subcommand() {
+                ("list", _) => {
+                    let admin_client = admin_rpc_service::connect(&ledger_path);
+                    let plugins = admin_rpc_service::runtime()
+                        .block_on(async move { admin_client.await?.list_plugins().await })
+                        .unwrap_or_else(|err| {
+                            println!("Failed to list plugins: {err}");
+                            exit(1);
+                        });
+                    if !plugins.is_empty() {
+                        println!("Currently the following plugins are loaded:");
+                        for (plugin, i) in plugins.into_iter().zip(1..) {
+                            println!("  {i}) {plugin}");
+                        }
+                    } else {
+                        println!("There are currently no plugins loaded");
+                    }
+                    return;
+                }
+                ("unload", Some(subcommand_matches)) => {
+                    if let Some(name) = value_t!(subcommand_matches, "name", String).ok() {
+                        let admin_client = admin_rpc_service::connect(&ledger_path);
+                        admin_rpc_service::runtime()
+                            .block_on(async {
+                                admin_client.await?.unload_plugin(name.clone()).await
+                            })
+                            .unwrap_or_else(|err| {
+                                println!("Failed to unload plugin {name}: {err:?}");
+                                exit(1);
+                            });
+                        println!("Successfully unloaded plugin: {name}");
+                    }
+                    return;
+                }
+                ("load", Some(subcommand_matches)) => {
+                    if let Some(config) = value_t!(subcommand_matches, "config", String).ok() {
+                        let admin_client = admin_rpc_service::connect(&ledger_path);
+                        let name = admin_rpc_service::runtime()
+                            .block_on(async {
+                                admin_client.await?.load_plugin(config.clone()).await
+                            })
+                            .unwrap_or_else(|err| {
+                                println!("Failed to load plugin {config}: {err:?}");
+                                exit(1);
+                            });
+                        println!("Successfully loaded plugin: {name}");
+                    }
+                    return;
+                }
+                ("reload", Some(subcommand_matches)) => {
+                    if let Some(name) = value_t!(subcommand_matches, "name", String).ok() {
+                        if let Some(config) = value_t!(subcommand_matches, "config", String).ok() {
+                            let admin_client = admin_rpc_service::connect(&ledger_path);
+                            admin_rpc_service::runtime()
+                                .block_on(async {
+                                    admin_client
+                                        .await?
+                                        .reload_plugin(name.clone(), config.clone())
+                                        .await
+                                })
+                                .unwrap_or_else(|err| {
+                                    println!("Failed to reload plugin {name}: {err:?}");
+                                    exit(1);
+                                });
+                            println!("Successfully reloaded plugin: {name}");
+                        }
+                    }
+                    return;
+                }
+                _ => unreachable!(),
+            }
+        }
         ("contact-info", Some(subcommand_matches)) => {
             let output_mode = subcommand_matches.value_of("output");
             let admin_client = admin_rpc_service::connect(&ledger_path);
@@ -841,8 +919,9 @@ pub fn main() {
 
     let private_rpc = matches.is_present("private_rpc");
     let do_port_check = !matches.is_present("no_port_check");
-    let tpu_coalesce_ms =
-        value_t!(matches, "tpu_coalesce_ms", u64).unwrap_or(DEFAULT_TPU_COALESCE_MS);
+    let tpu_coalesce = value_t!(matches, "tpu_coalesce_ms", u64)
+        .map(Duration::from_millis)
+        .unwrap_or(DEFAULT_TPU_COALESCE);
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
@@ -1058,7 +1137,7 @@ pub fn main() {
 
     let accounts_db_config = Some(accounts_db_config);
 
-    let geyser_plugin_config_files = if matches.is_present("geyser_plugin_config") {
+    let on_start_geyser_plugin_config_files = if matches.is_present("geyser_plugin_config") {
         Some(
             values_t_or_exit!(matches, "geyser_plugin_config", String)
                 .into_iter()
@@ -1068,6 +1147,7 @@ pub fn main() {
     } else {
         None
     };
+    let starting_with_geyser_plugins: bool = on_start_geyser_plugin_config_files.is_some();
 
     let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
         || matches.is_present("enable_bigtable_ledger_upload")
@@ -1155,7 +1235,7 @@ pub fn main() {
                 usize
             )),
         },
-        geyser_plugin_config_files,
+        on_start_geyser_plugin_config_files,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
                 SocketAddr::new(rpc_bind_address, rpc_port),
@@ -1194,10 +1274,11 @@ pub fn main() {
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         known_validators,
         repair_validators,
-        repair_whitelist: repair_whitelist.clone(),
+        repair_whitelist,
         gossip_validators,
         wal_recovery_mode,
-        poh_verify: !matches.is_present("skip_poh_verify"),
+        run_verification: !(matches.is_present("skip_poh_verify")
+            || matches.is_present("skip_startup_ledger_verification")),
         debug_keys,
         contact_debug_interval,
         send_transaction_service_config: send_transaction_service::Config {
@@ -1234,8 +1315,8 @@ pub fn main() {
         account_indexes,
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         accounts_db_config,
-        accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
-        tpu_coalesce_ms,
+        accounts_db_skip_shrink: true,
+        tpu_coalesce,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
         runtime_config: RuntimeConfig {
@@ -1276,31 +1357,25 @@ pub fn main() {
             .ok();
 
     // Create and canonicalize account paths to avoid issues with symlink creation
-    let account_run_paths: Vec<PathBuf> = account_paths
-        .into_iter()
-        .map(|account_path| {
-            match fs::create_dir_all(&account_path).and_then(|_| fs::canonicalize(&account_path)) {
-                Ok(account_path) => account_path,
-                Err(err) => {
-                    eprintln!("Unable to access account path: {account_path:?}, err: {err:?}");
-                    exit(1);
-                }
-            }
-        }).map(
-        |account_path| {
-            // For all account_paths, set up the run/ and snapshot/ sub directories.
-            // If the sub directories do not exist, the account_path will be cleaned because older version put account files there
-            match create_accounts_run_and_snapshot_dirs(&account_path) {
-                Ok((account_run_path, _account_snapshot_path)) => account_run_path,
-                Err(err) => {
-                    eprintln!("Unable to create account run and snapshot sub directories: {}, err: {err:?}", account_path.display());
-                    exit(1);
-                }
-            }
-        }).collect();
+    account_paths.iter().for_each(|account_path| {
+        fs::create_dir_all(account_path)
+            .and_then(|_| fs::canonicalize(account_path))
+            .unwrap_or_else(|err| {
+                eprintln!("Unable to access account path: {account_path:?}, err: {err:?}");
+                exit(1);
+            });
+    });
+
+    let (account_run_paths, account_snapshot_paths) =
+        create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
+            eprintln!("Error: {err:?}");
+            exit(1);
+        });
 
     // From now on, use run/ paths in the same way as the previous account_paths.
     validator_config.account_paths = account_run_paths;
+
+    validator_config.account_snapshot_paths = account_snapshot_paths;
 
     validator_config.account_shrink_paths = account_shrink_paths.map(|paths| {
         paths
@@ -1321,9 +1396,12 @@ pub fn main() {
 
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let maximum_full_snapshot_archives_to_retain =
-        value_t_or_exit!(matches, "maximum_full_snapshots_to_retain", usize);
-    let maximum_incremental_snapshot_archives_to_retain =
-        value_t_or_exit!(matches, "maximum_incremental_snapshots_to_retain", usize);
+        value_t_or_exit!(matches, "maximum_full_snapshots_to_retain", NonZeroUsize);
+    let maximum_incremental_snapshot_archives_to_retain = value_t_or_exit!(
+        matches,
+        "maximum_incremental_snapshots_to_retain",
+        NonZeroUsize
+    );
     let snapshot_packager_niceness_adj =
         value_t_or_exit!(matches, "snapshot_packager_niceness_adj", i8);
     let minimal_snapshot_download_speed =
@@ -1452,6 +1530,18 @@ pub fn main() {
     }
 
     configure_banking_trace_dir_byte_limit(&mut validator_config, &matches);
+    validator_config.block_verification_method = value_t!(
+        matches,
+        "block_verification_method",
+        BlockVerificationMethod
+    )
+    .unwrap_or_default();
+    validator_config.block_production_method = value_t!(
+        matches, // comment to align formatting...
+        "block_production_method",
+        BlockProductionMethod
+    )
+    .unwrap_or_default();
 
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {
@@ -1513,6 +1603,13 @@ pub fn main() {
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
     let admin_service_post_init = Arc::new(RwLock::new(None));
+    let (rpc_to_plugin_manager_sender, rpc_to_plugin_manager_receiver) =
+        if starting_with_geyser_plugins {
+            let (sender, receiver) = unbounded();
+            (Some(sender), Some(receiver))
+        } else {
+            (None, None)
+        };
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -1524,6 +1621,7 @@ pub fn main() {
             post_init: admin_service_post_init.clone(),
             tower_storage: validator_config.tower_storage.clone(),
             staked_nodes_overrides,
+            rpc_to_plugin_manager_sender,
         },
     );
 
@@ -1682,23 +1780,18 @@ pub fn main() {
         cluster_entrypoints,
         &validator_config,
         should_check_duplicate_instance,
+        rpc_to_plugin_manager_receiver,
         start_progress,
         socket_addr_space,
         tpu_use_quic,
         tpu_connection_pool_size,
         tpu_enable_udp,
+        admin_service_post_init,
     )
     .unwrap_or_else(|e| {
         error!("Failed to start validator: {:?}", e);
         exit(1);
     });
-    *admin_service_post_init.write().unwrap() =
-        Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
-            bank_forks: validator.bank_forks.clone(),
-            cluster_info: validator.cluster_info.clone(),
-            vote_account,
-            repair_whitelist,
-        });
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {

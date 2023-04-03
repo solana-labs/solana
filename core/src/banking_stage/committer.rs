@@ -1,10 +1,10 @@
 use {
-    super::PreBalanceInfo,
     crate::leader_slot_banking_stage_timing_metrics::LeaderExecuteAndCommitTimings,
+    itertools::Itertools,
     solana_ledger::{
         blockstore_processor::TransactionStatusSender, token_balances::collect_token_balances,
     },
-    solana_measure::{measure, measure_us},
+    solana_measure::measure_us,
     solana_runtime::{
         accounts::TransactionLoadResult,
         bank::{
@@ -12,12 +12,15 @@ use {
             TransactionResults,
         },
         bank_utils,
+        prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::saturating_add_assign,
-    solana_transaction_status::token_balances::TransactionTokenBalancesSet,
-    std::sync::Arc,
+    solana_sdk::{pubkey::Pubkey, saturating_add_assign},
+    solana_transaction_status::{
+        token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
+    },
+    std::{collections::HashMap, sync::Arc},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,19 +29,29 @@ pub enum CommitTransactionDetails {
     NotCommitted,
 }
 
+#[derive(Default)]
+pub(super) struct PreBalanceInfo {
+    pub native: Vec<Vec<u64>>,
+    pub token: Vec<Vec<TransactionTokenBalance>>,
+    pub mint_decimals: HashMap<Pubkey, u8>,
+}
+
 pub struct Committer {
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: ReplayVoteSender,
+    prioritization_fee_cache: Arc<PrioritizationFeeCache>,
 }
 
 impl Committer {
     pub fn new(
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: ReplayVoteSender,
+        prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Self {
         Self {
             transaction_status_sender,
             replay_vote_sender,
+            prioritization_fee_cache,
         }
     }
 
@@ -68,6 +81,12 @@ impl Committer {
 
         let (last_blockhash, lamports_per_signature) =
             bank.last_blockhash_and_lamports_per_signature();
+
+        let executed_transactions = execution_results
+            .iter()
+            .zip(batch.sanitized_transactions())
+            .filter_map(|(execution_result, tx)| execution_result.was_executed().then_some(tx))
+            .collect_vec();
 
         let (tx_results, commit_time_us) = measure_us!(bank.commit_transactions(
             batch.sanitized_transactions(),
@@ -111,6 +130,8 @@ impl Committer {
                 pre_balance_info,
                 starting_transaction_index,
             );
+            self.prioritization_fee_cache
+                .update(bank, executed_transactions.into_iter());
         });
         execute_and_commit_timings.find_and_send_votes_us = find_and_send_votes_us;
         (commit_time_us, commit_transaction_statuses)

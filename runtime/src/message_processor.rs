@@ -218,12 +218,13 @@ mod tests {
         }
 
         fn mock_system_process_instruction(
-            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let instruction_data = instruction_context.get_instruction_data();
+            // mock builtin should consume units
+            let _ = invoke_context.consume_checked(1);
             if let Ok(instruction) = bincode::deserialize(instruction_data) {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
@@ -430,7 +431,6 @@ mod tests {
         }
 
         fn mock_system_process_instruction(
-            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -438,6 +438,8 @@ mod tests {
             let instruction_data = instruction_context.get_instruction_data();
             let mut to_account =
                 instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
+            // mock builtin should consume units
+            let _ = invoke_context.consume_checked(1);
             if let Ok(instruction) = bincode::deserialize(instruction_data) {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
@@ -644,9 +646,10 @@ mod tests {
     fn test_precompile() {
         let mock_program_id = Pubkey::new_unique();
         fn mock_process_instruction(
-            _first_instruction_account: IndexOfAccount,
-            _invoke_context: &mut InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
+            // mock builtin should consume units
+            let _ = invoke_context.consume_checked(1);
             Err(InstructionError::Custom(0xbabb1e))
         }
         let builtin_programs = &[BuiltinProgram {

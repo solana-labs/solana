@@ -11,13 +11,18 @@ use {
     std::collections::BTreeSet,
 };
 
-pub fn process_instruction(
-    _first_instruction_account: IndexOfAccount,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
+
+    // Consume compute units if feature `native_programs_consume_cu` is activated,
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::native_programs_consume_cu::id())
+    {
+        invoke_context.consume_checked(450)?;
+    }
 
     let key_list: ConfigKeys = limited_deserialize(data)?;
     let config_account_key = transaction_context.get_key_of_account_at_index(

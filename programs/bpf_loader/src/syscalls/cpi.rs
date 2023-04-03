@@ -3,6 +3,7 @@ use {
     crate::declare_syscall,
     solana_sdk::{
         feature_set::enable_bpf_loader_set_authority_checked_ix,
+        stable_layout::stable_instruction::StableInstruction,
         syscalls::{
             MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
         },
@@ -211,7 +212,7 @@ trait SyscallInvokeSigned {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<Instruction, EbpfError>;
+    ) -> Result<StableInstruction, EbpfError>;
     fn translate_accounts<'a>(
         instruction_accounts: &[InstructionAccount],
         program_indices: &[IndexOfAccount],
@@ -258,8 +259,8 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<Instruction, EbpfError> {
-        let ix = translate_type::<Instruction>(
+    ) -> Result<StableInstruction, EbpfError> {
+        let ix = translate_type::<StableInstruction>(
             memory_mapping,
             addr,
             invoke_context.get_check_aligned(),
@@ -296,10 +297,11 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             invoke_context.get_check_size(),
         )?
         .to_vec();
-        Ok(Instruction {
+
+        Ok(StableInstruction {
+            accounts: accounts.into(),
+            data: data.into(),
             program_id: ix.program_id,
-            accounts,
-            data,
         })
     }
 
@@ -469,7 +471,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<Instruction, EbpfError> {
+    ) -> Result<StableInstruction, EbpfError> {
         let ix_c = translate_type::<SolInstruction>(
             memory_mapping,
             addr,
@@ -530,10 +532,10 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             })
             .collect::<Result<Vec<AccountMeta>, EbpfError>>()?;
 
-        Ok(Instruction {
+        Ok(StableInstruction {
+            accounts: accounts.into(),
+            data: data.into(),
             program_id: *program_id,
-            accounts,
-            data,
         })
     }
 
@@ -1128,6 +1130,7 @@ mod tests {
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Epoch,
+            instruction::Instruction,
             rent::Rent,
             transaction_context::{TransactionAccount, TransactionContext},
         },
@@ -1330,7 +1333,7 @@ mod tests {
             ..Config::default()
         };
         let memory_mapping =
-            MemoryMapping::new(vec![mock_caller_account.region.clone()], &config).unwrap();
+            MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
 
         let mut caller_account = mock_caller_account.caller_account();
 
@@ -1387,7 +1390,7 @@ mod tests {
             ..Config::default()
         };
         let memory_mapping =
-            MemoryMapping::new(vec![mock_caller_account.region.clone()], &config).unwrap();
+            MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
 
         let data_slice = mock_caller_account.data_slice();
         let len_ptr = unsafe {
@@ -1605,7 +1608,7 @@ mod tests {
         vm_addr: u64,
         data: Vec<u8>,
         len: u64,
-        region: MemoryRegion,
+        regions: Vec<MemoryRegion>,
     }
 
     impl MockCallerAccount {
@@ -1617,7 +1620,7 @@ mod tests {
             d[mem::size_of::<u64>()..][..data.len()].copy_from_slice(data);
 
             // the memory region must include the realloc data
-            let region = MemoryRegion::new_writable(d.as_mut_slice(), vm_addr);
+            let regions = vec![MemoryRegion::new_writable(d.as_mut_slice(), vm_addr)];
 
             // caller_account.data must have the actual data length
             d.truncate(mem::size_of::<u64>() + data.len());
@@ -1628,7 +1631,7 @@ mod tests {
                 vm_addr,
                 data: d,
                 len: data.len() as u64,
-                region,
+                regions,
             }
         }
 
@@ -1693,12 +1696,12 @@ mod tests {
         fn into_region(self, vm_addr: u64) -> (Vec<u8>, MemoryRegion) {
             let accounts_len = mem::size_of::<AccountMeta>() * self.accounts.len();
 
-            let size = mem::size_of::<Instruction>() + accounts_len + self.data.len();
+            let size = mem::size_of::<StableInstruction>() + accounts_len + self.data.len();
 
             let mut data = vec![0; size];
 
             let vm_addr = vm_addr as usize;
-            let accounts_addr = vm_addr + mem::size_of::<Instruction>();
+            let accounts_addr = vm_addr + mem::size_of::<StableInstruction>();
             let data_addr = accounts_addr + accounts_len;
 
             let ins = Instruction {
@@ -1714,6 +1717,7 @@ mod tests {
                     Vec::from_raw_parts(data_addr as *mut _, self.data.len(), self.data.len())
                 },
             };
+            let ins = StableInstruction::from(ins);
 
             unsafe {
                 ptr::write_unaligned(data.as_mut_ptr().cast(), ins);

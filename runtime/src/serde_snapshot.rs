@@ -1,14 +1,15 @@
 use {
     crate::{
+        account_storage::meta::StoredMetaWriteVersion,
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
             AtomicAppendVecId, BankHashStats, IndexGenerationInfo,
         },
-        accounts_hash::{AccountsDeltaHash, AccountsHash},
+        accounts_file::AccountsFile,
+        accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        append_vec::{AppendVec, StoredMetaWriteVersion},
         bank::{Bank, BankFieldsToDeserialize, BankIncrementalSnapshotPersistence, BankRc},
         blockhash_queue::BlockhashQueue,
         builtins::Builtins,
@@ -52,12 +53,16 @@ use {
 mod newer;
 mod storage;
 mod tests;
+mod types;
 mod utils;
 
-pub(crate) use storage::SerializedAppendVecId;
 // a number of test cases in accounts_db use this
 #[cfg(test)]
 pub(crate) use tests::reconstruct_accounts_db_via_serialization;
+pub(crate) use {
+    storage::SerializedAppendVecId,
+    types::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
+};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
@@ -82,8 +87,8 @@ pub struct AccountsDbFields<T>(
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 struct BankHashInfo {
-    accounts_delta_hash: AccountsDeltaHash,
-    accounts_hash: AccountsHash,
+    accounts_delta_hash: SerdeAccountsDeltaHash,
+    accounts_hash: SerdeAccountsHash,
     stats: BankHashStats,
 }
 
@@ -92,6 +97,21 @@ struct BankHashInfo {
 pub struct SnapshotStreams<'a, R> {
     pub full_snapshot_stream: &'a mut BufReader<R>,
     pub incremental_snapshot_stream: Option<&'a mut BufReader<R>>,
+}
+
+/// Helper type to wrap BankFields when reconstructing Bank from either just a full
+/// snapshot, or both a full and incremental snapshot
+#[derive(Debug)]
+pub struct SnapshotBankFields {
+    full: BankFieldsToDeserialize,
+    incremental: Option<BankFieldsToDeserialize>,
+}
+
+impl SnapshotBankFields {
+    /// Collapse the SnapshotBankFields into a single (the latest) BankFieldsToDeserialize.
+    pub fn collapse_into(self) -> BankFieldsToDeserialize {
+        self.incremental.unwrap_or(self.full)
+    }
 }
 
 /// Helper type to wrap AccountsDbFields when reconstructing AccountsDb from either just a full
@@ -271,34 +291,35 @@ pub(crate) fn fields_from_stream<R: Read>(
     }
 }
 
-pub(crate) fn fields_from_streams<R: Read>(
+pub(crate) fn fields_from_streams(
     serde_style: SerdeStyle,
-    snapshot_streams: &mut SnapshotStreams<R>,
+    snapshot_streams: &mut SnapshotStreams<impl Read>,
 ) -> std::result::Result<
     (
-        BankFieldsToDeserialize,
+        SnapshotBankFields,
         SnapshotAccountsDbFields<SerializableAccountStorageEntry>,
     ),
     Error,
 > {
     let (full_snapshot_bank_fields, full_snapshot_accounts_db_fields) =
         fields_from_stream(serde_style, snapshot_streams.full_snapshot_stream)?;
-    let incremental_fields = snapshot_streams
-        .incremental_snapshot_stream
-        .as_mut()
-        .map(|stream| fields_from_stream(serde_style, stream))
-        .transpose()?;
     let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
-        incremental_fields.unzip();
+        snapshot_streams
+            .incremental_snapshot_stream
+            .as_mut()
+            .map(|stream| fields_from_stream(serde_style, stream))
+            .transpose()?
+            .unzip();
 
+    let snapshot_bank_fields = SnapshotBankFields {
+        full: full_snapshot_bank_fields,
+        incremental: incremental_snapshot_bank_fields,
+    };
     let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
         full_snapshot_accounts_db_fields,
         incremental_snapshot_accounts_db_fields,
     };
-    Ok((
-        incremental_snapshot_bank_fields.unwrap_or(full_snapshot_bank_fields),
-        snapshot_accounts_db_fields,
-    ))
+    Ok((snapshot_bank_fields, snapshot_accounts_db_fields))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -419,8 +440,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
 ) -> bool {
     let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
     let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
-    let mut bank_pre = bank_post.clone();
-    bank_pre.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+    let bank_pre = bank_post.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     let mut found = false;
     {
@@ -513,7 +533,7 @@ impl<'a, C> solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccou
 
 #[allow(clippy::too_many_arguments)]
 fn reconstruct_bank_from_fields<E>(
-    bank_fields: BankFieldsToDeserialize,
+    bank_fields: SnapshotBankFields,
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
@@ -532,6 +552,14 @@ fn reconstruct_bank_from_fields<E>(
 where
     E: SerializableStorage + std::marker::Sync,
 {
+    let capitalizations = (
+        bank_fields.full.capitalization,
+        bank_fields
+            .incremental
+            .as_ref()
+            .map(|bank_fields| bank_fields.capitalization),
+    );
+    let bank_fields = bank_fields.collapse_into();
     let (accounts_db, reconstructed_accounts_db_info) = reconstruct_accountsdb_from_fields(
         snapshot_accounts_db_fields,
         account_paths,
@@ -545,6 +573,8 @@ where
         accounts_update_notifier,
         exit,
         bank_fields.epoch_accounts_hash,
+        capitalizations,
+        bank_fields.incremental_snapshot_persistence.as_ref(),
     )?;
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
@@ -568,17 +598,17 @@ where
     Ok(bank)
 }
 
-fn reconstruct_single_storage(
+pub(crate) fn reconstruct_single_storage(
     slot: &Slot,
     append_vec_path: &Path,
     current_len: usize,
     append_vec_id: AppendVecId,
 ) -> io::Result<Arc<AccountStorageEntry>> {
-    let (accounts, num_accounts) = AppendVec::new_from_file(append_vec_path, current_len)?;
+    let (accounts_file, num_accounts) = AccountsFile::new_from_file(append_vec_path, current_len)?;
     Ok(Arc::new(AccountStorageEntry::new_existing(
         *slot,
         append_vec_id,
-        accounts,
+        accounts_file,
         num_accounts,
     )))
 }
@@ -594,7 +624,7 @@ fn remap_append_vec_file(
     // due to full snapshots and incremental snapshots generated from different nodes
     let (remapped_append_vec_id, remapped_append_vec_path) = loop {
         let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::AcqRel);
-        let remapped_file_name = AppendVec::file_name(slot, remapped_append_vec_id);
+        let remapped_file_name = AccountsFile::file_name(slot, remapped_append_vec_id);
         let remapped_append_vec_path = append_vec_path.parent().unwrap().join(remapped_file_name);
 
         // Break out of the loop in the following situations:
@@ -666,6 +696,8 @@ fn reconstruct_accountsdb_from_fields<E>(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
     epoch_accounts_hash: Option<Hash>,
+    capitalizations: (u64, Option<u64>),
+    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> Result<(AccountsDb, ReconstructedAccountsDbInfo), Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -684,6 +716,78 @@ where
         accounts_db
             .epoch_accounts_hash_manager
             .set_valid(EpochAccountsHash::new(epoch_accounts_hash), 0);
+    }
+
+    // Store the accounts hash & capitalization, from the full snapshot, in the new AccountsDb
+    {
+        let AccountsDbFields(_, _, slot, bank_hash_info, _, _) =
+            &snapshot_accounts_db_fields.full_snapshot_accounts_db_fields;
+        let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+            *slot,
+            bank_hash_info.accounts_hash.clone(),
+            capitalizations.0,
+        );
+        assert!(
+            old_accounts_hash.is_none(),
+            "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+        );
+    }
+
+    // Store the accounts hash & capitalization, from the incremental snapshot, in the new AccountsDb
+    {
+        if let Some(AccountsDbFields(_, _, slot, bank_hash_info, _, _)) =
+            snapshot_accounts_db_fields
+                .incremental_snapshot_accounts_db_fields
+                .as_ref()
+        {
+            if let Some(incremental_snapshot_persistence) = incremental_snapshot_persistence {
+                // Use the presence of a BankIncrementalSnapshotPersistence to indicate the
+                // Incremental Accounts Hash feature is enabled, and use its accounts hashes
+                // instead of `BankHashInfo`'s.
+                let AccountsDbFields(_, _, full_slot, full_bank_hash_info, _, _) =
+                    &snapshot_accounts_db_fields.full_snapshot_accounts_db_fields;
+                let full_accounts_hash = &full_bank_hash_info.accounts_hash;
+                assert_eq!(
+                    incremental_snapshot_persistence.full_slot, *full_slot,
+                    "The incremental snapshot's base slot ({}) must match the full snapshot's slot ({full_slot})!",
+                    incremental_snapshot_persistence.full_slot,
+                );
+                assert_eq!(
+                    &incremental_snapshot_persistence.full_hash, full_accounts_hash,
+                    "The incremental snapshot's base accounts hash ({}) must match the full snapshot's accounts hash ({})!",
+                    &incremental_snapshot_persistence.full_hash.0, full_accounts_hash.0,
+                );
+                assert_eq!(
+                    incremental_snapshot_persistence.full_capitalization, capitalizations.0,
+                    "The incremental snapshot's base capitalization ({}) must match the full snapshot's capitalization ({})!",
+                    incremental_snapshot_persistence.full_capitalization, capitalizations.0,
+                );
+                let old_incremental_accounts_hash = accounts_db
+                    .set_incremental_accounts_hash_from_snapshot(
+                        *slot,
+                        incremental_snapshot_persistence.incremental_hash.clone(),
+                        incremental_snapshot_persistence.incremental_capitalization,
+                    );
+                assert!(
+                    old_incremental_accounts_hash.is_none(),
+                    "There should not already be an IncrementalAccountsHash at slot {slot}: {old_incremental_accounts_hash:?}",
+                );
+            } else {
+                // ..and without a BankIncrementalSnapshotPersistence then the Incremental Accounts
+                // Hash feature is disabled; the accounts hash in `BankHashInfo` is valid.
+                let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+                    *slot,
+                    bank_hash_info.accounts_hash.clone(),
+                    capitalizations
+                        .1
+                        .expect("capitalization from incremental snapshot"),
+                );
+                assert!(
+                    old_accounts_hash.is_none(),
+                    "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+                );
+            };
+        }
     }
 
     let AccountsDbFields(
@@ -733,12 +837,6 @@ where
         old_accounts_delta_hash.is_none(),
         "There should not already be an AccountsDeltaHash at slot {snapshot_slot}: {old_accounts_delta_hash:?}",
         );
-    let old_accounts_hash = accounts_db
-        .set_accounts_hash_from_snapshot(snapshot_slot, snapshot_bank_hash_info.accounts_hash);
-    assert!(
-        old_accounts_hash.is_none(),
-        "There should not already be an AccountsHash at slot {snapshot_slot}: {old_accounts_hash:?}",
-    );
     let old_stats = accounts_db
         .update_bank_hash_stats_from_snapshot(snapshot_slot, snapshot_bank_hash_info.stats);
     assert!(

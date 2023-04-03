@@ -28,7 +28,9 @@ use {
         crds::{Crds, Cursor, GossipRoute},
         crds_gossip::CrdsGossip,
         crds_gossip_error::CrdsGossipError,
-        crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
+        crds_gossip_pull::{
+            CrdsFilter, CrdsTimeouts, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
+        },
         crds_value::{
             self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, IncrementalSnapshotHashes,
             LowestSlot, NodeInstance, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
@@ -2158,7 +2160,7 @@ impl ClusterInfo {
         &self,
         from: &Pubkey,
         crds_values: Vec<CrdsValue>,
-        timeouts: &HashMap<Pubkey, u64>,
+        timeouts: &CrdsTimeouts,
     ) -> (usize, usize, usize) {
         let len = crds_values.len();
         trace!("PullResponse me: {} from: {} len={}", self.id(), from, len);
@@ -2819,28 +2821,30 @@ impl Node {
         Self::new_localhost_with_pubkey(&pubkey)
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
-        let bind_ip_addr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let localhost_ip_addr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let localhost_bind_addr = format!("{localhost_ip_addr:?}:0");
+        let unspecified_bind_addr = format!("{:?}:0", IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         let port_range = (1024, 65535);
-        let ((_tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
-            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
-        let (gossip_port, (gossip, ip_echo)) =
-            bind_common_in_range(bind_ip_addr, port_range).unwrap();
-        let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), gossip_port);
-        let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
-            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
-        let tpu_vote = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let rpc_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_port);
-        let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
-        let rpc_pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_pubsub_port);
 
-        let broadcast = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
-        let retransmit_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let serve_repair = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let ancestor_hashes_requests = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let ((_tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
+            bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+        let (gossip_port, (gossip, ip_echo)) =
+            bind_common_in_range(localhost_ip_addr, port_range).unwrap();
+        let gossip_addr = SocketAddr::new(localhost_ip_addr, gossip_port);
+        let tvu = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let tvu_forwards = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
+            bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+        let tpu_vote = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let rpc_port = find_available_port_in_range(localhost_ip_addr, port_range).unwrap();
+        let rpc_addr = SocketAddr::new(localhost_ip_addr, rpc_port);
+        let rpc_pubsub_port = find_available_port_in_range(localhost_ip_addr, port_range).unwrap();
+        let rpc_pubsub_addr = SocketAddr::new(localhost_ip_addr, rpc_pubsub_port);
+        let broadcast = vec![UdpSocket::bind(&unspecified_bind_addr).unwrap()];
+        let retransmit_socket = UdpSocket::bind(&unspecified_bind_addr).unwrap();
+        let serve_repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let ancestor_hashes_requests = UdpSocket::bind(&unspecified_bind_addr).unwrap();
 
         let mut info = ContactInfo::new(
             *pubkey,
@@ -3303,7 +3307,13 @@ RPC Enabled Nodes: 1"#;
         });
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
         let data = test_crds_values(entrypoint_pubkey);
-        let timeouts = HashMap::new();
+        let stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
+        let timeouts = CrdsTimeouts::new(
+            cluster_info.id(),
+            CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS, // default_timeout
+            Duration::from_secs(48 * 3600),   // epoch_duration
+            &stakes,
+        );
         assert_eq!(
             (0, 0, 1),
             ClusterInfo::handle_pull_response(
@@ -4077,9 +4087,10 @@ RPC Enabled Nodes: 1"#;
         let entrypoint_crdsvalue =
             CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(entrypoint.clone()));
         let cluster_info = Arc::new(cluster_info);
+        let stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
         let timeouts = cluster_info.gossip.make_timeouts(
             cluster_info.id(),
-            &HashMap::default(), // stakes,
+            &stakes,
             Duration::from_millis(cluster_info.gossip.pull.crds_timeout),
         );
         ClusterInfo::handle_pull_response(
@@ -4725,8 +4736,13 @@ RPC Enabled Nodes: 1"#;
         })
         .take(NO_ENTRIES)
         .collect();
-        let mut timeouts = HashMap::new();
-        timeouts.insert(Pubkey::default(), CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS * 4);
+        let stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
+        let timeouts = CrdsTimeouts::new(
+            cluster_info.id(),
+            CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS * 4, // default_timeout
+            Duration::from_secs(48 * 3600),       // epoch_duration
+            &stakes,
+        );
         assert_eq!(
             (0, 0, NO_ENTRIES),
             cluster_info.handle_pull_response(&entrypoint_pubkey, data, &timeouts)

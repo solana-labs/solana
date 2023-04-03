@@ -114,7 +114,7 @@ command_step() {
     timeout_in_minutes: $3
     artifact_paths: "log-*.txt"
     agents:
-      queue: "solana"
+      queue: "${4:-solana}"
 EOF
 }
 
@@ -139,7 +139,7 @@ wait_step() {
 }
 
 all_test_steps() {
-  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
+  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20 check
   wait_step
 
   # Coverage...
@@ -245,19 +245,14 @@ EOF
              ^fetch-perf-libs.sh \
              ^programs/ \
              ^sdk/ \
-             ^scripts/build-downstream-projects.sh \
              cargo-build-bpf$ \
              cargo-test-bpf$ \
              cargo-build-sbf$ \
              cargo-test-sbf$ \
+             ^ci/downstream-projects \
+             .buildkite/scripts/build-downstream-projects.sh \
       ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "scripts/build-downstream-projects.sh"
-    name: "downstream-projects"
-    timeout_in_minutes: 35
-    agents:
-      queue: "solana"
-EOF
+    .buildkite/scripts/build-downstream-projects.sh >> "$output_file"
   else
     annotate --style info \
       "downstream-projects skipped as no relevant files were modified"
@@ -308,12 +303,12 @@ EOF
 }
 
 pull_or_push_steps() {
-  command_step sanity "ci/test-sanity.sh" 5
+  command_step sanity "ci/test-sanity.sh" 5 check
   wait_step
 
   # Check for any .sh file changes
   if affects .sh$; then
-    command_step shellcheck "ci/shellcheck.sh" 5
+    command_step shellcheck "ci/shellcheck.sh" 5 check
     wait_step
   fi
 

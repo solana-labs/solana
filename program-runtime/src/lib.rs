@@ -11,7 +11,6 @@ extern crate solana_metrics;
 
 pub mod accounts_data_meter;
 pub mod compute_budget;
-pub mod executor;
 pub mod executor_cache;
 pub mod invoke_context;
 pub mod loaded_programs;

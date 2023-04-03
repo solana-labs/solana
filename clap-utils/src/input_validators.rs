@@ -367,6 +367,34 @@ where
     }
 }
 
+pub fn validate_maximum_full_snapshot_archives_to_retain<T>(value: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    let value = value.as_ref();
+    if value.eq("0") {
+        Err(String::from(
+            "--maximum-full-snapshot-archives-to-retain cannot be zero",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+pub fn validate_maximum_incremental_snapshot_archives_to_retain<T>(value: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    let value = value.as_ref();
+    if value.eq("0") {
+        Err(String::from(
+            "--maximum-incremental-snapshot-archives-to-retain cannot be zero",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

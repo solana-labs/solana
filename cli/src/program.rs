@@ -11,7 +11,9 @@ use {
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_bpf_loader_program::syscalls::create_loader,
-    solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_clap_utils::{
+        self, hidden_unless_forced, input_parsers::*, input_validators::*, keypair::*,
+    },
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
         CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
@@ -134,7 +136,7 @@ impl ProgramSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("skip_fee_check")
                         .long("skip-fee-check")
-                        .hidden(true)
+                        .hidden(hidden_unless_forced())
                         .takes_value(false)
                         .global(true)
                 )

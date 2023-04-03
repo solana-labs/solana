@@ -65,7 +65,6 @@ pub(in crate::parse_token) fn parse_confidential_transfer_instruction(
             let mut value = json!({
                 "account": account_keys[account_indexes[0] as usize].to_string(),
                 "mint": account_keys[account_indexes[1] as usize].to_string(),
-                "encryptionPubkey": format!("{}", configure_account_data.encryption_pubkey),
                 "decryptableZeroBalance": format!("{}", configure_account_data.decryptable_zero_balance),
                 "maximumPendingBalanceCreditCounter": maximum_pending_balance_credit_counter,
 

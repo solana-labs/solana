@@ -20,7 +20,9 @@ use {
     solana_measure::measure::Measure,
     solana_perf::packet::{to_packet_batches, PacketBatch},
     solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_runtime::{
+        bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
+    },
     solana_sdk::{
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
@@ -433,10 +435,10 @@ fn main() {
             ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
         };
         let cluster_info = Arc::new(cluster_info);
-        let tpu_use_quic = matches.is_present("tpu_use_quic");
-        let connection_cache = match tpu_use_quic {
-            true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-            false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+        let tpu_disable_quic = matches.is_present("tpu_disable_quic");
+        let connection_cache = match tpu_disable_quic {
+            false => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+            true => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
         };
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
@@ -450,8 +452,8 @@ fn main() {
             None,
             Arc::new(connection_cache),
             bank_forks.clone(),
+            &Arc::new(PrioritizationFeeCache::new(0u64)),
         );
-        poh_recorder.write().unwrap().set_bank(&bank, false);
 
         // This is so that the signal_receiver does not go out of scope after the closure.
         // If it is dropped before poh_service, then poh_service will error when
@@ -535,6 +537,7 @@ fn main() {
                     std::u64::MAX,
                 );
 
+                assert!(poh_recorder.read().unwrap().bank().is_none());
                 poh_recorder.write().unwrap().set_bank(&bank, false);
                 assert!(poh_recorder.read().unwrap().bank().is_some());
                 debug!(

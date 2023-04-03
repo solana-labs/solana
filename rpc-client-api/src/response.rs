@@ -604,7 +604,7 @@ pub mod tests {
             sample_period_secs,
         };
         let actual =
-            serde_json::to_value(&input).expect("Can convert RpcPerfSample into a JSON value");
+            serde_json::to_value(input).expect("Can convert RpcPerfSample into a JSON value");
         let expected = json!({
             "slot": slot,
             "numTransactions": num_transactions,

@@ -1,0 +1,14 @@
+comment:
+  behavior: default
+  layout: diff
+  require_changes: false
+coverage:
+  precision: 1
+  range:
+  - 50.0
+  - 100.0
+  round: down
+  status:
+    patch: false
+    project: false
+github_checks: false

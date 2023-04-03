@@ -12,9 +12,7 @@ use {
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        transaction_context::{
-            BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
-        },
+        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
     },
     std::collections::HashSet,
 };
@@ -57,15 +55,22 @@ fn process_authorize_with_seed_instruction(
     )
 }
 
-pub fn process_instruction(
-    _first_instruction_account: IndexOfAccount,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
 
     trace!("process_instruction: {:?}", data);
+
+    // Consume compute units if feature `native_programs_consume_cu` is activated,
+    // Citing `runtime/src/block_cost_limit.rs`, vote has statically defined 2_100
+    // units; can consume based on instructions in the future like `bpf_loader` does.
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::native_programs_consume_cu::id())
+    {
+        invoke_context.consume_checked(2_100)?;
+    }
 
     let mut me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
     if *me.get_owner() != id() {

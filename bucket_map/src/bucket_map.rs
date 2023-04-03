@@ -25,7 +25,7 @@ impl BucketMapConfig {
     }
 }
 
-pub struct BucketMap<T: Clone + Copy + Debug> {
+pub struct BucketMap<T: Clone + Copy + Debug + 'static> {
     buckets: Vec<Arc<BucketApi<T>>>,
     drives: Arc<Vec<PathBuf>>,
     max_buckets_pow2: u8,
@@ -158,20 +158,6 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
             0
         }
     }
-
-    /// Increment the refcount for Pubkey `key`
-    pub fn addref(&self, key: &Pubkey) -> Option<RefCount> {
-        let ix = self.bucket_ix(key);
-        let bucket = &self.buckets[ix];
-        bucket.addref(key)
-    }
-
-    /// Decrement the refcount for Pubkey `key`
-    pub fn unref(&self, key: &Pubkey) -> Option<RefCount> {
-        let ix = self.bucket_ix(key);
-        let bucket = &self.buckets[ix];
-        bucket.unref(key)
-    }
 }
 
 /// Look at the first 8 bytes of the input and reinterpret them as a u64
@@ -184,6 +170,7 @@ fn read_be_u64(input: &[u8]) -> u64 {
 mod tests {
     use {
         super::*,
+        crate::index_entry::MAX_LEGAL_REFCOUNT,
         rand::{thread_rng, Rng},
         std::{collections::HashMap, sync::RwLock},
     };
@@ -371,7 +358,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let hash_map = RwLock::new(HashMap::<Pubkey, (Vec<(usize, usize)>, RefCount)>::new());
-        let max_slot_list_len = 3;
+        let max_slot_list_len = 5;
         let all_keys = Mutex::new(vec![]);
 
         let gen_rand_value = || {
@@ -379,7 +366,18 @@ mod tests {
             let v = (0..count)
                 .map(|x| (x as usize, x as usize /*thread_rng().gen::<usize>()*/))
                 .collect::<Vec<_>>();
-            let rc = thread_rng().gen::<RefCount>();
+            let range = thread_rng().gen_range(0, 100);
+            // pick ref counts that are useful and common
+            let rc = if range < 50 {
+                1
+            } else if range < 60 {
+                0
+            } else if range < 70 {
+                2
+            } else {
+                thread_rng().gen_range(0, MAX_LEGAL_REFCOUNT)
+            };
+
             (v, rc)
         };
 
@@ -498,13 +496,7 @@ mod tests {
                     rc = if inc { rc + 1 } else { rc - 1 };
                     hm.insert(k, (v.to_vec(), rc));
                     maps.iter().for_each(|map| {
-                        if thread_rng().gen_range(0, 2) == 0 {
-                            map.update(&k, |current| Some((current.unwrap().0.to_vec(), rc)))
-                        } else if inc {
-                            map.addref(&k);
-                        } else {
-                            map.unref(&k);
-                        }
+                        map.update(&k, |current| Some((current.unwrap().0.to_vec(), rc)))
                     });
 
                     return_key(k);

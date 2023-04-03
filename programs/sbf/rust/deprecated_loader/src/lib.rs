@@ -1,6 +1,7 @@
 //! Example Rust-based SBF program that supports the deprecated loader
 
 #![allow(unreachable_code)]
+#![allow(clippy::integer_arithmetic)]
 
 extern crate solana_program;
 use solana_program::{
@@ -23,7 +24,7 @@ fn return_sstruct() -> SStruct {
 #[no_mangle]
 fn custom_panic(info: &core::panic::PanicInfo<'_>) {
     // Full panic reporting
-    msg!(&format!("{}", info));
+    msg!(&format!("{info}"));
 }
 
 solana_program::entrypoint_deprecated!(process_instruction);

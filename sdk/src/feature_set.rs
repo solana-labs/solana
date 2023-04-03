@@ -618,6 +618,33 @@ pub mod apply_cost_tracker_during_replay {
     solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
 }
 
+pub mod add_set_tx_loaded_accounts_data_size_instruction {
+    solana_sdk::declare_id!("G6vbf1UBok8MWb8m25ex86aoQHeKTzDKzuZADHkShqm6");
+}
+
+pub mod switch_to_new_elf_parser {
+    solana_sdk::declare_id!("Cdkc8PPTeTNUPoZEfCY5AyetUrEdkZtNPMgz58nqyaHD");
+}
+
+pub mod round_up_heap_size {
+    solana_sdk::declare_id!("CE2et8pqgyQMP2mQRg3CgvX8nJBKUArMu3wfiQiQKY1y");
+}
+
+pub mod remove_bpf_loader_incorrect_program_id {
+    solana_sdk::declare_id!("2HmTkCj9tXuPE4ueHzdD7jPeMf9JGCoZh5AsyoATiWEe");
+}
+
+pub mod include_loaded_accounts_data_size_in_fee_calculation {
+    solana_sdk::declare_id!("EaQpmC6GtRssaZ3PCUM5YksGqUdMLeZ46BQXYtHYakDS");
+}
+
+pub mod native_programs_consume_cu {
+    solana_sdk::declare_id!("8pgXCMNXC8qyEFypuwpXyRxLXZdpM4Qo72gJ6k87A6wL");
+}
+pub mod simplify_writable_program_account_check {
+    solana_sdk::declare_id!("5ZCcFAzJ1zsFKe1KSZa9K92jhx7gkcKj97ci2DBo1vwj");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -767,6 +794,13 @@ lazy_static! {
         (prevent_rent_paying_rent_recipients::id(), "prevent recipients of rent rewards from ending in rent-paying state #30151"),
         (delay_visibility_of_program_deployment::id(), "delay visibility of program upgrades #30085"),
         (apply_cost_tracker_during_replay::id(), "apply cost tracker to blocks during replay #29595"),
+        (add_set_tx_loaded_accounts_data_size_instruction::id(), "add compute budget instruction for setting account data size per transaction #30366"),
+        (switch_to_new_elf_parser::id(), "switch to new ELF parser #30497"),
+        (round_up_heap_size::id(), "round up heap size when calculating heap cost #30679"),
+        (remove_bpf_loader_incorrect_program_id::id(), "stop incorrectly throwing IncorrectProgramId in bpf_loader #30747"),
+        (include_loaded_accounts_data_size_in_fee_calculation::id(), "include transaction loaded accounts data size in base fee calculation #30657"),
+        (native_programs_consume_cu::id(), "Native program should consume compute units #30620"),
+        (simplify_writable_program_account_check::id(), "Simplify checks performed for writable upgradeable program accounts #30559"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

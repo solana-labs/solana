@@ -36,6 +36,7 @@ use {
         },
         time::{Duration, Instant},
     },
+    thiserror::Error,
 };
 
 /// When downloading snapshots, wait at most this long for snapshot hashes from
@@ -48,6 +49,8 @@ const BLACKLIST_CLEAR_THRESHOLD: Duration = Duration::from_secs(60);
 /// If we can't find a good snapshot download candidate after this time, just
 /// give up.
 const NEWER_SNAPSHOT_THRESHOLD: Duration = Duration::from_secs(180);
+/// If we haven't found any RPC peers after this time, just give up.
+const GET_RPC_PEERS_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
 
@@ -316,6 +319,15 @@ fn check_vote_account(
     Ok(())
 }
 
+#[derive(Error, Debug)]
+pub enum GetRpcNodeError {
+    #[error("Unable to find any RPC peers")]
+    NoRpcPeersFound,
+
+    #[error("Giving up, did not get newer snapshots from the cluster")]
+    NoNewerSnapshots,
+}
+
 /// Struct to wrap the return value from get_rpc_nodes().  The `rpc_contact_info` is the peer to
 /// download from, and `snapshot_hash` is the (optional) full and (optional) incremental
 /// snapshots to download.
@@ -355,6 +367,13 @@ pub fn fail_rpc_node(
 
     info!("Excluding {} as a future RPC candidate", rpc_id);
     blacklisted_rpc_nodes.insert(*rpc_id);
+}
+
+fn shutdown_gossip_service(gossip: (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService)) {
+    let (cluster_info, gossip_exit_flag, gossip_service) = gossip;
+    cluster_info.save_contact_info();
+    gossip_exit_flag.store(true, Ordering::Relaxed);
+    gossip_service.join().unwrap();
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -409,10 +428,9 @@ pub fn attempt_download_genesis_and_snapshot(
         }
     }
 
-    let (cluster_info, gossip_exit_flag, gossip_service) = gossip.take().unwrap();
-    cluster_info.save_contact_info();
-    gossip_exit_flag.store(true, Ordering::Relaxed);
-    gossip_service.join().unwrap();
+    if let Some(gossip) = gossip.take() {
+        shutdown_gossip_service(gossip);
+    }
 
     let rpc_client_slot = rpc_client
         .get_slot_with_commitment(CommitmentConfig::finalized())
@@ -461,6 +479,80 @@ pub fn attempt_download_genesis_and_snapshot(
     Ok(())
 }
 
+// Populates `vetted_rpc_nodes` with a list of RPC nodes that are ready to be
+// used for downloading latest snapshots and/or the genesis block. Guaranteed to
+// find at least one viable node or terminate the process.
+fn get_vetted_rpc_nodes(
+    vetted_rpc_nodes: &mut Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)>,
+    cluster_info: &Arc<ClusterInfo>,
+    cluster_entrypoints: &[ContactInfo],
+    validator_config: &ValidatorConfig,
+    blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
+    bootstrap_config: &RpcBootstrapConfig,
+) {
+    while vetted_rpc_nodes.is_empty() {
+        let rpc_node_details = match get_rpc_nodes(
+            cluster_info,
+            cluster_entrypoints,
+            validator_config,
+            blacklisted_rpc_nodes,
+            bootstrap_config,
+        ) {
+            Ok(rpc_node_details) => rpc_node_details,
+            Err(err) => {
+                error!(
+                    "Failed to get RPC nodes: {err}. Consider checking system \
+                    clock, removing `--no-port-check`, or adjusting \
+                    `--known-validator ...` arguments as applicable"
+                );
+                exit(1);
+            }
+        };
+
+        let newly_blacklisted_rpc_nodes = RwLock::new(HashSet::new());
+        vetted_rpc_nodes.extend(
+            rpc_node_details
+                .into_par_iter()
+                .map(|rpc_node_details| {
+                    let GetRpcNodeResult {
+                        rpc_contact_info,
+                        snapshot_hash,
+                    } = rpc_node_details;
+
+                    info!(
+                        "Using RPC service from node {}: {:?}",
+                        rpc_contact_info.id, rpc_contact_info.rpc
+                    );
+                    let rpc_client = RpcClient::new_socket_with_timeout(
+                        rpc_contact_info.rpc,
+                        Duration::from_secs(5),
+                    );
+
+                    (rpc_contact_info, snapshot_hash, rpc_client)
+                })
+                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
+                    match rpc_client.get_version() {
+                        Ok(rpc_version) => {
+                            info!("RPC node version: {}", rpc_version.solana_core);
+                            true
+                        }
+                        Err(err) => {
+                            fail_rpc_node(
+                                format!("Failed to get RPC node version: {err}"),
+                                &validator_config.known_validators,
+                                &rpc_contact_info.id,
+                                &mut newly_blacklisted_rpc_nodes.write().unwrap(),
+                            );
+                            false
+                        }
+                    }
+                })
+                .collect::<Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)>>(),
+        );
+        blacklisted_rpc_nodes.extend(newly_blacklisted_rpc_nodes.into_inner().unwrap());
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn rpc_bootstrap(
     node: &Node,
@@ -501,9 +593,9 @@ pub fn rpc_bootstrap(
         return;
     }
 
-    let blacklisted_rpc_nodes = RwLock::new(HashSet::new());
+    let mut blacklisted_rpc_nodes = HashSet::new();
     let mut gossip = None;
-    let mut vetted_rpc_nodes: Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
+    let mut vetted_rpc_nodes = vec![];
     let mut download_abort_count = 0;
     loop {
         if gossip.is_none() {
@@ -525,57 +617,14 @@ pub fn rpc_bootstrap(
             ));
         }
 
-        while vetted_rpc_nodes.is_empty() {
-            let rpc_node_details_vec = get_rpc_nodes(
-                &gossip.as_ref().unwrap().0,
-                cluster_entrypoints,
-                validator_config,
-                &mut blacklisted_rpc_nodes.write().unwrap(),
-                &bootstrap_config,
-            );
-            if rpc_node_details_vec.is_empty() {
-                return;
-            }
-
-            vetted_rpc_nodes = rpc_node_details_vec
-                .into_par_iter()
-                .map(|rpc_node_details| {
-                    let GetRpcNodeResult {
-                        rpc_contact_info,
-                        snapshot_hash,
-                    } = rpc_node_details;
-
-                    info!(
-                        "Using RPC service from node {}: {:?}",
-                        rpc_contact_info.id, rpc_contact_info.rpc
-                    );
-                    let rpc_client = RpcClient::new_socket_with_timeout(
-                        rpc_contact_info.rpc,
-                        Duration::from_secs(5),
-                    );
-
-                    (rpc_contact_info, snapshot_hash, rpc_client)
-                })
-                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
-                    match rpc_client.get_version() {
-                        Ok(rpc_version) => {
-                            info!("RPC node version: {}", rpc_version.solana_core);
-                            true
-                        }
-                        Err(err) => {
-                            fail_rpc_node(
-                                format!("Failed to get RPC node version: {err}"),
-                                &validator_config.known_validators,
-                                &rpc_contact_info.id,
-                                &mut blacklisted_rpc_nodes.write().unwrap(),
-                            );
-                            false
-                        }
-                    }
-                })
-                .collect();
-        }
-
+        get_vetted_rpc_nodes(
+            &mut vetted_rpc_nodes,
+            &gossip.as_ref().unwrap().0,
+            cluster_entrypoints,
+            validator_config,
+            &mut blacklisted_rpc_nodes,
+            &bootstrap_config,
+        );
         let (rpc_contact_info, snapshot_hash, rpc_client) = vetted_rpc_nodes.pop().unwrap();
 
         match attempt_download_genesis_and_snapshot(
@@ -604,16 +653,14 @@ pub fn rpc_bootstrap(
                     err,
                     &validator_config.known_validators,
                     &rpc_contact_info.id,
-                    &mut blacklisted_rpc_nodes.write().unwrap(),
+                    &mut blacklisted_rpc_nodes,
                 );
             }
         }
     }
 
-    if let Some((cluster_info, gossip_exit_flag, gossip_service)) = gossip.take() {
-        cluster_info.save_contact_info();
-        gossip_exit_flag.store(true, Ordering::Relaxed);
-        gossip_service.join().unwrap();
+    if let Some(gossip) = gossip.take() {
+        shutdown_gossip_service(gossip);
     }
 }
 
@@ -626,8 +673,9 @@ fn get_rpc_nodes(
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     bootstrap_config: &RpcBootstrapConfig,
-) -> Vec<GetRpcNodeResult> {
+) -> Result<Vec<GetRpcNodeResult>, GetRpcNodeError> {
     let mut blacklist_timeout = Instant::now();
+    let mut get_rpc_peers_timout = Instant::now();
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
     loop {
@@ -645,16 +693,21 @@ fn get_rpc_nodes(
             bootstrap_config,
         );
         if rpc_peers.is_empty() {
+            if get_rpc_peers_timout.elapsed() > GET_RPC_PEERS_TIMEOUT {
+                return Err(GetRpcNodeError::NoRpcPeersFound);
+            }
             continue;
         }
 
+        // Reset timeouts if we found any viable RPC peers.
         blacklist_timeout = Instant::now();
+        get_rpc_peers_timout = Instant::now();
         if bootstrap_config.no_snapshot_fetch {
             let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
-            return vec![GetRpcNodeResult {
+            return Ok(vec![GetRpcNodeResult {
                 rpc_contact_info: random_peer.clone(),
                 snapshot_hash: None,
-            }];
+            }]);
         }
 
         let known_validators_to_wait_for = if newer_cluster_snapshot_timeout
@@ -678,8 +731,7 @@ fn get_rpc_nodes(
                 None => newer_cluster_snapshot_timeout = Some(Instant::now()),
                 Some(newer_cluster_snapshot_timeout) => {
                     if newer_cluster_snapshot_timeout.elapsed() > NEWER_SNAPSHOT_THRESHOLD {
-                        warn!("Giving up, did not get newer snapshots from the cluster.");
-                        return vec![];
+                        return Err(GetRpcNodeError::NoNewerSnapshots);
                     }
                 }
             }
@@ -709,7 +761,7 @@ fn get_rpc_nodes(
                 })
                 .take(MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION)
                 .collect();
-            return rpc_node_results;
+            return Ok(rpc_node_results);
         }
     }
 }

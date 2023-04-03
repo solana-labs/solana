@@ -22,7 +22,7 @@ use {
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::{ForkProgress, ProgressMap, PropagatedStats, ReplaySlotStats},
         repair_service::{DumpedSlotsSender, DuplicateSlotsResetReceiver},
-        rewards_recorder_service::RewardsRecorderSender,
+        rewards_recorder_service::{RewardsMessage, RewardsRecorderSender},
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
         validator::ProcessBlockStore,
@@ -1836,7 +1836,6 @@ impl ReplayStage {
             false,
             transaction_status_sender,
             Some(replay_vote_sender),
-            None,
             verify_recyclers,
             false,
             log_messages_bytes_limit,
@@ -2586,10 +2585,12 @@ impl ReplayStage {
                 let r_replay_stats = replay_stats.read().unwrap();
                 let replay_progress = bank_progress.replay_progress.clone();
                 let r_replay_progress = replay_progress.read().unwrap();
-                debug!("bank {} is completed replay from blockstore, contribute to update cost with {:?}",
+                debug!(
+                    "bank {} has completed replay from blockstore, \
+                     contribute to update cost with {:?}",
                     bank.slot(),
-                    r_replay_stats.execute_timings
-                    );
+                    r_replay_stats.batch_execute.totals
+                );
                 did_complete_bank = true;
                 let _ = cluster_slots_update_sender.send(vec![bank_slot]);
                 if let Some(transaction_status_sender) = transaction_status_sender {
@@ -2683,7 +2684,7 @@ impl ReplayStage {
                     r_replay_progress.num_shreds,
                     bank_complete_time.as_us(),
                 );
-                execute_timings.accumulate(&r_replay_stats.execute_timings);
+                execute_timings.accumulate(&r_replay_stats.batch_execute.totals);
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
@@ -3595,9 +3596,12 @@ impl ReplayStage {
             let rewards = bank.rewards.read().unwrap();
             if !rewards.is_empty() {
                 rewards_recorder_sender
-                    .send((bank.slot(), rewards.clone()))
+                    .send(RewardsMessage::Batch((bank.slot(), rewards.clone())))
                     .unwrap_or_else(|err| warn!("rewards_recorder_sender failed: {:?}", err));
             }
+            rewards_recorder_sender
+                .send(RewardsMessage::Complete(bank.slot()))
+                .unwrap_or_else(|err| warn!("rewards_recorder_sender failed: {:?}", err));
         }
     }
 
@@ -3776,9 +3780,11 @@ pub(crate) mod tests {
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(bank_forks);
         let exit = Arc::new(AtomicBool::new(false));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
             optimistically_confirmed_bank,
@@ -4343,9 +4349,11 @@ pub(crate) mod tests {
                 &PrioritizationFeeCache::new(0u64),
             );
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+            let max_complete_rewards_slot = Arc::new(AtomicU64::default());
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
                 &exit,
                 max_complete_transaction_status_slot,
+                max_complete_rewards_slot,
                 bank_forks.clone(),
                 block_commitment_cache,
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
@@ -4414,9 +4422,11 @@ pub(crate) mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks.clone(),
             block_commitment_cache.clone(),
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
@@ -6834,13 +6844,14 @@ pub(crate) mod tests {
         bank1.freeze();
         bank_forks.write().unwrap().insert(bank1);
 
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
             &mut progress,
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
-        assert!(res.is_ok(), "retry_iteration=0, retry_time=None");
+        assert_matches!(res, Err(_));
         assert_eq!(
             progress.get_retransmit_info(0).unwrap().retry_iteration,
             0,
@@ -6858,11 +6869,9 @@ pub(crate) mod tests {
             "retry_iteration=0, elapsed < 2^0 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info_mut(0).unwrap().retry_time = Some(
-            Instant::now()
-                .checked_sub(Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1))
-                .unwrap(),
-        );
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6890,11 +6899,9 @@ pub(crate) mod tests {
             "retry_iteration=1, elapsed < 2^1 * RETRY_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info_mut(0).unwrap().retry_time = Some(
-            Instant::now()
-                .checked_sub(Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1))
-                .unwrap(),
-        );
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6906,11 +6913,9 @@ pub(crate) mod tests {
             "retry_iteration=1, elapsed < 2^1 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info_mut(0).unwrap().retry_time = Some(
-            Instant::now()
-                .checked_sub(Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1))
-                .unwrap(),
-        );
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6933,11 +6938,9 @@ pub(crate) mod tests {
             .unwrap()
             .increment_retry_iteration();
 
-        progress.get_retransmit_info_mut(0).unwrap().retry_time = Some(
-            Instant::now()
-                .checked_sub(Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1))
-                .unwrap(),
-        );
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6949,11 +6952,9 @@ pub(crate) mod tests {
             "retry_iteration=3, elapsed < 2^3 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info_mut(0).unwrap().retry_time = Some(
-            Instant::now()
-                .checked_sub(Duration::from_millis(8 * RETRANSMIT_BASE_DELAY_MS + 1))
-                .unwrap(),
-        );
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(8 * RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             &retransmit_slots_sender,
@@ -6995,6 +6996,10 @@ pub(crate) mod tests {
         } = vote_simulator;
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let retry_time = Instant::now()
+            .checked_sub(Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1))
+            .unwrap();
+        progress.get_retransmit_info_mut(0).unwrap().retry_time = retry_time;
 
         let mut prev_index = 0;
         for i in (1..10).chain(11..15) {
@@ -7020,6 +7025,7 @@ pub(crate) mod tests {
             bank.freeze();
             bank_forks.write().unwrap().insert(bank);
             prev_index = i;
+            progress.get_retransmit_info_mut(i).unwrap().retry_time = retry_time;
         }
 
         // expect single slot when latest_leader_slot is the start of a consecutive range

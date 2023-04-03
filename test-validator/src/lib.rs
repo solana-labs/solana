@@ -1,12 +1,16 @@
 #![allow(clippy::integer_arithmetic)]
-
 use {
+    crossbeam_channel::Receiver,
     log::*,
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
     solana_core::{
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
+    },
+    solana_geyser_plugin_manager::{
+        geyser_plugin_manager::GeyserPluginManager, GeyserPluginManagerRequest,
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -29,6 +33,7 @@ use {
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
+        bpf_loader_upgradeable::UpgradeableLoaderState,
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
@@ -68,10 +73,19 @@ pub struct AccountInfo<'a> {
     pub filename: &'a str,
 }
 
+#[deprecated(since = "1.16.0", note = "Please use `UpgradeableProgramInfo` instead")]
 #[derive(Clone)]
 pub struct ProgramInfo {
     pub program_id: Pubkey,
     pub loader: Pubkey,
+    pub program_path: PathBuf,
+}
+
+#[derive(Clone)]
+pub struct UpgradeableProgramInfo {
+    pub program_id: Pubkey,
+    pub loader: Pubkey,
+    pub upgrade_authority: Pubkey,
     pub program_path: PathBuf,
 }
 
@@ -109,7 +123,9 @@ pub struct TestValidatorGenesis {
     warp_slot: Option<Slot>,
     no_bpf_jit: bool,
     accounts: HashMap<Pubkey, AccountSharedData>,
+    #[allow(deprecated)]
     programs: Vec<ProgramInfo>,
+    upgradeable_programs: Vec<UpgradeableProgramInfo>,
     ticks_per_slot: Option<u64>,
     epoch_schedule: Option<EpochSchedule>,
     node_config: TestValidatorNodeConfig,
@@ -125,6 +141,8 @@ pub struct TestValidatorGenesis {
     pub log_messages_bytes_limit: Option<usize>,
     pub transaction_account_lock_limit: Option<usize>,
     pub tpu_enable_udp: bool,
+    pub geyser_plugin_manager: Arc<RwLock<GeyserPluginManager>>,
+    admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -140,7 +158,9 @@ impl Default for TestValidatorGenesis {
             warp_slot: Option::<Slot>::default(),
             no_bpf_jit: bool::default(),
             accounts: HashMap::<Pubkey, AccountSharedData>::default(),
+            #[allow(deprecated)]
             programs: Vec::<ProgramInfo>::default(),
+            upgradeable_programs: Vec::<UpgradeableProgramInfo>::default(),
             ticks_per_slot: Option::<u64>::default(),
             epoch_schedule: Option::<EpochSchedule>::default(),
             node_config: TestValidatorNodeConfig::default(),
@@ -156,6 +176,9 @@ impl Default for TestValidatorGenesis {
             log_messages_bytes_limit: Option::<usize>::default(),
             transaction_account_lock_limit: Option::<usize>::default(),
             tpu_enable_udp: DEFAULT_TPU_ENABLE_UDP,
+            geyser_plugin_manager: Arc::new(RwLock::new(GeyserPluginManager::new())),
+            admin_rpc_service_post_init:
+                Arc::<RwLock<Option<AdminRpcRequestMetadataPostInit>>>::default(),
         }
     }
 }
@@ -312,6 +335,38 @@ impl TestValidatorGenesis {
         Ok(self)
     }
 
+    pub fn clone_upgradeable_programs<T>(
+        &mut self,
+        addresses: T,
+        rpc_client: &RpcClient,
+    ) -> Result<&mut Self, String>
+    where
+        T: IntoIterator<Item = Pubkey>,
+    {
+        let addresses: Vec<Pubkey> = addresses.into_iter().collect();
+        self.clone_accounts(addresses.clone(), rpc_client, false)?;
+
+        let mut programdata_addresses: HashSet<Pubkey> = HashSet::new();
+        for address in addresses {
+            let account = self.accounts.get(&address).unwrap();
+
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = account.deserialize_data()
+            {
+                programdata_addresses.insert(programdata_address);
+            } else {
+                return Err(format!(
+                    "Failed to read upgradeable program account {address}",
+                ));
+            }
+        }
+
+        self.clone_accounts(programdata_addresses, rpc_client, false)?;
+
+        Ok(self)
+    }
+
     pub fn add_accounts_from_json_files(
         &mut self,
         accounts: &[AccountInfo],
@@ -439,19 +494,35 @@ impl TestValidatorGenesis {
         let program_path = solana_program_test::find_file(&format!("{program_name}.so"))
             .unwrap_or_else(|| panic!("Unable to locate program {program_name}"));
 
-        self.programs.push(ProgramInfo {
+        self.upgradeable_programs.push(UpgradeableProgramInfo {
             program_id,
-            loader: solana_sdk::bpf_loader::id(),
+            loader: solana_sdk::bpf_loader_upgradeable::id(),
+            upgrade_authority: Pubkey::default(),
             program_path,
         });
         self
     }
 
     /// Add a list of programs to the test environment.
-    ///pub fn add_programs_with_path<'a>(&'a mut self, programs: &[ProgramInfo]) -> &'a mut Self {
+    #[deprecated(
+        since = "1.16.0",
+        note = "Please use `add_upgradeable_programs_with_path()` instead"
+    )]
+    #[allow(deprecated)]
     pub fn add_programs_with_path(&mut self, programs: &[ProgramInfo]) -> &mut Self {
         for program in programs {
             self.programs.push(program.clone());
+        }
+        self
+    }
+
+    /// Add a list of upgradeable programs to the test environment.
+    pub fn add_upgradeable_programs_with_path(
+        &mut self,
+        programs: &[UpgradeableProgramInfo],
+    ) -> &mut Self {
+        for program in programs {
+            self.upgradeable_programs.push(program.clone());
         }
         self
     }
@@ -464,7 +535,26 @@ impl TestValidatorGenesis {
         mint_address: Pubkey,
         socket_addr_space: SocketAddrSpace,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
-        TestValidator::start(mint_address, self, socket_addr_space).map(|test_validator| {
+        self.start_with_mint_address_and_geyser_plugin_rpc(mint_address, socket_addr_space, None)
+    }
+
+    /// Start a test validator with the address of the mint account that will receive tokens
+    /// created at genesis. Augments admin rpc service with dynamic geyser plugin manager if
+    /// the geyser plugin service is enabled at startup.
+    ///
+    pub fn start_with_mint_address_and_geyser_plugin_rpc(
+        &self,
+        mint_address: Pubkey,
+        socket_addr_space: SocketAddrSpace,
+        rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
+    ) -> Result<TestValidator, Box<dyn std::error::Error>> {
+        TestValidator::start(
+            mint_address,
+            self,
+            socket_addr_space,
+            rpc_to_plugin_manager_receiver,
+        )
+        .map(|test_validator| {
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_io()
                 .enable_time()
@@ -513,7 +603,7 @@ impl TestValidatorGenesis {
         socket_addr_space: SocketAddrSpace,
     ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        match TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space) {
+        match TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space, None) {
             Ok(test_validator) => {
                 test_validator.wait_for_nonzero_fees().await;
                 (test_validator, mint_keypair)
@@ -627,14 +717,53 @@ impl TestValidator {
         for (address, account) in solana_program_test::programs::spl_programs(&config.rent) {
             accounts.entry(address).or_insert(account);
         }
+        #[allow(deprecated)]
         for program in &config.programs {
             let data = solana_program_test::read_file(&program.program_path);
             accounts.insert(
                 program.program_id,
                 AccountSharedData::from(Account {
-                    lamports: Rent::default().minimum_balance(data.len()).min(1),
+                    lamports: Rent::default().minimum_balance(data.len()).max(1),
                     data,
                     owner: program.loader,
+                    executable: true,
+                    rent_epoch: 0,
+                }),
+            );
+        }
+        for upgradeable_program in &config.upgradeable_programs {
+            let data = solana_program_test::read_file(&upgradeable_program.program_path);
+            let (programdata_address, _) = Pubkey::find_program_address(
+                &[upgradeable_program.program_id.as_ref()],
+                &upgradeable_program.loader,
+            );
+            let mut program_data = bincode::serialize(&UpgradeableLoaderState::ProgramData {
+                slot: 0,
+                upgrade_authority_address: Some(upgradeable_program.upgrade_authority),
+            })
+            .unwrap();
+            program_data.extend_from_slice(&data);
+            accounts.insert(
+                programdata_address,
+                AccountSharedData::from(Account {
+                    lamports: Rent::default().minimum_balance(program_data.len()).max(1),
+                    data: program_data,
+                    owner: upgradeable_program.loader,
+                    executable: true,
+                    rent_epoch: 0,
+                }),
+            );
+
+            let data = bincode::serialize(&UpgradeableLoaderState::Program {
+                programdata_address,
+            })
+            .unwrap();
+            accounts.insert(
+                upgradeable_program.program_id,
+                AccountSharedData::from(Account {
+                    lamports: Rent::default().minimum_balance(data.len()).max(1),
+                    data,
+                    owner: upgradeable_program.loader,
                     executable: true,
                     rent_epoch: 0,
                 }),
@@ -730,6 +859,7 @@ impl TestValidator {
         mint_address: Pubkey,
         config: &TestValidatorGenesis,
         socket_addr_space: SocketAddrSpace,
+        rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let preserve_ledger = config.ledger_path.is_some();
         let ledger_path = TestValidator::initialize_ledger(mint_address, config)?;
@@ -792,7 +922,7 @@ impl TestValidator {
         };
 
         let mut validator_config = ValidatorConfig {
-            geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
+            on_start_geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             rpc_addrs: Some((
                 SocketAddr::new(
                     IpAddr::V4(Ipv4Addr::UNSPECIFIED),
@@ -811,7 +941,7 @@ impl TestValidator {
                     .unwrap()
                     .0,
             ],
-            poh_verify: false, // Skip PoH verification of ledger on startup for speed
+            run_verification: false, // Skip PoH verification of ledger on startup for speed
             snapshot_config: SnapshotConfig {
                 full_snapshot_archive_interval_slots: 100,
                 incremental_snapshot_archive_interval_slots: Slot::MAX,
@@ -844,11 +974,13 @@ impl TestValidator {
             vec![],
             &validator_config,
             true, // should_check_duplicate_instance
+            rpc_to_plugin_manager_receiver,
             config.start_progress.clone(),
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             config.tpu_enable_udp,
+            config.admin_rpc_service_post_init.clone(),
         )?);
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of

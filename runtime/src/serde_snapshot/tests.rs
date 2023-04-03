@@ -8,8 +8,8 @@ use {
         accounts_db::{
             get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
         },
+        accounts_file::AccountsFile,
         accounts_hash::{AccountsDeltaHash, AccountsHash},
-        append_vec::AppendVec,
         bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
         genesis_utils::{self, activate_all_features, activate_feature},
@@ -31,6 +31,7 @@ use {
     },
     std::{
         io::{BufReader, Cursor},
+        num::NonZeroUsize,
         ops::RangeFull,
         path::Path,
         sync::{Arc, RwLock},
@@ -43,23 +44,24 @@ fn copy_append_vecs<P: AsRef<Path>>(
     accounts_db: &AccountsDb,
     output_dir: P,
 ) -> std::io::Result<StorageAndNextAppendVecId> {
-    let storage_entries = accounts_db.get_snapshot_storages(RangeFull, None).0;
+    let storage_entries = accounts_db.get_snapshot_storages(RangeFull).0;
     let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
     let mut next_append_vec_id = 0;
     for storage_entry in storage_entries.into_iter() {
         // Copy file to new directory
         let storage_path = storage_entry.get_path();
-        let file_name = AppendVec::file_name(storage_entry.slot(), storage_entry.append_vec_id());
+        let file_name =
+            AccountsFile::file_name(storage_entry.slot(), storage_entry.append_vec_id());
         let output_path = output_dir.as_ref().join(file_name);
         std::fs::copy(storage_path, &output_path)?;
 
         // Read new file into append-vec and build new entry
-        let (append_vec, num_accounts) =
-            AppendVec::new_from_file(output_path, storage_entry.accounts.len())?;
+        let (accounts_file, num_accounts) =
+            AccountsFile::new_from_file(output_path, storage_entry.accounts.len())?;
         let new_storage_entry = AccountStorageEntry::new_existing(
             storage_entry.slot(),
             storage_entry.append_vec_id(),
-            append_vec,
+            accounts_file,
             num_accounts,
         );
         next_append_vec_id = next_append_vec_id.max(new_storage_entry.append_vec_id());
@@ -121,6 +123,8 @@ where
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
         &Arc::default(),
+        None,
+        (u64::default(), None),
         None,
     )
     .map(|(accounts_db, _)| accounts_db)
@@ -186,7 +190,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     let accounts_hash = AccountsHash(Hash::new_unique());
     accounts
         .accounts_db
-        .set_accounts_hash_from_snapshot(slot, accounts_hash);
+        .set_accounts_hash_for_tests(slot, accounts_hash);
 
     let mut writer = Cursor::new(vec![]);
     accountsdb_to_stream(
@@ -194,7 +198,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         &mut writer,
         &accounts.accounts_db,
         slot,
-        &get_storages_to_serialize(&accounts.accounts_db.get_snapshot_storages(..=slot, None).0),
+        &get_storages_to_serialize(&accounts.accounts_db.get_snapshot_storages(..=slot).0),
     )
     .unwrap();
 
@@ -219,8 +223,8 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     check_accounts(&daccounts, &pubkeys, 100);
     let daccounts_delta_hash = daccounts.accounts_db.calculate_accounts_delta_hash(slot);
     assert_eq!(accounts_delta_hash, daccounts_delta_hash);
-    let daccounts_hash = daccounts.accounts_db.get_accounts_hash(slot);
-    assert_eq!(Some(accounts_hash), daccounts_hash);
+    let daccounts_hash = daccounts.accounts_db.get_accounts_hash(slot).unwrap().0;
+    assert_eq!(accounts_hash, daccounts_hash);
 }
 
 fn test_bank_serialize_style(
@@ -308,9 +312,9 @@ fn test_bank_serialize_style(
     let incremental =
         incremental_snapshot_persistence.then(|| BankIncrementalSnapshotPersistence {
             full_slot: slot + 1,
-            full_hash: Hash::new(&[1; 32]),
+            full_hash: SerdeAccountsHash(Hash::new(&[1; 32])),
             full_capitalization: 31,
-            incremental_hash: Hash::new(&[2; 32]),
+            incremental_hash: SerdeIncrementalAccountsHash(Hash::new(&[2; 32])),
             incremental_capitalization: 32,
         });
 
@@ -318,11 +322,10 @@ fn test_bank_serialize_style(
         let temp_dir = TempDir::new().unwrap();
         let slot_dir = temp_dir.path().join(slot.to_string());
         let post_path = slot_dir.join(slot.to_string());
-        let mut pre_path = post_path.clone();
-        pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+        let pre_path = post_path.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
         std::fs::create_dir(&slot_dir).unwrap();
         {
-            let mut f = std::fs::File::create(&pre_path).unwrap();
+            let mut f = std::fs::File::create(pre_path).unwrap();
             f.write_all(&buf).unwrap();
         }
 
@@ -433,7 +436,7 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     slot: Slot,
 ) -> AccountsDb {
     let mut writer = Cursor::new(vec![]);
-    let snapshot_storages = accounts.get_snapshot_storages(..=slot, None).0;
+    let snapshot_storages = accounts.get_snapshot_storages(..=slot).0;
     accountsdb_to_stream(
         SerdeStyle::Newer,
         &mut writer,
@@ -520,11 +523,11 @@ fn test_extra_fields_eof() {
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_delta_hash_from_snapshot(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+        .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
+        .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
 
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -607,8 +610,8 @@ fn test_extra_fields_full_snapshot_archive() {
         full_snapshot_archives_dir.path(),
         incremental_snapshot_archives_dir.path(),
         ArchiveFormat::TarBzip2,
-        1,
-        0,
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
     )
     .unwrap();
 
@@ -656,11 +659,11 @@ fn test_blank_extra_fields() {
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_delta_hash_from_snapshot(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+        .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
+        .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
 
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -718,7 +721,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "Eg6gt9thiY8Sn6gDKvpyyHADtWpSt6ur9Z4Zwh1BrCgv")]
+    #[frozen_abi(digest = "6JEjZCVdbC7CgpEexb9BKEtyMBL6aTHNZrjEWmhzmgp3")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]
@@ -732,20 +735,12 @@ mod test_bank_serialize {
         bank.rc
             .accounts
             .accounts_db
-            .set_accounts_delta_hash_from_snapshot(
-                bank.slot(),
-                AccountsDeltaHash(Hash::new_unique()),
-            );
+            .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
         bank.rc
             .accounts
             .accounts_db
-            .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
-        let snapshot_storages = bank
-            .rc
-            .accounts
-            .accounts_db
-            .get_snapshot_storages(..=0, None)
-            .0;
+            .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+        let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(..=0).0;
         // ensure there is a single snapshot storage example for ABI digesting
         assert_eq!(snapshot_storages.len(), 1);
 

@@ -145,20 +145,20 @@ impl Default for ConnectionCache {
 }
 
 macro_rules! dispatch {
-    ($(#[$meta:meta])* $vis:vis fn $name:ident$(<$($t:ident: $cons:ident),*>)?(&self $(, $arg:ident: $ty:ty)*) $(-> $out:ty)?) => {
+    ($(#[$meta:meta])* $vis:vis fn $name:ident$(<$($t:ident: $cons:ident + ?Sized),*>)?(&self $(, $arg:ident: $ty:ty)*) $(-> $out:ty)?) => {
         #[inline]
         $(#[$meta])*
-        $vis fn $name$(<$($t: $cons),*>)?(&self $(, $arg:$ty)*) $(-> $out)? {
+        $vis fn $name$(<$($t: $cons + ?Sized),*>)?(&self $(, $arg:$ty)*) $(-> $out)? {
             match self {
                 Self::Quic(this) => this.$name($($arg, )*),
                 Self::Udp(this) => this.$name($($arg, )*),
             }
         }
     };
-    ($(#[$meta:meta])* $vis:vis fn $name:ident$(<$($t:ident: $cons:ident),*>)?(&mut self $(, $arg:ident: $ty:ty)*) $(-> $out:ty)?) => {
+    ($(#[$meta:meta])* $vis:vis fn $name:ident$(<$($t:ident: $cons:ident + ?Sized),*>)?(&mut self $(, $arg:ident: $ty:ty)*) $(-> $out:ty)?) => {
         #[inline]
         $(#[$meta])*
-        $vis fn $name$(<$($t: $cons),*>)?(&mut self $(, $arg:$ty)*) $(-> $out)? {
+        $vis fn $name$(<$($t: $cons + ?Sized),*>)?(&mut self $(, $arg:$ty)*) $(-> $out)? {
             match self {
                 Self::Quic(this) => this.$name($($arg, )*),
                 Self::Udp(this) => this.$name($($arg, )*),
@@ -204,9 +204,9 @@ mod tests {
         super::*,
         crate::connection_cache::ConnectionCache,
         crossbeam_channel::unbounded,
-        solana_sdk::{quic::QUIC_PORT_OFFSET, signature::Keypair},
+        solana_sdk::{net::DEFAULT_TPU_COALESCE, quic::QUIC_PORT_OFFSET, signature::Keypair},
         solana_streamer::{
-            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
+            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, quic::StreamStats,
             streamer::StakedNodes,
         },
         std::{
@@ -262,7 +262,8 @@ mod tests {
             10,
             10,
             response_recv_stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 

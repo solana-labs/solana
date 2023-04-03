@@ -106,7 +106,7 @@ fn recv_loop(
     packet_batch_sender: &PacketBatchSender,
     recycler: &PacketBatchRecycler,
     stats: &StreamerReceiveStats,
-    coalesce_ms: u64,
+    coalesce: Duration,
     use_pinned_memory: bool,
     in_vote_only_mode: Option<Arc<AtomicBool>>,
 ) -> Result<()> {
@@ -130,7 +130,7 @@ fn recv_loop(
                 }
             }
 
-            if let Ok(len) = packet::recv_from(&mut packet_batch, socket, coalesce_ms) {
+            if let Ok(len) = packet::recv_from(&mut packet_batch, socket, coalesce) {
                 if len > 0 {
                     let StreamerReceiveStats {
                         packets_count,
@@ -161,7 +161,7 @@ pub fn receiver(
     packet_batch_sender: PacketBatchSender,
     recycler: PacketBatchRecycler,
     stats: Arc<StreamerReceiveStats>,
-    coalesce_ms: u64,
+    coalesce: Duration,
     use_pinned_memory: bool,
     in_vote_only_mode: Option<Arc<AtomicBool>>,
 ) -> JoinHandle<()> {
@@ -176,7 +176,7 @@ pub fn receiver(
                 &packet_batch_sender,
                 &recycler,
                 &stats,
-                coalesce_ms,
+                coalesce,
                 use_pinned_memory,
                 in_vote_only_mode,
             );
@@ -469,7 +469,7 @@ mod test {
             s_reader,
             Recycler::default(),
             stats.clone(),
-            1,
+            Duration::from_millis(1), // coalesce
             true,
             None,
         );

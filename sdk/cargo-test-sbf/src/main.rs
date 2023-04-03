@@ -48,7 +48,7 @@ impl Default for Config<'_> {
             verbose: false,
             workspace: false,
             jobs: None,
-            arch: "sbf",
+            arch: "sbfv1",
         }
     }
 }
@@ -102,7 +102,11 @@ where
     }
 }
 
-fn test_sbf_package(config: &Config, target_directory: &Path, package: &cargo_metadata::Package) {
+fn test_solana_package(
+    config: &Config,
+    target_directory: &Path,
+    package: &cargo_metadata::Package,
+) {
     let sbf_out_dir = config
         .sbf_out_dir
         .as_ref()
@@ -191,7 +195,7 @@ fn test_sbf_package(config: &Config, target_directory: &Path, package: &cargo_me
     );
 }
 
-fn test_sbf(config: Config, manifest_path: Option<PathBuf>) {
+fn test_solana(config: Config, manifest_path: Option<PathBuf>) {
     let mut metadata_command = cargo_metadata::MetadataCommand::new();
     if let Some(manifest_path) = manifest_path.as_ref() {
         metadata_command.manifest_path(manifest_path);
@@ -214,7 +218,7 @@ fn test_sbf(config: Config, manifest_path: Option<PathBuf>) {
                     .any(|p| root_package.id.repr.contains(p)))
         {
             debug!("test root package {:?}", root_package.id);
-            test_sbf_package(&config, metadata.target_directory.as_ref(), root_package);
+            test_solana_package(&config, metadata.target_directory.as_ref(), root_package);
             return;
         }
     }
@@ -238,7 +242,7 @@ fn test_sbf(config: Config, manifest_path: Option<PathBuf>) {
         if config.packages.is_empty() || config.packages.iter().any(|p| package.id.repr.contains(p))
         {
             debug!("test package {:?}", package.id);
-            test_sbf_package(&config, metadata.target_directory.as_ref(), package);
+            test_solana_package(&config, metadata.target_directory.as_ref(), package);
         }
     }
 }
@@ -344,7 +348,7 @@ fn main() {
                 .long("workspace")
                 .takes_value(false)
                 .alias("all")
-                .help("Test all SBF packages in the workspace"),
+                .help("Test all Solana packages in the workspace"),
         )
         .arg(
             Arg::new("jobs")
@@ -358,9 +362,9 @@ fn main() {
         .arg(
             Arg::new("arch")
                 .long("arch")
-                .possible_values(["bpf", "sbf", "sbfv2"])
-                .default_value("sbf")
-                .help("Build for the given SBF version"),
+                .possible_values(["sbfv1", "sbfv2"])
+                .default_value("sbfv1")
+                .help("Build for the given target architecture"),
         )
         .arg(
             Arg::new("extra_cargo_test_args")
@@ -416,5 +420,5 @@ fn main() {
     }
 
     let manifest_path: Option<PathBuf> = matches.value_of_t("manifest_path").ok();
-    test_sbf(config, manifest_path);
+    test_solana(config, manifest_path);
 }

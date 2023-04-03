@@ -1,5 +1,5 @@
 use {
-    crate::append_vec::StoredAccountMeta,
+    crate::account_storage::meta::StoredAccountMeta,
     solana_sdk::{
         account::AccountSharedData, clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction,
     },

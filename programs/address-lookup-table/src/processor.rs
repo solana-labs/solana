@@ -14,15 +14,18 @@ use {
         program_utils::limited_deserialize,
         pubkey::{Pubkey, PUBKEY_BYTES},
         system_instruction,
-        transaction_context::IndexOfAccount,
     },
     std::convert::TryFrom,
 };
 
-pub fn process_instruction(
-    _first_instruction_account: IndexOfAccount,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+    // Consume compute units if feature `native_programs_consume_cu` is activated,
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::native_programs_consume_cu::id())
+    {
+        invoke_context.consume_checked(750)?;
+    }
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -144,18 +147,18 @@ impl Processor {
 
         if required_lamports > 0 {
             invoke_context.native_invoke(
-                system_instruction::transfer(&payer_key, &table_key, required_lamports),
+                system_instruction::transfer(&payer_key, &table_key, required_lamports).into(),
                 &[payer_key],
             )?;
         }
 
         invoke_context.native_invoke(
-            system_instruction::allocate(&table_key, table_account_data_len as u64),
+            system_instruction::allocate(&table_key, table_account_data_len as u64).into(),
             &[table_key],
         )?;
 
         invoke_context.native_invoke(
-            system_instruction::assign(&table_key, &crate::id()),
+            system_instruction::assign(&table_key, &crate::id()).into(),
             &[table_key],
         )?;
 
@@ -332,7 +335,7 @@ impl Processor {
             drop(payer_account);
 
             invoke_context.native_invoke(
-                system_instruction::transfer(&payer_key, &table_key, required_lamports),
+                system_instruction::transfer(&payer_key, &table_key, required_lamports).into(),
                 &[payer_key],
             )?;
         }

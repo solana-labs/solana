@@ -74,12 +74,10 @@ source multinode-demo/common.sh --prebuild
 
 nodes=(
   "multinode-demo/bootstrap-validator.sh \
-    --allow-private-addr \
     --no-restart \
     --init-complete-file init-complete-node0.log \
     --dynamic-port-range 8000-8050"
   "multinode-demo/validator.sh \
-    --allow-private-addr \
     --no-restart \
     --dynamic-port-range 8050-8100
     --init-complete-file init-complete-node1.log \
@@ -92,7 +90,6 @@ if [[ extraNodes -gt 0 ]]; then
     portEnd=$((portStart + 49))
     nodes+=(
       "multinode-demo/validator.sh \
-        --allow-private-addr \
         --no-restart \
         --dynamic-port-range $portStart-$portEnd
         --label dyn$i \

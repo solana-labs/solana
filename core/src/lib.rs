@@ -9,6 +9,7 @@
 //!
 
 pub mod accounts_hash_verifier;
+pub mod admin_rpc_post_init;
 pub mod ancestor_hashes_service;
 pub mod banking_stage;
 pub mod banking_trace;
@@ -43,7 +44,6 @@ pub mod next_leader;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
 pub mod packet_deserializer;
-mod packet_hasher;
 pub mod packet_threshold;
 pub mod poh_timing_report_service;
 pub mod poh_timing_reporter;

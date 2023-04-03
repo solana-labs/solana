@@ -9,7 +9,7 @@ use {
         unprocessed_transaction_storage::UnprocessedTransactionStorage,
     },
     crossbeam_channel::RecvTimeoutError,
-    solana_measure::{measure, measure::Measure, measure_us},
+    solana_measure::{measure::Measure, measure_us},
     solana_sdk::{saturating_add_assign, timing::timestamp},
     std::{sync::atomic::Ordering, time::Duration},
 };

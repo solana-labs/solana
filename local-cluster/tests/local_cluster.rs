@@ -23,7 +23,7 @@ use {
     },
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
-        cluster_tests::{self},
+        cluster_tests,
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
@@ -67,6 +67,7 @@ use {
         fs,
         io::Read,
         iter,
+        num::NonZeroUsize,
         path::Path,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -1054,6 +1055,11 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     };
     info!("leader full snapshot archive for comparison: {leader_full_snapshot_archive_for_comparison:#?}");
 
+    // Stop the validator before we reset its snapshots
+    info!("Stopping the validator...");
+    let validator_info = cluster.exit_node(&validator_identity.pubkey());
+    info!("Stopping the validator... DONE");
+
     info!("Delete all the snapshots on the validator and restore the originals from the backup...");
     delete_files_with_remote(
         validator_snapshot_test_config
@@ -1093,7 +1099,10 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     info!(
         "Restarting the validator with full snapshot {validator_full_snapshot_slot_at_startup}..."
     );
-    let validator_info = cluster.exit_node(&validator_identity.pubkey());
+    // To restart, it is not enough to remove the old bank snapshot directories under snapshot/.
+    // The old hardlinks under <account_path>/snapshot/<slot> should also be removed.
+    // The purge call covers all of them.
+    snapshot_utils::purge_old_bank_snapshots(validator_snapshot_test_config.bank_snapshots_dir, 0);
     cluster.restart_node(
         &validator_identity.pubkey(),
         validator_info,
@@ -1179,18 +1188,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         num_account_paths,
     );
 
-    // Copy over the snapshots to the new node, but need to remove the tmp snapshot dir so it
-    // doesn't break the simple copy_files closure.
-    snapshot_utils::remove_tmp_snapshot_archives(
-        validator_snapshot_test_config
-            .full_snapshot_archives_dir
-            .path(),
-    );
-    snapshot_utils::remove_tmp_snapshot_archives(
-        validator_snapshot_test_config
-            .incremental_snapshot_archives_dir
-            .path(),
-    );
+    // Copy over the snapshots to the new node that it will boot from
     copy_files(
         validator_snapshot_test_config
             .full_snapshot_archives_dir
@@ -1654,7 +1652,7 @@ fn test_optimistic_confirmation_violation_detection() {
         // from resetting to the parent of `prev_voted_slot` to create an alternative fork because
         // 1) Validator can't vote on earlier ancestor of last vote due to switch threshold (can't vote
         // on ancestors of last vote)
-        // 2) Won't reset to this earlier ancestor becasue reset can only happen on same voted fork if
+        // 2) Won't reset to this earlier ancestor because reset can only happen on same voted fork if
         // it's for the last vote slot or later
         remove_tower(&exited_validator_info.info.ledger_path, &node_to_restart);
         blockstore.set_dead_slot(prev_voted_slot).unwrap();
@@ -2157,7 +2155,7 @@ fn create_snapshot_to_hard_fork(
     let process_options = ProcessOptions {
         halt_at_slot: Some(snapshot_slot),
         new_hard_forks: Some(hard_forks),
-        poh_verify: false,
+        run_verification: false,
         ..ProcessOptions::default()
     };
     let ledger_path = blockstore.ledger_path();
@@ -2188,8 +2186,8 @@ fn create_snapshot_to_hard_fork(
         ledger_path,
         ledger_path,
         ArchiveFormat::TarZstd,
-        1,
-        1,
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
     )
     .unwrap();
     info!(

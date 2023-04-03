@@ -14,14 +14,17 @@ use {
     solana_rbpf::vm::ContextObject,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
-        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        feature_set::{enable_early_verification_of_account_modifications, FeatureSet},
+        feature_set::{
+            enable_early_verification_of_account_modifications, native_programs_consume_cu,
+            FeatureSet,
+        },
         hash::Hash,
-        instruction::{AccountMeta, Instruction, InstructionError},
+        instruction::{AccountMeta, InstructionError},
         native_loader,
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
+        stable_layout::stable_instruction::StableInstruction,
         transaction_context::{
             IndexOfAccount, InstructionAccount, TransactionAccount, TransactionContext,
         },
@@ -36,8 +39,7 @@ use {
     },
 };
 
-pub type ProcessInstructionWithContext =
-    fn(IndexOfAccount, &mut InvokeContext) -> Result<(), InstructionError>;
+pub type ProcessInstructionWithContext = fn(&mut InvokeContext) -> Result<(), InstructionError>;
 
 #[derive(Clone)]
 pub struct BuiltinProgram {
@@ -49,7 +51,7 @@ impl std::fmt::Debug for BuiltinProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // These are just type aliases for work around of Debug-ing above pointers
         type ErasedProcessInstructionWithContext =
-            fn(IndexOfAccount, &'static mut InvokeContext<'static>) -> Result<(), InstructionError>;
+            fn(&'static mut InvokeContext<'static>) -> Result<(), InstructionError>;
 
         // rustc doesn't compile due to bug without this work around
         // https://github.com/rust-lang/rust/issues/50280
@@ -489,7 +491,7 @@ impl<'a> InvokeContext<'a> {
     /// Entrypoint for a cross-program invocation from a builtin program
     pub fn native_invoke(
         &mut self,
-        instruction: Instruction,
+        instruction: StableInstruction,
         signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
         let (instruction_accounts, program_indices) =
@@ -509,7 +511,7 @@ impl<'a> InvokeContext<'a> {
     #[allow(clippy::type_complexity)]
     pub fn prepare_instruction(
         &mut self,
-        instruction: &Instruction,
+        instruction: &StableInstruction,
         signers: &[Pubkey],
     ) -> Result<(Vec<InstructionAccount>, Vec<IndexOfAccount>), InstructionError> {
         // Finds the index of each account in the instruction by its pubkey.
@@ -621,37 +623,11 @@ impl<'a> InvokeContext<'a> {
             ic_msg!(self, "Account {} is not executable", callee_program_id);
             return Err(InstructionError::AccountNotExecutable);
         }
-        let mut program_indices = vec![];
-        if borrowed_program_account.get_owner() == &bpf_loader_upgradeable::id() {
-            if let UpgradeableLoaderState::Program {
-                programdata_address,
-            } = borrowed_program_account.get_state()?
-            {
-                if let Some(programdata_account_index) = self
-                    .transaction_context
-                    .find_index_of_program_account(&programdata_address)
-                {
-                    program_indices.push(programdata_account_index);
-                } else {
-                    ic_msg!(
-                        self,
-                        "Unknown upgradeable programdata account {}",
-                        programdata_address,
-                    );
-                    return Err(InstructionError::MissingAccount);
-                }
-            } else {
-                ic_msg!(
-                    self,
-                    "Invalid upgradeable program account {}",
-                    callee_program_id,
-                );
-                return Err(InstructionError::MissingAccount);
-            }
-        }
-        program_indices.push(borrowed_program_account.get_index_in_transaction());
 
-        Ok((instruction_accounts, program_indices))
+        Ok((
+            instruction_accounts,
+            vec![borrowed_program_account.get_index_in_transaction()],
+        ))
     }
 
     /// Processes an instruction and returns how many compute units were used
@@ -732,15 +708,15 @@ impl<'a> InvokeContext<'a> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
         let mut process_executable_chain_time = Measure::start("process_executable_chain_time");
 
-        let (first_instruction_account, builtin_id) = {
+        let builtin_id = {
             let borrowed_root_account = instruction_context
                 .try_borrow_program_account(self.transaction_context, 0)
                 .map_err(|_| InstructionError::UnsupportedProgramId)?;
             let owner_id = borrowed_root_account.get_owner();
             if native_loader::check_id(owner_id) {
-                (1, *borrowed_root_account.get_key())
+                *borrowed_root_account.get_key()
             } else {
-                (0, *owner_id)
+                *owner_id
             }
         };
 
@@ -751,11 +727,12 @@ impl<'a> InvokeContext<'a> {
                 self.transaction_context
                     .set_return_data(program_id, Vec::new())?;
 
+                let is_builtin_program = builtin_id == program_id;
                 let pre_remaining_units = self.get_remaining();
-                let result = if builtin_id == program_id {
+                let result = if is_builtin_program {
                     let logger = self.get_log_collector();
                     stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
-                    (entry.process_instruction)(first_instruction_account, self)
+                    (entry.process_instruction)(self)
                         .map(|()| {
                             stable_log::program_success(&logger, &program_id);
                         })
@@ -764,10 +741,20 @@ impl<'a> InvokeContext<'a> {
                             err
                         })
                 } else {
-                    (entry.process_instruction)(first_instruction_account, self)
+                    (entry.process_instruction)(self)
                 };
                 let post_remaining_units = self.get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+
+                if is_builtin_program
+                    && result.is_ok()
+                    && *compute_units_consumed == 0
+                    && self
+                        .feature_set
+                        .is_active(&native_programs_consume_cu::id())
+                {
+                    return Err(InstructionError::BuiltinProgramsMustConsumeComputeUnits);
+                }
 
                 process_executable_chain_time.stop();
                 saturating_add_assign!(
@@ -1011,20 +998,19 @@ pub fn mock_process_instruction(
     if let Some(feature_set) = feature_set_override {
         invoke_context.feature_set = feature_set;
     }
-    invoke_context
-        .transaction_context
-        .get_next_instruction_context()
-        .unwrap()
-        .configure(
-            &program_indices,
-            &preparation.instruction_accounts,
-            instruction_data,
-        );
-    let result = invoke_context
-        .push()
-        .and_then(|_| process_instruction(1, &mut invoke_context));
-    let pop_result = invoke_context.pop();
-    assert_eq!(result.and(pop_result), expected_result);
+    let builtin_programs = &[BuiltinProgram {
+        program_id: *loader_id,
+        process_instruction,
+    }];
+    invoke_context.builtin_programs = builtin_programs;
+    let result = invoke_context.process_instruction(
+        instruction_data,
+        &preparation.instruction_accounts,
+        &program_indices,
+        &mut 0,
+        &mut ExecuteTimings::default(),
+    );
+    assert_eq!(result, expected_result);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
     transaction_accounts.pop();
     transaction_accounts
@@ -1036,7 +1022,7 @@ mod tests {
         super::*,
         crate::compute_budget,
         serde::{Deserialize, Serialize},
-        solana_sdk::account::WritableAccount,
+        solana_sdk::{account::WritableAccount, instruction::Instruction},
     };
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1061,16 +1047,12 @@ mod tests {
     fn test_program_entry_debug() {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
-            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             Ok(())
         }
         #[allow(clippy::unnecessary_wraps)]
-        fn mock_ix_processor(
-            _first_instruction_account: IndexOfAccount,
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
+        fn mock_ix_processor(_invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
             Ok(())
         }
         let builtin_programs = &[
@@ -1086,15 +1068,18 @@ mod tests {
         assert!(!format!("{builtin_programs:?}").is_empty());
     }
 
+    const MOCK_BUILTIN_COMPUTE_UNIT_COST: u64 = 1;
+
     #[allow(clippy::integer_arithmetic)]
     fn mock_process_instruction(
-        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
+        // mock builtin must consume units
+        invoke_context.consume_checked(MOCK_BUILTIN_COMPUTE_UNIT_COST)?;
         let instruction_accounts = (0..4)
             .map(|instruction_account_index| InstructionAccount {
                 index_in_transaction: instruction_account_index,
@@ -1161,7 +1146,7 @@ mod tests {
                     assert_eq!(result, Err(InstructionError::UnbalancedInstruction));
                     result?;
                     invoke_context
-                        .native_invoke(inner_instruction, &[])
+                        .native_invoke(inner_instruction.into(), &[])
                         .and(invoke_context.pop())?;
                 }
                 MockInstruction::UnbalancedPop => instruction_context
@@ -1336,7 +1321,7 @@ mod tests {
             let inner_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let result = invoke_context
-                .native_invoke(inner_instruction, &[])
+                .native_invoke(inner_instruction.into(), &[])
                 .and(invoke_context.pop());
             assert_eq!(result, case.1);
         }
@@ -1359,6 +1344,7 @@ mod tests {
                 },
                 metas.clone(),
             );
+            let inner_instruction = StableInstruction::from(inner_instruction);
             let (inner_instruction_accounts, program_indices) = invoke_context
                 .prepare_instruction(&inner_instruction, &[])
                 .unwrap();
@@ -1376,7 +1362,10 @@ mod tests {
             // the number of compute units consumed should be a non-default which is something greater
             // than zero.
             assert!(compute_units_consumed > 0);
-            assert_eq!(compute_units_consumed, compute_units_to_consume);
+            assert_eq!(
+                compute_units_consumed,
+                compute_units_to_consume + MOCK_BUILTIN_COMPUTE_UNIT_COST
+            );
             assert_eq!(result, expected_result);
 
             invoke_context.pop().unwrap();

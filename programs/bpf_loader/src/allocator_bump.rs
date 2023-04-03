@@ -26,8 +26,8 @@ impl BpfAllocator {
         }
     }
 
-    pub fn get_heap(&mut self) -> &mut [u8] {
-        self.heap.as_slice_mut()
+    pub fn heap_mut(&mut self) -> &mut AlignedMemory<HOST_ALIGN> {
+        &mut self.heap
     }
 }
 

@@ -40,5 +40,5 @@ custom_heap_default!();
 #[no_mangle]
 fn custom_panic(info: &core::panic::PanicInfo<'_>) {
     // Full panic reporting
-    msg!(&format!("{}", info));
+    msg!(&format!("{info}"));
 }

@@ -9,7 +9,10 @@ use {
     rayon::iter::{IntoParallelRefIterator, ParallelIterator},
     solana_runtime::{
         accounts::{AccountAddressFilter, Accounts},
-        accounts_db::{test_utils::create_test_accounts, AccountShrinkThreshold},
+        accounts_db::{
+            test_utils::create_test_accounts, AccountShrinkThreshold,
+            VerifyAccountsHashAndLamportsConfig,
+        },
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
         bank::*,
@@ -96,18 +99,22 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let (_, total_lamports) = accounts
         .accounts_db
         .update_accounts_hash_for_tests(0, &ancestors, false, false);
-    let test_hash_calculation = false;
+    accounts.add_root(slot);
+    accounts.accounts_db.flush_accounts_cache(true, Some(slot));
     bencher.iter(|| {
-        assert!(accounts.verify_bank_hash_and_lamports(
+        assert!(accounts.verify_accounts_hash_and_lamports(
             0,
-            &ancestors,
             total_lamports,
-            test_hash_calculation,
-            &EpochSchedule::default(),
-            &RentCollector::default(),
-            false,
-            false,
-            false,
+            None,
+            VerifyAccountsHashAndLamportsConfig {
+                ancestors: &ancestors,
+                test_hash_calculation: false,
+                epoch_schedule: &EpochSchedule::default(),
+                rent_collector: &RentCollector::default(),
+                ignore_mismatch: false,
+                store_detailed_debug_info: false,
+                use_bg_thread_pool: false,
+            }
         ))
     });
 }

@@ -174,16 +174,17 @@ where
 
     fn extract_subscription_id(message: Message) -> Result<u64, PubsubClientError> {
         let message_text = &message.into_text()?;
-        let json_msg: Map<String, Value> = serde_json::from_str(message_text)?;
 
-        if let Some(Number(x)) = json_msg.get("result") {
-            if let Some(x) = x.as_u64() {
-                return Ok(x);
+        if let Ok(json_msg) = serde_json::from_str::<Map<String, Value>>(message_text) {
+            if let Some(Number(x)) = json_msg.get("result") {
+                if let Some(x) = x.as_u64() {
+                    return Ok(x);
+                }
             }
         }
         // TODO: Add proper JSON RPC response/error handling...
         Err(PubsubClientError::UnexpectedMessageError(format!(
-            "{json_msg:?}"
+            "msg={message_text:?}"
         )))
     }
 
@@ -223,22 +224,25 @@ where
             ))?;
         let message = writable_socket.write().unwrap().read_message()?;
         let message_text = &message.into_text()?;
-        let json_msg: Map<String, Value> = serde_json::from_str(message_text)?;
 
-        if let Some(Object(version_map)) = json_msg.get("result") {
-            if let Some(node_version) = version_map.get("solana-core") {
-                let node_version = semver::Version::parse(
-                    node_version.as_str().unwrap_or_default(),
-                )
-                .map_err(|e| {
-                    PubsubClientError::RequestError(format!("failed to parse cluster version: {e}"))
-                })?;
-                return Ok(node_version);
+        if let Ok(json_msg) = serde_json::from_str::<Map<String, Value>>(message_text) {
+            if let Some(Object(version_map)) = json_msg.get("result") {
+                if let Some(node_version) = version_map.get("solana-core") {
+                    let node_version = semver::Version::parse(
+                        node_version.as_str().unwrap_or_default(),
+                    )
+                    .map_err(|e| {
+                        PubsubClientError::RequestError(format!(
+                            "failed to parse cluster version: {e}"
+                        ))
+                    })?;
+                    return Ok(node_version);
+                }
             }
         }
         // TODO: Add proper JSON RPC response/error handling...
         Err(PubsubClientError::UnexpectedMessageError(format!(
-            "{json_msg:?}"
+            "msg={message_text:?}"
         )))
     }
 
@@ -250,18 +254,18 @@ where
             return Ok(None);
         }
         let message_text = &message.into_text().unwrap();
-        let json_msg: Map<String, Value> = serde_json::from_str(message_text)?;
-
-        if let Some(Object(params)) = json_msg.get("params") {
-            if let Some(result) = params.get("result") {
-                let x: T = serde_json::from_value::<T>(result.clone()).unwrap();
-                return Ok(Some(x));
+        if let Ok(json_msg) = serde_json::from_str::<Map<String, Value>>(message_text) {
+            if let Some(Object(params)) = json_msg.get("params") {
+                if let Some(result) = params.get("result") {
+                    let x: T = serde_json::from_value::<T>(result.clone()).unwrap();
+                    return Ok(Some(x));
+                }
             }
         }
 
         // TODO: Add proper JSON RPC response/error handling...
         Err(PubsubClientError::UnexpectedMessageError(format!(
-            "{json_msg:?}"
+            "msg={message_text:?}"
         )))
     }
 

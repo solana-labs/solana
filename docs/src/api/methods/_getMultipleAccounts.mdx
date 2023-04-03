@@ -40,9 +40,14 @@ Configuration object containing the following fields:
 </Field>
 
 <Field name="dataSlice" type="object" optional={true}>
+  Request a slice of the account&apos;s data.
 
-limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - `length: <usize>` - number of bytes to return
+  - `offset: <usize>` - byte offset from which to start reading
 
+:::info
+Data slicing is only available for <code>base58</code>, <code>base64</code>, or <code>base64+zstd</code> encodings.
+:::
 </Field>
 
 <Field name="encoding" type="string" optional={true} defaultValue={"json"} href="/api/http#parsed-responses">

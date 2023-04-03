@@ -315,16 +315,21 @@ fn transfer_with_seed(
     )
 }
 
-pub fn process_instruction(
-    _first_instruction_account: IndexOfAccount,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
     let instruction = limited_deserialize(instruction_data)?;
 
     trace!("process_instruction: {:?}", instruction);
+
+    // Consume compute units if feature `native_programs_consume_cu` is activated,
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::native_programs_consume_cu::id())
+    {
+        invoke_context.consume_checked(150)?;
+    }
 
     let signers = instruction_context.get_signers(transaction_context)?;
     match instruction {
@@ -1867,9 +1872,9 @@ mod tests {
                 },
             ],
             Ok(()),
-            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
+            |invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
-                super::process_instruction(first_instruction_account, invoke_context)
+                super::process_instruction(invoke_context)
             },
         );
     }
@@ -2225,9 +2230,9 @@ mod tests {
                 },
             ],
             Err(NonceError::NoRecentBlockhashes.into()),
-            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
+            |invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
-                super::process_instruction(first_instruction_account, invoke_context)
+                super::process_instruction(invoke_context)
             },
         );
     }
