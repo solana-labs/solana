@@ -28,6 +28,7 @@ use {
         timing,
     },
     std::{
+        iter::repeat_with,
         net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -459,6 +460,7 @@ async fn setup_connection(
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout: Duration,
 ) {
+    const PRUNE_RANDOM_SAMPLE_SIZE: usize = 2;
     if let Ok(connecting_result) = timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await {
         if let Ok(new_connection) = connecting_result {
             stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
@@ -484,7 +486,8 @@ async fn setup_connection(
             if params.stake > 0 {
                 let mut connection_table_l = staked_connection_table.lock().unwrap();
                 if connection_table_l.total_size >= max_staked_connections {
-                    let num_pruned = connection_table_l.prune_random(params.stake);
+                    let num_pruned =
+                        connection_table_l.prune_random(PRUNE_RANDOM_SAMPLE_SIZE, params.stake);
                     stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
                 }
 
@@ -948,39 +951,27 @@ impl ConnectionTable {
         num_pruned
     }
 
-    fn connection_stake(&self, index: usize) -> Option<u64> {
-        self.table
-            .get_index(index)
-            .and_then(|(_, connection_vec)| connection_vec.first())
-            .map(|connection| connection.stake)
-    }
-
-    // Randomly select two connections, and evict the one with lower stake. If the stakes of both
-    // the connections are higher than the threshold_stake, reject the pruning attempt, and return 0.
-    fn prune_random(&mut self, threshold_stake: u64) -> usize {
-        let mut num_pruned = 0;
+    // Randomly selects sample_size many connections, evicts the one with the
+    // lowest stake, and returns the number of pruned connections.
+    // If the stakes of all the sampled connections are higher than the
+    // threshold_stake, rejects the pruning attempt, and returns 0.
+    fn prune_random(&mut self, sample_size: usize, threshold_stake: u64) -> usize {
         let mut rng = thread_rng();
-        // The candidate1 and candidate2 could potentially be the same. If so, the stake of the candidate
-        // will be compared just against the threshold_stake.
-        let candidate1 = rng.gen_range(0, self.table.len());
-        let candidate2 = rng.gen_range(0, self.table.len());
-
-        let candidate1_stake = self.connection_stake(candidate1).unwrap_or(0);
-        let candidate2_stake = self.connection_stake(candidate2).unwrap_or(0);
-
-        if candidate1_stake < threshold_stake || candidate2_stake < threshold_stake {
-            let removed = if candidate1_stake < candidate2_stake {
-                self.table.swap_remove_index(candidate1)
-            } else {
-                self.table.swap_remove_index(candidate2)
-            };
-
-            if let Some((_, removed_value)) = removed {
-                self.total_size -= removed_value.len();
-                num_pruned += removed_value.len();
-            }
-        }
-
+        let num_pruned = std::iter::once(self.table.len())
+            .filter(|&size| size > 0)
+            .flat_map(|size| repeat_with(move || rng.gen_range(0, size)))
+            .map(|index| {
+                let connection = self.table[index].first();
+                let stake = connection.map(|connection| connection.stake);
+                (index, stake)
+            })
+            .take(sample_size)
+            .min_by_key(|&(_, stake)| stake)
+            .filter(|&(_, stake)| stake < Some(threshold_stake))
+            .and_then(|(index, _)| self.table.swap_remove_index(index))
+            .map(|(_, connections)| connections.len())
+            .unwrap_or_default();
+        self.total_size = self.total_size.saturating_sub(num_pruned);
         num_pruned
     }
 
@@ -1793,12 +1784,15 @@ pub mod test {
 
         // Try pruninng with threshold stake less than all the entries in the table
         // It should fail to prune (i.e. return 0 number of pruned entries)
-        let pruned = table.prune_random(0);
+        let pruned = table.prune_random(/*sample_size:*/ 2, /*threshold_stake:*/ 0);
         assert_eq!(pruned, 0);
 
         // Try pruninng with threshold stake higher than all the entries in the table
         // It should succeed to prune (i.e. return 1 number of pruned entries)
-        let pruned = table.prune_random(num_entries as u64 + 1);
+        let pruned = table.prune_random(
+            2,                      // sample_size
+            num_entries as u64 + 1, // threshold_stake
+        );
         assert_eq!(pruned, 1);
     }
 
