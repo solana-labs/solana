@@ -150,14 +150,12 @@ struct SkippedSlotsInfo {
 }
 
 struct PartitionInfo {
-    partition_exists: bool,
     partition_start_time: Option<Instant>,
 }
 
 impl PartitionInfo {
     fn new() -> Self {
         Self {
-            partition_exists: false,
             partition_start_time: None,
         }
     }
@@ -165,41 +163,56 @@ impl PartitionInfo {
     fn update(
         &mut self,
         partition_detected: bool,
-        heaviest_bankslot: Slot,
+        heaviest_slot: Slot,
         last_voted_slot: Slot,
         reset_bank_slot: Slot,
+        heaviest_fork_failures: Vec<HeaviestForkFailures>,
+        switch_fork_decision: Option<SwitchForkDecision>,
     ) {
-        if !self.partition_exists && partition_detected {
+        if self.partition_start_time.is_none() && partition_detected {
             warn!("PARTITION DETECTED waiting to join heaviest fork: {} last vote: {:?}, reset slot: {}",
-                heaviest_bankslot,
+                heaviest_slot,
                 last_voted_slot,
                 reset_bank_slot,
             );
             datapoint_info!(
                 "replay_stage-partition-start",
-                ("heaviest_slot", heaviest_bankslot as i64, i64),
-                ("last_vote_slot", last_voted_slot as i64, i64),
-                ("reset_slot", reset_bank_slot as i64, i64)
-            );
-            self.partition_exists = true;
-            self.partition_start_time = Some(Instant::now());
-        } else if self.partition_exists && !partition_detected {
-            warn!(
-                "PARTITION resolved heaviest fork: {} last vote: {:?}, reset slot: {}",
-                heaviest_bankslot, last_voted_slot, reset_bank_slot
-            );
-            datapoint_info!(
-                "replay_stage-partition-resolved",
-                ("heaviest_slot", heaviest_bankslot as i64, i64),
+                ("heaviest_slot", heaviest_slot as i64, i64),
                 ("last_vote_slot", last_voted_slot as i64, i64),
                 ("reset_slot", reset_bank_slot as i64, i64),
                 (
-                    "partition_duration_secs",
-                    self.partition_start_time.unwrap().elapsed().as_secs() as i64,
+                    "heaviest_fork_failure_first",
+                    format!("{:?}", heaviest_fork_failures.first()),
+                    String
+                ),
+                (
+                    "heaviest_fork_failure_second",
+                    format!("{:?}", heaviest_fork_failures.get(1)),
+                    String
+                ),
+                (
+                    "switch_fork_decision",
+                    format!("{switch_fork_decision:?}"),
+                    String
+                ),
+            );
+            self.partition_start_time = Some(Instant::now());
+        } else if self.partition_start_time.is_some() && !partition_detected {
+            warn!(
+                "PARTITION resolved heaviest fork: {} last vote: {:?}, reset slot: {}",
+                heaviest_slot, last_voted_slot, reset_bank_slot
+            );
+            datapoint_info!(
+                "replay_stage-partition-resolved",
+                ("heaviest_slot", heaviest_slot as i64, i64),
+                ("last_vote_slot", last_voted_slot as i64, i64),
+                ("reset_slot", reset_bank_slot as i64, i64),
+                (
+                    "partition_duration_ms",
+                    self.partition_start_time.unwrap().elapsed().as_millis() as i64,
                     i64
                 ),
             );
-            self.partition_exists = false;
             self.partition_start_time = None;
         }
     }
@@ -792,10 +805,10 @@ impl ReplayStage {
                         heaviest_fork_failures
                     );
 
-                    for r in heaviest_fork_failures {
+                    for r in &heaviest_fork_failures {
                         if let HeaviestForkFailures::NoPropagatedConfirmation(slot) = r {
                             if let Some(latest_leader_slot) =
-                                progress.get_latest_leader_slot_must_exist(slot)
+                                progress.get_latest_leader_slot_must_exist(*slot)
                             {
                                 progress.log_propagated_stats(latest_leader_slot, &bank_forks);
                             }
@@ -806,48 +819,52 @@ impl ReplayStage {
 
                 let mut voting_time = Measure::start("voting_time");
                 // Vote on a fork
-                if let Some((ref vote_bank, ref switch_fork_decision)) = vote_bank {
-                    if let Some(votable_leader) =
-                        leader_schedule_cache.slot_leader_at(vote_bank.slot(), Some(vote_bank))
-                    {
-                        Self::log_leader_change(
-                            &my_pubkey,
-                            vote_bank.slot(),
-                            &mut current_leader,
-                            &votable_leader,
-                        );
-                    }
+                let switch_fork_decision =
+                    if let Some((ref vote_bank, ref switch_fork_decision)) = vote_bank {
+                        if let Some(votable_leader) =
+                            leader_schedule_cache.slot_leader_at(vote_bank.slot(), Some(vote_bank))
+                        {
+                            Self::log_leader_change(
+                                &my_pubkey,
+                                vote_bank.slot(),
+                                &mut current_leader,
+                                &votable_leader,
+                            );
+                        }
 
-                    Self::handle_votable_bank(
-                        vote_bank,
-                        switch_fork_decision,
-                        &bank_forks,
-                        &mut tower,
-                        &mut progress,
-                        &vote_account,
-                        &identity_keypair,
-                        &authorized_voter_keypairs.read().unwrap(),
-                        &blockstore,
-                        &leader_schedule_cache,
-                        &lockouts_sender,
-                        &accounts_background_request_sender,
-                        &latest_root_senders,
-                        &rpc_subscriptions,
-                        &block_commitment_cache,
-                        &mut heaviest_subtree_fork_choice,
-                        &bank_notification_sender,
-                        &mut duplicate_slots_tracker,
-                        &mut gossip_duplicate_confirmed_slots,
-                        &mut unfrozen_gossip_verified_vote_hashes,
-                        &mut voted_signatures,
-                        &mut has_new_vote_been_rooted,
-                        &mut replay_timing,
-                        &voting_sender,
-                        &mut epoch_slots_frozen_slots,
-                        &drop_bank_sender,
-                        wait_to_vote_slot,
-                    );
-                };
+                        Self::handle_votable_bank(
+                            vote_bank,
+                            switch_fork_decision,
+                            &bank_forks,
+                            &mut tower,
+                            &mut progress,
+                            &vote_account,
+                            &identity_keypair,
+                            &authorized_voter_keypairs.read().unwrap(),
+                            &blockstore,
+                            &leader_schedule_cache,
+                            &lockouts_sender,
+                            &accounts_background_request_sender,
+                            &latest_root_senders,
+                            &rpc_subscriptions,
+                            &block_commitment_cache,
+                            &mut heaviest_subtree_fork_choice,
+                            &bank_notification_sender,
+                            &mut duplicate_slots_tracker,
+                            &mut gossip_duplicate_confirmed_slots,
+                            &mut unfrozen_gossip_verified_vote_hashes,
+                            &mut voted_signatures,
+                            &mut has_new_vote_been_rooted,
+                            &mut replay_timing,
+                            &voting_sender,
+                            &mut epoch_slots_frozen_slots,
+                            &drop_bank_sender,
+                            wait_to_vote_slot,
+                        );
+                        Some(switch_fork_decision.clone())
+                    } else {
+                        None
+                    };
                 voting_time.stop();
 
                 let mut reset_bank_time = Measure::start("reset_bank");
@@ -930,6 +947,8 @@ impl ReplayStage {
                                 heaviest_bank.slot(),
                                 last_voted_slot,
                                 reset_bank.slot(),
+                                heaviest_fork_failures,
+                                switch_fork_decision,
                             );
                         }
                     }
