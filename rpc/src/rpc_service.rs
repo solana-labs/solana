@@ -583,7 +583,7 @@ mod tests {
         crate::rpc::{create_validator_exit, tests::new_test_cluster_info},
         solana_gossip::{
             crds::GossipRoute,
-            crds_value::{CrdsData, CrdsValue, SnapshotHashes},
+            crds_value::{AccountsHashes, CrdsData, CrdsValue},
         },
         solana_ledger::{
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -931,7 +931,7 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
                     known_validators[0],
                     vec![
                         (1, Hash::default()),
@@ -952,7 +952,7 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
                     known_validators[1],
                     vec![(1000 + health_check_slot_distance - 1, Hash::default())],
                 ))),
@@ -969,7 +969,7 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
                     known_validators[2],
                     vec![(1000 + health_check_slot_distance, Hash::default())],
                 ))),

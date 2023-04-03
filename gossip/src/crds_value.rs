@@ -86,7 +86,7 @@ pub enum CrdsData {
     Vote(VoteIndex, Vote),
     LowestSlot(/*DEPRECATED:*/ u8, LowestSlot),
     SnapshotHashes(SnapshotHashes),
-    AccountsHashes(SnapshotHashes),
+    AccountsHashes(AccountsHashes),
     EpochSlots(EpochSlotsIndex, EpochSlots),
     LegacyVersion(LegacyVersion),
     Version(Version),
@@ -154,7 +154,7 @@ impl CrdsData {
             // Index for LowestSlot is deprecated and should be zero.
             1 => CrdsData::LowestSlot(0, LowestSlot::new_rand(rng, pubkey)),
             2 => CrdsData::SnapshotHashes(SnapshotHashes::new_rand(rng, pubkey)),
-            3 => CrdsData::AccountsHashes(SnapshotHashes::new_rand(rng, pubkey)),
+            3 => CrdsData::AccountsHashes(AccountsHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
             5 => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
             _ => CrdsData::EpochSlots(
@@ -166,13 +166,13 @@ impl CrdsData {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
-pub struct SnapshotHashes {
+pub struct AccountsHashes {
     pub from: Pubkey,
     pub hashes: Vec<(Slot, Hash)>,
     pub wallclock: u64,
 }
 
-impl Sanitize for SnapshotHashes {
+impl Sanitize for AccountsHashes {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         sanitize_wallclock(self.wallclock)?;
         for (slot, _) in &self.hashes {
@@ -184,7 +184,7 @@ impl Sanitize for SnapshotHashes {
     }
 }
 
-impl SnapshotHashes {
+impl AccountsHashes {
     pub fn new(from: Pubkey, hashes: Vec<(Slot, Hash)>) -> Self {
         Self {
             from,
@@ -193,7 +193,7 @@ impl SnapshotHashes {
         }
     }
 
-    /// New random SnapshotHashes for tests and benchmarks.
+    /// New random AccountsHashes for tests and benchmarks.
     pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         let num_hashes = rng.gen_range(0, MAX_SNAPSHOT_HASHES) + 1;
         let hashes = std::iter::repeat_with(|| {
@@ -210,6 +210,8 @@ impl SnapshotHashes {
         }
     }
 }
+
+pub type SnapshotHashes = AccountsHashes;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct IncrementalSnapshotHashes {
@@ -633,7 +635,7 @@ impl CrdsValue {
         }
     }
 
-    pub(crate) fn accounts_hash(&self) -> Option<&SnapshotHashes> {
+    pub(crate) fn accounts_hash(&self) -> Option<&AccountsHashes> {
         match &self.data {
             CrdsData::AccountsHashes(slots) => Some(slots),
             _ => None,
