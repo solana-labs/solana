@@ -31,7 +31,6 @@ use {
     },
     std::{
         alloc::Layout,
-        borrow::Cow,
         cell::RefCell,
         fmt::{self, Debug},
         rc::Rc,
@@ -116,7 +115,7 @@ pub struct InvokeContext<'a> {
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
-    pub sysvar_cache: Cow<'a, SysvarCache>,
+    pub sysvar_cache: &'a SysvarCache,
     pub trace_log_stack: Vec<TraceLogStackFrame>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
@@ -138,7 +137,7 @@ impl<'a> InvokeContext<'a> {
         transaction_context: &'a mut TransactionContext,
         rent: Rent,
         builtin_programs: &'a [BuiltinProgram],
-        sysvar_cache: Cow<'a, SysvarCache>,
+        sysvar_cache: &'a SysvarCache,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
         tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
@@ -770,7 +769,7 @@ impl<'a> InvokeContext<'a> {
 
     /// Get cached sysvars
     pub fn get_sysvar_cache(&self) -> &SysvarCache {
-        &self.sysvar_cache
+        self.sysvar_cache
     }
 
     // Set this instruction syscall context
@@ -852,7 +851,7 @@ macro_rules! with_mock_invoke_context {
                 account::ReadableAccount, feature_set::FeatureSet, hash::Hash, sysvar::rent::Rent,
                 transaction_context::TransactionContext,
             },
-            std::{borrow::Cow, cell::RefCell, rc::Rc, sync::Arc},
+            std::{cell::RefCell, rc::Rc, sync::Arc},
             $crate::{
                 compute_budget::ComputeBudget, executor_cache::TransactionExecutorCache,
                 invoke_context::InvokeContext, log_collector::LogCollector,
@@ -889,9 +888,9 @@ macro_rules! with_mock_invoke_context {
             &mut $transaction_context,
             Rent::default(),
             &[],
-            Cow::Owned(sysvar_cache),
+            &sysvar_cache,
             Some(LogCollector::new_ref()),
-            ComputeBudget::default(),
+            compute_budget,
             Rc::new(RefCell::new(TransactionExecutorCache::default())),
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
@@ -941,7 +940,7 @@ pub fn mock_process_instruction(
     transaction_accounts.push((*loader_id, processor_account));
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
     if let Some(sysvar_cache) = sysvar_cache_override {
-        invoke_context.sysvar_cache = Cow::Borrowed(sysvar_cache);
+        invoke_context.sysvar_cache = &sysvar_cache;
     }
     if let Some(feature_set) = feature_set_override {
         invoke_context.feature_set = feature_set;

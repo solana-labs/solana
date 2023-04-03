@@ -3300,7 +3300,7 @@ mod tests {
         sysvar_cache.set_rent(src_rent);
 
         prepare_mockup!(invoke_context, program_id, bpf_loader::id());
-        invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
+        invoke_context.sysvar_cache = &sysvar_cache;
 
         // Test clock sysvar
         {
