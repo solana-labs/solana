@@ -98,7 +98,7 @@ pub struct Bucket<T: Copy + 'static> {
 
     /// # entries caller expects the map to need to contain.
     /// Used as a hint for the next time we need to grow.
-    anticipated_size: AtomicU64,
+    anticipated_size: u64,
 
     pub reallocated: Reallocated<IndexBucket<T>, DataBucket>,
 }
@@ -127,7 +127,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             data: vec![],
             stats,
             reallocated: Reallocated::default(),
-            anticipated_size: AtomicU64::default(),
+            anticipated_size: 0,
         }
     }
 
@@ -425,18 +425,17 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         }
     }
 
-    pub(crate) fn set_anticipated_count(&self, count: u64) {
-        self.anticipated_size.store(count, Ordering::Release);
+    pub(crate) fn set_anticipated_count(&mut self, count: u64) {
+        self.anticipated_size = count;
     }
 
     pub fn grow_index(&self, current_capacity_pow2: u8) {
         if self.index.capacity_pow2 == current_capacity_pow2 {
             let mut starting_size_pow2 = self.index.capacity_pow2;
-            let anticipated_size = self.anticipated_size.load(Ordering::Acquire);
-            if anticipated_size > 0 {
+            if self.anticipated_size > 0 {
                 // start the growth at the next pow2 larger than what would be required to hold `anticipated_size`.
                 // This will prevent unnecessary repeated grows at startup.
-                starting_size_pow2 = starting_size_pow2.max(anticipated_size.ilog2() as u8);
+                starting_size_pow2 = starting_size_pow2.max(self.anticipated_size.ilog2() as u8);
             }
             let mut m = Measure::start("grow_index");
             //debug!("GROW_INDEX: {}", current_capacity_pow2);

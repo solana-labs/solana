@@ -114,12 +114,6 @@ impl<T: Clone + Copy> BucketApi<T> {
     /// caller can specify that the index needs to hold approximately `count` entries soon.
     /// This gives a hint to the resizing algorithm and prevents repeated incremental resizes.
     pub fn set_anticipated_count(&self, count: u64) {
-        if let Some(bucket) = self.bucket.read().unwrap().as_ref() {
-            bucket.set_anticipated_count(count);
-            return;
-        }
-        // caller is about to write a lot of elements to this bucket, so we need to allocate it first
-        // so we have somewhere to store the anticipated count
         let mut bucket = self.get_write_bucket();
         bucket.as_mut().unwrap().set_anticipated_count(count);
     }
