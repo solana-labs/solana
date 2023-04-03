@@ -1017,7 +1017,7 @@ mod tests {
             deployment_slot: 19,
             effective_slot: 19,
             maybe_expiration_slot: Some(21),
-            usage_counter: Default::default(),
+            usage_counter: AtomicU64::default(),
         });
         assert!(!cache.replenish(program4, test_program).0);
 
