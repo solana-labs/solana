@@ -93,7 +93,8 @@ impl<O: BucketOccupied> BucketStorage<O> {
             "header size must be a multiple of u64"
         );
         let cell_size = elem_size * num_elems + offset as u64;
-        let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &stats);
+        let bytes = (1u64 << capacity_pow2) * cell_size;
+        let (mmap, path) = Self::new_map(&drives, bytes, &stats);
         Self {
             path,
             mmap,
@@ -234,14 +235,9 @@ impl<O: BucketOccupied> BucketStorage<O> {
         unsafe { std::slice::from_raw_parts_mut(ptr, len as usize) }
     }
 
-    fn new_map(
-        drives: &[PathBuf],
-        cell_size: usize,
-        capacity_pow2: u8,
-        stats: &BucketStats,
-    ) -> (MmapMut, PathBuf) {
+    /// allocate a new memory mapped file of size `bytes` on one of `drives`
+    fn new_map(drives: &[PathBuf], bytes: u64, stats: &BucketStats) -> (MmapMut, PathBuf) {
         let mut measure_new_file = Measure::start("measure_new_file");
-        let capacity = 1u64 << capacity_pow2;
         let r = thread_rng().gen_range(0, drives.len());
         let drive = &drives[r];
         let pos = format!("{}", thread_rng().gen_range(0, u128::MAX),);
@@ -265,8 +261,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         // the file so that we won't have to resize it later, which may be
         // expensive.
         //debug!("GROWING file {}", capacity * cell_size as u64);
-        data.seek(SeekFrom::Start(capacity * cell_size as u64 - 1))
-            .unwrap();
+        data.seek(SeekFrom::Start(bytes - 1)).unwrap();
         data.write_all(&[0]).unwrap();
         data.rewind().unwrap();
         measure_new_file.stop();
