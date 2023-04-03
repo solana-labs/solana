@@ -5749,6 +5749,7 @@ dependencies = [
  "solana-remote-wallet",
  "solana-sdk 1.16.0",
  "solana-version",
+ "tempfile",
  "tiny-bip39",
 ]
 

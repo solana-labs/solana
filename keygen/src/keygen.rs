@@ -564,7 +564,7 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let default_num_threads = num_cpus::get().to_string();
-    let matches = app(&default_num_threads, solana_version::version!()).get_matches();
+    let matches = app(&default_num_threads, solana_version::version!()).try_get_matches()?;
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
@@ -855,7 +855,10 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {
+        super::*,
+        tempfile::{tempdir, TempDir},
+    };
 
     fn process_test_command(args: &[&str]) -> Result<(), Box<dyn error::Error>> {
         let default_num_threads = num_cpus::get().to_string();
@@ -864,34 +867,33 @@ mod tests {
         do_main(&app_matches)
     }
 
-    fn create_tmp_keypair_and_config_file() -> (Pubkey, String, String) {
-        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+    fn create_tmp_keypair_and_config_file(
+        keypair_out_dir: &TempDir,
+        config_out_dir: &TempDir,
+    ) -> (Pubkey, String, String) {
         let keypair = Keypair::new();
-        let keypair_outfile = format!("{}/tmp/{}-keypair", out_dir, keypair.pubkey());
+        let keypair_path = keypair_out_dir
+            .path()
+            .join(format!("{}-keypair", keypair.pubkey()));
+        let keypair_outfile = keypair_path.into_os_string().into_string().unwrap();
         write_keypair_file(&keypair, &keypair_outfile).unwrap();
 
         let config = Config {
             keypair_path: keypair_outfile.clone(),
             ..Config::default()
         };
-        let config_outfile = format!("{}/tmp/{}-config", out_dir, keypair.pubkey());
+        let config_path = config_out_dir
+            .path()
+            .join(format!("{}-config", keypair.pubkey()));
+        let config_outfile = config_path.into_os_string().into_string().unwrap();
         config.save(&config_outfile).unwrap();
 
         (keypair.pubkey(), keypair_outfile, config_outfile)
     }
 
-    fn remove_tmp_keypair_and_config_file(keypair_path: &str, config_path: &str) {
-        std::fs::remove_file(keypair_path).unwrap();
-        std::fs::remove_file(config_path).unwrap();
-    }
-
-    fn tmp_outfile_path(name: &str) -> String {
-        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        format!("{out_dir}/tmp/{name}")
-    }
-
-    fn remove_tmp_outfile(outfile_path: &str) {
-        std::fs::remove_file(outfile_path).unwrap();
+    fn tmp_outfile_path(out_dir: &TempDir, name: &str) -> String {
+        let path = out_dir.path().join(format!("{name}"));
+        path.into_os_string().into_string().unwrap()
     }
 
     #[test]
@@ -905,7 +907,10 @@ mod tests {
 
     #[test]
     fn test_verify() {
-        let (correct_pubkey, keypair_path, config_path) = create_tmp_keypair_and_config_file();
+        let keypair_out_dir = tempdir().unwrap();
+        let config_out_dir = tempdir().unwrap();
+        let (correct_pubkey, keypair_path, config_path) =
+            create_tmp_keypair_and_config_file(&keypair_out_dir, &config_out_dir);
 
         // success case using a keypair file
         process_test_command(&[
@@ -955,7 +960,10 @@ mod tests {
         assert_eq!(result, expected);
 
         // keypair file takes precedence over config file
-        let (_, alt_keypair_path, alt_config_path) = create_tmp_keypair_and_config_file();
+        let alt_keypair_out_dir = tempdir().unwrap();
+        let alt_config_out_dir = tempdir().unwrap();
+        let (_, alt_keypair_path, alt_config_path) =
+            create_tmp_keypair_and_config_file(&alt_keypair_out_dir, &alt_config_out_dir);
 
         process_test_command(&[
             "solana-keygen",
@@ -980,86 +988,115 @@ mod tests {
 
         let expected = format!("Verification for public key: {incorrect_pubkey}: Failed");
         assert_eq!(result, expected);
-
-        remove_tmp_keypair_and_config_file(&keypair_path, &config_path);
-        remove_tmp_keypair_and_config_file(&alt_keypair_path, &alt_config_path);
     }
 
     #[test]
     fn test_pubkey() {
-        let (expected_pubkey, keypair_path, config_path) = create_tmp_keypair_and_config_file();
-        let outfile_path = tmp_outfile_path(&expected_pubkey.to_string());
+        let keypair_out_dir = tempdir().unwrap();
+        let config_out_dir = tempdir().unwrap();
+        let (expected_pubkey, keypair_path, config_path) =
+            create_tmp_keypair_and_config_file(&keypair_out_dir, &config_out_dir);
 
         // success case using a keypair file
-        process_test_command(&[
-            "solana-keygen",
-            "pubkey",
-            &keypair_path,
-            "--outfile",
-            &outfile_path,
-        ])
-        .unwrap();
+        {
+            let outfile_dir = tempdir().unwrap();
+            let outfile_path = tmp_outfile_path(&outfile_dir, &expected_pubkey.to_string());
 
-        let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
-        assert_eq!(result_pubkey, expected_pubkey);
-        remove_tmp_outfile(&outfile_path);
+            process_test_command(&[
+                "solana-keygen",
+                "pubkey",
+                &keypair_path,
+                "--outfile",
+                &outfile_path,
+            ])
+            .unwrap();
+
+            let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
+            assert_eq!(result_pubkey, expected_pubkey);
+        }
 
         // success case using a config file
-        process_test_command(&[
-            "solana-keygen",
-            "pubkey",
-            "--config",
-            &config_path,
-            "--outfile",
-            &outfile_path,
-        ])
-        .unwrap();
+        {
+            let outfile_dir = tempdir().unwrap();
+            let outfile_path = tmp_outfile_path(&outfile_dir, &expected_pubkey.to_string());
 
-        let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
-        assert_eq!(result_pubkey, expected_pubkey);
-        remove_tmp_outfile(&outfile_path);
+            process_test_command(&[
+                "solana-keygen",
+                "pubkey",
+                "--config",
+                &config_path,
+                "--outfile",
+                &outfile_path,
+            ])
+            .unwrap();
+
+            let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
+            assert_eq!(result_pubkey, expected_pubkey);
+        }
 
         // keypair file takes precedence over config file
-        let (_, alt_keypair_path, alt_config_path) = create_tmp_keypair_and_config_file();
+        {
+            let alt_keypair_out_dir = tempdir().unwrap();
+            let alt_config_out_dir = tempdir().unwrap();
+            let (_, _, alt_config_path) =
+                create_tmp_keypair_and_config_file(&alt_keypair_out_dir, &alt_config_out_dir);
+            let outfile_dir = tempdir().unwrap();
+            let outfile_path = tmp_outfile_path(&outfile_dir, &expected_pubkey.to_string());
 
-        process_test_command(&[
-            "solana-keygen",
-            "pubkey",
-            &keypair_path,
-            "--config",
-            &alt_config_path,
-            "--outfile",
-            &outfile_path,
-        ])
-        .unwrap();
+            process_test_command(&[
+                "solana-keygen",
+                "pubkey",
+                &keypair_path,
+                "--config",
+                &alt_config_path,
+                "--outfile",
+                &outfile_path,
+            ])
+            .unwrap();
 
-        let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
-        assert_eq!(result_pubkey, expected_pubkey);
-        remove_tmp_keypair_and_config_file(&alt_keypair_path, &alt_config_path);
+            let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
+            assert_eq!(result_pubkey, expected_pubkey);
+        }
 
         // refuse to overwrite file
-        let result = process_test_command(&[
-            "solana-keygen",
-            "pubkey",
-            "--config",
-            &config_path,
-            "--outfile",
-            &outfile_path,
-        ])
-        .unwrap_err()
-        .to_string();
+        {
+            let outfile_dir = tempdir().unwrap();
+            let outfile_path = tmp_outfile_path(&outfile_dir, &expected_pubkey.to_string());
 
-        let expected = format!("Refusing to overwrite {outfile_path} without --force flag");
-        assert_eq!(result, expected);
+            process_test_command(&[
+                "solana-keygen",
+                "pubkey",
+                &keypair_path,
+                "--outfile",
+                &outfile_path,
+            ])
+            .unwrap();
 
-        remove_tmp_outfile(&outfile_path);
-        remove_tmp_keypair_and_config_file(&keypair_path, &config_path);
+            let result = process_test_command(&[
+                "solana-keygen",
+                "pubkey",
+                "--config",
+                &config_path,
+                "--outfile",
+                &outfile_path,
+            ])
+            .unwrap_err()
+            .to_string();
+
+            let expected = format!("Refusing to overwrite {outfile_path} without --force flag");
+            assert_eq!(result, expected);
+        }
     }
 
     #[test]
     fn test_new() {
-        let (expected_pubkey, keypair_path, config_path) = create_tmp_keypair_and_config_file();
-        let outfile_path = tmp_outfile_path(&expected_pubkey.to_string());
+        let keypair_out_dir = tempdir().unwrap();
+        let config_out_dir = tempdir().unwrap();
+        let (expected_pubkey, _, _) =
+            create_tmp_keypair_and_config_file(&keypair_out_dir, &config_out_dir);
+
+        let outfile_dir = tempdir().unwrap();
+        let outfile_path = tmp_outfile_path(&outfile_dir, &expected_pubkey.to_string());
 
         // general success case
         process_test_command(&[
@@ -1157,9 +1194,6 @@ mod tests {
 
         let expected = "invalid derivation path: invalid prefix: -";
         assert_eq!(result, expected);
-
-        remove_tmp_outfile(&outfile_path);
-        remove_tmp_keypair_and_config_file(&keypair_path, &config_path);
     }
 
     #[test]
