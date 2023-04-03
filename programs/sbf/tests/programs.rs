@@ -22,6 +22,7 @@ use {
     solana_program_runtime::{
         compute_budget::ComputeBudget, invoke_context::InvokeContext, timings::ExecuteTimings,
     },
+    solana_rbpf::vm::ContextObject,
     solana_runtime::{
         bank::{
             DurableNonceFee, InnerInstruction, TransactionBalancesSet, TransactionExecutionDetails,
@@ -60,13 +61,7 @@ use {
     std::collections::HashMap,
 };
 use {
-    solana_bpf_loader_program::{
-        create_ebpf_vm, create_vm,
-        serialization::{deserialize_parameters, serialize_parameters},
-        syscalls::create_loader,
-    },
-    solana_program_runtime::invoke_context::with_mock_invoke_context,
-    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::VerifiedExecutable},
+    solana_program_runtime::invoke_context::mock_process_instruction,
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
@@ -80,7 +75,6 @@ use {
         bpf_loader, bpf_loader_deprecated,
         client::SyncClient,
         clock::UnixTimestamp,
-        entrypoint::SUCCESS,
         fee_calculator::FeeRateGovernor,
         genesis_config::ClusterType,
         hash::Hash,
@@ -94,131 +88,6 @@ use {
     },
     std::{str::FromStr, sync::Arc, time::Duration},
 };
-
-fn run_program(name: &str) -> u64 {
-    let elf = load_program_from_file(name);
-    let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 0, false, |invoke_context| {
-        let loader = create_loader(
-            &invoke_context.feature_set,
-            &ComputeBudget::default(),
-            true,
-            true,
-            true,
-        )
-        .unwrap();
-        let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
-
-        #[allow(unused_mut)]
-        let mut verified_executable =
-            VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-                .unwrap();
-
-        let run_program_iterations = {
-            #[cfg(target_arch = "x86_64")]
-            {
-                verified_executable.jit_compile().unwrap();
-                2
-            }
-            #[cfg(not(target_arch = "x86_64"))]
-            1
-        };
-
-        let mut instruction_count = 0;
-        let mut trace_log = None;
-        for i in 0..run_program_iterations {
-            let transaction_context = &mut invoke_context.transaction_context;
-            let instruction_context = transaction_context
-                .get_current_instruction_context()
-                .unwrap();
-            let caller = *instruction_context
-                .get_last_program_key(transaction_context)
-                .unwrap();
-            transaction_context
-                .set_return_data(caller, Vec::new())
-                .unwrap();
-
-            let (parameter_bytes, regions, account_lengths) = serialize_parameters(
-                invoke_context.transaction_context,
-                invoke_context
-                    .transaction_context
-                    .get_current_instruction_context()
-                    .unwrap(),
-                true, // should_cap_ix_accounts
-            )
-            .unwrap();
-
-            {
-                create_vm!(
-                    vm,
-                    &verified_executable,
-                    stack,
-                    heap,
-                    regions,
-                    account_lengths.clone(),
-                    invoke_context
-                );
-                let mut vm = vm.unwrap();
-                let (compute_units_consumed, result) = vm.execute_program(i == 0);
-                assert_eq!(SUCCESS, result.unwrap());
-                if i == 1 {
-                    assert_eq!(instruction_count, compute_units_consumed);
-                }
-                instruction_count = compute_units_consumed;
-                if i == 0 {
-                    trace_log = Some(
-                        vm.env
-                            .context_object_pointer
-                            .trace_log_stack
-                            .last()
-                            .expect("Inconsistent trace log stack")
-                            .trace_log
-                            .clone(),
-                    );
-                } else {
-                    let interpreter = trace_log.as_ref().unwrap().as_slice();
-                    let mut jit = vm
-                        .env
-                        .context_object_pointer
-                        .trace_log_stack
-                        .last()
-                        .expect("Inconsistent trace log stack")
-                        .trace_log
-                        .as_slice();
-                    if jit.len() > interpreter.len() {
-                        jit = &jit[0..interpreter.len()];
-                    }
-                    assert_eq!(interpreter, jit);
-                    trace_log = None;
-                }
-            }
-            assert!(match deserialize_parameters(
-                invoke_context.transaction_context,
-                invoke_context
-                    .transaction_context
-                    .get_current_instruction_context()
-                    .unwrap(),
-                parameter_bytes.as_slice(),
-                &account_lengths,
-            ) {
-                Ok(()) => true,
-                Err(InstructionError::ModifiedProgramId) => true,
-                Err(InstructionError::ExternalAccountLamportSpend) => true,
-                Err(InstructionError::ReadonlyLamportChange) => true,
-                Err(InstructionError::ExecutableLamportChange) => true,
-                Err(InstructionError::ExecutableAccountNotRentExempt) => true,
-                Err(InstructionError::ExecutableModified) => true,
-                Err(InstructionError::AccountDataSizeChanged) => true,
-                Err(InstructionError::InvalidRealloc) => true,
-                Err(InstructionError::ExecutableDataModified) => true,
-                Err(InstructionError::ReadonlyDataModified) => true,
-                Err(InstructionError::ExternalAccountDataModified) => true,
-                _ => false,
-            });
-        }
-        instruction_count
-    })
-}
 
 #[cfg(feature = "sbf_rust")]
 fn process_transaction_and_record_inner(
@@ -1503,8 +1372,8 @@ fn assert_instruction_count() {
             ("noop++", 5),
             ("relative_call", 210),
             ("return_data", 980),
-            ("sanity", 2377),
-            ("sanity++", 2277),
+            ("sanity", 3259),
+            ("sanity++", 3159),
             ("secp256k1_recover", 25383),
             ("sha", 1355),
             ("struct_pass", 108),
@@ -1526,30 +1395,70 @@ fn assert_instruction_count() {
             ("solana_sbf_rust_noop", 275),
             ("solana_sbf_rust_param_passing", 146),
             ("solana_sbf_rust_rand", 378),
-            ("solana_sbf_rust_sanity", 51931),
+            ("solana_sbf_rust_sanity", 10759),
             ("solana_sbf_rust_secp256k1_recover", 91185),
             ("solana_sbf_rust_sha", 24059),
         ]);
     }
 
-    let mut passed = true;
     println!("\n  {:36} expected actual  diff", "SBF program");
-    for program in programs.iter() {
-        let count = run_program(program.0);
-        let diff: i64 = count as i64 - program.1 as i64;
-        println!(
-            "  {:36} {:8} {:6} {:+5} ({:+3.0}%)",
-            program.0,
-            program.1,
-            count,
-            diff,
-            100.0_f64 * count as f64 / program.1 as f64 - 100.0_f64,
+    for (program_name, expected_consumption) in programs.iter() {
+        let loader_id = bpf_loader::id();
+        let program_key = Pubkey::new_unique();
+        let mut transaction_accounts = vec![
+            (program_key, AccountSharedData::new(0, 0, &loader_id)),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(0, 8, &program_key),
+            ),
+        ];
+        let instruction_accounts = vec![AccountMeta {
+            pubkey: transaction_accounts[1].0,
+            is_signer: false,
+            is_writable: false,
+        }];
+        transaction_accounts[0]
+            .1
+            .set_data_from_slice(&load_program_from_file(program_name));
+        transaction_accounts[0].1.set_executable(true);
+        transaction_accounts[1]
+            .1
+            .set_state(expected_consumption)
+            .unwrap();
+
+        print!("  {:36} {:8}", program_name, *expected_consumption);
+        mock_process_instruction(
+            &loader_id,
+            vec![0],
+            &[],
+            transaction_accounts,
+            instruction_accounts,
+            Ok(()),
+            |invoke_context: &mut InvokeContext| {
+                let expected_consumption: u64 = invoke_context
+                    .transaction_context
+                    .get_current_instruction_context()
+                    .unwrap()
+                    .try_borrow_instruction_account(&invoke_context.transaction_context, 0)
+                    .unwrap()
+                    .get_state()
+                    .unwrap();
+                let prev_compute_meter = invoke_context.get_remaining();
+                let _result = solana_bpf_loader_program::process_instruction(invoke_context);
+                let consumption = prev_compute_meter.saturating_sub(invoke_context.get_remaining());
+                let diff: i64 = consumption as i64 - expected_consumption as i64;
+                println!(
+                    "{:6} {:+5} ({:+3.0}%)",
+                    consumption,
+                    diff,
+                    100.0_f64 * consumption as f64 / expected_consumption as f64 - 100.0_f64,
+                );
+                assert_eq!(consumption, expected_consumption);
+                Ok(())
+            },
+            |_invoke_context| {},
         );
-        if count > program.1 {
-            passed = false;
-        }
     }
-    assert!(passed);
 }
 
 #[test]

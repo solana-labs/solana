@@ -1725,10 +1725,9 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            None,
             expected_result,
             super::process_instruction,
+            |_invoke_context| {},
         )
     }
 
@@ -2011,12 +2010,10 @@ mod tests {
             &[],
             vec![(program_id, program_account.clone())],
             Vec::new(),
-            None,
-            None,
             Err(InstructionError::ProgramFailedToComplete),
-            |invoke_context: &mut InvokeContext| {
+            super::process_instruction,
+            |invoke_context| {
                 invoke_context.mock_set_remaining(0);
-                super::process_instruction(invoke_context)
             },
         );
 
@@ -2557,10 +2554,9 @@ mod tests {
                 &instruction_data,
                 transaction_accounts,
                 instruction_accounts,
-                None,
-                None,
                 expected_result,
                 super::process_instruction,
+                |_invoke_context| {},
             )
         }
 

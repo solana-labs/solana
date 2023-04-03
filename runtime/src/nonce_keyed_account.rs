@@ -272,15 +272,15 @@ mod test {
     use {
         super::*,
         assert_matches::assert_matches,
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::with_mock_invoke_context,
         solana_sdk::{
             account::AccountSharedData,
-            hash::{hash, Hash},
+            hash::hash,
             nonce::{self, State},
             nonce_account::{create_account, verify_nonce_account},
             system_instruction::SystemError,
             system_program,
-            transaction_context::{InstructionAccount, TransactionContext},
+            transaction_context::InstructionAccount,
         },
     };
 
@@ -309,7 +309,7 @@ mod test {
                 ..Rent::default()
             };
             let from_lamports = $rent.minimum_balance(State::size()) + 42;
-            let accounts = vec![
+            let transaction_accounts = vec![
                 (
                     Pubkey::new_unique(),
                     create_account(from_lamports).into_inner(),
@@ -333,9 +333,7 @@ mod test {
                     is_writable: true,
                 },
             ];
-            let mut transaction_context =
-                TransactionContext::new(accounts, Some(Rent::default()), 1, 1);
-            let mut $invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+            with_mock_invoke_context!($invoke_context, transaction_context, transaction_accounts);
         };
     }
 

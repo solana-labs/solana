@@ -21,7 +21,7 @@ use {
         transaction::TransactionError,
         transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
     },
-    std::{borrow::Cow, cell::RefCell, rc::Rc, sync::Arc},
+    std::{cell::RefCell, rc::Rc, sync::Arc},
 };
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -71,7 +71,7 @@ impl MessageProcessor {
             transaction_context,
             rent,
             builtin_programs,
-            Cow::Borrowed(sysvar_cache),
+            sysvar_cache,
             log_collector,
             compute_budget,
             tx_executor_cache,
