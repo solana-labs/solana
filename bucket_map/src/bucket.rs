@@ -151,11 +151,11 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             let ix = IndexEntryPlaceInBucket::new(ii);
             let key = ix.key(&self.index);
             if range.map(|r| r.contains(key)).unwrap_or(true) {
-                let val = ix.read_value(&self.index, &self.data);
+                let (v, ref_count) = ix.read_value(&self.index, &self.data);
                 result.push(BucketItem {
                     pubkey: *key,
-                    ref_count: ix.ref_count(&self.index),
-                    slot_list: val.map(|(v, _ref_count)| v.to_vec()).unwrap_or_default(),
+                    ref_count,
+                    slot_list: v.to_vec(),
                 });
             }
         }
@@ -264,7 +264,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     pub fn read_value(&self, key: &Pubkey) -> Option<(&[T], RefCount)> {
         //debug!("READ_VALUE: {:?}", key);
         let (elem, _) = self.find_index_entry(key)?;
-        elem.read_value(&self.index, &self.data)
+        Some(elem.read_value(&self.index, &self.data))
     }
 
     pub fn try_write(

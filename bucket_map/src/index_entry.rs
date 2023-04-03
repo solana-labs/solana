@@ -281,17 +281,17 @@ impl<T: Copy> IndexEntryPlaceInBucket<T> {
         index_entry.set_slot_count_enum_value(value);
     }
 
-    pub fn ref_count(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> RefCount {
+    fn ref_count(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> RefCount {
         let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
         index_entry.packed_ref_count.ref_count()
     }
 
-    pub fn read_value<'a>(
+    pub(crate) fn read_value<'a>(
         &self,
         index_bucket: &'a BucketStorage<IndexBucket<T>>,
         data_buckets: &'a [BucketStorage<DataBucket>],
-    ) -> Option<(&'a [T], RefCount)> {
-        Some((
+    ) -> (&'a [T], RefCount) {
+        (
             match self.get_slot_count_enum(index_bucket) {
                 OccupiedEnum::ZeroSlots => {
                     // num_slots is 0. This means we don't have an actual allocation.
@@ -315,7 +315,7 @@ impl<T: Copy> IndexEntryPlaceInBucket<T> {
                 }
             },
             self.ref_count(index_bucket),
-        ))
+        )
     }
 
     pub fn new(ix: u64) -> Self {
