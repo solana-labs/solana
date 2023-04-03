@@ -120,8 +120,8 @@ pub fn compute_hash_time_ns(hashes_sample_size: u64) -> u64 {
 }
 
 pub fn compute_hashes_per_tick(duration: Duration, hashes_sample_size: u64) -> u64 {
-    let elapsed = compute_hash_time_ns(hashes_sample_size) / (1000 * 1000);
-    duration.as_millis() as u64 * hashes_sample_size / elapsed
+    let elapsed_ms = compute_hash_time_ns(hashes_sample_size) / (1000 * 1000);
+    duration.as_millis() as u64 * hashes_sample_size / elapsed_ms
 }
 
 #[cfg(test)]
