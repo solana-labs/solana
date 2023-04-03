@@ -11,6 +11,7 @@ use {
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
+        clock::Clock,
         feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
@@ -20,7 +21,6 @@ use {
             program::id,
             state::{Authorized, Lockup},
         },
-        sysvar::clock::Clock,
         transaction_context::{IndexOfAccount, InstructionContext, TransactionContext},
     },
 };
@@ -499,7 +499,10 @@ mod tests {
             invoke_context::mock_process_instruction, sysvar_cache::SysvarCache,
         },
         solana_sdk::{
-            account::{self, AccountSharedData, ReadableAccount, WritableAccount},
+            account::{
+                create_account_shared_data_for_test, AccountSharedData, ReadableAccount,
+                WritableAccount,
+            },
             account_utils::StateMut,
             clock::{Epoch, UnixTimestamp},
             feature_set::FeatureSet,
@@ -517,8 +520,8 @@ mod tests {
                 MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION,
             },
             stake_history::{StakeHistory, StakeHistoryEntry},
-            system_program, sysvar,
-            sysvar::{clock, rent, stake_history},
+            system_program,
+            sysvar::{clock, rent, rewards, stake_history},
         },
         solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
         std::{
@@ -609,26 +612,22 @@ mod tests {
             .iter()
             .map(|meta| meta.pubkey)
             .collect();
-        pubkeys.insert(sysvar::clock::id());
+        pubkeys.insert(clock::id());
         let transaction_accounts = pubkeys
             .iter()
             .map(|pubkey| {
                 (
                     *pubkey,
-                    if sysvar::clock::check_id(pubkey) {
-                        account::create_account_shared_data_for_test(
-                            &sysvar::clock::Clock::default(),
-                        )
-                    } else if sysvar::rewards::check_id(pubkey) {
-                        account::create_account_shared_data_for_test(
-                            &sysvar::rewards::Rewards::new(0.0),
-                        )
-                    } else if sysvar::stake_history::check_id(pubkey) {
-                        account::create_account_shared_data_for_test(&StakeHistory::default())
+                    if clock::check_id(pubkey) {
+                        create_account_shared_data_for_test(&clock::Clock::default())
+                    } else if rewards::check_id(pubkey) {
+                        create_account_shared_data_for_test(&rewards::Rewards::new(0.0))
+                    } else if stake_history::check_id(pubkey) {
+                        create_account_shared_data_for_test(&StakeHistory::default())
                     } else if stake_config::check_id(pubkey) {
                         config::create_account(0, &stake_config::Config::default())
-                    } else if sysvar::rent::check_id(pubkey) {
-                        account::create_account_shared_data_for_test(&Rent::default())
+                    } else if rent::check_id(pubkey) {
+                        create_account_shared_data_for_test(&Rent::default())
                     } else if *pubkey == invalid_stake_state_pubkey() {
                         AccountSharedData::new(0, 0, &id())
                     } else if *pubkey == invalid_vote_state_pubkey() {
@@ -914,20 +913,17 @@ mod tests {
         // these will not call stake_state, have bogus contents
         let stake_address = Pubkey::new_unique();
         let stake_account = create_default_stake_account();
-        let rent_address = sysvar::rent::id();
+        let rent_address = rent::id();
         let rent = Rent::default();
-        let rent_account = account::create_account_shared_data_for_test(&rent);
-        let rewards_address = sysvar::rewards::id();
-        let rewards_account =
-            account::create_account_shared_data_for_test(&sysvar::rewards::Rewards::new(0.0));
-        let stake_history_address = sysvar::stake_history::id();
-        let stake_history_account =
-            account::create_account_shared_data_for_test(&StakeHistory::default());
+        let rent_account = create_account_shared_data_for_test(&rent);
+        let rewards_address = rewards::id();
+        let rewards_account = create_account_shared_data_for_test(&rewards::Rewards::new(0.0));
+        let stake_history_address = stake_history::id();
+        let stake_history_account = create_account_shared_data_for_test(&StakeHistory::default());
         let vote_address = Pubkey::new_unique();
         let vote_account = AccountSharedData::new(0, 0, &solana_vote_program::id());
-        let clock_address = sysvar::clock::id();
-        let clock_account =
-            account::create_account_shared_data_for_test(&sysvar::clock::Clock::default());
+        let clock_address = clock::id();
+        let clock_account = create_account_shared_data_for_test(&clock::Clock::default());
         let config_address = stake_config::id();
         let config_account = config::create_account(0, &stake_config::Config::default());
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -1188,13 +1184,13 @@ mod tests {
         let authorized_address = Pubkey::new_unique();
         let authorized_account = create_default_account();
         let new_authorized_account = create_default_account();
-        let clock_address = sysvar::clock::id();
-        let clock_account = account::create_account_shared_data_for_test(&Clock::default());
+        let clock_address = clock::id();
+        let clock_account = create_account_shared_data_for_test(&Clock::default());
         let custodian = Pubkey::new_unique();
         let custodian_account = create_default_account();
         let rent = Rent::default();
-        let rent_address = sysvar::rent::id();
-        let rent_account = account::create_account_shared_data_for_test(&rent);
+        let rent_address = rent::id();
+        let rent_account = create_account_shared_data_for_test(&rent);
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
 
@@ -1560,10 +1556,7 @@ mod tests {
         .unwrap();
         let mut transaction_accounts = vec![
             (stake_address, stake_account.clone()),
-            (
-                sysvar::rent::id(),
-                account::create_account_shared_data_for_test(&rent),
-            ),
+            (rent::id(), create_account_shared_data_for_test(&rent)),
         ];
         let instruction_accounts = vec![
             AccountMeta {
@@ -1572,7 +1565,7 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::rent::id(),
+                pubkey: rent::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -1609,8 +1602,8 @@ mod tests {
 
         // not enough balance for rent
         transaction_accounts[1] = (
-            sysvar::rent::id(),
-            account::create_account_shared_data_for_test(&Rent {
+            rent::id(),
+            create_account_shared_data_for_test(&Rent {
                 lamports_per_byte_year: rent.lamports_per_byte_year + 1,
                 ..rent
             }),
@@ -1668,12 +1661,12 @@ mod tests {
             (to_address, to_account),
             (authority_address, AccountSharedData::default()),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&Clock::default()),
+                clock::id(),
+                create_account_shared_data_for_test(&Clock::default()),
             ),
             (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
         ];
         let mut instruction_accounts = vec![
@@ -1683,7 +1676,7 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -1793,12 +1786,12 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -1846,8 +1839,8 @@ mod tests {
             (stake_address, stake_account),
             (authority_address, AccountSharedData::default()),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&Clock::default()),
+                clock::id(),
+                create_account_shared_data_for_test(&Clock::default()),
             ),
         ];
         let mut instruction_accounts = vec![
@@ -1857,7 +1850,7 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -1966,8 +1959,8 @@ mod tests {
             (stake_address, stake_account),
             (authority_base_address, AccountSharedData::default()),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&Clock::default()),
+                clock::id(),
+                create_account_shared_data_for_test(&Clock::default()),
             ),
         ];
         let mut instruction_accounts = vec![
@@ -1982,7 +1975,7 @@ mod tests {
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -2094,12 +2087,12 @@ mod tests {
                 AccountSharedData::new(42, 0, &system_program::id()),
             ),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&Clock::default()),
+                clock::id(),
+                create_account_shared_data_for_test(&Clock::default()),
             ),
             (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
             (
                 stake_config::id(),
@@ -2118,12 +2111,12 @@ mod tests {
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -2156,7 +2149,7 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -2181,7 +2174,7 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -2241,7 +2234,7 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -2299,13 +2292,10 @@ mod tests {
             (stake_address, stake_account.clone()),
             (vote_address, vote_account),
             (vote_address_2, vote_account_2.clone()),
+            (clock::id(), create_account_shared_data_for_test(&clock)),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&clock),
-            ),
-            (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
             (
                 stake_config::id(),
@@ -2324,12 +2314,12 @@ mod tests {
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -2377,10 +2367,7 @@ mod tests {
         // verify that delegate fails as stake is active and not deactivating
         clock.epoch += 1;
         transaction_accounts[0] = (stake_address, accounts[0].clone());
-        transaction_accounts[3] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[3] = (clock::id(), create_account_shared_data_for_test(&clock));
         process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -2401,7 +2388,7 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -2449,10 +2436,7 @@ mod tests {
 
         // without stake history, cool down is instantaneous
         clock.epoch += 1;
-        transaction_accounts[3] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[3] = (clock::id(), create_account_shared_data_for_test(&clock));
 
         // verify that delegate can be called to new vote account, 2nd is redelegate
         transaction_accounts[0] = (stake_address, accounts[0].clone());
@@ -2537,13 +2521,10 @@ mod tests {
                 AccountSharedData::new(1, 0, &system_program::id()),
             ),
             (authority_address, AccountSharedData::default()),
+            (clock::id(), create_account_shared_data_for_test(&clock)),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&clock),
-            ),
-            (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
             (
                 stake_config::id(),
@@ -2562,12 +2543,12 @@ mod tests {
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -2589,7 +2570,7 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -2610,10 +2591,7 @@ mod tests {
         transaction_accounts[0] = (stake_address, accounts[0].clone());
 
         clock.epoch += 1;
-        transaction_accounts[2] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[2] = (clock::id(), create_account_shared_data_for_test(&clock));
         let accounts = process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::Deactivate).unwrap(),
@@ -2625,10 +2603,7 @@ mod tests {
 
         // Once deactivated, we withdraw stake to new account
         clock.epoch += 1;
-        transaction_accounts[2] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[2] = (clock::id(), create_account_shared_data_for_test(&clock));
         let withdraw_lamports = initial_lamports / 2;
         let accounts = process_instruction(
             Arc::clone(&feature_set),
@@ -2646,12 +2621,12 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: sysvar::stake_history::id(),
+                    pubkey: stake_history::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -2668,10 +2643,7 @@ mod tests {
         transaction_accounts[0] = (stake_address, accounts[0].clone());
 
         clock.epoch += 1;
-        transaction_accounts[2] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[2] = (clock::id(), create_account_shared_data_for_test(&clock));
         let accounts = process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -2686,10 +2658,7 @@ mod tests {
         transaction_accounts[0] = (stake_address, accounts[0].clone());
 
         clock.epoch += 1;
-        transaction_accounts[2] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[2] = (clock::id(), create_account_shared_data_for_test(&clock));
         let accounts = process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::Deactivate).unwrap(),
@@ -2706,10 +2675,7 @@ mod tests {
             .unwrap();
 
         clock.epoch += 1;
-        transaction_accounts[2] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[2] = (clock::id(), create_account_shared_data_for_test(&clock));
         let accounts = process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -2742,7 +2708,7 @@ mod tests {
             (split_to_address, split_to_account),
             (
                 rent::id(),
-                account::create_account_shared_data_for_test(&Rent {
+                create_account_shared_data_for_test(&Rent {
                     lamports_per_byte_year: 0,
                     ..Rent::default()
                 }),
@@ -2862,16 +2828,16 @@ mod tests {
             ),
             (custodian_address, AccountSharedData::default()),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&Clock::default()),
+                clock::id(),
+                create_account_shared_data_for_test(&Clock::default()),
             ),
             (
-                sysvar::rent::id(),
-                account::create_account_shared_data_for_test(&Rent::free()),
+                rent::id(),
+                create_account_shared_data_for_test(&Rent::free()),
             ),
             (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
             (
                 stake_config::id(),
@@ -2890,12 +2856,12 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -2949,7 +2915,7 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::rent::id(),
+                    pubkey: rent::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -2984,12 +2950,12 @@ mod tests {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: sysvar::stake_history::id(),
+                    pubkey: stake_history::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -3036,7 +3002,7 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -3050,10 +3016,7 @@ mod tests {
             epoch: 100,
             ..Clock::default()
         };
-        transaction_accounts[5] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[5] = (clock::id(), create_account_shared_data_for_test(&clock));
 
         // Try to withdraw more than what's available
         process_instruction(
@@ -3150,13 +3113,10 @@ mod tests {
             (stake_address, stake_account),
             (vote_address, vote_account),
             (recipient_address, AccountSharedData::default()),
+            (clock::id(), create_account_shared_data_for_test(&clock)),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&clock),
-            ),
-            (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
             (
                 stake_config::id(),
@@ -3175,12 +3135,12 @@ mod tests {
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -3208,12 +3168,12 @@ mod tests {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: sysvar::stake_history::id(),
+                    pubkey: stake_history::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -3234,14 +3194,11 @@ mod tests {
             &[stake_from(&accounts[0]).unwrap().delegation],
         );
         transaction_accounts[4] = (
-            sysvar::stake_history::id(),
-            account::create_account_shared_data_for_test(&stake_history),
+            stake_history::id(),
+            create_account_shared_data_for_test(&stake_history),
         );
         clock.epoch = 0;
-        transaction_accounts[3] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[3] = (clock::id(), create_account_shared_data_for_test(&clock));
         process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::Withdraw(
@@ -3281,13 +3238,10 @@ mod tests {
             (stake_address, stake_account.clone()),
             (recipient_address, AccountSharedData::default()),
             (custodian_address, AccountSharedData::default()),
+            (clock::id(), create_account_shared_data_for_test(&clock)),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&clock),
-            ),
-            (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
         ];
         let mut instruction_accounts = vec![
@@ -3302,12 +3256,12 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -3366,10 +3320,7 @@ mod tests {
         // should pass, lockup has expired
         instruction_accounts.pop();
         clock.epoch += 1;
-        transaction_accounts[3] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[3] = (clock::id(), create_account_shared_data_for_test(&clock));
         let accounts = process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::Withdraw(total_lamports)).unwrap(),
@@ -3405,12 +3356,12 @@ mod tests {
             (recipient_address, AccountSharedData::default()),
             (custodian_address, AccountSharedData::default()),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&Clock::default()),
+                clock::id(),
+                create_account_shared_data_for_test(&Clock::default()),
             ),
             (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
         ];
         let instruction_accounts = vec![
@@ -3425,12 +3376,12 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -3495,12 +3446,12 @@ mod tests {
             (stake_address, stake_account),
             (vote_address, vote_account),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&Clock::default()),
+                clock::id(),
+                create_account_shared_data_for_test(&Clock::default()),
             ),
             (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
             (
                 stake_config::id(),
@@ -3514,7 +3465,7 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -3557,12 +3508,12 @@ mod tests {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: sysvar::stake_history::id(),
+                    pubkey: stake_history::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -3629,16 +3580,16 @@ mod tests {
             (authorized_address, AccountSharedData::default()),
             (custodian_address, AccountSharedData::default()),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&Clock::default()),
+                clock::id(),
+                create_account_shared_data_for_test(&Clock::default()),
             ),
             (
-                sysvar::rent::id(),
-                account::create_account_shared_data_for_test(&Rent::free()),
+                rent::id(),
+                create_account_shared_data_for_test(&Rent::free()),
             ),
             (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
             (
                 stake_config::id(),
@@ -3652,7 +3603,7 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -3693,7 +3644,7 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::rent::id(),
+                    pubkey: rent::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -3739,12 +3690,12 @@ mod tests {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: sysvar::stake_history::id(),
+                    pubkey: stake_history::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -3814,10 +3765,7 @@ mod tests {
             epoch: Epoch::MAX,
             ..Clock::default()
         };
-        transaction_accounts[4] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[4] = (clock::id(), create_account_shared_data_for_test(&clock));
 
         // should fail, custodian cannot change it
         process_instruction(
@@ -3855,7 +3803,7 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -3900,7 +3848,7 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::rent::id(),
+                pubkey: rent::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -3918,10 +3866,7 @@ mod tests {
                 &instruction_data,
                 vec![
                     (stake_address, stake_account),
-                    (
-                        sysvar::rent::id(),
-                        account::create_account_shared_data_for_test(&rent),
-                    ),
+                    (rent::id(), create_account_shared_data_for_test(&rent)),
                 ],
                 instruction_accounts.clone(),
                 expected_result,
@@ -3966,12 +3911,12 @@ mod tests {
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -4006,12 +3951,12 @@ mod tests {
                         (stake_address, stake_account),
                         (vote_address, vote_account.clone()),
                         (
-                            sysvar::clock::id(),
-                            account::create_account_shared_data_for_test(&Clock::default()),
+                            clock::id(),
+                            create_account_shared_data_for_test(&Clock::default()),
                         ),
                         (
-                            sysvar::stake_history::id(),
-                            account::create_account_shared_data_for_test(&StakeHistory::default()),
+                            stake_history::id(),
+                            create_account_shared_data_for_test(&StakeHistory::default()),
                         ),
                         (
                             stake_config::id(),
@@ -4111,10 +4056,7 @@ mod tests {
                     vec![
                         (source_address, source_account),
                         (dest_address, dest_account.clone()),
-                        (
-                            sysvar::rent::id(),
-                            account::create_account_shared_data_for_test(&rent),
-                        ),
+                        (rent::id(), create_account_shared_data_for_test(&rent)),
                     ],
                     instruction_accounts.clone(),
                     expected_result.clone(),
@@ -4188,10 +4130,7 @@ mod tests {
                     vec![
                         (source_address, source_account),
                         (dest_address, dest_account.clone()),
-                        (
-                            sysvar::rent::id(),
-                            account::create_account_shared_data_for_test(&rent),
-                        ),
+                        (rent::id(), create_account_shared_data_for_test(&rent)),
                     ],
                     instruction_accounts.clone(),
                     expected_result.clone(),
@@ -4286,10 +4225,7 @@ mod tests {
                 vec![
                     (source_address, source_account),
                     (destination_address, destination_account),
-                    (
-                        sysvar::rent::id(),
-                        account::create_account_shared_data_for_test(&rent),
-                    ),
+                    (rent::id(), create_account_shared_data_for_test(&rent)),
                 ],
                 instruction_accounts.clone(),
                 expected_result.clone(),
@@ -4417,10 +4353,7 @@ mod tests {
                 vec![
                     (source_address, source_account.clone()),
                     (destination_address, destination_account),
-                    (
-                        sysvar::rent::id(),
-                        account::create_account_shared_data_for_test(&rent),
-                    ),
+                    (rent::id(), create_account_shared_data_for_test(&rent)),
                 ],
                 instruction_accounts.clone(),
                 expected_result.clone(),
@@ -4477,12 +4410,12 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -4524,16 +4457,16 @@ mod tests {
                             AccountSharedData::new(rent_exempt_reserve, 0, &system_program::id()),
                         ),
                         (
-                            sysvar::clock::id(),
-                            account::create_account_shared_data_for_test(&Clock::default()),
+                            clock::id(),
+                            create_account_shared_data_for_test(&Clock::default()),
                         ),
                         (
-                            sysvar::rent::id(),
-                            account::create_account_shared_data_for_test(&Rent::free()),
+                            rent::id(),
+                            create_account_shared_data_for_test(&Rent::free()),
                         ),
                         (
-                            sysvar::stake_history::id(),
-                            account::create_account_shared_data_for_test(&StakeHistory::default()),
+                            stake_history::id(),
+                            create_account_shared_data_for_test(&StakeHistory::default()),
                         ),
                         (
                             stake_config::id(),
@@ -4590,22 +4523,16 @@ mod tests {
                 recipient_address,
                 AccountSharedData::new(rent_exempt_reserve, 0, &system_program::id()),
             ),
+            (clock::id(), create_account_shared_data_for_test(&clock)),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&clock),
-            ),
-            (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
             (
                 stake_config::id(),
                 config::create_account(0, &stake_config::Config::default()),
             ),
-            (
-                sysvar::rent::id(),
-                account::create_account_shared_data_for_test(&rent),
-            ),
+            (rent::id(), create_account_shared_data_for_test(&rent)),
         ];
         let instruction_accounts = vec![
             AccountMeta {
@@ -4619,12 +4546,12 @@ mod tests {
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -4650,7 +4577,7 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::rent::id(),
+                    pubkey: rent::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -4670,10 +4597,7 @@ mod tests {
         transaction_accounts[1] = (vote_address, accounts[1].clone());
 
         clock.epoch += 1;
-        transaction_accounts[3] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[3] = (clock::id(), create_account_shared_data_for_test(&clock));
         let accounts = process_instruction(
             Arc::clone(&feature_set),
             &serialize(&StakeInstruction::Deactivate).unwrap(),
@@ -4685,7 +4609,7 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -4695,10 +4619,7 @@ mod tests {
         transaction_accounts[0] = (stake_address, accounts[0].clone());
 
         clock.epoch += 1;
-        transaction_accounts[3] = (
-            sysvar::clock::id(),
-            account::create_account_shared_data_for_test(&clock),
-        );
+        transaction_accounts[3] = (clock::id(), create_account_shared_data_for_test(&clock));
         let withdraw_amount =
             accounts[0].lamports() - (rent_exempt_reserve + minimum_delegation - 1);
         let accounts = process_instruction(
@@ -4717,12 +4638,12 @@ mod tests {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: sysvar::clock::id(),
+                    pubkey: clock::id(),
                     is_signer: false,
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: sysvar::stake_history::id(),
+                    pubkey: stake_history::id(),
                     is_signer: false,
                     is_writable: false,
                 },
@@ -4928,10 +4849,7 @@ mod tests {
         let transaction_accounts = vec![
             (stake_address, stake_account),
             (split_to_address, split_to_account),
-            (
-                sysvar::rent::id(),
-                account::create_account_shared_data_for_test(&rent),
-            ),
+            (rent::id(), create_account_shared_data_for_test(&rent)),
         ];
         let instruction_accounts = vec![
             AccountMeta {
@@ -5007,10 +4925,7 @@ mod tests {
             let mut transaction_accounts = vec![
                 (stake_address, stake_account),
                 (split_to_address, split_to_account.clone()),
-                (
-                    sysvar::rent::id(),
-                    account::create_account_shared_data_for_test(&rent),
-                ),
+                (rent::id(), create_account_shared_data_for_test(&rent)),
             ];
 
             // not enough to make a non-zero stake account
@@ -5121,10 +5036,7 @@ mod tests {
             let transaction_accounts = vec![
                 (stake_address, stake_account.clone()),
                 (split_to_address, split_to_account),
-                (
-                    sysvar::rent::id(),
-                    account::create_account_shared_data_for_test(&rent),
-                ),
+                (rent::id(), create_account_shared_data_for_test(&rent)),
             ];
 
             // split more than available fails
@@ -5247,10 +5159,7 @@ mod tests {
             let transaction_accounts = vec![
                 (stake_address, stake_account.clone()),
                 (split_to_address, split_to_account),
-                (
-                    sysvar::rent::id(),
-                    account::create_account_shared_data_for_test(&rent),
-                ),
+                (rent::id(), create_account_shared_data_for_test(&rent)),
             ];
 
             // split more than available fails
@@ -5374,10 +5283,7 @@ mod tests {
             let transaction_accounts = vec![
                 (stake_address, stake_account.clone()),
                 (split_to_address, split_to_account),
-                (
-                    sysvar::rent::id(),
-                    account::create_account_shared_data_for_test(&rent),
-                ),
+                (rent::id(), create_account_shared_data_for_test(&rent)),
             ];
 
             // should always return error when splitting to larger account
@@ -5449,10 +5355,7 @@ mod tests {
             let transaction_accounts = vec![
                 (stake_address, stake_account),
                 (split_to_address, split_to_account.clone()),
-                (
-                    sysvar::rent::id(),
-                    account::create_account_shared_data_for_test(&rent),
-                ),
+                (rent::id(), create_account_shared_data_for_test(&rent)),
             ];
 
             // split 100% over to dest
@@ -5552,10 +5455,7 @@ mod tests {
             let transaction_accounts = vec![
                 (stake_address, stake_account.clone()),
                 (split_to_address, split_to_account),
-                (
-                    sysvar::rent::id(),
-                    account::create_account_shared_data_for_test(&rent),
-                ),
+                (rent::id(), create_account_shared_data_for_test(&rent)),
             ];
 
             // split 100% over to dest
@@ -5642,10 +5542,7 @@ mod tests {
             let transaction_accounts = vec![
                 (stake_address, stake_account),
                 (split_to_address, split_to_account),
-                (
-                    sysvar::rent::id(),
-                    account::create_account_shared_data_for_test(&rent),
-                ),
+                (rent::id(), create_account_shared_data_for_test(&rent)),
             ];
             process_instruction(
                 Arc::clone(&feature_set),
@@ -5674,10 +5571,7 @@ mod tests {
             let transaction_accounts = vec![
                 (stake_address, stake_account),
                 (split_to_address, split_to_account),
-                (
-                    sysvar::rent::id(),
-                    account::create_account_shared_data_for_test(&rent),
-                ),
+                (rent::id(), create_account_shared_data_for_test(&rent)),
             ];
             let accounts = process_instruction(
                 Arc::clone(&feature_set),
@@ -5750,12 +5644,12 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -5793,12 +5687,12 @@ mod tests {
                     (merge_from_address, merge_from_account),
                     (authorized_address, AccountSharedData::default()),
                     (
-                        sysvar::clock::id(),
-                        account::create_account_shared_data_for_test(&Clock::default()),
+                        clock::id(),
+                        create_account_shared_data_for_test(&Clock::default()),
                     ),
                     (
-                        sysvar::stake_history::id(),
-                        account::create_account_shared_data_for_test(&StakeHistory::default()),
+                        stake_history::id(),
+                        create_account_shared_data_for_test(&StakeHistory::default()),
                     ),
                 ];
 
@@ -5892,12 +5786,12 @@ mod tests {
             (stake_address, stake_account),
             (authorized_address, AccountSharedData::default()),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&Clock::default()),
+                clock::id(),
+                create_account_shared_data_for_test(&Clock::default()),
             ),
             (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
         ];
         let instruction_accounts = vec![
@@ -5912,12 +5806,12 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -5957,12 +5851,12 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -6001,12 +5895,12 @@ mod tests {
                     (authorized_address, AccountSharedData::default()),
                     (wrong_authorized_address, AccountSharedData::default()),
                     (
-                        sysvar::clock::id(),
-                        account::create_account_shared_data_for_test(&Clock::default()),
+                        clock::id(),
+                        create_account_shared_data_for_test(&Clock::default()),
                     ),
                     (
-                        sysvar::stake_history::id(),
-                        account::create_account_shared_data_for_test(&StakeHistory::default()),
+                        stake_history::id(),
+                        create_account_shared_data_for_test(&StakeHistory::default()),
                     ),
                 ];
 
@@ -6050,12 +5944,12 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -6092,12 +5986,12 @@ mod tests {
                     (merge_from_address, merge_from_account),
                     (authorized_address, AccountSharedData::default()),
                     (
-                        sysvar::clock::id(),
-                        account::create_account_shared_data_for_test(&Clock::default()),
+                        clock::id(),
+                        create_account_shared_data_for_test(&Clock::default()),
                     ),
                     (
-                        sysvar::stake_history::id(),
-                        account::create_account_shared_data_for_test(&StakeHistory::default()),
+                        stake_history::id(),
+                        create_account_shared_data_for_test(&StakeHistory::default()),
                     ),
                 ];
 
@@ -6138,12 +6032,12 @@ mod tests {
             (merge_from_address, merge_from_account),
             (authorized_address, AccountSharedData::default()),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&Clock::default()),
+                clock::id(),
+                create_account_shared_data_for_test(&Clock::default()),
             ),
             (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&StakeHistory::default()),
+                stake_history::id(),
+                create_account_shared_data_for_test(&StakeHistory::default()),
             ),
         ];
         let instruction_accounts = vec![
@@ -6158,12 +6052,12 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -6248,13 +6142,10 @@ mod tests {
             (stake_address, stake_account),
             (merge_from_address, merge_from_account),
             (authorized_address, AccountSharedData::default()),
+            (clock::id(), create_account_shared_data_for_test(&clock)),
             (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&clock),
-            ),
-            (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&stake_history),
+                stake_history::id(),
+                create_account_shared_data_for_test(&stake_history),
             ),
         ];
         let instruction_accounts = vec![
@@ -6269,12 +6160,12 @@ mod tests {
                 is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: clock::id(),
                 is_signer: false,
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::stake_history::id(),
+                pubkey: stake_history::id(),
                 is_signer: false,
                 is_writable: false,
             },
@@ -6337,13 +6228,10 @@ mod tests {
                     deactivating,
                 },
             );
-            transaction_accounts[3] = (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&clock),
-            );
+            transaction_accounts[3] = (clock::id(), create_account_shared_data_for_test(&clock));
             transaction_accounts[4] = (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&stake_history),
+                stake_history::id(),
+                create_account_shared_data_for_test(&stake_history),
             );
             if stake_amount == stake.stake(clock.epoch, Some(&stake_history))
                 && merge_from_amount == merge_from_stake.stake(clock.epoch, Some(&stake_history))
@@ -6413,13 +6301,10 @@ mod tests {
                     deactivating,
                 },
             );
-            transaction_accounts[3] = (
-                sysvar::clock::id(),
-                account::create_account_shared_data_for_test(&clock),
-            );
+            transaction_accounts[3] = (clock::id(), create_account_shared_data_for_test(&clock));
             transaction_accounts[4] = (
-                sysvar::stake_history::id(),
-                account::create_account_shared_data_for_test(&stake_history),
+                stake_history::id(),
+                create_account_shared_data_for_test(&stake_history),
             );
             if 0 == stake.stake(clock.epoch, Some(&stake_history))
                 && 0 == merge_from_stake.stake(clock.epoch, Some(&stake_history))
@@ -6503,8 +6388,8 @@ mod tests {
     #[test_case(feature_set_new_behavior(); "new_behavior")]
     fn test_stake_process_instruction_error_ordering(feature_set: Arc<FeatureSet>) {
         let rent = Rent::default();
-        let rent_address = sysvar::rent::id();
-        let rent_account = account::create_account_shared_data_for_test(&rent);
+        let rent_address = rent::id();
+        let rent_account = create_account_shared_data_for_test(&rent);
 
         let good_stake_address = Pubkey::new_unique();
         let good_stake_account = AccountSharedData::new(u64::MAX, StakeState::size_of(), &id());
@@ -6660,7 +6545,7 @@ mod tests {
                         (reference_vote_address, reference_vote_account.clone()),
                         (
                             clock::id(),
-                            account::create_account_shared_data_for_test(&Clock {
+                            create_account_shared_data_for_test(&Clock {
                                 epoch: current_epoch,
                                 ..Clock::default()
                             }),
@@ -6967,15 +6852,12 @@ mod tests {
                         ),
                         (
                             stake_history::id(),
-                            account::create_account_shared_data_for_test(&stake_history),
+                            create_account_shared_data_for_test(&stake_history),
                         ),
-                        (
-                            rent::id(),
-                            account::create_account_shared_data_for_test(&rent),
-                        ),
+                        (rent::id(), create_account_shared_data_for_test(&rent)),
                         (
                             clock::id(),
-                            account::create_account_shared_data_for_test(&Clock {
+                            create_account_shared_data_for_test(&Clock {
                                 epoch: current_epoch,
                                 ..Clock::default()
                             }),
@@ -7139,15 +7021,12 @@ mod tests {
                     ),
                     (
                         stake_history::id(),
-                        account::create_account_shared_data_for_test(&stake_history),
+                        create_account_shared_data_for_test(&stake_history),
                     ),
-                    (
-                        rent::id(),
-                        account::create_account_shared_data_for_test(&rent),
-                    ),
+                    (rent::id(), create_account_shared_data_for_test(&rent)),
                     (
                         clock::id(),
-                        account::create_account_shared_data_for_test(&Clock {
+                        create_account_shared_data_for_test(&Clock {
                             epoch: current_epoch,
                             ..Clock::default()
                         }),
@@ -7165,12 +7044,12 @@ mod tests {
                         is_writable: false,
                     },
                     AccountMeta {
-                        pubkey: sysvar::clock::id(),
+                        pubkey: clock::id(),
                         is_signer: false,
                         is_writable: false,
                     },
                     AccountMeta {
-                        pubkey: sysvar::stake_history::id(),
+                        pubkey: stake_history::id(),
                         is_signer: false,
                         is_writable: false,
                     },
