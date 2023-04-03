@@ -115,6 +115,7 @@ pub fn load_program_from_account(
         Arc::new(loader),
         state.slot,
         state.slot.saturating_add(1),
+        None,
         programdata,
         program.get_data().len(),
         use_jit,
