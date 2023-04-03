@@ -921,48 +921,51 @@ pub fn prepare_mock_invoke_context(
     }
 }
 
-pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
-    loader_id: Pubkey,
-    account_size: usize,
-    is_writable: bool,
-    mut callback: F,
-) -> R {
-    let program_indices = vec![0, 1];
-    let program_key = Pubkey::new_unique();
-    let transaction_accounts = vec![
-        (
-            loader_id,
-            AccountSharedData::new(0, 0, &native_loader::id()),
-        ),
-        (program_key, AccountSharedData::new(1, 0, &loader_id)),
-        (
-            Pubkey::new_unique(),
-            AccountSharedData::new(2, account_size, &program_key),
-        ),
-    ];
-    let instruction_accounts = vec![AccountMeta {
-        pubkey: transaction_accounts.get(2).unwrap().0,
-        is_signer: false,
-        is_writable,
-    }];
-    let preparation =
-        prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
-    let compute_budget = ComputeBudget::default();
-    let mut transaction_context = TransactionContext::new(
-        preparation.transaction_accounts,
-        Some(Rent::default()),
-        compute_budget.max_invoke_stack_height,
-        compute_budget.max_instruction_trace_length,
-    );
-    transaction_context.enable_cap_accounts_data_allocations_per_transaction();
-    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-    invoke_context
-        .transaction_context
-        .get_next_instruction_context()
-        .unwrap()
-        .configure(&program_indices, &preparation.instruction_accounts, &[]);
-    invoke_context.push().unwrap();
-    callback(&mut invoke_context)
+#[macro_export]
+macro_rules! with_mock_invoke_context {
+    ($invoke_context:ident, $loader_id:expr, $account_size:expr) => {
+        use solana_sdk::account::AccountSharedData;
+        use solana_sdk::native_loader;
+        use solana_sdk::pubkey::Pubkey;
+        use solana_sdk::sysvar::rent::Rent;
+        use solana_sdk::transaction_context::{InstructionAccount, TransactionContext};
+
+        let program_indices = vec![0, 1];
+        let program_key = Pubkey::new_unique();
+        let transaction_accounts = vec![
+            (
+                $loader_id,
+                AccountSharedData::new(0, 0, &native_loader::id()),
+            ),
+            (program_key, AccountSharedData::new(1, 0, &$loader_id)),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(2, $account_size, &program_key),
+            ),
+        ];
+        let instruction_accounts = vec![InstructionAccount {
+            index_in_transaction: 2,
+            index_in_caller: 2,
+            index_in_callee: 0,
+            is_signer: false,
+            is_writable: false,
+        }];
+        let compute_budget = ComputeBudget::default();
+        let mut transaction_context = TransactionContext::new(
+            transaction_accounts,
+            Some(Rent::default()),
+            compute_budget.max_invoke_stack_height,
+            compute_budget.max_instruction_trace_length,
+        );
+        transaction_context.enable_cap_accounts_data_allocations_per_transaction();
+        let mut $invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        $invoke_context
+            .transaction_context
+            .get_next_instruction_context()
+            .unwrap()
+            .configure(&program_indices, &instruction_accounts, &[]);
+        $invoke_context.push().unwrap();
+    };
 }
 
 pub fn mock_process_instruction(
