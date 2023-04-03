@@ -273,7 +273,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "DEsQ36QZ4dnZWrSqprTskBg6wwwyphHadcdQc2bkaTn3")]
+#[frozen_abi(digest = "5rGt5M3ujgfduA2dtN3rYg1CmvrGpZdRBq7KW4U58C8H")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
