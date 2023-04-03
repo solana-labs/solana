@@ -4470,6 +4470,7 @@ dependencies = [
  "log",
  "memmap2",
  "modular-bitfield",
+ "num_enum",
  "rand 0.7.3",
  "solana-measure",
  "solana-sdk 1.16.0",
