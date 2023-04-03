@@ -51,6 +51,17 @@ pub trait BucketOccupied {
     /// initialize this struct
     /// `num_elements` is the number of elements allocated in the bucket
     fn new(num_elements: usize) -> Self;
+    /// copying entry. Any in-memory (per-bucket) data structures may need to be copied for this `ix_old`.
+    /// no-op by default
+    fn copying_entry(
+        &mut self,
+        _element_new: &mut [u8],
+        _ix_new: usize,
+        _other: &Self,
+        _element_old: &[u8],
+        _ix_old: usize,
+    ) {
+    }
 }
 
 pub struct BucketStorage<O: BucketOccupied> {
@@ -128,6 +139,18 @@ impl<O: BucketOccupied> BucketStorage<O> {
             stats,
             count,
         )
+    }
+
+    pub(crate) fn copying_entry(&mut self, ix_new: u64, other: &Self, ix_old: u64) {
+        let start = self.get_start_offset_with_header(ix_new);
+        let start_old = other.get_start_offset_with_header(ix_old);
+        self.contents.copying_entry(
+            &mut self.mmap[start..],
+            ix_new as usize,
+            &other.contents,
+            &other.mmap[start_old..],
+            ix_old as usize,
+        );
     }
 
     /// true if the entry at index 'ix' is free (as opposed to being occupied)
@@ -294,6 +317,8 @@ impl<O: BucketOccupied> BucketStorage<O> {
         let index_grow = 1 << increment;
         (0..old_cap as usize).for_each(|i| {
             if !old_bucket.is_free(i as u64) {
+                self.copying_entry((i * index_grow) as u64, old_bucket, i as u64);
+
                 {
                     // copying from old to new. If 'occupied' bit is stored outside the data, then
                     // occupied has to be set on the new entry in the new bucket.

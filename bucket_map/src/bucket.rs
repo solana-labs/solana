@@ -447,6 +447,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                         let new_ix = new_ix.unwrap();
                         let new_elem: &mut IndexEntry<T> = index.get_mut(new_ix);
                         *new_elem = *elem;
+                        index.copying_entry(new_ix, &self.index, ix);
                         /*
                         let dbg_elem: IndexEntry = *new_elem;
                         assert_eq!(
