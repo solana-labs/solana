@@ -5,7 +5,7 @@ use {
     std::time::{Duration, Instant},
 };
 
-const VARIABLE_HASHES_PER_TICK: u64 = std::u64::MAX;
+const LOW_POWER_MODE: u64 = std::u64::MAX;
 
 pub struct Poh {
     pub hash: Hash,
@@ -28,7 +28,7 @@ impl Poh {
     }
 
     pub fn new_with_slot_info(hash: Hash, hashes_per_tick: Option<u64>, tick_number: u64) -> Self {
-        let hashes_per_tick = hashes_per_tick.unwrap_or(VARIABLE_HASHES_PER_TICK);
+        let hashes_per_tick = hashes_per_tick.unwrap_or(LOW_POWER_MODE);
         assert!(hashes_per_tick > 1);
         let now = Instant::now();
         Poh {
@@ -92,9 +92,9 @@ impl Poh {
         self.num_hashes += 1;
         self.remaining_hashes -= 1;
 
-        // If the hashes_per_tick is variable (std::u64::MAX) then always generate a tick.
+        // If we are in low power mode then always generate a tick.
         // Otherwise only tick if there are no remaining hashes
-        if self.hashes_per_tick != VARIABLE_HASHES_PER_TICK && self.remaining_hashes != 0 {
+        if self.hashes_per_tick != LOW_POWER_MODE && self.remaining_hashes != 0 {
             return None;
         }
 
