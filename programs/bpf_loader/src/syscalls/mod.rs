@@ -40,7 +40,8 @@ use {
             enable_early_verification_of_account_modifications,
             error_on_syscall_bpf_function_hash_collisions, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, reject_callx_r10,
-            stop_sibling_instruction_search_at_parent, switch_to_new_elf_parser,
+            stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
+            switch_to_new_elf_parser,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -428,14 +429,19 @@ fn translate_string_and_do(
     len: u64,
     check_aligned: bool,
     check_size: bool,
+    stop_truncating_strings_in_syscalls: bool,
     work: &mut dyn FnMut(&str) -> Result<u64, EbpfError>,
 ) -> Result<u64, EbpfError> {
     let buf = translate_slice::<u8>(memory_mapping, addr, len, check_aligned, check_size)?;
-    let i = match buf.iter().position(|byte| *byte == 0) {
-        Some(i) => i,
-        None => len as usize,
+    let msg = if stop_truncating_strings_in_syscalls {
+        buf
+    } else {
+        let i = match buf.iter().position(|byte| *byte == 0) {
+            Some(i) => i,
+            None => len as usize,
+        };
+        buf.get(..i).ok_or(SyscallError::InvalidLength)?
     };
-    let msg = buf.get(..i).ok_or(SyscallError::InvalidLength)?;
     match from_utf8(msg) {
         Ok(message) => work(message),
         Err(err) => Err(SyscallError::InvalidString(err, msg.to_vec()).into()),
@@ -508,6 +514,9 @@ declare_syscall!(
             len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
+            invoke_context
+                .feature_set
+                .is_active(&stop_truncating_strings_in_syscalls::id()),
             &mut |string: &str| Err(SyscallError::Panic(string.to_string(), line, column).into()),
         )
     }
@@ -2044,6 +2053,7 @@ mod tests {
                 &memory_mapping,
                 0x100000000,
                 string.len() as u64,
+                true,
                 true,
                 true,
                 &mut |string: &str| {
