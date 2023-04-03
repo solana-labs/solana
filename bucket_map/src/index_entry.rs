@@ -7,6 +7,7 @@ use {
     },
     bv::BitVec,
     modular_bitfield::prelude::*,
+    num_enum::FromPrimitive,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{fmt::Debug, marker::PhantomData},
 };
@@ -183,32 +184,45 @@ pub(crate) union SingleElementOrMultipleSlots<T: Clone + Copy> {
     pub(crate) multiple_slots: MultipleSlots,
 }
 
+/// just the values for `OccupiedEnum`
+/// This excludes the contents of any enum value.
+#[derive(PartialEq, FromPrimitive)]
+#[repr(u8)]
+enum OccupiedEnumTag {
+    #[default]
+    Free = 0,
+    ZeroSlots = 1,
+    OneSlotInIndex = 2,
+    MultipleSlots = 3,
+}
+
 #[repr(u8)]
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum OccupiedEnum<'a, T> {
     /// this spot is not occupied.
     /// ALL other enum values ARE occupied.
-    Free = 0,
+    Free = OccupiedEnumTag::Free as u8,
     /// zero slots in the slot list
-    ZeroSlots = 1,
+    ZeroSlots = OccupiedEnumTag::ZeroSlots as u8,
     /// one slot in the slot list, it is stored in the index
-    OneSlotInIndex(&'a T) = 2,
+    OneSlotInIndex(&'a T) = OccupiedEnumTag::OneSlotInIndex as u8,
     /// data is stored in data file
-    MultipleSlots(&'a MultipleSlots) = 3,
+    MultipleSlots(&'a MultipleSlots) = OccupiedEnumTag::MultipleSlots as u8,
 }
 
 impl<T: Copy> IndexEntry<T> {
     pub(crate) fn get_slot_count_enum(&self) -> OccupiedEnum<'_, T> {
-        unsafe {
-            match self.packed_ref_count.slot_count_enum() {
-                0 => OccupiedEnum::Free,
-                1 => OccupiedEnum::ZeroSlots,
-                2 => OccupiedEnum::OneSlotInIndex(&self.contents.single_element),
-                3 => OccupiedEnum::MultipleSlots(&self.contents.multiple_slots),
-                _ => {
-                    panic!("unexpected value");
-                }
-            }
+        let enum_tag =
+            num_enum::FromPrimitive::from_primitive(self.packed_ref_count.slot_count_enum());
+        match enum_tag {
+            OccupiedEnumTag::Free => OccupiedEnum::Free,
+            OccupiedEnumTag::ZeroSlots => OccupiedEnum::ZeroSlots,
+            OccupiedEnumTag::OneSlotInIndex => unsafe {
+                OccupiedEnum::OneSlotInIndex(&self.contents.single_element)
+            },
+            OccupiedEnumTag::MultipleSlots => unsafe {
+                OccupiedEnum::MultipleSlots(&self.contents.multiple_slots)
+            },
         }
     }
 
@@ -222,18 +236,19 @@ impl<T: Copy> IndexEntry<T> {
     }
 
     pub(crate) fn set_slot_count_enum_value<'a>(&'a mut self, value: OccupiedEnum<'a, T>) {
-        self.packed_ref_count.set_slot_count_enum(match value {
-            OccupiedEnum::Free => 0,
-            OccupiedEnum::ZeroSlots => 1,
+        let enum_tag = match value {
+            OccupiedEnum::Free => OccupiedEnumTag::Free,
+            OccupiedEnum::ZeroSlots => OccupiedEnumTag::ZeroSlots,
             OccupiedEnum::OneSlotInIndex(single_element) => {
                 self.contents.single_element = *single_element;
-                2
+                OccupiedEnumTag::OneSlotInIndex
             }
             OccupiedEnum::MultipleSlots(multiple_slots) => {
                 self.contents.multiple_slots = *multiple_slots;
-                3
+                OccupiedEnumTag::MultipleSlots
             }
-        });
+        };
+        self.packed_ref_count.set_slot_count_enum(enum_tag as u8);
     }
 }
 
