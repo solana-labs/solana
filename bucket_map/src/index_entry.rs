@@ -44,12 +44,12 @@ pub struct IndexBucketUsingRefCountBits<T: 'static> {
     _phantom: PhantomData<&'static T>,
 }
 
-impl<T: 'static> BucketOccupied for IndexBucketUsingRefCountBits<T> {
+impl<T: Copy> BucketOccupied for IndexBucketUsingRefCountBits<T> {
     fn occupy(&mut self, element: &mut [u8], ix: usize) {
         assert!(self.is_free(element, ix));
         let entry: &mut IndexEntry<T> =
             BucketStorage::<IndexBucketUsingRefCountBits<T>>::get_mut_from_parts(element);
-        entry.set_slot_count_enum_value(OccupiedEnum::Occupied);
+        entry.set_slot_count_enum_value(OccupiedEnum::ZeroSlots);
     }
     fn free(&mut self, element: &mut [u8], ix: usize) {
         assert!(!self.is_free(element, ix));
@@ -86,11 +86,11 @@ pub struct IndexEntryPlaceInBucket<T: 'static> {
 #[derive(Copy, Clone)]
 /// one instance of this per item in the index
 /// stored in the index bucket
-pub struct IndexEntry<T: 'static> {
+pub struct IndexEntry<T: Clone + Copy> {
     pub(crate) key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
     packed_ref_count: PackedRefCount,
-    multiple_slots: MultipleSlots,
-    _phantom: PhantomData<&'static T>,
+    /// depends on the contents of ref_count.slot_count_enum
+    contents: SingleElementOrMultipleSlots<T>,
 }
 
 /// 62 bits available for ref count
@@ -173,32 +173,66 @@ impl MultipleSlots {
     }
 }
 
-#[repr(u8)]
-#[derive(Debug, Eq, PartialEq)]
-pub(crate) enum OccupiedEnum {
-    /// this spot is free (ie. not occupied)
-    Free = 0,
-    /// this spot is occupied
-    Occupied = 1,
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub(crate) union SingleElementOrMultipleSlots<T: Clone + Copy> {
+    /// the slot list contains a single element. No need for an entry in the data file.
+    /// The element itself is stored in place in the index entry
+    pub(crate) single_element: T,
+    /// the slot list ocntains more than one element. This contains the reference to the data file.
+    pub(crate) multiple_slots: MultipleSlots,
 }
 
-impl<T: 'static> IndexEntry<T> {
-    /// enum value stored in 2 spare bits taken from ref_count
-    fn get_slot_count_enum(&self) -> OccupiedEnum {
-        match self.packed_ref_count.slot_count_enum() {
-            0 => OccupiedEnum::Free,
-            1 => OccupiedEnum::Occupied,
-            _ => {
-                panic!("unexpected value");
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum OccupiedEnum<'a, T> {
+    /// this spot is not occupied.
+    /// ALL other enum values ARE occupied.
+    Free = 0,
+    /// zero slots in the slot list
+    ZeroSlots = 1,
+    /// one slot in the slot list, it is stored in the index
+    OneSlotInIndex(&'a T) = 2,
+    /// data is stored in data file
+    MultipleSlots(&'a MultipleSlots) = 3,
+}
+
+impl<T: Copy> IndexEntry<T> {
+    pub(crate) fn get_slot_count_enum(&self) -> OccupiedEnum<'_, T> {
+        unsafe {
+            match self.packed_ref_count.slot_count_enum() {
+                0 => OccupiedEnum::Free,
+                1 => OccupiedEnum::ZeroSlots,
+                2 => OccupiedEnum::OneSlotInIndex(&self.contents.single_element),
+                3 => OccupiedEnum::MultipleSlots(&self.contents.multiple_slots),
+                _ => {
+                    panic!("unexpected value");
+                }
             }
         }
     }
 
-    /// enum value stored in 2 spare bits taken from ref_count
-    fn set_slot_count_enum_value(&mut self, value: OccupiedEnum) {
+    pub(crate) fn get_multiple_slots_mut(&mut self) -> Option<&mut MultipleSlots> {
+        unsafe {
+            match self.packed_ref_count.slot_count_enum() {
+                3 => Some(&mut self.contents.multiple_slots),
+                _ => None,
+            }
+        }
+    }
+
+    pub(crate) fn set_slot_count_enum_value<'a>(&'a mut self, value: OccupiedEnum<'a, T>) {
         self.packed_ref_count.set_slot_count_enum(match value {
             OccupiedEnum::Free => 0,
-            OccupiedEnum::Occupied => 1,
+            OccupiedEnum::ZeroSlots => 1,
+            OccupiedEnum::OneSlotInIndex(single_element) => {
+                self.contents.single_element = *single_element;
+                2
+            }
+            OccupiedEnum::MultipleSlots(multiple_slots) => {
+                self.contents.multiple_slots = *multiple_slots;
+                3
+            }
         });
     }
 }
@@ -212,42 +246,36 @@ struct PackedStorage {
     offset: B56,
 }
 
-impl<T: 'static> IndexEntryPlaceInBucket<T> {
+impl<T: Copy> IndexEntryPlaceInBucket<T> {
     pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
+        self.set_slot_count_enum_value(index_bucket, OccupiedEnum::ZeroSlots);
         let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
         index_entry.key = *pubkey;
         index_entry.packed_ref_count.set_ref_count(0);
-        index_entry.multiple_slots = MultipleSlots::default();
     }
 
-    pub(crate) fn get_multiple_slots<'a>(
-        &self,
-        index_bucket: &'a BucketStorage<IndexBucket<T>>,
-    ) -> &'a MultipleSlots {
-        &index_bucket.get::<IndexEntry<T>>(self.ix).multiple_slots
-    }
-
+    /// return Some(MultipleSlots) if this item's data is stored in the data file
     pub(crate) fn get_multiple_slots_mut<'a>(
         &self,
         index_bucket: &'a mut BucketStorage<IndexBucket<T>>,
-    ) -> &'a mut MultipleSlots {
-        &mut index_bucket
-            .get_mut::<IndexEntry<T>>(self.ix)
-            .multiple_slots
+    ) -> Option<&'a mut MultipleSlots> {
+        let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
+        index_entry.get_multiple_slots_mut()
     }
 
-    pub(crate) fn get_slot_count_enum(
+    pub(crate) fn get_slot_count_enum<'a>(
         &self,
-        index_bucket: &BucketStorage<IndexBucket<T>>,
-    ) -> OccupiedEnum {
+        index_bucket: &'a BucketStorage<IndexBucket<T>>,
+    ) -> OccupiedEnum<'a, T> {
         let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
         index_entry.get_slot_count_enum()
     }
 
-    pub(crate) fn set_slot_count_enum_value(
+    /// make this index entry reflect `value`
+    pub(crate) fn set_slot_count_enum_value<'a>(
         &self,
-        index_bucket: &mut BucketStorage<IndexBucket<T>>,
-        value: OccupiedEnum,
+        index_bucket: &'a mut BucketStorage<IndexBucket<T>>,
+        value: OccupiedEnum<'a, T>,
     ) {
         let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
         index_entry.set_slot_count_enum_value(value);
@@ -260,22 +288,34 @@ impl<T: 'static> IndexEntryPlaceInBucket<T> {
 
     pub fn read_value<'a>(
         &self,
-        index_bucket: &BucketStorage<IndexBucket<T>>,
+        index_bucket: &'a BucketStorage<IndexBucket<T>>,
         data_buckets: &'a [BucketStorage<DataBucket>],
     ) -> Option<(&'a [T], RefCount)> {
-        let multiple_slots = self.get_multiple_slots(index_bucket);
-        let num_slots = multiple_slots.num_slots();
-        let slice = if num_slots > 0 {
-            let data_bucket_ix = multiple_slots.data_bucket_ix();
-            let data_bucket = &data_buckets[data_bucket_ix as usize];
-            let loc = multiple_slots.data_loc(data_bucket);
-            assert!(!data_bucket.is_free(loc));
-            data_bucket.get_cell_slice(loc, num_slots)
-        } else {
-            // num_slots is 0. This means we don't have an actual allocation.
-            &[]
-        };
-        Some((slice, self.ref_count(index_bucket)))
+        Some((
+            match self.get_slot_count_enum(index_bucket) {
+                OccupiedEnum::ZeroSlots => {
+                    // num_slots is 0. This means we don't have an actual allocation.
+                    &[]
+                }
+                OccupiedEnum::OneSlotInIndex(single_element) => {
+                    // only element is stored in the index entry
+                    // Note that the lifetime comes from `index_bucket` here.
+                    std::slice::from_ref(single_element)
+                }
+                OccupiedEnum::MultipleSlots(multiple_slots) => {
+                    // data is in data file, so return a ref to that data
+                    let data_bucket_ix = multiple_slots.data_bucket_ix();
+                    let data_bucket = &data_buckets[data_bucket_ix as usize];
+                    let loc = multiple_slots.data_loc(data_bucket);
+                    assert!(!data_bucket.is_free(loc));
+                    data_bucket.get_cell_slice::<T>(loc, multiple_slots.num_slots)
+                }
+                _ => {
+                    panic!("trying to read data from a free entry");
+                }
+            },
+            self.ref_count(index_bucket),
+        ))
     }
 
     pub fn new(ix: u64) -> Self {
