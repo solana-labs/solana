@@ -892,7 +892,7 @@ mod tests {
     }
 
     fn tmp_outfile_path(out_dir: &TempDir, name: &str) -> String {
-        let path = out_dir.path().join(format!("{name}"));
+        let path = out_dir.path().join(name);
         path.into_os_string().into_string().unwrap()
     }
 
