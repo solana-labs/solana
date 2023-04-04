@@ -138,7 +138,8 @@ impl ThreadAwareAccountLocks {
             thread_set
                 .only_one_contained()
                 .filter(|thread_id| counts[*thread_id] < self.sequential_queue_limit)
-                .map_or_else(ThreadSet::none, ThreadSet::only)
+                .map(ThreadSet::only)
+                .unwrap_or_else(ThreadSet::none)
         })
     }
 
