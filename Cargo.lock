@@ -5815,6 +5815,7 @@ dependencies = [
  "serde_json",
  "solana-entry",
  "solana-geyser-plugin-interface",
+ "solana-ledger",
  "solana-measure",
  "solana-metrics",
  "solana-rpc",
