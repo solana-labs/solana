@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit
 
 if [[ -z $HOST ]]; then
   HOST=internal-metrics.solana.com
