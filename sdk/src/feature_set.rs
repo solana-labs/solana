@@ -641,8 +641,13 @@ pub mod include_loaded_accounts_data_size_in_fee_calculation {
 pub mod native_programs_consume_cu {
     solana_sdk::declare_id!("8pgXCMNXC8qyEFypuwpXyRxLXZdpM4Qo72gJ6k87A6wL");
 }
+
 pub mod simplify_writable_program_account_check {
     solana_sdk::declare_id!("5ZCcFAzJ1zsFKe1KSZa9K92jhx7gkcKj97ci2DBo1vwj");
+}
+
+pub mod stop_truncating_strings_in_syscalls {
+    solana_sdk::declare_id!("16FMCmgLzCNNz6eTwGanbyN2ZxvTBSLuQ6DZhgeMshg");
 }
 
 lazy_static! {
@@ -801,6 +806,7 @@ lazy_static! {
         (include_loaded_accounts_data_size_in_fee_calculation::id(), "include transaction loaded accounts data size in base fee calculation #30657"),
         (native_programs_consume_cu::id(), "Native program should consume compute units #30620"),
         (simplify_writable_program_account_check::id(), "Simplify checks performed for writable upgradeable program accounts #30559"),
+        (stop_truncating_strings_in_syscalls::id(), "Stop truncating strings in syscalls #31029"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
