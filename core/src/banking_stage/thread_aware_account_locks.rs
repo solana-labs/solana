@@ -343,8 +343,8 @@ impl ThreadSet {
     }
 
     #[inline(always)]
-    pub(crate) fn num_threads(&self) -> u8 {
-        self.0.count_ones() as u8
+    pub(crate) fn num_threads(&self) -> u32 {
+        self.0.count_ones()
     }
 
     #[inline(always)]
