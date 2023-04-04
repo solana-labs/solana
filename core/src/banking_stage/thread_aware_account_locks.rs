@@ -323,12 +323,12 @@ impl ThreadSet {
 
     #[inline(always)]
     pub fn any(num_threads: usize) -> Self {
-        Self((1 << num_threads) - 1)
+        Self(Self::as_flag(num_threads) - 1)
     }
 
     #[inline(always)]
     pub fn only(thread_id: ThreadId) -> Self {
-        Self(1 << thread_id)
+        Self(Self::as_flag(thread_id))
     }
 
     #[inline(always)]
@@ -348,22 +348,27 @@ impl ThreadSet {
 
     #[inline(always)]
     pub fn contains(&self, thread_id: ThreadId) -> bool {
-        self.0 & (1 << thread_id) != 0
+        self.0 & (Self::as_flag(thread_id)) != 0
     }
 
     #[inline(always)]
     pub fn insert(&mut self, thread_id: ThreadId) {
-        self.0 |= 1 << thread_id;
+        self.0 |= Self::as_flag(thread_id);
     }
 
     #[inline(always)]
     pub fn remove(&mut self, thread_id: ThreadId) {
-        self.0 &= !(1 << thread_id);
+        self.0 &= !Self::as_flag(thread_id);
     }
 
     #[inline(always)]
     pub fn threads_iter(self) -> impl Iterator<Item = ThreadId> {
         (0..MAX_THREADS).filter(move |thread_id| self.contains(*thread_id))
+    }
+
+    #[inline(always)]
+    fn as_flag(thread_id: ThreadId) -> u64 {
+        1 << thread_id
     }
 }
 
