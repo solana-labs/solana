@@ -248,7 +248,7 @@ fn bank_forks_from_snapshot(
                 ) {
                     let start_snapshot_hashes = StartingSnapshotHashes {
                         full: FullSnapshotHash {
-                            hash: (archive_info.slot(), archive_info.hash().clone()),
+                            hash: (archive_info.slot(), *archive_info.hash()),
                         },
                         incremental: None,
                     };
