@@ -12991,3 +12991,29 @@ fn test_calculate_loaded_accounts_data_size_cost() {
         Bank::calculate_loaded_accounts_data_size_cost(&compute_budget)
     );
 }
+
+#[test]
+fn test_squash_timing_add_assign() {
+    let mut t0 = SquashTiming::default();
+
+    let t1 = SquashTiming {
+        squash_accounts_ms: 1,
+        squash_accounts_cache_ms: 2,
+        squash_accounts_index_ms: 3,
+        squash_accounts_store_ms: 4,
+        squash_cache_ms: 5,
+    };
+
+    let expected = SquashTiming {
+        squash_accounts_ms: 2,
+        squash_accounts_cache_ms: 2 * 2,
+        squash_accounts_index_ms: 3 * 2,
+        squash_accounts_store_ms: 4 * 2,
+        squash_cache_ms: 5 * 2,
+    };
+
+    t0 += t1;
+    t0 += t1;
+
+    assert!(t0 == expected);
+}

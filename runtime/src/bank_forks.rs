@@ -271,7 +271,7 @@ impl BankForks {
         let parents = root_bank.parents();
         banks.extend(parents.iter());
         let total_parent_banks = banks.len();
-        let mut total_squash_time = SquashTiming::default();
+        let mut squash_timing = SquashTiming::default();
         let mut total_snapshot_ms = 0;
 
         // handle epoch accounts hash
@@ -297,7 +297,7 @@ impl BankForks {
             );
 
             self.last_accounts_hash_slot = eah_bank.slot();
-            total_squash_time += eah_bank.squash();
+            squash_timing += eah_bank.squash();
             is_root_bank_squashed = eah_bank.slot() == root;
 
             eah_bank
@@ -329,7 +329,7 @@ impl BankForks {
         }) {
             let bank_slot = bank.slot();
             self.last_accounts_hash_slot = bank_slot;
-            total_squash_time += bank.squash();
+            squash_timing += bank.squash();
 
             is_root_bank_squashed = bank_slot == root;
 
@@ -364,7 +364,7 @@ impl BankForks {
         }
 
         if !is_root_bank_squashed {
-            total_squash_time += root_bank.squash();
+            squash_timing += root_bank.squash();
         }
         let new_tx_count = root_bank.transaction_count();
         let accounts_data_len = root_bank.load_accounts_data_size() as i64;
@@ -382,7 +382,7 @@ impl BankForks {
             removed_banks,
             SetRootMetrics {
                 timings: SetRootTimings {
-                    total_squash_time,
+                    total_squash_time: squash_timing,
                     total_snapshot_ms,
                     prune_non_rooted_ms: prune_time.as_ms() as i64,
                     drop_parent_banks_ms: drop_parent_banks_time.as_ms() as i64,
@@ -435,7 +435,7 @@ impl BankForks {
             ("total_banks", self.banks.len(), i64),
             (
                 "total_squash_cache_ms",
-                set_root_metrics.timings.total_squash_time.squash_cache_ms as i64,
+                set_root_metrics.timings.total_squash_time.squash_cache_ms,
                 i64
             ),
             (
@@ -443,7 +443,7 @@ impl BankForks {
                 set_root_metrics
                     .timings
                     .total_squash_time
-                    .squash_accounts_ms as i64,
+                    .squash_accounts_ms,
                 i64
             ),
             (
@@ -451,7 +451,7 @@ impl BankForks {
                 set_root_metrics
                     .timings
                     .total_squash_time
-                    .squash_accounts_index_ms as i64,
+                    .squash_accounts_index_ms,
                 i64
             ),
             (
@@ -459,7 +459,7 @@ impl BankForks {
                 set_root_metrics
                     .timings
                     .total_squash_time
-                    .squash_accounts_cache_ms as i64,
+                    .squash_accounts_cache_ms,
                 i64
             ),
             (
@@ -467,7 +467,7 @@ impl BankForks {
                 set_root_metrics
                     .timings
                     .total_squash_time
-                    .squash_accounts_store_ms as i64,
+                    .squash_accounts_store_ms,
                 i64
             ),
             (
@@ -498,7 +498,7 @@ impl BankForks {
             ),
             (
                 "program_cache_prune_ms",
-                timing::duration_as_ms(&program_cache_prune_start.elapsed()) as usize,
+                timing::duration_as_ms(&program_cache_prune_start.elapsed()),
                 i64
             ),
             ("dropped_banks_len", set_root_metrics.dropped_banks_len, i64),
@@ -1127,31 +1127,5 @@ mod tests {
             bank_forks.relationship(2, 0),
             BlockRelation::Unknown
         ));
-    }
-
-    #[test]
-    fn test_squash_timing_add_assign() {
-        let mut t0 = SquashTiming::default();
-
-        let t1 = SquashTiming {
-            squash_accounts_ms: 1,
-            squash_accounts_cache_ms: 2,
-            squash_accounts_index_ms: 3,
-            squash_accounts_store_ms: 4,
-            squash_cache_ms: 5,
-        };
-
-        let expected = SquashTiming {
-            squash_accounts_ms: 2,
-            squash_accounts_cache_ms: 2 * 2,
-            squash_accounts_index_ms: 3 * 2,
-            squash_accounts_store_ms: 4 * 2,
-            squash_cache_ms: 5 * 2,
-        };
-
-        t0 += t1;
-        t0 += t1;
-
-        assert!(t0 == expected);
     }
 }
