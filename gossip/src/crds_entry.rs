@@ -58,21 +58,15 @@ impl_crds_entry!(LegacyVersion, CrdsData::LegacyVersion(version), version);
 impl_crds_entry!(LowestSlot, CrdsData::LowestSlot(_, slot), slot);
 impl_crds_entry!(Version, CrdsData::Version(version), version);
 impl_crds_entry!(
+    SnapshotHashes,
+    CrdsData::SnapshotHashes(snapshot_hashes),
+    snapshot_hashes
+);
+impl_crds_entry!(
     IncrementalSnapshotHashes,
     CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
     incremental_snapshot_hashes
 );
-
-impl<'a, 'b> CrdsEntry<'a, 'b> for &'a SnapshotHashes {
-    type Key = Pubkey;
-    fn get_entry(table: &'a CrdsTable, key: Self::Key) -> Option<Self> {
-        let key = CrdsValueLabel::SnapshotHashes(key);
-        match &table.get(&key)?.value.data {
-            CrdsData::SnapshotHashes(snapshot_hash) => Some(snapshot_hash),
-            _ => None,
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
