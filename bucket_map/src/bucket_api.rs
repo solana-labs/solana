@@ -111,6 +111,13 @@ impl<T: Clone + Copy> BucketApi<T> {
         }
     }
 
+    /// caller can specify that the index needs to hold approximately `count` entries soon.
+    /// This gives a hint to the resizing algorithm and prevents repeated incremental resizes.
+    pub fn set_anticipated_count(&self, count: u64) {
+        let mut bucket = self.get_write_bucket();
+        bucket.as_mut().unwrap().set_anticipated_count(count);
+    }
+
     pub fn update<F>(&self, key: &Pubkey, updatefn: F)
     where
         F: FnMut(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
