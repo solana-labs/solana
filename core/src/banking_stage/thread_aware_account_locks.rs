@@ -158,7 +158,7 @@ impl ThreadAwareAccountLocks {
                 }
             }
             (Some((thread_id, count)), Some((thread_set, counts))) => {
-                debug_assert_eq!(Some(*thread_id), thread_set.only_one_contained());
+                assert_eq!(Some(*thread_id), thread_set.only_one_contained());
                 if count + counts[*thread_id] == self.sequential_queue_limit {
                     ThreadSet::none()
                 } else {
