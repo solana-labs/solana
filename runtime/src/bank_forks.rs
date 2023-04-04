@@ -334,7 +334,7 @@ impl BankForks {
         //
         // This is needed when a snapshot request occurs in a slot after an EAH request, and is
         // part of the same set of `banks` in a single `set_root()` invocation.  While (very)
-        // unlikely for a validator with defaut snapshot intervals (and accounts hash verifier
+        // unlikely for a validator with default snapshot intervals (and accounts hash verifier
         // intervals), it *is* possible, and there are tests to exercise this possibility.
         if let Some(bank) = banks.iter().find(|bank| {
             bank.slot() > self.last_accounts_hash_slot
