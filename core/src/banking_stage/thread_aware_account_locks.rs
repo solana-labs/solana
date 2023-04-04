@@ -12,6 +12,8 @@ pub(crate) const MAX_THREADS: usize = u64::BITS as usize;
 /// Identifier for a thread
 pub(crate) type ThreadId = usize; // 0..MAX_THREADS-1
 
+type LockCount = u32;
+
 /// A bit-set of threads an account is scheduled or can be scheduled for.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub(crate) struct ThreadSet(u64);
@@ -31,7 +33,7 @@ pub(crate) struct ThreadAwareAccountLocks {
     /// Read locks - multiple threads can hold a read lock at a time.
     /// Contains thread-set for easily checking which threads are scheduled.
     /// Contains how many read locks are held by each thread.
-    read_locks: HashMap<Pubkey, (ThreadSet, [u32; MAX_THREADS])>,
+    read_locks: HashMap<Pubkey, (ThreadSet, [LockCount; MAX_THREADS])>,
 }
 
 impl ThreadAwareAccountLocks {
