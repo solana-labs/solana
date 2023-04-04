@@ -297,15 +297,10 @@ impl AccountsHashVerifier {
 
         if let Some(snapshot_info) = &accounts_package.snapshot_info {
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                snapshot_info.snapshot_links.as_path(),
+                snapshot_info.snapshot_links.path(),
                 accounts_package.slot,
                 &accounts_hash_for_reserialize,
                 bank_incremental_snapshot_persistence.as_ref(),
-            );
-            info!(
-                "xxx AHV: reserialized bank for slot: {}, path {}",
-                accounts_package.slot,
-                snapshot_info.snapshot_links.display()
             );
         }
 
