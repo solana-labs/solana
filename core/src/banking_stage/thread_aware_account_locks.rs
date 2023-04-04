@@ -345,7 +345,7 @@ impl ThreadSet {
 
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
-        self.0 == 0
+        self == &Self::none()
     }
 
     #[inline(always)]
