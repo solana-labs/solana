@@ -317,22 +317,24 @@ impl LoadedPrograms {
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
                         let current_slot = working_slot.current_slot();
-                        if entry
-                            .maybe_expiration_slot
-                            .map(|expiration_slot| current_slot >= expiration_slot)
-                            .unwrap_or(false)
+                        if current_slot == entry.deployment_slot
+                            || working_slot.is_ancestor(entry.deployment_slot)
                         {
-                            // Found an entry that's already expired. Any further entries in the list
-                            // are older than the current one. So treat the program as missing in the
-                            // cache and return early.
-                            missing.push(key);
-                            return None;
-                        }
-                        if current_slot >= entry.effective_slot
-                            && (current_slot == entry.deployment_slot
-                                || working_slot.is_ancestor(entry.deployment_slot))
-                        {
-                            return Some((key, entry.clone()));
+                            if entry
+                                .maybe_expiration_slot
+                                .map(|expiration_slot| current_slot >= expiration_slot)
+                                .unwrap_or(false)
+                            {
+                                // Found an entry that's already expired. Any further entries in the list
+                                // are older than the current one. So treat the program as missing in the
+                                // cache and return early.
+                                missing.push(key);
+                                return None;
+                            }
+
+                            if current_slot >= entry.effective_slot {
+                                return Some((key, entry.clone()));
+                            }
                         }
                     }
                 }
