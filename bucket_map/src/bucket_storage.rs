@@ -49,8 +49,8 @@ pub trait BucketOccupied {
     /// This must be a multiple of sizeof(u64)
     fn offset_to_first_data() -> usize;
     /// initialize this struct
-    /// `num_elements` is the number of elements allocated in the bucket
-    fn new(num_elements: usize) -> Self;
+    /// `capacity` is the number of elements allocated in the bucket
+    fn new(capacity: Capacity) -> Self;
     /// copying entry. Any in-memory (per-bucket) data structures may need to be copied for this `ix_old`.
     /// no-op by default
     fn copying_entry(
@@ -64,11 +64,19 @@ pub trait BucketOccupied {
     }
 }
 
+pub trait BucketCapacity {
+    fn capacity(&self) -> u64;
+    fn capacity_pow2(&self) -> u8 {
+        unimplemented!();
+    }
+}
+
 pub struct BucketStorage<O: BucketOccupied> {
     path: PathBuf,
     mmap: MmapMut,
     pub cell_size: u64,
-    pub capacity_pow2: u8,
+    /// number of cells this bucket can hold
+    pub capacity: Capacity,
     pub count: Arc<AtomicU64>,
     pub stats: Arc<BucketStats>,
     pub max_search: MaxSearch,
@@ -94,12 +102,40 @@ pub(crate) enum IncludeHeader {
     NoHeader,
 }
 
+/// 2 common ways of specifying capacity
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum Capacity {
+    /// 1 << Pow2 produces # elements
+    Pow2(u8),
+    /// Actual # elements
+    Actual(u64),
+}
+
+impl BucketCapacity for Capacity {
+    fn capacity(&self) -> u64 {
+        match self {
+            Capacity::Pow2(pow2) => 1 << *pow2,
+            Capacity::Actual(elements) => *elements,
+        }
+    }
+    fn capacity_pow2(&self) -> u8 {
+        match self {
+            Capacity::Pow2(pow2) => *pow2,
+            Capacity::Actual(_elements) => {
+                panic!("illegal to ask for pow2 from random capacity");
+            }
+        }
+    }
+}
+
 impl<O: BucketOccupied> BucketStorage<O> {
+    /// allocate a bucket of at least `capacity` elements.
+    /// if capacity can be random, more may be allocated to fill the last page.
     pub fn new_with_capacity(
         drives: Arc<Vec<PathBuf>>,
         num_elems: u64,
         elem_size: u64,
-        capacity_pow2: u8,
+        mut capacity: Capacity,
         max_search: MaxSearch,
         stats: Arc<BucketStats>,
         count: Arc<AtomicU64>,
@@ -112,18 +148,35 @@ impl<O: BucketOccupied> BucketStorage<O> {
             "header size must be a multiple of u64"
         );
         let cell_size = elem_size * num_elems + offset as u64;
-        let bytes = (1u64 << capacity_pow2) * cell_size;
+        let bytes = Self::allocate_to_fill_page(&mut capacity, cell_size);
         let (mmap, path) = Self::new_map(&drives, bytes, &stats);
         Self {
             path,
             mmap,
             cell_size,
             count,
-            capacity_pow2,
+            capacity,
             stats,
             max_search,
-            contents: O::new(1 << capacity_pow2),
+            contents: O::new(capacity),
         }
+    }
+
+    fn allocate_to_fill_page(capacity: &mut Capacity, cell_size: u64) -> u64 {
+        let mut bytes = capacity.capacity() * cell_size;
+        if let Capacity::Actual(_) = capacity {
+            // maybe bump up allocation to fit a page size
+            const PAGE_SIZE: u64 = 4 * 1024;
+            let full_page_bytes = bytes / PAGE_SIZE * PAGE_SIZE / cell_size * cell_size;
+            if full_page_bytes < bytes {
+                let bytes_new = ((bytes / PAGE_SIZE) + 1) * PAGE_SIZE / cell_size * cell_size;
+                assert!(bytes_new >= bytes, "allocating less than requested, capacity: {}, bytes: {}, bytes_new: {}, full_page_bytes: {}", capacity.capacity(), bytes, bytes_new, full_page_bytes);
+                assert_eq!(bytes_new % cell_size, 0);
+                bytes = bytes_new;
+                *capacity = Capacity::Actual(bytes / cell_size);
+            }
+        }
+        bytes
     }
 
     pub fn max_search(&self) -> u64 {
@@ -142,7 +195,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
             drives,
             num_elems,
             elem_size,
-            DEFAULT_CAPACITY_POW2,
+            Capacity::Pow2(DEFAULT_CAPACITY_POW2),
             max_search,
             stats,
             count,
@@ -330,7 +383,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         let old_cap = old_bucket.capacity();
         let old_map = &old_bucket.mmap;
 
-        let increment = self.capacity_pow2 - old_bucket.capacity_pow2;
+        let increment = self.capacity.capacity_pow2() - old_bucket.capacity.capacity_pow2();
         let index_grow = 1 << increment;
         (0..old_cap as usize).for_each(|i| {
             if !old_bucket.is_free(i as u64) {
@@ -370,7 +423,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         drives: &Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
         bucket: Option<&Self>,
-        capacity_pow_2: u8,
+        capacity: Capacity,
         num_elems: u64,
         elem_size: u64,
         stats: &Arc<BucketStats>,
@@ -379,7 +432,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
             Arc::clone(drives),
             num_elems,
             elem_size,
-            capacity_pow_2,
+            capacity,
             max_search,
             Arc::clone(stats),
             bucket
@@ -400,7 +453,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
 
     /// Return the number of cells currently allocated
     pub fn capacity(&self) -> u64 {
-        1 << self.capacity_pow2
+        self.capacity.capacity()
     }
 }
 
@@ -458,8 +511,14 @@ mod test {
             std::mem::size_of::<u64>() - 1
         }
         /// initialize this struct
-        fn new(_num_elements: usize) -> Self {
+        fn new(_num_elements: Capacity) -> Self {
             Self {}
+        }
+    }
+
+    impl BucketCapacity for BucketBadHeader {
+        fn capacity(&self) -> u64 {
+            unimplemented!();
         }
     }
 
@@ -470,7 +529,7 @@ mod test {
             Arc::default(),
             0,
             0,
-            0,
+            Capacity::Pow2(0),
             0,
             Arc::default(),
             Arc::default(),

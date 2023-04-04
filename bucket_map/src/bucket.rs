@@ -3,7 +3,10 @@ use {
         bucket_item::BucketItem,
         bucket_map::BucketMapError,
         bucket_stats::BucketMapStats,
-        bucket_storage::{BucketOccupied, BucketStorage, IncludeHeader, DEFAULT_CAPACITY_POW2},
+        bucket_storage::{
+            BucketCapacity, BucketOccupied, BucketStorage, Capacity, IncludeHeader,
+            DEFAULT_CAPACITY_POW2,
+        },
         index_entry::{
             DataBucket, IndexBucket, IndexEntry, IndexEntryPlaceInBucket, MultipleSlots,
             OccupiedEnum,
@@ -88,11 +91,11 @@ struct DataFileEntryToFree {
 // >= 2 instances of BucketStorage per 'bucket' in the bucket map. 1 for index, >= 1 for data
 pub struct Bucket<T: Copy + 'static> {
     drives: Arc<Vec<PathBuf>>,
-    //index
+    /// index
     pub index: BucketStorage<IndexBucket<T>>,
-    //random offset for the index
+    /// random offset for the index
     random: u64,
-    //storage buckets to store SlotSlice up to a power of 2 in len
+    /// storage buckets to store SlotSlice up to a power of 2 in len
     pub data: Vec<BucketStorage<DataBucket>>,
     stats: Arc<BucketMapStats>,
 
@@ -210,7 +213,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             .fetch_add(m.as_us(), Ordering::Relaxed);
         match first_free {
             Some(ii) => Ok((None, ii)),
-            None => Err(BucketMapError::IndexNoSpace(index.capacity_pow2)),
+            None => Err(BucketMapError::IndexNoSpace(index.capacity.capacity_pow2())),
         }
     }
 
@@ -263,7 +266,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             .stats
             .find_index_entry_mut_us
             .fetch_add(m.as_us(), Ordering::Relaxed);
-        Err(BucketMapError::IndexNoSpace(index.capacity_pow2))
+        Err(BucketMapError::IndexNoSpace(index.capacity.capacity_pow2()))
     }
 
     pub fn read_value(&self, key: &Pubkey) -> Option<(&[T], RefCount)> {
@@ -356,7 +359,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
         // need to move the allocation to a best fit spot
         let best_bucket = &self.data[best_fit_bucket as usize];
-        let cap_power = best_bucket.capacity_pow2;
+        let cap_power = best_bucket.capacity.capacity_pow2();
         let cap = best_bucket.capacity();
         let pos = thread_rng().gen_range(0, cap);
         let mut success = false;
@@ -373,7 +376,8 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             if best_bucket.is_free(ix) {
                 let mut multiple_slots = MultipleSlots::default();
                 multiple_slots.set_storage_offset(ix);
-                multiple_slots.set_storage_capacity_when_created_pow2(best_bucket.capacity_pow2);
+                multiple_slots
+                    .set_storage_capacity_when_created_pow2(best_bucket.capacity.capacity_pow2());
                 multiple_slots.set_num_slots(num_slots);
                 elem.set_slot_count_enum_value(
                     &mut self.index,
@@ -430,8 +434,8 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     pub fn grow_index(&self, current_capacity_pow2: u8) {
-        if self.index.capacity_pow2 == current_capacity_pow2 {
-            let mut starting_size_pow2 = self.index.capacity_pow2;
+        if self.index.capacity.capacity_pow2() == current_capacity_pow2 {
+            let mut starting_size_pow2 = self.index.capacity.capacity_pow2();
             if self.anticipated_size > 0 {
                 // start the growth at the next pow2 larger than what would be required to hold `anticipated_size`.
                 // This will prevent unnecessary repeated grows at startup.
@@ -446,7 +450,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                     1,
                     std::mem::size_of::<IndexEntry<T>>() as u64,
                     // the subtle `+ i` here causes us to grow from the starting size by a power of 2 on each iteration of the for loop
-                    starting_size_pow2 + i,
+                    Capacity::Pow2(starting_size_pow2 + i),
                     self.index.max_search,
                     Arc::clone(&self.stats.index),
                     Arc::clone(&self.index.count),
@@ -540,7 +544,10 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             &self.drives,
             self.index.max_search,
             self.data.get(data_index as usize),
-            std::cmp::max(current_capacity_pow2 + 1, DEFAULT_CAPACITY_POW2),
+            Capacity::Pow2(std::cmp::max(
+                current_capacity_pow2 + 1,
+                DEFAULT_CAPACITY_POW2,
+            )),
             1 << data_index,
             Self::elem_size(),
             &self.stats.data,
@@ -564,7 +571,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
     /// grow the appropriate piece. Note this takes an immutable ref.
     /// The actual grow is set into self.reallocated and applied later on a write lock
-    pub fn grow(&self, err: BucketMapError) {
+    pub(crate) fn grow(&self, err: BucketMapError) {
         match err {
             BucketMapError::DataNoSpace((data_index, current_capacity_pow2)) => {
                 //debug!("GROWING SPACE {:?}", (data_index, current_capacity_pow2));

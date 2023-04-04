@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        bucket_storage::{BucketOccupied, BucketStorage, IncludeHeader},
+        bucket_storage::{BucketCapacity, BucketOccupied, BucketStorage, Capacity, IncludeHeader},
         RefCount,
     },
     bv::BitVec,
@@ -33,9 +33,9 @@ impl BucketOccupied for BucketWithBitVec {
         // no header, nothing stored in data stream
         0
     }
-    fn new(num_elements: usize) -> Self {
+    fn new(capacity: Capacity) -> Self {
         Self {
-            occupied: BitVec::new_fill(false, num_elements as u64),
+            occupied: BitVec::new_fill(false, capacity.capacity()),
         }
     }
 }
@@ -64,9 +64,10 @@ impl<T: Copy> BucketOccupied for IndexBucketUsingRefCountBits<T> {
         matches!(entry.get_slot_count_enum(), OccupiedEnum::Free)
     }
     fn offset_to_first_data() -> usize {
+        // no header, nothing stored in data stream
         0
     }
-    fn new(_num_elements: usize) -> Self {
+    fn new(_capacity: Capacity) -> Self {
         Self {
             _phantom: PhantomData,
         }
@@ -170,7 +171,8 @@ impl MultipleSlots {
     /// This function maps the original data location into an index in the current bucket storage.
     /// This is coupled with how we resize bucket storages.
     pub(crate) fn data_loc(&self, storage: &BucketStorage<DataBucket>) -> u64 {
-        self.storage_offset() << (storage.capacity_pow2 - self.storage_capacity_when_created_pow2())
+        self.storage_offset()
+            << (storage.capacity.capacity_pow2() - self.storage_capacity_when_created_pow2())
     }
 }
 
