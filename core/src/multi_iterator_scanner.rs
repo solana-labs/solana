@@ -114,8 +114,8 @@ where
     }
 
     /// Consume the iterator and return the payload.
-    pub fn finalize(self) -> U {
-        self.payload
+    pub fn finalize(self) -> (U, Vec<bool>) {
+        (self.payload, self.already_handled)
     }
 
     /// Initialize the `current_positions` vector for the first batch.
@@ -282,7 +282,7 @@ mod tests {
         let expected_batches = vec![vec![&0, &1], vec![&0, &2], vec![&0, &3], vec![&1]];
         assert_eq!(actual_batches, expected_batches);
 
-        let TestScannerPayload { locks } = scanner.finalize();
+        let TestScannerPayload { locks } = scanner.finalize().0;
         assert_eq!(locks, vec![false; 4]);
     }
 
@@ -325,7 +325,7 @@ mod tests {
         ];
         assert_eq!(actual_batches, expected_batches);
 
-        let TestScannerPayload { locks } = scanner.finalize();
+        let TestScannerPayload { locks } = scanner.finalize().0;
         assert_eq!(locks, vec![false; 4]);
     }
 
