@@ -146,6 +146,22 @@ pub struct Entry {
     pub transactions: Vec<VersionedTransaction>,
 }
 
+pub struct EntrySummary {
+    pub num_hashes: u64,
+    pub hash: Hash,
+    pub num_transactions: u64,
+}
+
+impl From<Entry> for EntrySummary {
+    fn from(entry: Entry) -> Self {
+        Self {
+            num_hashes: entry.num_hashes,
+            hash: entry.hash,
+            num_transactions: entry.transactions.len() as u64,
+        }
+    }
+}
+
 /// Typed entry to distinguish between transaction and tick entries
 pub enum EntryType {
     Transactions(Vec<SanitizedTransaction>),
