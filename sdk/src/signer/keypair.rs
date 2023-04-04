@@ -13,7 +13,6 @@ use {
     rand::{rngs::OsRng, CryptoRng, RngCore},
     std::{
         error,
-        fs::{self, File, OpenOptions},
         io::{Read, Write},
         path::Path,
     },
@@ -122,16 +121,8 @@ impl EncodableKey for Keypair {
         read_keypair(reader)
     }
 
-    fn read_from_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
-        read_keypair_file(path)
-    }
-
     fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
         write_keypair(self, writer)
-    }
-
-    fn write_to_file<F: AsRef<Path>>(&self, outfile: F) -> Result<String, Box<dyn error::Error>> {
-        write_keypair_file(self, outfile)
     }
 
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
@@ -163,8 +154,7 @@ pub fn read_keypair<R: Read>(reader: &mut R) -> Result<Keypair, Box<dyn error::E
 
 /// Reads a `Keypair` from a file
 pub fn read_keypair_file<F: AsRef<Path>>(path: F) -> Result<Keypair, Box<dyn error::Error>> {
-    let mut file = File::open(path.as_ref())?;
-    read_keypair(&mut file)
+    Keypair::read_from_file(path)
 }
 
 /// Writes a `Keypair` to a `Write` implementor with JSON-encoding
@@ -183,29 +173,7 @@ pub fn write_keypair_file<F: AsRef<Path>>(
     keypair: &Keypair,
     outfile: F,
 ) -> Result<String, Box<dyn error::Error>> {
-    let outfile = outfile.as_ref();
-
-    if let Some(outdir) = outfile.parent() {
-        fs::create_dir_all(outdir)?;
-    }
-
-    let mut f = {
-        #[cfg(not(unix))]
-        {
-            OpenOptions::new()
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            OpenOptions::new().mode(0o600)
-        }
-    }
-    .write(true)
-    .truncate(true)
-    .create(true)
-    .open(outfile)?;
-
-    write_keypair(keypair, &mut f)
+    keypair.write_to_file(outfile)
 }
 
 /// Constructs a `Keypair` from caller-provided seed entropy
