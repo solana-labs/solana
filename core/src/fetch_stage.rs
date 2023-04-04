@@ -30,7 +30,6 @@ pub struct FetchStage {
 }
 
 impl FetchStage {
-    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         sockets: Vec<UdpSocket>,
         tpu_forwards_sockets: Vec<UdpSocket>,

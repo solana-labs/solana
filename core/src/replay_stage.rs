@@ -378,7 +378,7 @@ pub struct ReplayStage {
 }
 
 impl ReplayStage {
-    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: ReplayStageConfig,
         blockstore: Arc<Blockstore>,

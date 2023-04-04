@@ -235,7 +235,6 @@ impl SigVerifier for DisabledSigVerifier {
 }
 
 impl SigVerifyStage {
-    #[allow(clippy::new_ret_no_self)]
     pub fn new<T: SigVerifier + 'static + Send>(
         packet_receiver: FindPacketSenderStakeReceiver,
         verifier: T,

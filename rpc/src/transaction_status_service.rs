@@ -25,7 +25,6 @@ pub struct TransactionStatusService {
 }
 
 impl TransactionStatusService {
-    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         write_transaction_status_receiver: Receiver<TransactionStatusMessage>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
