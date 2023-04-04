@@ -37,7 +37,7 @@ pub const DEFAULT_CAPACITY_POW2: u8 = 5;
 /// keep track of an individual element's occupied vs. free state
 /// every element must either be occupied or free and should never be double occupied or double freed
 /// For parameters below, `element` is used to view/modify header fields or fields within the element data.
-pub trait BucketOccupied {
+pub trait BucketOccupied: BucketCapacity {
     /// set entry at `ix` as occupied (as opposed to free)
     fn occupy(&mut self, element: &mut [u8], ix: usize);
     /// set entry at `ix` as free
@@ -75,8 +75,6 @@ pub struct BucketStorage<O: BucketOccupied> {
     path: PathBuf,
     mmap: MmapMut,
     pub cell_size: u64,
-    /// number of cells this bucket can hold
-    pub capacity: Capacity,
     pub count: Arc<AtomicU64>,
     pub stats: Arc<BucketStats>,
     pub max_search: MaxSearch,
@@ -155,7 +153,6 @@ impl<O: BucketOccupied> BucketStorage<O> {
             mmap,
             cell_size,
             count,
-            capacity,
             stats,
             max_search,
             contents: O::new(capacity),
@@ -385,7 +382,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         let old_cap = old_bucket.capacity();
         let old_map = &old_bucket.mmap;
 
-        let increment = self.capacity.capacity_pow2() - old_bucket.capacity.capacity_pow2();
+        let increment = self.contents.capacity_pow2() - old_bucket.contents.capacity_pow2();
         let index_grow = 1 << increment;
         (0..old_cap as usize).for_each(|i| {
             if !old_bucket.is_free(i as u64) {
@@ -455,7 +452,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
 
     /// Return the number of cells currently allocated
     pub fn capacity(&self) -> u64 {
-        self.capacity.capacity()
+        self.contents.capacity()
     }
 }
 

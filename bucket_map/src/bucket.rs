@@ -213,7 +213,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             .fetch_add(m.as_us(), Ordering::Relaxed);
         match first_free {
             Some(ii) => Ok((None, ii)),
-            None => Err(BucketMapError::IndexNoSpace(index.capacity.capacity_pow2())),
+            None => Err(BucketMapError::IndexNoSpace(index.contents.capacity_pow2())),
         }
     }
 
@@ -266,7 +266,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             .stats
             .find_index_entry_mut_us
             .fetch_add(m.as_us(), Ordering::Relaxed);
-        Err(BucketMapError::IndexNoSpace(index.capacity.capacity_pow2()))
+        Err(BucketMapError::IndexNoSpace(index.contents.capacity_pow2()))
     }
 
     pub fn read_value(&self, key: &Pubkey) -> Option<(&[T], RefCount)> {
@@ -359,7 +359,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
         // need to move the allocation to a best fit spot
         let best_bucket = &self.data[best_fit_bucket as usize];
-        let cap_power = best_bucket.capacity.capacity_pow2();
+        let cap_power = best_bucket.contents.capacity_pow2();
         let cap = best_bucket.capacity();
         let pos = thread_rng().gen_range(0, cap);
         let mut success = false;
@@ -377,7 +377,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 let mut multiple_slots = MultipleSlots::default();
                 multiple_slots.set_storage_offset(ix);
                 multiple_slots
-                    .set_storage_capacity_when_created_pow2(best_bucket.capacity.capacity_pow2());
+                    .set_storage_capacity_when_created_pow2(best_bucket.contents.capacity_pow2());
                 multiple_slots.set_num_slots(num_slots);
                 elem.set_slot_count_enum_value(
                     &mut self.index,
@@ -434,8 +434,8 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
     }
 
     pub fn grow_index(&self, current_capacity_pow2: u8) {
-        if self.index.capacity.capacity_pow2() == current_capacity_pow2 {
-            let mut starting_size_pow2 = self.index.capacity.capacity_pow2();
+        if self.index.contents.capacity_pow2() == current_capacity_pow2 {
+            let mut starting_size_pow2 = self.index.contents.capacity_pow2();
             if self.anticipated_size > 0 {
                 // start the growth at the next pow2 larger than what would be required to hold `anticipated_size`.
                 // This will prevent unnecessary repeated grows at startup.
