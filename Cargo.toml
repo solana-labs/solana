@@ -66,6 +66,7 @@ members = [
     "programs/zk-token-proof-tests",
     "pubsub-client",
     "quic-client",
+    "quic-connection-dos",
     "rayon-threadlimit",
     "rbpf-cli",
     "remote-wallet",
