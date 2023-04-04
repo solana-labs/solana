@@ -303,11 +303,9 @@ impl Sub for ThreadSet {
     }
 }
 
-#[cfg(test)]
-static_assertions::assert_eq_size!(ThreadSet, u64); // Formatting must change if size changes
 impl Display for ThreadSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ThreadSet({:#064b})", self.0)
+        write!(f, "ThreadSet({:#0width$b})", self.0, width = MAX_THREADS)
     }
 }
 
