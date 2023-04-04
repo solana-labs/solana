@@ -243,13 +243,32 @@ fn bank_forks_from_snapshot(
             exit,
         ) {
             Ok(bank) => {
-                let bank_forks = BankForks::new(bank);
-                return (Arc::new(RwLock::new(bank_forks)), None);
+                if let Some(archive_info) = snapshot_utils::get_highest_full_snapshot_archive_info(
+                    &snapshot_config.full_snapshot_archives_dir,
+                ) {
+                    let start_snapshot_hashes = StartingSnapshotHashes {
+                        full: FullSnapshotHash {
+                            hash: (archive_info.slot(), archive_info.hash().clone()),
+                        },
+                        incremental: None,
+                    };
+                    let bank_forks = BankForks::new(bank);
+                    return (
+                        Arc::new(RwLock::new(bank_forks)),
+                        Some(start_snapshot_hashes),
+                    );
+                } else {
+                    info!(
+                        "No snapshot archive found in directory: {:?}",
+                        &snapshot_config.full_snapshot_archives_dir
+                    );
+                }
             }
             Err(err) => {
-                error!("Failed to load bank from snapshot dir: {:?}, falling back to loading from snapshot archive", err);
+                error!("Failed to load bank from snapshot dir: {:?}", err);
             }
         }
+        info!("falling back to loading from snapshot archive")
     }
 
     // Purge all the snapshot dirs.
