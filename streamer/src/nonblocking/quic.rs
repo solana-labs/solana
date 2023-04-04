@@ -32,11 +32,12 @@ use {
         net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc, Mutex, MutexGuard, RwLock,
+            Arc, RwLock,
         },
         time::{Duration, Instant},
     },
     tokio::{
+        sync::{Mutex, MutexGuard},
         task::JoinHandle,
         time::{sleep, timeout},
     },
@@ -484,7 +485,7 @@ async fn setup_connection(
             );
 
             if params.stake > 0 {
-                let mut connection_table_l = staked_connection_table.lock().unwrap();
+                let mut connection_table_l = staked_connection_table.lock().await;
                 if connection_table_l.total_size >= max_staked_connections {
                     let num_pruned =
                         connection_table_l.prune_random(PRUNE_RANDOM_SAMPLE_SIZE, params.stake);
@@ -509,7 +510,7 @@ async fn setup_connection(
                     // connection from the unstaked connection table.
                     if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
                         new_connection,
-                        unstaked_connection_table.lock().unwrap(),
+                        unstaked_connection_table.lock().await,
                         unstaked_connection_table.clone(),
                         max_unstaked_connections,
                         &params,
@@ -529,7 +530,7 @@ async fn setup_connection(
                 }
             } else if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
                 new_connection,
-                unstaked_connection_table.lock().unwrap(),
+                unstaked_connection_table.lock().await,
                 unstaked_connection_table.clone(),
                 max_unstaked_connections,
                 &params,
@@ -720,7 +721,7 @@ async fn handle_connection(
         }
     }
 
-    let removed_connection_count = connection_table.lock().unwrap().remove_connection(
+    let removed_connection_count = connection_table.lock().await.remove_connection(
         ConnectionTableKey::new(remote_addr.ip(), remote_pubkey),
         remote_addr.port(),
         stable_id,
