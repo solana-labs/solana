@@ -1,7 +1,7 @@
 use {
     crate::{
         cluster_slots::ClusterSlots,
-        duplicate_repair_status::{DeadSlotAncestorRequestStatus, DuplicateAncestorDecision},
+        duplicate_repair_status::{AncestorRequestStatus, DuplicateAncestorDecision},
         outstanding_requests::OutstandingRequests,
         packet_threshold::DynamicPacketToProcessThreshold,
         repair_service::{DuplicateSlotsResetSender, RepairInfo, RepairStatsGroup},
@@ -164,7 +164,7 @@ impl AncestorHashesService {
             None,
         );
 
-        let ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>> =
+        let ancestor_hashes_request_statuses: Arc<DashMap<Slot, AncestorRequestStatus>> =
             Arc::new(DashMap::new());
         let (retryable_slots_sender, retryable_slots_receiver) = unbounded();
 
@@ -204,7 +204,7 @@ impl AncestorHashesService {
 
     /// Listen for responses to our ancestors hashes repair requests
     fn run_responses_listener(
-        ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>>,
+        ancestor_hashes_request_statuses: Arc<DashMap<Slot, AncestorRequestStatus>>,
         response_receiver: PacketBatchReceiver,
         blockstore: Arc<Blockstore>,
         outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>>,
@@ -253,7 +253,7 @@ impl AncestorHashesService {
     /// Process messages from the network
     #[allow(clippy::too_many_arguments)]
     fn process_new_packets_from_channel(
-        ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
+        ancestor_hashes_request_statuses: &DashMap<Slot, AncestorRequestStatus>,
         response_receiver: &PacketBatchReceiver,
         blockstore: &Blockstore,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
@@ -300,7 +300,7 @@ impl AncestorHashesService {
     }
 
     fn process_packet_batch(
-        ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
+        ancestor_hashes_request_statuses: &DashMap<Slot, AncestorRequestStatus>,
         packet_batch: PacketBatch,
         stats: &mut AncestorHashesResponsesStats,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
@@ -336,7 +336,7 @@ impl AncestorHashesService {
     /// `request_slot`
     fn verify_and_process_ancestor_response(
         packet: &Packet,
-        ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
+        ancestor_hashes_request_statuses: &DashMap<Slot, AncestorRequestStatus>,
         stats: &mut AncestorHashesResponsesStats,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         blockstore: &Blockstore,
@@ -485,7 +485,7 @@ impl AncestorHashesService {
 
     fn process_replay_updates(
         ancestor_hashes_replay_update_receiver: &AncestorHashesReplayUpdateReceiver,
-        ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
+        ancestor_hashes_request_statuses: &DashMap<Slot, AncestorRequestStatus>,
         dead_slot_pool: &mut HashSet<Slot>,
         repairable_dead_slot_pool: &mut HashSet<Slot>,
         root_slot: Slot,
@@ -512,7 +512,7 @@ impl AncestorHashesService {
     }
 
     fn run_manage_ancestor_requests(
-        ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>>,
+        ancestor_hashes_request_statuses: Arc<DashMap<Slot, AncestorRequestStatus>>,
         ancestor_hashes_request_socket: Arc<UdpSocket>,
         repair_info: RepairInfo,
         outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>>,
@@ -561,7 +561,7 @@ impl AncestorHashesService {
 
     #[allow(clippy::too_many_arguments)]
     fn manage_ancestor_requests(
-        ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
+        ancestor_hashes_request_statuses: &DashMap<Slot, AncestorRequestStatus>,
         ancestor_hashes_request_socket: &UdpSocket,
         repair_info: &RepairInfo,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
@@ -595,7 +595,6 @@ impl AncestorHashesService {
         );
 
         dead_slot_pool.retain(|slot| *slot > root_bank.slot());
-
         repairable_dead_slot_pool.retain(|slot| *slot > root_bank.slot());
 
         ancestor_hashes_request_statuses.retain(|slot, status| {
@@ -705,7 +704,7 @@ impl AncestorHashesService {
     /// added to `ancestor_hashes_request_statuses`
     #[allow(clippy::too_many_arguments)]
     fn initiate_ancestor_hashes_requests_for_duplicate_slot(
-        ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
+        ancestor_hashes_request_statuses: &DashMap<Slot, AncestorRequestStatus>,
         ancestor_hashes_request_socket: &UdpSocket,
         cluster_slots: &ClusterSlots,
         serve_repair: &ServeRepair,
@@ -741,7 +740,7 @@ impl AncestorHashesService {
                 }
             }
 
-            let ancestor_request_status = DeadSlotAncestorRequestStatus::new(
+            let ancestor_request_status = AncestorRequestStatus::new(
                 sampled_validators
                     .into_iter()
                     .map(|(_pk, socket_addr)| socket_addr),
@@ -840,7 +839,7 @@ mod test {
 
         // 4) If an outstanding request for a slot already exists, should
         // ignore any signals from replay stage
-        ancestor_hashes_request_statuses.insert(slot, DeadSlotAncestorRequestStatus::default());
+        ancestor_hashes_request_statuses.insert(slot, AncestorRequestStatus::default());
         dead_slot_pool.clear();
         repairable_dead_slot_pool.clear();
         ancestor_hashes_replay_update_sender
@@ -1031,7 +1030,7 @@ mod test {
     }
 
     struct ManageAncestorHashesState {
-        ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>>,
+        ancestor_hashes_request_statuses: Arc<DashMap<Slot, AncestorRequestStatus>>,
         ancestor_hashes_request_socket: Arc<UdpSocket>,
         requester_serve_repair: ServeRepair,
         repair_info: RepairInfo,
