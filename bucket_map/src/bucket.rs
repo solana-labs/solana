@@ -300,10 +300,8 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             elem_allocate.init(&mut self.index, key);
             elem_allocate
         };
-
-        elem.set_ref_count(&mut self.index, ref_count);
         let num_slots = data_len as u64;
-        if num_slots <= 1 {
+        if num_slots <= 1 && ref_count == 1 {
             // new data stored should be stored in IndexEntry and NOT in data file
             // new data len is 0 or 1
             if let OccupiedEnum::MultipleSlots(multiple_slots) =
@@ -335,6 +333,9 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
             if best_fit_bucket == bucket_ix as u64 {
                 // in place update in same data file
+                MultipleSlots::set_ref_count(current_bucket, elem_loc, ref_count);
+
+                // write data
                 assert!(!current_bucket.is_free(elem_loc));
                 let slice: &mut [T] = current_bucket.get_mut_cell_slice(
                     elem_loc,
@@ -358,7 +359,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         }
 
         // need to move the allocation to a best fit spot
-        let best_bucket = &self.data[best_fit_bucket as usize];
+        let best_bucket = &mut self.data[best_fit_bucket as usize];
         let cap_power = best_bucket.contents.capacity_pow2();
         let cap = best_bucket.capacity();
         let pos = thread_rng().gen_range(0, cap);
@@ -379,15 +380,17 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 multiple_slots
                     .set_storage_capacity_when_created_pow2(best_bucket.contents.capacity_pow2());
                 multiple_slots.set_num_slots(num_slots);
+                MultipleSlots::set_ref_count(best_bucket, ix, ref_count);
+
                 elem.set_slot_count_enum_value(
                     &mut self.index,
                     OccupiedEnum::MultipleSlots(&multiple_slots),
                 );
                 //debug!(                        "DATA ALLOC {:?} {} {} {}",                        key, elem.data_location, best_bucket.capacity, elem_uid                    );
+                let best_bucket = &mut self.data[best_fit_bucket as usize];
+                best_bucket.occupy(ix, false).unwrap();
                 if num_slots > 0 {
                     // copy slotlist into the data bucket
-                    let best_bucket = &mut self.data[best_fit_bucket as usize];
-                    best_bucket.occupy(ix, false).unwrap();
                     let slice =
                         best_bucket.get_mut_cell_slice(ix, num_slots, IncludeHeader::NoHeader);
                     slice.iter_mut().zip(data).for_each(|(dest, src)| {
