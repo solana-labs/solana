@@ -61,6 +61,7 @@ pub enum LoadedProgramType {
     FailedVerification,
     Closed,
     DelayVisibility,
+    Unloaded,
     LegacyV0(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     LegacyV1(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     Typed(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
@@ -75,6 +76,7 @@ impl Debug for LoadedProgramType {
             }
             LoadedProgramType::Closed => write!(f, "LoadedProgramType::Closed"),
             LoadedProgramType::DelayVisibility => write!(f, "LoadedProgramType::DelayVisibility"),
+            LoadedProgramType::Unloaded => write!(f, "LoadedProgramType::Unloaded"),
             LoadedProgramType::LegacyV0(_) => write!(f, "LoadedProgramType::LegacyV0"),
             LoadedProgramType::LegacyV1(_) => write!(f, "LoadedProgramType::LegacyV1"),
             LoadedProgramType::Typed(_) => write!(f, "LoadedProgramType::Typed"),
@@ -125,6 +127,14 @@ impl LoadProgramMetrics {
             ("verify_code_us", self.verify_code_us, i64),
             ("jit_compile_us", self.jit_compile_us, i64),
         );
+    }
+}
+
+impl PartialEq for LoadedProgram {
+    fn eq(&self, other: &Self) -> bool {
+        self.effective_slot == other.effective_slot
+            && self.deployment_slot == other.deployment_slot
+            && self.is_tombstone() == other.is_tombstone()
     }
 }
 
@@ -185,6 +195,16 @@ impl LoadedProgram {
             usage_counter: AtomicU64::new(0),
             program,
         })
+    }
+
+    pub fn to_unloaded(&self) -> Self {
+        Self {
+            program: LoadedProgramType::Unloaded,
+            account_size: 0,
+            deployment_slot: self.deployment_slot,
+            effective_slot: self.effective_slot,
+            usage_counter: AtomicU64::new(self.usage_counter.load(Ordering::Relaxed)),
+        }
     }
 
     /// Creates a new built-in program
@@ -345,35 +365,39 @@ impl LoadedPrograms {
         (found, missing)
     }
 
-    /// Evicts programs which were used infrequently
-    pub fn sort_and_evict(&mut self, max_cache_entries: Option<usize>) {
+    /// Unloads programs which were used infrequently
+    pub fn sort_and_unload(&mut self, max_cache_entries: Option<usize>) {
         // Find eviction candidates and sort by their usage counters
-        let mut num_cache_entries: usize = 0;
         let sorted_candidates = self
             .entries
             .iter()
-            .filter(|(_key, programs)| {
-                num_cache_entries = num_cache_entries.saturating_add(programs.len());
-                programs.len() == 1
+            .flat_map(|(id, list)| {
+                list.iter().filter_map(|program| match program.program {
+                    LoadedProgramType::LegacyV0(_)
+                    | LoadedProgramType::LegacyV1(_)
+                    | LoadedProgramType::Typed(_)
+                    | LoadedProgramType::BuiltIn(_) => Some((*id, program.clone())),
+                    _ => None,
+                })
             })
-            .sorted_by_cached_key(|(_key, programs)| {
-                programs
-                    .get(0)
-                    .unwrap()
-                    .usage_counter
-                    .load(Ordering::Relaxed)
-            })
-            .map(|(key, _programs)| *key)
-            .collect::<Vec<Pubkey>>();
-        // Calculate how many to remove
-        let num_to_remove = std::cmp::min(
-            num_cache_entries.saturating_sub(max_cache_entries.unwrap_or(MAX_CACHE_ENTRIES)),
-            sorted_candidates.len(),
-        );
-        // Remove selected entries
-        if num_to_remove != 0 {
-            self.remove_entries(sorted_candidates.into_iter().take(num_to_remove))
-        }
+            .sorted_by_cached_key(|(_, program)| program.usage_counter.load(Ordering::Relaxed))
+            .collect::<Vec<(Pubkey, Arc<LoadedProgram>)>>();
+
+        // Calculate how many to unload
+        let num_to_unload = sorted_candidates
+            .len()
+            .saturating_sub(max_cache_entries.unwrap_or(MAX_CACHE_ENTRIES));
+        sorted_candidates
+            .iter()
+            .take(num_to_unload)
+            .for_each(|(id, program)| {
+                self.entries.get_mut(id).map(|entries| {
+                    entries
+                        .iter_mut()
+                        .find(|entry| entry == &program)
+                        .map(|candidate| *candidate = Arc::new(candidate.to_unloaded()));
+                });
+            });
     }
 
     /// Removes the entries at the given keys, if they exist
@@ -439,9 +463,7 @@ mod tests {
         fork_graph.insert_fork(&[0, 10, 20, 22]);
         fork_graph.insert_fork(&[0, 5, 11, 15, 16]);
         fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
-        let possible_slots: Vec<u64> = vec![0, 5, 10, 11, 15, 16, 20, 22, 25, 27];
-        let usage_counters: Vec<u64> = vec![43, 10, 1128, 1, 0, 67, 212, 322, 29, 21];
-        let mut programs = HashMap::<Pubkey, Vec<(u64, u64)>>::new();
+        let mut programs = vec![];
         let mut num_total_programs: usize = 0;
 
         let mut cache = LoadedPrograms::default();
@@ -453,29 +475,17 @@ mod tests {
             .iter()
             .enumerate()
             .for_each(|(i, deployment_slot)| {
+                let usage_counter = *program1_usage_counters.get(i).unwrap_or(&0);
                 cache.replenish(
                     program1,
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
                         (*deployment_slot) + 2,
-                        AtomicU64::new(*program1_usage_counters.get(i).unwrap_or(&0)),
+                        AtomicU64::new(usage_counter),
                     ),
                 );
                 num_total_programs += 1;
-                programs
-                    .entry(program1)
-                    .and_modify(|entries| {
-                        entries.push((
-                            *deployment_slot,
-                            *program1_usage_counters.get(i).unwrap_or(&0),
-                        ))
-                    })
-                    .or_insert_with(|| {
-                        Vec::<(u64, u64)>::from([(
-                            *deployment_slot,
-                            *program1_usage_counters.get(i).unwrap_or(&0),
-                        )])
-                    });
+                programs.push((program1, *deployment_slot, usage_counter));
             });
 
         let program2 = Pubkey::new_unique();
@@ -485,29 +495,17 @@ mod tests {
             .iter()
             .enumerate()
             .for_each(|(i, deployment_slot)| {
+                let usage_counter = *program2_usage_counters.get(i).unwrap_or(&0);
                 cache.replenish(
                     program2,
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
                         (*deployment_slot) + 2,
-                        AtomicU64::new(*program2_usage_counters.get(i).unwrap_or(&0)),
+                        AtomicU64::new(usage_counter),
                     ),
                 );
                 num_total_programs += 1;
-                programs
-                    .entry(program2)
-                    .and_modify(|entries| {
-                        entries.push((
-                            *deployment_slot,
-                            *program2_usage_counters.get(i).unwrap_or(&0),
-                        ))
-                    })
-                    .or_insert_with(|| {
-                        Vec::<(u64, u64)>::from([(
-                            *deployment_slot,
-                            *program2_usage_counters.get(i).unwrap_or(&0),
-                        )])
-                    });
+                programs.push((program2, *deployment_slot, usage_counter));
             });
 
         let program3 = Pubkey::new_unique();
@@ -517,147 +515,42 @@ mod tests {
             .iter()
             .enumerate()
             .for_each(|(i, deployment_slot)| {
+                let usage_counter = *program3_usage_counters.get(i).unwrap_or(&0);
                 cache.replenish(
                     program3,
                     new_test_loaded_program_with_usage(
                         *deployment_slot,
                         (*deployment_slot) + 2,
-                        AtomicU64::new(*program3_usage_counters.get(i).unwrap_or(&0)),
+                        AtomicU64::new(usage_counter),
                     ),
                 );
                 num_total_programs += 1;
-                programs
-                    .entry(program3)
-                    .and_modify(|entries| {
-                        entries.push((
-                            *deployment_slot,
-                            *program3_usage_counters.get(i).unwrap_or(&0),
-                        ))
-                    })
-                    .or_insert_with(|| {
-                        Vec::<(u64, u64)>::from([(
-                            *deployment_slot,
-                            *program3_usage_counters.get(i).unwrap_or(&0),
-                        )])
-                    });
+                programs.push((program3, *deployment_slot, usage_counter));
             });
 
-        // Add random set of used programs (with no redeploys) on each possible slot
-        // in the fork graph
-        let mut eviction_candidates = possible_slots
-            .into_iter()
-            .enumerate()
-            .map(|(i, slot)| {
-                (
-                    Pubkey::new_unique(),
-                    slot,
-                    *usage_counters.get(i).unwrap_or(&0),
-                )
-            })
-            .collect::<Vec<_>>();
-        eviction_candidates
-            .iter()
-            .for_each(|(key, deployment_slot, usage_counter)| {
-                cache.replenish(
-                    *key,
-                    new_test_loaded_program_with_usage(
-                        *deployment_slot,
-                        (*deployment_slot) + 2,
-                        AtomicU64::new(*usage_counter),
-                    ),
-                );
-                num_total_programs += 1;
-                programs
-                    .entry(*key)
-                    .and_modify(|entries| entries.push((*deployment_slot, *usage_counter)))
-                    .or_insert_with(|| {
-                        Vec::<(u64, u64)>::from([(*deployment_slot, *usage_counter)])
-                    });
-            });
-        eviction_candidates.sort_by_key(|(_key, _deplyment_slot, usage_counter)| *usage_counter);
+        programs.sort_by_key(|(_id, _slot, usage_count)| *usage_count);
 
-        // Try to remove no programs.
-        cache.sort_and_evict(Some(num_total_programs));
+        cache.sort_and_unload(Some(num_total_programs.saturating_sub(3)));
         // Check that every program is still in the cache.
         programs.iter().for_each(|entry| {
-            assert!(cache.entries.get(entry.0).is_some());
+            assert!(cache.entries.get(&entry.0).is_some());
         });
 
-        // Try to remove less than max programs.
-        let max_cache_entries = 12_usize;
-        // Guarantee you won't evict all eviction candidates
-        let num_to_remove = num_total_programs - max_cache_entries;
-        assert!(eviction_candidates.len() > num_to_remove);
-        let removals = eviction_candidates
-            .drain(0..num_to_remove)
-            .map(|(key, _, _)| key)
-            .collect::<Vec<_>>();
-        cache.sort_and_evict(Some(max_cache_entries));
-        // Make sure removed entries are gone
-        removals.iter().for_each(|key| {
-            assert!(cache.entries.get(key).is_none());
-        });
-        // Make sure the other entries are still present in the cache
-        programs
+        let unloaded = cache
+            .entries
             .iter()
-            .filter(|(key, _)| !removals.contains(key))
-            .for_each(
-                // For every entry not removed
-                |(key, val)| {
-                    let program_in_cache = cache.entries.get(key);
-                    assert!(program_in_cache.is_some()); // Make sure it's entry exists
-                    let values_in_cache = program_in_cache
-                        .unwrap()
-                        .iter()
-                        .map(|x| (x.deployment_slot, x.usage_counter.load(Ordering::Relaxed)))
-                        .collect::<Vec<_>>();
-                    val.iter().for_each(|entry| {
-                        // make sure the exact slot and usage counter remain
-                        // for the entry
-                        assert!(values_in_cache.contains(entry));
-                    });
-                },
-            );
-        // Remove entries from you local cache tracker
-        removals.iter().for_each(|key| {
-            programs.remove(key);
-            num_total_programs -= 1;
-        });
+            .flat_map(|(id, cached_programs)| {
+                cached_programs.iter().filter_map(|program| {
+                    matches!(program.program, LoadedProgramType::Unloaded)
+                        .then_some((*id, program.usage_counter.load(Ordering::Relaxed)))
+                })
+            })
+            .collect::<Vec<(Pubkey, u64)>>();
 
-        // Try to remove all programs.
-        let max_num_removals = eviction_candidates.len();
-        // Make sure total programs is greater than number of eviction candidates
-        assert!(num_total_programs > max_num_removals);
-        cache.sort_and_evict(Some(0));
-        // Make sure all candidate removals were removed
-        let removals = eviction_candidates
-            .iter()
-            .map(|(key, _, _)| key)
-            .collect::<Vec<_>>();
-        removals.iter().for_each(|key| {
-            assert!(cache.entries.get(*key).is_none());
-        });
-        // Make sure all non-candidate removals remain
-        programs
-            .iter()
-            .filter(|(key, _)| !removals.contains(key))
-            .for_each(
-                // For every entry not removed
-                |(key, val)| {
-                    let program_in_cache = cache.entries.get(key);
-                    assert!(program_in_cache.is_some()); // Make sure it's entry exists
-                    let values_in_cache = program_in_cache
-                        .unwrap()
-                        .iter()
-                        .map(|x| (x.deployment_slot, x.usage_counter.load(Ordering::Relaxed)))
-                        .collect::<Vec<_>>();
-                    val.iter().for_each(|entry| {
-                        // make sure the exact slot and usage counter remain
-                        // for the entry
-                        assert!(values_in_cache.contains(entry));
-                    });
-                },
-            );
+        for index in 0..3 {
+            let expected = programs.get(index).expect("Missing program");
+            assert!(unloaded.contains(&(expected.0, expected.2)));
+        }
     }
 
     #[test]
@@ -864,7 +757,7 @@ mod tests {
         usage_counter: AtomicU64,
     ) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
-            program: LoadedProgramType::FailedVerification,
+            program: LoadedProgramType::BuiltIn(BuiltInProgram::default()),
             account_size: 0,
             deployment_slot,
             effective_slot,

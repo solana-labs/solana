@@ -4644,7 +4644,7 @@ impl Bank {
         self.loaded_programs_cache
             .write()
             .unwrap()
-            .sort_and_evict(None);
+            .sort_and_unload(None);
 
         debug!(
             "check: {}us load: {}us execute: {}us txs_len={}",
