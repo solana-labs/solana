@@ -126,7 +126,7 @@ impl ThreadAwareAccountLocks {
         // if the read lock is held by a single thread, and the limit is not exceeded.
         self.schedulable_threads_with_read_only_handler(account, |thread_set, counts| {
             thread_set
-                .only_one_scheduled()
+                .only_one_contained()
                 .filter(|thread_id| counts[*thread_id] < self.sequential_queue_limit)
                 .map_or_else(ThreadSet::none, ThreadSet::only)
         })
@@ -156,7 +156,7 @@ impl ThreadAwareAccountLocks {
                 }
             }
             (Some((thread_id, count)), Some((thread_set, counts))) => {
-                debug_assert_eq!(Some(*thread_id), thread_set.only_one_scheduled());
+                debug_assert_eq!(Some(*thread_id), thread_set.only_one_contained());
                 if count + counts[*thread_id] == self.sequential_queue_limit {
                     ThreadSet::none()
                 } else {
@@ -337,7 +337,7 @@ impl ThreadSet {
     }
 
     #[inline(always)]
-    pub fn only_one_scheduled(&self) -> Option<ThreadId> {
+    pub fn only_one_contained(&self) -> Option<ThreadId> {
         (self.num_threads() == 1).then_some(self.0.trailing_zeros() as ThreadId)
     }
 
@@ -662,7 +662,7 @@ mod tests {
         let mut thread_set = ThreadSet::none();
         assert!(thread_set.is_empty());
         assert_eq!(thread_set.num_threads(), 0);
-        assert_eq!(thread_set.only_one_scheduled(), None);
+        assert_eq!(thread_set.only_one_contained(), None);
         for idx in 0..MAX_THREADS {
             assert!(!thread_set.contains(idx));
         }
@@ -670,7 +670,7 @@ mod tests {
         thread_set.insert(4);
         assert!(!thread_set.is_empty());
         assert_eq!(thread_set.num_threads(), 1);
-        assert_eq!(thread_set.only_one_scheduled(), Some(4));
+        assert_eq!(thread_set.only_one_contained(), Some(4));
         for idx in 0..MAX_THREADS {
             assert_eq!(thread_set.contains(idx), idx == 4);
         }
@@ -678,7 +678,7 @@ mod tests {
         thread_set.insert(2);
         assert!(!thread_set.is_empty());
         assert_eq!(thread_set.num_threads(), 2);
-        assert_eq!(thread_set.only_one_scheduled(), None);
+        assert_eq!(thread_set.only_one_contained(), None);
         for idx in 0..MAX_THREADS {
             assert_eq!(thread_set.contains(idx), idx == 2 || idx == 4);
         }
@@ -686,7 +686,7 @@ mod tests {
         thread_set.remove(4);
         assert!(!thread_set.is_empty());
         assert_eq!(thread_set.num_threads(), 1);
-        assert_eq!(thread_set.only_one_scheduled(), Some(2));
+        assert_eq!(thread_set.only_one_contained(), Some(2));
         for idx in 0..MAX_THREADS {
             assert_eq!(thread_set.contains(idx), idx == 2);
         }
