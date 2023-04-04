@@ -14,7 +14,17 @@ use {
 
 /// allocated in `contents` in a BucketStorage
 pub struct BucketWithBitVec {
-    pub occupied: BitVec,
+    occupied: BitVec,
+    capacity_pow2: Capacity,
+}
+
+impl BucketCapacity for BucketWithBitVec {
+    fn capacity(&self) -> u64 {
+        self.capacity_pow2.capacity()
+    }
+    fn capacity_pow2(&self) -> u8 {
+        self.capacity_pow2.capacity_pow2()
+    }
 }
 
 impl BucketOccupied for BucketWithBitVec {
@@ -34,16 +44,20 @@ impl BucketOccupied for BucketWithBitVec {
         0
     }
     fn new(capacity: Capacity) -> Self {
+        assert!(matches!(capacity, Capacity::Pow2(_)));
         Self {
             occupied: BitVec::new_fill(false, capacity.capacity()),
+            capacity_pow2: capacity,
         }
     }
 }
 
-#[derive(Debug, Default)]
+/// allocated in `contents` in a BucketStorage
+#[derive(Debug)]
 pub struct IndexBucketUsingBitVecBits<T: 'static> {
     /// 2 bits per entry that represent a 4 state enum tag
     pub enum_tag: BitVec,
+    capacity_pow2: Capacity,
     _phantom: PhantomData<&'static T>,
 }
 
@@ -90,6 +104,7 @@ impl<T: Copy + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
         Self {
             // note: twice as many bits allocated as `num_elements` because we store 2 bits per element
             enum_tag: BitVec::new_fill(false, capacity.capacity() * 2),
+            capacity_pow2: capacity,
             _phantom: PhantomData,
         }
     }
@@ -104,6 +119,15 @@ impl<T: Copy + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
         ix_old: usize,
     ) {
         self.set_enum_tag(ix_new as u64, other.get_enum_tag(ix_old as u64));
+    }
+}
+
+impl<T> BucketCapacity for IndexBucketUsingBitVecBits<T> {
+    fn capacity(&self) -> u64 {
+        self.capacity_pow2.capacity()
+    }
+    fn capacity_pow2(&self) -> u8 {
+        self.capacity_pow2.capacity_pow2()
     }
 }
 
@@ -205,7 +229,7 @@ impl MultipleSlots {
     /// This is coupled with how we resize bucket storages.
     pub(crate) fn data_loc(&self, storage: &BucketStorage<DataBucket>) -> u64 {
         self.storage_offset()
-            << (storage.capacity.capacity_pow2() - self.storage_capacity_when_created_pow2())
+            << (storage.contents.capacity_pow2() - self.storage_capacity_when_created_pow2())
     }
 }
 
