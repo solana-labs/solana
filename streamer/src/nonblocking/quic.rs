@@ -32,11 +32,12 @@ use {
         net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc, Mutex, MutexGuard, RwLock,
+            Arc, RwLock,
         },
         time::{Duration, Instant},
     },
     tokio::{
+        sync::{Mutex, MutexGuard},
         task::JoinHandle,
         time::{sleep, timeout},
     },
@@ -372,18 +373,21 @@ fn handle_and_cache_new_connection(
     }
 }
 
-fn prune_unstaked_connections_and_add_new_connection(
+async fn prune_unstaked_connections_and_add_new_connection(
     connection: Connection,
     connection_table: Arc<Mutex<ConnectionTable>>,
     max_connections: usize,
     params: &NewConnectionHandlerParams,
     wait_for_chunk_timeout: Duration,
 ) -> Result<(), ConnectionHandlerError> {
-    let stats = params.stats.clone();
     if max_connections > 0 {
         let connection_table_clone = connection_table.clone();
-        let mut connection_table = connection_table.lock().unwrap();
-        prune_unstaked_connection_table(&mut connection_table, max_connections, stats);
+        let mut connection_table = connection_table.lock().await;
+        prune_unstaked_connection_table(
+            &mut connection_table,
+            max_connections,
+            params.stats.clone(),
+        );
         handle_and_cache_new_connection(
             connection,
             connection_table,
@@ -485,7 +489,7 @@ async fn setup_connection(
                 );
 
                 if params.stake > 0 {
-                    let mut connection_table_l = staked_connection_table.lock().unwrap();
+                    let mut connection_table_l = staked_connection_table.lock().await;
                     if connection_table_l.total_size >= max_staked_connections {
                         let num_pruned =
                             connection_table_l.prune_random(PRUNE_RANDOM_SAMPLE_SIZE, params.stake);
@@ -514,7 +518,9 @@ async fn setup_connection(
                             max_unstaked_connections,
                             &params,
                             wait_for_chunk_timeout,
-                        ) {
+                        )
+                        .await
+                        {
                             stats
                                 .connection_added_from_staked_peer
                                 .fetch_add(1, Ordering::Relaxed);
@@ -533,7 +539,9 @@ async fn setup_connection(
                     max_unstaked_connections,
                     &params,
                     wait_for_chunk_timeout,
-                ) {
+                )
+                .await
+                {
                     stats
                         .connection_added_from_unstaked_peer
                         .fetch_add(1, Ordering::Relaxed);
@@ -757,7 +765,7 @@ async fn handle_connection(
         }
     }
 
-    let removed_connection_count = connection_table.lock().unwrap().remove_connection(
+    let removed_connection_count = connection_table.lock().await.remove_connection(
         ConnectionTableKey::new(remote_addr.ip(), remote_pubkey),
         remote_addr.port(),
         stable_id,
