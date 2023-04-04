@@ -363,7 +363,7 @@ impl ThreadSet {
 
     #[inline(always)]
     pub fn threads_iter(self) -> impl Iterator<Item = ThreadId> {
-        (0..MAX_THREADS as ThreadId).filter(move |thread_id| self.contains(*thread_id))
+        (0..MAX_THREADS).filter(move |thread_id| self.contains(*thread_id))
     }
 }
 
