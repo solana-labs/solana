@@ -14,7 +14,6 @@ pub type ThreadId = usize; // 0..MAX_THREADS-1
 
 /// A bit-set of threads an account is scheduled or can be scheduled for.
 #[derive(Copy, Clone, PartialEq, Eq)]
-#[repr(transparent)]
 pub struct ThreadSet(u64);
 
 /// Thread-aware account locks which allows for scheduling on threads
