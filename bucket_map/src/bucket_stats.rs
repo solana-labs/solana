@@ -6,6 +6,7 @@ use std::sync::{
 #[derive(Debug, Default)]
 pub struct BucketStats {
     pub resizes: AtomicU64,
+    pub failed_resizes: AtomicU64,
     pub max_size: AtomicU64,
     pub resize_us: AtomicU64,
     pub new_file_us: AtomicU64,

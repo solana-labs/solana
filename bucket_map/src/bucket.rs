@@ -443,14 +443,15 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             }
             let mut m = Measure::start("grow_index");
             //debug!("GROW_INDEX: {}", current_capacity_pow2);
-            let increment = 1;
-            for i in increment.. {
+            let mut count = 0;
+            loop {
+                count += 1;
                 let mut index = BucketStorage::new_with_capacity(
                     Arc::clone(&self.drives),
                     1,
                     std::mem::size_of::<IndexEntry<T>>() as u64,
                     // the subtle `+ i` here causes us to grow from the starting size by a power of 2 on each iteration of the for loop
-                    Capacity::Pow2(starting_size_pow2 + i),
+                    Capacity::Pow2(starting_size_pow2 + count),
                     self.index.max_search,
                     Arc::clone(&self.stats.index),
                     Arc::clone(&self.index.count),
@@ -487,6 +488,12 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 }
             }
             m.stop();
+            if count > 1 {
+                self.stats
+                    .index
+                    .failed_resizes
+                    .fetch_add(count as u64 - 1, Ordering::Relaxed);
+            }
             self.stats.index.resizes.fetch_add(1, Ordering::Relaxed);
             self.stats
                 .index

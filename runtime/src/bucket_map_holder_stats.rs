@@ -405,6 +405,12 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
+                    "disk_index_failed_resizes",
+                    disk.map(|disk| disk.stats.index.failed_resizes.swap(0, Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
                     "disk_index_max_size",
                     disk.map(|disk| { disk.stats.index.max_size.swap(0, Ordering::Relaxed) })
                         .unwrap_or_default(),
