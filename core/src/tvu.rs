@@ -37,7 +37,7 @@ use {
     },
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
-        leader_schedule_cache::LeaderScheduleCache,
+        entry_notifier_service::EntryNotifierSender, leader_schedule_cache::LeaderScheduleCache,
     },
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
@@ -120,6 +120,7 @@ impl Tvu {
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         cache_block_meta_sender: Option<CacheBlockMetaSender>,
+        entry_notification_sender: Option<EntryNotifierSender>,
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
@@ -243,6 +244,7 @@ impl Tvu {
             transaction_status_sender,
             rewards_recorder_sender,
             cache_block_meta_sender,
+            entry_notification_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
@@ -457,6 +459,7 @@ pub mod tests {
             &exit,
             block_commitment_cache,
             Arc::<AtomicBool>::default(),
+            None,
             None,
             None,
             None,

@@ -604,9 +604,6 @@ impl Validator {
             entry_notifier.is_some()
         );
 
-        let (_entry_notification_sender, entry_notifier_service) =
-            initialize_entry_notifier_service(entry_notifier, &exit).unzip();
-
         let system_monitor_service = Some(SystemMonitorService::new(
             Arc::clone(&exit),
             SystemMonitorStatsReportConfig {
@@ -643,6 +640,8 @@ impl Validator {
             blockstore_process_options,
             blockstore_root_scan,
             pruned_banks_receiver,
+            entry_notification_sender,
+            entry_notifier_service,
         ) = load_blockstore(
             config,
             ledger_path,
@@ -650,6 +649,7 @@ impl Validator {
             &start_progress,
             accounts_update_notifier,
             transaction_notifier,
+            entry_notifier,
             Some(poh_timing_point_sender.clone()),
         )?;
 
@@ -775,6 +775,7 @@ impl Validator {
             &blockstore_process_options,
             transaction_status_sender.as_ref(),
             cache_block_meta_sender.clone(),
+            entry_notification_sender.as_ref(),
             blockstore_root_scan,
             accounts_background_request_sender.clone(),
             config,
@@ -1113,6 +1114,7 @@ impl Validator {
             transaction_status_sender.clone(),
             rewards_recorder_sender,
             cache_block_meta_sender,
+            entry_notification_sender.clone(),
             vote_tracker.clone(),
             retransmit_slots_sender,
             gossip_verified_vote_hash_receiver,
@@ -1508,6 +1510,7 @@ fn load_blockstore(
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
+    entry_notifier: Option<EntryNotifierLock>,
     poh_timing_point_sender: Option<PohTimingSender>,
 ) -> Result<
     (
@@ -1523,6 +1526,8 @@ fn load_blockstore(
         blockstore_processor::ProcessOptions,
         BlockstoreRootScan,
         DroppedSlotsReceiver,
+        Option<EntryNotifierSender>,
+        Option<EntryNotifierService>,
     ),
     String,
 > {
@@ -1600,6 +1605,9 @@ fn load_blockstore(
             TransactionHistoryServices::default()
         };
 
+    let (entry_notification_sender, entry_notifier_service) =
+        initialize_entry_notifier_service(entry_notifier, exit).unzip();
+
     let (bank_forks, mut leader_schedule_cache, starting_snapshot_hashes) =
         bank_forks_utils::load_bank_forks(
             &genesis_config,
@@ -1611,6 +1619,7 @@ fn load_blockstore(
             transaction_history_services
                 .cache_block_meta_sender
                 .as_ref(),
+            entry_notification_sender.as_ref(),
             accounts_update_notifier,
             exit,
         );
@@ -1663,6 +1672,8 @@ fn load_blockstore(
         process_options,
         blockstore_root_scan,
         pruned_banks_receiver,
+        entry_notification_sender,
+        entry_notifier_service,
     ))
 }
 
@@ -1677,6 +1688,7 @@ pub struct ProcessBlockStore<'a> {
     process_options: &'a blockstore_processor::ProcessOptions,
     transaction_status_sender: Option<&'a TransactionStatusSender>,
     cache_block_meta_sender: Option<CacheBlockMetaSender>,
+    entry_notification_sender: Option<&'a EntryNotifierSender>,
     blockstore_root_scan: Option<BlockstoreRootScan>,
     accounts_background_request_sender: AbsRequestSender,
     config: &'a ValidatorConfig,
@@ -1696,6 +1708,7 @@ impl<'a> ProcessBlockStore<'a> {
         process_options: &'a blockstore_processor::ProcessOptions,
         transaction_status_sender: Option<&'a TransactionStatusSender>,
         cache_block_meta_sender: Option<CacheBlockMetaSender>,
+        entry_notification_sender: Option<&'a EntryNotifierSender>,
         blockstore_root_scan: BlockstoreRootScan,
         accounts_background_request_sender: AbsRequestSender,
         config: &'a ValidatorConfig,
@@ -1711,6 +1724,7 @@ impl<'a> ProcessBlockStore<'a> {
             process_options,
             transaction_status_sender,
             cache_block_meta_sender,
+            entry_notification_sender,
             blockstore_root_scan: Some(blockstore_root_scan),
             accounts_background_request_sender,
             config,
@@ -1748,6 +1762,7 @@ impl<'a> ProcessBlockStore<'a> {
                 self.process_options,
                 self.transaction_status_sender,
                 self.cache_block_meta_sender.as_ref(),
+                self.entry_notification_sender,
                 &self.accounts_background_request_sender,
             ) {
                 exit.store(true, Ordering::Relaxed);
