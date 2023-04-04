@@ -114,13 +114,13 @@ pub fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
 /// written, and derived from sources.
 pub trait EncodableKey: Sized {
     fn pubkey_string(&self) -> Result<String, Box<dyn error::Error>>;
-    fn read_key<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>>;
-    fn read_key_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>>;
+    fn read_from_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
         let mut file = File::open(path.as_ref())?;
-        Self::read_key(&mut file)
+        Self::read(&mut file)
     }
-    fn write_key<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>>;
-    fn write_key_file<F: AsRef<Path>>(&self, outfile: F) -> Result<String, Box<dyn error::Error>> {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>>;
+    fn write_to_file<F: AsRef<Path>>(&self, outfile: F) -> Result<String, Box<dyn error::Error>> {
         let outfile = outfile.as_ref();
 
         if let Some(outdir) = outfile.parent() {
@@ -143,14 +143,14 @@ pub trait EncodableKey: Sized {
         .create(true)
         .open(outfile)?;
 
-        self.write_key(&mut f)
+        self.write(&mut f)
     }
-    fn key_from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>>;
-    fn key_from_seed_and_derivation_path(
+    fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>>;
+    fn from_seed_and_derivation_path(
         seed: &[u8],
         derivation_path: Option<DerivationPath>,
     ) -> Result<Self, Box<dyn error::Error>>;
-    fn key_from_seed_phrase_and_passphrase(
+    fn from_seed_phrase_and_passphrase(
         seed_phrase: &str,
         passphrase: &str,
     ) -> Result<Self, Box<dyn error::Error>>;

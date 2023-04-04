@@ -118,34 +118,34 @@ impl EncodableKey for Keypair {
         Ok(self.pubkey().to_string())
     }
 
-    fn read_key<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
         read_keypair(reader)
     }
 
-    fn read_key_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
+    fn read_from_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
         read_keypair_file(path)
     }
 
-    fn write_key<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
         write_keypair(self, writer)
     }
 
-    fn write_key_file<F: AsRef<Path>>(&self, outfile: F) -> Result<String, Box<dyn error::Error>> {
+    fn write_to_file<F: AsRef<Path>>(&self, outfile: F) -> Result<String, Box<dyn error::Error>> {
         write_keypair_file(self, outfile)
     }
 
-    fn key_from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+    fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
         keypair_from_seed(seed)
     }
 
-    fn key_from_seed_and_derivation_path(
+    fn from_seed_and_derivation_path(
         seed: &[u8],
         derivation_path: Option<DerivationPath>,
     ) -> Result<Self, Box<dyn error::Error>> {
         keypair_from_seed_and_derivation_path(seed, derivation_path)
     }
 
-    fn key_from_seed_phrase_and_passphrase(
+    fn from_seed_phrase_and_passphrase(
         seed_phrase: &str,
         passphrase: &str,
     ) -> Result<Self, Box<dyn error::Error>> {

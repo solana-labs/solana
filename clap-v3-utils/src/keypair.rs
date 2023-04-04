@@ -1024,7 +1024,7 @@ fn encodable_key_from_path<K: EncodableKey>(
                 legacy,
             )?)
         }
-        SignerSourceKind::Filepath(path) => match K::read_key_file(&path) {
+        SignerSourceKind::Filepath(path) => match K::read_from_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!(
@@ -1037,7 +1037,7 @@ fn encodable_key_from_path<K: EncodableKey>(
         },
         SignerSourceKind::Stdin => {
             let mut stdin = std::io::stdin();
-            Ok(K::read_key(&mut stdin)?)
+            Ok(K::read(&mut stdin)?)
         }
         _ => Err(std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -1083,10 +1083,10 @@ fn encodable_key_from_seed_phrase<K: EncodableKey>(
     let key = if skip_validation {
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         if legacy {
-            K::key_from_seed_phrase_and_passphrase(seed_phrase, &passphrase)?
+            K::from_seed_phrase_and_passphrase(seed_phrase, &passphrase)?
         } else {
             let seed = generate_seed_from_seed_phrase_and_passphrase(seed_phrase, &passphrase);
-            K::key_from_seed_and_derivation_path(&seed, derivation_path)?
+            K::from_seed_and_derivation_path(&seed, derivation_path)?
         }
     } else {
         let sanitized = sanitize_seed_phrase(seed_phrase);
@@ -1111,9 +1111,9 @@ fn encodable_key_from_seed_phrase<K: EncodableKey>(
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         let seed = Seed::new(&mnemonic, &passphrase);
         if legacy {
-            K::key_from_seed(seed.as_bytes())?
+            K::from_seed(seed.as_bytes())?
         } else {
-            K::key_from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?
+            K::from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?
         }
     };
 
