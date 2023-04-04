@@ -5,7 +5,7 @@
 cd "$(dirname "$0")"
 
 if [[ -z $HOST ]]; then
-  HOST=metrics.solana.com
+  HOST=internal-metrics.solana.com
 fi
 echo "HOST: $HOST"
 
@@ -34,7 +34,7 @@ sudo chown buildkite-agent:buildkite-agent certs
 
 
 # (Re)start the container
-sudo sudo docker run \
+sudo docker run \
   --detach \
   --env AUTH_DURATION=24h \
   --env TLS_CERTIFICATE=/certs/fullchain.pem \
@@ -53,4 +53,4 @@ sudo sudo docker run \
   --volume /var/lib/chronograf:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file="5" \
-  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086
+  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086 --influxdb-username="$INFLUXDB_USERNAME" --influxdb-password="$INLUXDB_PASSWORD"
