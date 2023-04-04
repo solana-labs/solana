@@ -4,7 +4,6 @@
 extern crate test;
 
 use {
-    rand::distributions::{Distribution, Uniform},
     solana_core::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         unprocessed_packet_batches::*,
@@ -30,16 +29,14 @@ fn build_packet_batch(
 ) -> (PacketBatch, Vec<usize>) {
     let packet_batch = PacketBatch::new(
         (0..packet_per_batch_count)
-            .map(|sender_stake| {
+            .map(|_| {
                 let tx = system_transaction::transfer(
                     &Keypair::new(),
                     &solana_sdk::pubkey::new_rand(),
                     1,
                     recent_blockhash.unwrap_or_else(Hash::new_unique),
                 );
-                let mut packet = Packet::from_data(None, tx).unwrap();
-                packet.meta_mut().sender_stake = sender_stake as u64;
-                packet
+                Packet::from_data(None, tx).unwrap()
             })
             .collect(),
     );
@@ -52,9 +49,6 @@ fn build_randomized_packet_batch(
     packet_per_batch_count: usize,
     recent_blockhash: Option<Hash>,
 ) -> (PacketBatch, Vec<usize>) {
-    let mut rng = rand::thread_rng();
-    let distribution = Uniform::from(0..200_000);
-
     let packet_batch = PacketBatch::new(
         (0..packet_per_batch_count)
             .map(|_| {
@@ -64,10 +58,7 @@ fn build_randomized_packet_batch(
                     1,
                     recent_blockhash.unwrap_or_else(Hash::new_unique),
                 );
-                let mut packet = Packet::from_data(None, tx).unwrap();
-                let sender_stake = distribution.sample(&mut rng);
-                packet.meta_mut().sender_stake = sender_stake as u64;
-                packet
+                Packet::from_data(None, tx).unwrap()
             })
             .collect(),
     );
@@ -119,11 +110,7 @@ fn bench_packet_clone(bencher: &mut Bencher) {
 
             let mut timer = Measure::start("insert_batch");
             packet_batch.iter().for_each(|packet| {
-                let mut packet = packet.clone();
-                packet.meta_mut().sender_stake *= 2;
-                if packet.meta().sender_stake > 2 {
-                    outer_packet = packet;
-                }
+                outer_packet = packet.clone();
             });
 
             timer.stop();

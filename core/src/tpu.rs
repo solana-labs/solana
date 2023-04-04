@@ -12,7 +12,6 @@ use {
             GossipVerifiedVoteHashSender, VerifiedVoteSender, VoteTracker,
         },
         fetch_stage::FetchStage,
-        find_packet_sender_stake_stage::FindPacketSenderStakeStage,
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
@@ -67,8 +66,6 @@ pub struct Tpu {
     broadcast_stage: BroadcastStage,
     tpu_quic_t: thread::JoinHandle<()>,
     tpu_forwards_quic_t: thread::JoinHandle<()>,
-    find_packet_sender_stake_stage: FindPacketSenderStakeStage,
-    vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     staked_nodes_updater_service: StakedNodesUpdaterService,
     tracer_thread_hdl: TracerThread,
 }
@@ -141,25 +138,6 @@ impl Tpu {
             shared_staked_nodes_overrides,
         );
 
-        let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
-
-        let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
-            packet_receiver,
-            find_packet_sender_stake_sender,
-            staked_nodes.clone(),
-            "Tpu",
-        );
-
-        let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
-            unbounded();
-
-        let vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
-            vote_packet_receiver,
-            vote_find_packet_sender_stake_sender,
-            staked_nodes.clone(),
-            "Vote",
-        );
-
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
 
         let stats = Arc::new(StreamStats::default());
@@ -205,18 +183,14 @@ impl Tpu {
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::new(non_vote_sender);
-            SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, "tpu-verifier")
+            SigVerifyStage::new(packet_receiver, verifier, "tpu-verifier")
         };
 
         let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
 
         let vote_sigverify_stage = {
             let verifier = TransactionSigVerifier::new_reject_non_vote(tpu_vote_sender);
-            SigVerifyStage::new(
-                vote_find_packet_sender_stake_receiver,
-                verifier,
-                "tpu-vote-verifier",
-            )
+            SigVerifyStage::new(vote_packet_receiver, verifier, "tpu-vote-verifier")
         };
 
         let (gossip_vote_sender, gossip_vote_receiver) =
@@ -271,8 +245,6 @@ impl Tpu {
             broadcast_stage,
             tpu_quic_t,
             tpu_forwards_quic_t,
-            find_packet_sender_stake_stage,
-            vote_find_packet_sender_stake_stage,
             staked_nodes_updater_service,
             tracer_thread_hdl,
         }
@@ -285,8 +257,6 @@ impl Tpu {
             self.vote_sigverify_stage.join(),
             self.cluster_info_vote_listener.join(),
             self.banking_stage.join(),
-            self.find_packet_sender_stake_stage.join(),
-            self.vote_find_packet_sender_stake_stage.join(),
             self.staked_nodes_updater_service.join(),
             self.tpu_quic_t.join(),
             self.tpu_forwards_quic_t.join(),

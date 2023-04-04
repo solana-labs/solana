@@ -177,7 +177,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher, use_same_tx: bool) {
             batch
                 .iter_mut()
                 .for_each(|packet| packet.meta_mut().flags |= PacketFlags::TRACER_PACKET);
-            packet_s.send(vec![batch]).unwrap();
+            packet_s.send(batch).unwrap();
         }
         let mut received = 0;
         let mut total_tracer_packets_received_in_sigverify_stage = 0;

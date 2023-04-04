@@ -351,7 +351,6 @@ fn handle_and_cache_new_connection(
                 connection_table,
                 stream_exit,
                 params.stats.clone(),
-                params.stake,
                 peer_type,
                 wait_for_chunk_timeout,
             ));
@@ -689,7 +688,6 @@ async fn handle_connection(
     connection_table: Arc<Mutex<ConnectionTable>>,
     stream_exit: Arc<AtomicBool>,
     stats: Arc<StreamStats>,
-    stake: u64,
     peer_type: ConnectionPeerType,
     wait_for_chunk_timeout: Duration,
 ) {
@@ -736,7 +734,6 @@ async fn handle_connection(
                                     &remote_addr,
                                     &packet_sender,
                                     stats.clone(),
-                                    stake,
                                     peer_type,
                                 )
                                 .await
@@ -788,7 +785,6 @@ async fn handle_chunk(
     remote_addr: &SocketAddr,
     packet_sender: &AsyncSender<PacketAccumulator>,
     stats: Arc<StreamStats>,
-    stake: u64,
     peer_type: ConnectionPeerType,
 ) -> bool {
     match chunk {
@@ -817,7 +813,6 @@ async fn handle_chunk(
                 if packet_accum.is_none() {
                     let mut meta = Meta::default();
                     meta.set_socket_addr(remote_addr);
-                    meta.sender_stake = stake;
                     *packet_accum = Some(PacketAccumulator {
                         meta,
                         chunks: Vec::new(),

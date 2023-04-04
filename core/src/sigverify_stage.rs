@@ -6,9 +6,9 @@
 //! if perf-libs are available
 
 use {
-    crate::{find_packet_sender_stake_stage::FindPacketSenderStakeReceiver, sigverify},
+    crate::sigverify,
     core::time::Duration,
-    crossbeam_channel::{RecvTimeoutError, SendError},
+    crossbeam_channel::{Receiver, RecvTimeoutError, SendError},
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
@@ -236,7 +236,7 @@ impl SigVerifier for DisabledSigVerifier {
 
 impl SigVerifyStage {
     pub fn new<T: SigVerifier + 'static + Send>(
-        packet_receiver: FindPacketSenderStakeReceiver,
+        packet_receiver: Receiver<PacketBatch>,
         verifier: T,
         name: &'static str,
     ) -> Self {
@@ -292,11 +292,11 @@ impl SigVerifyStage {
 
     fn verifier<const K: usize, T: SigVerifier>(
         deduper: &Deduper<K, [u8]>,
-        recvr: &FindPacketSenderStakeReceiver,
+        recvr: &Receiver<PacketBatch>,
         verifier: &mut T,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
-        let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
+        let (mut batches, num_packets, recv_duration) = streamer::recv_packet_batches(recvr)?;
 
         let batches_len = batches.len();
         debug!(
@@ -405,7 +405,7 @@ impl SigVerifyStage {
     }
 
     fn verifier_service<T: SigVerifier + 'static + Send>(
-        packet_receiver: FindPacketSenderStakeReceiver,
+        packet_receiver: Receiver<PacketBatch>,
         mut verifier: T,
         name: &'static str,
     ) -> JoinHandle<()> {
@@ -450,7 +450,7 @@ impl SigVerifyStage {
     }
 
     fn verifier_services<T: SigVerifier + 'static + Send>(
-        packet_receiver: FindPacketSenderStakeReceiver,
+        packet_receiver: Receiver<PacketBatch>,
         verifier: T,
         name: &'static str,
     ) -> JoinHandle<()> {
@@ -574,7 +574,7 @@ mod tests {
                 .iter_mut()
                 .for_each(|packet| packet.meta_mut().flags |= PacketFlags::TRACER_PACKET);
             assert_eq!(batch.len(), packets_per_batch);
-            packet_s.send(vec![batch]).unwrap();
+            packet_s.send(batch).unwrap();
         }
         let mut received = 0;
         let mut total_tracer_packets_received_in_sigverify_stage = 0;
