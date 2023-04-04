@@ -26,10 +26,10 @@ pub(crate) struct ThreadAwareAccountLocks {
     /// Number of threads.
     num_threads: usize, // 0..MAX_THREADS
     /// Limit on the number of sequentially-queued transactions per account.
-    sequential_queue_limit: u32,
+    sequential_queue_limit: LockCount,
     /// Write locks - only on thread can hold a write lock at a time.
     /// Contains how many write locks are held by the thread.
-    write_locks: HashMap<Pubkey, (ThreadId, u32)>,
+    write_locks: HashMap<Pubkey, (ThreadId, LockCount)>,
     /// Read locks - multiple threads can hold a read lock at a time.
     /// Contains thread-set for easily checking which threads are scheduled.
     /// Contains how many read locks are held by each thread.
