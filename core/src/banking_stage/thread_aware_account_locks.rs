@@ -7,20 +7,20 @@ use {
     },
 };
 
-pub const MAX_THREADS: usize = u64::BITS as usize;
+pub(crate) const MAX_THREADS: usize = u64::BITS as usize;
 
 /// Identifier for a thread
-pub type ThreadId = usize; // 0..MAX_THREADS-1
+pub(crate) type ThreadId = usize; // 0..MAX_THREADS-1
 
 /// A bit-set of threads an account is scheduled or can be scheduled for.
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct ThreadSet(u64);
+pub(crate) struct ThreadSet(u64);
 
 /// Thread-aware account locks which allows for scheduling on threads
 /// that already hold locks on the account. This is useful for allowing
 /// queued transactions to be scheduled on a thread while the transaction
 /// is still being executed on the thread, up to a queue limit.
-pub struct ThreadAwareAccountLocks {
+pub(crate) struct ThreadAwareAccountLocks {
     /// Number of threads.
     num_threads: usize, // 0..MAX_THREADS
     /// Limit on the number of sequentially-queued transactions per account.
@@ -37,7 +37,7 @@ pub struct ThreadAwareAccountLocks {
 impl ThreadAwareAccountLocks {
     /// Creates a new `ThreadAwareAccountLocks` with the given number of threads
     /// and queue limit.
-    pub fn new(num_threads: usize, sequential_queue_limit: u32) -> Self {
+    pub(crate) fn new(num_threads: usize, sequential_queue_limit: u32) -> Self {
         assert!(num_threads > 0, "num threads must be > 0");
         assert!(
             num_threads <= MAX_THREADS,
@@ -60,7 +60,7 @@ impl ThreadAwareAccountLocks {
     /// for the given thread, otherwise `None` is returned.
     /// If accounts are schedulable, then they are locked for the thread
     /// selected by the `thread_selector` function.
-    pub fn try_lock_accounts<'a>(
+    pub(crate) fn try_lock_accounts<'a>(
         &mut self,
         write_account_locks: impl Iterator<Item = &'a Pubkey> + Clone,
         read_account_locks: impl Iterator<Item = &'a Pubkey> + Clone,
@@ -167,7 +167,7 @@ impl ThreadAwareAccountLocks {
     }
 
     /// Add locks for all writable and readable accounts on `thread_id`.
-    pub fn lock_accounts<'a>(
+    pub(crate) fn lock_accounts<'a>(
         &mut self,
         write_account_locks: impl Iterator<Item = &'a Pubkey>,
         read_account_locks: impl Iterator<Item = &'a Pubkey>,
@@ -317,52 +317,52 @@ impl Debug for ThreadSet {
 
 impl ThreadSet {
     #[inline(always)]
-    pub fn none() -> Self {
+    pub(crate) fn none() -> Self {
         Self(0)
     }
 
     #[inline(always)]
-    pub fn any(num_threads: usize) -> Self {
+    pub(crate) fn any(num_threads: usize) -> Self {
         Self(Self::as_flag(num_threads) - 1)
     }
 
     #[inline(always)]
-    pub fn only(thread_id: ThreadId) -> Self {
+    pub(crate) fn only(thread_id: ThreadId) -> Self {
         Self(Self::as_flag(thread_id))
     }
 
     #[inline(always)]
-    pub fn num_threads(&self) -> u8 {
+    pub(crate) fn num_threads(&self) -> u8 {
         self.0.count_ones() as u8
     }
 
     #[inline(always)]
-    pub fn only_one_contained(&self) -> Option<ThreadId> {
+    pub(crate) fn only_one_contained(&self) -> Option<ThreadId> {
         (self.num_threads() == 1).then_some(self.0.trailing_zeros() as ThreadId)
     }
 
     #[inline(always)]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self == &Self::none()
     }
 
     #[inline(always)]
-    pub fn contains(&self, thread_id: ThreadId) -> bool {
+    pub(crate) fn contains(&self, thread_id: ThreadId) -> bool {
         self.0 & (Self::as_flag(thread_id)) != 0
     }
 
     #[inline(always)]
-    pub fn insert(&mut self, thread_id: ThreadId) {
+    pub(crate) fn insert(&mut self, thread_id: ThreadId) {
         self.0 |= Self::as_flag(thread_id);
     }
 
     #[inline(always)]
-    pub fn remove(&mut self, thread_id: ThreadId) {
+    pub(crate) fn remove(&mut self, thread_id: ThreadId) {
         self.0 &= !Self::as_flag(thread_id);
     }
 
     #[inline(always)]
-    pub fn threads_iter(self) -> impl Iterator<Item = ThreadId> {
+    pub(crate) fn threads_iter(self) -> impl Iterator<Item = ThreadId> {
         (0..MAX_THREADS).filter(move |thread_id| self.contains(*thread_id))
     }
 
