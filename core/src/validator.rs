@@ -51,6 +51,8 @@ use {
         },
         blockstore_options::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
         blockstore_processor::{self, TransactionStatusSender},
+        entry_notifier_interface::EntryNotifierLock,
+        entry_notifier_service::{EntryNotifierSender, EntryNotifierService},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
     },
@@ -422,6 +424,7 @@ pub struct Validator {
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
     cache_block_meta_service: Option<CacheBlockMetaService>,
+    entry_notifier_service: Option<EntryNotifierService>,
     system_monitor_service: Option<SystemMonitorService>,
     sample_performance_service: Option<SamplePerformanceService>,
     poh_timing_report_service: PohTimingReportService,
@@ -584,15 +587,25 @@ impl Validator {
             .as_ref()
             .and_then(|geyser_plugin_service| geyser_plugin_service.get_transaction_notifier());
 
+        let entry_notifier = geyser_plugin_service
+            .as_ref()
+            .and_then(|geyser_plugin_service| geyser_plugin_service.get_entry_notifier());
+
         let block_metadata_notifier = geyser_plugin_service
             .as_ref()
             .and_then(|geyser_plugin_service| geyser_plugin_service.get_block_metadata_notifier());
 
         info!(
-            "Geyser plugin: accounts_update_notifier: {} transaction_notifier: {}",
+            "Geyser plugin: accounts_update_notifier: {}, \
+            transaction_notifier: {}, \
+            entry_notifier: {}",
             accounts_update_notifier.is_some(),
-            transaction_notifier.is_some()
+            transaction_notifier.is_some(),
+            entry_notifier.is_some()
         );
+
+        let (_entry_notification_sender, entry_notifier_service) =
+            initialize_entry_notifier_service(entry_notifier, &exit).unzip();
 
         let system_monitor_service = Some(SystemMonitorService::new(
             Arc::clone(&exit),
@@ -1183,6 +1196,7 @@ impl Validator {
             transaction_status_service,
             rewards_recorder_service,
             cache_block_meta_service,
+            entry_notifier_service,
             system_monitor_service,
             sample_performance_service,
             poh_timing_report_service,
@@ -1297,6 +1311,12 @@ impl Validator {
             sample_performance_service
                 .join()
                 .expect("sample_performance_service");
+        }
+
+        if let Some(entry_notifier_service) = self.entry_notifier_service {
+            entry_notifier_service
+                .join()
+                .expect("entry_notifier_service");
         }
 
         if let Some(s) = self.snapshot_packager_service {
@@ -1993,6 +2013,18 @@ fn initialize_rpc_transaction_history_services(
         cache_block_meta_sender,
         cache_block_meta_service,
     }
+}
+
+fn initialize_entry_notifier_service(
+    entry_notifier: Option<EntryNotifierLock>,
+    exit: &Arc<AtomicBool>,
+) -> Option<(EntryNotifierSender, EntryNotifierService)> {
+    entry_notifier.map(|entry_notifier| {
+        let (entry_notification_sender, entry_notification_receiver) = unbounded();
+        let entry_notifier_service =
+            EntryNotifierService::new(entry_notification_receiver, entry_notifier, exit);
+        (entry_notification_sender, entry_notifier_service)
+    })
 }
 
 #[derive(Debug, PartialEq, Eq)]
