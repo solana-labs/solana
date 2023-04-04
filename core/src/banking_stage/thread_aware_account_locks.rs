@@ -115,7 +115,7 @@ impl ThreadAwareAccountLocks {
         // that is not at the sequential limit.
         self.schedulable_threads_with_read_only_handler(account, |thread_set, counts| {
             let mut schedulable_threads = ThreadSet::any(self.num_threads);
-            for thread_id in thread_set.threads_iter() {
+            for thread_id in thread_set.contained_threads_iter() {
                 if counts[thread_id] == self.sequential_queue_limit {
                     schedulable_threads.remove(thread_id);
                 }
@@ -373,7 +373,7 @@ impl ThreadSet {
     }
 
     #[inline(always)]
-    pub(crate) fn threads_iter(self) -> impl Iterator<Item = ThreadId> {
+    pub(crate) fn contained_threads_iter(self) -> impl Iterator<Item = ThreadId> {
         (0..MAX_THREADS).filter(move |thread_id| self.contains(*thread_id))
     }
 
@@ -392,7 +392,7 @@ mod tests {
 
     // Simple thread selector to select the first schedulable thread
     fn test_thread_selector(thread_set: ThreadSet) -> ThreadId {
-        thread_set.threads_iter().next().unwrap()
+        thread_set.contained_threads_iter().next().unwrap()
     }
 
     #[test]
