@@ -6,7 +6,7 @@
 cd "$(dirname "$0")"
 
 if [[ -z $HOST ]]; then
-  HOST=metrics.solana.com
+  HOST=internal-metrics.solana.com
 fi
 echo "HOST: $HOST"
 
@@ -48,6 +48,10 @@ sudo docker run \
   --publish 3000:3000 \
   --user root:root \
   --env GF_PATHS_CONFIG=/grafana.ini \
+  --env GF_AUTH_GITHUB_CLIENT_ID="$GITHUB_CLIENT_ID" \
+  --env GF_AUTH_GITHUB_CLIENT_SECRET="$GITHUB_CLIENT_SECRET" \
+  --env GF_SECURITY_ADMIN_USER="$ADMIN_USER_GRAFANA" \
+  --env GF_SECURITY_ADMIN_PASSWORD="$ADMIN_PASSWORD_GRAFANA" \
   --volume "$PWD"/certs:/certs:ro \
   --volume "$PWD"/grafana-"$HOST".ini:/grafana.ini:ro \
   --volume /var/lib/grafana:/var/lib/grafana \
@@ -61,6 +65,8 @@ sudo docker run \
   --net=influxdb \
   --publish 8086:8086 \
   --user "$(id -u):$(id -g)" \
+  --env INFLUXDB_ADMIN_USER="$INFLUXDB_USERNAME" \
+  --env INFLUXDB_ADMIN_PASSWORD="$INLUXDB_PASSWORD" \
   --volume "$PWD"/certs:/certs \
   --volume "$PWD"/influxdb.conf:/etc/influxdb/influxdb.conf:ro \
   --volume /var/lib/influxdb:/var/lib/influxdb \
@@ -90,9 +96,9 @@ sudo docker run \
   --volume /var/lib/chronograf_8889:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file="5" \
-  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086
+  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086 --influxdb-username="$INFLUXDB_USERNAME" --influxdb-password="$INLUXDB_PASSWORD"
 
-sudo sudo docker run \
+sudo docker run \
   --detach \
   --env AUTH_DURATION=24h \
   --env TLS_CERTIFICATE=/certs/fullchain.pem \
@@ -111,7 +117,7 @@ sudo sudo docker run \
   --volume /var/lib/chronograf:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file="5" \
-  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086
+  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086 --influxdb-username="$INFLUXDB_USERNAME" --influxdb-password="$INLUXDB_PASSWORD"
 
 curl -h | sed -ne '/--tlsv/p'
 curl --retry 10 --retry-delay 5 -v --head https://"$HOST":8086/ping

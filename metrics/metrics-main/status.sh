@@ -1,5 +1,12 @@
 #!/bin/bash
 
+cd "$(dirname "$0")" || exit
+
+if [[ -z $HOST ]]; then
+  HOST=metrics.solana.com
+fi
+echo "HOST: $HOST"
+
 # List of containers
 containers=("chronograf_8889" "grafana" "alertmanager" "alertmanager-discord" "prometheus" "chronograf" "kapacitor")
 
