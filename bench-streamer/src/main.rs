@@ -113,7 +113,7 @@ fn main() -> Result<()> {
             s_reader,
             recycler.clone(),
             stats.clone(),
-            1,
+            Duration::from_millis(1), // coalesce
             true,
             None,
         ));

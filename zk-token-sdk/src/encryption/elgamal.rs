@@ -177,7 +177,6 @@ impl ElGamalKeypair {
     ///
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
     #[cfg(not(target_os = "solana"))]
-    #[allow(clippy::new_ret_no_self)]
     pub fn new_rand() -> Self {
         ElGamal::keygen()
     }

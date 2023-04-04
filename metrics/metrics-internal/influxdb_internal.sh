@@ -5,7 +5,7 @@
 cd "$(dirname "$0")"
 
 if [[ -z $HOST ]]; then
-  HOST=metrics.solana.com
+  HOST=internal-metrics.solana.com
 fi
 echo "HOST: $HOST"
 
@@ -39,6 +39,8 @@ sudo docker run \
   --net=influxdb \
   --publish 8086:8086 \
   --user "$(id -u):$(id -g)" \
+  --env INFLUXDB_ADMIN_USER="$INFLUXDB_USERNAME" \
+  --env INFLUXDB_ADMIN_PASSWORD="$INLUXDB_PASSWORD" \
   --volume "$PWD"/certs:/certs \
   --volume "$PWD"/influxdb.conf:/etc/influxdb/influxdb.conf:ro \
   --volume /var/lib/influxdb:/var/lib/influxdb \

@@ -1,7 +1,7 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! multi-stage transaction processing pipeline in software.
 
-pub use solana_sdk::net::DEFAULT_TPU_COALESCE_MS;
+pub use solana_sdk::net::DEFAULT_TPU_COALESCE;
 use {
     crate::{
         banking_stage::BankingStage,
@@ -33,7 +33,7 @@ use {
     },
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
-        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
         quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         streamer::StakedNodes,
     },
@@ -42,6 +42,7 @@ use {
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
+        time::Duration,
     },
 };
 
@@ -93,7 +94,7 @@ impl Tpu {
         replay_vote_receiver: ReplayVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
         bank_notification_sender: Option<BankNotificationSender>,
-        tpu_coalesce_ms: u64,
+        tpu_coalesce: Duration,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
@@ -127,7 +128,7 @@ impl Tpu {
             &forwarded_packet_sender,
             forwarded_packet_receiver,
             poh_recorder,
-            tpu_coalesce_ms,
+            tpu_coalesce,
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
             tpu_enable_udp,
         );
@@ -177,8 +178,8 @@ impl Tpu {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            tpu_coalesce_ms,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            tpu_coalesce,
         )
         .unwrap();
 
@@ -197,8 +198,8 @@ impl Tpu {
             MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
             0, // Prevent unstaked nodes from forwarding transactions
             stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            tpu_coalesce_ms,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            tpu_coalesce,
         )
         .unwrap();
 

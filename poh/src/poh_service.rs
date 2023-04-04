@@ -111,14 +111,14 @@ impl PohService {
                 solana_sys_tuner::request_realtime_poh();
                 if poh_config.hashes_per_tick.is_none() {
                     if poh_config.target_tick_count.is_none() {
-                        Self::sleepy_tick_producer(
+                        Self::low_power_tick_producer(
                             poh_recorder,
                             &poh_config,
                             &poh_exit_,
                             record_receiver,
                         );
                     } else {
-                        Self::short_lived_sleepy_tick_producer(
+                        Self::short_lived_low_power_tick_producer(
                             poh_recorder,
                             &poh_config,
                             &poh_exit_,
@@ -162,7 +162,7 @@ impl PohService {
         target_tick_duration_ns.saturating_sub(adjustment_per_tick)
     }
 
-    fn sleepy_tick_producer(
+    fn low_power_tick_producer(
         poh_recorder: Arc<RwLock<PohRecorder>>,
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,
@@ -206,7 +206,7 @@ impl PohService {
         }
     }
 
-    fn short_lived_sleepy_tick_producer(
+    fn short_lived_low_power_tick_producer(
         poh_recorder: Arc<RwLock<PohRecorder>>,
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,

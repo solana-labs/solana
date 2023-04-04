@@ -15,10 +15,7 @@ use {
         create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
     solana_measure::measure::Measure,
-    solana_program_runtime::{
-        compute_budget::ComputeBudget,
-        invoke_context::{with_mock_invoke_context, InvokeContext},
-    },
+    solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
     solana_rbpf::{
         ebpf::MM_INPUT_START,
         elf::Executable,
@@ -33,13 +30,17 @@ use {
         loader_utils::{load_program, load_program_from_file},
     },
     solana_sdk::{
+        account::AccountSharedData,
         bpf_loader,
         client::SyncClient,
         entrypoint::SUCCESS,
         feature_set::FeatureSet,
         instruction::{AccountMeta, Instruction},
         message::Message,
+        native_loader,
+        pubkey::Pubkey,
         signature::Signer,
+        transaction_context::InstructionAccount,
     },
     std::{mem, sync::Arc},
     test::Bencher,
@@ -47,6 +48,41 @@ use {
 
 const ARMSTRONG_LIMIT: u64 = 500;
 const ARMSTRONG_EXPECTED: u64 = 5;
+
+macro_rules! with_mock_invoke_context {
+    ($invoke_context:ident, $loader_id:expr, $account_size:expr) => {
+        let program_key = Pubkey::new_unique();
+        let transaction_accounts = vec![
+            (
+                $loader_id,
+                AccountSharedData::new(0, 0, &native_loader::id()),
+            ),
+            (program_key, AccountSharedData::new(1, 0, &$loader_id)),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(2, $account_size, &program_key),
+            ),
+        ];
+        let instruction_accounts = vec![InstructionAccount {
+            index_in_transaction: 2,
+            index_in_caller: 2,
+            index_in_callee: 0,
+            is_signer: false,
+            is_writable: false,
+        }];
+        solana_program_runtime::with_mock_invoke_context!(
+            $invoke_context,
+            transaction_context,
+            transaction_accounts
+        );
+        $invoke_context
+            .transaction_context
+            .get_next_instruction_context()
+            .unwrap()
+            .configure(&[0, 1], &instruction_accounts, &[]);
+        $invoke_context.push().unwrap();
+    };
+}
 
 #[bench]
 fn bench_program_create_executable(bencher: &mut Bencher) {
@@ -75,82 +111,81 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .unwrap();
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
     let elf = load_program_from_file("bench_alu");
-    let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 10000001, false, |invoke_context| {
-        let loader = create_loader(
-            &invoke_context.feature_set,
-            &ComputeBudget::default(),
-            true,
-            true,
-            false,
-        )
-        .unwrap();
-        let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
+    with_mock_invoke_context!(invoke_context, bpf_loader::id(), 10000001);
 
-        let mut verified_executable =
-            VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-                .unwrap();
+    let loader = create_loader(
+        &invoke_context.feature_set,
+        &ComputeBudget::default(),
+        true,
+        true,
+        false,
+    )
+    .unwrap();
+    let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
 
-        verified_executable.jit_compile().unwrap();
-        create_vm!(
-            vm,
-            &verified_executable,
-            stack,
-            heap,
-            vec![MemoryRegion::new_writable(&mut inner_iter, MM_INPUT_START)],
-            vec![],
-            invoke_context
-        );
-        let mut vm = vm.unwrap();
+    let mut verified_executable =
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+            .unwrap();
 
-        println!("Interpreted:");
+    verified_executable.jit_compile().unwrap();
+    create_vm!(
+        vm,
+        &verified_executable,
+        stack,
+        heap,
+        vec![MemoryRegion::new_writable(&mut inner_iter, MM_INPUT_START)],
+        vec![],
+        &mut invoke_context
+    );
+    let mut vm = vm.unwrap();
+
+    println!("Interpreted:");
+    vm.env
+        .context_object_pointer
+        .mock_set_remaining(std::i64::MAX as u64);
+    let (instructions, result) = vm.execute_program(true);
+    assert_eq!(SUCCESS, result.unwrap());
+    assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
+    assert_eq!(
+        ARMSTRONG_EXPECTED,
+        LittleEndian::read_u64(&inner_iter[mem::size_of::<u64>()..])
+    );
+
+    bencher.iter(|| {
         vm.env
             .context_object_pointer
             .mock_set_remaining(std::i64::MAX as u64);
-        let (instructions, result) = vm.execute_program(true);
-        assert_eq!(SUCCESS, result.unwrap());
-        assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
-        assert_eq!(
-            ARMSTRONG_EXPECTED,
-            LittleEndian::read_u64(&inner_iter[mem::size_of::<u64>()..])
-        );
-
-        bencher.iter(|| {
-            vm.env
-                .context_object_pointer
-                .mock_set_remaining(std::i64::MAX as u64);
-            vm.execute_program(true).1.unwrap();
-        });
-        let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
-        println!("  {:?} instructions", instructions);
-        println!("  {:?} ns/iter median", summary.median as u64);
-        assert!(0f64 != summary.median);
-        let mips = (instructions * (ns_per_s / summary.median as u64)) / one_million;
-        println!("  {:?} MIPS", mips);
-        println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_interpreted_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
-
-        println!("JIT to native:");
-        assert_eq!(SUCCESS, vm.execute_program(false).1.unwrap());
-        assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
-        assert_eq!(
-            ARMSTRONG_EXPECTED,
-            LittleEndian::read_u64(&inner_iter[mem::size_of::<u64>()..])
-        );
-
-        bencher.iter(|| {
-            vm.env
-                .context_object_pointer
-                .mock_set_remaining(std::i64::MAX as u64);
-            vm.execute_program(false).1.unwrap();
-        });
-        let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
-        println!("  {:?} instructions", instructions);
-        println!("  {:?} ns/iter median", summary.median as u64);
-        assert!(0f64 != summary.median);
-        let mips = (instructions * (ns_per_s / summary.median as u64)) / one_million;
-        println!("  {:?} MIPS", mips);
-        println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_jit_to_native_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
+        vm.execute_program(true).1.unwrap();
     });
+    let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
+    println!("  {:?} instructions", instructions);
+    println!("  {:?} ns/iter median", summary.median as u64);
+    assert!(0f64 != summary.median);
+    let mips = (instructions * (ns_per_s / summary.median as u64)) / one_million;
+    println!("  {:?} MIPS", mips);
+    println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_interpreted_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
+
+    println!("JIT to native:");
+    assert_eq!(SUCCESS, vm.execute_program(false).1.unwrap());
+    assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
+    assert_eq!(
+        ARMSTRONG_EXPECTED,
+        LittleEndian::read_u64(&inner_iter[mem::size_of::<u64>()..])
+    );
+
+    bencher.iter(|| {
+        vm.env
+            .context_object_pointer
+            .mock_set_remaining(std::i64::MAX as u64);
+        vm.execute_program(false).1.unwrap();
+    });
+    let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
+    println!("  {:?} instructions", instructions);
+    println!("  {:?} ns/iter median", summary.median as u64);
+    assert!(0f64 != summary.median);
+    let mips = (instructions * (ns_per_s / summary.median as u64)) / one_million;
+    println!("  {:?} MIPS", mips);
+    println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_jit_to_native_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
 }
 
 #[bench]
@@ -190,111 +225,107 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
 #[bench]
 fn bench_create_vm(bencher: &mut Bencher) {
     let elf = load_program_from_file("noop");
-    let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 10000001, false, |invoke_context| {
-        const BUDGET: u64 = 200_000;
-        invoke_context.mock_set_remaining(BUDGET);
+    with_mock_invoke_context!(invoke_context, bpf_loader::id(), 10000001);
+    const BUDGET: u64 = 200_000;
+    invoke_context.mock_set_remaining(BUDGET);
 
-        let loader = create_loader(
-            &invoke_context.feature_set,
-            &ComputeBudget::default(),
-            true,
-            true,
-            false,
-        )
-        .unwrap();
-        let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
+    let loader = create_loader(
+        &invoke_context.feature_set,
+        &ComputeBudget::default(),
+        true,
+        true,
+        false,
+    )
+    .unwrap();
+    let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
 
-        let verified_executable =
-            VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-                .unwrap();
+    let verified_executable =
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+            .unwrap();
 
-        // Serialize account data
-        let (_serialized, regions, account_lengths) = serialize_parameters(
-            invoke_context.transaction_context,
-            invoke_context
-                .transaction_context
-                .get_current_instruction_context()
-                .unwrap(),
-            true, // should_cap_ix_accounts
-        )
-        .unwrap();
+    // Serialize account data
+    let (_serialized, regions, account_lengths) = serialize_parameters(
+        invoke_context.transaction_context,
+        invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .unwrap(),
+        true, // should_cap_ix_accounts
+    )
+    .unwrap();
 
-        bencher.iter(|| {
-            create_vm!(
-                vm,
-                &verified_executable,
-                stack,
-                heap,
-                clone_regions(&regions),
-                account_lengths.clone(),
-                invoke_context
-            );
-            let _ = vm.unwrap();
-        });
+    bencher.iter(|| {
+        create_vm!(
+            vm,
+            &verified_executable,
+            stack,
+            heap,
+            clone_regions(&regions),
+            account_lengths.clone(),
+            &mut invoke_context
+        );
+        let _ = vm.unwrap();
     });
 }
 
 #[bench]
 fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let elf = load_program_from_file("tuner");
-    let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 10000001, true, |invoke_context| {
-        const BUDGET: u64 = 200_000;
-        invoke_context.mock_set_remaining(BUDGET);
+    with_mock_invoke_context!(invoke_context, bpf_loader::id(), 10000001);
+    const BUDGET: u64 = 200_000;
+    invoke_context.mock_set_remaining(BUDGET);
 
-        // Serialize account data
-        let (_serialized, regions, account_lengths) = serialize_parameters(
-            invoke_context.transaction_context,
-            invoke_context
-                .transaction_context
-                .get_current_instruction_context()
-                .unwrap(),
-            true, // should_cap_ix_accounts
-        )
-        .unwrap();
+    // Serialize account data
+    let (_serialized, regions, account_lengths) = serialize_parameters(
+        invoke_context.transaction_context,
+        invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .unwrap(),
+        true, // should_cap_ix_accounts
+    )
+    .unwrap();
 
-        let loader = create_loader(
-            &invoke_context.feature_set,
-            &ComputeBudget::default(),
-            true,
-            true,
-            false,
-        )
-        .unwrap();
-        let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
+    let loader = create_loader(
+        &invoke_context.feature_set,
+        &ComputeBudget::default(),
+        true,
+        true,
+        false,
+    )
+    .unwrap();
+    let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
 
-        let verified_executable =
-            VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-                .unwrap();
+    let verified_executable =
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+            .unwrap();
 
-        create_vm!(
-            vm,
-            &verified_executable,
-            stack,
-            heap,
-            regions,
-            account_lengths,
-            invoke_context
-        );
-        let mut vm = vm.unwrap();
+    create_vm!(
+        vm,
+        &verified_executable,
+        stack,
+        heap,
+        regions,
+        account_lengths,
+        &mut invoke_context
+    );
+    let mut vm = vm.unwrap();
 
-        let mut measure = Measure::start("tune");
-        let (instructions, _result) = vm.execute_program(true);
-        measure.stop();
+    let mut measure = Measure::start("tune");
+    let (instructions, _result) = vm.execute_program(true);
+    measure.stop();
 
-        assert_eq!(
-            0,
-            vm.env.context_object_pointer.get_remaining(),
-            "Tuner must consume the whole budget"
-        );
-        println!(
-            "{:?} compute units took {:?} us ({:?} instructions)",
-            BUDGET - vm.env.context_object_pointer.get_remaining(),
-            measure.as_us(),
-            instructions,
-        );
-    });
+    assert_eq!(
+        0,
+        vm.env.context_object_pointer.get_remaining(),
+        "Tuner must consume the whole budget"
+    );
+    println!(
+        "{:?} compute units took {:?} us ({:?} instructions)",
+        BUDGET - vm.env.context_object_pointer.get_remaining(),
+        measure.as_us(),
+        instructions,
+    );
 }
 
 fn clone_regions(regions: &[MemoryRegion]) -> Vec<MemoryRegion> {

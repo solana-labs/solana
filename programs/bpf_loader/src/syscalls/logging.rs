@@ -24,6 +24,9 @@ declare_syscall!(
             len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
+            invoke_context
+                .feature_set
+                .is_active(&stop_truncating_strings_in_syscalls::id()),
             &mut |string: &str| {
                 stable_log::program_log(&invoke_context.get_log_collector(), string);
                 Ok(0)

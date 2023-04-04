@@ -40,7 +40,8 @@ use {
             enable_early_verification_of_account_modifications,
             error_on_syscall_bpf_function_hash_collisions, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, reject_callx_r10,
-            stop_sibling_instruction_search_at_parent, switch_to_new_elf_parser,
+            stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
+            switch_to_new_elf_parser,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -428,14 +429,19 @@ fn translate_string_and_do(
     len: u64,
     check_aligned: bool,
     check_size: bool,
+    stop_truncating_strings_in_syscalls: bool,
     work: &mut dyn FnMut(&str) -> Result<u64, EbpfError>,
 ) -> Result<u64, EbpfError> {
     let buf = translate_slice::<u8>(memory_mapping, addr, len, check_aligned, check_size)?;
-    let i = match buf.iter().position(|byte| *byte == 0) {
-        Some(i) => i,
-        None => len as usize,
+    let msg = if stop_truncating_strings_in_syscalls {
+        buf
+    } else {
+        let i = match buf.iter().position(|byte| *byte == 0) {
+            Some(i) => i,
+            None => len as usize,
+        };
+        buf.get(..i).ok_or(SyscallError::InvalidLength)?
     };
-    let msg = buf.get(..i).ok_or(SyscallError::InvalidLength)?;
     match from_utf8(msg) {
         Ok(message) => work(message),
         Err(err) => Err(SyscallError::InvalidString(err, msg.to_vec()).into()),
@@ -508,6 +514,9 @@ declare_syscall!(
             len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
+            invoke_context
+                .feature_set
+                .is_active(&stop_truncating_strings_in_syscalls::id()),
             &mut |string: &str| Err(SyscallError::Panic(string.to_string(), line, column).into()),
         )
     }
@@ -1812,7 +1821,7 @@ mod tests {
         super::*,
         crate::BpfAllocator,
         core::slice,
-        solana_program_runtime::{invoke_context::InvokeContext, sysvar_cache::SysvarCache},
+        solana_program_runtime::{invoke_context::InvokeContext, with_mock_invoke_context},
         solana_rbpf::{
             aligned_memory::AlignedMemory,
             ebpf::{self, HOST_ALIGN},
@@ -1820,17 +1829,16 @@ mod tests {
             vm::{BuiltInFunction, Config},
         },
         solana_sdk::{
-            account::AccountSharedData,
+            account::{create_account_shared_data_for_test, AccountSharedData},
             bpf_loader,
             fee_calculator::FeeCalculator,
             hash::hashv,
             instruction::Instruction,
             program::check_type_assumptions,
             stable_layout::stable_instruction::StableInstruction,
-            sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
-            transaction_context::TransactionContext,
+            sysvar::{self, clock::Clock, epoch_schedule::EpochSchedule},
         },
-        std::{borrow::Cow, cell::RefCell, mem, rc::Rc, str::FromStr},
+        std::{mem, str::FromStr},
     };
 
     macro_rules! assert_access_violation {
@@ -1847,7 +1855,6 @@ mod tests {
 
     macro_rules! prepare_mockup {
         ($invoke_context:ident,
-         $transaction_context:ident,
          $program_key:ident,
          $loader_key:expr $(,)?) => {
             let $program_key = Pubkey::new_unique();
@@ -1858,9 +1865,7 @@ mod tests {
                 ),
                 ($program_key, AccountSharedData::new(0, 0, &$loader_key)),
             ];
-            let mut $transaction_context =
-                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
-            let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
+            with_mock_invoke_context!($invoke_context, transaction_context, transaction_accounts);
             $invoke_context
                 .transaction_context
                 .get_next_instruction_context()
@@ -2050,6 +2055,7 @@ mod tests {
                 string.len() as u64,
                 true,
                 true,
+                true,
                 &mut |string: &str| {
                     assert_eq!(string, "Gaggablaghblagh!");
                     Ok(42)
@@ -2062,12 +2068,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "UserError(SyscallError(Abort))")]
     fn test_syscall_abort() {
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
         let config = Config::default();
         let mut memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
         let mut result = ProgramResult::Ok(0);
@@ -2087,12 +2088,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "UserError(SyscallError(Panic(\"Gaggablaghblagh!\", 42, 84)))")]
     fn test_syscall_sol_panic() {
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
 
         let string = "Gaggablaghblagh!";
         let config = Config::default();
@@ -2138,12 +2134,7 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_log() {
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
 
         let string = "Gaggablaghblagh!";
         let config = Config::default();
@@ -2221,12 +2212,7 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_log_u64() {
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
         let cost = invoke_context.get_compute_budget().log_64_units;
 
         invoke_context.mock_set_remaining(cost);
@@ -2257,12 +2243,7 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_pubkey() {
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
 
         let pubkey = Pubkey::from_str("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN").unwrap();
@@ -2335,12 +2316,7 @@ mod tests {
 
         // large alloc
         {
-            prepare_mockup!(
-                invoke_context,
-                transaction_context,
-                program_id,
-                bpf_loader::id(),
-            );
+            prepare_mockup!(invoke_context, program_id, bpf_loader::id());
             let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let mut memory_mapping = MemoryMapping::new(
                 vec![
@@ -2400,12 +2376,7 @@ mod tests {
 
         // many small unaligned allocs
         {
-            prepare_mockup!(
-                invoke_context,
-                transaction_context,
-                program_id,
-                bpf_loader::id(),
-            );
+            prepare_mockup!(invoke_context, program_id, bpf_loader::id());
             let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let mut memory_mapping = MemoryMapping::new(
                 vec![
@@ -2455,12 +2426,7 @@ mod tests {
 
         // many small aligned allocs
         {
-            prepare_mockup!(
-                invoke_context,
-                transaction_context,
-                program_id,
-                bpf_loader::id(),
-            );
+            prepare_mockup!(invoke_context, program_id, bpf_loader::id());
             let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let mut memory_mapping = MemoryMapping::new(
                 vec![
@@ -2511,12 +2477,7 @@ mod tests {
         // aligned allocs
 
         fn aligned<T>() {
-            prepare_mockup!(
-                invoke_context,
-                transaction_context,
-                program_id,
-                bpf_loader::id(),
-            );
+            prepare_mockup!(invoke_context, program_id, bpf_loader::id());
             let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let config = Config::default();
             let mut memory_mapping = MemoryMapping::new(
@@ -2565,12 +2526,7 @@ mod tests {
     #[test]
     fn test_syscall_sha256() {
         let config = Config::default();
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader_deprecated::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader_deprecated::id());
 
         let bytes1 = "Gaggablaghblagh!";
         let bytes2 = "flurbos";
@@ -2685,12 +2641,7 @@ mod tests {
         use solana_zk_token_sdk::curve25519::curve_syscall_traits::CURVE25519_EDWARDS;
 
         let config = Config::default();
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
 
         let valid_bytes: [u8; 32] = [
             201, 179, 241, 122, 180, 185, 239, 50, 183, 52, 221, 0, 153, 195, 43, 18, 22, 38, 187,
@@ -2770,12 +2721,7 @@ mod tests {
         use solana_zk_token_sdk::curve25519::curve_syscall_traits::CURVE25519_RISTRETTO;
 
         let config = Config::default();
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
 
         let valid_bytes: [u8; 32] = [
             226, 242, 174, 10, 106, 188, 78, 113, 168, 132, 169, 97, 197, 0, 81, 95, 88, 227, 11,
@@ -2857,12 +2803,7 @@ mod tests {
         };
 
         let config = Config::default();
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
 
         let left_point: [u8; 32] = [
             33, 124, 71, 170, 117, 69, 151, 247, 59, 12, 95, 125, 133, 166, 64, 5, 2, 27, 90, 27,
@@ -3034,12 +2975,7 @@ mod tests {
         };
 
         let config = Config::default();
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
 
         let left_point: [u8; 32] = [
             208, 165, 125, 204, 2, 100, 218, 17, 170, 194, 23, 9, 102, 156, 134, 136, 217, 190, 98,
@@ -3213,12 +3149,7 @@ mod tests {
         };
 
         let config = Config::default();
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
 
         let scalar_a: [u8; 32] = [
             254, 198, 23, 138, 67, 243, 184, 110, 236, 115, 236, 205, 205, 215, 79, 114, 45, 250,
@@ -3378,13 +3309,25 @@ mod tests {
         sysvar_cache.set_fees(src_fees.clone());
         sysvar_cache.set_rent(src_rent);
 
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
-        invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
+        let transaction_accounts = vec![
+            (
+                sysvar::clock::id(),
+                create_account_shared_data_for_test(&src_clock),
+            ),
+            (
+                sysvar::epoch_schedule::id(),
+                create_account_shared_data_for_test(&src_epochschedule),
+            ),
+            (
+                sysvar::fees::id(),
+                create_account_shared_data_for_test(&src_fees),
+            ),
+            (
+                sysvar::rent::id(),
+                create_account_shared_data_for_test(&src_rent),
+            ),
+        ];
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
 
         // Test clock sysvar
         {
@@ -3635,12 +3578,7 @@ mod tests {
         )
         .unwrap();
 
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
 
         let mut result = ProgramResult::Ok(0);
         SyscallSetReturnData::call(
@@ -3700,13 +3638,20 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let instruction_trace = [1, 2, 3, 2, 2, 3, 4, 3];
-        let mut transaction_context =
-            TransactionContext::new(transaction_accounts, None, 4, instruction_trace.len());
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         for (index_in_trace, stack_height) in instruction_trace.into_iter().enumerate() {
-            while stack_height <= transaction_context.get_instruction_context_stack_height() {
-                transaction_context.pop().unwrap();
+            while stack_height
+                <= invoke_context
+                    .transaction_context
+                    .get_instruction_context_stack_height()
+            {
+                invoke_context.transaction_context.pop().unwrap();
             }
-            if stack_height > transaction_context.get_instruction_context_stack_height() {
+            if stack_height
+                > invoke_context
+                    .transaction_context
+                    .get_instruction_context_stack_height()
+            {
                 let instruction_accounts = [InstructionAccount {
                     index_in_transaction: index_in_trace.saturating_add(1) as IndexOfAccount,
                     index_in_caller: 0, // This is incorrect / inconsistent but not required
@@ -3714,14 +3659,14 @@ mod tests {
                     is_signer: false,
                     is_writable: false,
                 }];
-                transaction_context
+                invoke_context
+                    .transaction_context
                     .get_next_instruction_context()
                     .unwrap()
                     .configure(&[0], &instruction_accounts, &[index_in_trace as u8]);
-                transaction_context.push().unwrap();
+                invoke_context.transaction_context.push().unwrap();
             }
         }
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
         let syscall_base_cost = invoke_context.get_compute_budget().syscall_base_cost;
 
@@ -3840,12 +3785,7 @@ mod tests {
     fn test_create_program_address() {
         // These tests duplicate the direct tests in solana_program::pubkey
 
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
         let address = bpf_loader_upgradeable::id();
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
@@ -3954,12 +3894,7 @@ mod tests {
 
     #[test]
     fn test_find_program_address() {
-        prepare_mockup!(
-            invoke_context,
-            transaction_context,
-            program_id,
-            bpf_loader::id(),
-        );
+        prepare_mockup!(invoke_context, program_id, bpf_loader::id());
         let cost = invoke_context
             .get_compute_budget()
             .create_program_address_units;

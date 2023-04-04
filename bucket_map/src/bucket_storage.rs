@@ -37,7 +37,7 @@ pub const DEFAULT_CAPACITY_POW2: u8 = 5;
 /// keep track of an individual element's occupied vs. free state
 /// every element must either be occupied or free and should never be double occupied or double freed
 /// For parameters below, `element` is used to view/modify header fields or fields within the element data.
-pub trait BucketOccupied {
+pub trait BucketOccupied: BucketCapacity {
     /// set entry at `ix` as occupied (as opposed to free)
     fn occupy(&mut self, element: &mut [u8], ix: usize);
     /// set entry at `ix` as free
@@ -49,15 +49,32 @@ pub trait BucketOccupied {
     /// This must be a multiple of sizeof(u64)
     fn offset_to_first_data() -> usize;
     /// initialize this struct
-    /// `num_elements` is the number of elements allocated in the bucket
-    fn new(num_elements: usize) -> Self;
+    /// `capacity` is the number of elements allocated in the bucket
+    fn new(capacity: Capacity) -> Self;
+    /// copying entry. Any in-memory (per-bucket) data structures may need to be copied for this `ix_old`.
+    /// no-op by default
+    fn copying_entry(
+        &mut self,
+        _element_new: &mut [u8],
+        _ix_new: usize,
+        _other: &Self,
+        _element_old: &[u8],
+        _ix_old: usize,
+    ) {
+    }
+}
+
+pub trait BucketCapacity {
+    fn capacity(&self) -> u64;
+    fn capacity_pow2(&self) -> u8 {
+        unimplemented!();
+    }
 }
 
 pub struct BucketStorage<O: BucketOccupied> {
     path: PathBuf,
     mmap: MmapMut,
     pub cell_size: u64,
-    pub capacity_pow2: u8,
     pub count: Arc<AtomicU64>,
     pub stats: Arc<BucketStats>,
     pub max_search: MaxSearch,
@@ -75,12 +92,48 @@ impl<O: BucketOccupied> Drop for BucketStorage<O> {
     }
 }
 
+#[allow(dead_code)]
+pub(crate) enum IncludeHeader {
+    /// caller wants header
+    Header,
+    /// caller wants header skipped
+    NoHeader,
+}
+
+/// 2 common ways of specifying capacity
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum Capacity {
+    /// 1 << Pow2 produces # elements
+    Pow2(u8),
+    /// Actual # elements
+    Actual(u64),
+}
+
+impl BucketCapacity for Capacity {
+    fn capacity(&self) -> u64 {
+        match self {
+            Capacity::Pow2(pow2) => 1 << *pow2,
+            Capacity::Actual(elements) => *elements,
+        }
+    }
+    fn capacity_pow2(&self) -> u8 {
+        match self {
+            Capacity::Pow2(pow2) => *pow2,
+            Capacity::Actual(_elements) => {
+                panic!("illegal to ask for pow2 from random capacity");
+            }
+        }
+    }
+}
+
 impl<O: BucketOccupied> BucketStorage<O> {
+    /// allocate a bucket of at least `capacity` elements.
+    /// if capacity can be random, more may be allocated to fill the last page.
     pub fn new_with_capacity(
         drives: Arc<Vec<PathBuf>>,
         num_elems: u64,
         elem_size: u64,
-        capacity_pow2: u8,
+        mut capacity: Capacity,
         max_search: MaxSearch,
         stats: Arc<BucketStats>,
         count: Arc<AtomicU64>,
@@ -93,17 +146,34 @@ impl<O: BucketOccupied> BucketStorage<O> {
             "header size must be a multiple of u64"
         );
         let cell_size = elem_size * num_elems + offset as u64;
-        let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &stats);
+        let bytes = Self::allocate_to_fill_page(&mut capacity, cell_size);
+        let (mmap, path) = Self::new_map(&drives, bytes, &stats);
         Self {
             path,
             mmap,
             cell_size,
             count,
-            capacity_pow2,
             stats,
             max_search,
-            contents: O::new(1 << capacity_pow2),
+            contents: O::new(capacity),
         }
+    }
+
+    fn allocate_to_fill_page(capacity: &mut Capacity, cell_size: u64) -> u64 {
+        let mut bytes = capacity.capacity() * cell_size;
+        if let Capacity::Actual(_) = capacity {
+            // maybe bump up allocation to fit a page size
+            const PAGE_SIZE: u64 = 4 * 1024;
+            let full_page_bytes = bytes / PAGE_SIZE * PAGE_SIZE / cell_size * cell_size;
+            if full_page_bytes < bytes {
+                let bytes_new = ((bytes / PAGE_SIZE) + 1) * PAGE_SIZE / cell_size * cell_size;
+                assert!(bytes_new >= bytes, "allocating less than requested, capacity: {}, bytes: {}, bytes_new: {}, full_page_bytes: {}", capacity.capacity(), bytes, bytes_new, full_page_bytes);
+                assert_eq!(bytes_new % cell_size, 0);
+                bytes = bytes_new;
+                *capacity = Capacity::Actual(bytes / cell_size);
+            }
+        }
+        bytes
     }
 
     pub fn max_search(&self) -> u64 {
@@ -122,11 +192,23 @@ impl<O: BucketOccupied> BucketStorage<O> {
             drives,
             num_elems,
             elem_size,
-            DEFAULT_CAPACITY_POW2,
+            Capacity::Pow2(DEFAULT_CAPACITY_POW2),
             max_search,
             stats,
             count,
         )
+    }
+
+    pub(crate) fn copying_entry(&mut self, ix_new: u64, other: &Self, ix_old: u64) {
+        let start = self.get_start_offset_with_header(ix_new);
+        let start_old = other.get_start_offset_with_header(ix_old);
+        self.contents.copying_entry(
+            &mut self.mmap[start..],
+            ix_new as usize,
+            &other.contents,
+            &other.mmap[start_old..],
+            ix_old as usize,
+        );
     }
 
     /// true if the entry at index 'ix' is free (as opposed to being occupied)
@@ -174,24 +256,42 @@ impl<O: BucketOccupied> BucketStorage<O> {
         (self.cell_size * ix) as usize
     }
 
-    fn get_start_offset_no_header(&self, ix: u64) -> usize {
-        self.get_start_offset_with_header(ix) + O::offset_to_first_data()
+    fn get_start_offset(&self, ix: u64, header: IncludeHeader) -> usize {
+        self.get_start_offset_with_header(ix)
+            + match header {
+                IncludeHeader::Header => 0,
+                IncludeHeader::NoHeader => O::offset_to_first_data(),
+            }
     }
 
-    pub fn get<T>(&self, ix: u64) -> &T {
-        let slice = self.get_cell_slice::<T>(ix, 1);
+    pub(crate) fn get<T>(&self, ix: u64) -> &T {
+        let slice = self.get_cell_slice::<T>(ix, 1, IncludeHeader::NoHeader);
         // SAFETY: `get_cell_slice` ensures there's at least one element in the slice
         unsafe { slice.get_unchecked(0) }
     }
 
-    pub fn get_mut<T>(&mut self, ix: u64) -> &mut T {
-        let slice = self.get_mut_cell_slice::<T>(ix, 1);
+    pub(crate) fn get_mut<T>(&mut self, ix: u64) -> &mut T {
+        let slice = self.get_mut_cell_slice::<T>(ix, 1, IncludeHeader::NoHeader);
         // SAFETY: `get_mut_cell_slice` ensures there's at least one element in the slice
         unsafe { slice.get_unchecked_mut(0) }
     }
 
-    pub fn get_cell_slice<T>(&self, ix: u64, len: u64) -> &[T] {
-        let start = self.get_start_offset_no_header(ix);
+    #[allow(dead_code)]
+    pub(crate) fn get_mut_from_parts<T>(item_slice: &mut [u8]) -> &mut T {
+        debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
+        let item = item_slice.as_mut_ptr() as *mut T;
+        unsafe { &mut *item }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_from_parts<T>(item_slice: &[u8]) -> &T {
+        debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
+        let item = item_slice.as_ptr() as *const T;
+        unsafe { &*item }
+    }
+
+    pub(crate) fn get_cell_slice<T>(&self, ix: u64, len: u64, header: IncludeHeader) -> &[T] {
+        let start = self.get_start_offset(ix, header);
         let slice = {
             let size = std::mem::size_of::<T>() * len as usize;
             let slice = &self.mmap[start..];
@@ -206,8 +306,13 @@ impl<O: BucketOccupied> BucketStorage<O> {
         unsafe { std::slice::from_raw_parts(ptr, len as usize) }
     }
 
-    pub fn get_mut_cell_slice<T>(&mut self, ix: u64, len: u64) -> &mut [T] {
-        let start = self.get_start_offset_no_header(ix);
+    pub(crate) fn get_mut_cell_slice<T>(
+        &mut self,
+        ix: u64,
+        len: u64,
+        header: IncludeHeader,
+    ) -> &mut [T] {
+        let start = self.get_start_offset(ix, header);
         let slice = {
             let size = std::mem::size_of::<T>() * len as usize;
             let slice = &mut self.mmap[start..];
@@ -222,14 +327,9 @@ impl<O: BucketOccupied> BucketStorage<O> {
         unsafe { std::slice::from_raw_parts_mut(ptr, len as usize) }
     }
 
-    fn new_map(
-        drives: &[PathBuf],
-        cell_size: usize,
-        capacity_pow2: u8,
-        stats: &BucketStats,
-    ) -> (MmapMut, PathBuf) {
+    /// allocate a new memory mapped file of size `bytes` on one of `drives`
+    fn new_map(drives: &[PathBuf], bytes: u64, stats: &BucketStats) -> (MmapMut, PathBuf) {
         let mut measure_new_file = Measure::start("measure_new_file");
-        let capacity = 1u64 << capacity_pow2;
         let r = thread_rng().gen_range(0, drives.len());
         let drive = &drives[r];
         let pos = format!("{}", thread_rng().gen_range(0, u128::MAX),);
@@ -253,8 +353,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         // the file so that we won't have to resize it later, which may be
         // expensive.
         //debug!("GROWING file {}", capacity * cell_size as u64);
-        data.seek(SeekFrom::Start(capacity * cell_size as u64 - 1))
-            .unwrap();
+        data.seek(SeekFrom::Start(bytes - 1)).unwrap();
         data.write_all(&[0]).unwrap();
         data.rewind().unwrap();
         measure_new_file.stop();
@@ -283,10 +382,12 @@ impl<O: BucketOccupied> BucketStorage<O> {
         let old_cap = old_bucket.capacity();
         let old_map = &old_bucket.mmap;
 
-        let increment = self.capacity_pow2 - old_bucket.capacity_pow2;
+        let increment = self.contents.capacity_pow2() - old_bucket.contents.capacity_pow2();
         let index_grow = 1 << increment;
         (0..old_cap as usize).for_each(|i| {
             if !old_bucket.is_free(i as u64) {
+                self.copying_entry((i * index_grow) as u64, old_bucket, i as u64);
+
                 {
                     // copying from old to new. If 'occupied' bit is stored outside the data, then
                     // occupied has to be set on the new entry in the new bucket.
@@ -321,7 +422,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         drives: &Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
         bucket: Option<&Self>,
-        capacity_pow_2: u8,
+        capacity: Capacity,
         num_elems: u64,
         elem_size: u64,
         stats: &Arc<BucketStats>,
@@ -330,7 +431,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
             Arc::clone(drives),
             num_elems,
             elem_size,
-            capacity_pow_2,
+            capacity,
             max_search,
             Arc::clone(stats),
             bucket
@@ -351,7 +452,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
 
     /// Return the number of cells currently allocated
     pub fn capacity(&self) -> u64 {
-        1 << self.capacity_pow2
+        self.contents.capacity()
     }
 }
 
@@ -372,7 +473,7 @@ mod test {
         let mut storage = BucketStorage::<IndexBucket<u64>>::new(
             Arc::new(paths),
             1,
-            1,
+            std::mem::size_of::<crate::index_entry::IndexEntry<u64>>() as u64,
             1,
             Arc::default(),
             Arc::default(),
@@ -409,8 +510,14 @@ mod test {
             std::mem::size_of::<u64>() - 1
         }
         /// initialize this struct
-        fn new(_num_elements: usize) -> Self {
+        fn new(_num_elements: Capacity) -> Self {
             Self {}
+        }
+    }
+
+    impl BucketCapacity for BucketBadHeader {
+        fn capacity(&self) -> u64 {
+            unimplemented!();
         }
     }
 
@@ -421,7 +528,7 @@ mod test {
             Arc::default(),
             0,
             0,
-            0,
+            Capacity::Pow2(0),
             0,
             Arc::default(),
             Arc::default(),

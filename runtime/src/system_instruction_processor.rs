@@ -612,14 +612,14 @@ mod tests {
         system_instruction, system_program,
         sysvar::{self, recent_blockhashes::IterItem, rent::Rent},
         transaction::TransactionError,
-        transaction_context::TransactionContext,
     };
     use {
         super::*,
         crate::{bank::Bank, bank_client::BankClient},
         bincode::serialize,
-        solana_program_runtime::invoke_context::{
-            mock_process_instruction, InvokeContext, ProcessInstructionWithContext,
+        solana_program_runtime::{
+            invoke_context::{mock_process_instruction, ProcessInstructionWithContext},
+            with_mock_invoke_context,
         },
         std::sync::Arc,
     };
@@ -646,10 +646,9 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            None,
             expected_result,
             process_instruction,
+            |_invoke_context| {},
         )
     }
 
@@ -793,9 +792,7 @@ mod tests {
 
     #[test]
     fn test_address_create_with_seed_mismatch() {
-        let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, Vec::new());
         let from = Pubkey::new_unique();
         let seed = "dull boy";
         let to = Pubkey::new_unique();

@@ -134,7 +134,7 @@ impl ShredFetchStage {
                     packet_sender.clone(),
                     recycler.clone(),
                     Arc::new(StreamerReceiveStats::new("packet_modifier")),
-                    1,
+                    Duration::from_millis(1), // coalesce
                     true,
                     None,
                 )

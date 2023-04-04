@@ -47,11 +47,15 @@ impl<T: Clone + Copy + Debug> std::fmt::Debug for BucketMap<T> {
     }
 }
 
+/// used to communicate resize necessary and current size.
 #[derive(Debug)]
 pub enum BucketMapError {
     /// (bucket_index, current_capacity_pow2)
+    /// Note that this is specific to data buckets
     DataNoSpace((u64, u8)),
+
     /// current_capacity_pow2
+    /// Note that this is specific to index buckets
     IndexNoSpace(u8),
 }
 
@@ -170,6 +174,7 @@ fn read_be_u64(input: &[u8]) -> u64 {
 mod tests {
     use {
         super::*,
+        crate::index_entry::MAX_LEGAL_REFCOUNT,
         rand::{thread_rng, Rng},
         std::{collections::HashMap, sync::RwLock},
     };
@@ -365,7 +370,18 @@ mod tests {
             let v = (0..count)
                 .map(|x| (x as usize, x as usize /*thread_rng().gen::<usize>()*/))
                 .collect::<Vec<_>>();
-            let rc = thread_rng().gen::<RefCount>();
+            let range = thread_rng().gen_range(0, 100);
+            // pick ref counts that are useful and common
+            let rc = if range < 50 {
+                1
+            } else if range < 60 {
+                0
+            } else if range < 70 {
+                2
+            } else {
+                thread_rng().gen_range(0, MAX_LEGAL_REFCOUNT)
+            };
+
             (v, rc)
         };
 

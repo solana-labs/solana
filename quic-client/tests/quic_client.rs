@@ -8,9 +8,9 @@ mod tests {
         solana_quic_client::nonblocking::quic_client::{
             QuicClientCertificate, QuicLazyInitializedEndpoint,
         },
-        solana_sdk::{net::DEFAULT_TPU_COALESCE_MS, packet::PACKET_DATA_SIZE, signature::Keypair},
+        solana_sdk::{net::DEFAULT_TPU_COALESCE, packet::PACKET_DATA_SIZE, signature::Keypair},
         solana_streamer::{
-            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
+            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, quic::StreamStats,
             streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate,
         },
         std::{
@@ -86,8 +86,8 @@ mod tests {
             10,
             10,
             stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            DEFAULT_TPU_COALESCE_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 
@@ -166,8 +166,8 @@ mod tests {
             10,
             10,
             stats,
-            1000,
-            DEFAULT_TPU_COALESCE_MS,
+            Duration::from_secs(1), // wait_for_chunk_timeout
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 
@@ -223,8 +223,8 @@ mod tests {
             10,
             10,
             request_recv_stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            DEFAULT_TPU_COALESCE_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 
@@ -253,8 +253,8 @@ mod tests {
             10,
             10,
             response_recv_stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            DEFAULT_TPU_COALESCE_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            DEFAULT_TPU_COALESCE,
         )
         .unwrap();
 

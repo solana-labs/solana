@@ -1,33 +1,47 @@
-#!/bin/bash -ex
-#
-# Status of the InfluxDB/Chronograf/Grafana/Chronograf_8889 containers
-#
-cd "$(dirname "$0")"
+#!/bin/bash
+
+cd "$(dirname "$0")" || exit
 
 if [[ -z $HOST ]]; then
-  HOST=metrics.solana.com
+  HOST=internal-metrics.solana.com
 fi
 echo "HOST: $HOST"
 
-echo +++ status
-(
-  set -x
-  pwd
-  sudo docker ps --no-trunc --size
-  sudo du -hs /var/lib/{influxdb,chronograf,grafana}
-  df -h
-  free -h
-  uptime
-)
+# List of containers
+containers=("influxdb_internal" "chronograf_8889_internal" "chronograf_8888_internal" "grafana_internal")
 
-# If the container is not running state or exited state, then sent the notification on slack and redeploy the container again
+# Send a message to Discord
+send_discord_message() {
+  local message="$1"
+  curl -sS -H "Content-Type: application/json" -X POST -d "{\"content\": \"$message\"}" "$DISCORD_WEBHOOK"
+}
 
-for container in influxdb_internal chronograf_8888_internal chronograf_8889_internal grafana_internal; do
-          if [ "$(sudo docker inspect --format='{{.State.Status}}' $container)" != "running" ] || [ "$(sudo docker inspect --format='{{.State.Status}}' $container)" = "exited" ]; then
-        curl -X POST -H 'Content-type: application/json' --data '{"text": "'"$container"' container is down in metrics-internal server"}' "$SLACK_WEBHOOK"
-        curl -X POST -H 'Content-type: application/json' --data '{"content": "'"$container"' container is down in metrics-internal server"}' "$DISCORD_WEBHOOK"
-        echo "Starting up script"
-        sudo bash $container.sh
-        sleep 30
-     fi
-    done
+# Send a critical alert to PagerDuty
+send_pagerduty_alert() {
+  local description="$1"
+  curl -sS -H "Content-Type: application/json" -X POST -d "{\"event_action\": \"trigger\", \"payload\": {\"summary\": \"$description\", \"source\": \"Docker Monitor\", \"severity\": \"critical\"}}" "$PAGERDUTY_WEBHOOK"
+}
+
+# Iterate over the containers and check their status
+for container in "${containers[@]}"; do
+  container_status=$(docker inspect --format '{{.State.Status}}' "$container" 2>/dev/null)
+
+  if [ "$container_status" != "running" ]; then
+    send_discord_message "$container is down and it's being redeployed..."
+
+    # Run the container.sh script to redeploy the container
+    chmod +x "$container.sh"
+    ./"$container.sh"
+    sleep 10
+
+    # Check the container status again
+    container_status=$(docker inspect --format '{{.State.Status}}' "$container" 2>/dev/null)
+
+    if [ "$container_status" != "running" ]; then
+      send_discord_message "$container failed to redeploy and manual intervention is required"
+      send_pagerduty_alert "$container failed to redeploy and manual intervention is required."
+    else
+      send_discord_message "$container has been redeployed successfully"
+    fi
+  fi
+done

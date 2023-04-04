@@ -5,7 +5,7 @@
 cd "$(dirname "$0")"
 
 if [[ -z $HOST ]]; then
-  HOST=metrics.solana.com
+  HOST=internal-metrics.solana.com
 fi
 echo "HOST: $HOST"
 
@@ -43,7 +43,7 @@ sudo docker run \
   --env GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET_8889" \
   --env GOOGLE_DOMAINS=solana.com,jito.wtf,jumpcrypto.com,certus.one,mango.markets \
   --env PUBLIC_URL=https://internal-metrics.solana.com:8889 \
-  --env TOKEN_SECRET= \
+  --env TOKEN_SECRET="$TOKEN_SECRET" \
   --env inactivity-duration=48h \
   --name=chronograf_8889_internal \
   --net=influxdb \
@@ -53,4 +53,4 @@ sudo docker run \
   --volume /var/lib/chronograf_8889:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file="5" \
-  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086
+  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086 --influxdb-username="$INFLUXDB_USERNAME" --influxdb-password="$INLUXDB_PASSWORD"

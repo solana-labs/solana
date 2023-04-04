@@ -14,9 +14,8 @@ pub struct PohConfig {
     pub target_tick_count: Option<u64>,
 
     /// How many hashes to roll before emitting the next tick entry.
-    /// None enables "Low power mode", which implies:
-    /// * sleep for `target_tick_duration` instead of hashing
-    /// * the number of hashes per tick will be variable
+    /// None enables "Low power mode", which makes the validator sleep
+    /// for `target_tick_duration` instead of hashing
     pub hashes_per_tick: Option<u64>,
 }
 

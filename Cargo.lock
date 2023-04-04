@@ -5038,6 +5038,7 @@ dependencies = [
  "log",
  "memmap2",
  "modular-bitfield",
+ "num_enum",
  "rand 0.7.3",
  "rayon",
  "solana-logger 1.16.0",

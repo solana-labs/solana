@@ -2,35 +2,32 @@
 
 use {
     crate::{
-        bucket_storage::{BucketOccupied, BucketStorage},
+        bucket_storage::{BucketCapacity, BucketOccupied, BucketStorage, Capacity, IncludeHeader},
         RefCount,
     },
     bv::BitVec,
     modular_bitfield::prelude::*,
+    num_enum::FromPrimitive,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{fmt::Debug, marker::PhantomData},
 };
 
-/// in use/occupied
-const OCCUPIED_OCCUPIED: u64 = 1;
-/// free, ie. not occupied
-const OCCUPIED_FREE: u64 = 0;
-
-/// header for elements in a bucket
-/// needs to be multiple of size_of::<u64>()
-#[repr(C)]
-struct OccupiedHeader {
-    /// OCCUPIED_OCCUPIED or OCCUPIED_FREE
-    occupied: u64,
-}
-
 /// allocated in `contents` in a BucketStorage
-pub struct BucketWithBitVec<T: 'static> {
-    pub occupied: BitVec,
-    _phantom: PhantomData<&'static T>,
+pub struct BucketWithBitVec {
+    occupied: BitVec,
+    capacity_pow2: Capacity,
 }
 
-impl<T> BucketOccupied for BucketWithBitVec<T> {
+impl BucketCapacity for BucketWithBitVec {
+    fn capacity(&self) -> u64 {
+        self.capacity_pow2.capacity()
+    }
+    fn capacity_pow2(&self) -> u8 {
+        self.capacity_pow2.capacity_pow2()
+    }
+}
+
+impl BucketOccupied for BucketWithBitVec {
     fn occupy(&mut self, element: &mut [u8], ix: usize) {
         assert!(self.is_free(element, ix));
         self.occupied.set(ix as u64, true);
@@ -46,16 +43,96 @@ impl<T> BucketOccupied for BucketWithBitVec<T> {
         // no header, nothing stored in data stream
         0
     }
-    fn new(num_elements: usize) -> Self {
+    fn new(capacity: Capacity) -> Self {
+        assert!(matches!(capacity, Capacity::Pow2(_)));
         Self {
-            occupied: BitVec::new_fill(false, num_elements as u64),
-            _phantom: PhantomData,
+            occupied: BitVec::new_fill(false, capacity.capacity()),
+            capacity_pow2: capacity,
         }
     }
 }
 
-pub type DataBucket = BucketWithBitVec<()>;
-pub type IndexBucket<T> = BucketWithBitVec<T>;
+/// allocated in `contents` in a BucketStorage
+#[derive(Debug)]
+pub struct IndexBucketUsingBitVecBits<T: 'static> {
+    /// 2 bits per entry that represent a 4 state enum tag
+    pub enum_tag: BitVec,
+    capacity_pow2: Capacity,
+    _phantom: PhantomData<&'static T>,
+}
+
+impl<T: Copy + 'static> IndexBucketUsingBitVecBits<T> {
+    /// set the 2 bits (first and second) in `enum_tag`
+    fn set_bits(&mut self, ix: u64, first: bool, second: bool) {
+        self.enum_tag.set(ix * 2, first);
+        self.enum_tag.set(ix * 2 + 1, second);
+    }
+    /// get the 2 bits (first and second) in `enum_tag`
+    fn get_bits(&self, ix: u64) -> (bool, bool) {
+        (self.enum_tag.get(ix * 2), self.enum_tag.get(ix * 2 + 1))
+    }
+    /// turn the tag into bits and store them
+    fn set_enum_tag(&mut self, ix: u64, value: OccupiedEnumTag) {
+        let value = value as u8;
+        self.set_bits(ix, (value & 2) == 2, (value & 1) == 1);
+    }
+    /// read the bits and convert them to an enum tag
+    fn get_enum_tag(&self, ix: u64) -> OccupiedEnumTag {
+        let (first, second) = self.get_bits(ix);
+        let tag = (first as u8 * 2) + second as u8;
+        num_enum::FromPrimitive::from_primitive(tag)
+    }
+}
+
+impl<T: Copy + 'static> BucketOccupied for IndexBucketUsingBitVecBits<T> {
+    fn occupy(&mut self, element: &mut [u8], ix: usize) {
+        assert!(self.is_free(element, ix));
+        self.set_enum_tag(ix as u64, OccupiedEnumTag::ZeroSlots);
+    }
+    fn free(&mut self, element: &mut [u8], ix: usize) {
+        assert!(!self.is_free(element, ix));
+        self.set_enum_tag(ix as u64, OccupiedEnumTag::Free);
+    }
+    fn is_free(&self, _element: &[u8], ix: usize) -> bool {
+        self.get_enum_tag(ix as u64) == OccupiedEnumTag::Free
+    }
+    fn offset_to_first_data() -> usize {
+        // no header, nothing stored in data stream
+        0
+    }
+    fn new(capacity: Capacity) -> Self {
+        Self {
+            // note: twice as many bits allocated as `num_elements` because we store 2 bits per element
+            enum_tag: BitVec::new_fill(false, capacity.capacity() * 2),
+            capacity_pow2: capacity,
+            _phantom: PhantomData,
+        }
+    }
+    /// in this impl, the enum tag is stored in in-memory bit vec and there is more information than
+    /// a single 'occupied' bit. So, this enum_tag needs to be copied over.
+    fn copying_entry(
+        &mut self,
+        _element_new: &mut [u8],
+        ix_new: usize,
+        other: &Self,
+        _element_old: &[u8],
+        ix_old: usize,
+    ) {
+        self.set_enum_tag(ix_new as u64, other.get_enum_tag(ix_old as u64));
+    }
+}
+
+impl<T> BucketCapacity for IndexBucketUsingBitVecBits<T> {
+    fn capacity(&self) -> u64 {
+        self.capacity_pow2.capacity()
+    }
+    fn capacity_pow2(&self) -> u8 {
+        self.capacity_pow2.capacity_pow2()
+    }
+}
+
+pub type DataBucket = BucketWithBitVec;
+pub type IndexBucket<T> = IndexBucketUsingBitVecBits<T>;
 
 /// contains the index of an entry in the index bucket.
 /// This type allows us to call methods to interact with the index entry on this type.
@@ -66,23 +143,37 @@ pub struct IndexEntryPlaceInBucket<T: 'static> {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-// one instance of this per item in the index
-// stored in the index bucket
-pub struct IndexEntry<T: 'static> {
-    pub key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
-    ref_count: RefCount, // can this be smaller? Do we ever need more than 4B refcounts?
-    multiple_slots: MultipleSlots,
-    _phantom: PhantomData<&'static T>,
+/// one instance of this per item in the index
+/// stored in the index bucket
+pub struct IndexEntry<T: Clone + Copy> {
+    pub(crate) key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
+    packed_ref_count: PackedRefCount,
+    /// depends on the contents of ref_count.slot_count_enum
+    contents: SingleElementOrMultipleSlots<T>,
+}
+
+/// 63 bits available for ref count
+pub(crate) const MAX_LEGAL_REFCOUNT: RefCount = RefCount::MAX >> 1;
+
+/// hold a big `RefCount` while leaving room for extra bits to be used for things like 'Occupied'
+#[bitfield(bits = 64)]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+pub(crate) struct PackedRefCount {
+    /// currently unused
+    pub(crate) unused: B1,
+    /// ref_count of this entry. We don't need any where near 63 bits for this value
+    pub(crate) ref_count: B63,
 }
 
 /// required fields when an index element references the data file
 #[repr(C)]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 pub(crate) struct MultipleSlots {
     // if the bucket doubled, the index can be recomputed using storage_cap_and_offset.create_bucket_capacity_pow2
     storage_cap_and_offset: PackedStorage,
     /// num elements in the slot list
-    num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
+    num_slots: Slot,
 }
 
 impl MultipleSlots {
@@ -133,6 +224,49 @@ impl MultipleSlots {
             (Slot::BITS - (num_slots - 1).leading_zeros()) as u64
         }
     }
+
+    /// This function maps the original data location into an index in the current bucket storage.
+    /// This is coupled with how we resize bucket storages.
+    pub(crate) fn data_loc(&self, storage: &BucketStorage<DataBucket>) -> u64 {
+        self.storage_offset()
+            << (storage.contents.capacity_pow2() - self.storage_capacity_when_created_pow2())
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub(crate) union SingleElementOrMultipleSlots<T: Clone + Copy> {
+    /// the slot list contains a single element. No need for an entry in the data file.
+    /// The element itself is stored in place in the index entry
+    pub(crate) single_element: T,
+    /// the slot list ocntains more than one element. This contains the reference to the data file.
+    pub(crate) multiple_slots: MultipleSlots,
+}
+
+/// just the values for `OccupiedEnum`
+/// This excludes the contents of any enum value.
+#[derive(PartialEq, FromPrimitive)]
+#[repr(u8)]
+enum OccupiedEnumTag {
+    #[default]
+    Free = 0,
+    ZeroSlots = 1,
+    OneSlotInIndex = 2,
+    MultipleSlots = 3,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum OccupiedEnum<'a, T> {
+    /// this spot is not occupied.
+    /// ALL other enum values ARE occupied.
+    Free = OccupiedEnumTag::Free as u8,
+    /// zero slots in the slot list
+    ZeroSlots = OccupiedEnumTag::ZeroSlots as u8,
+    /// one slot in the slot list, it is stored in the index
+    OneSlotInIndex(&'a T) = OccupiedEnumTag::OneSlotInIndex as u8,
+    /// data is stored in data file
+    MultipleSlots(&'a MultipleSlots) = OccupiedEnumTag::MultipleSlots as u8,
 }
 
 /// Pack the storage offset and capacity-when-crated-pow2 fields into a single u64
@@ -144,83 +278,110 @@ struct PackedStorage {
     offset: B56,
 }
 
-impl<T> IndexEntryPlaceInBucket<T> {
-    pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
-        let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
-        index_entry.key = *pubkey;
-        index_entry.ref_count = 0;
-        index_entry.multiple_slots = MultipleSlots::default();
-    }
-
-    pub fn set_storage_capacity_when_created_pow2(
-        &self,
-        index_bucket: &mut BucketStorage<IndexBucket<T>>,
-        storage_capacity_when_created_pow2: u8,
-    ) {
-        self.get_multiple_slots_mut(index_bucket)
-            .set_storage_capacity_when_created_pow2(storage_capacity_when_created_pow2);
-    }
-
-    pub fn set_storage_offset(
-        &self,
-        index_bucket: &mut BucketStorage<IndexBucket<T>>,
-        storage_offset: u64,
-    ) {
-        self.get_multiple_slots_mut(index_bucket)
-            .set_storage_offset(storage_offset);
-    }
-
-    pub(crate) fn get_multiple_slots<'a>(
+impl<T: Copy + 'static> IndexEntryPlaceInBucket<T> {
+    pub(crate) fn get_slot_count_enum<'a>(
         &self,
         index_bucket: &'a BucketStorage<IndexBucket<T>>,
-    ) -> &'a MultipleSlots {
-        &index_bucket.get::<IndexEntry<T>>(self.ix).multiple_slots
+    ) -> OccupiedEnum<'a, T> {
+        let enum_tag = index_bucket.contents.get_enum_tag(self.ix);
+        let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
+        match enum_tag {
+            OccupiedEnumTag::Free => OccupiedEnum::Free,
+            OccupiedEnumTag::ZeroSlots => OccupiedEnum::ZeroSlots,
+            OccupiedEnumTag::OneSlotInIndex => unsafe {
+                OccupiedEnum::OneSlotInIndex(&index_entry.contents.single_element)
+            },
+            OccupiedEnumTag::MultipleSlots => unsafe {
+                OccupiedEnum::MultipleSlots(&index_entry.contents.multiple_slots)
+            },
+        }
     }
 
+    /// return Some(MultipleSlots) if this item's data is stored in the data file
     pub(crate) fn get_multiple_slots_mut<'a>(
         &self,
         index_bucket: &'a mut BucketStorage<IndexBucket<T>>,
-    ) -> &'a mut MultipleSlots {
-        &mut index_bucket
-            .get_mut::<IndexEntry<T>>(self.ix)
-            .multiple_slots
+    ) -> Option<&'a mut MultipleSlots> {
+        let enum_tag = index_bucket.contents.get_enum_tag(self.ix);
+        unsafe {
+            match enum_tag {
+                OccupiedEnumTag::MultipleSlots => {
+                    let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
+                    Some(&mut index_entry.contents.multiple_slots)
+                }
+                _ => None,
+            }
+        }
     }
 
-    pub fn ref_count(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> RefCount {
-        let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
-        index_entry.ref_count
-    }
-
-    /// This function maps the original data location into an index in the current bucket storage.
-    /// This is coupled with how we resize bucket storages.
-    pub fn data_loc(
+    /// make this index entry reflect `value`
+    pub(crate) fn set_slot_count_enum_value<'a>(
         &self,
-        index_bucket: &BucketStorage<IndexBucket<T>>,
-        storage: &BucketStorage<DataBucket>,
-    ) -> u64 {
-        let multiple_slots = self.get_multiple_slots(index_bucket);
-        multiple_slots.storage_offset()
-            << (storage.capacity_pow2 - multiple_slots.storage_capacity_when_created_pow2())
-    }
-
-    pub fn read_value<'a>(
-        &self,
-        index_bucket: &BucketStorage<IndexBucket<T>>,
-        data_buckets: &'a [BucketStorage<DataBucket>],
-    ) -> Option<(&'a [T], RefCount)> {
-        let multiple_slots = self.get_multiple_slots(index_bucket);
-        let num_slots = multiple_slots.num_slots();
-        let slice = if num_slots > 0 {
-            let data_bucket_ix = multiple_slots.data_bucket_ix();
-            let data_bucket = &data_buckets[data_bucket_ix as usize];
-            let loc = self.data_loc(index_bucket, data_bucket);
-            assert!(!data_bucket.is_free(loc));
-            data_bucket.get_cell_slice(loc, num_slots)
-        } else {
-            // num_slots is 0. This means we don't have an actual allocation.
-            &[]
+        index_bucket: &'a mut BucketStorage<IndexBucket<T>>,
+        value: OccupiedEnum<'a, T>,
+    ) {
+        let tag = match value {
+            OccupiedEnum::Free => OccupiedEnumTag::Free,
+            OccupiedEnum::ZeroSlots => OccupiedEnumTag::ZeroSlots,
+            OccupiedEnum::OneSlotInIndex(single_element) => {
+                let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
+                index_entry.contents.single_element = *single_element;
+                OccupiedEnumTag::OneSlotInIndex
+            }
+            OccupiedEnum::MultipleSlots(multiple_slots) => {
+                let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
+                index_entry.contents.multiple_slots = *multiple_slots;
+                OccupiedEnumTag::MultipleSlots
+            }
         };
-        Some((slice, self.ref_count(index_bucket)))
+        index_bucket.contents.set_enum_tag(self.ix, tag);
+    }
+
+    pub fn init(&self, index_bucket: &mut BucketStorage<IndexBucket<T>>, pubkey: &Pubkey) {
+        self.set_slot_count_enum_value(index_bucket, OccupiedEnum::ZeroSlots);
+        let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
+        index_entry.key = *pubkey;
+    }
+
+    fn ref_count(&self, index_bucket: &BucketStorage<IndexBucket<T>>) -> RefCount {
+        let index_entry = index_bucket.get::<IndexEntry<T>>(self.ix);
+        index_entry.packed_ref_count.ref_count()
+    }
+
+    pub(crate) fn read_value<'a>(
+        &self,
+        index_bucket: &'a BucketStorage<IndexBucket<T>>,
+        data_buckets: &'a [BucketStorage<DataBucket>],
+    ) -> (&'a [T], RefCount) {
+        (
+            match self.get_slot_count_enum(index_bucket) {
+                OccupiedEnum::ZeroSlots => {
+                    // num_slots is 0. This means we don't have an actual allocation.
+                    &[]
+                }
+                OccupiedEnum::OneSlotInIndex(single_element) => {
+                    // only element is stored in the index entry
+                    // Note that the lifetime comes from `index_bucket` here.
+                    std::slice::from_ref(single_element)
+                }
+                OccupiedEnum::MultipleSlots(multiple_slots) => {
+                    // data is in data file, so return a ref to that data
+                    let data_bucket_ix = multiple_slots.data_bucket_ix();
+                    let data_bucket = &data_buckets[data_bucket_ix as usize];
+                    let loc = multiple_slots.data_loc(data_bucket);
+                    assert!(!data_bucket.is_free(loc));
+                    data_bucket.get_cell_slice::<T>(
+                        loc,
+                        multiple_slots.num_slots,
+                        IncludeHeader::NoHeader,
+                    )
+                }
+                _ => {
+                    panic!("trying to read data from a free entry");
+                }
+            },
+            self.ref_count(index_bucket),
+        )
     }
 
     pub fn new(ix: u64) -> Self {
@@ -241,28 +402,16 @@ impl<T> IndexEntryPlaceInBucket<T> {
         ref_count: RefCount,
     ) {
         let index_entry = index_bucket.get_mut::<IndexEntry<T>>(self.ix);
-        index_entry.ref_count = ref_count;
+        index_entry
+            .packed_ref_count
+            .set_ref_count_checked(ref_count)
+            .expect("ref count must fit into 62 bits!");
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        std::{path::PathBuf, sync::Arc},
-        tempfile::tempdir,
-    };
-
-    impl<T> IndexEntry<T> {
-        pub fn new(key: Pubkey) -> Self {
-            IndexEntry {
-                key,
-                ref_count: 0,
-                multiple_slots: MultipleSlots::default(),
-                _phantom: PhantomData,
-            }
-        }
-    }
+    use super::*;
 
     /// verify that accessors for storage_offset and capacity_when_created are
     /// correct and independent
@@ -288,29 +437,6 @@ mod tests {
     fn test_size() {
         assert_eq!(std::mem::size_of::<PackedStorage>(), 1 + 7);
         assert_eq!(std::mem::size_of::<IndexEntry<u64>>(), 32 + 8 + 8 + 8);
-    }
-
-    fn index_bucket_for_testing() -> BucketStorage<IndexBucket<u64>> {
-        let tmpdir = tempdir().unwrap();
-        let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
-        assert!(!paths.is_empty());
-
-        // `new` here creates a file in `tmpdir`. Once the file is created, `tmpdir` can be dropped without issue.
-        BucketStorage::<IndexBucket<u64>>::new(
-            Arc::new(paths),
-            1,
-            std::mem::size_of::<IndexEntry<u64>>() as u64,
-            1,
-            Arc::default(),
-            Arc::default(),
-        )
-    }
-
-    fn index_entry_for_testing() -> (
-        BucketStorage<IndexBucket<u64>>,
-        IndexEntryPlaceInBucket<u64>,
-    ) {
-        (index_bucket_for_testing(), IndexEntryPlaceInBucket::new(0))
     }
 
     #[test]

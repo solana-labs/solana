@@ -132,7 +132,7 @@ sudo docker run \
   --volume /var/lib/chronograf:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file=5 \
-  $CHRONOGRAF_IMAGE --influxdb-url=https://metrics.solana.com:8086
+  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086
 
 sudo docker run \
   --detach \
