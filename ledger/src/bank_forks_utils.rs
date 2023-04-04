@@ -268,7 +268,7 @@ fn bank_forks_from_snapshot(
                 error!("Failed to load bank from snapshot dir: {:?}", err);
             }
         }
-        info!("falling back to loading from snapshot archive")
+        info!("Falling back to loading from snapshot archive");
     }
 
     // Purge all the snapshot dirs.
