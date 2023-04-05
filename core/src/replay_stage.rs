@@ -107,10 +107,10 @@ lazy_static! {
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum HeaviestForkFailures {
-    LockedOut(u64),
-    FailedThreshold(u64),
-    FailedSwitchThreshold(u64),
-    NoPropagatedConfirmation(u64),
+    LockedOut(Slot),
+    FailedThreshold(Slot),
+    FailedSwitchThreshold(Slot, u64 /* stake % */),
+    NoPropagatedConfirmation(Slot),
 }
 
 // Implement a destructor for the ReplayStage thread to signal it exited
@@ -3150,6 +3150,9 @@ impl ReplayStage {
                     );
                     failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
                         heaviest_bank.slot(),
+                        switch_proof_stake
+                            .saturating_mul(100)
+                            .saturating_div(total_stake),
                     ));
                     reset_bank.map(|b| (b, switch_fork_decision))
                 }
@@ -3198,6 +3201,7 @@ impl ReplayStage {
                     );
                     failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
                         heaviest_bank.slot(),
+                        0,
                     ));
                     reset_bank.map(|b| (b, switch_fork_decision))
                 }

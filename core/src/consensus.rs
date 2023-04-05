@@ -2013,10 +2013,12 @@ pub mod test {
             if slot == 48 {
                 assert!(results.get(&slot).unwrap().is_empty());
             } else {
-                assert_eq!(
-                    *results.get(&slot).unwrap(),
-                    vec![HeaviestForkFailures::FailedSwitchThreshold(slot)]
-                );
+                match results.get(&slot).unwrap().first() {
+                    Some(HeaviestForkFailures::FailedSwitchThreshold(result_slot, _)) => {
+                        assert_eq!(*result_slot, slot);
+                    }
+                    _ => panic!(),
+                }
             }
         }
     }
