@@ -246,7 +246,10 @@ mod tests {
     use {
         super::*,
         bip39::{Language, Mnemonic, MnemonicType, Seed},
-        std::mem,
+        std::{
+            fs::{self, File},
+            mem,
+        },
     };
 
     fn tmp_file_path(name: &str) -> String {
