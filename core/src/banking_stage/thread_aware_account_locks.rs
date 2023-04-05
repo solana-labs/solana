@@ -3,7 +3,7 @@ use {
     std::{
         collections::{hash_map::Entry, HashMap},
         fmt::{Debug, Display},
-        ops::{BitAndAssign, Sub},
+        ops::{BitAnd, BitAndAssign, Sub},
     },
 };
 
@@ -52,18 +52,20 @@ impl ThreadAwareAccountLocks {
 
     /// Returns the `ThreadId` if the accounts are able to be locked
     /// for the given thread, otherwise `None` is returned.
+    /// `allowed_threads` is a set of threads that the caller restricts locking to.
     /// If accounts are schedulable, then they are locked for the thread
     /// selected by the `thread_selector` function.
     pub(crate) fn try_lock_accounts<'a>(
         &mut self,
         write_account_locks: impl Iterator<Item = &'a Pubkey> + Clone,
         read_account_locks: impl Iterator<Item = &'a Pubkey> + Clone,
+        allowed_threads: ThreadSet,
         thread_selector: impl FnOnce(ThreadSet) -> ThreadId,
     ) -> Option<ThreadId> {
         let schedulable_threads = self.accounts_schedulable_threads(
             write_account_locks.clone(),
             read_account_locks.clone(),
-        )?;
+        )? & allowed_threads;
         (!schedulable_threads.is_empty()).then(|| {
             let thread_id = thread_selector(schedulable_threads);
             self.lock_accounts(write_account_locks, read_account_locks, thread_id);
@@ -255,6 +257,14 @@ impl ThreadAwareAccountLocks {
     }
 }
 
+impl BitAnd for ThreadSet {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+}
+
 impl BitAndAssign for ThreadSet {
     fn bitand_assign(&mut self, rhs: Self) {
         self.0 &= rhs.0;
@@ -283,17 +293,17 @@ impl Debug for ThreadSet {
 
 impl ThreadSet {
     #[inline(always)]
-    pub(crate) fn none() -> Self {
+    pub(crate) const fn none() -> Self {
         Self(0)
     }
 
     #[inline(always)]
-    pub(crate) fn any(num_threads: usize) -> Self {
+    pub(crate) const fn any(num_threads: usize) -> Self {
         Self(Self::as_flag(num_threads) - 1)
     }
 
     #[inline(always)]
-    pub(crate) fn only(thread_id: ThreadId) -> Self {
+    pub(crate) const fn only(thread_id: ThreadId) -> Self {
         Self(Self::as_flag(thread_id))
     }
 
@@ -333,7 +343,7 @@ impl ThreadSet {
     }
 
     #[inline(always)]
-    fn as_flag(thread_id: ThreadId) -> u64 {
+    const fn as_flag(thread_id: ThreadId) -> u64 {
         1 << thread_id
     }
 }
@@ -343,6 +353,7 @@ mod tests {
     use super::*;
 
     const TEST_NUM_THREADS: usize = 4;
+    const TEST_ANY_THREADS: ThreadSet = ThreadSet::any(TEST_NUM_THREADS);
 
     // Simple thread selector to select the first schedulable thread
     fn test_thread_selector(thread_set: ThreadSet) -> ThreadId {
@@ -369,7 +380,12 @@ mod tests {
         locks.read_lock_account(&pk1, 2);
         locks.read_lock_account(&pk1, 3);
         assert_eq!(
-            locks.try_lock_accounts([&pk1].into_iter(), [&pk2].into_iter(), test_thread_selector),
+            locks.try_lock_accounts(
+                [&pk1].into_iter(),
+                [&pk2].into_iter(),
+                TEST_ANY_THREADS,
+                test_thread_selector
+            ),
             None
         );
     }
@@ -382,7 +398,12 @@ mod tests {
         locks.write_lock_account(&pk2, 3);
 
         assert_eq!(
-            locks.try_lock_accounts([&pk1].into_iter(), [&pk2].into_iter(), test_thread_selector),
+            locks.try_lock_accounts(
+                [&pk1].into_iter(),
+                [&pk2].into_iter(),
+                TEST_ANY_THREADS,
+                test_thread_selector
+            ),
             Some(3)
         );
     }
@@ -396,8 +417,13 @@ mod tests {
         locks.read_lock_account(&pk2, 0);
 
         assert_eq!(
-            locks.try_lock_accounts([&pk1].into_iter(), [&pk2].into_iter(), test_thread_selector),
-            Some(0)
+            locks.try_lock_accounts(
+                [&pk1].into_iter(),
+                [&pk2].into_iter(),
+                TEST_ANY_THREADS - ThreadSet::only(0), // exclude 0
+                test_thread_selector
+            ),
+            Some(1)
         );
     }
 
@@ -407,7 +433,12 @@ mod tests {
         let pk2 = Pubkey::new_unique();
         let mut locks = ThreadAwareAccountLocks::new(TEST_NUM_THREADS);
         assert_eq!(
-            locks.try_lock_accounts([&pk1].into_iter(), [&pk2].into_iter(), test_thread_selector),
+            locks.try_lock_accounts(
+                [&pk1].into_iter(),
+                [&pk2].into_iter(),
+                TEST_ANY_THREADS,
+                test_thread_selector
+            ),
             Some(0)
         );
     }
@@ -419,11 +450,11 @@ mod tests {
 
         assert_eq!(
             locks.accounts_schedulable_threads([&pk1].into_iter(), std::iter::empty()),
-            Some(ThreadSet::any(TEST_NUM_THREADS))
+            Some(TEST_ANY_THREADS)
         );
         assert_eq!(
             locks.accounts_schedulable_threads(std::iter::empty(), [&pk1].into_iter()),
-            Some(ThreadSet::any(TEST_NUM_THREADS))
+            Some(TEST_ANY_THREADS)
         );
     }
 
@@ -457,7 +488,7 @@ mod tests {
         );
         assert_eq!(
             locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
-            Some(ThreadSet::any(TEST_NUM_THREADS))
+            Some(TEST_ANY_THREADS)
         );
 
         locks.read_lock_account(&pk1, 0);
@@ -467,7 +498,7 @@ mod tests {
         );
         assert_eq!(
             locks.accounts_schedulable_threads(std::iter::empty(), [&pk1, &pk2].into_iter()),
-            Some(ThreadSet::any(TEST_NUM_THREADS))
+            Some(TEST_ANY_THREADS)
         );
     }
 
