@@ -14,6 +14,8 @@ use {
     },
 };
 
+pub const COUNT_MAX_SEARCHES: usize = 3;
+
 /*
 1	2
 2	4
@@ -78,6 +80,8 @@ pub struct BucketStorage<O: BucketOccupied> {
     pub count: Arc<AtomicU64>,
     pub stats: Arc<BucketStats>,
     pub max_search: MaxSearch,
+    pub longest_current_search: MaxSearch,
+    pub count_max_searches: Vec<u64>,
     pub contents: O,
 }
 
@@ -155,6 +159,8 @@ impl<O: BucketOccupied> BucketStorage<O> {
             count,
             stats,
             max_search,
+            longest_current_search: 0,
+            count_max_searches: vec![0; COUNT_MAX_SEARCHES],
             contents: O::new(capacity),
         }
     }

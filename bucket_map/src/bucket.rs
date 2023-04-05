@@ -5,7 +5,7 @@ use {
         bucket_stats::BucketMapStats,
         bucket_storage::{
             BucketCapacity, BucketOccupied, BucketStorage, Capacity, IncludeHeader,
-            DEFAULT_CAPACITY_POW2,
+            COUNT_MAX_SEARCHES, DEFAULT_CAPACITY_POW2,
         },
         index_entry::{
             DataBucket, IndexBucket, IndexEntry, IndexEntryPlaceInBucket, MultipleSlots,
@@ -212,7 +212,15 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             .find_index_entry_mut_us
             .fetch_add(m.as_us(), Ordering::Relaxed);
         match first_free {
-            Some(ii) => Ok((None, ii)),
+            Some(ii) => {
+                let distance = if ii < ix {
+                    (ii + capacity) - ix
+                } else {
+                    ii - ix
+                };
+                Self::update_search_distance_stats(index, distance);
+                Ok((None, ii))
+            }
             None => Err(BucketMapError::IndexNoSpace(index.contents.capacity())),
         }
     }
@@ -236,6 +244,20 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         None
     }
 
+    /// update the search distance stats
+    fn update_search_distance_stats(index: &mut BucketStorage<IndexBucket<T>>, distance: u64) {
+        index.longest_current_search = index.longest_current_search.max(distance as u8);
+        let distance_from_max_search = index
+            .max_search()
+            .saturating_sub(distance.saturating_add(1))
+            as usize;
+        if distance_from_max_search < COUNT_MAX_SEARCHES {
+            index.count_max_searches[distance_from_max_search] += 1;
+            index.stats.count_max_searches[distance_from_max_search]
+                .fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
     fn bucket_create_key(
         index: &mut BucketStorage<IndexBucket<T>>,
         key: &Pubkey,
@@ -249,6 +271,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             if !index.is_free(ii) {
                 continue;
             }
+            Self::update_search_distance_stats(index, i.saturating_sub(ix));
             index.occupy(ii, is_resizing).unwrap();
             // These fields will be overwritten after allocation by callers.
             // Since this part of the mmapped file could have previously been used by someone else, there can be garbage here.
@@ -483,6 +506,17 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                         */
                     }
                 }
+                let index_to_update_stats = if valid { &self.index } else { &index };
+                // update stats to have the global combined stats match our bucket's current index state.
+                (0..COUNT_MAX_SEARCHES).for_each(|max_search| {
+                    let count = index_to_update_stats.count_max_searches[max_search];
+                    if count > 0 {
+                        // subtract out our old stats
+                        index_to_update_stats.stats.count_max_searches[max_search]
+                            .fetch_sub(count, Ordering::Relaxed);
+                    }
+                });
+
                 if valid {
                     self.stats.index.update_max_size(index.capacity());
                     let mut items = self.reallocated.items.lock().unwrap();

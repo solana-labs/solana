@@ -399,6 +399,24 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
+                    "disk_index_max_search_0",
+                    disk.map(|disk| disk.stats.index.count_max_searches[0].load(Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
+                    "disk_index_max_search_1",
+                    disk.map(|disk| disk.stats.index.count_max_searches[1].load(Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
+                    "disk_index_max_search_2",
+                    disk.map(|disk| disk.stats.index.count_max_searches[2].load(Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
                     "disk_index_resizes",
                     disk.map(|disk| disk.stats.index.resizes.swap(0, Ordering::Relaxed))
                         .unwrap_or_default(),

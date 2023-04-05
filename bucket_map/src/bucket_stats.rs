@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
+use {
+    crate::bucket_storage::COUNT_MAX_SEARCHES,
+    std::sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 #[derive(Debug, Default)]
@@ -15,6 +18,8 @@ pub struct BucketStats {
     pub find_index_entry_mut_us: AtomicU64,
     pub file_count: AtomicU64,
     pub total_file_size: AtomicU64,
+    pub count_max_searches: [AtomicU64; COUNT_MAX_SEARCHES],
+    pub max_search_distance: AtomicU64,
 }
 
 impl BucketStats {
