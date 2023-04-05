@@ -564,7 +564,9 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let default_num_threads = num_cpus::get().to_string();
-    let matches = app(&default_num_threads, solana_version::version!()).try_get_matches()?;
+    let matches = app(&default_num_threads, solana_version::version!())
+        .try_get_matches()
+        .unwrap_or_else(|e| e.exit());
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
