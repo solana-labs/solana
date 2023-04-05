@@ -113,7 +113,6 @@ pub fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
 /// The `EncodableKey` trait defines the interface by which cryptographic keys/keypairs are read,
 /// written, and derived from sources.
 pub trait EncodableKey: Sized {
-    fn pubkey_string(&self) -> Result<String, Box<dyn error::Error>>;
     fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>>;
     fn read_from_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
         let mut file = File::open(path.as_ref())?;

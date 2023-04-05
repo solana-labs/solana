@@ -999,14 +999,29 @@ pub fn keypair_from_path(
     keypair_name: &str,
     confirm_pubkey: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
-    encodable_key_from_path(matches, path, keypair_name, confirm_pubkey)
+    let keypair = encodable_key_from_path(matches, path, keypair_name)?;
+    if confirm_pubkey {
+        confirm_keypair_pubkey(&keypair);
+    }
+    Ok(keypair)
+}
+
+fn confirm_keypair_pubkey(keypair: &Keypair) {
+    let pubkey = keypair.pubkey();
+    print!("Recovered pubkey `{pubkey:?}`. Continue? (y/n): ");
+    let _ignored = stdout().flush();
+    let mut input = String::new();
+    stdin().read_line(&mut input).expect("Unexpected input");
+    if input.to_lowercase().trim() != "y" {
+        println!("Exiting");
+        exit(1);
+    }
 }
 
 fn encodable_key_from_path<K: EncodableKey>(
     matches: &ArgMatches,
     path: &str,
     keypair_name: &str,
-    confirm_pubkey: bool,
 ) -> Result<K, Box<dyn error::Error>> {
     let SignerSource {
         kind,
@@ -1019,7 +1034,6 @@ fn encodable_key_from_path<K: EncodableKey>(
             Ok(encodable_key_from_seed_phrase(
                 keypair_name,
                 skip_validation,
-                confirm_pubkey,
                 derivation_path,
                 legacy,
             )?)
@@ -1058,19 +1072,17 @@ pub fn keypair_from_seed_phrase(
     derivation_path: Option<DerivationPath>,
     legacy: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
-    encodable_key_from_seed_phrase(
-        keypair_name,
-        skip_validation,
-        confirm_pubkey,
-        derivation_path,
-        legacy,
-    )
+    let keypair: Keypair =
+        encodable_key_from_seed_phrase(keypair_name, skip_validation, derivation_path, legacy)?;
+    if confirm_pubkey {
+        confirm_keypair_pubkey(&keypair);
+    }
+    Ok(keypair)
 }
 
 fn encodable_key_from_seed_phrase<K: EncodableKey>(
     key_name: &str,
     skip_validation: bool,
-    confirm_pubkey: bool,
     derivation_path: Option<DerivationPath>,
     legacy: bool,
 ) -> Result<K, Box<dyn error::Error>> {
@@ -1116,19 +1128,6 @@ fn encodable_key_from_seed_phrase<K: EncodableKey>(
             K::from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?
         }
     };
-
-    if confirm_pubkey {
-        let pubkey = key.pubkey_string()?;
-        print!("Recovered pubkey `{pubkey:?}`. Continue? (y/n): ");
-        let _ignored = stdout().flush();
-        let mut input = String::new();
-        stdin().read_line(&mut input).expect("Unexpected input");
-        if input.to_lowercase().trim() != "y" {
-            println!("Exiting");
-            exit(1);
-        }
-    }
-
     Ok(key)
 }
 
