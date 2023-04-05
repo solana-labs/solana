@@ -252,29 +252,34 @@ fn bank_forks_from_snapshot(
                         bank.set_shrink_paths(shrink_paths);
                     }
 
-                    let full_hash = FullSnapshotHash {
+                    let full_snapshot_hash = FullSnapshotHash {
                         hash: (
                             full_snapshot_archive_info.slot(),
                             *full_snapshot_archive_info.hash(),
                         ),
                     };
-                    let incremental_hash =
+                    let incremental_snapshot_hash =
                         snapshot_utils::get_highest_incremental_snapshot_archive_info(
                             &snapshot_config.incremental_snapshot_archives_dir,
                             full_snapshot_archive_info.slot(),
                         )
-                        .map(|info| IncrementalSnapshotHash {
-                            base: full_hash.hash,
-                            hash: (info.slot(), *info.hash()),
+                        .map(|incremental_snapshot_archive_info| {
+                            IncrementalSnapshotHash {
+                                base: full_snapshot_hash.hash,
+                                hash: (
+                                    incremental_snapshot_archive_info.slot(),
+                                    *incremental_snapshot_archive_info.hash(),
+                                ),
+                            }
                         });
-                    let start_snapshot_hashes = StartingSnapshotHashes {
-                        full: full_hash,
-                        incremental: incremental_hash,
+                    let starting_snapshot_hashes = StartingSnapshotHashes {
+                        full: full_snapshot_hash,
+                        incremental: incremental_snapshot_hash,
                     };
                     let bank_forks = BankForks::new(bank);
                     return (
                         Arc::new(RwLock::new(bank_forks)),
-                        Some(start_snapshot_hashes),
+                        Some(starting_snapshot_hashes),
                     );
                 } else {
                     info!(
