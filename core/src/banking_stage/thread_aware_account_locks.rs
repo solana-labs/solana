@@ -73,6 +73,22 @@ impl ThreadAwareAccountLocks {
         })
     }
 
+    /// Unlocks the accounts for the given thread.
+    pub(crate) fn unlock_accounts<'a>(
+        &mut self,
+        write_account_locks: impl Iterator<Item = &'a Pubkey>,
+        read_account_locks: impl Iterator<Item = &'a Pubkey>,
+        thread_id: ThreadId,
+    ) {
+        for account in write_account_locks {
+            self.write_unlock_account(account, thread_id);
+        }
+
+        for account in read_account_locks {
+            self.read_unlock_account(account, thread_id);
+        }
+    }
+
     /// Returns `ThreadSet` that the given accounts can be scheduled on.
     fn accounts_schedulable_threads<'a>(
         &self,
