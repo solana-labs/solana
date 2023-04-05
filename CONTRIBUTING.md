@@ -206,7 +206,7 @@ Non-exhaustive list of things that make it *harder* to review:
   changes. Instead move those changes to a different PR
 * Renaming variables/functions/types unnecessarily and/or without explanation.
 * Not following established conventions in the function/module/crate/repo.
-* Changing whitespace: moving code and/or reformatting code.
+* Changing whitespace: moving code and/or reformatting code. Make such changes in a separate PR
 * Force-pushing the branch unnecessarily; this makes it harder to track any
   previous comments on specific lines of code, and also harder to track changes
   already reviewed from previous commits.
