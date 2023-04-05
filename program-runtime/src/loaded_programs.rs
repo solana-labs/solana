@@ -93,6 +93,8 @@ pub struct LoadedProgram {
     pub deployment_slot: Slot,
     /// Slot in which this entry will become active (can be in the future)
     pub effective_slot: Slot,
+    /// Optional expiration slot for this entry, after which it is treated as non-existent
+    pub maybe_expiration_slot: Option<Slot>,
     /// How often this entry was used
     pub usage_counter: AtomicU64,
 }
@@ -133,6 +135,7 @@ impl LoadedProgram {
         loader: Arc<BuiltInProgram<InvokeContext<'static>>>,
         deployment_slot: Slot,
         effective_slot: Slot,
+        maybe_expiration_slot: Option<Slot>,
         elf_bytes: &[u8],
         account_size: usize,
         use_jit: bool,
@@ -178,6 +181,7 @@ impl LoadedProgram {
             deployment_slot,
             account_size,
             effective_slot,
+            maybe_expiration_slot,
             usage_counter: AtomicU64::new(0),
             program,
         })
@@ -192,17 +196,21 @@ impl LoadedProgram {
             deployment_slot,
             account_size: 0,
             effective_slot: deployment_slot.saturating_add(1),
+            maybe_expiration_slot: None,
             usage_counter: AtomicU64::new(0),
             program: LoadedProgramType::BuiltIn(program),
         }
     }
 
     pub fn new_tombstone(slot: Slot, reason: LoadedProgramType) -> Self {
+        let maybe_expiration_slot =
+            matches!(reason, LoadedProgramType::DelayVisibility).then_some(slot.saturating_add(1));
         let tombstone = Self {
             program: reason,
             account_size: 0,
             deployment_slot: slot,
             effective_slot: slot,
+            maybe_expiration_slot,
             usage_counter: AtomicU64::default(),
         };
         debug_assert!(tombstone.is_tombstone());
@@ -308,10 +316,25 @@ impl LoadedPrograms {
             .filter_map(|key| {
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
-                        if working_slot.current_slot() >= entry.effective_slot
-                            && working_slot.is_ancestor(entry.deployment_slot)
+                        let current_slot = working_slot.current_slot();
+                        if current_slot == entry.deployment_slot
+                            || working_slot.is_ancestor(entry.deployment_slot)
                         {
-                            return Some((key, entry.clone()));
+                            if entry
+                                .maybe_expiration_slot
+                                .map(|expiration_slot| current_slot >= expiration_slot)
+                                .unwrap_or(false)
+                            {
+                                // Found an entry that's already expired. Any further entries in the list
+                                // are older than the current one. So treat the program as missing in the
+                                // cache and return early.
+                                missing.push(key);
+                                return None;
+                            }
+
+                            if current_slot >= entry.effective_slot {
+                                return Some((key, entry.clone()));
+                            }
                         }
                     }
                 }
@@ -385,6 +408,7 @@ mod tests {
             account_size: 0,
             deployment_slot,
             effective_slot,
+            maybe_expiration_slot: None,
             usage_counter: AtomicU64::default(),
         })
     }
@@ -844,6 +868,7 @@ mod tests {
             account_size: 0,
             deployment_slot,
             effective_slot,
+            maybe_expiration_slot: None,
             usage_counter,
         })
     }
@@ -880,7 +905,7 @@ mod tests {
 
         let mut fork_graph = TestForkGraphSpecific::default();
         fork_graph.insert_fork(&[0, 10, 20, 22]);
-        fork_graph.insert_fork(&[0, 5, 11, 15, 16]);
+        fork_graph.insert_fork(&[0, 5, 11, 15, 16, 19, 21, 23]);
         fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
 
         let program1 = Pubkey::new_unique();
@@ -901,8 +926,8 @@ mod tests {
         let program4 = Pubkey::new_unique();
         assert!(!cache.replenish(program4, new_test_loaded_program(0, 1)).0);
         assert!(!cache.replenish(program4, new_test_loaded_program(5, 6)).0);
-        // The following is a special case, where effective slot is 4 slots in the future
-        assert!(!cache.replenish(program4, new_test_loaded_program(15, 19)).0);
+        // The following is a special case, where effective slot is 3 slots in the future
+        assert!(!cache.replenish(program4, new_test_loaded_program(15, 18)).0);
 
         // Current fork graph
         //                   0
@@ -933,7 +958,7 @@ mod tests {
         assert!(missing.contains(&program3));
 
         // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 16
-        let mut working_slot = TestWorkingSlot::new(16, &[0, 5, 11, 15, 16, 19, 23]);
+        let mut working_slot = TestWorkingSlot::new(16, &[0, 5, 11, 15, 16, 18, 19, 23]);
         let (found, missing) = cache.extract(
             &working_slot,
             vec![program1, program2, program3, program4].into_iter(),
@@ -947,8 +972,8 @@ mod tests {
 
         assert!(missing.contains(&program3));
 
-        // Testing the same fork above, but current slot is now 19 (equal to effective slot of program4).
-        working_slot.update_slot(19);
+        // Testing the same fork above, but current slot is now 18 (equal to effective slot of program4).
+        working_slot.update_slot(18);
         let (found, missing) = cache.extract(
             &working_slot,
             vec![program1, program2, program3, program4].into_iter(),
@@ -957,7 +982,7 @@ mod tests {
         assert!(match_slot(&found, &program1, 0));
         assert!(match_slot(&found, &program2, 11));
 
-        // The effective slot of program4 deployed in slot 15 is 19. So it should be usable in slot 19.
+        // The effective slot of program4 deployed in slot 15 is 18. So it should be usable in slot 18.
         assert!(match_slot(&found, &program4, 15));
 
         assert!(missing.contains(&program3));
@@ -989,6 +1014,50 @@ mod tests {
         assert!(match_slot(&found, &program4, 5));
 
         assert!(missing.contains(&program3));
+
+        // The following is a special case, where there's an expiration slot
+        let test_program = Arc::new(LoadedProgram {
+            program: LoadedProgramType::DelayVisibility,
+            account_size: 0,
+            deployment_slot: 19,
+            effective_slot: 19,
+            maybe_expiration_slot: Some(21),
+            usage_counter: AtomicU64::default(),
+        });
+        assert!(!cache.replenish(program4, test_program).0);
+
+        // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
+        let working_slot = TestWorkingSlot::new(19, &[0, 5, 11, 15, 16, 18, 19, 21, 23]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 11));
+        // Program4 deployed at slot 19 should not be expired yet
+        assert!(match_slot(&found, &program4, 19));
+
+        assert!(missing.contains(&program3));
+
+        // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 21
+        // This would cause program4 deployed at slot 19 to be expired.
+        let working_slot = TestWorkingSlot::new(21, &[0, 5, 11, 15, 16, 18, 19, 21, 23]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 11));
+
+        assert!(missing.contains(&program3));
+        assert!(missing.contains(&program4));
+
+        // Remove the expired entry to let the rest of the test continue
+        if let Some(programs) = cache.entries.get_mut(&program4) {
+            programs.pop();
+        }
 
         cache.prune(&fork_graph, 5);
 

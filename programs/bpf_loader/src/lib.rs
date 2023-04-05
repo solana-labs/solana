@@ -113,6 +113,7 @@ pub fn load_program_from_bytes(
         loader,
         deployment_slot,
         effective_slot,
+        None,
         programdata,
         account_size,
         use_jit,
