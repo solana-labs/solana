@@ -3,7 +3,7 @@
 use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
-        bank::Bank,
+        bank::{Bank, SquashTiming},
         epoch_accounts_hash,
         snapshot_config::SnapshotConfig,
     },
@@ -48,11 +48,7 @@ struct SetRootMetrics {
 
 #[derive(Debug, Default, Copy, Clone)]
 struct SetRootTimings {
-    total_squash_cache_ms: i64,
-    total_squash_accounts_ms: i64,
-    total_squash_accounts_index_ms: i64,
-    total_squash_accounts_cache_ms: i64,
-    total_squash_accounts_store_ms: i64,
+    total_squash_time: SquashTiming,
     total_snapshot_ms: i64,
     prune_non_rooted_ms: i64,
     drop_parent_banks_ms: i64,
@@ -275,11 +271,7 @@ impl BankForks {
         let parents = root_bank.parents();
         banks.extend(parents.iter());
         let total_parent_banks = banks.len();
-        let mut total_squash_accounts_ms = 0;
-        let mut total_squash_accounts_index_ms = 0;
-        let mut total_squash_accounts_cache_ms = 0;
-        let mut total_squash_accounts_store_ms = 0;
-        let mut total_squash_cache_ms = 0;
+        let mut squash_timing = SquashTiming::default();
         let mut total_snapshot_ms = 0;
 
         // handle epoch accounts hash
@@ -305,12 +297,7 @@ impl BankForks {
             );
 
             self.last_accounts_hash_slot = eah_bank.slot();
-            let squash_timing = eah_bank.squash();
-            total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
-            total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
-            total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
-            total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
-            total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
+            squash_timing += eah_bank.squash();
             is_root_bank_squashed = eah_bank.slot() == root;
 
             eah_bank
@@ -334,7 +321,7 @@ impl BankForks {
         //
         // This is needed when a snapshot request occurs in a slot after an EAH request, and is
         // part of the same set of `banks` in a single `set_root()` invocation.  While (very)
-        // unlikely for a validator with defaut snapshot intervals (and accounts hash verifier
+        // unlikely for a validator with default snapshot intervals (and accounts hash verifier
         // intervals), it *is* possible, and there are tests to exercise this possibility.
         if let Some(bank) = banks.iter().find(|bank| {
             bank.slot() > self.last_accounts_hash_slot
@@ -342,12 +329,8 @@ impl BankForks {
         }) {
             let bank_slot = bank.slot();
             self.last_accounts_hash_slot = bank_slot;
-            let squash_timing = bank.squash();
-            total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
-            total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
-            total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
-            total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
-            total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
+            squash_timing += bank.squash();
+
             is_root_bank_squashed = bank_slot == root;
 
             let mut snapshot_time = Measure::start("squash::snapshot_time");
@@ -381,12 +364,7 @@ impl BankForks {
         }
 
         if !is_root_bank_squashed {
-            let squash_timing = root_bank.squash();
-            total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
-            total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
-            total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
-            total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
-            total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
+            squash_timing += root_bank.squash();
         }
         let new_tx_count = root_bank.transaction_count();
         let accounts_data_len = root_bank.load_accounts_data_size() as i64;
@@ -404,11 +382,7 @@ impl BankForks {
             removed_banks,
             SetRootMetrics {
                 timings: SetRootTimings {
-                    total_squash_cache_ms,
-                    total_squash_accounts_ms,
-                    total_squash_accounts_index_ms,
-                    total_squash_accounts_cache_ms,
-                    total_squash_accounts_store_ms,
+                    total_squash_time: squash_timing,
                     total_snapshot_ms,
                     prune_non_rooted_ms: prune_time.as_ms() as i64,
                     drop_parent_banks_ms: drop_parent_banks_time.as_ms() as i64,
@@ -461,27 +435,39 @@ impl BankForks {
             ("total_banks", self.banks.len(), i64),
             (
                 "total_squash_cache_ms",
-                set_root_metrics.timings.total_squash_cache_ms,
+                set_root_metrics.timings.total_squash_time.squash_cache_ms,
                 i64
             ),
             (
                 "total_squash_accounts_ms",
-                set_root_metrics.timings.total_squash_accounts_ms,
+                set_root_metrics
+                    .timings
+                    .total_squash_time
+                    .squash_accounts_ms,
                 i64
             ),
             (
                 "total_squash_accounts_index_ms",
-                set_root_metrics.timings.total_squash_accounts_index_ms,
+                set_root_metrics
+                    .timings
+                    .total_squash_time
+                    .squash_accounts_index_ms,
                 i64
             ),
             (
                 "total_squash_accounts_cache_ms",
-                set_root_metrics.timings.total_squash_accounts_cache_ms,
+                set_root_metrics
+                    .timings
+                    .total_squash_time
+                    .squash_accounts_cache_ms,
                 i64
             ),
             (
                 "total_squash_accounts_store_ms",
-                set_root_metrics.timings.total_squash_accounts_store_ms,
+                set_root_metrics
+                    .timings
+                    .total_squash_time
+                    .squash_accounts_store_ms,
                 i64
             ),
             (
@@ -512,7 +498,7 @@ impl BankForks {
             ),
             (
                 "program_cache_prune_ms",
-                timing::duration_as_ms(&program_cache_prune_start.elapsed()) as usize,
+                timing::duration_as_ms(&program_cache_prune_start.elapsed()),
                 i64
             ),
             ("dropped_banks_len", set_root_metrics.dropped_banks_len, i64),

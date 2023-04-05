@@ -168,7 +168,7 @@ use {
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
-        ops::{Deref, RangeInclusive},
+        ops::{AddAssign, Deref, RangeInclusive},
         path::PathBuf,
         rc::Rc,
         sync::{
@@ -301,6 +301,7 @@ type RentCollectionCycleParams = (
     PartitionsPerCycle,
 );
 
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SquashTiming {
     pub squash_accounts_ms: u64,
     pub squash_accounts_cache_ms: u64,
@@ -308,6 +309,16 @@ pub struct SquashTiming {
     pub squash_accounts_store_ms: u64,
 
     pub squash_cache_ms: u64,
+}
+
+impl AddAssign for SquashTiming {
+    fn add_assign(&mut self, rhs: Self) {
+        self.squash_accounts_ms += rhs.squash_accounts_ms;
+        self.squash_accounts_cache_ms += rhs.squash_accounts_cache_ms;
+        self.squash_accounts_index_ms += rhs.squash_accounts_index_ms;
+        self.squash_accounts_store_ms += rhs.squash_accounts_store_ms;
+        self.squash_cache_ms += rhs.squash_cache_ms;
+    }
 }
 
 type EpochCount = u64;
