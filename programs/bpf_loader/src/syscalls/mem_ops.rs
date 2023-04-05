@@ -1,6 +1,6 @@
 use {super::*, crate::declare_syscall};
 
-fn mem_op_consume(invoke_context: &mut InvokeContext, n: u64) -> Result<(), EbpfError> {
+fn mem_op_consume(invoke_context: &mut InvokeContext, n: u64) -> Result<(), Error> {
     let compute_budget = invoke_context.get_compute_budget();
     let cost = compute_budget
         .mem_op_base_cost
@@ -19,7 +19,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         mem_op_consume(invoke_context, n)?;
 
         if !is_nonoverlapping(src_addr, n, dst_addr, n) {
@@ -66,7 +66,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         mem_op_consume(invoke_context, n)?;
 
         let dst = translate_slice_mut::<u8>(
@@ -101,7 +101,7 @@ declare_syscall!(
         cmp_result_addr: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         mem_op_consume(invoke_context, n)?;
 
         let s1 = translate_slice::<u8>(
@@ -149,7 +149,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         mem_op_consume(invoke_context, n)?;
 
         let s = translate_slice_mut::<u8>(

@@ -1342,7 +1342,7 @@ fn test_rent_complex() {
 
     fn mock_process_instruction(
         invoke_context: &mut InvokeContext,
-    ) -> result::Result<(), InstructionError> {
+    ) -> result::Result<(), Box<dyn std::error::Error>> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
@@ -1359,7 +1359,7 @@ fn test_rent_complex() {
                 }
             }
         } else {
-            Err(InstructionError::InvalidInstructionData)
+            Err(Box::new(InstructionError::InvalidInstructionData))
         }
     }
 
@@ -5072,14 +5072,14 @@ fn test_add_builtin() {
     }
     fn mock_vote_processor(
         invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), InstructionError> {
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
         if mock_vote_program_id() != *program_id {
-            return Err(InstructionError::IncorrectProgramId);
+            return Err(Box::new(InstructionError::IncorrectProgramId));
         }
-        Err(InstructionError::Custom(42))
+        Err(Box::new(InstructionError::Custom(42)))
     }
 
     assert!(bank.get_account(&mock_vote_program_id()).is_none());
@@ -5130,10 +5130,10 @@ fn test_add_duplicate_static_program() {
 
     fn mock_vote_processor(
         invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), InstructionError> {
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         // mock builtin must consume units
         invoke_context.consume_checked(1)?;
-        Err(InstructionError::Custom(42))
+        Err(Box::new(InstructionError::Custom(42)))
     }
 
     let mock_account = Keypair::new();
@@ -5180,10 +5180,10 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
 
         fn mock_ix_processor(
             invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), InstructionError> {
+        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
             // mock builtin must consume units
             invoke_context.consume_checked(1)?;
-            Err(InstructionError::Custom(42))
+            Err(Box::new(InstructionError::Custom(42)))
         }
 
         // Non-builtin loader accounts can not be used for instruction processing
@@ -6472,7 +6472,7 @@ fn test_transaction_with_duplicate_accounts_in_instruction() {
 
     fn mock_process_instruction(
         invoke_context: &mut InvokeContext,
-    ) -> result::Result<(), InstructionError> {
+    ) -> result::Result<(), Box<dyn std::error::Error>> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
@@ -6533,7 +6533,7 @@ fn test_transaction_with_program_ids_passed_to_programs() {
     #[allow(clippy::unnecessary_wraps)]
     fn mock_process_instruction(
         invoke_context: &mut InvokeContext,
-    ) -> result::Result<(), InstructionError> {
+    ) -> result::Result<(), Box<dyn std::error::Error>> {
         // mock builtin must consume units
         invoke_context.consume_checked(1)?;
         Ok(())
@@ -6753,7 +6753,7 @@ fn test_program_id_as_payer() {
 #[allow(clippy::unnecessary_wraps)]
 fn mock_ok_vote_processor(
     invoke_context: &mut InvokeContext,
-) -> std::result::Result<(), InstructionError> {
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
     // mock builtin must consume units
     invoke_context.consume_checked(1)?;
     Ok(())
@@ -7001,7 +7001,7 @@ fn test_bank_hash_consistency() {
 fn test_same_program_id_uses_unqiue_executable_accounts() {
     fn nested_processor(
         invoke_context: &mut InvokeContext,
-    ) -> result::Result<(), InstructionError> {
+    ) -> result::Result<(), Box<dyn std::error::Error>> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let _ = instruction_context
@@ -7223,7 +7223,7 @@ fn test_add_builtin_no_overwrite() {
     #[allow(clippy::unnecessary_wraps)]
     fn mock_ix_processor(
         _invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), InstructionError> {
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 
@@ -7254,7 +7254,7 @@ fn test_add_builtin_loader_no_overwrite() {
     #[allow(clippy::unnecessary_wraps)]
     fn mock_ix_processor(
         _context: &mut InvokeContext,
-    ) -> std::result::Result<(), InstructionError> {
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 
@@ -10002,7 +10002,7 @@ fn test_tx_return_data() {
     let mock_program_id = Pubkey::from([2u8; 32]);
     fn mock_process_instruction(
         invoke_context: &mut InvokeContext,
-    ) -> result::Result<(), InstructionError> {
+    ) -> result::Result<(), Box<dyn std::error::Error>> {
         let mock_program_id = Pubkey::from([2u8; 32]);
         let transaction_context = &mut invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -10199,7 +10199,7 @@ fn test_transfer_sysvar() {
 
     fn mock_ix_processor(
         invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), InstructionError> {
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         // mock builtin should consume units
@@ -10412,7 +10412,7 @@ fn test_compute_budget_program_noop() {
 
     fn mock_ix_processor(
         invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), InstructionError> {
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let compute_budget = invoke_context.get_compute_budget();
         assert_eq!(
             *compute_budget,
@@ -10459,7 +10459,7 @@ fn test_compute_request_instruction() {
 
     fn mock_ix_processor(
         invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), InstructionError> {
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let compute_budget = invoke_context.get_compute_budget();
         assert_eq!(
             *compute_budget,
@@ -10513,7 +10513,7 @@ fn test_failed_compute_request_instruction() {
 
     fn mock_ix_processor(
         invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), InstructionError> {
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let compute_budget = invoke_context.get_compute_budget();
         assert_eq!(
             *compute_budget,
@@ -11078,7 +11078,7 @@ enum MockTransferInstruction {
 
 fn mock_transfer_process_instruction(
     invoke_context: &mut InvokeContext,
-) -> result::Result<(), InstructionError> {
+) -> result::Result<(), Box<dyn std::error::Error>> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -11097,7 +11097,7 @@ fn mock_transfer_process_instruction(
             }
         }
     } else {
-        Err(InstructionError::InvalidInstructionData)
+        Err(Box::new(InstructionError::InvalidInstructionData))
     }
 }
 
@@ -11890,7 +11890,7 @@ enum MockReallocInstruction {
 
 fn mock_realloc_process_instruction(
     invoke_context: &mut InvokeContext,
-) -> result::Result<(), InstructionError> {
+) -> result::Result<(), Box<dyn std::error::Error>> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -11929,7 +11929,7 @@ fn mock_realloc_process_instruction(
             }
         }
     } else {
-        Err(InstructionError::InvalidInstructionData)
+        Err(Box::new(InstructionError::InvalidInstructionData))
     }
 }
 

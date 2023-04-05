@@ -10,11 +10,7 @@ pub mod upgradeable_with_jit;
 pub mod with_jit;
 
 use {
-    crate::{
-        allocator_bump::BpfAllocator,
-        serialization::{deserialize_parameters, serialize_parameters},
-        syscalls::SyscallError,
-    },
+    crate::allocator_bump::BpfAllocator,
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
@@ -30,9 +26,8 @@ use {
         aligned_memory::AlignedMemory,
         ebpf::{self, HOST_ALIGN, MM_HEAP_START},
         elf::Executable,
-        error::{EbpfError, UserDefinedError},
         memory_region::{MemoryCowCallback, MemoryMapping, MemoryRegion},
-        verifier::{RequisiteVerifier, VerifierError},
+        verifier::RequisiteVerifier,
         vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
@@ -65,12 +60,10 @@ use {
     },
     std::{
         cell::{RefCell, RefMut},
-        fmt::Debug,
         mem,
         rc::Rc,
         sync::{atomic::Ordering, Arc},
     },
-    thiserror::Error,
 };
 
 solana_sdk::declare_builtin!(
@@ -78,16 +71,6 @@ solana_sdk::declare_builtin!(
     solana_bpf_loader_program,
     solana_bpf_loader_program::process_instruction
 );
-
-/// Errors returned by functions the BPF Loader registers with the VM
-#[derive(Debug, Error, PartialEq, Eq)]
-pub enum BpfError {
-    #[error("{0}")]
-    VerifierError(#[from] VerifierError),
-    #[error("{0}")]
-    SyscallError(#[from] SyscallError),
-}
-impl UserDefinedError for BpfError {}
 
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
@@ -326,7 +309,7 @@ pub fn create_ebpf_vm<'a, 'b>(
     regions: Vec<MemoryRegion>,
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
-) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, EbpfError> {
+) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
     let round_up_heap_size = invoke_context
         .feature_set
         .is_active(&round_up_heap_size::id());
@@ -336,7 +319,7 @@ pub fn create_ebpf_vm<'a, 'b>(
         round_up_heap_size,
     ));
     if round_up_heap_size {
-        heap_cost_result.map_err(SyscallError::InstructionError)?;
+        heap_cost_result?;
     }
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
@@ -346,20 +329,17 @@ pub fn create_ebpf_vm<'a, 'b>(
                 instruction_context
                     .try_borrow_last_program_account(invoke_context.transaction_context)
             })
-            .map(|program_account| *program_account.get_owner())
-            .map_err(SyscallError::InstructionError)?;
+            .map(|program_account| *program_account.get_owner())?;
     let check_size = invoke_context
         .feature_set
         .is_active(&check_slice_translation_size::id());
     let allocator = Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START)));
-    invoke_context
-        .set_syscall_context(
-            check_aligned,
-            check_size,
-            orig_account_lengths,
-            allocator.clone(),
-        )
-        .map_err(SyscallError::InstructionError)?;
+    invoke_context.set_syscall_context(
+        check_aligned,
+        check_size,
+        orig_account_lengths,
+        allocator.clone(),
+    )?;
     let stack_len = stack.len();
     let memory_mapping = create_memory_mapping(
         program.get_executable(),
@@ -369,7 +349,12 @@ pub fn create_ebpf_vm<'a, 'b>(
         None,
     )?;
 
-    EbpfVm::new(program, invoke_context, memory_mapping, stack_len)
+    Ok(EbpfVm::new(
+        program,
+        invoke_context,
+        memory_mapping,
+        stack_len,
+    ))
 }
 
 #[macro_export]
@@ -406,7 +391,7 @@ fn create_memory_mapping<'a, 'b, C: ContextObject>(
     heap: &'b mut AlignedMemory<{ HOST_ALIGN }>,
     additional_regions: Vec<MemoryRegion>,
     cow_cb: Option<MemoryCowCallback>,
-) -> Result<MemoryMapping<'a>, EbpfError> {
+) -> Result<MemoryMapping<'a>, Box<dyn std::error::Error>> {
     let config = executable.get_config();
     let regions: Vec<MemoryRegion> = vec![
         executable.get_ro_region(),
@@ -432,18 +417,22 @@ fn create_memory_mapping<'a, 'b, C: ContextObject>(
     })
 }
 
-pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
-    process_instruction_common(invoke_context, false)
+pub fn process_instruction(
+    invoke_context: &mut InvokeContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    process_instruction_inner(invoke_context, false)
 }
 
-pub fn process_instruction_jit(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
-    process_instruction_common(invoke_context, true)
+pub fn process_instruction_jit(
+    invoke_context: &mut InvokeContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    process_instruction_inner(invoke_context, true)
 }
 
-fn process_instruction_common(
+fn process_instruction_inner(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
-) -> Result<(), InstructionError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -518,7 +507,7 @@ fn process_instruction_common(
             )?;
             if first_account.is_executable() {
                 ic_logger_msg!(log_collector, "BPF loader is executable");
-                return Err(InstructionError::IncorrectProgramId);
+                return Err(Box::new(InstructionError::IncorrectProgramId));
             }
         }
     }
@@ -554,13 +543,14 @@ fn process_instruction_common(
         } else {
             ic_logger_msg!(log_collector, "Invalid BPF loader id");
             Err(InstructionError::IncorrectProgramId)
-        };
+        }
+        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>);
     }
 
     // Program Invocation
     if !program_account.is_executable() {
         ic_logger_msg!(log_collector, "Program is not executable");
-        return Err(InstructionError::IncorrectProgramId);
+        return Err(Box::new(InstructionError::IncorrectProgramId));
     }
 
     let programdata_account = if bpf_loader_upgradeable::check_id(program_account.get_owner()) {
@@ -601,10 +591,10 @@ fn process_instruction_common(
     match &executor.program {
         LoadedProgramType::FailedVerification
         | LoadedProgramType::Closed
-        | LoadedProgramType::DelayVisibility => Err(InstructionError::InvalidAccountData),
+        | LoadedProgramType::DelayVisibility => Err(Box::new(InstructionError::InvalidAccountData)),
         LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
         LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
-        _ => Err(InstructionError::IncorrectProgramId),
+        _ => Err(Box::new(InstructionError::IncorrectProgramId)),
     }
 }
 
@@ -1525,9 +1515,8 @@ fn process_loader_instruction(
 fn execute<'a, 'b: 'a>(
     executable: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
     invoke_context: &'a mut InvokeContext<'b>,
-) -> Result<(), InstructionError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let log_collector = invoke_context.get_log_collector();
-    let stack_height = invoke_context.get_stack_height();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let program_id = *instruction_context.get_last_program_key(transaction_context)?;
@@ -1537,7 +1526,7 @@ fn execute<'a, 'b: 'a>(
     let use_jit = executable.get_executable().get_compiled_program().is_some();
 
     let mut serialize_time = Measure::start("serialize");
-    let (parameter_bytes, regions, account_lengths) = serialize_parameters(
+    let (parameter_bytes, regions, account_lengths) = serialization::serialize_parameters(
         invoke_context.transaction_context,
         instruction_context,
         invoke_context
@@ -1569,13 +1558,12 @@ fn execute<'a, 'b: 'a>(
             Ok(info) => info,
             Err(e) => {
                 ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", e);
-                return Err(InstructionError::ProgramEnvironmentSetupFailure);
+                return Err(Box::new(InstructionError::ProgramEnvironmentSetupFailure));
             }
         };
         create_vm_time.stop();
 
         execute_time = Measure::start("execute");
-        stable_log::program_invoke(&log_collector, &program_id, stack_height);
         let (compute_units_consumed, result) = vm.execute_program(!use_jit);
         drop(vm);
         ic_logger_msg!(
@@ -1609,50 +1597,32 @@ fn execute<'a, 'b: 'a>(
                 } else {
                     status.into()
                 };
-                stable_log::program_failure(&log_collector, &program_id, &error);
-                Err(error)
+                Err(Box::new(error) as Box<dyn std::error::Error>)
             }
-            ProgramResult::Err(error) => {
-                let error = match error {
-                    /*EbpfError::UserError(user_error) if let BpfError::SyscallError(
-                        SyscallError::InstructionError(instruction_error),
-                    ) = user_error.downcast_ref::<BpfError>().unwrap() => instruction_error.clone(),*/
-                    EbpfError::UserError(user_error)
-                        if matches!(
-                            user_error.downcast_ref::<BpfError>().unwrap(),
-                            BpfError::SyscallError(SyscallError::InstructionError(_)),
-                        ) =>
-                    {
-                        match user_error.downcast_ref::<BpfError>().unwrap() {
-                            BpfError::SyscallError(SyscallError::InstructionError(
-                                instruction_error,
-                            )) => instruction_error.clone(),
-                            _ => unreachable!(),
-                        }
-                    }
-                    err => {
-                        ic_logger_msg!(log_collector, "Program failed to complete: {}", err);
-                        InstructionError::ProgramFailedToComplete
-                    }
-                };
-                stable_log::program_failure(&log_collector, &program_id, &error);
-                Err(error)
-            }
+            ProgramResult::Err(error) => Err(error),
             _ => Ok(()),
         }
     };
     execute_time.stop();
 
-    let mut deserialize_time = Measure::start("deserialize");
-    let execute_or_deserialize_result = execution_result.and_then(|_| {
-        deserialize_parameters(
+    fn deserialize_parameters(
+        invoke_context: &mut InvokeContext,
+        parameter_bytes: &[u8],
+    ) -> Result<(), InstructionError> {
+        serialization::deserialize_parameters(
             invoke_context.transaction_context,
             invoke_context
                 .transaction_context
                 .get_current_instruction_context()?,
-            parameter_bytes.as_slice(),
+            parameter_bytes,
             invoke_context.get_orig_account_lengths()?,
         )
+    }
+
+    let mut deserialize_time = Measure::start("deserialize");
+    let execute_or_deserialize_result = execution_result.and_then(|_| {
+        deserialize_parameters(invoke_context, parameter_bytes.as_slice())
+            .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
     });
     deserialize_time.stop();
 
@@ -1665,9 +1635,6 @@ fn execute<'a, 'b: 'a>(
         .deserialize_us
         .saturating_add(deserialize_time.as_us());
 
-    if execute_or_deserialize_result.is_ok() {
-        stable_log::program_success(&log_collector, &program_id);
-    }
     execute_or_deserialize_result
 }
 
@@ -1680,7 +1647,7 @@ mod tests {
         solana_rbpf::{
             ebpf::MM_INPUT_START,
             elf::Executable,
-            verifier::Verifier,
+            verifier::{Verifier, VerifierError},
             vm::{BuiltInProgram, Config, ContextObject, FunctionRegistry},
         },
         solana_sdk::{
@@ -1755,7 +1722,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "ExceededMaxInstructions(31, 10)")]
+    #[should_panic(expected = "ExceededMaxInstructions(31)")]
     fn test_bpf_loader_non_terminating_program() {
         #[rustfmt::skip]
         let program = &[
@@ -1798,8 +1765,7 @@ mod tests {
             &mut context_object,
             memory_mapping,
             stack_len,
-        )
-        .unwrap();
+        );
         vm.execute_program(true).1.unwrap();
     }
 

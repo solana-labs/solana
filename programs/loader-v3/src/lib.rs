@@ -141,7 +141,7 @@ fn calculate_heap_cost(heap_size: u64, heap_cost: u64) -> u64 {
 pub fn create_vm<'a, 'b>(
     invoke_context: &'a mut InvokeContext<'b>,
     program: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>,
-) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, InstructionError> {
+) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
     let config = program.get_executable().get_config();
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
@@ -160,18 +160,22 @@ pub fn create_vm<'a, 'b>(
         MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
     ];
     let log_collector = invoke_context.get_log_collector();
-    MemoryMapping::new(regions, config)
-        .and_then(|memory_mapping| EbpfVm::new(program, invoke_context, memory_mapping, stack_len))
-        .map_err(|err| {
-            ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", err);
-            InstructionError::ProgramEnvironmentSetupFailure
-        })
+    let memory_mapping = MemoryMapping::new(regions, config).map_err(|err| {
+        ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", err);
+        Box::new(InstructionError::ProgramEnvironmentSetupFailure)
+    })?;
+    Ok(EbpfVm::new(
+        program,
+        invoke_context,
+        memory_mapping,
+        stack_len,
+    ))
 }
 
 fn execute(
     invoke_context: &mut InvokeContext,
     program: &VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
-) -> Result<(), InstructionError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let log_collector = invoke_context.get_log_collector();
     let stack_height = invoke_context.get_stack_height();
     let transaction_context = &invoke_context.transaction_context;
@@ -211,10 +215,10 @@ fn execute(
 
     match result {
         ProgramResult::Ok(status) if status != SUCCESS => {
-            let error = status.into();
-            Err(error)
+            let error: InstructionError = status.into();
+            Err(Box::new(error) as Box<dyn std::error::Error>)
         }
-        ProgramResult::Err(_) => Err(InstructionError::ProgramFailedToComplete),
+        ProgramResult::Err(error) => Err(error),
         _ => Ok(()),
     }
 }
@@ -531,7 +535,9 @@ pub fn process_instruction_transfer_authority(
     Ok(())
 }
 
-pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+pub fn process_instruction(
+    invoke_context: &mut InvokeContext,
+) -> Result<(), Box<dyn std::error::Error>> {
     let use_jit = true;
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
@@ -558,20 +564,21 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
                 process_instruction_transfer_authority(invoke_context)
             }
         }
+        .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
     } else {
         let program = instruction_context.try_borrow_last_program_account(transaction_context)?;
         if !loader_v3::check_id(program.get_owner()) {
             ic_logger_msg!(log_collector, "Program not owned by loader");
-            return Err(InstructionError::InvalidAccountOwner);
+            return Err(Box::new(InstructionError::InvalidAccountOwner));
         }
         if program.get_data().is_empty() {
             ic_logger_msg!(log_collector, "Program is uninitialized");
-            return Err(InstructionError::InvalidAccountData);
+            return Err(Box::new(InstructionError::InvalidAccountData));
         }
         let state = get_state(program.get_data())?;
         if !state.is_deployed {
             ic_logger_msg!(log_collector, "Program is not deployed");
-            return Err(InstructionError::InvalidArgument);
+            return Err(Box::new(InstructionError::InvalidArgument));
         }
         let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
         let (loaded_program, load_program_metrics) = load_program_from_account(
@@ -593,9 +600,11 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
         match &loaded_program.program {
             LoadedProgramType::FailedVerification
             | LoadedProgramType::Closed
-            | LoadedProgramType::DelayVisibility => Err(InstructionError::InvalidAccountData),
+            | LoadedProgramType::DelayVisibility => {
+                Err(Box::new(InstructionError::InvalidAccountData))
+            }
             LoadedProgramType::Typed(executable) => execute(invoke_context, executable),
-            _ => Err(InstructionError::IncorrectProgramId),
+            _ => Err(Box::new(InstructionError::IncorrectProgramId)),
         }
     }
 }

@@ -38,7 +38,27 @@ use {
     },
 };
 
-pub type ProcessInstructionWithContext = fn(&mut InvokeContext) -> Result<(), InstructionError>;
+/// Adapter so we can unify the interfaces of built-in programs and syscalls
+#[macro_export]
+macro_rules! declare_process_instruction {
+    ($cu_to_consume:expr) => {
+        pub fn process_instruction(
+            invoke_context: &mut InvokeContext,
+        ) -> Result<(), Box<dyn std::error::Error>> {
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::native_programs_consume_cu::id())
+            {
+                invoke_context.consume_checked($cu_to_consume)?;
+            }
+            process_instruction_inner(invoke_context)
+                .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+        }
+    };
+}
+
+pub type ProcessInstructionWithContext =
+    fn(&mut InvokeContext) -> Result<(), Box<dyn std::error::Error>>;
 
 #[derive(Clone)]
 pub struct BuiltinProgram {
@@ -50,7 +70,7 @@ impl std::fmt::Debug for BuiltinProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // These are just type aliases for work around of Debug-ing above pointers
         type ErasedProcessInstructionWithContext =
-            fn(&'static mut InvokeContext<'static>) -> Result<(), InstructionError>;
+            fn(&'static mut InvokeContext<'static>) -> Result<(), Box<dyn std::error::Error>>;
 
         // rustc doesn't compile due to bug without this work around
         // https://github.com/rust-lang/rust/issues/50280
@@ -689,26 +709,25 @@ impl<'a> InvokeContext<'a> {
                 self.transaction_context
                     .set_return_data(program_id, Vec::new())?;
 
-                let is_builtin_program = builtin_id == program_id;
                 let pre_remaining_units = self.get_remaining();
-                let result = if is_builtin_program {
-                    let logger = self.get_log_collector();
-                    stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
-                    (entry.process_instruction)(self)
-                        .map(|()| {
-                            stable_log::program_success(&logger, &program_id);
-                        })
-                        .map_err(|err| {
-                            stable_log::program_failure(&logger, &program_id, &err);
-                            err
-                        })
-                } else {
-                    (entry.process_instruction)(self)
-                };
+                let logger = self.get_log_collector();
+                stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
+                let result = (entry.process_instruction)(self)
+                    .map(|()| {
+                        stable_log::program_success(&logger, &program_id);
+                    })
+                    .map_err(|err| {
+                        stable_log::program_failure(&logger, &program_id, err.as_ref());
+                        if let Some(err) = err.downcast_ref::<InstructionError>() {
+                            err.clone()
+                        } else {
+                            InstructionError::ProgramFailedToComplete
+                        }
+                    });
                 let post_remaining_units = self.get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
 
-                if is_builtin_program
+                if builtin_id == program_id
                     && result.is_ok()
                     && *compute_units_consumed == 0
                     && self
@@ -739,13 +758,13 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Consume compute units
-    pub fn consume_checked(&self, amount: u64) -> Result<(), InstructionError> {
+    pub fn consume_checked(&self, amount: u64) -> Result<(), Box<dyn std::error::Error>> {
         self.log_consumed_bpf_units(amount);
         let mut compute_meter = self.compute_meter.borrow_mut();
         let exceeded = *compute_meter < amount;
         *compute_meter = compute_meter.saturating_sub(amount);
         if exceeded {
-            return Err(InstructionError::ComputationalBudgetExceeded);
+            return Err(Box::new(InstructionError::ComputationalBudgetExceeded));
         }
         Ok(())
     }
@@ -986,14 +1005,14 @@ mod tests {
 
     #[test]
     fn test_program_entry_debug() {
-        #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
+        ) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
-        #[allow(clippy::unnecessary_wraps)]
-        fn mock_ix_processor(_invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+        fn mock_ix_processor(
+            _invoke_context: &mut InvokeContext,
+        ) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         let builtin_programs = &[
@@ -1014,7 +1033,7 @@ mod tests {
     #[allow(clippy::integer_arithmetic)]
     fn mock_process_instruction(
         invoke_context: &mut InvokeContext,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
@@ -1048,7 +1067,7 @@ mod tests {
         if let Ok(instruction) = bincode::deserialize(instruction_data) {
             match instruction {
                 MockInstruction::NoopSuccess => (),
-                MockInstruction::NoopFail => return Err(InstructionError::GenericError),
+                MockInstruction::NoopFail => return Err(Box::new(InstructionError::GenericError)),
                 MockInstruction::ModifyOwned => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
                     .set_data_from_slice(&[1])?,
@@ -1098,14 +1117,15 @@ mod tests {
                     desired_result,
                 } => {
                     invoke_context.consume_checked(compute_units_to_consume)?;
-                    return desired_result;
+                    return desired_result
+                        .map_err(|err| Box::new(err) as Box<dyn std::error::Error>);
                 }
                 MockInstruction::Resize { new_len } => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
                     .set_data(vec![0; new_len as usize])?,
             }
         } else {
-            return Err(InstructionError::InvalidInstructionData);
+            return Err(Box::new(InstructionError::InvalidInstructionData));
         }
         Ok(())
     }

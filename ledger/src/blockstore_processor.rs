@@ -2975,7 +2975,7 @@ pub mod tests {
 
         fn mock_processor_ok(
             invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), InstructionError> {
+        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
             invoke_context.consume_checked(1)?;
             Ok(())
         }
@@ -3006,7 +3006,7 @@ pub mod tests {
 
         fn mock_processor_err(
             invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), InstructionError> {
+        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
             let instruction_errors = get_instruction_errors();
 
             invoke_context.consume_checked(1)?;
@@ -3017,10 +3017,12 @@ pub mod tests {
                 .get_instruction_data()
                 .first()
                 .expect("Failed to get instruction data");
-            Err(instruction_errors
-                .get(*err as usize)
-                .expect("Invalid error index")
-                .clone())
+            Err(Box::new(
+                instruction_errors
+                    .get(*err as usize)
+                    .expect("Invalid error index")
+                    .clone(),
+            ))
         }
 
         let mut bankhash_err = None;

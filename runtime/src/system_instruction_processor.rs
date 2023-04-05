@@ -5,7 +5,8 @@ use {
     },
     log::*,
     solana_program_runtime::{
-        ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
+        declare_process_instruction, ic_msg, invoke_context::InvokeContext,
+        sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -315,21 +316,16 @@ fn transfer_with_seed(
     )
 }
 
-pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+declare_process_instruction!(150);
+pub fn process_instruction_inner(
+    invoke_context: &mut InvokeContext,
+) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
     let instruction = limited_deserialize(instruction_data)?;
 
     trace!("process_instruction: {:?}", instruction);
-
-    // Consume compute units if feature `native_programs_consume_cu` is activated,
-    if invoke_context
-        .feature_set
-        .is_active(&feature_set::native_programs_consume_cu::id())
-    {
-        invoke_context.consume_checked(150)?;
-    }
 
     let signers = instruction_context.get_signers(transaction_context)?;
     match instruction {

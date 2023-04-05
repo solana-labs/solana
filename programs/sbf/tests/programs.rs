@@ -918,6 +918,7 @@ fn test_program_sbf_invoke_sanity() {
                 assert_eq!(result, Err(expected_error));
                 assert_eq!(invoked_programs, expected_invoked_programs);
                 if let Some(expected_log_messages) = expected_log_messages {
+                    assert_eq!(log_messages.len(), expected_log_messages.len());
                     expected_log_messages
                         .into_iter()
                         .zip(log_messages)
@@ -985,8 +986,7 @@ fn test_program_sbf_invoke_sanity() {
                 format!("Program log: invoke {program_lang} program"),
                 "Program log: Test max instruction data len exceeded".into(),
                 "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with data that is too large (10241 > 10240)".into(),
-                format!("Program {invoke_program_id} failed: Program failed to complete"),
+                format!("Program {invoke_program_id} failed: Invoked an instruction with data that is too large (10241 > 10240)"),
             ]),
         );
 
@@ -999,8 +999,7 @@ fn test_program_sbf_invoke_sanity() {
                 format!("Program log: invoke {program_lang} program"),
                 "Program log: Test max instruction accounts exceeded".into(),
                 "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with too many accounts (256 > 255)".into(),
-                format!("Program {invoke_program_id} failed: Program failed to complete"),
+                format!("Program {invoke_program_id} failed: Invoked an instruction with too many accounts (256 > 255)"),
             ]),
         );
 
@@ -1013,8 +1012,7 @@ fn test_program_sbf_invoke_sanity() {
                 format!("Program log: invoke {program_lang} program"),
                 "Program log: Test max account infos exceeded".into(),
                 "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with too many account info's (129 > 128)".into(),
-                format!("Program {invoke_program_id} failed: Program failed to complete"),
+                format!("Program {invoke_program_id} failed: Invoked an instruction with too many account info's (129 > 128)"),
             ]),
         );
 
