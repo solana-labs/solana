@@ -248,6 +248,10 @@ fn bank_forks_from_snapshot(
                         &snapshot_config.full_snapshot_archives_dir,
                     )
                 {
+                    if let Some(shrink_paths) = shrink_paths {
+                        bank.set_shrink_paths(shrink_paths);
+                    }
+
                     let full_hash = FullSnapshotHash {
                         hash: (
                             full_snapshot_archive_info.slot(),
