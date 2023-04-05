@@ -16,8 +16,8 @@ out=${1:-src/cli/usage.md}
 cat src/cli/.usage.md.header > "$out"
 
 # Skip generating the usage doc for non deployment commits of the docs
-if [[ ! -z $CI ]]; then
-  if [[ $CI_BRANCH != $EDGE_CHANNEL ]] && [[ $CI_BRANCH != $BETA_CHANNEL ]] && [[ $CI_BRANCH != $STABLE_CHANNEL ]]; then
+if [[ -n $CI ]]; then
+  if [[ $CI_BRANCH != $EDGE_CHANNEL* ]] && [[ $CI_BRANCH != $BETA_CHANNEL* ]] && [[ $CI_BRANCH != $STABLE_CHANNEL* ]]; then
     echo "**NOTE:** The usage doc is only auto-generated during full production deployments of the docs"
     echo "**NOTE:** This usage doc is auto-generated during deployments" >> "$out"
     exit
