@@ -147,6 +147,7 @@ generous (and not expected) to rebase or reword commits such that each change
 matches the logical flow in your PR description.
 
 ### The PR / Issue Labels
+
 Labels make it easier to manage and track PRs / issues.  Below some common labels
 that we use in Solana.  For the complete list of labels, please refer to the
 [label page](https://github.com/solana-labs/solana/issues/labels):
@@ -193,6 +194,35 @@ Recall that once your PR is opened, a notification is sent every time you push
 a commit.  After a reviewer adds feedback, they won't be checking on the status
 of that feedback after every new commit. Instead, directly mention the reviewer
 when you feel your PR is ready for another pass.
+
+### Is your PR easy to say "yes" to?
+
+PRs that are easier to review are more like to be reviewed. Strive to make your
+PR easy to say "yes" to.
+
+Non-exhaustive list of things that make it *harder* to review:
+
+* Additional changes that are orthogonal to the problem statement and proposed
+  changes.
+* Renaming variables/functions/types unnecessarily and/or without explanation.
+* Not following established conventions in the function/module/crate/repo.
+* Changing whitespace: moving code and/or reformatting code.
+* Force-pushing the branch unnecessarily; this makes it harder to track any
+  previous comments on specific lines of code, and also harder to track changes
+  already reviewed from previous commits.
+  * When force-pushing is required—for example to handle a merge conflict—and
+    no new changes have been made since the previous review, indicating as such
+    is beneficial.
+
+Non-exhaustive list of things that make it *easier* to review:
+
+* Adding tests for all new/changed behavior.
+* Including in the PR's description any non-automated testing that was
+  performed.
+* Including relevant results for changes that target performance improvements.
+
+Note that these lists are *independent* of how simple/complicated the actual
+*code* changes are.
 
 ## Draft Pull Requests
 
