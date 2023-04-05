@@ -2,7 +2,7 @@
 use {
     crate::geyser_plugin_manager::GeyserPluginManager,
     log::*,
-    solana_entry::entry::Entry,
+    solana_entry::entry::EntrySummary,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
         ReplicaEntryInfo, ReplicaEntryInfoVersions,
     },
@@ -18,7 +18,7 @@ pub(crate) struct EntryNotifierImpl {
 }
 
 impl EntryNotifier for EntryNotifierImpl {
-    fn notify_entry<'a>(&'a self, slot: Slot, index: usize, entry: &'a Entry) {
+    fn notify_entry<'a>(&'a self, slot: Slot, index: usize, entry: &'a EntrySummary) {
         let mut measure = Measure::start("geyser-plugin-notify_plugins_of_entry_info");
 
         let plugin_manager = self.plugin_manager.read().unwrap();
@@ -63,14 +63,14 @@ impl EntryNotifierImpl {
     fn build_replica_entry_info(
         slot: Slot,
         index: usize,
-        entry: &'_ Entry,
+        entry: &'_ EntrySummary,
     ) -> ReplicaEntryInfo<'_> {
         ReplicaEntryInfo {
             slot,
             index,
             num_hashes: entry.num_hashes,
             hash: entry.hash.as_ref(),
-            executed_transaction_count: entry.transactions.len() as u64,
+            executed_transaction_count: entry.num_transactions,
         }
     }
 }
