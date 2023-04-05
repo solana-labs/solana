@@ -203,7 +203,7 @@ PR easy to say "yes" to.
 Non-exhaustive list of things that make it *harder* to review:
 
 * Additional changes that are orthogonal to the problem statement and proposed
-  changes.
+  changes. Instead move those changes to a different PR
 * Renaming variables/functions/types unnecessarily and/or without explanation.
 * Not following established conventions in the function/module/crate/repo.
 * Changing whitespace: moving code and/or reformatting code.
