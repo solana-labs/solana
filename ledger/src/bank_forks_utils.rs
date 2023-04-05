@@ -243,14 +243,29 @@ fn bank_forks_from_snapshot(
             exit,
         ) {
             Ok(bank) => {
-                if let Some(archive_info) = snapshot_utils::get_highest_full_snapshot_archive_info(
-                    &snapshot_config.full_snapshot_archives_dir,
-                ) {
+                if let Some(full_snapshot_archive_info) =
+                    snapshot_utils::get_highest_full_snapshot_archive_info(
+                        &snapshot_config.full_snapshot_archives_dir,
+                    )
+                {
+                    let full_hash = FullSnapshotHash {
+                        hash: (
+                            full_snapshot_archive_info.slot(),
+                            *full_snapshot_archive_info.hash(),
+                        ),
+                    };
+                    let incremental_hash =
+                        snapshot_utils::get_highest_incremental_snapshot_archive_info(
+                            &snapshot_config.incremental_snapshot_archives_dir,
+                            full_snapshot_archive_info.slot(),
+                        )
+                        .map(|info| IncrementalSnapshotHash {
+                            base: full_hash.hash,
+                            hash: (info.slot(), *info.hash()),
+                        });
                     let start_snapshot_hashes = StartingSnapshotHashes {
-                        full: FullSnapshotHash {
-                            hash: (archive_info.slot(), *archive_info.hash()),
-                        },
-                        incremental: None,
+                        full: full_hash,
+                        incremental: incremental_hash,
                     };
                     let bank_forks = BankForks::new(bank);
                     return (
