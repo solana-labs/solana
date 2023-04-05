@@ -203,16 +203,19 @@ PR easy to say "yes" to.
 Non-exhaustive list of things that make it *harder* to review:
 
 * Additional changes that are orthogonal to the problem statement and proposed
-  changes. Instead move those changes to a different PR
+  changes. Instead move those changes to a different PR.
 * Renaming variables/functions/types unnecessarily and/or without explanation.
 * Not following established conventions in the function/module/crate/repo.
-* Changing whitespace: moving code and/or reformatting code. Make such changes in a separate PR
+* Changing whitespace: moving code and/or reformatting code. Make such changes
+  in a separate PR.
 * Force-pushing the branch unnecessarily; this makes it harder to track any
   previous comments on specific lines of code, and also harder to track changes
   already reviewed from previous commits.
   * When force-pushing is required—for example to handle a merge conflict—and
     no new changes have been made since the previous review, indicating as such
     is beneficial.
+ * Not responding to comments from previous rounds of review. Follow the
+   guidance in [When will my PR be re-reviewed].
 
 Non-exhaustive list of things that make it *easier* to review:
 
