@@ -41,8 +41,8 @@ sudo docker run \
   --publish 3000:3000 \
   --user root:root \
   --env GF_PATHS_CONFIG=/grafana.ini \
-  --env GF_AUTH_GITHUB_CLIENT_ID="$GITHUB_CLIENT_ID" \
-  --env GF_AUTH_GITHUB_CLIENT_SECRET="$GITHUB_CLIENT_SECRET" \
+  --env GF_AUTH_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
+  --env GF_AUTH_GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET" \
   --env GF_SECURITY_ADMIN_USER="$ADMIN_USER_GRAFANA" \
   --env GF_SECURITY_ADMIN_PASSWORD="$ADMIN_PASSWORD_GRAFANA" \
   --volume "$PWD"/certs:/certs:ro \

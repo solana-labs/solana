@@ -53,4 +53,4 @@ sudo docker run \
   --volume /var/lib/chronograf:/var/lib/chronograf \
   --log-opt max-size=1g \
   --log-opt max-file="5" \
-  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086 --influxdb-username="$INFLUXDB_USERNAME" --influxdb-password="$INLUXDB_PASSWORD"
+  $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086 --influxdb-username="$INFLUXDB_USERNAME" --influxdb-password="$INLUXDB_PASSWORD" --auth-duration="720h" --inactivity-duration="48h"
