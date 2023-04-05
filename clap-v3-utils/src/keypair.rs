@@ -1077,13 +1077,6 @@ pub fn keypair_from_seed_phrase(
     derivation_path: Option<DerivationPath>,
     legacy: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
-<<<<<<< HEAD
-    let seed_phrase = prompt_password(&format!("[{}] seed phrase: ", keypair_name))?;
-    let seed_phrase = seed_phrase.trim();
-    let passphrase_prompt = format!(
-        "[{}] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue: ",
-        keypair_name,
-=======
     let keypair: Keypair =
         encodable_key_from_seed_phrase(keypair_name, skip_validation, derivation_path, legacy)?;
     if confirm_pubkey {
@@ -1102,7 +1095,6 @@ fn encodable_key_from_seed_phrase<K: EncodableKey>(
     let seed_phrase = seed_phrase.trim();
     let passphrase_prompt = format!(
         "[{key_name}] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue: ",
->>>>>>> d67fa6c47 ([clap-v3-utils] Define `EncodableKey` and make `keypair_from_path` and `keypair_from_seed` generic functions (#30947))
     );
 
     let key = if skip_validation {
@@ -1141,24 +1133,7 @@ fn encodable_key_from_seed_phrase<K: EncodableKey>(
             K::from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?
         }
     };
-<<<<<<< HEAD
-
-    if confirm_pubkey {
-        let pubkey = keypair.pubkey();
-        print!("Recovered pubkey `{:?}`. Continue? (y/n): ", pubkey);
-        let _ignored = stdout().flush();
-        let mut input = String::new();
-        stdin().read_line(&mut input).expect("Unexpected input");
-        if input.to_lowercase().trim() != "y" {
-            println!("Exiting");
-            exit(1);
-        }
-    }
-
-    Ok(keypair)
-=======
     Ok(key)
->>>>>>> d67fa6c47 ([clap-v3-utils] Define `EncodableKey` and make `keypair_from_path` and `keypair_from_seed` generic functions (#30947))
 }
 
 fn sanitize_seed_phrase(seed_phrase: &str) -> String {
