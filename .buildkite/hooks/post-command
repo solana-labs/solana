@@ -32,8 +32,8 @@ else
   fi
 
   if [[ -n $BUILDKITE && -f "results.json" ]]; then
-    # prepare result file
-    awk '/{ "type": .* }/' results.json > sanitized-results.json
+    # extract lines which start with '{'
+    awk '/{.*/' results.json > sanitized-results.json
 
     echo "~~~ Uploading test results to Buildkite Analytics"
     buildkite-test-collector < sanitized-results.json
