@@ -197,7 +197,7 @@ when you feel your PR is ready for another pass.
 
 ### Is your PR easy to say "yes" to?
 
-PRs that are easier to review are more like to be reviewed. Strive to make your
+PRs that are easier to review are more likely to be reviewed. Strive to make your
 PR easy to say "yes" to.
 
 Non-exhaustive list of things that make it *harder* to review:
