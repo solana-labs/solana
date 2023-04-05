@@ -264,6 +264,18 @@ impl<O: BucketOccupied> BucketStorage<O> {
             }
     }
 
+    pub(crate) fn get_header<T>(&self, ix: u64) -> &T {
+        let slice = self.get_cell_slice::<T>(ix, 1, IncludeHeader::Header);
+        // SAFETY: `get_cell_slice` ensures there's at least one element in the slice
+        unsafe { slice.get_unchecked(0) }
+    }
+
+    pub(crate) fn get_header_mut<T>(&mut self, ix: u64) -> &mut T {
+        let slice = self.get_mut_cell_slice::<T>(ix, 1, IncludeHeader::Header);
+        // SAFETY: `get_mut_cell_slice` ensures there's at least one element in the slice
+        unsafe { slice.get_unchecked_mut(0) }
+    }
+
     pub(crate) fn get<T>(&self, ix: u64) -> &T {
         let slice = self.get_cell_slice::<T>(ix, 1, IncludeHeader::NoHeader);
         // SAFETY: `get_cell_slice` ensures there's at least one element in the slice
@@ -276,14 +288,12 @@ impl<O: BucketOccupied> BucketStorage<O> {
         unsafe { slice.get_unchecked_mut(0) }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn get_mut_from_parts<T>(item_slice: &mut [u8]) -> &mut T {
         debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
         let item = item_slice.as_mut_ptr() as *mut T;
         unsafe { &mut *item }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn get_from_parts<T>(item_slice: &[u8]) -> &T {
         debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
         let item = item_slice.as_ptr() as *const T;
