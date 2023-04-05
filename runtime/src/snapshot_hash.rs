@@ -50,7 +50,7 @@ pub struct IncrementalSnapshotHashes {
 }
 
 /// The hash used for snapshot archives
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct SnapshotHash(pub Hash);
 
 impl SnapshotHash {
