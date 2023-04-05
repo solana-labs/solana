@@ -177,10 +177,10 @@ impl ThreadAwareAccountLocks {
         }
 
         // Check for outstanding read-locks
-        if let Some((read_thread_set, _)) = self.read_locks.get(account) {
+        if let Some(&(read_thread_set, _)) = self.read_locks.get(account) {
             assert_eq!(
                 read_thread_set,
-                &ThreadSet::only(thread_id),
+                ThreadSet::only(thread_id),
                 "outstanding read lock must be on same thread"
             );
         }
