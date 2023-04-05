@@ -27,7 +27,6 @@ use {
         collections::HashSet,
         error,
         path::Path,
-        process::exit,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
@@ -124,12 +123,13 @@ impl KeyGenerationCommonArgs for Command<'_> {
     }
 }
 
-fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
+fn check_for_overwrite(outfile: &str, matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     let force = matches.is_present("force");
     if !force && Path::new(outfile).exists() {
-        eprintln!("Refusing to overwrite {outfile} without --force flag");
-        exit(1);
+        let err_msg = format!("Refusing to overwrite {outfile} without --force flag");
+        return Err(err_msg.into());
     }
+    Ok(())
 }
 
 fn get_keypair_from_matches(
@@ -357,11 +357,10 @@ fn acquire_derivation_path(
     }
 }
 
-fn main() -> Result<(), Box<dyn error::Error>> {
-    let default_num_threads = num_cpus::get().to_string();
-    let matches = Command::new(crate_name!())
+fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
+    Command::new(crate_name!())
         .about(crate_description!())
-        .version(solana_version::version!())
+        .version(crate_version)
         .subcommand_required(true)
         .arg_required_else_help(true)
         .arg({
@@ -477,7 +476,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("NUMBER")
                         .takes_value(true)
                         .validator(is_parsable::<usize>)
-                        .default_value(&default_num_threads)
+                        .default_value(num_threads)
                         .help("Specify the number of grind threads"),
                 )
                 .arg(
@@ -561,8 +560,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
 
         )
-        .get_matches();
+}
 
+fn main() -> Result<(), Box<dyn error::Error>> {
+    let default_num_threads = num_cpus::get().to_string();
+    let matches = app(&default_num_threads, solana_version::version!())
+        .try_get_matches()
+        .unwrap_or_else(|e| e.exit());
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
@@ -584,7 +588,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
             if matches.is_present("outfile") {
                 let outfile = matches.value_of("outfile").unwrap();
-                check_for_overwrite(outfile, matches);
+                check_for_overwrite(outfile, matches)?;
                 write_pubkey_file(outfile, pubkey)?;
             } else {
                 println!("{pubkey}");
@@ -603,7 +607,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
             match outfile {
                 Some(STDOUT_OUTFILE_TOKEN) => (),
-                Some(outfile) => check_for_overwrite(outfile, matches),
+                Some(outfile) => check_for_overwrite(outfile, matches)?,
                 None => (),
             }
 
@@ -651,7 +655,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             };
 
             if outfile != STDOUT_OUTFILE_TOKEN {
-                check_for_overwrite(outfile, matches);
+                check_for_overwrite(outfile, matches)?;
             }
 
             let keypair_name = "recover";
@@ -698,10 +702,9 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 && ends_with_args.is_empty()
                 && starts_and_ends_with_args.is_empty()
             {
-                eprintln!(
-                    "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and-ends-with)"
+                return Err(
+                    "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and-ends-with)".into()
                 );
-                exit(1);
             }
 
             let num_threads: usize = matches.value_of_t_or_exit("num_threads");
@@ -842,12 +845,382 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             if signature.verify(&pubkey, &simple_message) {
                 println!("Verification for public key: {pubkey_bs58}: Success");
             } else {
-                println!("Verification for public key: {pubkey_bs58}: Failed");
-                exit(1);
+                let err_msg = format!("Verification for public key: {pubkey_bs58}: Failed");
+                return Err(err_msg.into());
             }
         }
         _ => unreachable!(),
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        tempfile::{tempdir, TempDir},
+    };
+
+    fn process_test_command(args: &[&str]) -> Result<(), Box<dyn error::Error>> {
+        let default_num_threads = num_cpus::get().to_string();
+        let solana_version = solana_version::version!();
+        let app_matches = app(&default_num_threads, solana_version).get_matches_from(args);
+        do_main(&app_matches)
+    }
+
+    fn create_tmp_keypair_and_config_file(
+        keypair_out_dir: &TempDir,
+        config_out_dir: &TempDir,
+    ) -> (Pubkey, String, String) {
+        let keypair = Keypair::new();
+        let keypair_path = keypair_out_dir
+            .path()
+            .join(format!("{}-keypair", keypair.pubkey()));
+        let keypair_outfile = keypair_path.into_os_string().into_string().unwrap();
+        write_keypair_file(&keypair, &keypair_outfile).unwrap();
+
+        let config = Config {
+            keypair_path: keypair_outfile.clone(),
+            ..Config::default()
+        };
+        let config_path = config_out_dir
+            .path()
+            .join(format!("{}-config", keypair.pubkey()));
+        let config_outfile = config_path.into_os_string().into_string().unwrap();
+        config.save(&config_outfile).unwrap();
+
+        (keypair.pubkey(), keypair_outfile, config_outfile)
+    }
+
+    fn tmp_outfile_path(out_dir: &TempDir, name: &str) -> String {
+        let path = out_dir.path().join(name);
+        path.into_os_string().into_string().unwrap()
+    }
+
+    #[test]
+    fn test_arguments() {
+        let default_num_threads = num_cpus::get().to_string();
+        let solana_version = solana_version::version!();
+
+        // run clap internal assert statements
+        app(&default_num_threads, solana_version).debug_assert();
+    }
+
+    #[test]
+    fn test_verify() {
+        let keypair_out_dir = tempdir().unwrap();
+        let config_out_dir = tempdir().unwrap();
+        let (correct_pubkey, keypair_path, config_path) =
+            create_tmp_keypair_and_config_file(&keypair_out_dir, &config_out_dir);
+
+        // success case using a keypair file
+        process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &correct_pubkey.to_string(),
+            &keypair_path,
+        ])
+        .unwrap();
+
+        // success case using a config file
+        process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &correct_pubkey.to_string(),
+            "--config",
+            &config_path,
+        ])
+        .unwrap();
+
+        // fail case using a keypair file
+        let incorrect_pubkey = Pubkey::new_unique();
+        let result = process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &incorrect_pubkey.to_string(),
+            &keypair_path,
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Verification for public key: {incorrect_pubkey}: Failed");
+        assert_eq!(result, expected);
+
+        // fail case using a config file
+        process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &incorrect_pubkey.to_string(),
+            "--config",
+            &config_path,
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Verification for public key: {incorrect_pubkey}: Failed");
+        assert_eq!(result, expected);
+
+        // keypair file takes precedence over config file
+        let alt_keypair_out_dir = tempdir().unwrap();
+        let alt_config_out_dir = tempdir().unwrap();
+        let (_, alt_keypair_path, alt_config_path) =
+            create_tmp_keypair_and_config_file(&alt_keypair_out_dir, &alt_config_out_dir);
+
+        process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &correct_pubkey.to_string(),
+            &keypair_path,
+            "--config",
+            &alt_config_path,
+        ])
+        .unwrap();
+
+        process_test_command(&[
+            "solana-keygen",
+            "verify",
+            &correct_pubkey.to_string(),
+            &alt_keypair_path,
+            "--config",
+            &config_path,
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Verification for public key: {incorrect_pubkey}: Failed");
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_pubkey() {
+        let keypair_out_dir = tempdir().unwrap();
+        let config_out_dir = tempdir().unwrap();
+        let (expected_pubkey, keypair_path, config_path) =
+            create_tmp_keypair_and_config_file(&keypair_out_dir, &config_out_dir);
+
+        // success case using a keypair file
+        {
+            let outfile_dir = tempdir().unwrap();
+            let outfile_path = tmp_outfile_path(&outfile_dir, &expected_pubkey.to_string());
+
+            process_test_command(&[
+                "solana-keygen",
+                "pubkey",
+                &keypair_path,
+                "--outfile",
+                &outfile_path,
+            ])
+            .unwrap();
+
+            let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
+            assert_eq!(result_pubkey, expected_pubkey);
+        }
+
+        // success case using a config file
+        {
+            let outfile_dir = tempdir().unwrap();
+            let outfile_path = tmp_outfile_path(&outfile_dir, &expected_pubkey.to_string());
+
+            process_test_command(&[
+                "solana-keygen",
+                "pubkey",
+                "--config",
+                &config_path,
+                "--outfile",
+                &outfile_path,
+            ])
+            .unwrap();
+
+            let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
+            assert_eq!(result_pubkey, expected_pubkey);
+        }
+
+        // keypair file takes precedence over config file
+        {
+            let alt_keypair_out_dir = tempdir().unwrap();
+            let alt_config_out_dir = tempdir().unwrap();
+            let (_, _, alt_config_path) =
+                create_tmp_keypair_and_config_file(&alt_keypair_out_dir, &alt_config_out_dir);
+            let outfile_dir = tempdir().unwrap();
+            let outfile_path = tmp_outfile_path(&outfile_dir, &expected_pubkey.to_string());
+
+            process_test_command(&[
+                "solana-keygen",
+                "pubkey",
+                &keypair_path,
+                "--config",
+                &alt_config_path,
+                "--outfile",
+                &outfile_path,
+            ])
+            .unwrap();
+
+            let result_pubkey = solana_sdk::pubkey::read_pubkey_file(&outfile_path).unwrap();
+            assert_eq!(result_pubkey, expected_pubkey);
+        }
+
+        // refuse to overwrite file
+        {
+            let outfile_dir = tempdir().unwrap();
+            let outfile_path = tmp_outfile_path(&outfile_dir, &expected_pubkey.to_string());
+
+            process_test_command(&[
+                "solana-keygen",
+                "pubkey",
+                &keypair_path,
+                "--outfile",
+                &outfile_path,
+            ])
+            .unwrap();
+
+            let result = process_test_command(&[
+                "solana-keygen",
+                "pubkey",
+                "--config",
+                &config_path,
+                "--outfile",
+                &outfile_path,
+            ])
+            .unwrap_err()
+            .to_string();
+
+            let expected = format!("Refusing to overwrite {outfile_path} without --force flag");
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_new() {
+        let keypair_out_dir = tempdir().unwrap();
+        let config_out_dir = tempdir().unwrap();
+        let (expected_pubkey, _, _) =
+            create_tmp_keypair_and_config_file(&keypair_out_dir, &config_out_dir);
+
+        let outfile_dir = tempdir().unwrap();
+        let outfile_path = tmp_outfile_path(&outfile_dir, &expected_pubkey.to_string());
+
+        // general success case
+        process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--outfile",
+            &outfile_path,
+            "--no-bip39-passphrase",
+        ])
+        .unwrap();
+
+        // refuse to overwrite file
+        let result = process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--outfile",
+            &outfile_path,
+            "--no-bip39-passphrase",
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Refusing to overwrite {outfile_path} without --force flag");
+        assert_eq!(result, expected);
+
+        // no outfile
+        process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--no-bip39-passphrase",
+            "--no-outfile",
+        ])
+        .unwrap();
+
+        // sanity check on languages and word count combinations
+        let languages = [
+            "english",
+            "chinese-simplified",
+            "chinese-traditional",
+            "japanese",
+            "spanish",
+            "korean",
+            "french",
+            "italian",
+        ];
+        let word_counts = ["12", "15", "18", "21", "24"];
+
+        for language in languages {
+            for word_count in word_counts {
+                process_test_command(&[
+                    "solana-keygen",
+                    "new",
+                    "--no-outfile",
+                    "--no-bip39-passphrase",
+                    "--language",
+                    language,
+                    "--word-count",
+                    word_count,
+                ])
+                .unwrap();
+            }
+        }
+
+        // sanity check derivation path
+        process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--no-bip39-passphrase",
+            "--no-outfile",
+            "--derivation-path",
+            // empty derivation path
+        ])
+        .unwrap();
+
+        process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--no-bip39-passphrase",
+            "--no-outfile",
+            "--derivation-path",
+            "m/44'/501'/0'/0'", // default derivation path
+        ])
+        .unwrap();
+
+        let result = process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--no-bip39-passphrase",
+            "--no-outfile",
+            "--derivation-path",
+            "-", // invalid derivation path
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = "invalid derivation path: invalid prefix: -";
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_grind() {
+        // simple sanity checks
+        process_test_command(&[
+            "solana-keygen",
+            "grind",
+            "--no-outfile",
+            "--no-bip39-passphrase",
+            "--use-mnemonic",
+            "--starts-with",
+            "a:1",
+        ])
+        .unwrap();
+
+        process_test_command(&[
+            "solana-keygen",
+            "grind",
+            "--no-outfile",
+            "--no-bip39-passphrase",
+            "--use-mnemonic",
+            "--ends-with",
+            "b:1",
+        ])
+        .unwrap();
+    }
 }
