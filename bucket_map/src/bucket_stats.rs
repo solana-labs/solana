@@ -9,6 +9,7 @@ pub struct BucketStats {
     pub failed_resizes: AtomicU64,
     pub max_size: AtomicU64,
     pub resize_us: AtomicU64,
+    pub resize_verify_us: AtomicU64,
     pub new_file_us: AtomicU64,
     pub flush_file_us: AtomicU64,
     pub mmap_us: AtomicU64,

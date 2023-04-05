@@ -353,6 +353,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         // the file so that we won't have to resize it later, which may be
         // expensive.
         //debug!("GROWING file {}", capacity * cell_size as u64);
+        //use log::*;error!("growing: {}", bytes);
         data.seek(SeekFrom::Start(bytes - 1)).unwrap();
         data.write_all(&[0]).unwrap();
         data.rewind().unwrap();

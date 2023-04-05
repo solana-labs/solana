@@ -453,6 +453,12 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
+                    "resize_verify_us",
+                    disk.map(|disk| disk.stats.index.resize_verify_us.swap(0, Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
                     "disk_index_find_index_entry_mut_us",
                     disk.map(|disk| disk
                         .stats
