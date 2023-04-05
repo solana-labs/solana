@@ -2226,13 +2226,14 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hidapi"
-version = "1.4.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38b1717343691998deb81766bfcd1dce6df0d5d6c37070b5a3de2bb6d39f7822"
+checksum = "d4255d387f1961f1d469ef24acc5620d4b1b15a7b763b759d9b29f095164ee27"
 dependencies = [
  "cc",
  "libc",
  "pkg-config",
+ "winapi 0.3.9",
 ]
 
 [[package]]
