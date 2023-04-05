@@ -243,15 +243,15 @@ fn bank_forks_from_snapshot(
             exit,
         ) {
             Ok(bank) => {
+                if let Some(shrink_paths) = shrink_paths {
+                    bank.set_shrink_paths(shrink_paths);
+                }
+
                 if let Some(full_snapshot_archive_info) =
                     snapshot_utils::get_highest_full_snapshot_archive_info(
                         &snapshot_config.full_snapshot_archives_dir,
                     )
                 {
-                    if let Some(shrink_paths) = shrink_paths {
-                        bank.set_shrink_paths(shrink_paths);
-                    }
-
                     let full_snapshot_hash = FullSnapshotHash {
                         hash: (
                             full_snapshot_archive_info.slot(),
