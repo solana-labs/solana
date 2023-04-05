@@ -4,7 +4,7 @@ use {
         ArgConstant,
     },
     clap::{Arg, ArgMatches, Command},
-    std::{path::Path, process::exit},
+    std::{error, path::Path},
 };
 
 pub const NO_OUTFILE_ARG: ArgConstant<'static> = ArgConstant {
@@ -31,10 +31,14 @@ impl KeyGenerationCommonArgs for Command<'_> {
     }
 }
 
-pub fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
+pub fn check_for_overwrite(
+    outfile: &str,
+    matches: &ArgMatches,
+) -> Result<(), Box<dyn error::Error>> {
     let force = matches.is_present("force");
     if !force && Path::new(outfile).exists() {
-        eprintln!("Refusing to overwrite {outfile} without --force flag");
-        exit(1);
+        let err_msg = format!("Refusing to overwrite {outfile} without --force flag");
+        return Err(err_msg.into());
     }
+    Ok(())
 }
