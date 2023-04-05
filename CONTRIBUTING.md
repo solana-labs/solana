@@ -215,7 +215,7 @@ Non-exhaustive list of things that make it *harder* to review:
     no new changes have been made since the previous review, indicating as such
     is beneficial.
  * Not responding to comments from previous rounds of review. Follow the
-   guidance in (#is-your-pr-easy-to-say-yes-to) above.
+   guidance in [**When will my PR be re-reviewed?**](#when-will-my-pr-be-re-reviewed).
 
 Non-exhaustive list of things that make it *easier* to review:
 
