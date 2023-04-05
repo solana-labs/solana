@@ -148,6 +148,12 @@ pub struct StreamStats {
     pub(crate) connection_add_failed_on_pruning: AtomicUsize,
     pub(crate) connection_setup_timeout: AtomicUsize,
     pub(crate) connection_setup_error: AtomicUsize,
+    pub(crate) connection_setup_error_closed: AtomicUsize,
+    pub(crate) connection_setup_error_timed_out: AtomicUsize,
+    pub(crate) connection_setup_error_transport: AtomicUsize,
+    pub(crate) connection_setup_error_app_closed: AtomicUsize,
+    pub(crate) connection_setup_error_reset: AtomicUsize,
+    pub(crate) connection_setup_error_locally_closed: AtomicUsize,
     pub(crate) connection_removed: AtomicUsize,
     pub(crate) connection_remove_failed: AtomicUsize,
 }
@@ -240,6 +246,41 @@ impl StreamStats {
             (
                 "connection_setup_error",
                 self.connection_setup_error.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error_timed_out",
+                self.connection_setup_error_timed_out
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error_closed",
+                self.connection_setup_error_closed
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error_transport",
+                self.connection_setup_error_transport
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error_app_closed",
+                self.connection_setup_error_app_closed
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error_reset",
+                self.connection_setup_error_reset.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error_locally_closed",
+                self.connection_setup_error_locally_closed
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
