@@ -742,14 +742,19 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             let no_outfile = matches.is_present(NO_OUTFILE_ARG.name);
 
             // The vast majority of base58 encoded public keys have length 44, but
-            // these only enacapsulate prefixes 1-9 and A-H.  If the user is searching
+            // these only encapsulate prefixes 1-9 and A-H.  If the user is searching
             // for a keypair that starts with a prefix of J-Z or a-z, then there is no
             // reason to waste time searching for a keypair that will never match
             let skip_len_44_pubkeys = grind_matches
                 .iter()
                 .map(|g| {
-                    let target_key = g.starts.clone()
-                        + &(0..44 - g.starts.len()).map(|_| "1").collect::<String>();
+                    let target_key = if ignore_case {
+                        g.starts.to_ascii_uppercase()
+                    } else {
+                        g.starts.clone()
+                    };
+                    let target_key =
+                        target_key + &(0..44 - g.starts.len()).map(|_| "1").collect::<String>();
                     bs58::decode(target_key).into_vec()
                 })
                 .filter_map(|s| s.ok())
