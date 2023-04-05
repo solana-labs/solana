@@ -52,6 +52,8 @@ pub enum AltBn128Error {
     UnexpectedError,
     #[error("Failed to convert a byte slice into a vector {0:?}")]
     TryIntoVecError(Vec<u8>),
+    #[error("Failed to convert projective to affine g1")]
+    ProjectiveToG1Failed,
 }
 
 impl From<u64> for AltBn128Error {
@@ -61,6 +63,7 @@ impl From<u64> for AltBn128Error {
             2 => AltBn128Error::GroupError,
             3 => AltBn128Error::SliceOutOfBounds,
             4 => AltBn128Error::TryIntoVecError(Vec::new()),
+            5 => AltBn128Error::ProjectiveToG1Failed,
             _ => AltBn128Error::UnexpectedError,
         }
     }
@@ -73,6 +76,7 @@ impl From<AltBn128Error> for u64 {
             AltBn128Error::GroupError => 2,
             AltBn128Error::SliceOutOfBounds => 3,
             AltBn128Error::TryIntoVecError(_) => 4,
+            AltBn128Error::ProjectiveToG1Failed => 5,
             AltBn128Error::UnexpectedError => 0,
         }
     }
@@ -90,20 +94,14 @@ pub struct PodG2(pub [u8; 128]);
 mod target_arch {
     use {
         super::*,
-        ark_bn254::{self, Parameters},
-        ark_ec::{
-            self,
-            models::bn::{g1::G1Prepared, g2::G2Prepared, Bn},
-            AffineCurve, PairingEngine, ProjectiveCurve,
-        },
-        ark_ff::{
-            bytes::{FromBytes, ToBytes},
-            BigInteger, BigInteger256, One, Zero,
-        },
+        ark_bn254::{self, Config},
+        ark_ec::{self, models::bn::Bn, pairing::Pairing, AffineRepr},
+        ark_ff::{BigInteger, BigInteger256, One},
+        ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate},
     };
 
-    type G1 = ark_ec::short_weierstrass_jacobian::GroupAffine<ark_bn254::g1::Parameters>;
-    type G2 = ark_ec::short_weierstrass_jacobian::GroupAffine<ark_bn254::g2::Parameters>;
+    type G1 = ark_bn254::g1::G1Affine;
+    type G2 = ark_bn254::g2::G2Affine;
 
     impl TryFrom<PodG1> for G1 {
         type Error = AltBn128Error;
@@ -112,7 +110,11 @@ mod target_arch {
             if bytes.0 == [0u8; 64] {
                 return Ok(G1::zero());
             }
-            let g1 = <Self as FromBytes>::read(&*[&bytes.0[..], &[0u8][..]].concat());
+            let g1 = Self::deserialize_with_mode(
+                &*[&bytes.0[..], &[0u8][..]].concat(),
+                Compress::No,
+                Validate::Yes,
+            );
 
             match g1 {
                 Ok(g1) => {
@@ -134,7 +136,11 @@ mod target_arch {
             if bytes.0 == [0u8; 128] {
                 return Ok(G2::zero());
             }
-            let g2 = <Self as FromBytes>::read(&*[&bytes.0[..], &[0u8][..]].concat());
+            let g2 = Self::deserialize_with_mode(
+                &*[&bytes.0[..], &[0u8][..]].concat(),
+                Compress::No,
+                Validate::Yes,
+            );
 
             match g2 {
                 Ok(g2) => {
@@ -170,15 +176,22 @@ mod target_arch {
         )
         .try_into()?;
 
-        let mut result_point_data = [0; ALT_BN128_ADDITION_OUTPUT_LEN + 1];
         let result_point = p + q;
-        <G1 as ToBytes>::write(&result_point, &mut result_point_data[..])
+
+        let mut result_point_data = [0u8; ALT_BN128_ADDITION_OUTPUT_LEN];
+        let result_point_affine: G1 = result_point
+            .try_into()
+            .map_err(|_| AltBn128Error::ProjectiveToG1Failed)?;
+        result_point_affine
+            .x
+            .serialize_with_mode(&mut result_point_data[..32], Compress::No)
+            .map_err(|_| AltBn128Error::InvalidInputData)?;
+        result_point_affine
+            .y
+            .serialize_with_mode(&mut result_point_data[32..], Compress::No)
             .map_err(|_| AltBn128Error::InvalidInputData)?;
 
-        if result_point == G1::zero() {
-            return Ok([0u8; ALT_BN128_ADDITION_OUTPUT_LEN].to_vec());
-        }
-        Ok(convert_edianness_64(&result_point_data[..ALT_BN128_ADDITION_OUTPUT_LEN]).to_vec())
+        Ok(convert_edianness_64(&result_point_data[..]).to_vec())
     }
 
     pub fn alt_bn128_multiplication(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
@@ -195,16 +208,24 @@ mod target_arch {
                 .map_err(AltBn128Error::TryIntoVecError)?,
         )
         .try_into()?;
-        let fr = <BigInteger256 as FromBytes>::read(convert_edianness_64(&input[64..96]).as_ref())
+        let fr = BigInteger256::deserialize_uncompressed_unchecked(
+            &convert_edianness_64(&input[64..96])[..],
+        )
+        .map_err(|_| AltBn128Error::InvalidInputData)?;
+
+        let result_point: G1 = p.mul_bigint(fr).into();
+
+        let mut result_point_data = [0u8; ALT_BN128_MULTIPLICATION_OUTPUT_LEN];
+
+        result_point
+            .x
+            .serialize_with_mode(&mut result_point_data[..32], Compress::No)
+            .map_err(|_| AltBn128Error::InvalidInputData)?;
+        result_point
+            .y
+            .serialize_with_mode(&mut result_point_data[32..], Compress::No)
             .map_err(|_| AltBn128Error::InvalidInputData)?;
 
-        let mut result_point_data = [0; ALT_BN128_MULTIPLICATION_OUTPUT_LEN + 1];
-        let result_point: G1 = p.into_projective().mul(fr).into();
-        <G1 as ToBytes>::write(&result_point, &mut result_point_data[..])
-            .map_err(|_| AltBn128Error::InvalidInputData)?;
-        if result_point == G1::zero() {
-            return Ok([0u8; ALT_BN128_MULTIPLICATION_OUTPUT_LEN].to_vec());
-        }
         Ok(
             convert_edianness_64(&result_point_data[..ALT_BN128_MULTIPLICATION_OUTPUT_LEN])
                 .to_vec(),
@@ -221,38 +242,42 @@ mod target_arch {
         }
 
         let ele_len = input.len().saturating_div(ALT_BN128_PAIRING_ELEMENT_LEN);
-        let mut vec_pairs: Vec<(G1Prepared<Parameters>, G2Prepared<Parameters>)> = Vec::new();
+
+        let mut vec_pairs: Vec<(G1, G2)> = Vec::new();
         for i in 0..ele_len {
-            let g1: G1 = PodG1(
-                convert_edianness_64(
-                    &input[i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
-                        ..i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
-                            .saturating_add(ALT_BN128_POINT_SIZE)],
+            vec_pairs.push((
+                PodG1(
+                    convert_edianness_64(
+                        &input[i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
+                            ..i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
+                                .saturating_add(ALT_BN128_POINT_SIZE)],
+                    )
+                    .try_into()
+                    .map_err(AltBn128Error::TryIntoVecError)?,
                 )
-                .try_into()
-                .map_err(AltBn128Error::TryIntoVecError)?,
-            )
-            .try_into()?;
-            let g2: G2 = PodG2(
-                convert_edianness_128(
-                    &input[i
-                        .saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
-                        .saturating_add(ALT_BN128_POINT_SIZE)
-                        ..i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
-                            .saturating_add(ALT_BN128_PAIRING_ELEMENT_LEN)],
+                .try_into()?,
+                PodG2(
+                    convert_edianness_128(
+                        &input[i
+                            .saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
+                            .saturating_add(ALT_BN128_POINT_SIZE)
+                            ..i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
+                                .saturating_add(ALT_BN128_PAIRING_ELEMENT_LEN)],
+                    )
+                    .try_into()
+                    .map_err(AltBn128Error::TryIntoVecError)?,
                 )
-                .try_into()
-                .map_err(AltBn128Error::TryIntoVecError)?,
-            )
-            .try_into()?;
-            vec_pairs.push((g1.into(), g2.into()));
+                .try_into()?,
+            ));
         }
 
         let mut result = BigInteger256::from(0u64);
-        let res =
-            <Bn<Parameters> as PairingEngine>::product_of_pairings((vec_pairs[..ele_len]).iter());
-        type GT = <ark_ec::models::bn::Bn<ark_bn254::Parameters> as ark_ec::PairingEngine>::Fqk;
-        if res == GT::one() {
+        let res = <Bn<Config> as Pairing>::multi_pairing(
+            vec_pairs.iter().map(|pair| pair.0),
+            vec_pairs.iter().map(|pair| pair.1),
+        );
+
+        if res.0 == ark_bn254::Fq12::one() {
             result = BigInteger256::from(1u64);
         }
 
@@ -345,7 +370,32 @@ mod target_arch {
 
 #[cfg(test)]
 mod tests {
-    use crate::alt_bn128::prelude::*;
+    use {
+        crate::alt_bn128::{prelude::*, PodG1},
+        ark_bn254::g1::G1Affine,
+        ark_ec::AffineRepr,
+        ark_serialize::{CanonicalSerialize, Compress},
+    };
+
+    #[test]
+    fn zero_serialization_test() {
+        let zero = G1Affine::zero();
+        let mut result_point_data = [0u8; 64];
+        zero.x
+            .serialize_with_mode(&mut result_point_data[..32], Compress::No)
+            .map_err(|_| AltBn128Error::InvalidInputData)
+            .unwrap();
+        zero.y
+            .serialize_with_mode(&mut result_point_data[32..], Compress::No)
+            .map_err(|_| AltBn128Error::InvalidInputData)
+            .unwrap();
+        assert_eq!(result_point_data, [0u8; 64]);
+
+        let p: G1Affine = PodG1(result_point_data[..64].try_into().unwrap())
+            .try_into()
+            .unwrap();
+        assert_eq!(p, zero);
+    }
 
     #[test]
     fn alt_bn128_addition_test() {
@@ -434,10 +484,10 @@ mod tests {
             let input = array_bytes::hex2bytes_unchecked(&test.input);
             let result = alt_bn128_addition(&input);
             assert!(result.is_ok());
-            let result = result.unwrap();
 
             let expected = array_bytes::hex2bytes_unchecked(&test.expected);
-            assert_eq!(result, expected);
+
+            assert_eq!(result.unwrap(), expected);
         });
     }
 
@@ -570,10 +620,8 @@ mod tests {
             let input = array_bytes::hex2bytes_unchecked(&test.input);
             let result = alt_bn128_multiplication(&input);
             assert!(result.is_ok());
-            let result = result.unwrap();
-
             let expected = array_bytes::hex2bytes_unchecked(&test.expected);
-            assert_eq!(result, expected);
+            assert_eq!(result.unwrap(), expected);
         });
     }
 
@@ -682,10 +730,8 @@ mod tests {
             let input = array_bytes::hex2bytes_unchecked(&test.input);
             let result = alt_bn128_pairing(&input);
             assert!(result.is_ok());
-            let result = result.unwrap();
-
             let expected = array_bytes::hex2bytes_unchecked(&test.expected);
-            assert_eq!(result, expected);
+            assert_eq!(result.unwrap(), expected);
         });
     }
 }
