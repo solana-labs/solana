@@ -97,46 +97,37 @@ impl ThreadAwareAccountLocks {
     }
 
     /// Returns `ThreadSet` of schedulable threads for the given readable account.
-    /// If the account is not locked, then all threads are schedulable.
-    /// If only read locked, then all threads are schedulable.
-    /// If write-locked, then only the thread holding the write lock is schedulable.
     fn read_schedulable_threads(&self, account: &Pubkey) -> ThreadSet {
-        // If the account is only read locked, then a read lock can be taken on any thread
-        self.schedulable_threads_with_read_only_handler(account, |_| {
-            ThreadSet::any(self.num_threads)
-        })
+        self.schedulable_threads::<false>(account)
     }
 
     /// Returns `ThreadSet` of schedulable threads for the given writable account.
-    /// If the account is not locked, then all threads are schedulable.
-    /// If read-locked on a single thread, then only that thread is schedulable.
-    /// If write-locked, then only that thread is schedulable.
-    /// In all other cases, no threads are schedulable.
     fn write_schedulable_threads(&self, account: &Pubkey) -> ThreadSet {
-        // If the account is only read locked, then a write lock can only be taken
-        // if the read lock is held by a single thread.
-        self.schedulable_threads_with_read_only_handler(account, |thread_set| {
-            thread_set
-                .only_one_contained()
-                .map(ThreadSet::only)
-                .unwrap_or_else(ThreadSet::none)
-        })
+        self.schedulable_threads::<true>(account)
     }
 
     /// Returns `ThreadSet` of schedulable threads, given the read-only lock handler.
     /// Helper function, since the only difference between read and write schedulable threads
-    /// is in how the case where only read locks are held is handled.
+    ///   is in how the case where only read locks are held is handled.
     /// If there are no locks, then all threads are schedulable.
     /// If only write-locked, then only the thread holding the write lock is schedulable.
     /// If a mix of locks, then only the write thread is schedulable.
-    fn schedulable_threads_with_read_only_handler(
-        &self,
-        account: &Pubkey,
-        read_only_handler: impl Fn(&ThreadSet) -> ThreadSet,
-    ) -> ThreadSet {
+    /// If only read-locked, the only write-schedulable thread is if a single thread
+    ///   holds all read locks. Otherwise, no threads are write-schedulable.
+    /// If only read-locked, all threads are read-schedulable.
+    fn schedulable_threads<const WRITE: bool>(&self, account: &Pubkey) -> ThreadSet {
         match (self.write_locks.get(account), self.read_locks.get(account)) {
             (None, None) => ThreadSet::any(self.num_threads),
-            (None, Some((thread_set, _))) => read_only_handler(thread_set),
+            (None, Some((thread_set, _))) => {
+                if WRITE {
+                    thread_set
+                        .only_one_contained()
+                        .map(ThreadSet::only)
+                        .unwrap_or_else(ThreadSet::none)
+                } else {
+                    ThreadSet::any(self.num_threads)
+                }
+            }
             (Some((thread_id, _)), None) => ThreadSet::only(*thread_id),
             (Some((thread_id, _)), Some((thread_set, _))) => {
                 assert_eq!(Some(*thread_id), thread_set.only_one_contained());
