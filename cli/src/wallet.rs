@@ -518,7 +518,7 @@ pub fn parse_find_program_address(matches: &ArgMatches<'_>) -> Result<CliCommand
                         "i64be" => i64::from_str(value).unwrap().to_be_bytes().to_vec(),
                         "i128be" => i128::from_str(value).unwrap().to_be_bytes().to_vec(),
                         // Must be unreachable due to arg validator
-                        _ => panic!("parse_find_program_address: {}:{}", prefix, value),
+                        _ => unreachable!("parse_find_program_address: {prefix}:{value}"),
                     }
                 })
                 .collect::<Vec<_>>()
@@ -839,7 +839,7 @@ pub fn process_find_program_address(
     program_id: &Pubkey,
 ) -> ProcessResult {
     if config.verbose {
-        println!("Seeds: {:?}", seeds);
+        println!("Seeds: {seeds:?}");
     }
     let seeds_slice = seeds.iter().map(|x| &x[..]).collect::<Vec<_>>();
     let (address, bump_seed) = Pubkey::find_program_address(&seeds_slice[..], program_id);
