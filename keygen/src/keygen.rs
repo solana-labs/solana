@@ -38,14 +38,14 @@ use {
 };
 
 mod smallest_length_44_public_key {
-    use solana_sdk::declare_id;
+    use solana_sdk::{pubkey, pubkey::Pubkey};
 
-    pubkey!("21111111111111111111111111111111111111111111");
+    pub(super) static PUBKEY: Pubkey = pubkey!("21111111111111111111111111111111111111111111");
 
     #[test]
     fn assert_length() {
         use crate::smallest_length_44_public_key;
-        assert_eq!(smallest_length_44_public_key::id().to_string().len(), 44);
+        assert_eq!(smallest_length_44_public_key::PUBKEY.to_string().len(), 44);
     }
 }
 
@@ -797,7 +797,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                             (Keypair::new(), "".to_string())
                         };
                         // Skip keypairs that will never match the user specified prefix
-                        if skip_len_44_pubkeys && keypair.pubkey() >= smallest_length_44_public_key::id() {
+                        if skip_len_44_pubkeys && keypair.pubkey() >= smallest_length_44_public_key::PUBKEY {
                             continue;
                         }
                         let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
