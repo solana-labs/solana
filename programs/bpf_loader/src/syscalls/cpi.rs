@@ -39,7 +39,7 @@ impl<'a> CallerAccount<'a> {
         _vm_addr: u64,
         account_info: &AccountInfo,
         original_data_len: usize,
-    ) -> Result<CallerAccount<'a>, EbpfError> {
+    ) -> Result<CallerAccount<'a>, Box<dyn std::error::Error>> {
         // account_info points to host memory. The addresses used internally are
         // in vm space so they need to be translated.
 
@@ -129,7 +129,7 @@ impl<'a> CallerAccount<'a> {
         vm_addr: u64,
         account_info: &SolAccountInfo,
         original_data_len: usize,
-    ) -> Result<CallerAccount<'a>, EbpfError> {
+    ) -> Result<CallerAccount<'a>, Box<dyn std::error::Error>> {
         // account_info points to host memory. The addresses used internally are
         // in vm space so they need to be translated.
 
@@ -212,7 +212,7 @@ trait SyscallInvokeSigned {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<StableInstruction, EbpfError>;
+    ) -> Result<StableInstruction, Box<dyn std::error::Error>>;
     fn translate_accounts<'a>(
         instruction_accounts: &[InstructionAccount],
         program_indices: &[IndexOfAccount],
@@ -220,14 +220,14 @@ trait SyscallInvokeSigned {
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<TranslatedAccounts<'a>, EbpfError>;
+    ) -> Result<TranslatedAccounts<'a>, Box<dyn std::error::Error>>;
     fn translate_signers(
         program_id: &Pubkey,
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &InvokeContext,
-    ) -> Result<Vec<Pubkey>, EbpfError>;
+    ) -> Result<Vec<Pubkey>, Box<dyn std::error::Error>>;
 }
 
 declare_syscall!(
@@ -241,7 +241,7 @@ declare_syscall!(
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         cpi_common::<Self>(
             invoke_context,
             instruction_addr,
@@ -259,7 +259,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<StableInstruction, EbpfError> {
+    ) -> Result<StableInstruction, Box<dyn std::error::Error>> {
         let ix = translate_type::<StableInstruction>(
             memory_mapping,
             addr,
@@ -312,7 +312,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<TranslatedAccounts<'a>, EbpfError> {
+    ) -> Result<TranslatedAccounts<'a>, Box<dyn std::error::Error>> {
         let (account_infos, account_info_keys) = translate_account_infos(
             account_infos_addr,
             account_infos_len,
@@ -339,7 +339,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &InvokeContext,
-    ) -> Result<Vec<Pubkey>, EbpfError> {
+    ) -> Result<Vec<Pubkey>, Box<dyn std::error::Error>> {
         let mut signers = Vec::new();
         if signers_seeds_len > 0 {
             let signers_seeds = translate_slice::<&[&[u8]]>(
@@ -377,7 +377,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
                             invoke_context.get_check_size(),
                         )
                     })
-                    .collect::<Result<Vec<_>, EbpfError>>()?;
+                    .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
                 let signer = Pubkey::create_program_address(&seeds, program_id)
                     .map_err(SyscallError::BadSeeds)?;
                 signers.push(signer);
@@ -453,7 +453,7 @@ declare_syscall!(
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         cpi_common::<Self>(
             invoke_context,
             instruction_addr,
@@ -471,7 +471,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<StableInstruction, EbpfError> {
+    ) -> Result<StableInstruction, Box<dyn std::error::Error>> {
         let ix_c = translate_type::<SolInstruction>(
             memory_mapping,
             addr,
@@ -530,7 +530,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                     is_writable: meta_c.is_writable,
                 })
             })
-            .collect::<Result<Vec<AccountMeta>, EbpfError>>()?;
+            .collect::<Result<Vec<AccountMeta>, Box<dyn std::error::Error>>>()?;
 
         Ok(StableInstruction {
             accounts: accounts.into(),
@@ -546,7 +546,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<TranslatedAccounts<'a>, EbpfError> {
+    ) -> Result<TranslatedAccounts<'a>, Box<dyn std::error::Error>> {
         let (account_infos, account_info_keys) = translate_account_infos(
             account_infos_addr,
             account_infos_len,
@@ -573,7 +573,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &InvokeContext,
-    ) -> Result<Vec<Pubkey>, EbpfError> {
+    ) -> Result<Vec<Pubkey>, Box<dyn std::error::Error>> {
         if signers_seeds_len > 0 {
             let signers_seeds = translate_slice::<SolSignerSeedsC>(
                 memory_mapping,
@@ -612,11 +612,11 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                                 invoke_context.get_check_size(),
                             )
                         })
-                        .collect::<Result<Vec<_>, EbpfError>>()?;
+                        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
                     Pubkey::create_program_address(&seeds_bytes, program_id)
                         .map_err(|err| SyscallError::BadSeeds(err).into())
                 })
-                .collect::<Result<Vec<_>, EbpfError>>()?)
+                .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?)
         } else {
             Ok(vec![])
         }
@@ -629,7 +629,7 @@ fn translate_account_infos<'a, T, F>(
     key_addr: F,
     memory_mapping: &mut MemoryMapping,
     invoke_context: &mut InvokeContext,
-) -> Result<(&'a [T], Vec<&'a Pubkey>), EbpfError>
+) -> Result<(&'a [T], Vec<&'a Pubkey>), Box<dyn std::error::Error>>
 where
     F: Fn(&T) -> u64,
 {
@@ -650,7 +650,7 @@ where
                 invoke_context.get_check_aligned(),
             )
         })
-        .collect::<Result<Vec<_>, EbpfError>>()?;
+        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
 
     Ok((account_infos, account_info_keys))
 }
@@ -666,9 +666,15 @@ fn translate_and_update_accounts<'a, T, F>(
     invoke_context: &mut InvokeContext,
     memory_mapping: &MemoryMapping,
     do_translate: F,
-) -> Result<TranslatedAccounts<'a>, EbpfError>
+) -> Result<TranslatedAccounts<'a>, Box<dyn std::error::Error>>
 where
-    F: Fn(&InvokeContext, &MemoryMapping, u64, &T, usize) -> Result<CallerAccount<'a>, EbpfError>,
+    F: Fn(
+        &InvokeContext,
+        &MemoryMapping,
+        u64,
+        &T,
+        usize,
+    ) -> Result<CallerAccount<'a>, Box<dyn std::error::Error>>,
 {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context
@@ -770,7 +776,7 @@ fn check_instruction_size(
     num_accounts: usize,
     data_len: usize,
     invoke_context: &mut InvokeContext,
-) -> Result<(), EbpfError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     if invoke_context
         .feature_set
         .is_active(&feature_set::loosen_cpi_size_restriction::id())
@@ -809,7 +815,7 @@ fn check_instruction_size(
 fn check_account_infos(
     num_account_infos: usize,
     invoke_context: &mut InvokeContext,
-) -> Result<(), EbpfError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     if invoke_context
         .feature_set
         .is_active(&feature_set::loosen_cpi_size_restriction::id())
@@ -847,7 +853,7 @@ fn check_authorized_program(
     program_id: &Pubkey,
     instruction_data: &[u8],
     invoke_context: &InvokeContext,
-) -> Result<(), EbpfError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
@@ -879,7 +885,7 @@ fn cpi_common<S: SyscallInvokeSigned>(
     signers_seeds_addr: u64,
     signers_seeds_len: u64,
     memory_mapping: &mut MemoryMapping,
-) -> Result<u64, EbpfError> {
+) -> Result<u64, Box<dyn std::error::Error>> {
     // CPI entry.
     //
     // Translate the inputs to the syscall and synchronize the caller's account
@@ -967,7 +973,7 @@ fn update_callee_account(
     invoke_context: &InvokeContext,
     caller_account: &CallerAccount,
     mut callee_account: BorrowedAccount<'_>,
-) -> Result<(), EbpfError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let is_disable_cpi_setting_executable_and_rent_epoch_active = invoke_context
         .feature_set
         .is_active(&disable_cpi_setting_executable_and_rent_epoch::id());
@@ -987,9 +993,7 @@ fn update_callee_account(
             .set_data_from_slice(caller_account.data)
             .map_err(SyscallError::InstructionError)?,
         Err(err) if callee_account.get_data() != caller_account.data => {
-            return Err(EbpfError::UserError(Box::new(BpfError::SyscallError(
-                SyscallError::InstructionError(err),
-            ))));
+            return Err(Box::new(err));
         }
         _ => {}
     }
@@ -1048,7 +1052,7 @@ fn update_caller_account(
     memory_mapping: &MemoryMapping,
     caller_account: &mut CallerAccount,
     callee_account: &BorrowedAccount<'_>,
-) -> Result<(), EbpfError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     *caller_account.lamports = callee_account.get_lamports();
     *caller_account.owner = *callee_account.get_owner();
     let new_len = callee_account.get_data().len();
@@ -1449,9 +1453,7 @@ mod tests {
                 &mut caller_account,
                 &callee_account,
             ),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::InvalidRealloc)
-            )
+            Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::InvalidRealloc,
         ));
     }
 

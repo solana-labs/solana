@@ -133,7 +133,10 @@ impl From<SyscallError> for EbpfError {
     }
 }
 
-fn consume_compute_meter(invoke_context: &InvokeContext, amount: u64) -> Result<(), EbpfError> {
+fn consume_compute_meter(
+    invoke_context: &InvokeContext,
+    amount: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
     invoke_context
         .consume_checked(amount)
         .map_err(SyscallError::InstructionError)?;
@@ -156,7 +159,7 @@ pub fn create_loader<'a>(
     reject_deployment_of_broken_elfs: bool,
     disable_deploy_of_alloc_free_syscall: bool,
     debugging_features: bool,
-) -> Result<Arc<BuiltInProgram<InvokeContext<'a>>>, EbpfError> {
+) -> Result<Arc<BuiltInProgram<InvokeContext<'a>>>, Box<dyn std::error::Error>> {
     use rand::Rng;
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
@@ -330,7 +333,7 @@ fn translate(
     access_type: AccessType,
     vm_addr: u64,
     len: u64,
-) -> Result<u64, EbpfError> {
+) -> Result<u64, Box<dyn std::error::Error>> {
     memory_mapping.map(access_type, vm_addr, len, 0).into()
 }
 
@@ -339,7 +342,7 @@ fn translate_type_inner<'a, T>(
     access_type: AccessType,
     vm_addr: u64,
     check_aligned: bool,
-) -> Result<&'a mut T, EbpfError> {
+) -> Result<&'a mut T, Box<dyn std::error::Error>> {
     let host_addr = translate(memory_mapping, access_type, vm_addr, size_of::<T>() as u64)?;
 
     if check_aligned && (host_addr as *mut T as usize).wrapping_rem(align_of::<T>()) != 0 {
@@ -351,14 +354,14 @@ fn translate_type_mut<'a, T>(
     memory_mapping: &MemoryMapping,
     vm_addr: u64,
     check_aligned: bool,
-) -> Result<&'a mut T, EbpfError> {
+) -> Result<&'a mut T, Box<dyn std::error::Error>> {
     translate_type_inner::<T>(memory_mapping, AccessType::Store, vm_addr, check_aligned)
 }
 fn translate_type<'a, T>(
     memory_mapping: &MemoryMapping,
     vm_addr: u64,
     check_aligned: bool,
-) -> Result<&'a T, EbpfError> {
+) -> Result<&'a T, Box<dyn std::error::Error>> {
     translate_type_inner::<T>(memory_mapping, AccessType::Load, vm_addr, check_aligned)
         .map(|value| &*value)
 }
@@ -370,7 +373,7 @@ fn translate_slice_inner<'a, T>(
     len: u64,
     check_aligned: bool,
     check_size: bool,
-) -> Result<&'a mut [T], EbpfError> {
+) -> Result<&'a mut [T], Box<dyn std::error::Error>> {
     if len == 0 {
         return Ok(&mut []);
     }
@@ -393,7 +396,7 @@ fn translate_slice_mut<'a, T>(
     len: u64,
     check_aligned: bool,
     check_size: bool,
-) -> Result<&'a mut [T], EbpfError> {
+) -> Result<&'a mut [T], Box<dyn std::error::Error>> {
     translate_slice_inner::<T>(
         memory_mapping,
         AccessType::Store,
@@ -409,7 +412,7 @@ fn translate_slice<'a, T>(
     len: u64,
     check_aligned: bool,
     check_size: bool,
-) -> Result<&'a [T], EbpfError> {
+) -> Result<&'a [T], Box<dyn std::error::Error>> {
     translate_slice_inner::<T>(
         memory_mapping,
         AccessType::Load,
@@ -430,8 +433,8 @@ fn translate_string_and_do(
     check_aligned: bool,
     check_size: bool,
     stop_truncating_strings_in_syscalls: bool,
-    work: &mut dyn FnMut(&str) -> Result<u64, EbpfError>,
-) -> Result<u64, EbpfError> {
+    work: &mut dyn FnMut(&str) -> Result<u64, Box<dyn std::error::Error>>,
+) -> Result<u64, Box<dyn std::error::Error>> {
     let buf = translate_slice::<u8>(memory_mapping, addr, len, check_aligned, check_size)?;
     let msg = if stop_truncating_strings_in_syscalls {
         buf
@@ -488,7 +491,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         Err(SyscallError::Abort.into())
     }
 );
@@ -505,7 +508,7 @@ declare_syscall!(
         column: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         consume_compute_meter(invoke_context, len)?;
 
         translate_string_and_do(
@@ -538,7 +541,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let allocator = invoke_context
             .get_allocator()
             .map_err(SyscallError::InstructionError)?;
@@ -576,7 +579,7 @@ fn translate_and_check_program_address_inputs<'a>(
     memory_mapping: &mut MemoryMapping,
     check_aligned: bool,
     check_size: bool,
-) -> Result<(Vec<&'a [u8]>, &'a Pubkey), EbpfError> {
+) -> Result<(Vec<&'a [u8]>, &'a Pubkey), Box<dyn std::error::Error>> {
     let untranslated_seeds = translate_slice::<&[&u8]>(
         memory_mapping,
         seeds_addr,
@@ -601,7 +604,7 @@ fn translate_and_check_program_address_inputs<'a>(
                 check_size,
             )
         })
-        .collect::<Result<Vec<_>, EbpfError>>()?;
+        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
     let program_id = translate_type::<Pubkey>(memory_mapping, program_id_addr, check_aligned)?;
     Ok((seeds, program_id))
 }
@@ -617,7 +620,7 @@ declare_syscall!(
         address_addr: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let cost = invoke_context
             .get_compute_budget()
             .create_program_address_units;
@@ -661,7 +664,7 @@ declare_syscall!(
         address_addr: u64,
         bump_seed_addr: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let cost = invoke_context
             .get_compute_budget()
             .create_program_address_units;
@@ -731,7 +734,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let compute_budget = invoke_context.get_compute_budget();
         if compute_budget.sha256_max_slices < vals_len {
             ic_msg!(
@@ -794,7 +797,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let compute_budget = invoke_context.get_compute_budget();
         if compute_budget.sha256_max_slices < vals_len {
             ic_msg!(
@@ -857,7 +860,7 @@ declare_syscall!(
         result_addr: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let cost = invoke_context.get_compute_budget().secp256k1_recover_cost;
         consume_compute_meter(invoke_context, cost)?;
 
@@ -949,7 +952,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         use solana_zk_token_sdk::curve25519::{curve_syscall_traits::*, edwards, ristretto};
         match curve_id {
             CURVE25519_EDWARDS => {
@@ -1006,7 +1009,7 @@ declare_syscall!(
         right_input_addr: u64,
         result_point_addr: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         use solana_zk_token_sdk::curve25519::{
             curve_syscall_traits::*, edwards, ristretto, scalar,
         };
@@ -1207,7 +1210,7 @@ declare_syscall!(
         points_len: u64,
         result_point_addr: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         use solana_zk_token_sdk::curve25519::{
             curve_syscall_traits::*, edwards, ristretto, scalar,
         };
@@ -1310,7 +1313,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let compute_budget = invoke_context.get_compute_budget();
         if compute_budget.sha256_max_slices < vals_len {
             ic_msg!(
@@ -1373,7 +1376,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let budget = invoke_context.get_compute_budget();
 
         let cost = len
@@ -1424,7 +1427,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let budget = invoke_context.get_compute_budget();
 
         consume_compute_meter(invoke_context, budget.syscall_base_cost)?;
@@ -1491,7 +1494,7 @@ declare_syscall!(
         data_addr: u64,
         accounts_addr: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let budget = invoke_context.get_compute_budget();
 
         consume_compute_meter(invoke_context, budget.syscall_base_cost)?;
@@ -1643,7 +1646,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let budget = invoke_context.get_compute_budget();
 
         consume_compute_meter(invoke_context, budget.syscall_base_cost)?;
@@ -1663,7 +1666,7 @@ declare_syscall!(
         result_addr: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         use solana_sdk::alt_bn128::prelude::{ALT_BN128_ADD, ALT_BN128_MUL, ALT_BN128_PAIRING};
         let budget = invoke_context.get_compute_budget();
         let (cost, output): (u64, usize) = match group_op {
@@ -1748,7 +1751,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Box<dyn std::error::Error>> {
         let params = &translate_slice::<BigModExpParams>(
             memory_mapping,
             params,
@@ -1825,6 +1828,7 @@ mod tests {
         solana_rbpf::{
             aligned_memory::AlignedMemory,
             ebpf::{self, HOST_ALIGN},
+            error::EbpfError,
             memory_region::MemoryRegion,
             vm::{BuiltInFunction, Config},
         },
@@ -1843,11 +1847,10 @@ mod tests {
 
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {
-            match $result {
-                ProgramResult::Err(EbpfError::AccessViolation(_, _, va, len, _))
-                    if $va == va && $len == len => {}
-                ProgramResult::Err(EbpfError::StackAccessViolation(_, _, va, len, _))
-                    if $va == va && $len == len => {}
+            match $result.unwrap_err().downcast_ref::<EbpfError>().unwrap() {
+                EbpfError::AccessViolation(_, _, va, len, _) if $va == *va && $len == *len => {}
+                EbpfError::StackAccessViolation(_, _, va, len, _) if $va == *va && $len == *len => {
+                }
                 _ => panic!(),
             }
         };
@@ -2066,7 +2069,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "UserError(SyscallError(Abort))")]
+    #[should_panic(expected = "Abort")]
     fn test_syscall_abort() {
         prepare_mockup!(invoke_context, program_id, bpf_loader::id());
         let config = Config::default();
@@ -2086,7 +2089,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "UserError(SyscallError(Panic(\"Gaggablaghblagh!\", 42, 84)))")]
+    #[should_panic(expected = "Panic(\"Gaggablaghblagh!\", 42, 84)")]
     fn test_syscall_sol_panic() {
         prepare_mockup!(invoke_context, program_id, bpf_loader::id());
 
@@ -2112,9 +2115,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ),
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
         ));
 
         invoke_context.mock_set_remaining(string.len() as u64);
@@ -2195,9 +2196,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ),
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
         ));
 
         assert_eq!(
@@ -2281,9 +2280,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ),
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
         ));
 
         invoke_context.mock_set_remaining(cost);
@@ -2617,7 +2614,7 @@ mod tests {
             &mut result,
         );
         assert_access_violation!(result, rw_va - 1, HASH_BYTES as u64);
-
+        let mut result = ProgramResult::Ok(0);
         SyscallSha256::call(
             &mut invoke_context,
             ro_va,
@@ -2630,9 +2627,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ),
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
         ));
     }
 
@@ -2710,9 +2705,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ),
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
         ));
     }
 
@@ -2790,9 +2783,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ),
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
         ));
     }
 
@@ -2962,9 +2953,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ),
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
         ));
     }
 
@@ -3136,9 +3125,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ),
+            ProgramResult::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
         ));
     }
 
@@ -3479,7 +3466,7 @@ mod tests {
         program_id: &Pubkey,
         overlap_outputs: bool,
         syscall: BuiltInFunction<InvokeContext<'b>>,
-    ) -> Result<(Pubkey, u8), EbpfError> {
+    ) -> Result<(Pubkey, u8), Box<dyn std::error::Error>> {
         const SEEDS_VA: u64 = 0x100000000;
         const PROGRAM_ID_VA: u64 = 0x200000000;
         const ADDRESS_VA: u64 = 0x300000000;
@@ -3526,14 +3513,14 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        Result::<u64, EbpfError>::from(result).map(|_| (address, bump_seed))
+        Result::<u64, Box<dyn std::error::Error>>::from(result).map(|_| (address, bump_seed))
     }
 
     fn create_program_address(
         invoke_context: &mut InvokeContext,
         seeds: &[&[u8]],
         address: &Pubkey,
-    ) -> Result<Pubkey, EbpfError> {
+    ) -> Result<Pubkey, Box<dyn std::error::Error>> {
         let (address, _) = call_program_address_common(
             invoke_context,
             seeds,
@@ -3548,7 +3535,7 @@ mod tests {
         invoke_context: &mut InvokeContext,
         seeds: &[&[u8]],
         address: &Pubkey,
-    ) -> Result<(Pubkey, u8), EbpfError> {
+    ) -> Result<(Pubkey, u8), Box<dyn std::error::Error>> {
         call_program_address_common(
             invoke_context,
             seeds,
@@ -3621,9 +3608,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::CopyOverlapping
-            ),
+            ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping,
         ));
     }
 
@@ -3775,9 +3760,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::CopyOverlapping
-            ),
+            ProgramResult::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping,
         ));
     }
 
@@ -3791,9 +3774,7 @@ mod tests {
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
         assert!(matches!(
             create_program_address(&mut invoke_context, &[exceeded_seed], &address),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
-            ),
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
         ));
         assert!(matches!(
             create_program_address(
@@ -3801,9 +3782,7 @@ mod tests {
                 &[b"short_seed", exceeded_seed],
                 &address,
             ),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
-            ),
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
         ));
         let max_seed = &[0; MAX_SEED_LEN];
         assert!(create_program_address(&mut invoke_context, &[max_seed], &address).is_ok());
@@ -3847,9 +3826,7 @@ mod tests {
         ];
         assert!(matches!(
             create_program_address(&mut invoke_context, max_seeds, &address),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
-            ),
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
         ));
         assert_eq!(
             create_program_address(&mut invoke_context, &[b"", &[1]], &address).unwrap(),
@@ -3886,9 +3863,7 @@ mod tests {
         invoke_context.mock_set_remaining(0);
         assert!(matches!(
             create_program_address(&mut invoke_context, &[b"", &[1]], &address),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ),
+            Result::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
         ));
     }
 
@@ -3927,18 +3902,14 @@ mod tests {
         invoke_context.mock_set_remaining(cost * (max_tries - bump_seed as u64 - 1));
         assert!(matches!(
             try_find_program_address(&mut invoke_context, seeds, &address),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ),
+            Result::Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ComputationalBudgetExceeded,
         ));
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
         invoke_context.mock_set_remaining(cost * (max_tries - 1));
         assert!(matches!(
             try_find_program_address(&mut invoke_context, &[exceeded_seed], &address),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
-            ),
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
         ));
         let exceeded_seeds: &[&[u8]] = &[
             &[1],
@@ -3962,9 +3933,7 @@ mod tests {
         invoke_context.mock_set_remaining(cost * (max_tries - 1));
         assert!(matches!(
             try_find_program_address(&mut invoke_context, exceeded_seeds, &address),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
-            ),
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded),
         ));
 
         assert!(matches!(
@@ -3975,9 +3944,7 @@ mod tests {
                 true,
                 SyscallTryFindProgramAddress::call,
             ),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::CopyOverlapping
-            ),
+            Result::Err(error) if error.downcast_ref::<SyscallError>().unwrap() == &SyscallError::CopyOverlapping,
         ));
     }
 

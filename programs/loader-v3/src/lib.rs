@@ -215,10 +215,10 @@ fn execute(
 
     match result {
         ProgramResult::Ok(status) if status != SUCCESS => {
-            let error = status.into();
-            Err(error)
+            let error: InstructionError = status.into();
+            Err(Box::new(error) as Box<dyn std::error::Error>)
         }
-        ProgramResult::Err(_) => Err(Box::new(InstructionError::ProgramFailedToComplete)),
+        ProgramResult::Err(error) => Err(error),
         _ => Ok(()),
     }
 }

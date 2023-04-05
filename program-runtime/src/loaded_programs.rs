@@ -137,7 +137,7 @@ impl LoadedProgram {
         account_size: usize,
         use_jit: bool,
         metrics: &mut LoadProgramMetrics,
-    ) -> Result<Self, EbpfError> {
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut load_elf_time = Measure::start("load_elf_time");
         let executable = Executable::load(elf_bytes, loader.clone())?;
         load_elf_time.stop();
