@@ -137,7 +137,7 @@ impl ThreadAwareAccountLocks {
     }
 
     /// Add locks for all writable and readable accounts on `thread_id`.
-    pub(crate) fn lock_accounts<'a>(
+    fn lock_accounts<'a>(
         &mut self,
         write_account_locks: impl Iterator<Item = &'a Pubkey>,
         read_account_locks: impl Iterator<Item = &'a Pubkey>,
