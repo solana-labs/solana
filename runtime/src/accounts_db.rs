@@ -1367,8 +1367,8 @@ pub struct AccountsDb {
     /// Keeps tracks of index into AppendVec on a per slot basis
     pub accounts_index: AccountInfoAccountsIndex,
 
-    /// slot that is one epoch older than the highest slot where accounts hash calculation has completed
-    pub accounts_hash_complete_one_epoch_old: RwLock<Slot>,
+    /// oldest slot that is not ancient, relative to the highest slot where accounts hash calculation has completed
+    pub accounts_hash_complete_oldest_non_ancient_slot: RwLock<Slot>,
 
     /// Some(offset) iff we want to squash old append vecs together into 'ancient append vecs'
     /// Some(offset) means for slots up to (max_slot - (slots_per_epoch - 'offset')), put them in ancient append vecs
@@ -2408,7 +2408,7 @@ impl AccountsDb {
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
             active_stats: ActiveStats::default(),
-            accounts_hash_complete_one_epoch_old: RwLock::default(),
+            accounts_hash_complete_oldest_non_ancient_slot: RwLock::default(),
             skip_initial_hash_calc: false,
             ancient_append_vec_offset: None,
             accounts_index,
@@ -2517,8 +2517,8 @@ impl AccountsDb {
 
         let ancient_append_vec_offset = accounts_db_config
             .as_ref()
-            .map(|config| config.ancient_append_vec_offset)
-            .unwrap_or(ANCIENT_APPEND_VEC_DEFAULT_OFFSET);
+            .and_then(|config| config.ancient_append_vec_offset)
+            .or(ANCIENT_APPEND_VEC_DEFAULT_OFFSET);
 
         let exhaustively_verify_refcounts = accounts_db_config
             .as_ref()
@@ -2655,7 +2655,7 @@ impl AccountsDb {
         // the hot loop will be the order of ~Xms.
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
 
-        let one_epoch_old = self.get_accounts_hash_complete_one_epoch_old();
+        let one_epoch_old = self.get_accounts_hash_complete_oldest_non_ancient_slot();
         let pubkeys_removed_from_accounts_index = Mutex::new(pubkeys_removed_from_accounts_index);
 
         let mut clean_rooted = Measure::start("clean_old_root-ms");
@@ -2888,13 +2888,19 @@ impl AccountsDb {
         }
     }
 
-    /// return 'slot' - slots_in_epoch
-    fn get_slot_one_epoch_prior(slot: Slot, epoch_schedule: &EpochSchedule) -> Slot {
+    /// return `slot` - slots_in_epoch + 1
+    /// The resulting slot is within one epoch length of `slot`
+    fn get_oldest_slot_within_one_epoch_prior(slot: Slot, epoch_schedule: &EpochSchedule) -> Slot {
         // would like to use:
         // slot.saturating_sub(epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(slot)))
         // but there are problems with warmup and such on tests and probably test clusters.
         // So, just use the maximum below (epoch_schedule.slots_per_epoch)
-        slot.saturating_sub(epoch_schedule.slots_per_epoch)
+        if slot > epoch_schedule.slots_per_epoch {
+            slot.saturating_sub(epoch_schedule.slots_per_epoch)
+                .saturating_add(1)
+        } else {
+            0
+        }
     }
 
     /// hash calc is completed as of 'slot'
@@ -2904,20 +2910,35 @@ impl AccountsDb {
         completed_slot: Slot,
         epoch_schedule: &EpochSchedule,
     ) {
-        let one_epoch_old_slot = Self::get_slot_one_epoch_prior(completed_slot, epoch_schedule);
-        let mut accounts_hash_complete_one_epoch_old =
-            self.accounts_hash_complete_one_epoch_old.write().unwrap();
-        *accounts_hash_complete_one_epoch_old =
-            std::cmp::max(*accounts_hash_complete_one_epoch_old, one_epoch_old_slot);
-        let accounts_hash_complete_one_epoch_old = *accounts_hash_complete_one_epoch_old;
+        let one_epoch_old_slot =
+            Self::get_oldest_slot_within_one_epoch_prior(completed_slot, epoch_schedule);
+        let mut accounts_hash_complete_oldest_non_ancient_slot = self
+            .accounts_hash_complete_oldest_non_ancient_slot
+            .write()
+            .unwrap();
+        *accounts_hash_complete_oldest_non_ancient_slot = std::cmp::max(
+            *accounts_hash_complete_oldest_non_ancient_slot,
+            one_epoch_old_slot,
+        );
+        if let Some(offset) = self.ancient_append_vec_offset {
+            *accounts_hash_complete_oldest_non_ancient_slot =
+                Self::apply_offset_to_slot(*accounts_hash_complete_oldest_non_ancient_slot, offset);
+        }
+
+        let accounts_hash_complete_oldest_non_ancient_slot =
+            *accounts_hash_complete_oldest_non_ancient_slot;
 
         // now that accounts hash calculation is complete, we can remove old historical roots
-        self.remove_old_historical_roots(accounts_hash_complete_one_epoch_old);
+        self.remove_old_historical_roots(accounts_hash_complete_oldest_non_ancient_slot);
     }
 
-    /// get the slot that is one epoch older than the highest slot that has been used for hash calculation
-    fn get_accounts_hash_complete_one_epoch_old(&self) -> Slot {
-        *self.accounts_hash_complete_one_epoch_old.read().unwrap()
+    /// get the oldest slot that is within one epoch of the highest slot that has been used for hash calculation.
+    /// The slot will have been offset by `self.ancient_append_vec_offset`
+    fn get_accounts_hash_complete_oldest_non_ancient_slot(&self) -> Slot {
+        *self
+            .accounts_hash_complete_oldest_non_ancient_slot
+            .read()
+            .unwrap()
     }
 
     /// Collect all the uncleaned slots, up to a max slot
@@ -2976,9 +2997,9 @@ impl AccountsDb {
         let max_slot_inclusive =
             max_clean_root_inclusive.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
-        // find the oldest append vec older than one epoch old
+        // find the oldest non-ancient append vec
         // we'll add logging if that append vec cannot be marked dead
-        let mut min_dirty_slot = self.get_accounts_hash_complete_one_epoch_old();
+        let mut min_dirty_slot = self.get_accounts_hash_complete_oldest_non_ancient_slot();
         self.dirty_stores.retain(|slot, store| {
             if *slot > max_slot_inclusive {
                 true
@@ -4192,7 +4213,7 @@ impl AccountsDb {
     fn select_candidates_by_total_usage(
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
-        newest_ancient_slot: Option<Slot>,
+        oldest_non_ancient_slot: Option<Slot>,
     ) -> (ShrinkCandidates, ShrinkCandidates) {
         struct StoreUsageInfo {
             slot: Slot,
@@ -4206,8 +4227,8 @@ impl AccountsDb {
         let mut total_bytes: u64 = 0;
         let mut total_candidate_stores: usize = 0;
         for (slot, store) in shrink_slots {
-            if newest_ancient_slot
-                .map(|newest_ancient_slot| slot <= &newest_ancient_slot)
+            if oldest_non_ancient_slot
+                .map(|oldest_non_ancient_slot| slot < &oldest_non_ancient_slot)
                 .unwrap_or_default()
             {
                 // this slot will be 'shrunk' by ancient code
@@ -4295,22 +4316,14 @@ impl AccountsDb {
             .get_prior(slot)
     }
 
-    /// return highest slot that should be treated as ancient
-    fn get_newest_ancient_slot(&self) -> Slot {
-        let mut reference_slot = self.get_accounts_hash_complete_one_epoch_old();
-        if let Some(offset) = self.ancient_append_vec_offset {
-            reference_slot = Self::apply_offset_to_slot(reference_slot, offset);
-        }
-        reference_slot
-    }
-
     /// return all slots that are more than one epoch old and thus could already be an ancient append vec
     /// or which could need to be combined into a new or existing ancient append vec
     /// offset is used to combine newer slots than we normally would. This is designed to be used for testing.
     fn get_sorted_potential_ancient_slots(&self) -> Vec<Slot> {
-        let mut old_slots = self.get_roots_less_than(self.get_newest_ancient_slot());
-        old_slots.sort_unstable();
-        old_slots
+        let mut ancient_slots =
+            self.get_roots_less_than(self.get_accounts_hash_complete_oldest_non_ancient_slot());
+        ancient_slots.sort_unstable();
+        ancient_slots
     }
 
     /// get a sorted list of slots older than an epoch
@@ -4690,7 +4703,7 @@ impl AccountsDb {
                         &shrink_candidates_slots,
                         shrink_ratio,
                         self.ancient_append_vec_offset
-                            .map(|_| self.get_newest_ancient_slot()),
+                            .map(|_| self.get_accounts_hash_complete_oldest_non_ancient_slot()),
                     );
                 (shrink_slots, Some(shrink_slots_next_batch))
             } else {
@@ -7544,11 +7557,11 @@ impl AccountsDb {
 
     /// if we ever try to calc hash where there are squashed append vecs within the last epoch, we will fail
     fn assert_safe_squashing_accounts_hash(&self, slot: Slot, epoch_schedule: &EpochSchedule) {
-        let previous = self.get_accounts_hash_complete_one_epoch_old();
-        let current = Self::get_slot_one_epoch_prior(slot, epoch_schedule);
+        let previous = self.get_accounts_hash_complete_oldest_non_ancient_slot();
+        let current = Self::get_oldest_slot_within_one_epoch_prior(slot, epoch_schedule);
         assert!(
             previous <= current,
-            "get_accounts_hash_complete_one_epoch_old: {previous}, get_slot_one_epoch_prior: {current}, slot: {slot}"
+            "get_accounts_hash_complete_oldest_non_ancient_slot: {previous}, get_oldest_slot_within_one_epoch_prior: {current}, slot: {slot}"
         );
     }
 
@@ -13700,7 +13713,7 @@ pub mod tests {
                 AccountsDb::select_candidates_by_total_usage(
                     &candidates,
                     target_alive_ratio,
-                    newest_ancient_slot,
+                    newest_ancient_slot.map(|newest_ancient_slot| newest_ancient_slot + 1),
                 );
             assert_eq!(
                 if newest_ancient_slot == Some(slot1) {
@@ -17109,23 +17122,40 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_accounts_hash_complete_one_epoch_old() {
+    fn test_get_accounts_hash_complete_oldest_non_ancient_slot() {
+        // note that this test has to worry about saturation at 0 as we subtract `slots_per_epoch` and `ancient_append_vec_offset`
         let db = AccountsDb::new_single_for_tests();
-        assert_eq!(db.get_accounts_hash_complete_one_epoch_old(), 0);
+        assert_eq!(db.get_accounts_hash_complete_oldest_non_ancient_slot(), 0);
         let epoch_schedule = EpochSchedule::default();
-        let completed_slot = epoch_schedule.slots_per_epoch;
-        db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
-        assert_eq!(db.get_accounts_hash_complete_one_epoch_old(), 0);
-        let offset = 1;
-        let completed_slot = completed_slot + offset;
-        db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
-        let earliest = AccountsDb::get_slot_one_epoch_prior(completed_slot, &epoch_schedule);
-        assert_eq!(db.get_accounts_hash_complete_one_epoch_old(), earliest);
+        let ancient_append_vec_offset = db.ancient_append_vec_offset.unwrap();
+        for inc in 0..6 {
+            let expected_first_ancient_slot = inc;
+            let expected_oldest_non_ancient_slot = expected_first_ancient_slot + 1;
+            let completed_slot = AccountsDb::apply_offset_to_slot(
+                epoch_schedule.slots_per_epoch + inc,
+                -ancient_append_vec_offset,
+            );
+            db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
+            assert_eq!(
+                db.get_accounts_hash_complete_oldest_non_ancient_slot(),
+                expected_oldest_non_ancient_slot
+            );
+        }
+
         let offset = 5;
-        let completed_slot = completed_slot + offset;
+        let completed_slot = AccountsDb::apply_offset_to_slot(
+            epoch_schedule.slots_per_epoch + offset,
+            -ancient_append_vec_offset,
+        );
         db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
-        let earliest = AccountsDb::get_slot_one_epoch_prior(completed_slot, &epoch_schedule);
-        assert_eq!(db.get_accounts_hash_complete_one_epoch_old(), earliest);
+        let earliest = AccountsDb::apply_offset_to_slot(
+            AccountsDb::get_oldest_slot_within_one_epoch_prior(completed_slot, &epoch_schedule),
+            ancient_append_vec_offset,
+        );
+        assert_eq!(
+            db.get_accounts_hash_complete_oldest_non_ancient_slot(),
+            earliest
+        );
     }
 
     #[test]
@@ -17211,11 +17241,11 @@ pub mod tests {
     #[test]
     fn test_get_sorted_potential_ancient_slots() {
         let db = AccountsDb::new_single_for_tests();
+        let ancient_append_vec_offset = db.ancient_append_vec_offset.unwrap();
         assert!(db.get_sorted_potential_ancient_slots().is_empty());
         let root0 = 0;
         db.add_root(root0);
         let root1 = 1;
-        let root2 = 2;
         db.add_root(root1);
         assert!(db.get_sorted_potential_ancient_slots().is_empty());
         let epoch_schedule = EpochSchedule::default();
@@ -17224,11 +17254,17 @@ pub mod tests {
         // get_sorted_potential_ancient_slots uses 'less than' as opposed to 'less or equal'
         // so, we need to get more than an epoch away to get the first valid root
         assert!(db.get_sorted_potential_ancient_slots().is_empty());
-        let completed_slot = epoch_schedule.slots_per_epoch + root1;
-        db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
+        let completed_slot = epoch_schedule.slots_per_epoch + root0;
+        db.notify_accounts_hash_calculated_complete(
+            AccountsDb::apply_offset_to_slot(completed_slot, -ancient_append_vec_offset),
+            &epoch_schedule,
+        );
         assert_eq!(db.get_sorted_potential_ancient_slots(), vec![root0]);
-        let completed_slot = epoch_schedule.slots_per_epoch + root2;
-        db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
+        let completed_slot = epoch_schedule.slots_per_epoch + root1;
+        db.notify_accounts_hash_calculated_complete(
+            AccountsDb::apply_offset_to_slot(completed_slot, -ancient_append_vec_offset),
+            &epoch_schedule,
+        );
         assert_eq!(db.get_sorted_potential_ancient_slots(), vec![root0, root1]);
         db.accounts_index
             .roots_tracker
