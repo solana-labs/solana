@@ -107,7 +107,7 @@ manually download and install the binaries.
 
 Download the binaries by navigating to
 [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
-download **solana-release-x86_64-unknown-linux-msvc.tar.bz2**, then extract the
+download **solana-release-x86_64-unknown-linux-gnu.tar.bz2**, then extract the
 archive:
 
 ```bash
