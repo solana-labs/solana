@@ -10814,6 +10814,45 @@ fn test_calculate_fee_compute_units() {
 }
 
 #[test]
+fn test_calculate_prioritization_fee() {
+    let fee_structure = FeeStructure {
+        lamports_per_signature: 1,
+        ..FeeStructure::default()
+    };
+
+    let request_units = 1_000_000;
+    let request_unit_price = 2_000_000_000; // 2B micro-lamports/CU
+                                            // prioritization_fee = 2B micro-lamports/CU * 1M CUs = (2B / 1M) * 1M = 2B lamports
+    let prioritization_fee = 2_000_000_000;
+
+    let message = SanitizedMessage::try_from(Message::new(
+        &[
+            ComputeBudgetInstruction::set_compute_unit_limit(request_units),
+            ComputeBudgetInstruction::set_compute_unit_price(request_unit_price),
+        ],
+        Some(&Pubkey::new_unique()),
+    ))
+    .unwrap();
+    for support_set_accounts_data_size_limit_ix in [true, false] {
+        let fee = Bank::calculate_fee(
+            &message,
+            fee_structure.lamports_per_signature,
+            &fee_structure,
+            true,  // use_default_units_per_instruction
+            false, // not support_request_units_deprecated
+            true,  // remove_congestion_multiplier
+            true,  // enable_request_heap_frame_ix
+            support_set_accounts_data_size_limit_ix,
+            false, // include_loaded_account_data_size_in_fee
+        );
+        assert_eq!(
+            fee,
+            fee_structure.lamports_per_signature + prioritization_fee
+        );
+    }
+}
+
+#[test]
 fn test_calculate_fee_secp256k1() {
     let fee_structure = FeeStructure {
         lamports_per_signature: 1,

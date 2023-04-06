@@ -4257,4 +4257,67 @@ mod tests {
         test(tx_set_limit_99, &feature_set, &result_requested_limit);
         test(tx_set_limit_0, &feature_set, &result_invalid_limit);
     }
+
+    #[test]
+    fn test_load_accounts_too_high_prioritization_fee() {
+        solana_logger::setup();
+        let lamports_per_signature = 5000;
+        let request_units = 1_000_000;
+        let request_unit_price = 2_000_000_000; // 2B micro-lamports/CU
+                                                // prioritization_fee = 2B micro-lamports/CU * 1M CUs = (2B / 1M) * 1M = 2B lamports
+        let prioritization_fee = 2_000_000_000;
+
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
+        let mut error_counters = TransactionErrorMetrics::default();
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+
+        // set up account with 2B lamports
+        let account = AccountSharedData::new(prioritization_fee, 0, &Pubkey::default());
+        accounts.push((key0, account));
+
+        let instructions = &[
+            solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_limit(
+                request_units,
+            ),
+            solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_price(
+                request_unit_price,
+            ),
+        ];
+        let tx = Transaction::new(
+            &[&keypair],
+            Message::new(instructions, Some(&key0)),
+            Hash::default(),
+        );
+
+        let fee = Bank::calculate_fee(
+            &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+            lamports_per_signature,
+            &FeeStructure::default(),
+            true,
+            false,
+            true,
+            true,
+            true,
+            false,
+        );
+        assert_eq!(fee, lamports_per_signature + prioritization_fee);
+
+        // assert fail to load account with 2B lamport balance for transaction asking for 2B
+        // lamports as prioritization fee.
+        let loaded_accounts = load_accounts_with_fee(
+            tx,
+            &accounts,
+            lamports_per_signature,
+            &mut error_counters,
+            None,
+        );
+
+        assert_eq!(error_counters.insufficient_funds, 1);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(
+            loaded_accounts[0].clone(),
+            (Err(TransactionError::InsufficientFundsForFee), None,),
+        );
+    }
 }
