@@ -15,9 +15,6 @@ keywords:
 
 Rust is the most common programming language to write Solana programs with. This quickstart guide will demonstrate how to quickly setup, build, and deploy your first Rust based Solana program to the blockchain.
 
-> **NOTE: **
-> This guide uses the Solana CLI and assumes you have setup your local development environment. Checkout our [local development quickstart guide](./local.md) here to quickly get setup.
-
 ## What you will learn
 
 - How to install the Rust language locally
@@ -32,6 +29,9 @@ To be able to compile Rust based Solana programs, install the Rust language and 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
+
+> **NOTE: **
+> This guide uses the Solana CLI and assumes you have setup your local development environment. Checkout our [local development quickstart guide](./local.md) here to quickly get setup.
 
 ## Run your localhost validator
 
