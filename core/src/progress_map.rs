@@ -2,7 +2,7 @@ use {
     crate::{
         cluster_info_vote_listener::SlotVoteTracker,
         cluster_slots::SlotPubkeys,
-        consensus::{Stake, VotedStakes},
+        consensus::{Stake, ThresholdDecision, VotedStakes},
         replay_stage::SUPERMINORITY_THRESHOLD,
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
@@ -299,7 +299,7 @@ pub struct ForkStats {
     pub has_voted: bool,
     pub is_recent: bool,
     pub is_empty: bool,
-    pub vote_threshold: bool,
+    pub vote_threshold: ThresholdDecision,
     pub is_locked_out: bool,
     pub voted_stakes: VotedStakes,
     pub is_supermajority_confirmed: bool,

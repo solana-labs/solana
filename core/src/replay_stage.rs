@@ -14,7 +14,8 @@ use {
         cluster_slots_service::ClusterSlotsUpdateSender,
         commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
         consensus::{
-            ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
+            ComputedBankState, Stake, SwitchForkDecision, ThresholdDecision, Tower, VotedStakes,
+            SWITCH_FORK_THRESHOLD,
         },
         cost_update_service::CostUpdate,
         fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
@@ -108,9 +109,21 @@ lazy_static! {
 #[derive(PartialEq, Eq, Debug)]
 pub enum HeaviestForkFailures {
     LockedOut(u64),
-    FailedThreshold(u64),
-    FailedSwitchThreshold(u64),
-    NoPropagatedConfirmation(u64),
+    FailedThreshold(
+        Slot,
+        /* Observed stake */ u64,
+        /* Total stake */ u64,
+    ),
+    FailedSwitchThreshold(
+        Slot,
+        /* Observed stake */ u64,
+        /* Total stake */ u64,
+    ),
+    NoPropagatedConfirmation(
+        Slot,
+        /* Observed stake */ u64,
+        /* Total stake */ u64,
+    ),
 }
 
 // Implement a destructor for the ReplayStage thread to signal it exited
@@ -800,7 +813,7 @@ impl ReplayStage {
                     );
 
                     for r in &heaviest_fork_failures {
-                        if let HeaviestForkFailures::NoPropagatedConfirmation(slot) = r {
+                        if let HeaviestForkFailures::NoPropagatedConfirmation(slot, ..) = r {
                             if let Some(latest_leader_slot) =
                                 progress.get_latest_leader_slot_must_exist(*slot)
                             {
@@ -3150,6 +3163,8 @@ impl ReplayStage {
                     );
                     failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
                         heaviest_bank.slot(),
+                        switch_proof_stake,
+                        total_stake,
                     ));
                     reset_bank.map(|b| (b, switch_fork_decision))
                 }
@@ -3198,6 +3213,8 @@ impl ReplayStage {
                     );
                     failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
                         heaviest_bank.slot(),
+                        0, // In this case we never actually performed the switch check, 0 for now
+                        0,
                     ));
                     reset_bank.map(|b| (b, switch_fork_decision))
                 }
@@ -3206,14 +3223,25 @@ impl ReplayStage {
         };
 
         if let Some((bank, switch_fork_decision)) = selected_fork {
-            let (is_locked_out, vote_threshold, is_leader_slot, fork_weight) = {
+            let (
+                is_locked_out,
+                vote_threshold,
+                propagated_stake,
+                is_leader_slot,
+                fork_weight,
+                total_threshold_stake,
+                total_epoch_stake,
+            ) = {
                 let fork_stats = progress.get_fork_stats(bank.slot()).unwrap();
                 let propagated_stats = &progress.get_propagated_stats(bank.slot()).unwrap();
                 (
                     fork_stats.is_locked_out,
                     fork_stats.vote_threshold,
+                    propagated_stats.propagated_validators_stake,
                     propagated_stats.is_leader_slot,
                     fork_stats.weight,
+                    fork_stats.total_stake,
+                    propagated_stats.total_epoch_stake,
                 )
             };
 
@@ -3225,15 +3253,23 @@ impl ReplayStage {
             if is_locked_out {
                 failure_reasons.push(HeaviestForkFailures::LockedOut(bank.slot()));
             }
-            if !vote_threshold {
-                failure_reasons.push(HeaviestForkFailures::FailedThreshold(bank.slot()));
+            if let ThresholdDecision::FailedThreshold(fork_stake) = vote_threshold {
+                failure_reasons.push(HeaviestForkFailures::FailedThreshold(
+                    bank.slot(),
+                    fork_stake,
+                    total_threshold_stake,
+                ));
             }
             if !propagation_confirmed {
-                failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(bank.slot()));
+                failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(
+                    bank.slot(),
+                    propagated_stake,
+                    total_epoch_stake,
+                ));
             }
 
             if !is_locked_out
-                && vote_threshold
+                && vote_threshold.passed()
                 && propagation_confirmed
                 && switch_fork_decision.can_vote()
             {
