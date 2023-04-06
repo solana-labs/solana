@@ -192,7 +192,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use {super::MultiIteratorScanner, crate::multi_iterator_scanner::ProcessingDecision};
+    use super::*;
 
     struct TestScannerPayload {
         locks: Vec<bool>,
@@ -282,8 +282,9 @@ mod tests {
         let expected_batches = vec![vec![&0, &1], vec![&0, &2], vec![&0, &3], vec![&1]];
         assert_eq!(actual_batches, expected_batches);
 
-        let TestScannerPayload { locks } = scanner.finalize().0;
+        let (TestScannerPayload { locks }, already_handled) = scanner.finalize();
         assert_eq!(locks, vec![false; 4]);
+        assert!(already_handled.into_iter().all(|x| x));
     }
 
     #[test]
@@ -325,8 +326,9 @@ mod tests {
         ];
         assert_eq!(actual_batches, expected_batches);
 
-        let TestScannerPayload { locks } = scanner.finalize().0;
+        let (TestScannerPayload { locks }, already_handled) = scanner.finalize();
         assert_eq!(locks, vec![false; 4]);
+        assert!(already_handled.into_iter().all(|x| x));
     }
 
     #[test]
@@ -349,5 +351,29 @@ mod tests {
         //                    ^
         let expected_batches = vec![vec![&0, &1], vec![&2]];
         assert_eq!(actual_batches, expected_batches);
+    }
+
+    #[test]
+    fn test_multi_iterator_scanner_iterate_not_handled() {
+        let slice = [0, 1, 2];
+
+        // 0 and 2 will always be marked as later, and never actually handled
+        let should_process = |item: &i32, _payload: &mut ()| match item {
+            1 => ProcessingDecision::Now,
+            _ => ProcessingDecision::Later,
+        };
+
+        let mut scanner = MultiIteratorScanner::new(&slice, 2, (), should_process);
+        let mut actual_batches = vec![];
+        while let Some((batch, _payload)) = scanner.iterate() {
+            actual_batches.push(batch.to_vec());
+        }
+
+        // Batch 1: [1]
+        let expected_batches = vec![vec![&1]];
+        assert_eq!(actual_batches, expected_batches);
+
+        let (_, already_handled) = scanner.finalize();
+        assert_eq!(already_handled, vec![false, true, false]);
     }
 }
