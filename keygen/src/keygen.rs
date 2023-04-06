@@ -36,6 +36,18 @@ use {
     },
 };
 
+mod smallest_length_44_public_key {
+    use solana_sdk::{pubkey, pubkey::Pubkey};
+
+    pub(super) static PUBKEY: Pubkey = pubkey!("21111111111111111111111111111111111111111111");
+
+    #[test]
+    fn assert_length() {
+        use crate::smallest_length_44_public_key;
+        assert_eq!(smallest_length_44_public_key::PUBKEY.to_string().len(), 44);
+    }
+}
+
 const NO_PASSPHRASE: &str = "";
 const DEFAULT_DERIVATION_PATH: &str = "m/44'/501'/0'/0'";
 
@@ -732,6 +744,25 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             };
             let no_outfile = matches.is_present(NO_OUTFILE_ARG.name);
 
+            // The vast majority of base58 encoded public keys have length 44, but
+            // these only encapsulate prefixes 1-9 and A-H.  If the user is searching
+            // for a keypair that starts with a prefix of J-Z or a-z, then there is no
+            // reason to waste time searching for a keypair that will never match
+            let skip_len_44_pubkeys = grind_matches
+                .iter()
+                .map(|g| {
+                    let target_key = if ignore_case {
+                        g.starts.to_ascii_uppercase()
+                    } else {
+                        g.starts.clone()
+                    };
+                    let target_key =
+                        target_key + &(0..44 - g.starts.len()).map(|_| "1").collect::<String>();
+                    bs58::decode(target_key).into_vec()
+                })
+                .filter_map(|s| s.ok())
+                .all(|s| s.len() > 32);
+
             let grind_matches_thread_safe = Arc::new(grind_matches);
             let attempts = Arc::new(AtomicU64::new(1));
             let found = Arc::new(AtomicU64::new(0));
@@ -747,6 +778,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                     let passphrase = passphrase.clone();
                     let passphrase_message = passphrase_message.clone();
                     let derivation_path = derivation_path.clone();
+                    let skip_len_44_pubkeys = skip_len_44_pubkeys;
 
                     thread::spawn(move || loop {
                         if done.load(Ordering::Relaxed) {
@@ -772,6 +804,10 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                         } else {
                             (Keypair::new(), "".to_string())
                         };
+                        // Skip keypairs that will never match the user specified prefix
+                        if skip_len_44_pubkeys && keypair.pubkey() >= smallest_length_44_public_key::PUBKEY {
+                            continue;
+                        }
                         let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
                         if ignore_case {
                             pubkey = pubkey.to_lowercase();
