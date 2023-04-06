@@ -12,7 +12,7 @@ use {
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
-        deduper::Deduper,
+        deduper::{self, Deduper},
         packet::{Packet, PacketBatch},
         sigverify::{
             count_discarded_packets, count_packets_in_batches, count_valid_packets, shrink_batches,
@@ -80,6 +80,7 @@ struct SigVerifierStats {
     dedup_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
     batches_hist: histogram::Histogram,         // number of packet batches per verify call
     packets_hist: histogram::Histogram,         // number of packets per verify call
+    num_deduper_saturations: usize,
     total_batches: usize,
     total_packets: usize,
     total_dedup: usize,
@@ -196,6 +197,7 @@ impl SigVerifierStats {
             ("packets_min", self.packets_hist.minimum().unwrap_or(0), i64),
             ("packets_max", self.packets_hist.maximum().unwrap_or(0), i64),
             ("packets_mean", self.packets_hist.mean().unwrap_or(0), i64),
+            ("num_deduper_saturations", self.num_deduper_saturations, i64),
             ("total_batches", self.total_batches, i64),
             ("total_packets", self.total_packets, i64),
             ("total_dedup", self.total_dedup, i64),
@@ -233,7 +235,6 @@ impl SigVerifier for DisabledSigVerifier {
 }
 
 impl SigVerifyStage {
-    #[allow(clippy::new_ret_no_self)]
     pub fn new<T: SigVerifier + 'static + Send>(
         packet_receiver: FindPacketSenderStakeReceiver,
         verifier: T,
@@ -289,8 +290,8 @@ impl SigVerifyStage {
         (shrink_time.as_us(), shrink_total)
     }
 
-    fn verifier<T: SigVerifier>(
-        deduper: &Deduper,
+    fn verifier<const K: usize, T: SigVerifier>(
+        deduper: &Deduper<K, [u8]>,
         recvr: &FindPacketSenderStakeReceiver,
         verifier: &mut T,
         stats: &mut SigVerifierStats,
@@ -314,7 +315,8 @@ impl SigVerifyStage {
         discard_random_time.stop();
 
         let mut dedup_time = Measure::start("sigverify_dedup_time");
-        let discard_or_dedup_fail = deduper.dedup_packets_and_count_discards(
+        let discard_or_dedup_fail = deduper::dedup_packets_and_count_discards(
+            deduper,
             &mut batches,
             #[inline(always)]
             |received_packet, removed_before_sigverify_stage, is_dup| {
@@ -410,13 +412,17 @@ impl SigVerifyStage {
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
         const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
-        const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
+        const DEDUPER_FALSE_POSITIVE_RATE: f64 = 0.001;
+        const DEDUPER_NUM_BITS: u64 = 63_999_979;
         Builder::new()
             .name("solSigVerifier".to_string())
             .spawn(move || {
-                let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
+                let mut rng = rand::thread_rng();
+                let mut deduper = Deduper::<2, [u8]>::new(&mut rng, DEDUPER_NUM_BITS);
                 loop {
-                    deduper.reset();
+                    if deduper.maybe_reset(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, MAX_DEDUPER_AGE) {
+                        stats.num_deduper_saturations += 1;
+                    }
                     if let Err(e) =
                         Self::verifier(&deduper, &packet_receiver, &mut verifier, &mut stats)
                     {

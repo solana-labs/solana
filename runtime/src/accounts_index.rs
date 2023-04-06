@@ -1685,11 +1685,14 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     }
 
     /// return Vec<Vec<>> because the internal vecs are already allocated per bin
-    pub fn retrieve_duplicate_keys_from_startup(&self) -> Vec<Vec<(Slot, Pubkey)>> {
+    pub(crate) fn populate_and_retrieve_duplicate_keys_from_startup(
+        &self,
+    ) -> Vec<Vec<(Slot, Pubkey)>> {
         (0..self.bins())
+            .into_par_iter()
             .map(|pubkey_bin| {
                 let r_account_maps = &self.account_maps[pubkey_bin];
-                r_account_maps.retrieve_duplicate_keys_from_startup()
+                r_account_maps.populate_and_retrieve_duplicate_keys_from_startup()
             })
             .collect()
     }
@@ -2699,6 +2702,7 @@ pub mod tests {
             index.set_startup(Startup::Normal);
         }
         assert!(gc.is_empty());
+        index.populate_and_retrieve_duplicate_keys_from_startup();
 
         for lock in &[false, true] {
             let read_lock = if *lock {

@@ -100,7 +100,7 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
     invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     set_invoke_context(invoke_context);
 
     let transaction_context = &invoke_context.transaction_context;
@@ -134,8 +134,8 @@ pub fn builtin_process_instruction(
 
     // Execute the program
     process_instruction(program_id, &account_infos, instruction_data).map_err(|err| {
-        let err = u64::from(err);
-        stable_log::program_failure(&log_collector, program_id, &err.into());
+        let err: Box<dyn std::error::Error> = Box::new(InstructionError::from(u64::from(err)));
+        stable_log::program_failure(&log_collector, program_id, err.as_ref());
         err
     })?;
     stable_log::program_success(&log_collector, program_id);
@@ -463,13 +463,18 @@ impl Default for ProgramTest {
         let prefer_bpf =
             std::env::var("BPF_OUT_DIR").is_ok() || std::env::var("SBF_OUT_DIR").is_ok();
 
+        // deactivate feature `native_program_consume_cu` to continue support existing mock/test
+        // programs that do not consume units.
+        let deactivate_feature_set =
+            HashSet::from([solana_sdk::feature_set::native_programs_consume_cu::id()]);
+
         Self {
             accounts: vec![],
             builtins: vec![],
             compute_max_units: None,
             prefer_bpf,
             use_bpf_jit: false,
-            deactivate_feature_set: HashSet::default(),
+            deactivate_feature_set,
             transaction_account_lock_limit: None,
         }
     }
@@ -622,7 +627,7 @@ impl ProgramTest {
         let add_native = |this: &mut ProgramTest, process_fn: ProcessInstructionWithContext| {
             info!("\"{}\" program loaded as native code", program_name);
             this.builtins
-                .push(Builtin::new(program_name, program_id, process_fn, 0));
+                .push(Builtin::new(program_name, program_id, process_fn));
         };
 
         let warn_invalid_program_name = || {
@@ -695,12 +700,8 @@ impl ProgramTest {
         process_instruction: ProcessInstructionWithContext,
     ) {
         info!("\"{}\" builtin program", program_name);
-        self.builtins.push(Builtin::new(
-            program_name,
-            program_id,
-            process_instruction,
-            0,
-        ));
+        self.builtins
+            .push(Builtin::new(program_name, program_id, process_instruction));
     }
 
     /// Deactivate a runtime feature.
@@ -793,7 +794,7 @@ impl ProgramTest {
         // Add loaders
         macro_rules! add_builtin {
             ($b:expr) => {
-                bank.add_builtin(&$b.0, &$b.1, $b.2, $b.3)
+                bank.add_builtin(&$b.0, &$b.1, $b.2)
             };
         }
         add_builtin!(solana_bpf_loader_deprecated_program!());
@@ -816,7 +817,6 @@ impl ProgramTest {
                 &builtin.name,
                 &builtin.id,
                 builtin.process_instruction_with_context,
-                0,
             );
         }
 

@@ -41,8 +41,9 @@ $*"
   ) || echo "Error from packet loss analysis"
 
   execution_step "Deleting Testnet"
-  "${REPO_ROOT}"/net/"${CLOUD_PROVIDER}".sh delete -p "${TESTNET_TAG}"
-
+  if test -f "${REPO_ROOT}"/net/"${CLOUD_PROVIDER}".sh; then
+    "${REPO_ROOT}"/net/"${CLOUD_PROVIDER}".sh delete -p "${TESTNET_TAG}"
+  fi
 }
 trap 'cleanup_testnet $BASH_COMMAND' EXIT
 
@@ -97,6 +98,8 @@ function launch_testnet() {
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" $maybeEnableGpu \
         -p "$TESTNET_TAG" $maybePublicIpAddresses --dedicated \
         ${ADDITIONAL_FLAGS[@]/#/" "}
+      ;;
+    bare)
       ;;
     *)
       echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"

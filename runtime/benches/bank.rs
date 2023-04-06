@@ -15,7 +15,6 @@ use {
         client::{AsyncClient, SyncClient},
         clock::MAX_RECENT_BLOCKHASHES,
         genesis_config::create_genesis_config,
-        instruction::InstructionError,
         message::Message,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -35,8 +34,9 @@ const NOOP_PROGRAM_ID: [u8; 32] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
 ];
 
-#[allow(clippy::unnecessary_wraps)]
-fn process_instruction(_invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+fn process_instruction(
+    _invoke_context: &mut InvokeContext,
+) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
@@ -136,7 +136,6 @@ fn do_bench_transactions(
         "builtin_program",
         &Pubkey::from(BUILTIN_PROGRAM_ID),
         process_instruction,
-        0,
     );
     bank.add_builtin_account("solana_noop_program", &Pubkey::from(NOOP_PROGRAM_ID), false);
     let bank = Arc::new(bank);

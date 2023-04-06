@@ -100,7 +100,7 @@ impl Tvu {
     /// * `cluster_info` - The cluster_info state.
     /// * `sockets` - fetch, repair, and retransmit sockets
     /// * `blockstore` - the ledger itself
-    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         vote_account: &Pubkey,
         authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
@@ -161,6 +161,7 @@ impl Tvu {
             tvu_config.shred_version,
             bank_forks.clone(),
             cluster_info.clone(),
+            turbine_disabled,
             exit,
         );
 
@@ -173,7 +174,6 @@ impl Tvu {
             fetch_receiver,
             retransmit_sender.clone(),
             verified_sender,
-            turbine_disabled,
         );
 
         let retransmit_stage = RetransmitStage::new(

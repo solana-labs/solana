@@ -81,6 +81,11 @@ impl DataBudget {
         }
         self.bytes.load(Ordering::Acquire)
     }
+
+    #[must_use]
+    pub fn check(&self, size: usize) -> bool {
+        size <= self.bytes.load(Ordering::Acquire)
+    }
 }
 
 #[cfg(test)]

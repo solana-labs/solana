@@ -24,14 +24,17 @@ use {
             verify_net_stats_access, SystemMonitorService, SystemMonitorStatsReportConfig,
         },
         tower_storage::TowerStorage,
-        tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
+        tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE},
         tvu::{Tvu, TvuConfig, TvuSockets},
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
+    lazy_static::lazy_static,
     rand::{thread_rng, Rng},
     solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
-    solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
+    solana_geyser_plugin_manager::{
+        geyser_plugin_service::GeyserPluginService, GeyserPluginManagerRequest,
+    },
     solana_gossip::{
         cluster_info::{
             ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
@@ -87,7 +90,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_utils::{self, move_and_async_delete_path},
+        snapshot_utils::{self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path},
     },
     solana_sdk::{
         clock::Slot,
@@ -114,10 +117,60 @@ use {
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    strum::VariantNames,
+    strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr},
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
+
+#[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[strum(serialize_all = "kebab-case")]
+pub enum BlockVerificationMethod {
+    #[default]
+    BlockstoreProcessor,
+}
+
+impl BlockVerificationMethod {
+    pub const fn cli_names() -> &'static [&'static str] {
+        Self::VARIANTS
+    }
+
+    pub fn cli_message() -> &'static str {
+        lazy_static! {
+            static ref MESSAGE: String = format!(
+                "Switch transaction scheduling method for verifying ledger entries [default: {}]",
+                BlockVerificationMethod::default()
+            );
+        };
+
+        &MESSAGE
+    }
+}
+
+#[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[strum(serialize_all = "kebab-case")]
+pub enum BlockProductionMethod {
+    #[default]
+    ThreadLocalMultiIterator,
+}
+
+impl BlockProductionMethod {
+    pub const fn cli_names() -> &'static [&'static str] {
+        Self::VARIANTS
+    }
+
+    pub fn cli_message() -> &'static str {
+        lazy_static! {
+            static ref MESSAGE: String = format!(
+                "Switch transaction scheduling method for producing ledger entries [default: {}]",
+                BlockProductionMethod::default()
+            );
+        };
+
+        &MESSAGE
+    }
+}
 
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
@@ -126,9 +179,11 @@ pub struct ValidatorConfig {
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
+    pub account_snapshot_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
-    pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
+    /// Specifies which plugins to start up with
+    pub on_start_geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: SnapshotConfig,
@@ -148,7 +203,9 @@ pub struct ValidatorConfig {
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-    pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
+    /// Run PoH, transaction signature and other transaction verifications during blockstore
+    /// processing.
+    pub run_verification: bool,
     pub require_tower: bool,
     pub tower_storage: Arc<dyn TowerStorage>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -168,7 +225,7 @@ pub struct ValidatorConfig {
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_skip_shrink: bool,
-    pub tpu_coalesce_ms: u64,
+    pub tpu_coalesce: Duration,
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
@@ -178,6 +235,8 @@ pub struct ValidatorConfig {
     pub runtime_config: RuntimeConfig,
     pub replay_slots_concurrently: bool,
     pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
+    pub block_verification_method: BlockVerificationMethod,
+    pub block_production_method: BlockProductionMethod,
 }
 
 impl Default for ValidatorConfig {
@@ -190,9 +249,10 @@ impl Default for ValidatorConfig {
             voting_disabled: false,
             max_ledger_shreds: None,
             account_paths: Vec::new(),
+            account_snapshot_paths: Vec::new(),
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
-            geyser_plugin_config_files: None,
+            on_start_geyser_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: SnapshotConfig::new_load_only(),
@@ -211,7 +271,7 @@ impl Default for ValidatorConfig {
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
-            poh_verify: true,
+            run_verification: true,
             require_tower: false,
             tower_storage: Arc::new(crate::tower_storage::NullTowerStorage::default()),
             debug_keys: None,
@@ -230,7 +290,7 @@ impl Default for ValidatorConfig {
             warp_slot: None,
             accounts_db_test_hash_calculation: false,
             accounts_db_skip_shrink: false,
-            tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
+            tpu_coalesce: DEFAULT_TPU_COALESCE,
             staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
@@ -241,6 +301,8 @@ impl Default for ValidatorConfig {
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
             banking_trace_dir_byte_limit: 0,
+            block_verification_method: BlockVerificationMethod::default(),
+            block_production_method: BlockProductionMethod::default(),
         }
     }
 }
@@ -392,6 +454,7 @@ impl Validator {
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
         should_check_duplicate_instance: bool,
+        rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
@@ -413,12 +476,19 @@ impl Validator {
 
         let mut bank_notification_senders = Vec::new();
 
+        let exit = Arc::new(AtomicBool::new(false));
+
         let geyser_plugin_service =
-            if let Some(geyser_plugin_config_files) = &config.geyser_plugin_config_files {
+            if let Some(geyser_plugin_config_files) = &config.on_start_geyser_plugin_config_files {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
                 bank_notification_senders.push(confirmed_bank_sender);
-                let result =
-                    GeyserPluginService::new(confirmed_bank_receiver, geyser_plugin_config_files);
+                let rpc_to_plugin_manager_receiver_and_exit =
+                    rpc_to_plugin_manager_receiver.map(|receiver| (receiver, exit.clone()));
+                let result = GeyserPluginService::new_with_receiver(
+                    confirmed_bank_receiver,
+                    geyser_plugin_config_files,
+                    rpc_to_plugin_manager_receiver_and_exit,
+                );
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),
                     Err(err) => {
@@ -482,6 +552,16 @@ impl Validator {
         cleanup_accounts_paths(config);
         start.stop();
         info!("done. {}", start);
+
+        info!("Cleaning orphaned account snapshot directories..");
+        if let Err(e) = clean_orphaned_account_snapshot_dirs(
+            &config.snapshot_config.bank_snapshots_dir,
+            &config.account_snapshot_paths,
+        ) {
+            return Err(format!(
+                "Failed to clean orphaned account snapshot directories: {e:?}"
+            ));
+        }
 
         let exit = Arc::new(AtomicBool::new(false));
         {
@@ -662,6 +742,10 @@ impl Validator {
             config.accounts_db_test_hash_calculation,
             last_full_snapshot_slot,
         );
+        info!(
+            "Using: block-verification-method: {}, block-production-method: {}",
+            config.block_verification_method, config.block_production_method
+        );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let mut process_blockstore = ProcessBlockStore::new(
@@ -783,7 +867,7 @@ impl Validator {
         };
 
         // block min prioritization fee cache should be readable by RPC, and writable by validator
-        // (for now, by replay stage)
+        // (by both replay stage and banking stage)
         let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
@@ -1062,7 +1146,7 @@ impl Validator {
             replay_vote_receiver,
             replay_vote_sender,
             bank_notification_sender,
-            config.tpu_coalesce_ms,
+            config.tpu_coalesce,
             cluster_confirmed_slot_sender,
             &connection_cache,
             &identity_keypair,
@@ -1072,6 +1156,7 @@ impl Validator {
             banking_tracer,
             tracer_thread,
             tpu_enable_udp,
+            &prioritization_fee_cache,
         );
 
         datapoint_info!(
@@ -1460,7 +1545,7 @@ fn load_blockstore(
         .or_else(|| blockstore.highest_slot().unwrap_or(None));
 
     let process_options = blockstore_processor::ProcessOptions {
-        poh_verify: config.poh_verify,
+        run_verification: config.run_verification,
         halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
         debug_keys: config.debug_keys.clone(),
@@ -2176,6 +2261,7 @@ mod tests {
             vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
             &config,
             true, // should_check_duplicate_instance
+            None, // rpc_to_plugin_manager_receiver
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
             DEFAULT_TPU_USE_QUIC,
@@ -2273,7 +2359,8 @@ mod tests {
                     Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
                     vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
                     &config,
-                    true, // should_check_duplicate_instance
+                    true, // should_check_duplicate_instance.
+                    None, // rpc_to_plugin_manager_receiver
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
                     DEFAULT_TPU_USE_QUIC,
@@ -2297,8 +2384,7 @@ mod tests {
             sender.send(()).unwrap();
         });
 
-        // timeout of 30s for shutting down the validators
-        let timeout = Duration::from_secs(30);
+        let timeout = Duration::from_secs(60);
         if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
             panic!("timeout for shutting down validators",);
         }

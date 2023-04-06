@@ -1,6 +1,7 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! multi-stage transaction processing pipeline in software.
 
+pub use solana_sdk::net::DEFAULT_TPU_COALESCE;
 use {
     crate::{
         banking_stage::BankingStage,
@@ -27,11 +28,12 @@ use {
     },
     solana_runtime::{
         bank_forks::BankForks,
+        prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
-        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
         quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         streamer::StakedNodes,
     },
@@ -40,10 +42,9 @@ use {
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
+        time::Duration,
     },
 };
-
-pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
 // allow multiple connections for NAT and any open/close overlap
 pub const MAX_QUIC_CONNECTIONS_PER_PEER: usize = 8;
@@ -93,7 +94,7 @@ impl Tpu {
         replay_vote_receiver: ReplayVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
         bank_notification_sender: Option<BankNotificationSender>,
-        tpu_coalesce_ms: u64,
+        tpu_coalesce: Duration,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
@@ -103,6 +104,7 @@ impl Tpu {
         banking_tracer: Arc<BankingTracer>,
         tracer_thread_hdl: TracerThread,
         tpu_enable_udp: bool,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -126,7 +128,7 @@ impl Tpu {
             &forwarded_packet_sender,
             forwarded_packet_receiver,
             poh_recorder,
-            tpu_coalesce_ms,
+            tpu_coalesce,
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
             tpu_enable_udp,
         );
@@ -176,7 +178,8 @@ impl Tpu {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            tpu_coalesce,
         )
         .unwrap();
 
@@ -195,7 +198,8 @@ impl Tpu {
             MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
             0, // Prevent unstaked nodes from forwarding transactions
             stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+            tpu_coalesce,
         )
         .unwrap();
 
@@ -244,6 +248,7 @@ impl Tpu {
             log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),
+            prioritization_fee_cache,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(

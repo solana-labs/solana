@@ -1,8 +1,11 @@
 use {
-    jsonrpc_core::{MetaIoHandler, Metadata, Result},
+    crossbeam_channel::Sender,
+    jsonrpc_core::{BoxFuture, ErrorCode, MetaIoHandler, Metadata, Result},
     jsonrpc_core_client::{transports::ipc, RpcError},
     jsonrpc_derive::rpc,
-    jsonrpc_ipc_server::{RequestContext, ServerBuilder},
+    jsonrpc_ipc_server::{
+        tokio::sync::oneshot::channel as oneshot_channel, RequestContext, ServerBuilder,
+    },
     jsonrpc_server_utils::tokio,
     log::*,
     serde::{de::Deserializer, Deserialize, Serialize},
@@ -10,6 +13,7 @@ use {
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit, consensus::Tower,
         tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
+    solana_geyser_plugin_manager::GeyserPluginManagerRequest,
     solana_gossip::contact_info::ContactInfo,
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
@@ -41,7 +45,9 @@ pub struct AdminRpcRequestMetadata {
     pub tower_storage: Arc<dyn TowerStorage>,
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
+    pub rpc_to_plugin_manager_sender: Option<Sender<GeyserPluginManagerRequest>>,
 }
+
 impl Metadata for AdminRpcRequestMetadata {}
 
 impl AdminRpcRequestMetadata {
@@ -139,6 +145,23 @@ pub trait AdminRpc {
     #[rpc(meta, name = "exit")]
     fn exit(&self, meta: Self::Metadata) -> Result<()>;
 
+    #[rpc(meta, name = "reloadPlugin")]
+    fn reload_plugin(
+        &self,
+        meta: Self::Metadata,
+        name: String,
+        config_file: String,
+    ) -> BoxFuture<Result<()>>;
+
+    #[rpc(meta, name = "unloadPlugin")]
+    fn unload_plugin(&self, meta: Self::Metadata, name: String) -> BoxFuture<Result<()>>;
+
+    #[rpc(meta, name = "loadPlugin")]
+    fn load_plugin(&self, meta: Self::Metadata, config_file: String) -> BoxFuture<Result<String>>;
+
+    #[rpc(meta, name = "listPlugins")]
+    fn list_plugins(&self, meta: Self::Metadata) -> BoxFuture<Result<Vec<String>>>;
+
     #[rpc(meta, name = "rpcAddress")]
     fn rpc_addr(&self, meta: Self::Metadata) -> Result<Option<SocketAddr>>;
 
@@ -232,6 +255,121 @@ impl AdminRpc for AdminRpcImpl {
             })
             .unwrap();
         Ok(())
+    }
+
+    fn reload_plugin(
+        &self,
+        meta: Self::Metadata,
+        name: String,
+        config_file: String,
+    ) -> BoxFuture<Result<()>> {
+        Box::pin(async move {
+            // Construct channel for plugin to respond to this particular rpc request instance
+            let (response_sender, response_receiver) = oneshot_channel();
+
+            // Send request to plugin manager if there is a geyser service
+            if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
+                rpc_to_manager_sender
+                    .send(GeyserPluginManagerRequest::ReloadPlugin {
+                        name,
+                        config_file,
+                        response_sender,
+                    })
+                    .expect("GeyerPluginService should never drop request receiver");
+            } else {
+                return Err(jsonrpc_core::Error {
+                    code: ErrorCode::InvalidRequest,
+                    message: "No geyser plugin service".to_string(),
+                    data: None,
+                });
+            }
+
+            // Await response from plugin manager
+            response_receiver
+                .await
+                .expect("GeyerPluginService's oneshot sender shouldn't drop early")
+        })
+    }
+
+    fn load_plugin(&self, meta: Self::Metadata, config_file: String) -> BoxFuture<Result<String>> {
+        Box::pin(async move {
+            // Construct channel for plugin to respond to this particular rpc request instance
+            let (response_sender, response_receiver) = oneshot_channel();
+
+            // Send request to plugin manager if there is a geyser service
+            if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
+                rpc_to_manager_sender
+                    .send(GeyserPluginManagerRequest::LoadPlugin {
+                        config_file,
+                        response_sender,
+                    })
+                    .expect("GeyerPluginService should never drop request receiver");
+            } else {
+                return Err(jsonrpc_core::Error {
+                    code: ErrorCode::InvalidRequest,
+                    message: "No geyser plugin service".to_string(),
+                    data: None,
+                });
+            }
+
+            // Await response from plugin manager
+            response_receiver
+                .await
+                .expect("GeyerPluginService's oneshot sender shouldn't drop early")
+        })
+    }
+
+    fn unload_plugin(&self, meta: Self::Metadata, name: String) -> BoxFuture<Result<()>> {
+        Box::pin(async move {
+            // Construct channel for plugin to respond to this particular rpc request instance
+            let (response_sender, response_receiver) = oneshot_channel();
+
+            // Send request to plugin manager if there is a geyser service
+            if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
+                rpc_to_manager_sender
+                    .send(GeyserPluginManagerRequest::UnloadPlugin {
+                        name,
+                        response_sender,
+                    })
+                    .expect("GeyerPluginService should never drop request receiver");
+            } else {
+                return Err(jsonrpc_core::Error {
+                    code: ErrorCode::InvalidRequest,
+                    message: "No geyser plugin service".to_string(),
+                    data: None,
+                });
+            }
+
+            // Await response from plugin manager
+            response_receiver
+                .await
+                .expect("GeyerPluginService's oneshot sender shouldn't drop early")
+        })
+    }
+
+    fn list_plugins(&self, meta: Self::Metadata) -> BoxFuture<Result<Vec<String>>> {
+        Box::pin(async move {
+            // Construct channel for plugin to respond to this particular rpc request instance
+            let (response_sender, response_receiver) = oneshot_channel();
+
+            // Send request to plugin manager
+            if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
+                rpc_to_manager_sender
+                    .send(GeyserPluginManagerRequest::ListPlugins { response_sender })
+                    .expect("GeyerPluginService should never drop request receiver");
+            } else {
+                return Err(jsonrpc_core::Error {
+                    code: ErrorCode::InvalidRequest,
+                    message: "No geyser plugin service".to_string(),
+                    data: None,
+                });
+            }
+
+            // Await response from plugin manager
+            response_receiver
+                .await
+                .expect("GeyerPluginService's oneshot sender shouldn't drop early")
+        })
     }
 
     fn rpc_addr(&self, meta: Self::Metadata) -> Result<Option<SocketAddr>> {
@@ -544,6 +682,7 @@ pub fn run(ledger_path: &Path, metadata: AdminRpcRequestMetadata) {
                     warn!("Unable to start admin rpc service: {:?}", err);
                 }
                 Ok(server) => {
+                    info!("started admin rpc service!");
                     let close_handle = server.close_handle();
                     validator_exit
                         .write()
@@ -708,6 +847,7 @@ mod tests {
                     repair_whitelist,
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
+                rpc_to_plugin_manager_sender: None,
             };
             let mut io = MetaIoHandler::default();
             io.extend_with(AdminRpcImpl.to_delegate());

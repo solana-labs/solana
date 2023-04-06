@@ -10,6 +10,8 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+async-channel = { workspace = true }
+bytes = { workspace = true }
 crossbeam-channel = { workspace = true }
 futures-util = { workspace = true }
 histogram = { workspace = true }

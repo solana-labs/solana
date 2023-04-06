@@ -47,16 +47,21 @@ impl SnapshotPackagerService {
         let cluster_info = cluster_info.clone();
         let max_full_snapshot_hashes = std::cmp::min(
             MAX_SNAPSHOT_HASHES,
-            snapshot_config.maximum_full_snapshot_archives_to_retain,
+            snapshot_config
+                .maximum_full_snapshot_archives_to_retain
+                .get(),
         );
         let max_incremental_snapshot_hashes = std::cmp::min(
             MAX_INCREMENTAL_SNAPSHOT_HASHES,
-            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+            snapshot_config
+                .maximum_incremental_snapshot_archives_to_retain
+                .get(),
         );
 
         let t_snapshot_packager = Builder::new()
             .name("solSnapshotPkgr".to_string())
             .spawn(move || {
+                info!("SnapshotPackagerService has started");
                 renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
                 let mut snapshot_gossip_manager = enable_gossip_push.then(||
                     SnapshotGossipManager::new(
@@ -122,7 +127,7 @@ impl SnapshotPackagerService {
                         ("handling-time-us", handling_time_us, i64),
                     );
                 }
-                info!("Snapshot Packager Service has stopped");
+                info!("SnapshotPackagerService has stopped");
             })
             .unwrap();
 

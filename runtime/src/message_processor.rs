@@ -21,7 +21,7 @@ use {
         transaction::TransactionError,
         transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
     },
-    std::{borrow::Cow, cell::RefCell, rc::Rc, sync::Arc},
+    std::{cell::RefCell, rc::Rc, sync::Arc},
 };
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -71,7 +71,7 @@ impl MessageProcessor {
             transaction_context,
             rent,
             builtin_programs,
-            Cow::Borrowed(sysvar_cache),
+            sysvar_cache,
             log_collector,
             compute_budget,
             tx_executor_cache,
@@ -219,10 +219,12 @@ mod tests {
 
         fn mock_system_process_instruction(
             invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
+        ) -> Result<(), Box<dyn std::error::Error>> {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let instruction_data = instruction_context.get_instruction_data();
+            // mock builtin should consume units
+            let _ = invoke_context.consume_checked(1);
             if let Ok(instruction) = bincode::deserialize(instruction_data) {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
@@ -243,7 +245,7 @@ mod tests {
                     }
                 }
             } else {
-                Err(InstructionError::InvalidInstructionData)
+                Err(Box::new(InstructionError::InvalidInstructionData))
             }
         }
 
@@ -255,7 +257,6 @@ mod tests {
         let builtin_programs = &[BuiltinProgram {
             program_id: mock_system_program_id,
             process_instruction: mock_system_process_instruction,
-            default_compute_unit_cost: 0,
         }];
 
         let accounts = vec![
@@ -431,12 +432,14 @@ mod tests {
 
         fn mock_system_process_instruction(
             invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
+        ) -> Result<(), Box<dyn std::error::Error>> {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let instruction_data = instruction_context.get_instruction_data();
             let mut to_account =
                 instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
+            // mock builtin should consume units
+            let _ = invoke_context.consume_checked(1);
             if let Ok(instruction) = bincode::deserialize(instruction_data) {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
@@ -445,7 +448,7 @@ mod tests {
                         let dup_account = instruction_context
                             .try_borrow_instruction_account(transaction_context, 2)?;
                         if from_account.get_lamports() != dup_account.get_lamports() {
-                            return Err(InstructionError::InvalidArgument);
+                            return Err(Box::new(InstructionError::InvalidArgument));
                         }
                         Ok(())
                     }
@@ -457,7 +460,7 @@ mod tests {
                             .try_borrow_instruction_account(transaction_context, 2)?
                             .get_lamports();
                         if lamports_a != lamports_b {
-                            return Err(InstructionError::InvalidArgument);
+                            return Err(Box::new(InstructionError::InvalidArgument));
                         }
                         Ok(())
                     }
@@ -476,7 +479,7 @@ mod tests {
                     }
                 }
             } else {
-                Err(InstructionError::InvalidInstructionData)
+                Err(Box::new(InstructionError::InvalidInstructionData))
             }
         }
 
@@ -485,7 +488,6 @@ mod tests {
         let builtin_programs = &[BuiltinProgram {
             program_id: mock_program_id,
             process_instruction: mock_system_process_instruction,
-            default_compute_unit_cost: 0,
         }];
 
         let accounts = vec![
@@ -644,14 +646,15 @@ mod tests {
     fn test_precompile() {
         let mock_program_id = Pubkey::new_unique();
         fn mock_process_instruction(
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
-            Err(InstructionError::Custom(0xbabb1e))
+            invoke_context: &mut InvokeContext,
+        ) -> Result<(), Box<dyn std::error::Error>> {
+            // mock builtin should consume units
+            let _ = invoke_context.consume_checked(1);
+            Err(Box::new(InstructionError::Custom(0xbabb1e)))
         }
         let builtin_programs = &[BuiltinProgram {
             program_id: mock_program_id,
             process_instruction: mock_process_instruction,
-            default_compute_unit_cost: 0,
         }];
 
         let mut secp256k1_account = AccountSharedData::new(1, 0, &native_loader::id());

@@ -57,6 +57,8 @@ pub enum ProgramError {
     InvalidRealloc,
     #[error("Instruction trace length exceeded the maximum allowed per transaction")]
     MaxInstructionTraceLengthExceeded,
+    #[error("Builtin programs must consume compute units")]
+    BuiltinProgramsMustConsumeComputeUnits,
 }
 
 pub trait PrintProgramError {
@@ -102,6 +104,9 @@ impl PrintProgramError for ProgramError {
             Self::MaxInstructionTraceLengthExceeded => {
                 msg!("Error: MaxInstructionTraceLengthExceeded")
             }
+            Self::BuiltinProgramsMustConsumeComputeUnits => {
+                msg!("Error: BuiltinProgramsMustConsumeComputeUnits")
+            }
         }
     }
 }
@@ -135,6 +140,7 @@ pub const ILLEGAL_OWNER: u64 = to_builtin!(18);
 pub const MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED: u64 = to_builtin!(19);
 pub const INVALID_ACCOUNT_DATA_REALLOC: u64 = to_builtin!(20);
 pub const MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED: u64 = to_builtin!(21);
+pub const BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS: u64 = to_builtin!(22);
 // Warning: Any new program errors added here must also be:
 // - Added to the below conversions
 // - Added as an equivalent to InstructionError
@@ -167,6 +173,9 @@ impl From<ProgramError> for u64 {
             ProgramError::InvalidRealloc => INVALID_ACCOUNT_DATA_REALLOC,
             ProgramError::MaxInstructionTraceLengthExceeded => {
                 MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED
+            }
+            ProgramError::BuiltinProgramsMustConsumeComputeUnits => {
+                BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS
             }
             ProgramError::Custom(error) => {
                 if error == 0 {
@@ -203,6 +212,9 @@ impl From<u64> for ProgramError {
             MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED => Self::MaxAccountsDataAllocationsExceeded,
             INVALID_ACCOUNT_DATA_REALLOC => Self::InvalidRealloc,
             MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED => Self::MaxInstructionTraceLengthExceeded,
+            BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS => {
+                Self::BuiltinProgramsMustConsumeComputeUnits
+            }
             _ => Self::Custom(error as u32),
         }
     }
@@ -238,6 +250,9 @@ impl TryFrom<InstructionError> for ProgramError {
             Self::Error::MaxInstructionTraceLengthExceeded => {
                 Ok(Self::MaxInstructionTraceLengthExceeded)
             }
+            Self::Error::BuiltinProgramsMustConsumeComputeUnits => {
+                Ok(Self::BuiltinProgramsMustConsumeComputeUnits)
+            }
             _ => Err(error),
         }
     }
@@ -271,6 +286,9 @@ where
             MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED => Self::MaxAccountsDataAllocationsExceeded,
             INVALID_ACCOUNT_DATA_REALLOC => Self::InvalidRealloc,
             MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED => Self::MaxInstructionTraceLengthExceeded,
+            BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS => {
+                Self::BuiltinProgramsMustConsumeComputeUnits
+            }
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {

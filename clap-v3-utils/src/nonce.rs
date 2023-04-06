@@ -1,5 +1,5 @@
 use {
-    crate::{input_validators::*, offline::BLOCKHASH_ARG, ArgConstant},
+    crate::{input_validators::*, ArgConstant},
     clap::{Arg, Command},
 };
 
@@ -23,7 +23,6 @@ fn nonce_arg<'a>() -> Arg<'a> {
         .long(NONCE_ARG.long)
         .takes_value(true)
         .value_name("PUBKEY")
-        .requires(BLOCKHASH_ARG.name)
         .validator(|s| is_valid_pubkey(s))
         .help(NONCE_ARG.help)
 }

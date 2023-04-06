@@ -6,6 +6,7 @@ use {
         SubCommand,
     },
     solana_clap_utils::{
+        hidden_unless_forced,
         input_parsers::keypair_of,
         input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
     },
@@ -39,7 +40,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .long("allow-private-addr")
                 .takes_value(false)
                 .help("Allow contacting private ip addresses")
-                .hidden(true),
+                .hidden(hidden_unless_forced()),
         )
         .subcommand(
             SubCommand::with_name("rpc-url")

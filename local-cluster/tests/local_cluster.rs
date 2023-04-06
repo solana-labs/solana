@@ -23,7 +23,7 @@ use {
     },
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
-        cluster_tests::{self},
+        cluster_tests,
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
@@ -67,6 +67,7 @@ use {
         fs,
         io::Read,
         iter,
+        num::NonZeroUsize,
         path::Path,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -2154,7 +2155,7 @@ fn create_snapshot_to_hard_fork(
     let process_options = ProcessOptions {
         halt_at_slot: Some(snapshot_slot),
         new_hard_forks: Some(hard_forks),
-        poh_verify: false,
+        run_verification: false,
         ..ProcessOptions::default()
     };
     let ledger_path = blockstore.ledger_path();
@@ -2185,8 +2186,8 @@ fn create_snapshot_to_hard_fork(
         ledger_path,
         ledger_path,
         ArchiveFormat::TarZstd,
-        1,
-        1,
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
     )
     .unwrap();
     info!(

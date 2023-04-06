@@ -27,7 +27,10 @@ use {
     solana_measure::{measure, measure_us},
     solana_perf::{data_budget::DataBudget, packet::PACKETS_PER_BATCH},
     solana_poh::poh_recorder::PohRecorder,
-    solana_runtime::{bank_forks::BankForks, vote_sender_types::ReplayVoteSender},
+    solana_runtime::{
+        bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
+        vote_sender_types::ReplayVoteSender,
+    },
     solana_sdk::{feature_set::allow_votes_to_directly_update_vote_state, timing::AtomicInterval},
     std::{
         cmp, env,
@@ -290,6 +293,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -303,6 +307,7 @@ impl BankingStage {
             log_messages_bytes_limit,
             connection_cache,
             bank_forks,
+            prioritization_fee_cache,
         )
     }
 
@@ -319,6 +324,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         // Single thread to generate entries from many banks.
@@ -385,6 +391,7 @@ impl BankingStage {
                 let committer = Committer::new(
                     transaction_status_sender.clone(),
                     replay_vote_sender.clone(),
+                    prioritization_fee_cache.clone(),
                 );
                 let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
                 let forwarder = Forwarder::new(
@@ -396,7 +403,7 @@ impl BankingStage {
                 );
                 let consumer = Consumer::new(
                     committer,
-                    poh_recorder.read().unwrap().recorder(),
+                    poh_recorder.read().unwrap().new_recorder(),
                     QosService::new(id),
                     log_messages_bytes_limit,
                 );
@@ -432,8 +439,9 @@ impl BankingStage {
         if unprocessed_transaction_storage.should_not_process() {
             return;
         }
-        let ((metrics_action, decision), make_decision_time) =
-            measure!(decision_maker.make_consume_or_forward_decision(slot_metrics_tracker));
+        let (decision, make_decision_time) =
+            measure!(decision_maker.make_consume_or_forward_decision());
+        let metrics_action = slot_metrics_tracker.check_leader_slot_boundary(decision.bank_start());
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
         match decision {
@@ -639,6 +647,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
             drop(non_vote_sender);
             drop(tpu_vote_sender);
@@ -694,6 +703,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
             trace!("sending bank");
             drop(non_vote_sender);
@@ -774,6 +784,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -935,6 +946,7 @@ mod tests {
                     None,
                     Arc::new(ConnectionCache::default()),
                     bank_forks,
+                    &Arc::new(PrioritizationFeeCache::new(0u64)),
                 );
 
                 // wait for banking_stage to eat the packets
@@ -998,7 +1010,7 @@ mod tests {
                 &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
-            let recorder = poh_recorder.recorder();
+            let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
@@ -1128,6 +1140,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
 
             let keypairs = (0..100).map(|_| Keypair::new()).collect_vec();

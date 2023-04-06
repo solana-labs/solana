@@ -620,8 +620,10 @@ struct GenerateIndexTimings {
     pub index_flush_us: u64,
     pub rent_paying: AtomicUsize,
     pub amount_to_top_off_rent: AtomicU64,
-    pub total_duplicates: u64,
+    pub total_including_duplicates: u64,
     pub accounts_data_len_dedup_time_us: u64,
+    pub total_duplicate_slot_keys: u64,
+    pub populate_duplicate_keys_us: u64,
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -668,14 +670,24 @@ impl GenerateIndexTimings {
                 i64
             ),
             (
-                "total_items_with_duplicates",
-                self.total_duplicates as i64,
+                "total_items_including_duplicates",
+                self.total_including_duplicates as i64,
                 i64
             ),
             ("total_items", self.total_items as i64, i64),
             (
                 "accounts_data_len_dedup_time_us",
                 self.accounts_data_len_dedup_time_us as i64,
+                i64
+            ),
+            (
+                "total_duplicate_slot_keys",
+                self.total_duplicate_slot_keys as i64,
+                i64
+            ),
+            (
+                "populate_duplicate_keys_us",
+                self.populate_duplicate_keys_us as i64,
                 i64
             ),
         );
@@ -7266,7 +7278,7 @@ impl AccountsDb {
                 }
 
                 let mut collect_time = Measure::start("collect");
-                let (combined_maps, slots) = self.get_snapshot_storages(..=slot, config.ancestors);
+                let (combined_maps, slots) = self.get_snapshot_storages(..=slot);
                 collect_time.stop();
 
                 let mut sort_time = Measure::start("sort_storages");
@@ -7351,6 +7363,25 @@ impl AccountsDb {
             .unwrap(); // unwrap here will never fail since check_hash = false
         self.set_accounts_hash(slot, (accounts_hash, total_lamports));
         (accounts_hash, total_lamports)
+    }
+
+    /// Calculate the incremental accounts hash for `storages` and save the results at `slot`
+    pub fn update_incremental_accounts_hash(
+        &self,
+        config: &CalcAccountsHashConfig<'_>,
+        storages: &SortedStorages<'_>,
+        slot: Slot,
+        stats: HashStats,
+    ) -> Result<(IncrementalAccountsHash, /*capitalization*/ u64), AccountsHashVerificationError>
+    {
+        let incremental_accounts_hash =
+            self.calculate_incremental_accounts_hash(config, storages, stats)?;
+        let old_incremental_accounts_hash =
+            self.set_incremental_accounts_hash(slot, incremental_accounts_hash);
+        if let Some(old_incremental_accounts_hash) = old_incremental_accounts_hash {
+            warn!("Incremental accounts hash was already set for slot {slot}! old: {old_incremental_accounts_hash:?}, new: {incremental_accounts_hash:?}");
+        }
+        Ok(incremental_accounts_hash)
     }
 
     /// Set the accounts hash for `slot`
@@ -7568,17 +7599,14 @@ impl AccountsDb {
     /// - Zero-lamport accounts are *included* in the hash because zero-lamport accounts are also
     ///   included in the incremental snapshot.  This ensures reconstructing the AccountsDb is
     ///   still correct when using this incremental accounts hash.
-    /// - `storages` must be *greater than* `base_slot`.  This follows the same requirements as
-    ///   incremental snapshots.
+    /// - `storages` must be the same as the ones going into the incremental snapshot.
     pub fn calculate_incremental_accounts_hash(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
-        base_slot: Slot,
         stats: HashStats,
     ) -> Result<(IncrementalAccountsHash, /* capitalization */ u64), AccountsHashVerificationError>
     {
-        assert!(storages.range().start > base_slot, "The storages for calculating an incremental accounts hash must all be higher than the base slot");
         let (accounts_hash, capitalization) = self._calculate_accounts_hash_from_storages(
             config,
             storages,
@@ -7697,55 +7725,85 @@ impl AccountsDb {
             .remove_old_historical_roots(min_root, &alive_roots);
     }
 
-    /// Only called from startup or test code.
+    /// Verify accounts hash at startup (or tests)
+    ///
+    /// Calculate accounts hash(es) and compare them to the values set at startup.
+    /// If `base` is `None`, only calculates the full accounts hash for `[0, slot]`.
+    /// If `base` is `Some`, calculate the full accounts hash for `[0, base slot]`
+    /// and then calculate the incremental accounts hash for `(base slot, slot]`.
     pub fn verify_accounts_hash_and_lamports(
         &self,
         slot: Slot,
         total_lamports: u64,
+        base: Option<(Slot, /*capitalization*/ u64)>,
         config: VerifyAccountsHashAndLamportsConfig,
     ) -> Result<(), AccountsHashVerificationError> {
         use AccountsHashVerificationError::*;
+        let calc_config = CalcAccountsHashConfig {
+            use_bg_thread_pool: config.use_bg_thread_pool,
+            check_hash: false, // this will not be supported anymore
+            ancestors: Some(config.ancestors),
+            epoch_schedule: config.epoch_schedule,
+            rent_collector: config.rent_collector,
+            store_detailed_debug_info_on_failure: config.store_detailed_debug_info,
+        };
+        let hash_mismatch_is_error = !config.ignore_mismatch;
 
-        let check_hash = false; // this will not be supported anymore
-        let (calculated_accounts_hash, calculated_lamports) = self
-            .calculate_accounts_hash_with_verify(
-                CalcAccountsHashDataSource::Storages,
-                config.test_hash_calculation,
-                slot,
-                CalcAccountsHashConfig {
-                    use_bg_thread_pool: config.use_bg_thread_pool,
-                    check_hash,
-                    ancestors: Some(config.ancestors),
-                    epoch_schedule: config.epoch_schedule,
-                    rent_collector: config.rent_collector,
-                    store_detailed_debug_info_on_failure: config.store_detailed_debug_info,
-                },
-                None,
+        if let Some((base_slot, base_capitalization)) = base {
+            self.verify_accounts_hash_and_lamports(base_slot, base_capitalization, None, config)?;
+            let (storages, slots) =
+                self.get_snapshot_storages(base_slot.checked_add(1).unwrap()..=slot);
+            let sorted_storages =
+                SortedStorages::new_with_slots(storages.iter().zip(slots.into_iter()), None, None);
+            let calculated_incremental_accounts_hash = self.calculate_incremental_accounts_hash(
+                &calc_config,
+                &sorted_storages,
+                HashStats::default(),
             )?;
-
-        if calculated_lamports != total_lamports {
-            warn!(
-                "Mismatched total lamports: {} calculated: {}",
-                total_lamports, calculated_lamports
-            );
-            return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
-        }
-
-        if config.ignore_mismatch {
-            Ok(())
-        } else if let Some((found_accounts_hash, _)) = self.get_accounts_hash(slot) {
-            if calculated_accounts_hash == found_accounts_hash {
-                Ok(())
-            } else {
+            let found_incremental_accounts_hash = self
+                .get_incremental_accounts_hash(slot)
+                .ok_or(MissingAccountsHash)?;
+            if calculated_incremental_accounts_hash != found_incremental_accounts_hash {
                 warn!(
-                    "mismatched accounts hash for slot {slot}: \
-                    {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
+                    "mismatched incremental accounts hash for slot {slot}: \
+                    {calculated_incremental_accounts_hash:?} (calculated) != {found_incremental_accounts_hash:?} (expected)"
                 );
-                Err(MismatchedAccountsHash)
+                if hash_mismatch_is_error {
+                    return Err(MismatchedAccountsHash);
+                }
             }
         } else {
-            Err(MissingAccountsHash)
+            let (calculated_accounts_hash, calculated_lamports) = self
+                .calculate_accounts_hash_with_verify(
+                    CalcAccountsHashDataSource::Storages,
+                    config.test_hash_calculation,
+                    slot,
+                    calc_config,
+                    None,
+                )?;
+
+            if calculated_lamports != total_lamports {
+                warn!(
+                    "Mismatched total lamports: {} calculated: {}",
+                    total_lamports, calculated_lamports
+                );
+                return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
+            }
+
+            let (found_accounts_hash, _) =
+                self.get_accounts_hash(slot).ok_or(MissingAccountsHash)?;
+            if calculated_accounts_hash != found_accounts_hash {
+                warn!(
+                    "Mismatched accounts hash for slot {slot}: \
+                    {calculated_accounts_hash:?} (calculated) != {found_accounts_hash:?} (expected)"
+                );
+                if hash_mismatch_is_error {
+                    return Err(MismatchedAccountsHash);
+                }
+            }
         }
+
+        Ok(())
     }
 
     /// helper to return
@@ -8631,7 +8689,6 @@ impl AccountsDb {
     pub fn get_snapshot_storages(
         &self,
         requested_slots: impl RangeBounds<Slot> + Sync,
-        ancestors: Option<&Ancestors>,
     ) -> (Vec<Arc<AccountStorageEntry>>, Vec<Slot>) {
         let mut m = Measure::start("get slots");
         let mut slots_and_storages = self
@@ -8653,12 +8710,7 @@ impl AccountsDb {
                 .map(|slots_and_storages| {
                     slots_and_storages
                         .iter_mut()
-                        .filter(|(slot, _)| {
-                            self.accounts_index.is_alive_root(*slot)
-                                || ancestors
-                                    .map(|ancestors| ancestors.contains_key(slot))
-                                    .unwrap_or_default()
-                        })
+                        .filter(|(slot, _)| self.accounts_index.is_alive_root(*slot))
                         .filter_map(|(slot, store)| {
                             let store = std::mem::take(store).unwrap();
                             store.has_accounts().then_some((store, *slot))
@@ -8942,7 +8994,7 @@ impl AccountsDb {
             let insertion_time_us = AtomicU64::new(0);
             let rent_paying = AtomicUsize::new(0);
             let amount_to_top_off_rent = AtomicU64::new(0);
-            let total_duplicates = AtomicU64::new(0);
+            let total_including_duplicates = AtomicU64::new(0);
             let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
             let scan_time: u64 = slots
                 .par_chunks(chunk_size)
@@ -8985,7 +9037,8 @@ impl AccountsDb {
                             rent_paying.fetch_add(rent_paying_this_slot, Ordering::Relaxed);
                             amount_to_top_off_rent
                                 .fetch_add(amount_to_top_off_rent_this_slot, Ordering::Relaxed);
-                            total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
+                            total_including_duplicates
+                                .fetch_add(total_this_slot, Ordering::Relaxed);
                             accounts_data_len
                                 .fetch_add(accounts_data_len_this_slot, Ordering::Relaxed);
                             let mut rent_paying_accounts_by_partition =
@@ -9048,6 +9101,8 @@ impl AccountsDb {
                 .sum();
 
             let mut index_flush_us = 0;
+            let mut total_duplicate_slot_keys = 0;
+            let mut populate_duplicate_keys_us = 0;
             if pass == 0 {
                 // tell accounts index we are done adding the initial accounts at startup
                 let mut m = Measure::start("accounts_index_idle_us");
@@ -9055,21 +9110,25 @@ impl AccountsDb {
                 m.stop();
                 index_flush_us = m.as_us();
 
-                // this has to happen before visit_duplicate_pubkeys_during_startup below
-                // get duplicate keys from acct idx. We have to wait until we've finished flushing.
-                for (slot, key) in self
-                    .accounts_index
-                    .retrieve_duplicate_keys_from_startup()
-                    .into_iter()
-                    .flatten()
-                {
-                    match self.uncleaned_pubkeys.entry(slot) {
-                        Occupied(mut occupied) => occupied.get_mut().push(key),
-                        Vacant(vacant) => {
-                            vacant.insert(vec![key]);
+                populate_duplicate_keys_us = measure_us!({
+                    // this has to happen before visit_duplicate_pubkeys_during_startup below
+                    // get duplicate keys from acct idx. We have to wait until we've finished flushing.
+                    for (slot, key) in self
+                        .accounts_index
+                        .populate_and_retrieve_duplicate_keys_from_startup()
+                        .into_iter()
+                        .flatten()
+                    {
+                        total_duplicate_slot_keys += 1;
+                        match self.uncleaned_pubkeys.entry(slot) {
+                            Occupied(mut occupied) => occupied.get_mut().push(key),
+                            Vacant(vacant) => {
+                                vacant.insert(vec![key]);
+                            }
                         }
                     }
-                }
+                })
+                .1;
             }
 
             let storage_info_timings = storage_info_timings.into_inner().unwrap();
@@ -9083,7 +9142,9 @@ impl AccountsDb {
                 total_items,
                 rent_paying,
                 amount_to_top_off_rent,
-                total_duplicates: total_duplicates.load(Ordering::Relaxed),
+                total_duplicate_slot_keys,
+                populate_duplicate_keys_us,
+                total_including_duplicates: total_including_duplicates.load(Ordering::Relaxed),
                 storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
                 storage_size_accounts_map_flatten_us: storage_info_timings
                     .storage_size_accounts_map_flatten_us,
@@ -10016,7 +10077,7 @@ pub mod tests {
         accounts.store_for_tests(slot, &to_store[..]);
         accounts.add_root_and_flush_write_cache(slot);
 
-        let (storages, slots) = accounts.get_snapshot_storages(..=slot, None);
+        let (storages, slots) = accounts.get_snapshot_storages(..=slot);
         assert_eq!(storages.len(), slots.len());
         storages
             .iter()
@@ -12252,7 +12313,7 @@ pub mod tests {
         );
 
         accounts
-            .verify_accounts_hash_and_lamports(4, 1222, config)
+            .verify_accounts_hash_and_lamports(4, 1222, None, config)
             .unwrap();
     }
 
@@ -12677,14 +12738,14 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, config.clone()),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
             Ok(_)
         );
 
         db.accounts_hashes.lock().unwrap().remove(&some_slot);
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, config.clone()),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
             Err(MissingAccountsHash)
         );
 
@@ -12694,7 +12755,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, config),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config),
             Err(MismatchedAccountsHash)
         );
     }
@@ -12725,7 +12786,7 @@ pub mod tests {
                 db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
 
                 assert_matches!(
-                    db.verify_accounts_hash_and_lamports(some_slot, 1, config.clone()),
+                    db.verify_accounts_hash_and_lamports(some_slot, 1, None, config.clone()),
                     Ok(_)
                 );
                 continue;
@@ -12743,12 +12804,12 @@ pub mod tests {
             db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
 
             assert_matches!(
-                db.verify_accounts_hash_and_lamports(some_slot, 2, config.clone()),
+                db.verify_accounts_hash_and_lamports(some_slot, 2, None, config.clone()),
                 Ok(_)
             );
 
             assert_matches!(
-                db.verify_accounts_hash_and_lamports(some_slot, 10, config),
+                db.verify_accounts_hash_and_lamports(some_slot, 10, None, config),
                 Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
             );
         }
@@ -12774,7 +12835,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 0, config),
+            db.verify_accounts_hash_and_lamports(some_slot, 0, None, config),
             Ok(_)
         );
     }
@@ -12814,7 +12875,7 @@ pub mod tests {
         );
 
         assert_matches!(
-            db.verify_accounts_hash_and_lamports(some_slot, 1, config),
+            db.verify_accounts_hash_and_lamports(some_slot, 1, None, config),
             Err(MismatchedAccountsHash)
         );
     }
@@ -12835,7 +12896,7 @@ pub mod tests {
     #[test]
     fn test_get_snapshot_storages_empty() {
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
-        assert!(db.get_snapshot_storages(..=0, None).0.is_empty());
+        assert!(db.get_snapshot_storages(..=0).0.is_empty());
     }
 
     #[test]
@@ -12850,10 +12911,10 @@ pub mod tests {
 
         db.store_for_tests(base_slot, &[(&key, &account)]);
         db.add_root_and_flush_write_cache(base_slot);
-        assert!(db.get_snapshot_storages(..=before_slot, None).0.is_empty());
+        assert!(db.get_snapshot_storages(..=before_slot).0.is_empty());
 
-        assert_eq!(1, db.get_snapshot_storages(..=base_slot, None).0.len());
-        assert_eq!(1, db.get_snapshot_storages(..=after_slot, None).0.len());
+        assert_eq!(1, db.get_snapshot_storages(..=base_slot).0.len());
+        assert_eq!(1, db.get_snapshot_storages(..=after_slot).0.len());
     }
 
     #[test]
@@ -12870,13 +12931,13 @@ pub mod tests {
             if pass == 0 {
                 db.add_root_and_flush_write_cache(base_slot);
                 db.storage.remove(&base_slot, false);
-                assert!(db.get_snapshot_storages(..=after_slot, None).0.is_empty());
+                assert!(db.get_snapshot_storages(..=after_slot).0.is_empty());
                 continue;
             }
 
             db.store_for_tests(base_slot, &[(&key, &account)]);
             db.add_root_and_flush_write_cache(base_slot);
-            assert_eq!(1, db.get_snapshot_storages(..=after_slot, None).0.len());
+            assert_eq!(1, db.get_snapshot_storages(..=after_slot).0.len());
         }
     }
 
@@ -12890,10 +12951,10 @@ pub mod tests {
         let after_slot = base_slot + 1;
 
         db.store_for_tests(base_slot, &[(&key, &account)]);
-        assert!(db.get_snapshot_storages(..=after_slot, None).0.is_empty());
+        assert!(db.get_snapshot_storages(..=after_slot).0.is_empty());
 
         db.add_root_and_flush_write_cache(base_slot);
-        assert_eq!(1, db.get_snapshot_storages(..=after_slot, None).0.len());
+        assert_eq!(1, db.get_snapshot_storages(..=after_slot).0.len());
     }
 
     #[test]
@@ -12907,13 +12968,13 @@ pub mod tests {
 
         db.store_for_tests(base_slot, &[(&key, &account)]);
         db.add_root_and_flush_write_cache(base_slot);
-        assert_eq!(1, db.get_snapshot_storages(..=after_slot, None).0.len());
+        assert_eq!(1, db.get_snapshot_storages(..=after_slot).0.len());
 
         db.storage
             .get_slot_storage_entry(0)
             .unwrap()
             .remove_account(0, true);
-        assert!(db.get_snapshot_storages(..=after_slot, None).0.is_empty());
+        assert!(db.get_snapshot_storages(..=after_slot).0.is_empty());
     }
 
     #[test]
@@ -12926,11 +12987,8 @@ pub mod tests {
         let slot = 10;
         db.store_for_tests(slot, &[(&key, &account)]);
         db.add_root_and_flush_write_cache(slot);
-        assert_eq!(
-            0,
-            db.get_snapshot_storages(slot + 1..=slot + 1, None).0.len()
-        );
-        assert_eq!(1, db.get_snapshot_storages(slot..=slot + 1, None).0.len());
+        assert_eq!(0, db.get_snapshot_storages(slot + 1..=slot + 1).0.len());
+        assert_eq!(1, db.get_snapshot_storages(slot..=slot + 1).0.len());
     }
 
     #[test]
@@ -13094,7 +13152,7 @@ pub mod tests {
         accounts.store_for_tests(current_slot, &[(&pubkey2, &zero_lamport_account)]);
         accounts.store_for_tests(current_slot, &[(&pubkey3, &zero_lamport_account)]);
 
-        let snapshot_stores = accounts.get_snapshot_storages(..=current_slot, None).0;
+        let snapshot_stores = accounts.get_snapshot_storages(..=current_slot).0;
         let total_accounts: usize = snapshot_stores.iter().map(|s| s.all_accounts().len()).sum();
         assert!(!snapshot_stores.is_empty());
         assert!(total_accounts > 0);
@@ -13354,12 +13412,12 @@ pub mod tests {
 
             accounts.update_accounts_hash_for_tests(current_slot, &no_ancestors, false, false);
             accounts
-                .verify_accounts_hash_and_lamports(current_slot, 22300, config.clone())
+                .verify_accounts_hash_and_lamports(current_slot, 22300, None, config.clone())
                 .unwrap();
 
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             accounts
-                .verify_accounts_hash_and_lamports(current_slot, 22300, config)
+                .verify_accounts_hash_and_lamports(current_slot, 22300, None, config)
                 .unwrap();
 
             // repeating should be no-op
@@ -18111,7 +18169,7 @@ pub mod tests {
         // calculate the full accounts hash
         let full_accounts_hash = {
             accounts_db.clean_accounts(Some(slot - 1), false, None);
-            let (storages, _) = accounts_db.get_snapshot_storages(..=slot, None);
+            let (storages, _) = accounts_db.get_snapshot_storages(..=slot);
             let storages = SortedStorages::new(&storages);
             accounts_db
                 .calculate_accounts_hash_from_storages(
@@ -18179,13 +18237,12 @@ pub mod tests {
         let incremental_accounts_hash = {
             accounts_db.clean_accounts(Some(slot - 1), false, Some(full_accounts_hash_slot));
             let (storages, _) =
-                accounts_db.get_snapshot_storages(full_accounts_hash_slot + 1..=slot, None);
+                accounts_db.get_snapshot_storages(full_accounts_hash_slot + 1..=slot);
             let storages = SortedStorages::new(&storages);
             accounts_db
                 .calculate_incremental_accounts_hash(
                     &CalcAccountsHashConfig::default(),
                     &storages,
-                    full_accounts_hash_slot,
                     HashStats::default(),
                 )
                 .unwrap()

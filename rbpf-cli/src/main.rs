@@ -5,22 +5,21 @@ use {
     solana_bpf_loader_program::{
         create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
-    solana_program_runtime::{
-        compute_budget::ComputeBudget,
-        invoke_context::{prepare_mock_invoke_context, InvokeContext},
-    },
+    solana_program_runtime::{invoke_context::InvokeContext, with_mock_invoke_context},
     solana_rbpf::{
         assembler::assemble, elf::Executable, static_analysis::Analysis,
         verifier::RequisiteVerifier, vm::VerifiedExecutable,
     },
     solana_sdk::{
-        account::AccountSharedData, bpf_loader, instruction::AccountMeta, pubkey::Pubkey,
-        sysvar::rent::Rent, transaction_context::TransactionContext,
+        account::AccountSharedData,
+        bpf_loader,
+        pubkey::Pubkey,
+        transaction_context::{IndexOfAccount, InstructionAccount},
     },
     std::{
         fmt::{Debug, Formatter},
         fs::File,
-        io::{Read, Seek},
+        io::{Read, Seek, Write},
         path::Path,
         time::{Duration, Instant},
     },
@@ -186,8 +185,10 @@ before execting it in the virtual machine.",
                 pubkey,
                 AccountSharedData::new(0, allocation_size, &Pubkey::new_unique()),
             ));
-            instruction_accounts.push(AccountMeta {
-                pubkey,
+            instruction_accounts.push(InstructionAccount {
+                index_in_transaction: 0,
+                index_in_caller: 0,
+                index_in_callee: 0,
                 is_signer: false,
                 is_writable: true,
             });
@@ -195,43 +196,32 @@ before execting it in the virtual machine.",
         }
         Err(_) => {
             let input = load_accounts(Path::new(matches.value_of("input").unwrap())).unwrap();
-            for account_info in input.accounts {
+            for (index, account_info) in input.accounts.into_iter().enumerate() {
                 let mut account = AccountSharedData::new(
                     account_info.lamports,
                     account_info.data.len(),
                     &account_info.owner,
                 );
                 account.set_data(account_info.data);
-                instruction_accounts.push(AccountMeta {
-                    pubkey: account_info.key,
+                transaction_accounts.push((account_info.key, account));
+                instruction_accounts.push(InstructionAccount {
+                    index_in_transaction: index as IndexOfAccount,
+                    index_in_caller: index as IndexOfAccount,
+                    index_in_callee: index as IndexOfAccount,
                     is_signer: account_info.is_signer,
                     is_writable: account_info.is_writable,
                 });
-                transaction_accounts.push((account_info.key, account));
             }
             input.instruction_data
         }
     };
-    let program_indices = [0, 1];
-    let preparation =
-        prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
-    let mut transaction_context = TransactionContext::new(
-        preparation.transaction_accounts,
-        Some(Rent::default()),
-        1,
-        1,
-    );
-    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+    with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
     invoke_context.enable_instruction_tracing = true;
     invoke_context
         .transaction_context
         .get_next_instruction_context()
         .unwrap()
-        .configure(
-            &program_indices,
-            &preparation.instruction_accounts,
-            &instruction_data,
-        );
+        .configure(&[0, 1], &instruction_accounts, &instruction_data);
     invoke_context.push().unwrap();
     let (_parameter_bytes, regions, account_lengths) = serialize_parameters(
         invoke_context.transaction_context,
@@ -309,27 +299,29 @@ before execting it in the virtual machine.",
     let (instruction_count, result) = vm.execute_program(matches.value_of("use").unwrap() != "jit");
     let duration = Instant::now() - start_time;
     if matches.occurrences_of("trace") > 0 {
-        let trace_log = vm
+        for (frame, trace) in vm
             .env
             .context_object_pointer
             .trace_log_stack
-            .last()
-            .expect("Inconsistent trace log stack")
-            .trace_log
-            .as_slice();
-        if matches.value_of("trace").unwrap() == "stdout" {
-            analysis
-                .analyze()
-                .disassemble_trace_log(&mut std::io::stdout(), trace_log)
-                .unwrap();
-        } else {
-            analysis
-                .analyze()
-                .disassemble_trace_log(
-                    &mut File::create(matches.value_of("trace").unwrap()).unwrap(),
-                    trace_log,
-                )
-                .unwrap();
+            .iter()
+            .enumerate()
+        {
+            let trace_log = trace.trace_log.as_slice();
+            if matches.value_of("trace").unwrap() == "stdout" {
+                writeln!(&mut std::io::stdout(), "Frame {frame}").unwrap();
+                analysis
+                    .analyze()
+                    .disassemble_trace_log(&mut std::io::stdout(), trace_log)
+                    .unwrap();
+            } else {
+                let filename = format!("{}.{}", matches.value_of("trace").unwrap(), frame);
+                let mut fd = File::create(filename).unwrap();
+                writeln!(&fd, "Frame {frame}").unwrap();
+                analysis
+                    .analyze()
+                    .disassemble_trace_log(&mut fd, trace_log)
+                    .unwrap();
+            }
         }
     }
     drop(vm);

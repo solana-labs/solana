@@ -5,7 +5,8 @@ use {
     log::*,
     solana_program::vote::{instruction::VoteInstruction, program::id, state::VoteAuthorize},
     solana_program_runtime::{
-        invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
+        declare_process_instruction, invoke_context::InvokeContext,
+        sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
         feature_set,
@@ -55,7 +56,12 @@ fn process_authorize_with_seed_instruction(
     )
 }
 
-pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+// Citing `runtime/src/block_cost_limit.rs`, vote has statically defined 2_100
+// units; can consume based on instructions in the future like `bpf_loader` does.
+declare_process_instruction!(2_100);
+pub fn process_instruction_inner(
+    invoke_context: &mut InvokeContext,
+) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
@@ -316,10 +322,9 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            None,
             expected_result,
             super::process_instruction,
+            |_invoke_context| {},
         )
     }
 
@@ -335,10 +340,11 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            Some(std::sync::Arc::new(FeatureSet::default())),
             expected_result,
             super::process_instruction,
+            |invoke_context| {
+                invoke_context.feature_set = std::sync::Arc::new(FeatureSet::default());
+            },
         )
     }
 

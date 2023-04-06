@@ -5,7 +5,7 @@ use {
         derivation_path::DerivationPath,
         pubkey::Pubkey,
         signature::Signature,
-        signer::{Signer, SignerError},
+        signer::{EncodableKey, Signer, SignerError},
     },
     ed25519_dalek::Signer as DalekSigner,
     ed25519_dalek_bip32::Error as Bip32Error,
@@ -13,7 +13,6 @@ use {
     rand::{rngs::OsRng, CryptoRng, RngCore},
     std::{
         error,
-        fs::{self, File, OpenOptions},
         io::{Read, Write},
         path::Path,
     },
@@ -113,6 +112,34 @@ where
     }
 }
 
+impl EncodableKey for Keypair {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+        read_keypair(reader)
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+        write_keypair(self, writer)
+    }
+
+    fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+        keypair_from_seed(seed)
+    }
+
+    fn from_seed_and_derivation_path(
+        seed: &[u8],
+        derivation_path: Option<DerivationPath>,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        keypair_from_seed_and_derivation_path(seed, derivation_path)
+    }
+
+    fn from_seed_phrase_and_passphrase(
+        seed_phrase: &str,
+        passphrase: &str,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        keypair_from_seed_phrase_and_passphrase(seed_phrase, passphrase)
+    }
+}
+
 /// Reads a JSON-encoded `Keypair` from a `Reader` implementor
 pub fn read_keypair<R: Read>(reader: &mut R) -> Result<Keypair, Box<dyn error::Error>> {
     let bytes: Vec<u8> = serde_json::from_reader(reader)?;
@@ -123,8 +150,7 @@ pub fn read_keypair<R: Read>(reader: &mut R) -> Result<Keypair, Box<dyn error::E
 
 /// Reads a `Keypair` from a file
 pub fn read_keypair_file<F: AsRef<Path>>(path: F) -> Result<Keypair, Box<dyn error::Error>> {
-    let mut file = File::open(path.as_ref())?;
-    read_keypair(&mut file)
+    Keypair::read_from_file(path)
 }
 
 /// Writes a `Keypair` to a `Write` implementor with JSON-encoding
@@ -143,29 +169,7 @@ pub fn write_keypair_file<F: AsRef<Path>>(
     keypair: &Keypair,
     outfile: F,
 ) -> Result<String, Box<dyn error::Error>> {
-    let outfile = outfile.as_ref();
-
-    if let Some(outdir) = outfile.parent() {
-        fs::create_dir_all(outdir)?;
-    }
-
-    let mut f = {
-        #[cfg(not(unix))]
-        {
-            OpenOptions::new()
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            OpenOptions::new().mode(0o600)
-        }
-    }
-    .write(true)
-    .truncate(true)
-    .create(true)
-    .open(outfile)?;
-
-    write_keypair(keypair, &mut f)
+    keypair.write_to_file(outfile)
 }
 
 /// Constructs a `Keypair` from caller-provided seed entropy
@@ -238,7 +242,10 @@ mod tests {
     use {
         super::*,
         bip39::{Language, Mnemonic, MnemonicType, Seed},
-        std::mem,
+        std::{
+            fs::{self, File},
+            mem,
+        },
     };
 
     fn tmp_file_path(name: &str) -> String {

@@ -16,7 +16,7 @@ use {
 
 type LockedBucket<T> = RwLock<Option<Bucket<T>>>;
 
-pub struct BucketApi<T: Clone + Copy> {
+pub struct BucketApi<T: Clone + Copy + 'static> {
     drives: Arc<Vec<PathBuf>>,
     max_search: MaxSearch,
     pub stats: Arc<BucketMapStats>,
@@ -98,18 +98,6 @@ impl<T: Clone + Copy> BucketApi<T> {
         bucket
     }
 
-    pub fn addref(&self, key: &Pubkey) -> Option<RefCount> {
-        self.get_write_bucket()
-            .as_mut()
-            .and_then(|bucket| bucket.addref(key))
-    }
-
-    pub fn unref(&self, key: &Pubkey) -> Option<RefCount> {
-        self.get_write_bucket()
-            .as_mut()
-            .and_then(|bucket| bucket.unref(key))
-    }
-
     pub fn insert(&self, pubkey: &Pubkey, value: (&[T], RefCount)) {
         let mut bucket = self.get_write_bucket();
         bucket.as_mut().unwrap().insert(pubkey, value)
@@ -121,6 +109,13 @@ impl<T: Clone + Copy> BucketApi<T> {
         if let Some(bucket) = self.bucket.read().unwrap().as_ref() {
             bucket.grow(err)
         }
+    }
+
+    /// caller can specify that the index needs to hold approximately `count` entries soon.
+    /// This gives a hint to the resizing algorithm and prevents repeated incremental resizes.
+    pub fn set_anticipated_count(&self, count: u64) {
+        let mut bucket = self.get_write_bucket();
+        bucket.as_mut().unwrap().set_anticipated_count(count);
     }
 
     pub fn update<F>(&self, key: &Pubkey, updatefn: F)

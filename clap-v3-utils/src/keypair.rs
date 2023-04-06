@@ -29,9 +29,8 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::{
-            generate_seed_from_seed_phrase_and_passphrase, keypair_from_seed,
-            keypair_from_seed_and_derivation_path, keypair_from_seed_phrase_and_passphrase,
-            read_keypair, read_keypair_file, Keypair, NullSigner, Presigner, Signature, Signer,
+            generate_seed_from_seed_phrase_and_passphrase, read_keypair, read_keypair_file,
+            EncodableKey, Keypair, NullSigner, Presigner, Signature, Signer,
         },
     },
     std::{
@@ -1000,6 +999,30 @@ pub fn keypair_from_path(
     keypair_name: &str,
     confirm_pubkey: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
+    let keypair = encodable_key_from_path(matches, path, keypair_name)?;
+    if confirm_pubkey {
+        confirm_keypair_pubkey(&keypair);
+    }
+    Ok(keypair)
+}
+
+fn confirm_keypair_pubkey(keypair: &Keypair) {
+    let pubkey = keypair.pubkey();
+    print!("Recovered pubkey `{pubkey:?}`. Continue? (y/n): ");
+    let _ignored = stdout().flush();
+    let mut input = String::new();
+    stdin().read_line(&mut input).expect("Unexpected input");
+    if input.to_lowercase().trim() != "y" {
+        println!("Exiting");
+        exit(1);
+    }
+}
+
+fn encodable_key_from_path<K: EncodableKey>(
+    matches: &ArgMatches,
+    path: &str,
+    keypair_name: &str,
+) -> Result<K, Box<dyn error::Error>> {
     let SignerSource {
         kind,
         derivation_path,
@@ -1008,15 +1031,14 @@ pub fn keypair_from_path(
     match kind {
         SignerSourceKind::Prompt => {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-            Ok(keypair_from_seed_phrase(
+            Ok(encodable_key_from_seed_phrase(
                 keypair_name,
                 skip_validation,
-                confirm_pubkey,
                 derivation_path,
                 legacy,
             )?)
         }
-        SignerSourceKind::Filepath(path) => match read_keypair_file(&path) {
+        SignerSourceKind::Filepath(path) => match K::read_from_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!(
@@ -1029,7 +1051,7 @@ pub fn keypair_from_path(
         },
         SignerSourceKind::Stdin => {
             let mut stdin = std::io::stdin();
-            Ok(read_keypair(&mut stdin)?)
+            Ok(K::read(&mut stdin)?)
         }
         _ => Err(std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -1050,19 +1072,33 @@ pub fn keypair_from_seed_phrase(
     derivation_path: Option<DerivationPath>,
     legacy: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
-    let seed_phrase = prompt_password(format!("[{keypair_name}] seed phrase: "))?;
+    let keypair: Keypair =
+        encodable_key_from_seed_phrase(keypair_name, skip_validation, derivation_path, legacy)?;
+    if confirm_pubkey {
+        confirm_keypair_pubkey(&keypair);
+    }
+    Ok(keypair)
+}
+
+fn encodable_key_from_seed_phrase<K: EncodableKey>(
+    key_name: &str,
+    skip_validation: bool,
+    derivation_path: Option<DerivationPath>,
+    legacy: bool,
+) -> Result<K, Box<dyn error::Error>> {
+    let seed_phrase = prompt_password(format!("[{key_name}] seed phrase: "))?;
     let seed_phrase = seed_phrase.trim();
     let passphrase_prompt = format!(
-        "[{keypair_name}] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue: ",
+        "[{key_name}] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue: ",
     );
 
-    let keypair = if skip_validation {
+    let key = if skip_validation {
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         if legacy {
-            keypair_from_seed_phrase_and_passphrase(seed_phrase, &passphrase)?
+            K::from_seed_phrase_and_passphrase(seed_phrase, &passphrase)?
         } else {
             let seed = generate_seed_from_seed_phrase_and_passphrase(seed_phrase, &passphrase);
-            keypair_from_seed_and_derivation_path(&seed, derivation_path)?
+            K::from_seed_and_derivation_path(&seed, derivation_path)?
         }
     } else {
         let sanitized = sanitize_seed_phrase(seed_phrase);
@@ -1087,25 +1123,12 @@ pub fn keypair_from_seed_phrase(
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         let seed = Seed::new(&mnemonic, &passphrase);
         if legacy {
-            keypair_from_seed(seed.as_bytes())?
+            K::from_seed(seed.as_bytes())?
         } else {
-            keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?
+            K::from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?
         }
     };
-
-    if confirm_pubkey {
-        let pubkey = keypair.pubkey();
-        print!("Recovered pubkey `{pubkey:?}`. Continue? (y/n): ");
-        let _ignored = stdout().flush();
-        let mut input = String::new();
-        stdin().read_line(&mut input).expect("Unexpected input");
-        if input.to_lowercase().trim() != "y" {
-            println!("Exiting");
-            exit(1);
-        }
-    }
-
-    Ok(keypair)
+    Ok(key)
 }
 
 fn sanitize_seed_phrase(seed_phrase: &str) -> String {

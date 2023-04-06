@@ -3,7 +3,7 @@
 use {
     crate::ConfigKeys,
     bincode::deserialize,
-    solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
+    solana_program_runtime::{declare_process_instruction, ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
         feature_set, instruction::InstructionError, program_utils::limited_deserialize,
         pubkey::Pubkey, transaction_context::IndexOfAccount,
@@ -11,7 +11,10 @@ use {
     std::collections::BTreeSet,
 };
 
-pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+declare_process_instruction!(450);
+pub fn process_instruction_inner(
+    invoke_context: &mut InvokeContext,
+) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
@@ -162,10 +165,9 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            None,
             expected_result,
             super::process_instruction,
+            |_invoke_context| {},
         )
     }
 

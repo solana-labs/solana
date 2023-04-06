@@ -1779,13 +1779,12 @@ mod tests {
     use {
         super::*,
         proptest::prelude::*,
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::with_mock_invoke_context,
         solana_sdk::{
             account::{create_account_shared_data_for_test, AccountSharedData},
             native_token,
             pubkey::Pubkey,
             sysvar::SysvarId,
-            transaction_context::TransactionContext,
         },
     };
 
@@ -2916,18 +2915,6 @@ mod tests {
         );
     }
 
-    fn create_mock_tx_context() -> TransactionContext {
-        TransactionContext::new(
-            vec![(
-                Rent::id(),
-                create_account_shared_data_for_test(&Rent::default()),
-            )],
-            Some(Rent::default()),
-            1,
-            1,
-        )
-    }
-
     #[test]
     fn test_lockup_is_expired() {
         let custodian = solana_sdk::pubkey::new_rand();
@@ -3034,9 +3021,7 @@ mod tests {
 
     #[test]
     fn test_things_can_merge() {
-        let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, Vec::new());
         let good_stake = Stake {
             credits_observed: 4242,
             delegation: Delegation {
@@ -3134,9 +3119,7 @@ mod tests {
 
     #[test]
     fn test_metas_can_merge() {
-        let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, Vec::new());
         // Identical Metas can merge
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
@@ -3282,9 +3265,7 @@ mod tests {
 
     #[test]
     fn test_merge_kind_get_if_mergeable() {
-        let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, Vec::new());
         let authority_pubkey = Pubkey::new_unique();
         let initial_lamports = 4242424242;
         let rent = Rent::default();
@@ -3522,9 +3503,7 @@ mod tests {
 
     #[test]
     fn test_merge_kind_merge() {
-        let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, Vec::new());
         let clock = Clock::default();
         let lamports = 424242;
         let meta = Meta {
@@ -3603,8 +3582,11 @@ mod tests {
 
     #[test]
     fn test_active_stake_merge() {
-        let mut transaction_context = create_mock_tx_context();
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        let transaction_accounts = vec![(
+            Rent::id(),
+            create_account_shared_data_for_test(&Rent::default()),
+        )];
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let clock = Clock::default();
         let delegation_a = 4_242_424_242u64;
         let delegation_b = 6_200_000_000u64;
