@@ -640,6 +640,7 @@ mod tests {
             expected_result,
             super::process_instruction,
             |_invoke_context| {},
+            |_invoke_context| {},
         )
     }
 
@@ -1831,6 +1832,7 @@ mod tests {
             |invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
             },
+            |_invoke_context| {},
         );
     }
 
@@ -2181,6 +2183,7 @@ mod tests {
             |invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
             },
+            |_invoke_context| {},
         );
     }
 

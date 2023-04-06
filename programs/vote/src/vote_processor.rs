@@ -322,6 +322,7 @@ mod tests {
             expected_result,
             super::process_instruction,
             |_invoke_context| {},
+            |_invoke_context| {},
         )
     }
 
@@ -342,6 +343,7 @@ mod tests {
             |invoke_context| {
                 invoke_context.feature_set = std::sync::Arc::new(FeatureSet::default());
             },
+            |_invoke_context| {},
         )
     }
 

@@ -591,6 +591,7 @@ mod tests {
             |invoke_context| {
                 invoke_context.feature_set = Arc::clone(&feature_set);
             },
+            |_invoke_context| {},
         )
     }
 
@@ -6340,17 +6341,16 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             Ok(()),
+            super::process_instruction,
             |invoke_context| {
-                super::process_instruction(invoke_context)?;
+                invoke_context.feature_set = Arc::clone(&feature_set);
+            },
+            |invoke_context| {
                 let expected_minimum_delegation =
                     crate::get_minimum_delegation(&invoke_context.feature_set).to_le_bytes();
                 let actual_minimum_delegation =
                     invoke_context.transaction_context.get_return_data().1;
                 assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
-                Ok(())
-            },
-            |invoke_context| {
-                invoke_context.feature_set = Arc::clone(&feature_set);
             },
         );
     }

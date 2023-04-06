@@ -165,6 +165,7 @@ mod tests {
             expected_result,
             super::process_instruction,
             |_invoke_context| {},
+            |_invoke_context| {},
         )
     }
 

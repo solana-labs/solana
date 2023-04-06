@@ -924,7 +924,7 @@ macro_rules! with_mock_invoke_context {
     };
 }
 
-pub fn mock_process_instruction<F: FnMut(&mut InvokeContext)>(
+pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut InvokeContext)>(
     loader_id: &Pubkey,
     mut program_indices: Vec<IndexOfAccount>,
     instruction_data: &[u8],
@@ -933,6 +933,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext)>(
     expected_result: Result<(), InstructionError>,
     process_instruction: ProcessInstructionWithContext,
     mut pre_adjustments: F,
+    mut post_adjustments: G,
 ) -> Vec<AccountSharedData> {
     let mut instruction_accounts: Vec<InstructionAccount> =
         Vec::with_capacity(instruction_account_metas.len());
@@ -976,6 +977,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext)>(
         &mut ExecuteTimings::default(),
     );
     assert_eq!(result, expected_result);
+    post_adjustments(&mut invoke_context);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
     transaction_accounts.pop();
     transaction_accounts

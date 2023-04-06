@@ -7988,6 +7988,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         Ok(()),
         solana_bpf_loader_program::process_instruction,
         |_invoke_context| {},
+        |_invoke_context| {},
     );
 
     // Test initialized program account

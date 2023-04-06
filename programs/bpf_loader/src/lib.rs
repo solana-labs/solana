@@ -1696,6 +1696,7 @@ mod tests {
             expected_result,
             super::process_instruction,
             |_invoke_context| {},
+            |_invoke_context| {},
         )
     }
 
@@ -1982,6 +1983,7 @@ mod tests {
             |invoke_context| {
                 invoke_context.mock_set_remaining(0);
             },
+            |_invoke_context| {},
         );
 
         // Case: Account not a program
@@ -2523,6 +2525,7 @@ mod tests {
                 instruction_accounts,
                 expected_result,
                 super::process_instruction,
+                |_invoke_context| {},
                 |_invoke_context| {},
             )
         }
