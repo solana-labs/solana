@@ -39,7 +39,6 @@ pub struct Meta {
     pub addr: IpAddr,
     pub port: u16,
     pub flags: PacketFlags,
-    pub sender_stake: u64,
 }
 
 // serde_as is used as a work around because array isn't supported by serde
@@ -243,7 +242,6 @@ impl Default for Meta {
             addr: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             port: 0,
             flags: PacketFlags::empty(),
-            sender_stake: 0,
         }
     }
 }
