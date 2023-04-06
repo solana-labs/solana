@@ -56,12 +56,9 @@ fn process_authorize_with_seed_instruction(
     )
 }
 
-// Citing `runtime/src/block_cost_limit.rs`, vote has statically defined 2_100
+// Citing `runtime/src/block_cost_limit.rs`, vote has statically defined 2100
 // units; can consume based on instructions in the future like `bpf_loader` does.
-declare_process_instruction!(2_100);
-pub fn process_instruction_inner(
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+declare_process_instruction!(process_instruction, 2100, |invoke_context| {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
@@ -260,7 +257,7 @@ pub fn process_instruction_inner(
             }
         }
     }
-}
+});
 
 #[cfg(test)]
 mod tests {

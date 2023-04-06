@@ -8,8 +8,7 @@ use {
     },
     log::*,
     solana_program_runtime::{
-        declare_process_instruction, invoke_context::InvokeContext,
-        sysvar_cache::get_sysvar_with_account_check,
+        declare_process_instruction, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
         clock::Clock,
@@ -52,10 +51,7 @@ fn get_optional_pubkey<'a>(
     )
 }
 
-declare_process_instruction!(750);
-pub fn process_instruction_inner(
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+declare_process_instruction!(process_instruction, 750, |invoke_context| {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
@@ -479,7 +475,7 @@ pub fn process_instruction_inner(
             Err(err)
         }
     }
-}
+});
 
 #[cfg(test)]
 mod tests {
