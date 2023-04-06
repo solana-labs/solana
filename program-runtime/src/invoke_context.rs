@@ -997,31 +997,6 @@ mod tests {
         },
     }
 
-    #[test]
-    fn test_program_entry_debug() {
-        fn mock_process_instruction(
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), Box<dyn std::error::Error>> {
-            Ok(())
-        }
-        fn mock_ix_processor(
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), Box<dyn std::error::Error>> {
-            Ok(())
-        }
-        let builtin_programs = &[
-            BuiltinProgram {
-                program_id: solana_sdk::pubkey::new_rand(),
-                process_instruction: mock_process_instruction,
-            },
-            BuiltinProgram {
-                program_id: solana_sdk::pubkey::new_rand(),
-                process_instruction: mock_ix_processor,
-            },
-        ];
-        assert!(!format!("{builtin_programs:?}").is_empty());
-    }
-
     const MOCK_BUILTIN_COMPUTE_UNIT_COST: u64 = 1;
 
     declare_process_instruction!(
