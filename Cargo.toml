@@ -241,7 +241,7 @@ num-derive = "0.3"
 num-traits = "0.2"
 once_cell = "1.13.0"
 openssl = "0.10"
-ouroboros = "0.15.0"
+ouroboros = "0.15.6"
 parking_lot = "0.12"
 pbkdf2 = { version = "0.11.0", default-features = false }
 pem = "1.1.1"
