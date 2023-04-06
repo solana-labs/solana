@@ -83,10 +83,10 @@ the RPC providers that already support the Read API:
 
 The process to create or mint compressed NFTs on Solana is similar to creating a
 "traditional NFT collection", with a few differences. The mint process will
-happen in 4 primary steps:
+happen in 3 primary steps:
 
 - create an NFT collection (or use an existing one)
-- create an
+- create a
   [concurrent merkle tree](../../learn/state-compression.md#what-is-a-concurrent-merkle-tree)
   (using the `@solana/spl-account-compression` SDK)
 - mint compressed NFTs into your tree (to any owner's address you want)
@@ -439,9 +439,9 @@ Bubblegum SDK, we can craft the instruction to actually mint our compressed NFT
 directly into our collection.
 
 If you have minted traditional NFTs on Solana, this will look fairly similar. We
-are creating a new instruction, giving several several of the account addresses
-you might expect (e.g. the `payer`, `tokenMetadataProgram`, and various
-collection addresses), and then some tree specific addresses.
+are creating a new instruction, giving several of the account addresses you
+might expect (e.g. the `payer`, `tokenMetadataProgram`, and various collection
+addresses), and then some tree specific addresses.
 
 The addresses to pay special attention to are:
 
@@ -540,7 +540,7 @@ asset `id` value differs slightly between traditional NFTs and compressed NFTs:
 - for traditional/uncompressed NFTs: this is the token's address for the actual
   Account on-chain that stores the metadata for the asset.
 - for compressed NFTs: this is the `id` of the compressed NFT within the tree
-  and is **NOT** an actual on-chain Account address. While a compressed NFTs
+  and is **NOT** an actual on-chain Account address. While a compressed NFT's
   `assetId` resembles a traditional Solana Account address, it is not.
 
 :::
@@ -550,7 +550,7 @@ asset `id` value differs slightly between traditional NFTs and compressed NFTs:
 While the Read API supports more than these listed below, the most commonly used
 methods are:
 
-- `getAsset` - get an specific NFT asset by its `id`
+- `getAsset` - get a specific NFT asset by its `id`
 - `getAssetProof` - returns the merkle proof that is required to transfer a
   compressed NFT, by its asset `id`
 - `getAssetsByOwner` - get the assets owned by a specific address
@@ -858,5 +858,5 @@ compressed NFT.
 
 ## Example code repository
 
-You can find an example code repository for this developer guide on the the
-Solana Developers GitHub: https://github.com/solana-developers/compressed-nfts
+You can find an example code repository for this developer guide on the Solana
+Developers GitHub: https://github.com/solana-developers/compressed-nfts
