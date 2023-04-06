@@ -211,10 +211,10 @@ fn get_connection_stake(
     let staked_nodes = staked_nodes.read().unwrap();
     Some((
         pubkey,
-        staked_nodes.pubkey_stake_map.get(&pubkey).copied()?,
-        staked_nodes.total_stake,
-        staked_nodes.max_stake,
-        staked_nodes.min_stake,
+        staked_nodes.get_node_stake(&pubkey)?,
+        staked_nodes.total_stake(),
+        staked_nodes.max_stake(),
+        staked_nodes.min_stake(),
     ))
 }
 
@@ -1102,7 +1102,7 @@ pub mod test {
             signature::Keypair,
             signer::Signer,
         },
-        std::net::Ipv4Addr,
+        std::{collections::HashMap, net::Ipv4Addr},
         tokio::time::sleep,
     };
 
@@ -1518,12 +1518,11 @@ pub mod test {
         solana_logger::setup();
 
         let client_keypair = Keypair::new();
-        let mut staked_nodes = StakedNodes::default();
-        staked_nodes
-            .pubkey_stake_map
-            .insert(client_keypair.pubkey(), 100000);
-        staked_nodes.total_stake = 100000;
-
+        let stakes = HashMap::from([(client_keypair.pubkey(), 100_000)]);
+        let staked_nodes = StakedNodes::new(
+            Arc::new(stakes),
+            HashMap::<Pubkey, u64>::default(), // overrides
+        );
         let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes), 1);
         check_multiple_writes(receiver, server_address, Some(&client_keypair)).await;
         exit.store(true, Ordering::Relaxed);
@@ -1545,12 +1544,11 @@ pub mod test {
         solana_logger::setup();
 
         let client_keypair = Keypair::new();
-        let mut staked_nodes = StakedNodes::default();
-        staked_nodes
-            .pubkey_stake_map
-            .insert(client_keypair.pubkey(), 0);
-        staked_nodes.total_stake = 0;
-
+        let stakes = HashMap::from([(client_keypair.pubkey(), 0)]);
+        let staked_nodes = StakedNodes::new(
+            Arc::new(stakes),
+            HashMap::<Pubkey, u64>::default(), // overrides
+        );
         let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes), 1);
         check_multiple_writes(receiver, server_address, Some(&client_keypair)).await;
         exit.store(true, Ordering::Relaxed);
