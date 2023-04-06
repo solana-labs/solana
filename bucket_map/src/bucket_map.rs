@@ -355,161 +355,225 @@ mod tests {
     fn hashmap_compare() {
         use std::sync::Mutex;
         solana_logger::setup();
-        let maps = (0..2)
-            .map(|max_buckets_pow2| {
-                let config = BucketMapConfig::new(1 << max_buckets_pow2);
-                BucketMap::new(config)
-            })
-            .collect::<Vec<_>>();
-        let hash_map = RwLock::new(HashMap::<Pubkey, (Vec<(usize, usize)>, RefCount)>::new());
-        let max_slot_list_len = 5;
-        let all_keys = Mutex::new(vec![]);
-
-        let gen_rand_value = || {
-            let count = thread_rng().gen_range(0, max_slot_list_len);
-            let v = (0..count)
-                .map(|x| (x as usize, x as usize /*thread_rng().gen::<usize>()*/))
-                .collect::<Vec<_>>();
-            let range = thread_rng().gen_range(0, 100);
-            // pick ref counts that are useful and common
-            let rc = if range < 50 {
-                1
-            } else if range < 60 {
-                0
-            } else if range < 70 {
-                2
-            } else {
-                thread_rng().gen_range(0, MAX_LEGAL_REFCOUNT)
-            };
-
-            (v, rc)
-        };
-
-        let get_key = || {
-            let mut keys = all_keys.lock().unwrap();
-            if keys.is_empty() {
-                return None;
-            }
-            let len = keys.len();
-            Some(keys.remove(thread_rng().gen_range(0, len)))
-        };
-        let return_key = |key| {
-            let mut keys = all_keys.lock().unwrap();
-            keys.push(key);
-        };
-
-        let verify = || {
-            let mut maps = maps
-                .iter()
-                .map(|map| {
-                    let mut r = vec![];
-                    for bin in 0..map.num_buckets() {
-                        r.append(
-                            &mut map.buckets[bin]
-                                .items_in_range(&None::<&std::ops::RangeInclusive<Pubkey>>),
-                        );
-                    }
-                    r
+        for mut use_batch_insert in [true, false] {
+            let maps = (0..2)
+                .map(|max_buckets_pow2| {
+                    let config = BucketMapConfig::new(1 << max_buckets_pow2);
+                    BucketMap::new(config)
                 })
                 .collect::<Vec<_>>();
-            let hm = hash_map.read().unwrap();
-            for (k, v) in hm.iter() {
-                for map in maps.iter_mut() {
-                    for i in 0..map.len() {
-                        if k == &map[i].pubkey {
-                            assert_eq!(map[i].slot_list, v.0);
-                            assert_eq!(map[i].ref_count, v.1);
-                            map.remove(i);
-                            break;
+            let hash_map = RwLock::new(HashMap::<Pubkey, (Vec<(usize, usize)>, RefCount)>::new());
+            let max_slot_list_len = 5;
+            let all_keys = Mutex::new(vec![]);
+
+            let gen_rand_value = || {
+                let count = thread_rng().gen_range(0, max_slot_list_len);
+                let v = (0..count)
+                    .map(|x| (x as usize, x as usize /*thread_rng().gen::<usize>()*/))
+                    .collect::<Vec<_>>();
+                let range = thread_rng().gen_range(0, 100);
+                // pick ref counts that are useful and common
+                let rc = if range < 50 {
+                    1
+                } else if range < 60 {
+                    0
+                } else if range < 70 {
+                    2
+                } else {
+                    thread_rng().gen_range(0, MAX_LEGAL_REFCOUNT)
+                };
+
+                (v, rc)
+            };
+
+            let get_key = || {
+                let mut keys = all_keys.lock().unwrap();
+                if keys.is_empty() {
+                    return None;
+                }
+                let len = keys.len();
+                Some(keys.remove(thread_rng().gen_range(0, len)))
+            };
+            let return_key = |key| {
+                let mut keys = all_keys.lock().unwrap();
+                keys.push(key);
+            };
+
+            let verify = || {
+                let mut maps = maps
+                    .iter()
+                    .map(|map| {
+                        let mut r = vec![];
+                        for bin in 0..map.num_buckets() {
+                            r.append(
+                                &mut map.buckets[bin]
+                                    .items_in_range(&None::<&std::ops::RangeInclusive<Pubkey>>),
+                            );
+                        }
+                        r
+                    })
+                    .collect::<Vec<_>>();
+                let hm = hash_map.read().unwrap();
+                for (k, v) in hm.iter() {
+                    for map in maps.iter_mut() {
+                        for i in 0..map.len() {
+                            if k == &map[i].pubkey {
+                                assert_eq!(map[i].slot_list, v.0);
+                                assert_eq!(map[i].ref_count, v.1);
+                                map.remove(i);
+                                break;
+                            }
                         }
                     }
                 }
+                for map in maps.iter() {
+                    assert!(map.is_empty());
+                }
+            };
+            let mut initial: usize = 100; // put this many items in to start
+            if use_batch_insert {
+                // insert a lot more when inserting with batch to make sure we hit resizing during batch
+                initial *= 3;
             }
-            for map in maps.iter() {
-                assert!(map.is_empty());
-            }
-        };
-        let mut initial = 100; // put this many items in to start
 
-        // do random operations: insert, update, delete, add/unref in random order
-        // verify consistency between hashmap and all bucket maps
-        for i in 0..10000 {
-            if initial > 0 {
-                initial -= 1;
-            }
-            if initial > 0 || thread_rng().gen_range(0, 5) == 0 {
-                // insert
-                let k = solana_sdk::pubkey::new_rand();
-                let v = gen_rand_value();
-                hash_map.write().unwrap().insert(k, v.clone());
-                let insert = thread_rng().gen_range(0, 2) == 0;
-                maps.iter().for_each(|map| {
-                    if insert {
-                        map.insert(&k, (&v.0, v.1))
-                    } else {
-                        map.update(&k, |current| {
-                            assert!(current.is_none());
-                            Some(v.clone())
-                        })
+            // do random operations: insert, update, delete, add/unref in random order
+            // verify consistency between hashmap and all bucket maps
+            for i in 0..10000 {
+                initial = initial.saturating_sub(1);
+                if initial > 0 || thread_rng().gen_range(0, 5) == 0 {
+                    // insert
+                    let mut to_add = 1;
+                    if initial > 1 && use_batch_insert {
+                        to_add = thread_rng().gen_range(1, (initial / 4).max(2));
+                        initial -= to_add;
                     }
-                });
-                return_key(k);
-            }
-            if thread_rng().gen_range(0, 10) == 0 {
-                // update
-                if let Some(k) = get_key() {
-                    let hm = hash_map.read().unwrap();
-                    let (v, rc) = gen_rand_value();
-                    let v_old = hm.get(&k);
+
+                    let additions = (0..to_add)
+                        .map(|_| {
+                            let k = solana_sdk::pubkey::new_rand();
+                            let mut v = gen_rand_value();
+                            if use_batch_insert {
+                                // refcount has to be 1 to use batch insert
+                                v.1 = 1;
+                                // len has to be 1 to use batch insert
+                                if v.0.len() > 1 {
+                                    v.0.truncate(1);
+                                } else if v.0.is_empty() {
+                                    loop {
+                                        let mut new_v = gen_rand_value();
+                                        if !new_v.0.is_empty() {
+                                            v.0 = vec![new_v.0.pop().unwrap()];
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            (k, v)
+                        })
+                        .collect::<Vec<_>>();
+
+                    additions.clone().into_iter().for_each(|(k, v)| {
+                        hash_map.write().unwrap().insert(k, v);
+                        return_key(k);
+                    });
                     let insert = thread_rng().gen_range(0, 2) == 0;
                     maps.iter().for_each(|map| {
-                        if insert {
-                            map.insert(&k, (&v, rc))
+                        // batch insert can only work for the map with only 1 bucket so that we can batch add to a single bucket
+                        let batch_insert_now = map.buckets.len() == 1
+                            && use_batch_insert
+                            && thread_rng().gen_range(0, 2) == 0;
+                        if batch_insert_now {
+                            // batch insert into the map with 1 bucket 50% of the time
+                            assert!(map
+                                .get_bucket_from_index(0)
+                                .batch_insert_non_duplicates(
+                                    additions
+                                        .clone()
+                                        .into_iter()
+                                        .map(|(k, mut v)| (k, v.0.pop().unwrap())),
+                                    to_add,
+                                )
+                                .is_empty());
                         } else {
-                            map.update(&k, |current| {
-                                assert_eq!(current, v_old.map(|(v, rc)| (&v[..], *rc)), "{k}");
-                                Some((v.clone(), rc))
-                            })
+                            additions.clone().into_iter().for_each(|(k, v)| {
+                                if insert {
+                                    map.insert(&k, (&v.0, v.1))
+                                } else {
+                                    map.update(&k, |current| {
+                                        assert!(current.is_none());
+                                        Some(v.clone())
+                                    })
+                                }
+                            });
                         }
                     });
-                    drop(hm);
-                    hash_map.write().unwrap().insert(k, (v, rc));
-                    return_key(k);
-                }
-            }
-            if thread_rng().gen_range(0, 20) == 0 {
-                // delete
-                if let Some(k) = get_key() {
-                    let mut hm = hash_map.write().unwrap();
-                    hm.remove(&k);
-                    maps.iter().for_each(|map| {
-                        map.delete_key(&k);
-                    });
-                }
-            }
-            if thread_rng().gen_range(0, 10) == 0 {
-                // add/unref
-                if let Some(k) = get_key() {
-                    let mut inc = thread_rng().gen_range(0, 2) == 0;
-                    let mut hm = hash_map.write().unwrap();
-                    let (v, mut rc) = hm.get(&k).map(|(v, rc)| (v.to_vec(), *rc)).unwrap();
-                    if !inc && rc == 0 {
-                        // can't decrement rc=0
-                        inc = true;
-                    }
-                    rc = if inc { rc + 1 } else { rc - 1 };
-                    hm.insert(k, (v.to_vec(), rc));
-                    maps.iter().for_each(|map| {
-                        map.update(&k, |current| Some((current.unwrap().0.to_vec(), rc)))
-                    });
 
-                    return_key(k);
+                    if use_batch_insert && initial == 1 {
+                        // done using batch insert once we have added the initial entries
+                        // now, the test can remove, update, addref, etc.
+                        use_batch_insert = false;
+                    }
+                }
+                if use_batch_insert && initial > 0 {
+                    // if we are using batch insert, it is illegal to update, delete, or addref/unref an account until all batch inserts are complete
+                    continue;
+                }
+                if thread_rng().gen_range(0, 10) == 0 {
+                    // update
+                    if let Some(k) = get_key() {
+                        let hm = hash_map.read().unwrap();
+                        let (v, rc) = gen_rand_value();
+                        let v_old = hm.get(&k);
+                        let insert = thread_rng().gen_range(0, 2) == 0;
+                        maps.iter().for_each(|map| {
+                            if insert {
+                                map.insert(&k, (&v, rc))
+                            } else {
+                                map.update(&k, |current| {
+                                    assert_eq!(current, v_old.map(|(v, rc)| (&v[..], *rc)), "{k}");
+                                    Some((v.clone(), rc))
+                                })
+                            }
+                        });
+                        drop(hm);
+                        hash_map.write().unwrap().insert(k, (v, rc));
+                        return_key(k);
+                    }
+                }
+                if thread_rng().gen_range(0, 20) == 0 {
+                    // delete
+                    if let Some(k) = get_key() {
+                        let mut hm = hash_map.write().unwrap();
+                        hm.remove(&k);
+                        maps.iter().for_each(|map| {
+                            map.delete_key(&k);
+                        });
+                    }
+                }
+                if thread_rng().gen_range(0, 10) == 0 {
+                    // add/unref
+                    if let Some(k) = get_key() {
+                        let mut inc = thread_rng().gen_range(0, 2) == 0;
+                        let mut hm = hash_map.write().unwrap();
+                        let (v, mut rc) = hm.get(&k).map(|(v, rc)| (v.to_vec(), *rc)).unwrap();
+                        if !inc && rc == 0 {
+                            // can't decrement rc=0
+                            inc = true;
+                        }
+                        rc = if inc { rc + 1 } else { rc - 1 };
+                        hm.insert(k, (v.to_vec(), rc));
+                        maps.iter().for_each(|map| {
+                            map.update(&k, |current| Some((current.unwrap().0.to_vec(), rc)))
+                        });
+
+                        return_key(k);
+                    }
+                }
+                if i % 1000 == 0 {
+                    verify();
                 }
             }
-            if i % 1000 == 0 {
-                verify();
-            }
+            verify();
         }
-        verify();
     }
 }
