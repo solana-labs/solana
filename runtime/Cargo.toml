@@ -36,6 +36,7 @@ num-traits = { workspace = true }
 num_cpus = { workspace = true }
 once_cell = { workspace = true }
 ouroboros = { workspace = true }
+percentage = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }

@@ -1,6 +1,7 @@
 use {
     crate::{invoke_context::InvokeContext, timings::ExecuteDetailsTimings},
     itertools::Itertools,
+    percentage::PercentageInteger,
     solana_measure::measure::Measure,
     solana_rbpf::{
         elf::Executable,
@@ -22,7 +23,9 @@ use {
     },
 };
 
-const MAX_CACHE_ENTRIES: usize = 100; // TODO: Tune to size
+const MAX_LOADED_ENTRY_COUNT: usize = 256;
+const MAX_UNLOADED_ENTRY_COUNT: usize = 512;
+const MAX_TOMBSTONE_COUNT: usize = 512;
 
 /// Relationship between two fork IDs
 #[derive(Copy, Clone, PartialEq)]
@@ -65,6 +68,8 @@ pub enum LoadedProgramType {
     LegacyV0(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     LegacyV1(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     Typed(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
+    #[cfg(test)]
+    TestLoaded,
     BuiltIn(BuiltInProgram<InvokeContext<'static>>),
 }
 
@@ -80,6 +85,8 @@ impl Debug for LoadedProgramType {
             LoadedProgramType::LegacyV0(_) => write!(f, "LoadedProgramType::LegacyV0"),
             LoadedProgramType::LegacyV1(_) => write!(f, "LoadedProgramType::LegacyV1"),
             LoadedProgramType::Typed(_) => write!(f, "LoadedProgramType::Typed"),
+            #[cfg(test)]
+            LoadedProgramType::TestLoaded => write!(f, "LoadedProgramType::TestLoaded"),
             LoadedProgramType::BuiltIn(_) => write!(f, "LoadedProgramType::BuiltIn"),
         }
     }
@@ -200,9 +207,10 @@ impl LoadedProgram {
     pub fn to_unloaded(&self) -> Self {
         Self {
             program: LoadedProgramType::Unloaded,
-            account_size: 0,
+            account_size: self.account_size,
             deployment_slot: self.deployment_slot,
             effective_slot: self.effective_slot,
+            maybe_expiration_slot: self.maybe_expiration_slot,
             usage_counter: AtomicU64::new(self.usage_counter.load(Ordering::Relaxed)),
         }
     }
@@ -278,11 +286,18 @@ impl LoadedPrograms {
         let index = second_level
             .iter()
             .position(|at| at.effective_slot >= entry.effective_slot);
-        if let Some(existing) = index.and_then(|index| second_level.get(index)) {
+        if let Some((existing, entry_index)) =
+            index.and_then(|index| second_level.get(index).map(|value| (value, index)))
+        {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
-                return (true, existing.clone());
+                if matches!(existing.program, LoadedProgramType::Unloaded) {
+                    // The unloaded program is getting reloaded
+                    second_level.swap_remove(entry_index);
+                } else {
+                    return (true, existing.clone());
+                }
             }
         }
         second_level.insert(index.unwrap_or(second_level.len()), entry.clone());
@@ -322,6 +337,8 @@ impl LoadedPrograms {
             second_level.reverse();
             !second_level.is_empty()
         });
+
+        self.remove_expired_entries(new_root);
     }
 
     /// Extracts a subset of the programs relevant to a transaction batch
@@ -365,46 +382,114 @@ impl LoadedPrograms {
         (found, missing)
     }
 
-    /// Unloads programs which were used infrequently
-    pub fn sort_and_unload(&mut self, max_cache_entries: Option<usize>) {
-        // Find eviction candidates and sort by their usage counters
-        let sorted_candidates = self
+    /// Evicts programs which were used infrequently
+    pub fn sort_and_evict(&mut self, shrink_to: PercentageInteger) {
+        let mut num_loaded: usize = 0;
+        let mut num_unloaded: usize = 0;
+        let mut num_tombstones: usize = 0;
+        // Find eviction candidates and sort by their type and usage counters.
+        // Sorted result will have the following order:
+        //   Loaded entries with ascending order of their usage count
+        //   Unloaded entries with ascending order of their usage count
+        //   Tombstones with ascending order of their usage count
+        let (ordering, sorted_candidates): (Vec<u32>, Vec<(Pubkey, Arc<LoadedProgram>)>) = self
             .entries
             .iter()
             .flat_map(|(id, list)| {
-                list.iter().filter_map(|program| match program.program {
-                    LoadedProgramType::LegacyV0(_)
-                    | LoadedProgramType::LegacyV1(_)
-                    | LoadedProgramType::Typed(_)
-                    | LoadedProgramType::BuiltIn(_) => Some((*id, program.clone())),
-                    _ => None,
-                })
+                list.iter()
+                    .filter_map(move |program| match program.program {
+                        LoadedProgramType::LegacyV0(_)
+                        | LoadedProgramType::LegacyV1(_)
+                        | LoadedProgramType::Typed(_) => Some((0, (*id, program.clone()))),
+                        #[cfg(test)]
+                        LoadedProgramType::TestLoaded => Some((0, (*id, program.clone()))),
+                        LoadedProgramType::Unloaded => Some((1, (*id, program.clone()))),
+                        LoadedProgramType::FailedVerification
+                        | LoadedProgramType::Closed
+                        | LoadedProgramType::DelayVisibility => Some((2, (*id, program.clone()))),
+                        LoadedProgramType::BuiltIn(_) => None,
+                    })
             })
-            .sorted_by_cached_key(|(_, program)| program.usage_counter.load(Ordering::Relaxed))
-            .collect::<Vec<(Pubkey, Arc<LoadedProgram>)>>();
+            .sorted_by_cached_key(|(order, (_id, program))| {
+                (*order, program.usage_counter.load(Ordering::Relaxed))
+            })
+            .unzip();
 
-        // Calculate how many to unload
-        let num_to_unload = sorted_candidates
-            .len()
-            .saturating_sub(max_cache_entries.unwrap_or(MAX_CACHE_ENTRIES));
-        sorted_candidates
-            .iter()
-            .take(num_to_unload)
-            .for_each(|(id, program)| {
-                self.entries.get_mut(id).map(|entries| {
-                    entries
-                        .iter_mut()
-                        .find(|entry| entry == &program)
-                        .map(|candidate| *candidate = Arc::new(candidate.to_unloaded()));
-                });
-            });
+        for order in ordering {
+            if order == 0 {
+                num_loaded = num_loaded.saturating_add(1);
+            } else if order == 1 {
+                num_unloaded = num_unloaded.saturating_add(1);
+            } else if order == 2 {
+                num_tombstones = num_tombstones.saturating_add(1);
+            }
+        }
+
+        let num_to_unload = num_loaded.saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
+        self.unload_program_entries(sorted_candidates.iter().take(num_to_unload));
+
+        let num_unloaded_to_evict =
+            num_unloaded.saturating_sub(shrink_to.apply_to(MAX_UNLOADED_ENTRY_COUNT));
+        let (sorted_candidates, unloaded) = sorted_candidates.split_at(num_loaded);
+        self.remove_program_entries(unloaded.iter().take(num_unloaded_to_evict));
+
+        let num_tombstones_to_evict =
+            num_tombstones.saturating_sub(shrink_to.apply_to(MAX_TOMBSTONE_COUNT));
+        let (_sorted_candidates, tombstones) = sorted_candidates.split_at(num_unloaded);
+        self.remove_program_entries(tombstones.iter().take(num_tombstones_to_evict));
+
+        self.remove_programs_with_no_entries();
     }
 
-    /// Removes the entries at the given keys, if they exist
-    pub fn remove_entries(&mut self, keys: impl Iterator<Item = Pubkey>) {
+    /// Removes all the entries at the given keys, if they exist
+    pub fn remove_programs(&mut self, keys: impl Iterator<Item = Pubkey>) {
         for k in keys {
             self.entries.remove(&k);
         }
+    }
+
+    fn remove_program_entries<'a>(
+        &mut self,
+        remove: impl Iterator<Item = &'a (Pubkey, Arc<LoadedProgram>)>,
+    ) {
+        for (id, program) in remove {
+            if let Some(entries) = self.entries.get_mut(id) {
+                let index = entries.iter().position(|entry| entry == program);
+                if let Some(index) = index {
+                    entries.swap_remove(index);
+                }
+            }
+        }
+    }
+
+    fn remove_expired_entries(&mut self, current_slot: Slot) {
+        for entry in self.entries.values_mut() {
+            entry.retain(|program| {
+                program
+                    .maybe_expiration_slot
+                    .map(|expiration| expiration > current_slot)
+                    .unwrap_or(true)
+            });
+        }
+        self.remove_programs_with_no_entries();
+    }
+
+    fn unload_program_entries<'a>(
+        &mut self,
+        remove: impl Iterator<Item = &'a (Pubkey, Arc<LoadedProgram>)>,
+    ) {
+        for (id, program) in remove {
+            if let Some(entries) = self.entries.get_mut(id) {
+                entries
+                    .iter_mut()
+                    .find(|entry| entry == &program)
+                    .map(|candidate| *candidate = Arc::new(candidate.to_unloaded()));
+            }
+        }
+    }
+
+    fn remove_programs_with_no_entries(&mut self) {
+        self.entries.retain(|_, programs| !programs.is_empty())
     }
 }
 
@@ -414,6 +499,7 @@ mod tests {
         crate::loaded_programs::{
             BlockRelation, ForkGraph, LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot,
         },
+        percentage::Percentage,
         solana_rbpf::vm::BuiltInProgram,
         solana_sdk::{clock::Slot, pubkey::Pubkey},
         std::{
@@ -530,7 +616,7 @@ mod tests {
 
         programs.sort_by_key(|(_id, _slot, usage_count)| *usage_count);
 
-        cache.sort_and_unload(Some(num_total_programs.saturating_sub(3)));
+        cache.sort_and_evict(Percentage::from(2));
         // Check that every program is still in the cache.
         programs.iter().for_each(|entry| {
             assert!(cache.entries.get(&entry.0).is_some());
@@ -757,7 +843,7 @@ mod tests {
         usage_counter: AtomicU64,
     ) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
-            program: LoadedProgramType::BuiltIn(BuiltInProgram::default()),
+            program: LoadedProgramType::TestLoaded,
             account_size: 0,
             deployment_slot,
             effective_slot,
