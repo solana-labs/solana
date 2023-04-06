@@ -63,6 +63,23 @@ impl AccountsHashVerifier {
             .spawn(move || {
                 info!("AccountsHashVerifier has started");
                 let mut hashes = vec![];
+
+                // Prepare fault hash injection for testing.
+                // when fault_injection_rate_slots is not 0, inject a bad hash for every fault_injection_rate_slots on gossip.
+                let fault_hash_generator = if fault_injection_rate_slots != 0 {
+                    Some(|hash: &Hash, slot: Slot| {
+                        if slot % fault_injection_rate_slots == 0 {
+                            let fault_hash = Self::generate_fault_hash(hash);
+                            warn!("inserting fault at slot: {}", slot);
+                            Some(fault_hash)
+                        } else {
+                            None
+                        }
+                    })
+                } else {
+                    None
+                };
+
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -90,8 +107,8 @@ impl AccountsHashVerifier {
                         snapshot_package_sender.as_ref(),
                         &mut hashes,
                         &exit,
-                        fault_injection_rate_slots,
                         &snapshot_config,
+                        fault_hash_generator,
                     ));
 
                     datapoint_info!(
@@ -181,7 +198,7 @@ impl AccountsHashVerifier {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn process_accounts_package(
+    fn process_accounts_package<F>(
         accounts_package: AccountsPackage,
         cluster_info: &ClusterInfo,
         known_validators: Option<&HashSet<Pubkey>>,
@@ -189,9 +206,11 @@ impl AccountsHashVerifier {
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
-        fault_injection_rate_slots: u64,
         snapshot_config: &SnapshotConfig,
-    ) {
+        fault_hash_generator: Option<F>,
+    ) where
+        F: FnOnce(&Hash, Slot) -> Option<Hash>,
+    {
         let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
         Self::save_epoch_accounts_hash(&accounts_package, accounts_hash);
@@ -203,8 +222,8 @@ impl AccountsHashVerifier {
             halt_on_known_validator_accounts_hash_mismatch,
             hashes,
             exit,
-            fault_injection_rate_slots,
             accounts_hash,
+            fault_hash_generator,
         );
 
         Self::submit_for_packaging(
@@ -458,26 +477,22 @@ impl AccountsHashVerifier {
         extend_and_hash(original_hash, &[rand])
     }
 
-    fn push_accounts_hashes_to_cluster(
+    fn push_accounts_hashes_to_cluster<F>(
         accounts_package: &AccountsPackage,
         cluster_info: &ClusterInfo,
         known_validators: Option<&HashSet<Pubkey>>,
         halt_on_known_validator_accounts_hash_mismatch: bool,
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
-        fault_injection_rate_slots: u64,
         accounts_hash: AccountsHashEnum,
-    ) {
-        if fault_injection_rate_slots != 0
-            && accounts_package.slot % fault_injection_rate_slots == 0
-        {
-            // For testing, publish an invalid hash to gossip.
-            let fault_hash = Self::generate_fault_hash(accounts_hash.as_hash());
-            warn!("inserting fault at slot: {}", accounts_package.slot);
-            hashes.push((accounts_package.slot, fault_hash));
-        } else {
-            hashes.push((accounts_package.slot, *accounts_hash.as_hash()));
-        }
+        fault_hash_generator: Option<F>,
+    ) where
+        F: FnOnce(&Hash, Slot) -> Option<Hash>,
+    {
+        let hash = fault_hash_generator
+            .and_then(|f| f(accounts_hash.as_hash(), accounts_package.slot))
+            .or(Some(*accounts_hash.as_hash()));
+        hashes.push((accounts_package.slot, hash.unwrap()));
 
         retain_max_n_elements(hashes, MAX_SNAPSHOT_HASHES);
 
@@ -653,8 +668,8 @@ mod tests {
                 None,
                 &mut hashes,
                 &exit,
-                0,
                 &snapshot_config,
+                None::<fn(&Hash, Slot) -> Option<Hash>>,
             );
 
             // sleep for 1ms to create a newer timestamp for gossip entry
