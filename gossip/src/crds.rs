@@ -681,7 +681,7 @@ impl CrdsDataStats {
             CrdsData::LegacyContactInfo(_) => 0,
             CrdsData::Vote(_, _) => 1,
             CrdsData::LowestSlot(_, _) => 2,
-            CrdsData::SnapshotHashes(_) => 3,
+            CrdsData::LegacySnapshotHashes(_) => 3,
             CrdsData::AccountsHashes(_) => 4,
             CrdsData::EpochSlots(_, _) => 5,
             CrdsData::LegacyVersion(_) => 6,
@@ -720,7 +720,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            crds_value::{new_rand_timestamp, NodeInstance, SnapshotHashes},
+            crds_value::{new_rand_timestamp, LegacySnapshotHashes, NodeInstance},
             socketaddr,
         },
         rand::{thread_rng, Rng, SeedableRng},
@@ -1319,8 +1319,8 @@ mod tests {
         );
         assert_eq!(crds.get_shred_version(&pubkey), Some(8));
         // Add other crds values with the same pubkey.
-        let val = SnapshotHashes::new_rand(&mut rng, Some(pubkey));
-        let val = CrdsData::SnapshotHashes(val);
+        let val = LegacySnapshotHashes::new_rand(&mut rng, Some(pubkey));
+        let val = CrdsData::LegacySnapshotHashes(val);
         let val = CrdsValue::new_unsigned(val);
         assert_eq!(
             crds.insert(val, timestamp(), GossipRoute::LocalMessage),
@@ -1333,7 +1333,7 @@ mod tests {
         assert_eq!(crds.get::<&ContactInfo>(pubkey), None);
         assert_eq!(crds.get_shred_version(&pubkey), Some(8));
         // Remove the remaining entry with the same pubkey.
-        crds.remove(&CrdsValueLabel::SnapshotHashes(pubkey), timestamp());
+        crds.remove(&CrdsValueLabel::LegacySnapshotHashes(pubkey), timestamp());
         assert_eq!(crds.get_records(&pubkey).count(), 0);
         assert_eq!(crds.get_shred_version(&pubkey), None);
     }

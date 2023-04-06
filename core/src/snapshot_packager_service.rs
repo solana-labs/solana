@@ -1,7 +1,7 @@
 use {
     crossbeam_channel::{Receiver, Sender},
     solana_gossip::cluster_info::{
-        ClusterInfo, MAX_INCREMENTAL_SNAPSHOT_HASHES, MAX_SNAPSHOT_HASHES,
+        ClusterInfo, MAX_INCREMENTAL_SNAPSHOT_HASHES, MAX_LEGACY_SNAPSHOT_HASHES,
     },
     solana_measure::measure_us,
     solana_perf::thread::renice_this_thread,
@@ -46,7 +46,7 @@ impl SnapshotPackagerService {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
         let max_full_snapshot_hashes = std::cmp::min(
-            MAX_SNAPSHOT_HASHES,
+            MAX_LEGACY_SNAPSHOT_HASHES,
             snapshot_config
                 .maximum_full_snapshot_archives_to_retain
                 .get(),
@@ -279,7 +279,7 @@ impl SnapshotGossipManager {
         );
 
         self.cluster_info
-            .push_snapshot_hashes(Self::clone_hashes_for_crds(
+            .push_legacy_snapshot_hashes(Self::clone_hashes_for_crds(
                 &self.full_snapshot_hashes.hashes,
             ));
     }

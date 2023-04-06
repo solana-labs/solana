@@ -1,6 +1,6 @@
 use {
     crate::{
-        cluster_info::MAX_SNAPSHOT_HASHES,
+        cluster_info::MAX_LEGACY_SNAPSHOT_HASHES,
         contact_info::ContactInfo,
         deprecated,
         duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
@@ -85,7 +85,7 @@ pub enum CrdsData {
     LegacyContactInfo(LegacyContactInfo),
     Vote(VoteIndex, Vote),
     LowestSlot(/*DEPRECATED:*/ u8, LowestSlot),
-    SnapshotHashes(SnapshotHashes),
+    LegacySnapshotHashes(LegacySnapshotHashes),
     AccountsHashes(AccountsHashes),
     EpochSlots(EpochSlotsIndex, EpochSlots),
     LegacyVersion(LegacyVersion),
@@ -112,7 +112,7 @@ impl Sanitize for CrdsData {
                 }
                 val.sanitize()
             }
-            CrdsData::SnapshotHashes(val) => val.sanitize(),
+            CrdsData::LegacySnapshotHashes(val) => val.sanitize(),
             CrdsData::AccountsHashes(val) => val.sanitize(),
             CrdsData::EpochSlots(ix, val) => {
                 if *ix as usize >= MAX_EPOCH_SLOTS as usize {
@@ -153,7 +153,7 @@ impl CrdsData {
             0 => CrdsData::LegacyContactInfo(LegacyContactInfo::new_rand(rng, pubkey)),
             // Index for LowestSlot is deprecated and should be zero.
             1 => CrdsData::LowestSlot(0, LowestSlot::new_rand(rng, pubkey)),
-            2 => CrdsData::SnapshotHashes(SnapshotHashes::new_rand(rng, pubkey)),
+            2 => CrdsData::LegacySnapshotHashes(LegacySnapshotHashes::new_rand(rng, pubkey)),
             3 => CrdsData::AccountsHashes(AccountsHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
             5 => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
@@ -195,7 +195,7 @@ impl AccountsHashes {
 
     /// New random AccountsHashes for tests and benchmarks.
     pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
-        let num_hashes = rng.gen_range(0, MAX_SNAPSHOT_HASHES) + 1;
+        let num_hashes = rng.gen_range(0, MAX_LEGACY_SNAPSHOT_HASHES) + 1;
         let hashes = std::iter::repeat_with(|| {
             let slot = 47825632 + rng.gen_range(0, 512);
             let hash = solana_sdk::hash::new_rand(rng);
@@ -211,7 +211,7 @@ impl AccountsHashes {
     }
 }
 
-pub type SnapshotHashes = AccountsHashes;
+pub type LegacySnapshotHashes = AccountsHashes;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct IncrementalSnapshotHashes {
@@ -493,7 +493,7 @@ pub enum CrdsValueLabel {
     LegacyContactInfo(Pubkey),
     Vote(VoteIndex, Pubkey),
     LowestSlot(Pubkey),
-    SnapshotHashes(Pubkey),
+    LegacySnapshotHashes(Pubkey),
     EpochSlots(EpochSlotsIndex, Pubkey),
     AccountsHashes(Pubkey),
     LegacyVersion(Pubkey),
@@ -512,7 +512,9 @@ impl fmt::Display for CrdsValueLabel {
             }
             CrdsValueLabel::Vote(ix, _) => write!(f, "Vote({}, {})", ix, self.pubkey()),
             CrdsValueLabel::LowestSlot(_) => write!(f, "LowestSlot({})", self.pubkey()),
-            CrdsValueLabel::SnapshotHashes(_) => write!(f, "SnapshotHashes({})", self.pubkey()),
+            CrdsValueLabel::LegacySnapshotHashes(_) => {
+                write!(f, "LegacySnapshotHashes({})", self.pubkey())
+            }
             CrdsValueLabel::EpochSlots(ix, _) => write!(f, "EpochSlots({}, {})", ix, self.pubkey()),
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
             CrdsValueLabel::LegacyVersion(_) => write!(f, "LegacyVersion({})", self.pubkey()),
@@ -533,7 +535,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::LegacyContactInfo(p) => *p,
             CrdsValueLabel::Vote(_, p) => *p,
             CrdsValueLabel::LowestSlot(p) => *p,
-            CrdsValueLabel::SnapshotHashes(p) => *p,
+            CrdsValueLabel::LegacySnapshotHashes(p) => *p,
             CrdsValueLabel::EpochSlots(_, p) => *p,
             CrdsValueLabel::AccountsHashes(p) => *p,
             CrdsValueLabel::LegacyVersion(p) => *p,
@@ -583,7 +585,7 @@ impl CrdsValue {
             CrdsData::LegacyContactInfo(contact_info) => contact_info.wallclock,
             CrdsData::Vote(_, vote) => vote.wallclock,
             CrdsData::LowestSlot(_, obj) => obj.wallclock,
-            CrdsData::SnapshotHashes(hash) => hash.wallclock,
+            CrdsData::LegacySnapshotHashes(hash) => hash.wallclock,
             CrdsData::AccountsHashes(hash) => hash.wallclock,
             CrdsData::EpochSlots(_, p) => p.wallclock,
             CrdsData::LegacyVersion(version) => version.wallclock,
@@ -599,7 +601,7 @@ impl CrdsValue {
             CrdsData::LegacyContactInfo(contact_info) => contact_info.id,
             CrdsData::Vote(_, vote) => vote.from,
             CrdsData::LowestSlot(_, slots) => slots.from,
-            CrdsData::SnapshotHashes(hash) => hash.from,
+            CrdsData::LegacySnapshotHashes(hash) => hash.from,
             CrdsData::AccountsHashes(hash) => hash.from,
             CrdsData::EpochSlots(_, p) => p.from,
             CrdsData::LegacyVersion(version) => version.from,
@@ -615,7 +617,9 @@ impl CrdsValue {
             CrdsData::LegacyContactInfo(_) => CrdsValueLabel::LegacyContactInfo(self.pubkey()),
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
             CrdsData::LowestSlot(_, _) => CrdsValueLabel::LowestSlot(self.pubkey()),
-            CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
+            CrdsData::LegacySnapshotHashes(_) => {
+                CrdsValueLabel::LegacySnapshotHashes(self.pubkey())
+            }
             CrdsData::AccountsHashes(_) => CrdsValueLabel::AccountsHashes(self.pubkey()),
             CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
             CrdsData::LegacyVersion(_) => CrdsValueLabel::LegacyVersion(self.pubkey()),
@@ -905,7 +909,7 @@ mod test {
         }
         assert_eq!(count, currents.len());
         // Currently CrdsData::new_rand is implemented for:
-        //   AccountsHashes, ContactInfo, LowestSlot, SnapshotHashes, Version
+        //   AccountsHashes, ContactInfo, LowestSlot, LegacySnapshotHashes, Version
         //   EpochSlots x MAX_EPOCH_SLOTS
         //   Vote x MAX_VOTES
         let num_kinds = 5 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize;
