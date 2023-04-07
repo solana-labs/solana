@@ -31,7 +31,7 @@ use {
 pub struct ReallocatedItems<I: BucketOccupied, D: BucketOccupied> {
     // Some if the index was reallocated
     // u64 is random associated with the new index
-    pub index: Option<(u64, BucketStorage<I>)>,
+    pub index: Option<BucketStorage<I>>,
     // Some for a data bucket reallocation
     // u64 is data bucket index
     pub data: Option<(u64, BucketStorage<D>)>,
@@ -460,12 +460,12 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 // index may have allocated something larger than we asked for,
                 // so, in case we fail to reindex into this larger size, grow from this size next iteration.
                 current_capacity = index.capacity();
-                let random = thread_rng().gen();
                 let mut valid = true;
                 for ix in 0..self.index.capacity() {
                     if !self.index.is_free(ix) {
                         let elem: &IndexEntry<T> = self.index.get(ix);
-                        let new_ix = Self::bucket_create_key(&mut index, &elem.key, random, true);
+                        let new_ix =
+                            Self::bucket_create_key(&mut index, &elem.key, self.random, true);
                         if new_ix.is_err() {
                             valid = false;
                             break;
@@ -486,7 +486,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 if valid {
                     self.stats.index.update_max_size(index.capacity());
                     let mut items = self.reallocated.items.lock().unwrap();
-                    items.index = Some((random, index));
+                    items.index = Some(index);
                     self.reallocated.add_reallocation();
                     break;
                 }
@@ -506,12 +506,11 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         }
     }
 
-    pub fn apply_grow_index(&mut self, random: u64, index: BucketStorage<IndexBucket<T>>) {
+    pub fn apply_grow_index(&mut self, index: BucketStorage<IndexBucket<T>>) {
         self.stats
             .index
             .resize_grow(self.index.capacity_bytes(), index.capacity_bytes());
 
-        self.random = random;
         self.index = index;
     }
 
@@ -601,8 +600,8 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
             // swap out the bucket that was resized previously with a read lock
             let mut items = std::mem::take(&mut *self.reallocated.items.lock().unwrap());
 
-            if let Some((random, bucket)) = items.index.take() {
-                self.apply_grow_index(random, bucket);
+            if let Some(bucket) = items.index.take() {
+                self.apply_grow_index(bucket);
             } else {
                 // data bucket
                 let (i, new_bucket) = items.data.take().unwrap();
