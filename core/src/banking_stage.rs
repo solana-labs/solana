@@ -385,64 +385,72 @@ impl BankingStage {
                     .is_active(&allow_votes_to_directly_update_vote_state::id())
             })
             .unwrap_or(false);
-        // Many banks that process transactions in parallel.
-        let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
-            .map(|id| {
-                let (packet_receiver, unprocessed_transaction_storage) =
-                    match (id, should_split_voting_threads) {
-                        (0, false) => (
-                            gossip_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Voting(VoteSource::Gossip),
-                            ),
-                        ),
-                        (0, true) => (
-                            gossip_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_vote_storage(
-                                latest_unprocessed_votes.clone(),
-                                VoteSource::Gossip,
-                            ),
-                        ),
-                        (1, false) => (
-                            tpu_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Voting(VoteSource::Tpu),
-                            ),
-                        ),
-                        (1, true) => (
-                            tpu_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_vote_storage(
-                                latest_unprocessed_votes.clone(),
-                                VoteSource::Tpu,
-                            ),
-                        ),
-                        _ => (
-                            non_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Transactions,
-                            ),
-                        ),
-                    };
 
-                Self::spawn_thread(
-                    id,
-                    cluster_info.clone(),
-                    poh_recorder.clone(),
-                    packet_receiver,
-                    transaction_status_sender.clone(),
-                    replay_vote_sender.clone(),
-                    log_messages_bytes_limit,
-                    connection_cache.clone(),
-                    bank_forks.clone(),
-                    prioritization_fee_cache.clone(),
-                    data_budget.clone(),
-                    unprocessed_transaction_storage,
-                )
-            })
-            .collect();
+        let (gossip_storage, tpu_storage) = if should_split_voting_threads {
+            let gossip_storage = UnprocessedTransactionStorage::new_vote_storage(
+                latest_unprocessed_votes.clone(),
+                VoteSource::Gossip,
+            );
+            let tpu_storage = UnprocessedTransactionStorage::new_vote_storage(
+                latest_unprocessed_votes.clone(),
+                VoteSource::Tpu,
+            );
+            (gossip_storage, tpu_storage)
+        } else {
+            let gossip_storage = UnprocessedTransactionStorage::new_transaction_storage(
+                UnprocessedPacketBatches::with_capacity(batch_limit),
+                ThreadType::Voting(VoteSource::Gossip),
+            );
+            let tpu_storage = UnprocessedTransactionStorage::new_transaction_storage(
+                UnprocessedPacketBatches::with_capacity(batch_limit),
+                ThreadType::Voting(VoteSource::Tpu),
+            );
+            (gossip_storage, tpu_storage)
+        };
+
+        // Many banks that process transactions in parallel.
+        let mut bank_thread_hdls = Vec::with_capacity(num_threads as usize);
+        let mut id = 0;
+        for (unprocessed_transaction_storage, packet_receiver) in [
+            (gossip_storage, gossip_vote_receiver),
+            (tpu_storage, tpu_vote_receiver),
+        ] {
+            bank_thread_hdls.push(Self::spawn_thread(
+                id,
+                cluster_info.clone(),
+                poh_recorder.clone(),
+                packet_receiver,
+                transaction_status_sender.clone(),
+                replay_vote_sender.clone(),
+                log_messages_bytes_limit,
+                connection_cache.clone(),
+                bank_forks.clone(),
+                prioritization_fee_cache.clone(),
+                data_budget.clone(),
+                unprocessed_transaction_storage,
+            ));
+            id += 1;
+        }
+        for id in id..num_threads {
+            bank_thread_hdls.push(Self::spawn_thread(
+                id,
+                cluster_info.clone(),
+                poh_recorder.clone(),
+                non_vote_receiver.clone(),
+                transaction_status_sender.clone(),
+                replay_vote_sender.clone(),
+                log_messages_bytes_limit,
+                connection_cache.clone(),
+                bank_forks.clone(),
+                prioritization_fee_cache.clone(),
+                data_budget.clone(),
+                UnprocessedTransactionStorage::new_transaction_storage(
+                    UnprocessedPacketBatches::with_capacity(batch_limit),
+                    ThreadType::Transactions,
+                ),
+            ));
+        }
+
         Self { bank_thread_hdls }
     }
 
