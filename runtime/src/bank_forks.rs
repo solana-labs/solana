@@ -9,9 +9,9 @@ use {
         snapshot_config::SnapshotConfig,
     },
     log::*,
-    solana_scheduler::SchedulingMode,
     solana_measure::measure::Measure,
     solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph, WorkingSlot},
+    solana_scheduler::SchedulingMode,
     solana_sdk::{clock::Slot, feature_set, hash::Hash, timing},
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
