@@ -114,10 +114,7 @@ fn process_close_proof_context(invoke_context: &mut InvokeContext) -> Result<(),
     Ok(())
 }
 
-declare_process_instruction!(0);
-pub fn process_instruction_inner(
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+declare_process_instruction!(process_instruction, 0, |invoke_context| {
     if invoke_context.get_stack_height() != TRANSACTION_LEVEL_STACK_HEIGHT {
         // Not supported as an inner instruction
         return Err(InstructionError::UnsupportedProgramId);
@@ -195,4 +192,4 @@ pub fn process_instruction_inner(
             process_verify_proof::<PubkeyValidityData, PubkeyValidityProofContext>(invoke_context)
         }
     }
-}
+});

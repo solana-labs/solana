@@ -34,8 +34,9 @@ use {
     solana_logger,
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget, MAX_COMPUTE_UNIT_LIMIT},
+        declare_process_instruction,
         executor_cache::TransactionExecutorCache,
-        invoke_context::{mock_process_instruction, InvokeContext},
+        invoke_context::mock_process_instruction,
         loaded_programs::{LoadedProgram, LoadedProgramType},
         prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         timings::ExecuteTimings,
@@ -107,7 +108,6 @@ use {
         fs::File,
         io::Read,
         rc::Rc,
-        result,
         str::FromStr,
         sync::{
             atomic::{
@@ -752,6 +752,11 @@ fn assert_capitalization_diff(
     }
 }
 
+declare_process_instruction!(process_instruction, 1, |_invoke_context| {
+    // Default for all tests which don't bring their own processor
+    Ok(())
+});
+
 #[test]
 fn test_store_account_and_update_capitalization_missing() {
     let bank = create_simple_test_bank(0);
@@ -1340,9 +1345,7 @@ fn test_rent_complex() {
         Deduction,
     }
 
-    fn mock_process_instruction(
-        invoke_context: &mut InvokeContext,
-    ) -> result::Result<(), Box<dyn std::error::Error>> {
+    declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
@@ -1359,9 +1362,9 @@ fn test_rent_complex() {
                 }
             }
         } else {
-            Err(Box::new(InstructionError::InvalidInstructionData))
+            Err(InstructionError::InvalidInstructionData)
         }
-    }
+    });
 
     let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
     let mut keypairs: Vec<Keypair> = Vec::with_capacity(14);
@@ -1377,7 +1380,7 @@ fn test_rent_complex() {
     root_bank.restore_old_behavior_for_fragile_tests();
     let root_bank = Arc::new(root_bank);
     let mut bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
-    bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
+    bank.add_builtin("mock_program", &mock_program_id, process_instruction);
 
     assert_eq!(bank.last_blockhash(), genesis_config.hash());
 
@@ -5070,23 +5073,21 @@ fn test_add_builtin() {
     fn mock_vote_program_id() -> Pubkey {
         Pubkey::from([42u8; 32])
     }
-    fn mock_vote_processor(
-        invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
         if mock_vote_program_id() != *program_id {
-            return Err(Box::new(InstructionError::IncorrectProgramId));
+            return Err(InstructionError::IncorrectProgramId);
         }
-        Err(Box::new(InstructionError::Custom(42)))
-    }
+        Err(InstructionError::Custom(42))
+    });
 
     assert!(bank.get_account(&mock_vote_program_id()).is_none());
     bank.add_builtin(
         "mock_vote_program",
         &mock_vote_program_id(),
-        mock_vote_processor,
+        process_instruction,
     );
     assert!(bank.get_account(&mock_vote_program_id()).is_some());
 
@@ -5128,13 +5129,9 @@ fn test_add_duplicate_static_program() {
     } = create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 0);
     let mut bank = Bank::new_for_tests(&genesis_config);
 
-    fn mock_vote_processor(
-        invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-        // mock builtin must consume units
-        invoke_context.consume_checked(1)?;
-        Err(Box::new(InstructionError::Custom(42)))
-    }
+    declare_process_instruction!(process_instruction, 1, |_invoke_context| {
+        Err(InstructionError::Custom(42))
+    });
 
     let mock_account = Keypair::new();
     let mock_validator_identity = Keypair::new();
@@ -5159,7 +5156,7 @@ fn test_add_duplicate_static_program() {
     bank.add_builtin(
         "solana_vote_program",
         &solana_vote_program::id(),
-        mock_vote_processor,
+        process_instruction,
     );
     let new_vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
     // Vote loader account should not be updated since it was included in the genesis config.
@@ -5178,13 +5175,9 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
     for pass in 0..5 {
         let mut bank = create_simple_test_bank(500);
 
-        fn mock_ix_processor(
-            invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-            // mock builtin must consume units
-            invoke_context.consume_checked(1)?;
-            Err(Box::new(InstructionError::Custom(42)))
-        }
+        declare_process_instruction!(process_instruction, 1, |_invoke_context| {
+            Err(InstructionError::Custom(42))
+        });
 
         // Non-builtin loader accounts can not be used for instruction processing
         {
@@ -5215,8 +5208,8 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
             continue;
         }
 
-        bank.add_builtin("mock_program1", &vote_id, mock_ix_processor);
-        bank.add_builtin("mock_program2", &stake_id, mock_ix_processor);
+        bank.add_builtin("mock_program1", &vote_id, process_instruction);
+        bank.add_builtin("mock_program2", &stake_id, process_instruction);
         {
             let stakes = bank.stakes_cache.stakes();
             assert!(stakes.vote_accounts().as_ref().is_empty());
@@ -5239,8 +5232,8 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
         // Re-adding builtin programs should be no-op
         bank.update_accounts_hash_for_tests();
         let old_hash = bank.get_accounts_hash().unwrap();
-        bank.add_builtin("mock_program1", &vote_id, mock_ix_processor);
-        bank.add_builtin("mock_program2", &stake_id, mock_ix_processor);
+        bank.add_builtin("mock_program1", &vote_id, process_instruction);
+        bank.add_builtin("mock_program2", &stake_id, process_instruction);
         add_root_and_flush_write_cache(&bank);
         bank.update_accounts_hash_for_tests();
         let new_hash = bank.get_accounts_hash().unwrap();
@@ -6470,15 +6463,11 @@ fn test_transaction_with_duplicate_accounts_in_instruction() {
     let (genesis_config, mint_keypair) = create_genesis_config(500);
     let mut bank = Bank::new_for_tests(&genesis_config);
 
-    fn mock_process_instruction(
-        invoke_context: &mut InvokeContext,
-    ) -> result::Result<(), Box<dyn std::error::Error>> {
+    declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
         let lamports = u64::from_le_bytes(instruction_data.try_into().unwrap());
-        // mock builtin must consume units
-        invoke_context.consume_checked(1)?;
         instruction_context
             .try_borrow_instruction_account(transaction_context, 2)?
             .checked_sub_lamports(lamports)?;
@@ -6492,10 +6481,10 @@ fn test_transaction_with_duplicate_accounts_in_instruction() {
             .try_borrow_instruction_account(transaction_context, 1)?
             .checked_add_lamports(lamports)?;
         Ok(())
-    }
+    });
 
     let mock_program_id = Pubkey::from([2u8; 32]);
-    bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
+    bank.add_builtin("mock_program", &mock_program_id, process_instruction);
 
     let from_pubkey = solana_sdk::pubkey::new_rand();
     let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -6530,17 +6519,8 @@ fn test_transaction_with_program_ids_passed_to_programs() {
     let (genesis_config, mint_keypair) = create_genesis_config(500);
     let mut bank = Bank::new_for_tests(&genesis_config);
 
-    #[allow(clippy::unnecessary_wraps)]
-    fn mock_process_instruction(
-        invoke_context: &mut InvokeContext,
-    ) -> result::Result<(), Box<dyn std::error::Error>> {
-        // mock builtin must consume units
-        invoke_context.consume_checked(1)?;
-        Ok(())
-    }
-
     let mock_program_id = Pubkey::from([2u8; 32]);
-    bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
+    bank.add_builtin("mock_program", &mock_program_id, process_instruction);
 
     let from_pubkey = solana_sdk::pubkey::new_rand();
     let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -6592,11 +6572,7 @@ fn test_account_ids_after_program_ids() {
 
     tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
 
-    bank.add_builtin(
-        "mock_vote",
-        &solana_vote_program::id(),
-        mock_ok_vote_processor,
-    );
+    bank.add_builtin("mock_vote", &solana_vote_program::id(), process_instruction);
     let result = bank.process_transaction(&tx);
     assert_eq!(result, Ok(()));
     let account = bank.get_account(&solana_vote_program::id()).unwrap();
@@ -6646,11 +6622,7 @@ fn test_duplicate_account_key() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin(
-        "mock_vote",
-        &solana_vote_program::id(),
-        mock_ok_vote_processor,
-    );
+    bank.add_builtin("mock_vote", &solana_vote_program::id(), process_instruction);
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6679,11 +6651,7 @@ fn test_process_transaction_with_too_many_account_locks() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin(
-        "mock_vote",
-        &solana_vote_program::id(),
-        mock_ok_vote_processor,
-    );
+    bank.add_builtin("mock_vote", &solana_vote_program::id(), process_instruction);
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6716,11 +6684,7 @@ fn test_program_id_as_payer() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin(
-        "mock_vote",
-        &solana_vote_program::id(),
-        mock_ok_vote_processor,
-    );
+    bank.add_builtin("mock_vote", &solana_vote_program::id(), process_instruction);
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6750,15 +6714,6 @@ fn test_program_id_as_payer() {
     assert_eq!(result, Err(TransactionError::SanitizeFailure));
 }
 
-#[allow(clippy::unnecessary_wraps)]
-fn mock_ok_vote_processor(
-    invoke_context: &mut InvokeContext,
-) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    // mock builtin must consume units
-    invoke_context.consume_checked(1)?;
-    Ok(())
-}
-
 #[test]
 fn test_ref_account_key_after_program_id() {
     let (genesis_config, mint_keypair) = create_genesis_config(500);
@@ -6772,11 +6727,7 @@ fn test_ref_account_key_after_program_id() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin(
-        "mock_vote",
-        &solana_vote_program::id(),
-        mock_ok_vote_processor,
-    );
+    bank.add_builtin("mock_vote", &solana_vote_program::id(), process_instruction);
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6807,7 +6758,7 @@ fn test_fuzz_instructions() {
         .map(|i| {
             let key = solana_sdk::pubkey::new_rand();
             let name = format!("program{i:?}");
-            bank.add_builtin(&name, &key, mock_ok_vote_processor);
+            bank.add_builtin(&name, &key, process_instruction);
             (key, name.as_bytes().to_vec())
         })
         .collect();
@@ -6999,23 +6950,21 @@ fn test_bank_hash_consistency() {
 
 #[test]
 fn test_same_program_id_uses_unqiue_executable_accounts() {
-    fn nested_processor(
-        invoke_context: &mut InvokeContext,
-    ) -> result::Result<(), Box<dyn std::error::Error>> {
+    declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let _ = instruction_context
             .try_borrow_program_account(transaction_context, 1)?
             .checked_add_lamports(1);
         Ok(())
-    }
+    });
 
     let (genesis_config, mint_keypair) = create_genesis_config(50000);
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     // Add a new program
     let program1_pubkey = solana_sdk::pubkey::new_rand();
-    bank.add_builtin("program", &program1_pubkey, nested_processor);
+    bank.add_builtin("program", &program1_pubkey, process_instruction);
 
     // Add a new program owned by the first
     let program2_pubkey = solana_sdk::pubkey::new_rand();
@@ -7220,13 +7169,6 @@ fn test_shrink_candidate_slots_cached() {
 
 #[test]
 fn test_add_builtin_no_overwrite() {
-    #[allow(clippy::unnecessary_wraps)]
-    fn mock_ix_processor(
-        _invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-        Ok(())
-    }
-
     let slot = 123;
     let program_id = solana_sdk::pubkey::new_rand();
 
@@ -7239,25 +7181,18 @@ fn test_add_builtin_no_overwrite() {
 
     Arc::get_mut(&mut bank)
         .unwrap()
-        .add_builtin("mock_program", &program_id, mock_ix_processor);
+        .add_builtin("mock_program", &program_id, process_instruction);
     assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
     let mut bank = Arc::new(new_from_parent(&bank));
     Arc::get_mut(&mut bank)
         .unwrap()
-        .add_builtin("mock_program", &program_id, mock_ix_processor);
+        .add_builtin("mock_program", &program_id, process_instruction);
     assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 }
 
 #[test]
 fn test_add_builtin_loader_no_overwrite() {
-    #[allow(clippy::unnecessary_wraps)]
-    fn mock_ix_processor(
-        _context: &mut InvokeContext,
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-        Ok(())
-    }
-
     let slot = 123;
     let loader_id = solana_sdk::pubkey::new_rand();
 
@@ -7270,13 +7205,13 @@ fn test_add_builtin_loader_no_overwrite() {
 
     Arc::get_mut(&mut bank)
         .unwrap()
-        .add_builtin("mock_program", &loader_id, mock_ix_processor);
+        .add_builtin("mock_program", &loader_id, process_instruction);
     assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
 
     let mut bank = Arc::new(new_from_parent(&bank));
     Arc::get_mut(&mut bank)
         .unwrap()
-        .add_builtin("mock_program", &loader_id, mock_ix_processor);
+        .add_builtin("mock_program", &loader_id, process_instruction);
     assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
 }
 
@@ -8052,6 +7987,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         Vec::new(),
         Ok(()),
         solana_bpf_loader_program::process_instruction,
+        |_invoke_context| {},
         |_invoke_context| {},
     );
 
@@ -9999,10 +9935,7 @@ fn test_tx_return_data() {
     );
     let mut bank = Bank::new_for_tests(&genesis_config);
 
-    let mock_program_id = Pubkey::from([2u8; 32]);
-    fn mock_process_instruction(
-        invoke_context: &mut InvokeContext,
-    ) -> result::Result<(), Box<dyn std::error::Error>> {
+    declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let mock_program_id = Pubkey::from([2u8; 32]);
         let transaction_context = &mut invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -10016,9 +9949,11 @@ fn test_tx_return_data() {
                 .unwrap();
         }
         Ok(())
-    }
+    });
+
+    let mock_program_id = Pubkey::from([2u8; 32]);
     let blockhash = bank.last_blockhash();
-    bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
+    bank.add_builtin("mock_program", &mock_program_id, process_instruction);
 
     for index in [
         None,
@@ -10197,21 +10132,17 @@ fn test_transfer_sysvar() {
     );
     let mut bank = Bank::new_for_tests(&genesis_config);
 
-    fn mock_ix_processor(
-        invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        // mock builtin should consume units
-        let _ = invoke_context.consume_checked(1);
         instruction_context
             .try_borrow_instruction_account(transaction_context, 1)?
             .set_data(vec![0; 40])?;
         Ok(())
-    }
+    });
 
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin("mock_program1", &program_id, mock_ix_processor);
+    bank.add_builtin("mock_program1", &program_id, process_instruction);
 
     let blockhash = bank.last_blockhash();
     #[allow(deprecated)]
@@ -10410,9 +10341,7 @@ fn test_compute_budget_program_noop() {
     );
     let mut bank = Bank::new_for_tests(&genesis_config);
 
-    fn mock_ix_processor(
-        invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let compute_budget = invoke_context.get_compute_budget();
         assert_eq!(
             *compute_budget,
@@ -10422,12 +10351,10 @@ fn test_compute_budget_program_noop() {
                 ..ComputeBudget::default()
             }
         );
-        // mock builtin should consume units
-        let _ = invoke_context.consume_checked(1);
         Ok(())
-    }
+    });
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin("mock_program", &program_id, mock_ix_processor);
+    bank.add_builtin("mock_program", &program_id, process_instruction);
 
     let message = Message::new(
         &[
@@ -10457,9 +10384,7 @@ fn test_compute_request_instruction() {
     );
     let mut bank = Bank::new_for_tests(&genesis_config);
 
-    fn mock_ix_processor(
-        invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let compute_budget = invoke_context.get_compute_budget();
         assert_eq!(
             *compute_budget,
@@ -10469,12 +10394,10 @@ fn test_compute_request_instruction() {
                 ..ComputeBudget::default()
             }
         );
-        // mock builtin should consume units
-        let _ = invoke_context.consume_checked(1);
         Ok(())
-    }
+    });
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin("mock_program", &program_id, mock_ix_processor);
+    bank.add_builtin("mock_program", &program_id, process_instruction);
 
     let message = Message::new(
         &[
@@ -10511,9 +10434,7 @@ fn test_failed_compute_request_instruction() {
     bank.transfer(10, &mint_keypair, &payer1_keypair.pubkey())
         .unwrap();
 
-    fn mock_ix_processor(
-        invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    declare_process_instruction!(process_instruction, 1, |invoke_context| {
         let compute_budget = invoke_context.get_compute_budget();
         assert_eq!(
             *compute_budget,
@@ -10524,9 +10445,9 @@ fn test_failed_compute_request_instruction() {
             }
         );
         Ok(())
-    }
+    });
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin("mock_program", &program_id, mock_ix_processor);
+    bank.add_builtin("mock_program", &program_id, process_instruction);
 
     // This message will not be executed because the compute budget request is invalid
     let message0 = Message::new(
@@ -11076,14 +10997,10 @@ enum MockTransferInstruction {
     Transfer(u64),
 }
 
-fn mock_transfer_process_instruction(
-    invoke_context: &mut InvokeContext,
-) -> result::Result<(), Box<dyn std::error::Error>> {
+declare_process_instruction!(mock_transfer_process_instruction, 1, |invoke_context| {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
-    // mock builtin must consume units
-    invoke_context.consume_checked(1)?;
     if let Ok(instruction) = bincode::deserialize(instruction_data) {
         match instruction {
             MockTransferInstruction::Transfer(amount) => {
@@ -11097,9 +11014,9 @@ fn mock_transfer_process_instruction(
             }
         }
     } else {
-        Err(Box::new(InstructionError::InvalidInstructionData))
+        Err(InstructionError::InvalidInstructionData)
     }
-}
+});
 
 fn create_mock_transfer(
     payer: &Keypair,
@@ -11888,14 +11805,10 @@ enum MockReallocInstruction {
     Realloc(usize, u64, Pubkey),
 }
 
-fn mock_realloc_process_instruction(
-    invoke_context: &mut InvokeContext,
-) -> result::Result<(), Box<dyn std::error::Error>> {
+declare_process_instruction!(mock_realloc_process_instruction, 1, |invoke_context| {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
-    // mock builtin must consume units
-    invoke_context.consume_checked(1)?;
     if let Ok(instruction) = bincode::deserialize(instruction_data) {
         match instruction {
             MockReallocInstruction::Realloc(new_size, new_balance, _) => {
@@ -11929,9 +11842,9 @@ fn mock_realloc_process_instruction(
             }
         }
     } else {
-        Err(Box::new(InstructionError::InvalidInstructionData))
+        Err(InstructionError::InvalidInstructionData)
     }
-}
+});
 
 fn create_mock_realloc_tx(
     payer: &Keypair,

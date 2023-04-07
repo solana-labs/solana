@@ -41,13 +41,18 @@ use {
 /// Adapter so we can unify the interfaces of built-in programs and syscalls
 #[macro_export]
 macro_rules! declare_process_instruction {
-    ($cu_to_consume:expr) => {
-        pub fn process_instruction(
-            invoke_context: &mut InvokeContext,
-        ) -> Result<(), Box<dyn std::error::Error>> {
+    ($process_instruction:ident, $cu_to_consume:expr, |$invoke_context:ident| $inner:tt) => {
+        pub fn $process_instruction(
+            invoke_context: &mut $crate::invoke_context::InvokeContext,
+        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+            fn process_instruction_inner(
+                $invoke_context: &mut $crate::invoke_context::InvokeContext,
+            ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
+                $inner
+            }
             if invoke_context
                 .feature_set
-                .is_active(&feature_set::native_programs_consume_cu::id())
+                .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
             {
                 invoke_context.consume_checked($cu_to_consume)?;
             }
@@ -919,7 +924,7 @@ macro_rules! with_mock_invoke_context {
     };
 }
 
-pub fn mock_process_instruction<F: FnMut(&mut InvokeContext)>(
+pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut InvokeContext)>(
     loader_id: &Pubkey,
     mut program_indices: Vec<IndexOfAccount>,
     instruction_data: &[u8],
@@ -928,6 +933,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext)>(
     expected_result: Result<(), InstructionError>,
     process_instruction: ProcessInstructionWithContext,
     mut pre_adjustments: F,
+    mut post_adjustments: G,
 ) -> Vec<AccountSharedData> {
     let mut instruction_accounts: Vec<InstructionAccount> =
         Vec::with_capacity(instruction_account_metas.len());
@@ -971,6 +977,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext)>(
         &mut ExecuteTimings::default(),
     );
     assert_eq!(result, expected_result);
+    post_adjustments(&mut invoke_context);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
     transaction_accounts.pop();
     transaction_accounts
@@ -1030,105 +1037,105 @@ mod tests {
 
     const MOCK_BUILTIN_COMPUTE_UNIT_COST: u64 = 1;
 
-    #[allow(clippy::integer_arithmetic)]
-    fn mock_process_instruction(
-        invoke_context: &mut InvokeContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let transaction_context = &invoke_context.transaction_context;
-        let instruction_context = transaction_context.get_current_instruction_context()?;
-        let instruction_data = instruction_context.get_instruction_data();
-        let program_id = instruction_context.get_last_program_key(transaction_context)?;
-        // mock builtin must consume units
-        invoke_context.consume_checked(MOCK_BUILTIN_COMPUTE_UNIT_COST)?;
-        let instruction_accounts = (0..4)
-            .map(|instruction_account_index| InstructionAccount {
-                index_in_transaction: instruction_account_index,
-                index_in_caller: instruction_account_index,
-                index_in_callee: instruction_account_index,
-                is_signer: false,
-                is_writable: false,
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(
-            program_id,
-            instruction_context
-                .try_borrow_instruction_account(transaction_context, 0)?
-                .get_owner()
-        );
-        assert_ne!(
-            instruction_context
-                .try_borrow_instruction_account(transaction_context, 1)?
-                .get_owner(),
-            instruction_context
-                .try_borrow_instruction_account(transaction_context, 0)?
-                .get_key()
-        );
-
-        if let Ok(instruction) = bincode::deserialize(instruction_data) {
-            match instruction {
-                MockInstruction::NoopSuccess => (),
-                MockInstruction::NoopFail => return Err(Box::new(InstructionError::GenericError)),
-                MockInstruction::ModifyOwned => instruction_context
+    declare_process_instruction!(
+        process_instruction,
+        MOCK_BUILTIN_COMPUTE_UNIT_COST,
+        |invoke_context| {
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let instruction_data = instruction_context.get_instruction_data();
+            let program_id = instruction_context.get_last_program_key(transaction_context)?;
+            let instruction_accounts = (0..4)
+                .map(|instruction_account_index| InstructionAccount {
+                    index_in_transaction: instruction_account_index,
+                    index_in_caller: instruction_account_index,
+                    index_in_callee: instruction_account_index,
+                    is_signer: false,
+                    is_writable: false,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                program_id,
+                instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data_from_slice(&[1])?,
-                MockInstruction::ModifyNotOwned => instruction_context
+                    .get_owner()
+            );
+            assert_ne!(
+                instruction_context
                     .try_borrow_instruction_account(transaction_context, 1)?
-                    .set_data_from_slice(&[1])?,
-                MockInstruction::ModifyReadonly => instruction_context
-                    .try_borrow_instruction_account(transaction_context, 2)?
-                    .set_data_from_slice(&[1])?,
-                MockInstruction::UnbalancedPush => {
-                    instruction_context
+                    .get_owner(),
+                instruction_context
+                    .try_borrow_instruction_account(transaction_context, 0)?
+                    .get_key()
+            );
+
+            if let Ok(instruction) = bincode::deserialize(instruction_data) {
+                match instruction {
+                    MockInstruction::NoopSuccess => (),
+                    MockInstruction::NoopFail => return Err(InstructionError::GenericError),
+                    MockInstruction::ModifyOwned => instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .checked_add_lamports(1)?;
-                    let program_id = *transaction_context.get_key_of_account_at_index(3)?;
-                    let metas = vec![
-                        AccountMeta::new_readonly(
-                            *transaction_context.get_key_of_account_at_index(0)?,
-                            false,
-                        ),
-                        AccountMeta::new_readonly(
-                            *transaction_context.get_key_of_account_at_index(1)?,
-                            false,
-                        ),
-                    ];
-                    let inner_instruction = Instruction::new_with_bincode(
-                        program_id,
-                        &MockInstruction::NoopSuccess,
-                        metas,
-                    );
-                    invoke_context
-                        .transaction_context
-                        .get_next_instruction_context()
-                        .unwrap()
-                        .configure(&[3], &instruction_accounts, &[]);
-                    let result = invoke_context.push();
-                    assert_eq!(result, Err(InstructionError::UnbalancedInstruction));
-                    result?;
-                    invoke_context
-                        .native_invoke(inner_instruction.into(), &[])
-                        .and(invoke_context.pop())?;
+                        .set_data_from_slice(&[1])?,
+                    MockInstruction::ModifyNotOwned => instruction_context
+                        .try_borrow_instruction_account(transaction_context, 1)?
+                        .set_data_from_slice(&[1])?,
+                    MockInstruction::ModifyReadonly => instruction_context
+                        .try_borrow_instruction_account(transaction_context, 2)?
+                        .set_data_from_slice(&[1])?,
+                    MockInstruction::UnbalancedPush => {
+                        instruction_context
+                            .try_borrow_instruction_account(transaction_context, 0)?
+                            .checked_add_lamports(1)?;
+                        let program_id = *transaction_context.get_key_of_account_at_index(3)?;
+                        let metas = vec![
+                            AccountMeta::new_readonly(
+                                *transaction_context.get_key_of_account_at_index(0)?,
+                                false,
+                            ),
+                            AccountMeta::new_readonly(
+                                *transaction_context.get_key_of_account_at_index(1)?,
+                                false,
+                            ),
+                        ];
+                        let inner_instruction = Instruction::new_with_bincode(
+                            program_id,
+                            &MockInstruction::NoopSuccess,
+                            metas,
+                        );
+                        invoke_context
+                            .transaction_context
+                            .get_next_instruction_context()
+                            .unwrap()
+                            .configure(&[3], &instruction_accounts, &[]);
+                        let result = invoke_context.push();
+                        assert_eq!(result, Err(InstructionError::UnbalancedInstruction));
+                        result?;
+                        invoke_context
+                            .native_invoke(inner_instruction.into(), &[])
+                            .and(invoke_context.pop())?;
+                    }
+                    MockInstruction::UnbalancedPop => instruction_context
+                        .try_borrow_instruction_account(transaction_context, 0)?
+                        .checked_add_lamports(1)?,
+                    MockInstruction::ConsumeComputeUnits {
+                        compute_units_to_consume,
+                        desired_result,
+                    } => {
+                        invoke_context
+                            .consume_checked(compute_units_to_consume)
+                            .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+                        return desired_result;
+                    }
+                    MockInstruction::Resize { new_len } => instruction_context
+                        .try_borrow_instruction_account(transaction_context, 0)?
+                        .set_data(vec![0; new_len as usize])?,
                 }
-                MockInstruction::UnbalancedPop => instruction_context
-                    .try_borrow_instruction_account(transaction_context, 0)?
-                    .checked_add_lamports(1)?,
-                MockInstruction::ConsumeComputeUnits {
-                    compute_units_to_consume,
-                    desired_result,
-                } => {
-                    invoke_context.consume_checked(compute_units_to_consume)?;
-                    return desired_result
-                        .map_err(|err| Box::new(err) as Box<dyn std::error::Error>);
-                }
-                MockInstruction::Resize { new_len } => instruction_context
-                    .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(vec![0; new_len as usize])?,
+            } else {
+                return Err(InstructionError::InvalidInstructionData);
             }
-        } else {
-            return Err(Box::new(InstructionError::InvalidInstructionData));
+            Ok(())
         }
-        Ok(())
-    }
+    );
 
     #[test]
     fn test_instruction_stack_height() {
@@ -1236,7 +1243,7 @@ mod tests {
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let builtin_programs = &[BuiltinProgram {
             program_id: callee_program_id,
-            process_instruction: mock_process_instruction,
+            process_instruction,
         }];
         invoke_context.builtin_programs = builtin_programs;
 
@@ -1381,7 +1388,7 @@ mod tests {
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let builtin_programs = &[BuiltinProgram {
             program_id: program_key,
-            process_instruction: mock_process_instruction,
+            process_instruction,
         }];
         invoke_context.builtin_programs = builtin_programs;
 
