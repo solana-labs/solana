@@ -1,3 +1,4 @@
+use std::sync::Arc;
 
 pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
     fn random_id(&self) -> u64;
