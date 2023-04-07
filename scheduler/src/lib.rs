@@ -28,7 +28,7 @@
 #![allow(clippy::bool_to_int_with_if)]
 #![allow(clippy::integer_arithmetic)]
 
-/// Abstract scheduling algorithm
+/// This crate only contains a very abstract scheduling pure-logic algorithm.
 /// see solana_runtime::installed_scheduler_pool for high-level integration for actual transaction
 /// processing.
 
