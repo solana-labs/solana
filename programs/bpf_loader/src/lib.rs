@@ -37,11 +37,11 @@ use {
         entrypoint::SUCCESS,
         feature_set::{
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
-            check_slice_translation_size, delay_visibility_of_program_deployment,
-            disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, native_programs_consume_cu,
-            remove_bpf_loader_incorrect_program_id, round_up_heap_size, FeatureSet,
+            delay_visibility_of_program_deployment, disable_deploy_of_alloc_free_syscall,
+            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
+            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
+            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id, round_up_heap_size,
+            FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -326,25 +326,8 @@ pub fn create_ebpf_vm<'a, 'b>(
     if round_up_heap_size {
         heap_cost_result?;
     }
-    let check_aligned = bpf_loader_deprecated::id()
-        != invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .and_then(|instruction_context| {
-                instruction_context
-                    .try_borrow_last_program_account(invoke_context.transaction_context)
-            })
-            .map(|program_account| *program_account.get_owner())?;
-    let check_size = invoke_context
-        .feature_set
-        .is_active(&check_slice_translation_size::id());
     let allocator = Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START)));
-    invoke_context.set_syscall_context(
-        check_aligned,
-        check_size,
-        orig_account_lengths,
-        allocator.clone(),
-    )?;
+    invoke_context.set_syscall_context(orig_account_lengths, allocator.clone())?;
     let stack_len = stack.len();
     let memory_mapping = create_memory_mapping(
         program.get_executable(),
@@ -1620,7 +1603,7 @@ fn execute<'a, 'b: 'a>(
                 .transaction_context
                 .get_current_instruction_context()?,
             parameter_bytes,
-            invoke_context.get_orig_account_lengths()?,
+            &invoke_context.get_syscall_context()?.orig_account_lengths,
         )
     }
 

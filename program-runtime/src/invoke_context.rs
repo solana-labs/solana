@@ -14,9 +14,10 @@ use {
     solana_rbpf::vm::ContextObject,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
+        bpf_loader_deprecated,
         feature_set::{
-            enable_early_verification_of_account_modifications, native_programs_consume_cu,
-            FeatureSet,
+            check_slice_translation_size, enable_early_verification_of_account_modifications,
+            native_programs_consume_cu, FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
@@ -122,11 +123,9 @@ impl fmt::Display for AllocErr {
     }
 }
 
-struct SyscallContext {
-    check_aligned: bool,
-    check_size: bool,
-    orig_account_lengths: Vec<usize>,
-    allocator: Rc<RefCell<dyn Alloc>>,
+pub struct SyscallContext {
+    pub orig_account_lengths: Vec<usize>,
+    pub allocator: Rc<RefCell<dyn Alloc>>,
 }
 
 #[derive(Default)]
@@ -796,11 +795,29 @@ impl<'a> InvokeContext<'a> {
         self.sysvar_cache
     }
 
+    // Should alignment be enforced during user pointer translation
+    pub fn get_check_aligned(&self) -> bool {
+        self.transaction_context
+            .get_current_instruction_context()
+            .and_then(|instruction_context| {
+                let program_account =
+                    instruction_context.try_borrow_last_program_account(self.transaction_context);
+                debug_assert!(program_account.is_ok());
+                program_account
+            })
+            .map(|program_account| *program_account.get_owner() != bpf_loader_deprecated::id())
+            .unwrap_or(true)
+    }
+
+    // Set should type size be checked during user pointer translation
+    pub fn get_check_size(&self) -> bool {
+        self.feature_set
+            .is_active(&check_slice_translation_size::id())
+    }
+
     // Set this instruction syscall context
     pub fn set_syscall_context(
         &mut self,
-        check_aligned: bool,
-        check_size: bool,
         orig_account_lengths: Vec<usize>,
         allocator: Rc<RefCell<dyn Alloc>>,
     ) -> Result<(), InstructionError> {
@@ -808,47 +825,25 @@ impl<'a> InvokeContext<'a> {
             .syscall_context
             .last_mut()
             .ok_or(InstructionError::CallDepth)? = Some(SyscallContext {
-            check_aligned,
-            check_size,
             orig_account_lengths,
             allocator,
         });
         Ok(())
     }
 
-    // Should alignment be enforced during user pointer translation
-    pub fn get_check_aligned(&self) -> bool {
+    // Get this instruction's SyscallContext
+    pub fn get_syscall_context(&self) -> Result<&SyscallContext, InstructionError> {
         self.syscall_context
             .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.check_aligned)
-            .unwrap_or(true)
-    }
-
-    // Set should type size be checked during user pointer translation
-    pub fn get_check_size(&self) -> bool {
-        self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.check_size)
-            .unwrap_or(true)
-    }
-
-    /// Get the original account lengths
-    pub fn get_orig_account_lengths(&self) -> Result<&[usize], InstructionError> {
-        self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.orig_account_lengths.as_slice())
+            .and_then(|syscall_context| syscall_context.as_ref())
             .ok_or(InstructionError::CallDepth)
     }
 
-    // Get this instruction's memory allocator
-    pub fn get_allocator(&self) -> Result<Rc<RefCell<dyn Alloc>>, InstructionError> {
+    // Get this instruction's SyscallContext
+    pub fn get_syscall_context_mut(&mut self) -> Result<&mut SyscallContext, InstructionError> {
         self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.allocator.clone())
+            .last_mut()
+            .and_then(|syscall_context| syscall_context.as_mut())
             .ok_or(InstructionError::CallDepth)
     }
 

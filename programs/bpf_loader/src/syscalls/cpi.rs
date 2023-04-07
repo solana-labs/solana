@@ -675,7 +675,10 @@ where
 
     // unwrapping here is fine: we're in a syscall and the method below fails
     // only outside syscalls
-    let orig_data_lens = invoke_context.get_orig_account_lengths().unwrap();
+    let orig_data_lens = &invoke_context
+        .get_syscall_context()
+        .unwrap()
+        .orig_account_lengths;
 
     for (instruction_account_index, instruction_account) in instruction_accounts.iter().enumerate()
     {
@@ -1504,8 +1507,6 @@ mod tests {
         );
         invoke_context
             .set_syscall_context(
-                true,
-                true,
                 vec![original_data_len],
                 Rc::new(RefCell::new(BpfAllocator::new(
                     AlignedMemory::with_capacity(0),

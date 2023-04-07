@@ -530,7 +530,7 @@ declare_syscall!(
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, Error> {
-        let allocator = invoke_context.get_allocator()?;
+        let allocator = &invoke_context.get_syscall_context()?.allocator;
         let mut allocator = allocator
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
@@ -2307,8 +2307,6 @@ mod tests {
             .unwrap();
             invoke_context
                 .set_syscall_context(
-                    true,
-                    true,
                     vec![],
                     Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
                 )
@@ -2354,6 +2352,7 @@ mod tests {
         // many small unaligned allocs
         {
             prepare_mockup!(invoke_context, program_id, bpf_loader::id());
+            invoke_context.feature_set = Arc::new(FeatureSet::default());
             let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let mut memory_mapping = MemoryMapping::new(
                 vec![
@@ -2367,8 +2366,6 @@ mod tests {
             .unwrap();
             invoke_context
                 .set_syscall_context(
-                    false,
-                    true,
                     vec![],
                     Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
                 )
@@ -2417,8 +2414,6 @@ mod tests {
             .unwrap();
             invoke_context
                 .set_syscall_context(
-                    true,
-                    true,
                     vec![],
                     Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
                 )
@@ -2469,8 +2464,6 @@ mod tests {
             .unwrap();
             invoke_context
                 .set_syscall_context(
-                    true,
-                    true,
                     vec![],
                     Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
                 )
