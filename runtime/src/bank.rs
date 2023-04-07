@@ -6331,7 +6331,7 @@ impl Bank {
             transactions.len()
         );
 
-        let scheduler = &(self.scheduler.read().unwrap()).as_ref().0.unwrap();
+        let scheduler = (self.scheduler.read().unwrap()).deref().as_ref().0.unwrap();
 
         for (st, &i) in transactions.iter().zip(transaction_indexes) {
             scheduler.schedule_execution(st, i);
