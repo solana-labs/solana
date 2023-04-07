@@ -818,16 +818,12 @@ impl<'a> InvokeContext<'a> {
     // Set this instruction syscall context
     pub fn set_syscall_context(
         &mut self,
-        orig_account_lengths: Vec<usize>,
-        allocator: Rc<RefCell<dyn Alloc>>,
+        syscall_context: SyscallContext,
     ) -> Result<(), InstructionError> {
         *self
             .syscall_context
             .last_mut()
-            .ok_or(InstructionError::CallDepth)? = Some(SyscallContext {
-            orig_account_lengths,
-            allocator,
-        });
+            .ok_or(InstructionError::CallDepth)? = Some(syscall_context);
         Ok(())
     }
 

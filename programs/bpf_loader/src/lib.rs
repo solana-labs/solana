@@ -16,7 +16,7 @@ use {
         compute_budget::ComputeBudget,
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
-        invoke_context::InvokeContext,
+        invoke_context::{InvokeContext, SyscallContext},
         loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
         log_collector::LogCollector,
         stable_log,
@@ -327,7 +327,6 @@ pub fn create_ebpf_vm<'a, 'b>(
         heap_cost_result?;
     }
     let allocator = Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START)));
-    invoke_context.set_syscall_context(orig_account_lengths, allocator.clone())?;
     let stack_len = stack.len();
     let memory_mapping = create_memory_mapping(
         program.get_executable(),
@@ -336,7 +335,10 @@ pub fn create_ebpf_vm<'a, 'b>(
         regions,
         None,
     )?;
-
+    invoke_context.set_syscall_context(SyscallContext {
+        orig_account_lengths,
+        allocator,
+    })?;
     Ok(EbpfVm::new(
         program,
         invoke_context,
