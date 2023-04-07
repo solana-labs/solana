@@ -3,7 +3,6 @@ use crate::bank::Bank;
 use solana_sdk::slot_history::Slot;
 use solana_sdk::transaction::SanitizedTransaction;
 use solana_program_runtime::timings::ExecuteTimings;
-use crate::installed_scheduler_pool::InstalledScheduler;
 use crate::bank_forks::InstalledSchedulerPool;
 
 pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
