@@ -6331,7 +6331,8 @@ impl Bank {
             transactions.len()
         );
 
-        let scheduler = (self.scheduler.read().unwrap()).deref().0.as_ref().unwrap();
+        let scheduler_guard = self.scheduler.read().unwrap();
+        let scheduler = scheduler_guard.0.as_ref().unwrap();
 
         for (st, &i) in transactions.iter().zip(transaction_indexes) {
             scheduler.schedule_execution(st, i);
@@ -6339,8 +6340,8 @@ impl Bank {
     }
 
     pub fn schedule_termination(&self) {
-        let mut s = self.scheduler.write().unwrap();
-        if let Some(scheduler) = s.0.as_mut() {
+        let mut scheduler_guard = self.scheduler.write().unwrap();
+        if let Some(scheduler) = scheduler_guard.0.as_mut() {
             scheduler.schedule_termination();
         }
     }
