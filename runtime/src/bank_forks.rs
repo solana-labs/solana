@@ -5,13 +5,12 @@ use {
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
         bank::Bank,
         epoch_accounts_hash,
-        installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerPool, SchedulingContext},
+        installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerPool},
         snapshot_config::SnapshotConfig,
     },
     log::*,
     solana_measure::measure::Measure,
     solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph, WorkingSlot},
-    solana_scheduler::SchedulingMode,
     solana_sdk::{clock::Slot, feature_set, hash::Hash, timing},
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
@@ -69,7 +68,7 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
-    scheduler_pool: Option<Box<dyn InstalledSchedulerPool>>,
+    pub(crate) scheduler_pool: Option<Box<dyn InstalledSchedulerPool>>,
 }
 
 impl Index<u64> for BankForks {
