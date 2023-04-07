@@ -185,6 +185,7 @@ use {
     },
 };
 use crate::installed_scheduler_pool::InstalledScheduler;
+use crate::installed_scheduler_pool::InstalledSchedulerBox;
 
 /// params to `verify_accounts_hash`
 pub struct VerifyAccountsHashConfig {
