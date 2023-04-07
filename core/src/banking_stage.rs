@@ -392,7 +392,7 @@ impl BankingStage {
                 VoteSource::Gossip,
             );
             let tpu_storage = UnprocessedTransactionStorage::new_vote_storage(
-                latest_unprocessed_votes.clone(),
+                latest_unprocessed_votes,
                 VoteSource::Tpu,
             );
             (gossip_storage, tpu_storage)
