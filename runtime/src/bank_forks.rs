@@ -213,10 +213,8 @@ impl BankForks {
     }
 
     pub fn install_scheduler_pool(&mut self, pool: Box<dyn InstalledSchedulerPool>) {
-        use assert_matches::assert_matches;
-        assert_matches!(&self.scheduler_pool, None);
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
-        self.scheduler_pool = Some(pool);
+        assert!(self.scheduler_pool.replace(pool).is_none());
     }
 
     pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
