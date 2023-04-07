@@ -38,7 +38,7 @@ use {
     },
 };
 
-pub type AccountsFaultHashInjector = fn(&Hash, Slot) -> Option<Hash>;
+pub type AccountsHashFaultInjector = fn(&Hash, Slot) -> Option<Hash>;
 
 pub struct AccountsHashVerifier {
     t_accounts_hash_verifier: JoinHandle<()>,
@@ -53,7 +53,7 @@ impl AccountsHashVerifier {
         cluster_info: &Arc<ClusterInfo>,
         known_validators: Option<HashSet<Pubkey>>,
         halt_on_known_validators_accounts_hash_mismatch: bool,
-        accounts_hash_fault_injector: Option<AccountsFaultHashInjector>,
+        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
         snapshot_config: SnapshotConfig,
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
@@ -192,7 +192,7 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         snapshot_config: &SnapshotConfig,
-        accounts_hash_fault_injector: Option<AccountsFaultHashInjector>,
+        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
         let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
@@ -458,7 +458,7 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         accounts_hash: AccountsHashEnum,
-        accounts_hash_fault_injector: Option<AccountsFaultHashInjector>,
+        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
         let hash = accounts_hash_fault_injector
             .and_then(|f| f(accounts_hash.as_hash(), accounts_package.slot))

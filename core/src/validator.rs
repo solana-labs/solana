@@ -3,7 +3,7 @@
 pub use solana_perf::report_target_features;
 use {
     crate::{
-        accounts_hash_verifier::{AccountsFaultHashInjector, AccountsHashVerifier},
+        accounts_hash_verifier::{AccountsHashFaultInjector, AccountsHashVerifier},
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         banking_trace::{self, BankingTracer},
         broadcast_stage::BroadcastStageType,
@@ -199,7 +199,7 @@ pub struct ValidatorConfig {
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>, // Empty = repair with all
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub halt_on_known_validators_accounts_hash_mismatch: bool,
-    pub accounts_hash_fault_injector: Option<AccountsFaultHashInjector>,
+    pub accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
