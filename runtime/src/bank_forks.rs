@@ -5,7 +5,7 @@ use {
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
         bank::Bank,
         epoch_accounts_hash,
-        installed_scheduler_pool::{InstalledSchedulerPool, SchedulingContext},
+        installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerPool, SchedulingContext},
         snapshot_config::SnapshotConfig,
     },
     log::*,
