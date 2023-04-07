@@ -191,7 +191,7 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         snapshot_config: &SnapshotConfig,
-        fault_hash_generator: Option<AccountsFaultHashInjector>,
+        accounts_hash_fault_injector: Option<AccountsFaultHashInjector>,
     ) {
         let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
@@ -457,7 +457,7 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         accounts_hash: AccountsHashEnum,
-        fault_hash_generator: Option<AccountsFaultHashInjector>,
+        accounts_hash_fault_injector: Option<AccountsFaultHashInjector>,
     ) {
         let hash = fault_hash_generator
             .and_then(|f| f(accounts_hash.as_hash(), accounts_package.slot))

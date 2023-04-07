@@ -82,14 +82,12 @@ fn test_consistency_halt() {
         .validator_config
         .accounts_hash_fault_injector = Some(|hash: &Hash, slot: Slot| {
         const FAULT_INJECTION_RATE_SLOTS: u64 = 40; // Inject a fault hash every 40 slots
-        if slot % FAULT_INJECTION_RATE_SLOTS == 0 {
+        (slot % FAULT_INJECTION_RATE_SLOTS == 0).then(|| {
             let rand = thread_rng().gen_range(0, 10);
             let fault_hash = extend_and_hash(hash, &[rand]);
             warn!("inserting fault at slot: {}", slot);
-            Some(fault_hash)
-        } else {
-            None
-        }
+            fault_hash
+        })
     });
 
     let validator_stake = DEFAULT_NODE_STAKE;
