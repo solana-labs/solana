@@ -22,6 +22,7 @@ use {
         time::Instant,
     },
 };
+use crate::installed_scheduler_pool::InstalledSchedulerPool;
 
 pub const MAX_ROOT_DISTANCE_FOR_VOTE_ONLY: Slot = 400;
 pub type AtomicSlot = AtomicU64;
