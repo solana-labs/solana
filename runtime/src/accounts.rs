@@ -1455,10 +1455,14 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::executor_cache::TransactionExecutorCache,
+        solana_program_runtime::{
+            executor_cache::TransactionExecutorCache,
+            prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+        },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             bpf_loader_upgradeable::UpgradeableLoaderState,
+            compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,
             hash::Hash,
@@ -4261,28 +4265,24 @@ mod tests {
     #[test]
     fn test_load_accounts_too_high_prioritization_fee() {
         solana_logger::setup();
-        let lamports_per_signature = 5000;
-        let request_units = 1_000_000;
-        let request_unit_price = 2_000_000_000; // 2B micro-lamports/CU
-                                                // prioritization_fee = 2B micro-lamports/CU * 1M CUs = (2B / 1M) * 1M = 2B lamports
-        let prioritization_fee = 2_000_000_000;
+        let lamports_per_signature = 5000_u64;
+        let request_units = 1_000_000_u32;
+        let request_unit_price = 2_000_000_000_u64;
+        let prioritization_fee_details = PrioritizationFeeDetails::new(
+            PrioritizationFeeType::ComputeUnitPrice(request_unit_price),
+            request_units as u64,
+        );
+        let prioritization_fee = prioritization_fee_details.get_fee();
 
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = TransactionErrorMetrics::default();
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-
-        // set up account with 2B lamports
+        // set up account with balance of `prioritization_fee`
         let account = AccountSharedData::new(prioritization_fee, 0, &Pubkey::default());
-        accounts.push((key0, account));
+        let accounts = vec![(key0, account)];
 
         let instructions = &[
-            solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_limit(
-                request_units,
-            ),
-            solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_price(
-                request_unit_price,
-            ),
+            ComputeBudgetInstruction::set_compute_unit_limit(request_units),
+            ComputeBudgetInstruction::set_compute_unit_price(request_unit_price),
         ];
         let tx = Transaction::new(
             &[&keypair],
@@ -4305,6 +4305,7 @@ mod tests {
 
         // assert fail to load account with 2B lamport balance for transaction asking for 2B
         // lamports as prioritization fee.
+        let mut error_counters = TransactionErrorMetrics::default();
         let loaded_accounts = load_accounts_with_fee(
             tx,
             &accounts,
@@ -4317,7 +4318,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0].clone(),
-            (Err(TransactionError::InsufficientFundsForFee), None,),
+            (Err(TransactionError::InsufficientFundsForFee), None),
         );
     }
 }
