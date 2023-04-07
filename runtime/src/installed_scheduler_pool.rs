@@ -143,7 +143,7 @@ impl BankForks {
         assert!(self.scheduler_pool.replace(pool).is_none());
     }
 
-    pub(crate) fn install_scheduler_into_bank(&self, bank: Arc<Bank>) {
+    pub(crate) fn install_scheduler_into_bank(&self, bank: &Bank) {
         if let Some(scheduler_pool) = &self.scheduler_pool {
             let new_context =
                 SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
