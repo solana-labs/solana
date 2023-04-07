@@ -11,7 +11,7 @@ use {
         gossip_service::GossipService,
         legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
-    solana_metrics::*,
+    solana_metrics::datapoint_info,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -594,9 +594,9 @@ pub fn rpc_bootstrap(
         return;
     }
 
-    let total_snapshot_download_time = std::time::Instant::now();
-    let mut get_rpc_nodes_time = std::time::Duration::new(0, 0);
-    let mut snapshot_download_time = std::time::Duration::new(0, 0);
+    let total_snapshot_download_time = Instant::now();
+    let mut get_rpc_nodes_time = Duration::new(0, 0);
+    let mut snapshot_download_time = Duration::new(0, 0);
     let mut blacklisted_rpc_nodes = HashSet::new();
     let mut gossip = None;
     let mut vetted_rpc_nodes = vec![];
@@ -621,7 +621,7 @@ pub fn rpc_bootstrap(
             ));
         }
 
-        let get_rpc_nodes_start = std::time::Instant::now();
+        let get_rpc_nodes_start = Instant::now();
         get_vetted_rpc_nodes(
             &mut vetted_rpc_nodes,
             &gossip.as_ref().unwrap().0,
@@ -633,7 +633,7 @@ pub fn rpc_bootstrap(
         let (rpc_contact_info, snapshot_hash, rpc_client) = vetted_rpc_nodes.pop().unwrap();
         get_rpc_nodes_time += get_rpc_nodes_start.elapsed();
 
-        let snapshot_download_start = std::time::Instant::now();
+        let snapshot_download_start = Instant::now();
         let download_result = attempt_download_genesis_and_snapshot(
             &rpc_contact_info,
             ledger_path,
@@ -673,20 +673,20 @@ pub fn rpc_bootstrap(
     }
 
     datapoint_info!(
-        "snapshot-download",
+        "bootstrap-snapshot-download",
         (
-            "total_snapshot_download_time",
+            "total_time_secs",
             total_snapshot_download_time.elapsed().as_secs(),
             i64
         ),
-        ("get_rpc_nodes_time", get_rpc_nodes_time.as_secs(), i64),
+        ("get_rpc_nodes_time_secs", get_rpc_nodes_time.as_secs(), i64),
         (
-            "snapshot_download_time",
+            "snapshot_download_time_secs",
             snapshot_download_time.as_secs(),
             i64
         ),
         ("download_abort_count", download_abort_count, i64),
-        ("num_blacklisted_nodes", blacklisted_rpc_nodes.len(), i64),
+        ("blacklisted_nodes_count", blacklisted_rpc_nodes.len(), i64),
     );
 }
 
