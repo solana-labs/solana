@@ -136,6 +136,11 @@ impl Deref for BankWithScheduler {
 }
 
 impl Bank {
+    pub(crate) fn install_scheduler(&self, scheduler: Box<dyn InstalledScheduler>) {
+        let mut scheduler_guard = self.scheduler.write().unwrap();
+        assert!(scheduler_guard.0.replace(scheduler).is_none());
+    }
+
     pub fn with_scheduler(&self) -> bool {
         self.scheduler.read().unwrap().0.is_some()
     }
@@ -163,5 +168,62 @@ impl Bank {
         if let Some(scheduler) = scheduler_guard.0.as_mut() {
             scheduler.schedule_termination();
         }
+    }
+
+    fn wait_for_scheduler<
+        const VIA_DROP: bool,
+        const FROM_INTERNAL: bool,
+        const IS_RESTART: bool,
+    >(
+        &self,
+    ) -> Option<(ExecuteTimings, Result<()>)> {
+        let mut scheduler_guard = self.scheduler.write().unwrap();
+        let current_thread_name = std::thread::current().name().unwrap().to_string();
+        if VIA_DROP {
+            info!(
+                "wait_for_scheduler(VIA_DROP): {}",
+                std::backtrace::Backtrace::force_capture()
+            );
+        }
+        if scheduler_guard.0.is_some() {
+            info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
+
+            let timings_and_result = scheduler_guard
+                .0
+                .as_mut()
+                .and_then(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART));
+            if !IS_RESTART {
+                if let Some(scheduler) = scheduler_guard.0.take() {
+                    scheduler.scheduler_pool().return_to_pool(scheduler);
+                }
+            }
+            timings_and_result
+        } else {
+            warn!(
+                "Bank::wait_for_scheduler(via_drop: {VIA_DROP}) skipped from_internal: {FROM_INTERNAL} by {} ...",
+                current_thread_name
+            );
+            None
+        }
+    }
+
+    pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<()>) {
+        let maybe_timings_and_result = self.wait_for_scheduler::<false, false, false>();
+        maybe_timings_and_result.unwrap_or((ExecuteTimings::default(), Ok(())))
+    }
+
+    fn wait_for_completed_scheduler_via_drop(&self) -> Option<Result<()>> {
+        let maybe_timings_and_result = self.wait_for_scheduler::<true, false, false>();
+        maybe_timings_and_result.map(|(_timings, result)| result)
+    }
+
+    pub fn wait_for_completed_scheduler_via_internal_drop(self) {
+        let maybe_timings_and_result = self.wait_for_scheduler::<true, true, false>();
+        assert_matches!(maybe_timings_and_result, Some(_));
+    }
+
+    fn wait_for_reusable_scheduler(&self) {
+        let maybe_timings_and_result = self.wait_for_scheduler::<false, false, true>();
+        assert_matches!(maybe_timings_and_result, None);
     }
 }
