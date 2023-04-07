@@ -99,12 +99,6 @@ pub struct BankForks {
     scheduler_pool: Option<Box<dyn InstalledSchedulerPool>>,
 }
 
-pub trait InstalledSchedulerPool: Send + Sync + std::fmt::Debug {
-    fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler>;
-    fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler>);
-    // drop with exit atomicbool integration??
-}
-
 impl Index<u64> for BankForks {
     type Output = Arc<Bank>;
     fn index(&self, bank_slot: Slot) -> &Self::Output {
