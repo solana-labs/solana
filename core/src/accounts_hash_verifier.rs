@@ -5,7 +5,6 @@
 // set and halt the node if a mismatch is detected.
 
 use {
-    crate::validator::AccountsFaultHashInjector,
     crossbeam_channel::{Receiver, Sender},
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::measure_us,
@@ -38,6 +37,8 @@ use {
         time::Duration,
     },
 };
+
+pub type AccountsFaultHashInjector = fn(&Hash, Slot) -> Option<Hash>;
 
 pub struct AccountsHashVerifier {
     t_accounts_hash_verifier: JoinHandle<()>,
@@ -205,7 +206,7 @@ impl AccountsHashVerifier {
             hashes,
             exit,
             accounts_hash,
-            fault_hash_generator,
+            accounts_hash_fault_injector,
         );
 
         Self::submit_for_packaging(
@@ -459,7 +460,7 @@ impl AccountsHashVerifier {
         accounts_hash: AccountsHashEnum,
         accounts_hash_fault_injector: Option<AccountsFaultHashInjector>,
     ) {
-        let hash = fault_hash_generator
+        let hash = accounts_hash_fault_injector
             .and_then(|f| f(accounts_hash.as_hash(), accounts_package.slot))
             .or(Some(*accounts_hash.as_hash()));
         hashes.push((accounts_package.slot, hash.unwrap()));

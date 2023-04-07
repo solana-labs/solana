@@ -3,7 +3,7 @@
 pub use solana_perf::report_target_features;
 use {
     crate::{
-        accounts_hash_verifier::AccountsHashVerifier,
+        accounts_hash_verifier::{AccountsFaultHashInjector, AccountsHashVerifier},
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         banking_trace::{self, BankingTracer},
         broadcast_stage::BroadcastStageType,
@@ -171,8 +171,6 @@ impl BlockProductionMethod {
         &MESSAGE
     }
 }
-
-pub type AccountsFaultHashInjector = fn(&Hash, Slot) -> Option<Hash>;
 
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
