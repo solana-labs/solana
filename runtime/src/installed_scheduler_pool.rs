@@ -1,15 +1,13 @@
 use {
     crate::bank::Bank,
     solana_program_runtime::timings::ExecuteTimings,
+    solana_scheduler::{SchedulingMode, WithSchedulingMode},
     solana_sdk::{
         slot_history::Slot,
         transaction::{Result, SanitizedTransaction},
     },
-    std::sync::Arc,
+    std::{fmt::Debug, sync::Arc},
 };
-use std::fmt::Debug;
-use solana_scheduler::WithSchedulingMode;
-use solana_scheduler::SchedulingMode;
 
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler>;
