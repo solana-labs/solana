@@ -949,47 +949,6 @@ impl AbiExample for BuiltinPrograms {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct SchedulingContext {
-    pub bank: std::sync::Arc<Bank>,
-    pub mode: solana_scheduler::Mode,
-}
-
-impl solana_scheduler::WithMode for SchedulingContext {
-    fn mode(&self) -> solana_scheduler::Mode {
-        self.mode
-    }
-}
-
-impl SchedulingContext {
-    pub fn new(bank: Arc<Bank>, mode: solana_scheduler::Mode) -> Self {
-        Self { bank, mode }
-    }
-
-    pub fn slot(&self) -> Slot {
-        self.bank().slot()
-    }
-
-    pub fn bank(&self) -> &Arc<Bank> {
-        &self.bank
-    }
-
-    pub fn log_prefix(random_id: u64, context: Option<&Self>) -> String {
-        format!(
-            "id_{:016x}{}",
-            random_id,
-            context
-                .as_ref()
-                .map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode))
-                .unwrap_or_else(|| "".into())
-        )
-    }
-
-    pub fn into_bank(self) -> Option<Bank> {
-        Arc::try_unwrap(self.bank).ok()
-    }
-}
-
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
