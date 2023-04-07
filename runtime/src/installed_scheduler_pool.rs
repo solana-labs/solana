@@ -226,4 +226,16 @@ impl Bank {
         let maybe_timings_and_result = self.wait_for_scheduler::<false, false, true>();
         assert!(maybe_timings_and_result.is_none());
     }
+
+    pub(crate) fn drop_scheduler(&mut self) {
+        if self.with_scheduler() {
+            if let Some(Err(err)) = self.wait_for_completed_scheduler_via_drop() {
+                warn!(
+                    "Bank::drop(): slot: {} discarding error from scheduler: {:?}",
+                    self.slot(),
+                    err
+                );
+            }
+        }
+    }
 }
