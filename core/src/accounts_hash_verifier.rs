@@ -38,6 +38,8 @@ use {
     },
 };
 
+pub type AccountsHashFaultInjector = fn(&Hash, Slot) -> Option<Hash>;
+
 pub struct AccountsHashVerifier {
     t_accounts_hash_verifier: JoinHandle<()>,
 }
@@ -51,7 +53,7 @@ impl AccountsHashVerifier {
         cluster_info: &Arc<ClusterInfo>,
         known_validators: Option<HashSet<Pubkey>>,
         halt_on_known_validators_accounts_hash_mismatch: bool,
-        fault_injection_rate_slots: u64,
+        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
         snapshot_config: SnapshotConfig,
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
@@ -90,8 +92,8 @@ impl AccountsHashVerifier {
                         snapshot_package_sender.as_ref(),
                         &mut hashes,
                         &exit,
-                        fault_injection_rate_slots,
                         &snapshot_config,
+                        accounts_hash_fault_injector,
                     ));
 
                     datapoint_info!(
@@ -189,8 +191,8 @@ impl AccountsHashVerifier {
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
-        fault_injection_rate_slots: u64,
         snapshot_config: &SnapshotConfig,
+        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
         let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
@@ -203,8 +205,8 @@ impl AccountsHashVerifier {
             halt_on_known_validator_accounts_hash_mismatch,
             hashes,
             exit,
-            fault_injection_rate_slots,
             accounts_hash,
+            accounts_hash_fault_injector,
         );
 
         Self::submit_for_packaging(
@@ -448,16 +450,6 @@ impl AccountsHashVerifier {
         }
     }
 
-    fn generate_fault_hash(original_hash: &Hash) -> Hash {
-        use {
-            rand::{thread_rng, Rng},
-            solana_sdk::hash::extend_and_hash,
-        };
-
-        let rand = thread_rng().gen_range(0, 10);
-        extend_and_hash(original_hash, &[rand])
-    }
-
     fn push_accounts_hashes_to_cluster(
         accounts_package: &AccountsPackage,
         cluster_info: &ClusterInfo,
@@ -465,19 +457,13 @@ impl AccountsHashVerifier {
         halt_on_known_validator_accounts_hash_mismatch: bool,
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
-        fault_injection_rate_slots: u64,
         accounts_hash: AccountsHashEnum,
+        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
-        if fault_injection_rate_slots != 0
-            && accounts_package.slot % fault_injection_rate_slots == 0
-        {
-            // For testing, publish an invalid hash to gossip.
-            let fault_hash = Self::generate_fault_hash(accounts_hash.as_hash());
-            warn!("inserting fault at slot: {}", accounts_package.slot);
-            hashes.push((accounts_package.slot, fault_hash));
-        } else {
-            hashes.push((accounts_package.slot, *accounts_hash.as_hash()));
-        }
+        let hash = accounts_hash_fault_injector
+            .and_then(|f| f(accounts_hash.as_hash(), accounts_package.slot))
+            .or(Some(*accounts_hash.as_hash()));
+        hashes.push((accounts_package.slot, hash.unwrap()));
 
         retain_max_n_elements(hashes, MAX_SNAPSHOT_HASHES);
 
@@ -653,8 +639,8 @@ mod tests {
                 None,
                 &mut hashes,
                 &exit,
-                0,
                 &snapshot_config,
+                None,
             );
 
             // sleep for 1ms to create a newer timestamp for gossip entry

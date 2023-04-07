@@ -4,6 +4,7 @@
 use {
     common::*,
     log::*,
+    rand::{thread_rng, Rng},
     serial_test::serial,
     solana_core::validator::ValidatorConfig,
     solana_gossip::gossip_service::discover_cluster,
@@ -17,6 +18,7 @@ use {
     solana_sdk::{
         client::SyncClient,
         clock::Slot,
+        hash::{extend_and_hash, Hash},
         poh_config::PohConfig,
         signature::{Keypair, Signer},
     },
@@ -74,9 +76,19 @@ fn test_consistency_halt() {
     // Create cluster with a leader producing bad snapshot hashes.
     let mut leader_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+
+    // Prepare fault hash injection for testing.
     leader_snapshot_test_config
         .validator_config
-        .accounts_hash_fault_injection_slots = 40;
+        .accounts_hash_fault_injector = Some(|hash: &Hash, slot: Slot| {
+        const FAULT_INJECTION_RATE_SLOTS: u64 = 40; // Inject a fault hash every 40 slots
+        (slot % FAULT_INJECTION_RATE_SLOTS == 0).then(|| {
+            let rand = thread_rng().gen_range(0, 10);
+            let fault_hash = extend_and_hash(hash, &[rand]);
+            warn!("inserting fault at slot: {}", slot);
+            fault_hash
+        })
+    });
 
     let validator_stake = DEFAULT_NODE_STAKE;
     let mut config = ClusterConfig {
