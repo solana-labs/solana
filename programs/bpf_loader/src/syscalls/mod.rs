@@ -548,7 +548,7 @@ declare_syscall!(
                 Err(_) => Ok(0),
             }
         } else {
-            allocator.dealloc(free_addr, layout);
+            // Unimplemented
             Ok(0)
         }
     }

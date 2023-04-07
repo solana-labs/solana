@@ -319,7 +319,7 @@ pub fn create_vm<'a, 'b>(
     let mut stack = solana_rbpf::aligned_memory::AlignedMemory::<
         { solana_rbpf::ebpf::HOST_ALIGN },
     >::zero_filled(stack_size);
-    let heap = solana_rbpf::aligned_memory::AlignedMemory::<{ solana_rbpf::ebpf::HOST_ALIGN }>::zero_filled(heap_size);
+    let mut heap = solana_rbpf::aligned_memory::AlignedMemory::<{ solana_rbpf::ebpf::HOST_ALIGN }>::zero_filled(heap_size);
     let round_up_heap_size = invoke_context
         .feature_set
         .is_active(&round_up_heap_size::id());
@@ -331,17 +331,17 @@ pub fn create_vm<'a, 'b>(
     if round_up_heap_size {
         heap_cost_result?;
     }
-    let mut allocator = BpfAllocator::new(heap, MM_HEAP_START);
     let memory_mapping = create_memory_mapping(
         program.get_executable(),
         &mut stack,
-        allocator.heap_mut(),
+        &mut heap,
         regions,
         None,
     )?;
     invoke_context.set_syscall_context(SyscallContext {
         stack,
-        allocator,
+        heap,
+        allocator: BpfAllocator::new(heap_size as u64),
         orig_account_lengths,
         trace_log: Vec::new(),
     })?;
@@ -399,7 +399,7 @@ fn create_memory_mapping<'a, 'b, C: ContextObject>(
                 0
             },
         ),
-        MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
+        MemoryRegion::new_writable(heap.as_slice_mut(), MM_HEAP_START),
     ]
     .into_iter()
     .chain(additional_regions.into_iter())
