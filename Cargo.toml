@@ -191,7 +191,7 @@ fs_extra = "1.2.0"
 futures = "0.3.24"
 futures-util = "0.3.26"
 gag = "1.0.0"
-generic-array = { version = "0.14.6", default-features = false }
+generic-array = { version = "0.14.7", default-features = false }
 gethostname = "0.2.3"
 getrandom = "0.1.14"
 goauth = "0.13.1"
