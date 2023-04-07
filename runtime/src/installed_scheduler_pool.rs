@@ -133,3 +133,6 @@ impl Deref for BankWithScheduler {
         &self.0
     }
 }
+
+impl Bank {
+}
