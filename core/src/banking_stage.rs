@@ -398,45 +398,76 @@ impl BankingStage {
                         ),
                     };
 
-                let mut packet_receiver = PacketReceiver::new(id, packet_receiver);
-                let poh_recorder = poh_recorder.clone();
-
-                let committer = Committer::new(
+                Self::spawn_thread(
+                    id,
+                    cluster_info.clone(),
+                    poh_recorder.clone(),
+                    packet_receiver,
                     transaction_status_sender.clone(),
                     replay_vote_sender.clone(),
-                    prioritization_fee_cache.clone(),
-                );
-                let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
-                let forwarder = Forwarder::new(
-                    poh_recorder.clone(),
-                    bank_forks.clone(),
-                    cluster_info.clone(),
-                    connection_cache.clone(),
-                    data_budget.clone(),
-                );
-                let consumer = Consumer::new(
-                    committer,
-                    poh_recorder.read().unwrap().new_recorder(),
-                    QosService::new(id),
                     log_messages_bytes_limit,
-                );
-
-                Builder::new()
-                    .name(format!("solBanknStgTx{id:02}"))
-                    .spawn(move || {
-                        Self::process_loop(
-                            &mut packet_receiver,
-                            &decision_maker,
-                            &forwarder,
-                            &consumer,
-                            id,
-                            unprocessed_transaction_storage,
-                        );
-                    })
-                    .unwrap()
+                    connection_cache.clone(),
+                    bank_forks.clone(),
+                    prioritization_fee_cache.clone(),
+                    data_budget.clone(),
+                    unprocessed_transaction_storage,
+                )
             })
             .collect();
         Self { bank_thread_hdls }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_thread(
+        id: u32,
+        cluster_info: Arc<ClusterInfo>,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
+        packet_receiver: BankingPacketReceiver,
+        transaction_status_sender: Option<TransactionStatusSender>,
+        replay_vote_sender: ReplayVoteSender,
+        log_messages_bytes_limit: Option<usize>,
+        connection_cache: Arc<ConnectionCache>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: Arc<PrioritizationFeeCache>,
+        data_budget: Arc<DataBudget>,
+        unprocessed_transaction_storage: UnprocessedTransactionStorage,
+    ) -> JoinHandle<()> {
+        let transaction_recorder = poh_recorder.read().unwrap().new_recorder();
+
+        let mut packet_receiver = PacketReceiver::new(id, packet_receiver);
+        let committer = Committer::new(
+            transaction_status_sender,
+            replay_vote_sender,
+            prioritization_fee_cache,
+        );
+        let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
+        let forwarder = Forwarder::new(
+            poh_recorder,
+            bank_forks,
+            cluster_info,
+            connection_cache,
+            data_budget,
+        );
+        let consumer = Consumer::new(
+            committer,
+            transaction_recorder,
+            QosService::new(id),
+            log_messages_bytes_limit,
+        );
+
+        Builder::new()
+            .name(format!("solBanknStgTx{id:02}"))
+            .spawn(move || {
+                Self::process_loop(
+                    &mut packet_receiver,
+                    &decision_maker,
+                    &forwarder,
+                    &consumer,
+                    id,
+                    unprocessed_transaction_storage,
+                );
+            })
+            .unwrap()
     }
 
     #[allow(clippy::too_many_arguments)]
