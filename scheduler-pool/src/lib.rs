@@ -25,7 +25,7 @@ use solana_runtime::bank::LoadAndExecuteTransactionsOutput;
 use solana_runtime::bank::CommitTransactionCounts;
 use std::borrow::Cow;
 use solana_runtime::installed_scheduler_pool::InstalledScheduler;
-use solana_runtime::bank_forks::InstalledSchedulerPool;
+use solana_runtime::installed_scheduler_pool::InstalledSchedulerPool;
 use solana_runtime::installed_scheduler_pool::SchedulingContext;
 use std::sync::atomic::AtomicBool;
 use solana_sdk::transaction::SanitizedTransaction;
