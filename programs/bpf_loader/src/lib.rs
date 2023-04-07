@@ -373,6 +373,37 @@ macro_rules! create_vm {
     };
 }
 
+#[macro_export]
+macro_rules! mock_create_vm {
+    ($vm_name:ident, $additional_regions:expr, $orig_account_lengths:expr, $invoke_context:expr $(,)?) => {
+        use crate::create_ebpf_vm;
+        let loader = std::sync::Arc::new(BuiltInProgram::new_loader(
+            solana_rbpf::vm::Config::default(),
+        ));
+        let function_registry = solana_rbpf::vm::FunctionRegistry::default();
+        let executable = solana_rbpf::elf::Executable::<InvokeContext>::from_text_bytes(
+            &[0x95, 0, 0, 0, 0, 0, 0, 0],
+            loader,
+            function_registry,
+        )
+        .unwrap();
+        let verified_executable = solana_rbpf::vm::VerifiedExecutable::<
+            solana_rbpf::verifier::RequisiteVerifier,
+            InvokeContext,
+        >::from_executable(executable)
+        .unwrap();
+        crate::create_vm!(
+            $vm_name,
+            &verified_executable,
+            stack,
+            heap,
+            $additional_regions,
+            $orig_account_lengths,
+            $invoke_context
+        );
+    };
+}
+
 fn create_memory_mapping<'a, 'b, C: ContextObject>(
     executable: &'a Executable<C>,
     stack: &'b mut AlignedMemory<{ HOST_ALIGN }>,
