@@ -440,7 +440,7 @@ impl AddressBook {
         prefer_immediate: bool,
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
-        mode: Mode,
+        mode: SchedulingMode,
     ) -> CU {
         let tcuw = attempt
             //.target_contended_unique_weights()
@@ -661,7 +661,7 @@ struct Bundle {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Mode {
+pub enum SchedulingMode {
     BlockVerification
     //BlockProduction,
 }
@@ -723,9 +723,9 @@ impl Task {
         })
     }
 
-    pub fn transaction_index(&self, mode: Mode) -> u64 {
+    pub fn transaction_index(&self, mode: SchedulingMode) -> u64 {
         match mode {
-            Mode::BlockVerification => (UniqueWeight::max_value() - self.unique_weight).try_into().unwrap(),
+            SchedulingMode::BlockVerification => (UniqueWeight::max_value() - self.unique_weight).try_into().unwrap(),
         }
     }
 
@@ -1058,7 +1058,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
     lock_attempts: &mut [LockAttempt],
-    mode: Mode,
+    mode: SchedulingMode,
 ) -> (usize, usize, CU) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
@@ -1297,7 +1297,7 @@ impl ScheduleStage {
                         &mut next_task.lock_attempts_mut(ast),
                         (
                             if runnable_queue.is_backed_by_channel() {
-                                Mode::BlockVerification
+                                SchedulingMode::BlockVerification
                             } else {
                                 panic!()
                             }
@@ -1682,7 +1682,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    fn _run<'a, AST: AtScheduleThread, T: Send, C: WithContext>(
+    fn _run<'a, AST: AtScheduleThread, T: Send, C: WithSchedulingContext>(
         ast: AST,
         checkpoint: &std::sync::Arc<C>,
         executing_thread_count: usize,
@@ -1847,7 +1847,7 @@ impl ScheduleStage {
                                        if Some(new_mode) != mode {
                                            if !force_channel_backed {
                                                runnable_queue = match new_mode {
-                                                   Mode::BlockVerification => ModeSpecificTaskQueue::BlockVerification(ChannelBackedTaskQueue::new(from_prev)),
+                                                   SchedulingMode::BlockVerification => ModeSpecificTaskQueue::BlockVerification(ChannelBackedTaskQueue::new(from_prev)),
                                                };
                                            }
                                            mode = Some(new_mode);
@@ -2136,7 +2136,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    pub fn run<T: Send, C: WithContext>(
+    pub fn run<T: Send, C: WithSchedulingContext>(
         checkpoint: &std::sync::Arc<C>,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
@@ -2179,12 +2179,12 @@ pub enum Flushable<T> {
     Flush,
 }
 
-pub trait WithContext {
-    type Context: WithMode;
+pub trait WithSchedulingContext {
+    type Context: WithSchedulingMode;
     fn use_context_value(&self) -> Option<Self::Context>;
     // add fn log_prefix?
 }
 
-pub trait WithMode {
-    fn mode(&self) -> Mode;
+pub trait WithSchedulingMode {
+    fn mode(&self) -> SchedulingMode;
 }
