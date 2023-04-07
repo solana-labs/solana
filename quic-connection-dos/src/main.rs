@@ -1,14 +1,14 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     clap::{crate_description, crate_name, value_t, App, Arg},
-    quinn::{ClientConfig, Connection, EndpointConfig, IdleTimeout, TokioRuntime, TransportConfig},
     futures::future::join_all,
+    quinn::{ClientConfig, Connection, EndpointConfig, IdleTimeout, TokioRuntime, TransportConfig},
     //rayon::prelude::*,
     //solana_measure::measure::Measure,
     solana_sdk::{
+        packet::PACKET_DATA_SIZE,
         quic::{QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT},
         signer::keypair::Keypair,
-        packet::PACKET_DATA_SIZE,
     },
     solana_streamer::{
         nonblocking::quic::ALPN_TPU_PROTOCOL_ID, tls_certificates::new_self_signed_tls_certificate,
@@ -90,9 +90,7 @@ pub async fn make_client_connection(
 // to be configurable as client-side writes don't correspond to
 // quic-level packets/writes (but by doing multiple writes we are generally able
 // to get multiple writes on the quic level despite the spec not guaranteeing this)
-pub async fn check_multiple_writes(
-    conn: Arc<Connection>
-) {
+pub async fn check_multiple_writes(conn: Arc<Connection>) {
     // Send a full size packet with single byte writes.
     let num_bytes = PACKET_DATA_SIZE;
     let mut s1 = conn.open_uni().await.unwrap();
@@ -102,7 +100,11 @@ pub async fn check_multiple_writes(
     s1.finish().await.unwrap();
 }
 
-async fn run_connection_dos(server_address: SocketAddr, num_connections: u64, num_streams_per_conn: u64) {
+async fn run_connection_dos(
+    server_address: SocketAddr,
+    num_connections: u64,
+    num_streams_per_conn: u64,
+) {
     let mut connections = vec![];
     for _ in 0..num_connections {
         connections.push(make_client_connection(&server_address, None).await);
@@ -155,7 +157,11 @@ fn main() {
         .parse()
         .unwrap();
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    runtime.block_on(run_connection_dos(target_address, num_connections, num_streams_per_conn));
+    runtime.block_on(run_connection_dos(
+        target_address,
+        num_connections,
+        num_streams_per_conn,
+    ));
 }
 
 #[cfg(test)]
