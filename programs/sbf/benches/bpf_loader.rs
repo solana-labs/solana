@@ -12,7 +12,7 @@ extern crate solana_bpf_loader_program;
 use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_bpf_loader_program::{
-        create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
+        create_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
     solana_measure::measure::Measure,
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
@@ -128,16 +128,13 @@ fn bench_program_alu(bencher: &mut Bencher) {
             .unwrap();
 
     verified_executable.jit_compile().unwrap();
-    create_vm!(
-        vm,
+    let mut vm = create_vm(
         &verified_executable,
-        stack,
-        heap,
         vec![MemoryRegion::new_writable(&mut inner_iter, MM_INPUT_START)],
         vec![],
-        &mut invoke_context
-    );
-    let mut vm = vm.unwrap();
+        &mut invoke_context,
+    )
+    .unwrap();
 
     println!("Interpreted:");
     vm.env
@@ -255,16 +252,13 @@ fn bench_create_vm(bencher: &mut Bencher) {
     .unwrap();
 
     bencher.iter(|| {
-        create_vm!(
-            vm,
+        create_vm(
             &verified_executable,
-            stack,
-            heap,
             clone_regions(&regions),
             account_lengths.clone(),
-            &mut invoke_context
-        );
-        let _ = vm.unwrap();
+            &mut invoke_context,
+        )
+        .unwrap();
     });
 }
 
@@ -300,16 +294,13 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
             .unwrap();
 
-    create_vm!(
-        vm,
+    let mut vm = create_vm(
         &verified_executable,
-        stack,
-        heap,
         regions,
         account_lengths,
-        &mut invoke_context
-    );
-    let mut vm = vm.unwrap();
+        &mut invoke_context,
+    )
+    .unwrap();
 
     let mut measure = Measure::start("tune");
     let (instructions, _result) = vm.execute_program(true);

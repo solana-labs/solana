@@ -11,7 +11,7 @@ use {
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_measure::measure::Measure,
-    solana_rbpf::vm::ContextObject,
+    solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN, vm::ContextObject},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_deprecated,
@@ -125,8 +125,9 @@ impl fmt::Display for AllocErr {
 }
 
 pub struct SyscallContext {
-    pub orig_account_lengths: Vec<usize>,
+    pub stack: AlignedMemory<{ HOST_ALIGN }>,
     pub allocator: Rc<RefCell<dyn Alloc>>,
+    pub orig_account_lengths: Vec<usize>,
     pub trace_log: Vec<[u64; 12]>,
 }
 
