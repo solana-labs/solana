@@ -488,7 +488,7 @@ impl Scheduler {
             'recv: while let Ok(r) = (if thx >= base_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 if latest_scheduler_context.is_none() {
                     latest_scheduler_context = checkpoint.use_context_value();
-                    mode = latest_scheduler_context.as_ref().map(|sc| sc.mode);
+                    mode = latest_scheduler_context.as_ref().map(|sc| sc.mode());
                 }
                 match r {
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Payload(mut ee)) => {
@@ -676,7 +676,7 @@ impl Scheduler {
                                     },
                                     Err(e) => {
                                         transaction_error_counts.record(&e);
-                                        match latest_scheduler_context.as_ref().unwrap().mode {
+                                        match latest_scheduler_context.as_ref().unwrap().mode() {
                                             solana_scheduler::SchedulingMode::BlockVerification => {
                                                 error!(
                                                     "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
