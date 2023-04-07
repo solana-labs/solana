@@ -6247,35 +6247,6 @@ impl Bank {
         self.cluster_type.unwrap()
     }
 
-    pub fn schedule_transaction_executions<'a>(
-        &self,
-        transactions: &[SanitizedTransaction],
-        transaction_indexes: impl Iterator<Item = &'a usize>,
-    ) {
-        trace!(
-            "schedule_and_commit_transactions(): {} txs",
-            transactions.len()
-        );
-
-        let scheduler_guard = self.scheduler.read().unwrap();
-        let scheduler = scheduler_guard.0.as_ref().unwrap();
-
-        for (st, &i) in transactions.iter().zip(transaction_indexes) {
-            scheduler.schedule_execution(st, i);
-        }
-    }
-
-    pub fn schedule_termination(&self) {
-        let mut scheduler_guard = self.scheduler.write().unwrap();
-        if let Some(scheduler) = scheduler_guard.0.as_mut() {
-            scheduler.schedule_termination();
-        }
-    }
-
-    pub fn with_scheduler(&self) -> bool {
-        self.scheduler.read().unwrap().0.is_some()
-    }
-
     /// Process a batch of transactions.
     #[must_use]
     pub fn load_execute_and_commit_transactions(
