@@ -338,6 +338,7 @@ pub fn create_ebpf_vm<'a, 'b>(
     invoke_context.set_syscall_context(SyscallContext {
         orig_account_lengths,
         allocator,
+        trace_log: Vec::new(),
     })?;
     Ok(EbpfVm::new(
         program,

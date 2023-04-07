@@ -299,14 +299,17 @@ before execting it in the virtual machine.",
     let (instruction_count, result) = vm.execute_program(matches.value_of("use").unwrap() != "jit");
     let duration = Instant::now() - start_time;
     if matches.occurrences_of("trace") > 0 {
-        for (frame, trace) in vm
+        for (frame, syscall_context) in vm
             .env
             .context_object_pointer
-            .trace_log_stack
+            .syscall_context
             .iter()
             .enumerate()
         {
-            let trace_log = trace.trace_log.as_slice();
+            if syscall_context.is_none() {
+                continue;
+            }
+            let trace_log = syscall_context.as_ref().unwrap().trace_log.as_slice();
             if matches.value_of("trace").unwrap() == "stdout" {
                 writeln!(&mut std::io::stdout(), "Frame {frame}").unwrap();
                 analysis

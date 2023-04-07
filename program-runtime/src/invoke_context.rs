@@ -88,15 +88,16 @@ impl std::fmt::Debug for BuiltinProgram {
 
 impl<'a> ContextObject for InvokeContext<'a> {
     fn trace(&mut self, state: [u64; 12]) {
-        self.trace_log_stack
+        self.syscall_context
             .last_mut()
-            .expect("Inconsistent trace log stack")
+            .unwrap()
+            .as_mut()
+            .unwrap()
             .trace_log
             .push(state);
     }
 
     fn consume(&mut self, amount: u64) {
-        self.log_consumed_bpf_units(amount);
         // 1 to 1 instruction to compute unit mapping
         // ignore overflow, Ebpf will bail if exceeded
         let mut compute_meter = self.compute_meter.borrow_mut();
@@ -126,12 +127,7 @@ impl fmt::Display for AllocErr {
 pub struct SyscallContext {
     pub orig_account_lengths: Vec<usize>,
     pub allocator: Rc<RefCell<dyn Alloc>>,
-}
-
-#[derive(Default)]
-pub struct TraceLogStackFrame {
     pub trace_log: Vec<[u64; 12]>,
-    pub consumed_bpf_units: RefCell<Vec<(usize, u64)>>,
 }
 
 pub struct InvokeContext<'a> {
@@ -140,7 +136,6 @@ pub struct InvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
     sysvar_cache: &'a SysvarCache,
-    pub trace_log_stack: Vec<TraceLogStackFrame>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
@@ -151,7 +146,7 @@ pub struct InvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
-    syscall_context: Vec<Option<SyscallContext>>,
+    pub syscall_context: Vec<Option<SyscallContext>>,
     pub enable_instruction_tracing: bool,
 }
 
@@ -176,7 +171,6 @@ impl<'a> InvokeContext<'a> {
             pre_accounts: Vec::new(),
             builtin_programs,
             sysvar_cache,
-            trace_log_stack: vec![TraceLogStackFrame::default()],
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
@@ -272,14 +266,12 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
-        self.trace_log_stack.push(TraceLogStackFrame::default());
         self.syscall_context.push(None);
         self.transaction_context.push()
     }
 
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
-        self.trace_log_stack.pop();
         self.syscall_context.pop();
         self.transaction_context.pop()
     }
@@ -763,7 +755,6 @@ impl<'a> InvokeContext<'a> {
 
     /// Consume compute units
     pub fn consume_checked(&self, amount: u64) -> Result<(), Box<dyn std::error::Error>> {
-        self.log_consumed_bpf_units(amount);
         let mut compute_meter = self.compute_meter.borrow_mut();
         let exceeded = *compute_meter < amount;
         *compute_meter = compute_meter.saturating_sub(amount);
@@ -841,20 +832,6 @@ impl<'a> InvokeContext<'a> {
             .last_mut()
             .and_then(|syscall_context| syscall_context.as_mut())
             .ok_or(InstructionError::CallDepth)
-    }
-
-    fn log_consumed_bpf_units(&self, amount: u64) {
-        if self.enable_instruction_tracing && amount != 0 {
-            let trace_log_stack_frame = self
-                .trace_log_stack
-                .last()
-                .expect("Inconsistent trace log stack");
-
-            trace_log_stack_frame.consumed_bpf_units.borrow_mut().push((
-                trace_log_stack_frame.trace_log.len().saturating_sub(1),
-                amount,
-            ));
-        }
     }
 }
 
