@@ -182,7 +182,7 @@ impl AccountsHashVerifier {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn process_accounts_package<F>(
+    fn process_accounts_package(
         accounts_package: AccountsPackage,
         cluster_info: &ClusterInfo,
         known_validators: Option<&HashSet<Pubkey>>,
@@ -191,10 +191,8 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         snapshot_config: &SnapshotConfig,
-        fault_hash_generator: Option<F>,
-    ) where
-        F: FnOnce(&Hash, Slot) -> Option<Hash>,
-    {
+        fault_hash_generator: Option<AccountsFaultHashInjector>,
+    ) {
         let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
         Self::save_epoch_accounts_hash(&accounts_package, accounts_hash);
@@ -451,7 +449,7 @@ impl AccountsHashVerifier {
         }
     }
 
-    fn push_accounts_hashes_to_cluster<F>(
+    fn push_accounts_hashes_to_cluster(
         accounts_package: &AccountsPackage,
         cluster_info: &ClusterInfo,
         known_validators: Option<&HashSet<Pubkey>>,
@@ -459,10 +457,8 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         accounts_hash: AccountsHashEnum,
-        fault_hash_generator: Option<F>,
-    ) where
-        F: FnOnce(&Hash, Slot) -> Option<Hash>,
-    {
+        fault_hash_generator: Option<AccountsFaultHashInjector>,
+    ) {
         let hash = fault_hash_generator
             .and_then(|f| f(accounts_hash.as_hash(), accounts_package.slot))
             .or(Some(*accounts_hash.as_hash()));
@@ -643,7 +639,7 @@ mod tests {
                 &mut hashes,
                 &exit,
                 &snapshot_config,
-                None::<fn(&Hash, Slot) -> Option<Hash>>,
+                None,
             );
 
             // sleep for 1ms to create a newer timestamp for gossip entry
