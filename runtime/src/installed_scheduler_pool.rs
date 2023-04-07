@@ -1,3 +1,4 @@
+pub use solana_scheduler::SchedulingMode;
 /// Transaction processing glue code, mainly consisting of Object-safe traits
 ///
 /// `trait InstalledSchedulerPool` is the most crucial piece for this whole integration.
@@ -7,7 +8,7 @@
 /// subsystems (i.e. `ReplayStage` and `BankingStage`). `BankForks` is responsible for this
 /// book-keeping.
 ///
-/// `trait InstalledScheduler` can be fed with `SanitizedTransaction`s. Then, it schedules and 
+/// `trait InstalledScheduler` can be fed with `SanitizedTransaction`s. Then, it schedules and
 /// commits those transaction execution results into the associated _bank_. That means,
 /// `InstalledScheduler` and `Bank` are mutually linked to each other, resulting somewhat special
 /// handling as part of their life-cycle.
@@ -19,7 +20,6 @@
 /// Dynamic dispatch was inevitable, due to the need of delegating those implementations to the
 /// dependent crate to cut cyclic dependency (`solana-scheduler-pool`, which in turn depends on
 /// `solana-ledger`; another dependent crate of `solana-runtime`...).
-
 use {
     crate::bank::Bank,
     solana_program_runtime::timings::ExecuteTimings,
@@ -30,7 +30,6 @@ use {
     },
     std::{fmt::Debug, sync::Arc},
 };
-pub use solana_scheduler::SchedulingMode;
 
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler>;
