@@ -23,7 +23,7 @@
 use {
     crate::bank::Bank,
     solana_program_runtime::timings::ExecuteTimings,
-    solana_scheduler::{SchedulingMode, WithSchedulingMode},
+    solana_scheduler::WithSchedulingMode,
     solana_sdk::{
         slot_history::Slot,
         transaction::{Result, SanitizedTransaction},
