@@ -11,7 +11,6 @@ use {
             ThreadType, UnprocessedTransactionStorage, UNPROCESSED_BUFFER_STEP_SIZE,
         },
     },
-    solana_measure::measure::Measure,
     solana_perf::packet::{Packet, PacketBatch},
     solana_runtime::{
         bank::Bank,
@@ -45,53 +44,18 @@ fn build_packet_batch(
     (packet_batch, packet_indexes)
 }
 
-fn build_randomized_packet_batch(
-    packet_per_batch_count: usize,
-    recent_blockhash: Option<Hash>,
-) -> (PacketBatch, Vec<usize>) {
-    let packet_batch = PacketBatch::new(
-        (0..packet_per_batch_count)
-            .map(|_| {
-                let tx = system_transaction::transfer(
-                    &Keypair::new(),
-                    &solana_sdk::pubkey::new_rand(),
-                    1,
-                    recent_blockhash.unwrap_or_else(Hash::new_unique),
-                );
-                Packet::from_data(None, tx).unwrap()
-            })
-            .collect(),
-    );
-    let packet_indexes: Vec<usize> = (0..packet_per_batch_count).collect();
-
-    (packet_batch, packet_indexes)
-}
-
 fn insert_packet_batches(
     buffer_max_size: usize,
     batch_count: usize,
     packet_per_batch_count: usize,
-    randomize: bool,
 ) {
-    solana_logger::setup();
     let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(buffer_max_size);
 
-    let mut timer = Measure::start("insert_batch");
     (0..batch_count).for_each(|_| {
-        let (packet_batch, packet_indexes) = if randomize {
-            build_randomized_packet_batch(packet_per_batch_count, None)
-        } else {
-            build_packet_batch(packet_per_batch_count, None)
-        };
+        let (packet_batch, packet_indexes) = build_packet_batch(packet_per_batch_count, None);
         let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes);
         unprocessed_packet_batches.insert_batch(deserialized_packets);
     });
-    timer.stop();
-    log::info!(
-        "inserted {} batch, elapsed {}",
-        buffer_max_size,
-        timer.as_us()
-    );
 }
 
 #[bench]
@@ -108,12 +72,9 @@ fn bench_packet_clone(bencher: &mut Bencher) {
         test::black_box(packet_batches.iter().for_each(|packet_batch| {
             let mut outer_packet = Packet::default();
 
-            let mut timer = Measure::start("insert_batch");
             packet_batch.iter().for_each(|packet| {
                 outer_packet = packet.clone();
             });
-
-            timer.stop();
         }));
     });
 }
@@ -129,7 +90,7 @@ fn bench_unprocessed_packet_batches_within_limit(bencher: &mut Bencher) {
     let packet_per_batch_count = UNPROCESSED_BUFFER_STEP_SIZE;
 
     bencher.iter(|| {
-        insert_packet_batches(buffer_capacity, batch_count, packet_per_batch_count, false);
+        insert_packet_batches(buffer_capacity, batch_count, packet_per_batch_count);
     });
 }
 
@@ -148,35 +109,7 @@ fn bench_unprocessed_packet_batches_beyond_limit(bencher: &mut Bencher) {
     // Also, since all batches have same stake distribution, the new one is always the one got
     // dropped. Tho it does not change algo complexity.
     bencher.iter(|| {
-        insert_packet_batches(buffer_capacity, batch_count, packet_per_batch_count, false);
-    });
-}
-// */
-// v1, bench: 5,843,307,086 ns/iter (+/- 844,249,298)
-// v2, bench: 5,139,525,951 ns/iter (+/- 48,005,521)
-#[bench]
-#[ignore]
-fn bench_unprocessed_packet_batches_randomized_within_limit(bencher: &mut Bencher) {
-    let buffer_capacity = 1_000 * UNPROCESSED_BUFFER_STEP_SIZE;
-    let batch_count = 1_000;
-    let packet_per_batch_count = UNPROCESSED_BUFFER_STEP_SIZE;
-
-    bencher.iter(|| {
-        insert_packet_batches(buffer_capacity, batch_count, packet_per_batch_count, true);
-    });
-}
-
-// v1, bench: 6,497,623,849 ns/iter (+/- 3,206,382,212)
-// v2, bench: 5,762,071,682 ns/iter (+/- 168,244,418)
-#[bench]
-#[ignore]
-fn bench_unprocessed_packet_batches_randomized_beyond_limit(bencher: &mut Bencher) {
-    let buffer_capacity = 1_000 * UNPROCESSED_BUFFER_STEP_SIZE;
-    let batch_count = 1_100;
-    let packet_per_batch_count = UNPROCESSED_BUFFER_STEP_SIZE;
-
-    bencher.iter(|| {
-        insert_packet_batches(buffer_capacity, batch_count, packet_per_batch_count, true);
+        insert_packet_batches(buffer_capacity, batch_count, packet_per_batch_count);
     });
 }
 
@@ -184,9 +117,7 @@ fn buffer_iter_desc_and_forward(
     buffer_max_size: usize,
     batch_count: usize,
     packet_per_batch_count: usize,
-    randomize: bool,
 ) {
-    solana_logger::setup();
     let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(buffer_max_size);
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new_for_tests(&genesis_config);
@@ -195,22 +126,12 @@ fn buffer_iter_desc_and_forward(
     let current_bank = bank_forks.read().unwrap().root_bank();
     // fill buffer
     {
-        let mut timer = Measure::start("fill_buffer");
         (0..batch_count).for_each(|_| {
-            let (packet_batch, packet_indexes) = if randomize {
-                build_randomized_packet_batch(packet_per_batch_count, Some(genesis_config.hash()))
-            } else {
-                build_packet_batch(packet_per_batch_count, Some(genesis_config.hash()))
-            };
+            let (packet_batch, packet_indexes) =
+                build_packet_batch(packet_per_batch_count, Some(genesis_config.hash()));
             let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes);
             unprocessed_packet_batches.insert_batch(deserialized_packets);
         });
-        timer.stop();
-        log::info!(
-            "inserted {} batch, elapsed {}",
-            buffer_max_size,
-            timer.as_us()
-        );
     }
 
     // forward whole buffer
@@ -236,6 +157,6 @@ fn bench_forwarding_unprocessed_packet_batches(bencher: &mut Bencher) {
     let buffer_capacity = batch_count * packet_per_batch_count;
 
     bencher.iter(|| {
-        buffer_iter_desc_and_forward(buffer_capacity, batch_count, packet_per_batch_count, true);
+        buffer_iter_desc_and_forward(buffer_capacity, batch_count, packet_per_batch_count);
     });
 }
