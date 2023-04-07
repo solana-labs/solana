@@ -1130,7 +1130,7 @@ pub struct Bank {
 
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
-    scheduler: RwLock<InstalledSchedulerBox>,
+    pub(crate) scheduler: RwLock<InstalledSchedulerBox>,
 }
 
 struct VoteWithStakeDelegations {
