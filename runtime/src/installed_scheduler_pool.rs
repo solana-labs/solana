@@ -28,7 +28,7 @@ use {
         slot_history::Slot,
         transaction::{Result, SanitizedTransaction},
     },
-    std::{fmt::Debug, sync::Arc},
+    std::{fmt::Debug, ops::Deref, sync::Arc},
 };
 
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
@@ -126,7 +126,7 @@ impl Drop for BankWithScheduler {
     }
 }
 
-impl std::ops::Deref for BankWithScheduler {
+impl Deref for BankWithScheduler {
     type Target = Bank;
 
     fn deref(&self) -> &Bank {
