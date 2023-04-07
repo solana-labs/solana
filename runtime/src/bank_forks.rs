@@ -3,7 +3,8 @@
 use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
-        bank::{Bank, InstalledScheduler, SchedulingContext},
+        bank::Bank,
+        installed_scheduler_pool::{InstalledScheduler, SchedulingContext},
         epoch_accounts_hash,
         snapshot_config::SnapshotConfig,
     },
