@@ -1,3 +1,25 @@
+/// Transaction processing glue code, mainly consisting of Object-safe traits
+///
+/// `trait InstalledSchedulerPool` is the most crucial piece for this whole integration.
+///
+/// It lends one of pooled `trait InstalledScheduler`s out to a `Bank`, so that the ubiquitous
+/// `Arc<Bank>` can conveniently work as a facade for transaction scheduling, both to higher-layer
+/// subsystems (i.e. `ReplayStage` and `BankingStage`). `BankForks` is responsible for this
+/// book-keeping.
+///
+/// `trait InstalledScheduler` can be fed with `SanitizedTransaction`s. Then, it schedules and 
+/// commits those transaction execution results into the associated _bank_. That means,
+/// `InstalledScheduler` and `Bank` are mutually linked to each other, resulting somewhat special
+/// handling as part of their life-cycle.
+///
+/// At these interfaces level, it's generally assumed that each `InstalledScheduler` is backed by
+/// multiple threads for performant transaction execution and there's multiple of it inside a
+/// single instance of `InstalledSchedulerPool`.
+///
+/// Dynamic dispatch was inevitable, due to the need of delegating those implementations to the
+/// dependent crate to cut cyclic dependency (`solana-scheduler-pool`, which in turn depends on
+/// `solana-ledger`; another dependent crate of `solana-runtime`...).
+
 use {
     crate::bank::Bank,
     solana_program_runtime::timings::ExecuteTimings,
@@ -29,6 +51,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     fn replace_scheduler_context(&self, context: SchedulingContext);
 }
 
+// somewhat arbitrarily new type just to pacify Bank's frozen_abi...
 #[derive(Debug, Default)]
 pub(crate) struct InstalledSchedulerBox(pub(crate) Option<Box<dyn InstalledScheduler>>);
 
@@ -55,16 +78,16 @@ impl WithSchedulingMode for SchedulingContext {
 }
 
 impl SchedulingContext {
-    pub fn new(bank: Arc<Bank>, mode: SchedulingMode) -> Self {
-        Self { bank, mode }
-    }
-
-    pub fn slot(&self) -> Slot {
-        self.bank().slot()
+    pub fn new(mode: SchedulingMode, bank: Arc<Bank>) -> Self {
+        Self { mode, bank }
     }
 
     pub fn bank(&self) -> &Arc<Bank> {
         &self.bank
+    }
+
+    pub fn slot(&self) -> Slot {
+        self.bank().slot()
     }
 
     pub fn log_prefix(random_id: u64, context: Option<&Self>) -> String {
