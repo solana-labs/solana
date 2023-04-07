@@ -11,6 +11,7 @@ use {
         gossip_service::GossipService,
         legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
+    solana_metrics::*,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -593,6 +594,9 @@ pub fn rpc_bootstrap(
         return;
     }
 
+    let total_snapshot_download_time = std::time::Instant::now();
+    let mut get_rpc_nodes_time = std::time::Duration::new(0, 0);
+    let mut snapshot_download_time = std::time::Duration::new(0, 0);
     let mut blacklisted_rpc_nodes = HashSet::new();
     let mut gossip = None;
     let mut vetted_rpc_nodes = vec![];
@@ -617,6 +621,7 @@ pub fn rpc_bootstrap(
             ));
         }
 
+        let get_rpc_nodes_start = std::time::Instant::now();
         get_vetted_rpc_nodes(
             &mut vetted_rpc_nodes,
             &gossip.as_ref().unwrap().0,
@@ -626,8 +631,10 @@ pub fn rpc_bootstrap(
             &bootstrap_config,
         );
         let (rpc_contact_info, snapshot_hash, rpc_client) = vetted_rpc_nodes.pop().unwrap();
+        get_rpc_nodes_time += get_rpc_nodes_start.elapsed();
 
-        match attempt_download_genesis_and_snapshot(
+        let snapshot_download_start = std::time::Instant::now();
+        let download_result = attempt_download_genesis_and_snapshot(
             &rpc_contact_info,
             ledger_path,
             validator_config,
@@ -646,7 +653,9 @@ pub fn rpc_bootstrap(
             identity_keypair,
             vote_account,
             authorized_voter_keypairs.clone(),
-        ) {
+        );
+        snapshot_download_time += snapshot_download_start.elapsed();
+        match download_result {
             Ok(()) => break,
             Err(err) => {
                 fail_rpc_node(
@@ -662,6 +671,23 @@ pub fn rpc_bootstrap(
     if let Some(gossip) = gossip.take() {
         shutdown_gossip_service(gossip);
     }
+
+    datapoint_info!(
+        "snapshot-download",
+        (
+            "total_snapshot_download_time",
+            total_snapshot_download_time.elapsed().as_secs(),
+            i64
+        ),
+        ("get_rpc_nodes_time", get_rpc_nodes_time.as_secs(), i64),
+        (
+            "snapshot_download_time",
+            snapshot_download_time.as_secs(),
+            i64
+        ),
+        ("download_abort_count", download_abort_count, i64),
+        ("num_blacklisted_nodes", blacklisted_rpc_nodes.len(), i64),
+    );
 }
 
 /// Get RPC peer node candidates to download from.
