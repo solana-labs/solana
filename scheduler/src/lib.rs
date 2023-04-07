@@ -1,9 +1,5 @@
 #![feature(custom_inner_attributes)]
 #![rustfmt::skip]
-/// Abstract scheduling algorithm
-/// see solana_runtime::installed_scheduler_pool for high-level integration for actual transaction
-/// processing.
-
 #![allow(unused_imports)]
 #![allow(dead_code)]
 #![allow(unused_variables)]
@@ -31,6 +27,10 @@
 #![allow(clippy::borrow_deref_ref)]
 #![allow(clippy::bool_to_int_with_if)]
 #![allow(clippy::integer_arithmetic)]
+
+/// Abstract scheduling algorithm
+/// see solana_runtime::installed_scheduler_pool for high-level integration for actual transaction
+/// processing.
 
 use {
     crossbeam_channel::{bounded, unbounded},
