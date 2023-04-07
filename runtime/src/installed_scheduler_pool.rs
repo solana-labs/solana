@@ -30,6 +30,7 @@ use {
     },
     std::{fmt::Debug, sync::Arc},
 };
+pub use solana_scheduler::SchedulingMode;
 
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler>;

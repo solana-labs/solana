@@ -5,7 +5,7 @@ use {
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
         bank::Bank,
         epoch_accounts_hash,
-        installed_scheduler_pool::{InstalledSchedulerPool, SchedulingContext},
+        installed_scheduler_pool::{InstalledSchedulerPool, SchedulingContext, SchedulingMode},
         snapshot_config::SnapshotConfig,
     },
     log::*,
@@ -233,7 +233,7 @@ impl BankForks {
         }
         if let Some(scheduler_pool) = &self.scheduler_pool {
             let new_context = SchedulingContext::new(
-                solana_scheduler::SchedulingMode::BlockVerification,
+                SchedulingMode::BlockVerification,
                 bank.clone(),
             );
             bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
