@@ -22,6 +22,9 @@ pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
 struct InstalledSchedulerBox(Option<Box<dyn InstalledScheduler>>);
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_frozen_abi::abi_example::AbiExample;
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for InstalledSchedulerBox {
     fn example() -> Self {
         Self(None)
