@@ -8160,7 +8160,7 @@ impl Bank {
     >(
         &self,
     ) -> Option<(ExecuteTimings, Result<()>)> {
-        let mut s = self.scheduler.write().unwrap();
+        let mut scheduler_guard = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if VIA_DROP {
             info!(
@@ -8168,15 +8168,15 @@ impl Bank {
                 std::backtrace::Backtrace::force_capture()
             );
         }
-        if s.0.is_some() {
+        if scheduler_guard.0.is_some() {
             info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
 
-            let timings_and_result = s
+            let timings_and_result = scheduler_guard
                 .0
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART));
             if !IS_RESTART {
-                if let Some(scheduler) = s.0.take() {
+                if let Some(scheduler) = scheduler_guard.0.take() {
                     scheduler.scheduler_pool().return_to_pool(scheduler);
                 }
             }
