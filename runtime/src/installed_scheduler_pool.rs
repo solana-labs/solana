@@ -109,11 +109,11 @@ impl SchedulingContext {
 pub(crate) struct BankWithScheduler(Arc<Bank>);
 
 impl BankWithScheduler {
-    fn new_arc(&self) -> Arc<Bank> {
+    pub(crate) fn new_arc(&self) -> Arc<Bank> {
         self.0.clone()
     }
 
-    fn into_arc(self) -> Arc<Bank> {
+    pub(crate) fn into_arc(self) -> Arc<Bank> {
         let s = self.new_arc();
         drop(self);
         s
