@@ -8194,7 +8194,7 @@ impl Bank {
         maybe_timings_and_result.map(|(_timings, result)| result)
     }
 
-    fn wait_for_completed_scheduler_via_internal_drop(self) {
+    pub fn wait_for_completed_scheduler_via_internal_drop(self) {
         let maybe_timings_and_result = self.wait_for_scheduler::<true, true, false>();
         assert_matches!(maybe_timings_and_result, Some(_));
     }
