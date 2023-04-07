@@ -203,7 +203,7 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        self.install_scheduler_into_bank(bank);
+        self.install_scheduler_into_bank(&bank);
         bank
     }
 
