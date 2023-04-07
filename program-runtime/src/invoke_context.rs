@@ -165,7 +165,7 @@ impl BpfAllocator {
 
 pub struct SyscallContext {
     pub stack: AlignedMemory<{ HOST_ALIGN }>,
-    pub allocator: Rc<RefCell<BpfAllocator>>,
+    pub allocator: BpfAllocator,
     pub orig_account_lengths: Vec<usize>,
     pub trace_log: Vec<[u64; 12]>,
 }

@@ -331,11 +331,11 @@ pub fn create_vm<'a, 'b>(
     if round_up_heap_size {
         heap_cost_result?;
     }
-    let allocator = Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START)));
+    let mut allocator = BpfAllocator::new(heap, MM_HEAP_START);
     let memory_mapping = create_memory_mapping(
         program.get_executable(),
         &mut stack,
-        allocator.borrow_mut().heap_mut(),
+        allocator.heap_mut(),
         regions,
         None,
     )?;

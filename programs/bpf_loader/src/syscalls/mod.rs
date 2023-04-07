@@ -530,11 +530,6 @@ declare_syscall!(
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, Error> {
-        let allocator = &invoke_context.get_syscall_context()?.allocator;
-        let mut allocator = allocator
-            .try_borrow_mut()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-
         let align = if invoke_context.get_check_aligned() {
             BPF_ALIGN_OF_U128
         } else {
@@ -546,6 +541,7 @@ declare_syscall!(
                 return Ok(0);
             }
         };
+        let allocator = &mut invoke_context.get_syscall_context_mut()?.allocator;
         if free_addr == 0 {
             match allocator.alloc(layout) {
                 Ok(addr) => Ok(addr),
