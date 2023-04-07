@@ -137,7 +137,7 @@ impl Forwarder {
 
     /// Forwards all valid, unprocessed packets in the iterator, up to a rate limit.
     /// Returns whether forwarding succeeded, the number of attempted forwarded packets
-    /// if any, the time spent forwarding, and the leader pubkey if any.
+    /// if any, the time spent forwarding in us, and the leader pubkey if any.
     fn forward_packets<'a>(
         &self,
         forward_option: &ForwardOption,
