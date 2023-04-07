@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use crate::bank::Bank;
 
 pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
     fn random_id(&self) -> u64;
