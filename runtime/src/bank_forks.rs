@@ -233,7 +233,7 @@ impl BankForks {
         }
         if let Some(scheduler_pool) = &self.scheduler_pool {
             let new_context =
-                SchedulingContext::new(bank.clone(), solana_scheduler::Mode::BlockVerification);
+                SchedulingContext::new(bank.clone(), solana_scheduler::SchedulingMode::BlockVerification);
             bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
         }
         bank
