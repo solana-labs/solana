@@ -60,6 +60,7 @@ use {
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_associated_token_account, inline_spl_token,
+        installed_scheduler_pool::{InstalledScheduler, InstalledSchedulerBox},
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
         runtime_config::RuntimeConfig,
@@ -183,8 +184,6 @@ use {
         time::{Duration, Instant},
     },
 };
-use crate::installed_scheduler_pool::InstalledScheduler;
-use crate::installed_scheduler_pool::InstalledSchedulerBox;
 
 /// params to `verify_accounts_hash`
 pub struct VerifyAccountsHashConfig {

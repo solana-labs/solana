@@ -4,8 +4,8 @@ use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
         bank::Bank,
-        installed_scheduler_pool::SchedulingContext,
         epoch_accounts_hash,
+        installed_scheduler_pool::{InstalledSchedulerPool, SchedulingContext},
         snapshot_config::SnapshotConfig,
     },
     log::*,
@@ -22,7 +22,6 @@ use {
         time::Instant,
     },
 };
-use crate::installed_scheduler_pool::InstalledSchedulerPool;
 
 pub const MAX_ROOT_DISTANCE_FOR_VOTE_ONLY: Slot = 400;
 pub type AtomicSlot = AtomicU64;
