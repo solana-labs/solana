@@ -21,7 +21,7 @@
 //! `solana-ledger`; another dependent crate of `solana-runtime`...).
 
 use {
-    crate::bank::Bank,
+    crate::{bank::Bank, bank_forks::BankForks},
     log::*,
     solana_program_runtime::timings::ExecuteTimings,
     solana_scheduler::{SchedulingMode, WithSchedulingMode},
@@ -31,8 +31,6 @@ use {
     },
     std::{fmt::Debug, ops::Deref, sync::Arc},
 };
-use crate::bank_forks::BankForks;
-
 
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler>;
