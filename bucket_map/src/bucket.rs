@@ -183,7 +183,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         key: &Pubkey,
         random: u64,
     ) -> Result<(Option<IndexEntryPlaceInBucket<T>>, u64), BucketMapError> {
-        let ix = Self::bucket_index_ix(index, key, random);
+        let ix = Self::bucket_index_ix(key, random) % index.capacity();
         let mut first_free = None;
         let mut m = Measure::start("bucket_find_index_entry_mut");
         let capacity = index.capacity();
@@ -222,7 +222,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         key: &Pubkey,
         random: u64,
     ) -> Option<(IndexEntryPlaceInBucket<T>, u64)> {
-        let ix = Self::bucket_index_ix(index, key, random);
+        let ix = Self::bucket_index_ix(key, random) % index.capacity();
         for i in ix..ix + index.max_search() {
             let ii = i % index.capacity();
             if index.is_free(ii) {
@@ -243,7 +243,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         is_resizing: bool,
     ) -> Result<u64, BucketMapError> {
         let mut m = Measure::start("bucket_create_key");
-        let ix = Self::bucket_index_ix(index, key, random);
+        let ix = Self::bucket_index_ix(key, random) % index.capacity();
         for i in ix..ix + index.max_search() {
             let ii = i % index.capacity();
             if !index.is_free(ii) {
@@ -567,15 +567,14 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
         items.data = Some((data_index, new_bucket));
     }
 
-    fn bucket_index_ix(index: &BucketStorage<IndexBucket<T>>, key: &Pubkey, random: u64) -> u64 {
+    fn bucket_index_ix(key: &Pubkey, random: u64) -> u64 {
         let mut s = DefaultHasher::new();
         key.hash(&mut s);
         //the locally generated random will make it hard for an attacker
         //to deterministically cause all the pubkeys to land in the same
         //location in any bucket on all validators
         random.hash(&mut s);
-        let ix = s.finish();
-        ix % index.capacity()
+        s.finish()
         //debug!(            "INDEX_IX: {:?} uid:{} loc: {} cap:{}",            key,            uid,            location,            index.capacity()        );
     }
 
