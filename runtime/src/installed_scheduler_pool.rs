@@ -4,7 +4,6 @@ use solana_sdk::slot_history::Slot;
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::SanitizedTransaction;
 use solana_program_runtime::timings::ExecuteTimings;
-use crate::bank_forks::InstalledSchedulerPool;
 
 
 pub trait InstalledSchedulerPool: Send + Sync + std::fmt::Debug {
