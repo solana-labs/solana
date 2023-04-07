@@ -56,7 +56,7 @@ use solana_scheduler::WithMode;
 use solana_scheduler::WithContext;
 use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
 
-pub use solana_scheduler::Mode;
+pub use solana_scheduler::SchedulingMode;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
@@ -171,7 +171,7 @@ pub(crate) struct Scheduler {
     timings_and_result: Option<(ExecuteTimings, Result<()>)>,
     commit_status: Arc<CommitStatus>,
     checkpoint: Arc<Checkpoint>,
-    stopped_mode: Option<solana_scheduler::Mode>,
+    stopped_mode: Option<solana_scheduler::SchedulingMode>,
     current_scheduler_context: RwLock<Option<SchedulingContext>>,
     thread_count: usize,
     scheduler_pool: Arc<SchedulerPool>, // use Weak to cut circuric dep.
@@ -497,7 +497,7 @@ impl Scheduler {
                 let Some(bank) = latest_scheduler_context.as_ref().map(|sc| sc.bank()) else {
                     #[allow(clippy::single_match)]
                     match mode {
-                        Some(solana_scheduler::Mode::BlockVerification) => panic!(),
+                        Some(solana_scheduler::SchedulingMode::BlockVerification) => panic!(),
                         None => (),
                     };
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, Default::default())).unwrap();
@@ -548,7 +548,7 @@ impl Scheduler {
                     bank.last_blockhash_and_lamports_per_signature();
 
                 let commited_first_transaction_index = match mode {
-                    solana_scheduler::Mode::BlockVerification => {
+                    solana_scheduler::SchedulingMode::BlockVerification => {
                         //info!("replaying commit! {slot}");
                         Some(ee.task.transaction_index(mode) as usize)
                    },
@@ -584,7 +584,7 @@ impl Scheduler {
                 } else {
                     let sig = || ee.task.tx.0.signature().to_string();
                     match mode {
-                        solana_scheduler::Mode::BlockVerification => {
+                        solana_scheduler::SchedulingMode::BlockVerification => {
                             error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig(), tx_result);
                         },
                     }
@@ -677,7 +677,7 @@ impl Scheduler {
                                     Err(e) => {
                                         transaction_error_counts.record(&e);
                                         match latest_scheduler_context.as_ref().unwrap().mode {
-                                            solana_scheduler::Mode::BlockVerification => {
+                                            solana_scheduler::SchedulingMode::BlockVerification => {
                                                 error!(
                                                     "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
                                                     e, ee.task.tx.0
@@ -696,13 +696,13 @@ impl Scheduler {
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush) => {
                             info!("post_execution_handler: {} {:?}", SchedulingContext::log_prefix(random_id, latest_scheduler_context.as_ref()), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
-                            if let Some(solana_scheduler::Mode::BlockVerification) = latest_scheduler_context.as_ref().map(|c| c.mode) {
+                            if let Some(solana_scheduler::SchedulingMode::BlockVerification) = latest_scheduler_context.as_ref().map(|c| c.mode) {
                                 assert_eq!(skipped, 0);
                             }
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
                             let propagate_tx_error = match latest_scheduler_context.as_ref().unwrap().mode {
-                                solana_scheduler::Mode::BlockVerification => true, // tx_error isn't acceptable only for replaying
+                                solana_scheduler::SchedulingMode::BlockVerification => true, // tx_error isn't acceptable only for replaying
                             };
                             if !propagate_tx_error {
                                 first_error = Ok(());
@@ -867,7 +867,7 @@ impl Scheduler {
         self.scheduler_context_inner()
     }
 
-    fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
+    fn current_scheduler_mode(&self) -> solana_scheduler::SchedulingMode {
         self.stopped_mode.unwrap_or_else(||
             self.scheduler_context().unwrap().mode
         )
@@ -916,10 +916,10 @@ impl InstalledScheduler for Scheduler {
             .collect::<Vec<_>>();
 
         //assert_eq!(index, self.transaction_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
-        use solana_scheduler::{Mode, UniqueWeight};
+        use solana_scheduler::{SchedulingMode, UniqueWeight};
         use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
         let uw = match self.current_scheduler_mode() {
-            Mode::BlockVerification => solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight,
+            SchedulingMode::BlockVerification => solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight,
         };
         let t =
             solana_scheduler::Task::new_for_queue(nast, uw, (sanitized_tx.clone(), locks));
