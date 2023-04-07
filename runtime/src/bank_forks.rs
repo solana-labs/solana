@@ -204,17 +204,8 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        if let Some(scheduler_pool) = &self.scheduler_pool {
-            let new_context =
-                SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
-            bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
-        }
+        self.install_scheduler_into_bank(bank);
         bank
-    }
-
-    pub fn install_scheduler_pool(&mut self, pool: Box<dyn InstalledSchedulerPool>) {
-        info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
-        assert!(self.scheduler_pool.replace(pool).is_none());
     }
 
     pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
