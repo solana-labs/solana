@@ -8,6 +8,8 @@ use {
     std::sync::Arc,
 };
 use std::fmt::Debug;
+use solana_scheduler::WithSchedulingMode;
+use solana_scheduler::SchedulingMode;
 
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler>;
