@@ -5456,6 +5456,7 @@ name = "solana-connection-dos"
 version = "1.16.0"
 dependencies = [
  "clap 2.33.3",
+ "futures 0.3.24",
  "log",
  "quinn",
  "rayon",

@@ -1,14 +1,14 @@
 #![allow(clippy::integer_arithmetic)]
-#[macro_use]
-extern crate log;
 use {
     clap::{crate_description, crate_name, value_t, App, Arg},
     quinn::{ClientConfig, Connection, EndpointConfig, IdleTimeout, TokioRuntime, TransportConfig},
+    futures::future::join_all,
     //rayon::prelude::*,
     //solana_measure::measure::Measure,
     solana_sdk::{
         quic::{QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT},
         signer::keypair::Keypair,
+        packet::PACKET_DATA_SIZE,
     },
     solana_streamer::{
         nonblocking::quic::ALPN_TPU_PROTOCOL_ID, tls_certificates::new_self_signed_tls_certificate,
@@ -67,7 +67,7 @@ pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
     config
 }
 
-pub async fn make_client_endpoint(
+pub async fn make_client_connection(
     addr: &SocketAddr,
     client_keypair: Option<&Keypair>,
 ) -> Connection {
@@ -85,11 +85,38 @@ pub async fn make_client_endpoint(
         .expect("Failed in waiting")
 }
 
-async fn run_connection_dos(server_address: SocketAddr, num_connections: u64) {
+// Opens a slow stream and tries to send PACKET_DATA_SIZE bytes of junk
+// in as many chunks as possible. We don't allow the number of chunks
+// to be configurable as client-side writes don't correspond to
+// quic-level packets/writes (but by doing multiple writes we are generally able
+// to get multiple writes on the quic level despite the spec not guaranteeing this)
+pub async fn check_multiple_writes(
+    conn: Arc<Connection>
+) {
+    // Send a full size packet with single byte writes.
+    let num_bytes = PACKET_DATA_SIZE;
+    let mut s1 = conn.open_uni().await.unwrap();
+    for _ in 0..num_bytes {
+        s1.write_all(&[0u8]).await.unwrap();
+    }
+    s1.finish().await.unwrap();
+}
+
+async fn run_connection_dos(server_address: SocketAddr, num_connections: u64, num_streams_per_conn: u64) {
     let mut connections = vec![];
     for _ in 0..num_connections {
-        connections.push(make_client_endpoint(&server_address, None).await);
+        connections.push(make_client_connection(&server_address, None).await);
     }
+
+    let futures: Vec<_> = connections
+        .into_iter()
+        .map(|conn| {
+            let conn = Arc::new(conn);
+            join_all((0..num_streams_per_conn).map(|_| check_multiple_writes(conn.clone())))
+        })
+        .collect();
+
+    join_all(futures).await;
 }
 
 fn main() {
@@ -100,33 +127,42 @@ fn main() {
         .version(solana_version::version!())
         .arg(
             Arg::with_name("target_address")
-                .long("num_accounts")
+                .long("target_address")
                 .takes_value(true)
-                .value_name("NUM_ACCOUNTS")
-                .help("Total number of accounts"),
+                .value_name("TARGET_ADDR")
+                .help("Target address"),
         )
         .arg(
             Arg::with_name("num_connections")
-                .long("iterations")
+                .long("num_connections")
                 .takes_value(true)
-                .value_name("ITERATIONS")
-                .help("Number of bench iterations"),
+                .value_name("NUM_CONN")
+                .help("Number of connections"),
+        )
+        .arg(
+            Arg::with_name("num_streams_per_conn")
+                .long("num_streams_per_conn")
+                .takes_value(true)
+                .value_name("NUM_STREAMS")
+                .help("Number of streams per connection"),
         )
         .get_matches();
 
     let num_connections = value_t!(matches, "num_connections", u64).unwrap_or(20);
+    let num_streams_per_conn = value_t!(matches, "num_streams_per_conn", u64).unwrap_or(20);
     let target_address = value_t!(matches, "target_address", String)
         .unwrap_or("127.0.0.1".to_string())
         .parse()
         .unwrap();
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    runtime.block_on(run_connection_dos(target_address, num_connections));
+    runtime.block_on(run_connection_dos(target_address, num_connections, num_streams_per_conn));
 }
 
 #[cfg(test)]
 pub mod test {
     use {
         super::*,
+        log::warn,
         solana_core::validator::ValidatorConfig,
         solana_gossip::contact_info::LegacyContactInfo,
         solana_local_cluster::{
@@ -144,7 +180,7 @@ pub mod test {
     fn test_local_cluster() {
         solana_logger::setup();
 
-        const NUM_NODES: usize = 1;
+        const NUM_NODES: usize = 2;
         let cluster = LocalCluster::new(
             &mut ClusterConfig {
                 node_stakes: vec![999_990; NUM_NODES],
@@ -183,6 +219,6 @@ pub mod test {
         //let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
         let runtime = tokio::runtime::Runtime::new().unwrap();
-        runtime.block_on(run_connection_dos(tpu, 1));
+        runtime.block_on(run_connection_dos(tpu, 1, 1));
     }
 }

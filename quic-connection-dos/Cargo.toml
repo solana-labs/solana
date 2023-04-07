@@ -10,6 +10,7 @@ edition = { workspace = true }
 
 [dependencies]
 clap = { workspace = true }
+futures = { workspace = true }
 log = { workspace = true }
 quinn = { workspace = true }
 rayon = { workspace = true }
