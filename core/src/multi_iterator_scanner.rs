@@ -81,6 +81,11 @@ where
     initialized: bool,
 }
 
+pub struct PayloadAndAlreadyHandled<U> {
+    pub payload: U,
+    pub already_handled: Vec<bool>,
+}
+
 impl<'a, T, U, F> MultiIteratorScanner<'a, T, U, F>
 where
     F: FnMut(&T, &mut U) -> ProcessingDecision,
@@ -113,9 +118,13 @@ where
         self.get_current_items()
     }
 
-    /// Consume the iterator and return the payload.
-    pub fn finalize(self) -> (U, Vec<bool>) {
-        (self.payload, self.already_handled)
+    /// Consume the iterator. Return the payload, and a vector of booleans
+    /// indicating which items have been handled.
+    pub fn finalize(self) -> PayloadAndAlreadyHandled<U> {
+        PayloadAndAlreadyHandled {
+            payload: self.payload,
+            already_handled: self.already_handled,
+        }
     }
 
     /// Initialize the `current_positions` vector for the first batch.
@@ -282,7 +291,10 @@ mod tests {
         let expected_batches = vec![vec![&0, &1], vec![&0, &2], vec![&0, &3], vec![&1]];
         assert_eq!(actual_batches, expected_batches);
 
-        let (TestScannerPayload { locks }, already_handled) = scanner.finalize();
+        let PayloadAndAlreadyHandled {
+            payload: TestScannerPayload { locks },
+            already_handled,
+        } = scanner.finalize();
         assert_eq!(locks, vec![false; 4]);
         assert!(already_handled.into_iter().all(|x| x));
     }
@@ -326,7 +338,10 @@ mod tests {
         ];
         assert_eq!(actual_batches, expected_batches);
 
-        let (TestScannerPayload { locks }, already_handled) = scanner.finalize();
+        let PayloadAndAlreadyHandled {
+            payload: TestScannerPayload { locks },
+            already_handled,
+        } = scanner.finalize();
         assert_eq!(locks, vec![false; 4]);
         assert!(already_handled.into_iter().all(|x| x));
     }
@@ -373,7 +388,9 @@ mod tests {
         let expected_batches = vec![vec![&1]];
         assert_eq!(actual_batches, expected_batches);
 
-        let (_, already_handled) = scanner.finalize();
+        let PayloadAndAlreadyHandled {
+            already_handled, ..
+        } = scanner.finalize();
         assert_eq!(already_handled, vec![false, true, false]);
     }
 }
