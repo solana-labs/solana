@@ -2,6 +2,7 @@ use std::sync::Arc;
 use crate::bank::Bank;
 use solana_sdk::slot_history::Slot;
 use solana_sdk::transaction::SanitizedTransaction;
+use solana_program_runtime::timings::ExecuteTimings;
 
 pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
     fn random_id(&self) -> u64;
