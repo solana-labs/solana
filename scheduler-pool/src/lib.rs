@@ -52,8 +52,8 @@ use solana_runtime::bank::TransactionBalancesSet;
 use solana_runtime::vote_sender_types::ReplayVoteSender;
 use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_ledger::token_balances::collect_token_balances;
-use solana_scheduler::WithMode;
-use solana_scheduler::WithContext;
+use solana_scheduler::WithSchedulingMode;
+use solana_scheduler::WithSchedulingContext;
 use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
 
 pub use solana_scheduler::SchedulingMode;
@@ -406,7 +406,7 @@ impl Checkpoint {
     }
 }
 
-impl solana_scheduler::WithContext for Checkpoint {
+impl solana_scheduler::WithSchedulingContext for Checkpoint {
     type Context = SchedulingContext;
 
     fn use_context_value(&self) -> Option<SchedulingContext> {
