@@ -1,7 +1,6 @@
 #![deny(clippy::integer_arithmetic)]
 #![deny(clippy::indexing_slicing)]
 
-pub mod allocator_bump;
 pub mod deprecated;
 pub mod serialization;
 pub mod syscalls;
@@ -10,13 +9,12 @@ pub mod upgradeable_with_jit;
 pub mod with_jit;
 
 use {
-    crate::allocator_bump::BpfAllocator,
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
-        invoke_context::{InvokeContext, SyscallContext},
+        invoke_context::{BpfAllocator, InvokeContext, SyscallContext},
         loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
         log_collector::LogCollector,
         stable_log,
