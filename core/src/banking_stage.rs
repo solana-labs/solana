@@ -335,11 +335,40 @@ impl BankingStage {
         bank_forks: Arc<RwLock<BankForks>>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
+        match block_production_method {
+            BlockProductionMethod::ThreadLocalMultiIterator => Self::thread_local_multi_iterator(
+                cluster_info,
+                poh_recorder,
+                non_vote_receiver,
+                tpu_vote_receiver,
+                gossip_vote_receiver,
+                num_threads,
+                transaction_status_sender,
+                replay_vote_sender,
+                log_messages_bytes_limit,
+                connection_cache,
+                bank_forks,
+                prioritization_fee_cache,
+            ),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn thread_local_multi_iterator(
+        cluster_info: &Arc<ClusterInfo>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
+        non_vote_receiver: BankingPacketReceiver,
+        tpu_vote_receiver: BankingPacketReceiver,
+        gossip_vote_receiver: BankingPacketReceiver,
+        num_threads: u32,
+        transaction_status_sender: Option<TransactionStatusSender>,
+        replay_vote_sender: ReplayVoteSender,
+        log_messages_bytes_limit: Option<usize>,
+        connection_cache: Arc<ConnectionCache>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+    ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
-        assert!(matches!(
-            block_production_method,
-            BlockProductionMethod::ThreadLocalMultiIterator
-        ));
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its blockhash is registered with the bank.
