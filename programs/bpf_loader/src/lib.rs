@@ -316,10 +316,6 @@ pub fn create_vm<'a, 'b>(
         .get_compute_budget()
         .heap_size
         .unwrap_or(solana_sdk::entrypoint::HEAP_LENGTH);
-    let mut stack = solana_rbpf::aligned_memory::AlignedMemory::<
-        { solana_rbpf::ebpf::HOST_ALIGN },
-    >::zero_filled(stack_size);
-    let mut heap = solana_rbpf::aligned_memory::AlignedMemory::<{ solana_rbpf::ebpf::HOST_ALIGN }>::zero_filled(heap_size);
     let round_up_heap_size = invoke_context
         .feature_set
         .is_active(&round_up_heap_size::id());
@@ -331,6 +327,10 @@ pub fn create_vm<'a, 'b>(
     if round_up_heap_size {
         heap_cost_result?;
     }
+    let mut stack = solana_rbpf::aligned_memory::AlignedMemory::<
+        { solana_rbpf::ebpf::HOST_ALIGN },
+    >::zero_filled(stack_size);
+    let mut heap = solana_rbpf::aligned_memory::AlignedMemory::<{ solana_rbpf::ebpf::HOST_ALIGN }>::zero_filled(heap_size);
     let memory_mapping = create_memory_mapping(
         program.get_executable(),
         &mut stack,
