@@ -22,6 +22,7 @@
 
 use {
     crate::bank::Bank,
+    log::*,
     solana_program_runtime::timings::ExecuteTimings,
     solana_scheduler::{SchedulingMode, WithSchedulingMode},
     solana_sdk::{
