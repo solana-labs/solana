@@ -59,34 +59,6 @@ struct SetRootTimings {
     prune_remove_ms: i64,
 }
 
-struct BankWithScheduler(Arc<Bank>);
-
-impl BankWithScheduler {
-    fn new_arc(&self) -> Arc<Bank> {
-        self.0.clone()
-    }
-
-    fn into_arc(self) -> Arc<Bank> {
-        let s = self.new_arc();
-        drop(self);
-        s
-    }
-}
-
-impl Drop for BankWithScheduler {
-    fn drop(&mut self) {
-        self.0.schedule_termination();
-    }
-}
-
-impl std::ops::Deref for BankWithScheduler {
-    type Target = Bank;
-
-    fn deref(&self) -> &Bank {
-        &self.0
-    }
-}
-
 pub struct BankForks {
     banks: HashMap<Slot, BankWithScheduler>,
     descendants: HashMap<Slot, HashSet<Slot>>,
