@@ -106,7 +106,7 @@ impl SchedulingContext {
     }
 }
 
-pub(crate) struct BankWithScheduler(Arc<Bank>);
+pub(crate) struct BankWithScheduler(pub(crate) Arc<Bank>);
 
 impl BankWithScheduler {
     pub(crate) fn new_arc(&self) -> Arc<Bank> {
