@@ -7,14 +7,14 @@ use {
     },
     std::sync::Arc,
 };
+use std::fmt::Debug;
 
-pub trait InstalledSchedulerPool: Send + Sync + std::fmt::Debug {
+pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler>;
     fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler>);
-    // drop with exit atomicbool integration??
 }
 
-pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
+pub trait InstalledScheduler: Send + Sync + Debug {
     fn random_id(&self) -> u64;
     fn scheduler_pool(&self) -> Box<dyn InstalledSchedulerPool>;
 
@@ -27,8 +27,6 @@ pub trait InstalledScheduler: Send + Sync + std::fmt::Debug {
     ) -> Option<(ExecuteTimings, Result<()>)>;
 
     fn replace_scheduler_context(&self, context: SchedulingContext);
-
-    // drop with exit atomicbool integration??
 }
 
 #[derive(Debug, Default)]
@@ -46,8 +44,8 @@ impl AbiExample for InstalledSchedulerBox {
 
 #[derive(Clone, Debug)]
 pub struct SchedulingContext {
-    pub bank: std::sync::Arc<Bank>,
     pub mode: solana_scheduler::Mode,
+    pub bank: Arc<Bank>,
 }
 
 impl solana_scheduler::WithMode for SchedulingContext {
