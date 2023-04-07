@@ -135,6 +135,9 @@ impl Deref for BankWithScheduler {
     }
 }
 
+impl BankForks {
+}
+
 impl Bank {
     pub(crate) fn install_scheduler(&self, scheduler: Box<dyn InstalledScheduler>) {
         let mut scheduler_guard = self.scheduler.write().unwrap();
