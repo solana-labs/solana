@@ -199,7 +199,7 @@ impl BackgroundServices {
             &cluster_info,
             None,
             false,
-            0,
+            None,
             snapshot_config.clone(),
         );
 

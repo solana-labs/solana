@@ -172,6 +172,8 @@ impl BlockProductionMethod {
     }
 }
 
+pub type AccountsFaultHashInjector = fn(&Hash, Slot) -> Option<Hash>;
+
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
@@ -199,7 +201,7 @@ pub struct ValidatorConfig {
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>, // Empty = repair with all
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub halt_on_known_validators_accounts_hash_mismatch: bool,
-    pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
+    pub accounts_hash_fault_injector: Option<AccountsFaultHashInjector>,
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
@@ -267,7 +269,7 @@ impl Default for ValidatorConfig {
             repair_whitelist: Arc::new(RwLock::new(HashSet::default())),
             gossip_validators: None,
             halt_on_known_validators_accounts_hash_mismatch: false,
-            accounts_hash_fault_injection_slots: 0,
+            accounts_hash_fault_injector: None,
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
@@ -715,7 +717,7 @@ impl Validator {
             &cluster_info,
             config.known_validators.clone(),
             config.halt_on_known_validators_accounts_hash_mismatch,
-            config.accounts_hash_fault_injection_slots,
+            config.accounts_hash_fault_injector,
             config.snapshot_config.clone(),
         );
 

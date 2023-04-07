@@ -5,6 +5,7 @@
 // set and halt the node if a mismatch is detected.
 
 use {
+    crate::validator::AccountsFaultHashInjector,
     crossbeam_channel::{Receiver, Sender},
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::measure_us,
@@ -51,7 +52,7 @@ impl AccountsHashVerifier {
         cluster_info: &Arc<ClusterInfo>,
         known_validators: Option<HashSet<Pubkey>>,
         halt_on_known_validators_accounts_hash_mismatch: bool,
-        fault_injection_rate_slots: u64,
+        accounts_hash_fault_injector: Option<AccountsFaultHashInjector>,
         snapshot_config: SnapshotConfig,
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
@@ -63,23 +64,6 @@ impl AccountsHashVerifier {
             .spawn(move || {
                 info!("AccountsHashVerifier has started");
                 let mut hashes = vec![];
-
-                // Prepare fault hash injection for testing.
-                // when fault_injection_rate_slots is not 0, inject a bad hash for every fault_injection_rate_slots on gossip.
-                let fault_hash_generator = if fault_injection_rate_slots != 0 {
-                    Some(|hash: &Hash, slot: Slot| {
-                        if slot % fault_injection_rate_slots == 0 {
-                            let fault_hash = Self::generate_fault_hash(hash);
-                            warn!("inserting fault at slot: {}", slot);
-                            Some(fault_hash)
-                        } else {
-                            None
-                        }
-                    })
-                } else {
-                    None
-                };
-
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -108,7 +92,7 @@ impl AccountsHashVerifier {
                         &mut hashes,
                         &exit,
                         &snapshot_config,
-                        fault_hash_generator,
+                        accounts_hash_fault_injector,
                     ));
 
                     datapoint_info!(
@@ -465,16 +449,6 @@ impl AccountsHashVerifier {
                 .epoch_accounts_hash_manager
                 .set_valid(accounts_hash.into(), accounts_package.slot);
         }
-    }
-
-    fn generate_fault_hash(original_hash: &Hash) -> Hash {
-        use {
-            rand::{thread_rng, Rng},
-            solana_sdk::hash::extend_and_hash,
-        };
-
-        let rand = thread_rng().gen_range(0, 10);
-        extend_and_hash(original_hash, &[rand])
     }
 
     fn push_accounts_hashes_to_cluster<F>(
