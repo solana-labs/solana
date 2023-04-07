@@ -31,6 +31,8 @@ use {
     },
     std::{fmt::Debug, ops::Deref, sync::Arc},
 };
+use crate::bank_forks::BankForks;
+
 
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler>;
