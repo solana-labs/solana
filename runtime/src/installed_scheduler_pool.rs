@@ -44,18 +44,18 @@ impl AbiExample for InstalledSchedulerBox {
 
 #[derive(Clone, Debug)]
 pub struct SchedulingContext {
-    pub mode: solana_scheduler::Mode,
+    pub mode: solana_scheduler::SchedulingMode,
     pub bank: Arc<Bank>,
 }
 
-impl solana_scheduler::WithMode for SchedulingContext {
-    fn mode(&self) -> solana_scheduler::Mode {
+impl solana_scheduler::WithSchedulingMode for SchedulingContext {
+    fn mode(&self) -> solana_scheduler::SchedulingMode {
         self.mode
     }
 }
 
 impl SchedulingContext {
-    pub fn new(bank: Arc<Bank>, mode: solana_scheduler::Mode) -> Self {
+    pub fn new(bank: Arc<Bank>, mode: solana_scheduler::SchedulingMode) -> Self {
         Self { bank, mode }
     }
 
