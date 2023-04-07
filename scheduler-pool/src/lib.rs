@@ -332,7 +332,7 @@ impl Checkpoint {
 
     fn wait_for_restart_from_internal_thread(&self, scheduler_context: Option<SchedulingContext>) {
         let did_drop = if let Some(scheduler_context) = scheduler_context {
-            if let Some(bank) = scheduler_context.drop_cyclically() {
+            if let Some(bank) = scheduler_context.into_bank() {
                 bank.wait_for_completed_scheduler_via_internal_drop();
                 true
             } else {
