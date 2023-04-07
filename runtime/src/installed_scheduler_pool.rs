@@ -219,11 +219,11 @@ impl Bank {
 
     pub fn wait_for_completed_scheduler_via_internal_drop(self) {
         let maybe_timings_and_result = self.wait_for_scheduler::<true, true, false>();
-        assert_matches!(maybe_timings_and_result, Some(_));
+        assert!(maybe_timings_and_result.is_some());
     }
 
     fn wait_for_reusable_scheduler(&self) {
         let maybe_timings_and_result = self.wait_for_scheduler::<false, false, true>();
-        assert_matches!(maybe_timings_and_result, None);
+        assert!(maybe_timings_and_result.is_none());
     }
 }
