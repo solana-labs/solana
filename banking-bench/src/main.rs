@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     clap::{crate_description, crate_name, Arg, ArgEnum, Command},
     crossbeam_channel::{unbounded, Receiver},
@@ -9,6 +10,7 @@ use {
     solana_core::{
         banking_stage::BankingStage,
         banking_trace::{BankingPacketBatch, BankingTracer, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
+        validator::BlockProductionMethod,
     },
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
@@ -441,6 +443,7 @@ fn main() {
             true => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
         };
         let banking_stage = BankingStage::new_num_threads(
+            BlockProductionMethod::ThreadLocalMultiIterator,
             &cluster_info,
             &poh_recorder,
             non_vote_receiver,

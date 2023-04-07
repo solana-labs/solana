@@ -15,6 +15,7 @@ use {
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
+        validator::BlockProductionMethod,
     },
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::ConnectionCache,
@@ -100,6 +101,7 @@ impl Tpu {
         shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
         banking_tracer: Arc<BankingTracer>,
         tracer_thread_hdl: TracerThread,
+        block_production_method: BlockProductionMethod,
         tpu_enable_udp: bool,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
@@ -211,6 +213,7 @@ impl Tpu {
         );
 
         let banking_stage = BankingStage::new(
+            block_production_method,
             cluster_info,
             poh_recorder,
             non_vote_receiver,

@@ -67,7 +67,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         replay_slots_concurrently: config.replay_slots_concurrently,
         banking_trace_dir_byte_limit: config.banking_trace_dir_byte_limit,
         block_verification_method: config.block_verification_method.clone(),
-        block_production_method: config.block_production_method.clone(),
+        block_production_method: config.block_production_method,
     }
 }
 

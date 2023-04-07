@@ -148,7 +148,7 @@ impl BlockVerificationMethod {
     }
 }
 
-#[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[derive(Copy, Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
 pub enum BlockProductionMethod {
     #[default]
@@ -1155,6 +1155,7 @@ impl Validator {
             config.staked_nodes_overrides.clone(),
             banking_tracer,
             tracer_thread,
+            config.block_production_method,
             tpu_enable_udp,
             &prioritization_fee_cache,
         );
