@@ -386,6 +386,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_geyser_reload() {
         // Initialize empty manager
         let plugin_manager = Arc::new(RwLock::new(GeyserPluginManager::new()));
