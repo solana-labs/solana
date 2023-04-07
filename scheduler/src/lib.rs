@@ -1,9 +1,9 @@
+#![feature(custom_inner_attributes)]
+#![rustfmt::skip]
 /// Abstract scheduling algorithm
 /// see solana_runtime::installed_scheduler_pool for high-level integration for actual transaction
 /// processing.
 
-#![feature(custom_inner_attributes)]
-#![rustfmt::skip]
 #![allow(unused_imports)]
 #![allow(dead_code)]
 #![allow(unused_variables)]
