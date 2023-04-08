@@ -85,7 +85,7 @@ impl BankForks {
     }
 
     pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
-        self.banks.iter().map(|(&s, b)| (s, b.new_arc())).collect()
+        self.banks.iter().map(|(&s, b)| (s, b.new_bank())).collect()
     }
 
     pub fn get_vote_only_mode_signal(&self) -> Arc<AtomicBool> {
@@ -121,7 +121,7 @@ impl BankForks {
         self.banks
             .iter()
             .filter(|(_, b)| b.is_frozen())
-            .map(|(k, b)| (*k, b.new_arc()))
+            .map(|(k, b)| (*k, b.new_bank()))
             .collect()
     }
 
@@ -134,7 +134,7 @@ impl BankForks {
     }
 
     pub fn get(&self, bank_slot: Slot) -> Option<Arc<Bank>> {
-        self.banks.get(&bank_slot).map(|b| b.new_arc())
+        self.banks.get(&bank_slot).map(|b| b.new_bank())
     }
 
     pub fn get_with_checked_hash(
@@ -250,7 +250,7 @@ impl BankForks {
             .banks
             .get(&root)
             .expect("root bank didn't exist in bank_forks")
-            .new_arc();
+            .new_bank();
         let new_epoch = root_bank.epoch();
         if old_epoch != new_epoch {
             info!(
