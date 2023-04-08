@@ -226,7 +226,7 @@ impl BankForks {
         if entry.get().is_empty() {
             entry.remove_entry();
         }
-        Some(bank.into_arc())
+        Some(bank.into_bank())
     }
 
     pub fn highest_slot(&self) -> Slot {
