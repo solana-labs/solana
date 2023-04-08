@@ -212,10 +212,12 @@ impl Bank {
     >(
         &self,
     ) -> Option<(ExecuteTimings, Result<()>)> {
+        debug!("wait_for_scheduler<VIA_DROP = {VIA_DROP}, FROM_INTERNAL = {FROM_INTERNAL}, IS_RESTART = {IS_RESTART}(slot: {}): started...", self.slot());
+
         let mut scheduler_guard = self.scheduler.write().unwrap();
         let scheduler = &mut scheduler_guard.0;
 
-        if scheduler.is_some() {
+        let timings_and_result = if scheduler.is_some() {
             let timings_and_result = scheduler
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART));
@@ -226,7 +228,10 @@ impl Bank {
             timings_and_result
         } else {
             None
-        }
+        };
+        debug!("wait_for_scheduler<VIA_DROP = {VIA_DROP}, FROM_INTERNAL = {FROM_INTERNAL}, IS_RESTART = {IS_RESTART}(slot: {}): finished with: {}...", self.slot(), timings_and_result.1);
+
+        timings_and_result
     }
 
     pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<()>) {
