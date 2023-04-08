@@ -98,7 +98,7 @@ impl SchedulingContext {
     }
 
     pub fn log_prefix(scheduler_id: u64, context: Option<&Self>) -> String {
-        const BITS_PER_HEX_DIGIT: u32 = 4;
+        const BITS_PER_HEX_DIGIT: usize = 4;
 
         format!(
             "id_{:width$x}{}",
@@ -107,7 +107,7 @@ impl SchedulingContext {
                 .as_ref()
                 .map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode))
                 .unwrap_or_else(|| "".into()),
-            width = SchedulerId::BITS / BITS_PER_HEX_DIGIT,
+            width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
         )
     }
 
