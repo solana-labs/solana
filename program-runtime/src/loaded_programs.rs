@@ -1,10 +1,11 @@
+#[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+use solana_rbpf::error::EbpfError;
 use {
     crate::{invoke_context::InvokeContext, timings::ExecuteDetailsTimings},
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_rbpf::{
         elf::Executable,
-        error::EbpfError,
         verifier::RequisiteVerifier,
         vm::{BuiltInProgram, VerifiedExecutable},
     },
