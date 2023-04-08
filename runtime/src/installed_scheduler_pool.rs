@@ -112,7 +112,7 @@ impl SchedulingContext {
     }
 
     pub fn into_bank(self) -> Option<Bank> {
-        // XXX: this is racy....
+        // X X X: this is racy....
         Arc::try_unwrap(self.bank).ok()
     }
 }
