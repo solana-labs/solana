@@ -117,6 +117,8 @@ impl SchedulingContext {
     }
 }
 
+// tiny wrapper to ensure to call schedule_termination() via ::drop() inside
+// BankForks::set_root()'s pruning.
 pub(crate) struct BankWithScheduler(Arc<Bank>);
 
 impl BankWithScheduler {
