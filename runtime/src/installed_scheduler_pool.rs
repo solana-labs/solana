@@ -37,6 +37,8 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler>);
 }
 
+type InstalledSchedulerPoolBox = Option<Box<dyn InstalledSchedulerPool>>;
+
 pub trait InstalledScheduler: Send + Sync + Debug {
     // fn scheduler_id() -> SchedulerId
     fn random_id(&self) -> u64;
