@@ -161,11 +161,11 @@ impl BankForks {
 
         // Iterate through the heads of all the different forks
         for bank in initial_forks {
-            banks.insert(bank.slot(), BankWithScheduler(bank.clone()));
+            banks.insert(bank.slot(), BankWithScheduler::new(bank.clone()));
             let parents = bank.parents();
             for parent in parents {
                 if banks
-                    .insert(parent.slot(), BankWithScheduler(parent.clone()))
+                    .insert(parent.slot(), BankWithScheduler::new(parent.clone()))
                     .is_some()
                 {
                     // All ancestors have already been inserted by another fork
@@ -196,7 +196,7 @@ impl BankForks {
         let bank = Arc::new(bank);
         let prev = self
             .banks
-            .insert(bank.slot(), BankWithScheduler(bank.clone()));
+            .insert(bank.slot(), BankWithScheduler::new(bank.clone()));
         assert!(prev.is_none());
         let slot = bank.slot();
         self.descendants.entry(slot).or_default();
