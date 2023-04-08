@@ -9,12 +9,12 @@
 //!
 //! `trait InstalledScheduler` can be fed with `SanitizedTransaction`s. Then, it schedules and
 //! commits those transaction execution results into the associated _bank_. That means,
-//! `InstalledScheduler` and `Bank` are mutually linked to each other, resulting somewhat special
-//! handling as part of their life-cycle.
+//! `InstalledScheduler` and `Bank` are mutually linked to each other, resulting in somewhat
+//! special handling as part of their life-cycle.
 //!
-//! At these interfaces level, it's generally assumed that each `InstalledScheduler` is backed by
-//! multiple threads for performant transaction execution and there's multiple of it inside a
-//! single instance of `InstalledSchedulerPool`.
+//! Albeit being at this interfaces abstraction level, it's generally assumed that each
+//! `InstalledScheduler` is backed by multiple threads for performant transaction execution and
+//! there's multiple of it inside a single instance of `InstalledSchedulerPool`.
 //!
 //! Dynamic dispatch was inevitable, due to the need of delegating those implementations to the
 //! dependent crate to cut cyclic dependency (`solana-scheduler-pool`, which in turn depends on
@@ -38,6 +38,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 }
 
 pub trait InstalledScheduler: Send + Sync + Debug {
+    // fn scheduler_id() -> SchedulerId
     fn random_id(&self) -> u64;
     fn scheduler_pool(&self) -> Box<dyn InstalledSchedulerPool>;
 
