@@ -213,13 +213,14 @@ impl Bank {
         &self,
     ) -> Option<(ExecuteTimings, Result<()>)> {
         let mut scheduler_guard = self.scheduler.write().unwrap();
-        if scheduler_guard.0.is_some() {
-            let timings_and_result = scheduler_guard
-                .0
+        let mut scheduler = &mut scheduler_guard.0;
+
+        if scheduler.is_some() {
+            let timings_and_result = scheduler
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART));
             if !IS_RESTART {
-                let scheduler = scheduler_guard.0.take().expect("scheduler after waiting");
+                let scheduler = scheduler.take().expect("scheduler after waiting");
                 scheduler.scheduler_pool().return_to_pool(scheduler);
             }
             timings_and_result
