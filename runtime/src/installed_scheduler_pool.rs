@@ -213,7 +213,7 @@ impl Bank {
         &self,
     ) -> Option<(ExecuteTimings, Result<()>)> {
         let mut scheduler_guard = self.scheduler.write().unwrap();
-        let mut scheduler = &mut scheduler_guard.0;
+        let scheduler = &mut scheduler_guard.0;
 
         if scheduler.is_some() {
             let timings_and_result = scheduler
