@@ -234,7 +234,7 @@ impl Bank {
         maybe_timings_and_result.unwrap_or((ExecuteTimings::default(), Ok(())))
     }
 
-    pub(crate) fn wait_for_completed_scheduler_via_drop(&self) -> Option<Result<()>> {
+    fn wait_for_completed_scheduler_via_drop(&self) -> Option<Result<()>> {
         let maybe_timings_and_result = self.wait_for_scheduler::<true, false, false>();
         maybe_timings_and_result.map(|(_timings, result)| result)
     }
