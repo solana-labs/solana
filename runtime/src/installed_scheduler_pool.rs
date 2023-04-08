@@ -143,13 +143,13 @@ impl Deref for BankWithScheduler {
 }
 
 impl BankForks {
-    pub fn install_scheduler_pool(&mut self, pool: Box<dyn InstalledSchedulerPool>) {
+    pub fn install_scheduler_pool(&mut self, pool: SchedulerPoolBox) {
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         assert!(self.scheduler_pool.replace(pool).is_none());
     }
 
     pub(crate) fn install_scheduler_into_bank(&self, bank: &Arc<Bank>) {
-        if let Some(scheduler_pool) = &self.scheduler_pool {
+        if let Some(scheduler_pool) = self.scheduler_pool {
             let new_context =
                 SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
             bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
