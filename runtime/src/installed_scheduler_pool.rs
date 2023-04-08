@@ -97,10 +97,10 @@ impl SchedulingContext {
         self.bank().slot()
     }
 
-    pub fn log_prefix(random_id: u64, context: Option<&Self>) -> String {
+    pub fn log_prefix(scheduler_id: u64, context: Option<&Self>) -> String {
         format!(
             "id_{:016x}{}",
-            random_id,
+            scheduler_id,
             context
                 .as_ref()
                 .map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode))
@@ -109,6 +109,7 @@ impl SchedulingContext {
     }
 
     pub fn into_bank(self) -> Option<Bank> {
+        // XXX: this is racy....
         Arc::try_unwrap(self.bank).ok()
     }
 }
@@ -136,7 +137,7 @@ impl Drop for BankWithScheduler {
 impl Deref for BankWithScheduler {
     type Target = Bank;
 
-    fn deref(&self) -> &Bank {
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
