@@ -93,9 +93,9 @@ impl Drop for SchedulerPool {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         warn!("SchedulerPool::drop() by {}...", current_thread_name);
         todo!();
-        //info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
+        //info!("Scheduler::drop(): id_{:016x} begin..", self.scheduler_id);
         //self.gracefully_stop().unwrap();
-        //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
+        //info!("Scheduler::drop(): id_{:016x} end...", self.scheduler_id);
     }
 }
 
@@ -115,7 +115,7 @@ impl SchedulerPool {
         if let Some(scheduler) = maybe_scheduler {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
-                scheduler.random_id(),
+                scheduler.scheduler_id(),
                 schedulers.len() + 1,
                 schedulers.len()
             );
@@ -138,7 +138,7 @@ impl SchedulerPool {
 
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
-            scheduler.random_id(),
+            scheduler.scheduler_id(),
             schedulers.len(),
             schedulers.len() + 1
         );
@@ -161,7 +161,7 @@ use solana_transaction_status::TransactionTokenBalance;
 
 #[derive(Debug)]
 pub(crate) struct Scheduler {
-    random_id: u64,
+    scheduler_id: u64,
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
     executing_thread_handles: Option<Vec<std::thread::JoinHandle<Result<(Duration, Duration)>>>>,
     error_collector_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
@@ -191,12 +191,12 @@ impl CommitStatus {
         }
     }
 
-    fn check_and_wait(&self, random_id: u64, current_thread_name: &str, last_seq: &mut usize, context: &mut Option<SchedulingContext>) {
+    fn check_and_wait(&self, scheduler_id: u64, current_thread_name: &str, last_seq: &mut usize, context: &mut Option<SchedulingContext>) {
         let mut is_paused = self.is_paused.lock().unwrap();
         if *last_seq != is_paused.1 {
             *last_seq = is_paused.1;
             if let Some(sc) = context.take() {
-                info!("CommitStatus: {current_thread_name} {} detected stale scheduler_context...", SchedulingContext::log_prefix(random_id, Some(&sc)));
+                info!("CommitStatus: {current_thread_name} {} detected stale scheduler_context...", SchedulingContext::log_prefix(scheduler_id, Some(&sc)));
                 // drop arc in scheduler_context as soon as possible
                 drop(sc);
             }
@@ -465,7 +465,7 @@ impl Scheduler {
         let commit_status = Arc::new(CommitStatus::new());
 
         use rand::Rng;
-        let random_id = rand::thread_rng().gen::<u64>();
+        let scheduler_id = rand::thread_rng().gen::<SchedulerId>();
 
         let executing_thread_count = std::cmp::max(base_thread_count * 2, 1);
         let executing_thread_handles = (0..executing_thread_count).map(|thx| {
@@ -695,7 +695,7 @@ impl Scheduler {
                             drop(ee);
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush) => {
-                            info!("post_execution_handler: {} {:?}", SchedulingContext::log_prefix(random_id, latest_scheduler_context.as_ref()), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
+                            info!("post_execution_handler: {} {:?}", SchedulingContext::log_prefix(scheduler_id, latest_scheduler_context.as_ref()), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
                             if let Some(solana_scheduler::SchedulingMode::BlockVerification) = latest_scheduler_context.as_ref().map(|c| c.mode()) {
                                 assert_eq!(skipped, 0);
                             }
@@ -746,7 +746,7 @@ impl Scheduler {
                         Some(&scheduled_high_ee_sender),
                         &processed_ee_receiver,
                         Some(&retired_ee_sender),
-                        |context| SchedulingContext::log_prefix(random_id, context.as_ref()),
+                        |context| SchedulingContext::log_prefix(scheduler_id, context.as_ref()),
                     );
                     if scheduler_context.is_none() {
                        scheduler_context = checkpoint.use_context_value();
@@ -766,7 +766,7 @@ impl Scheduler {
             .unwrap();
 
         let s = Self {
-            random_id,
+            scheduler_id,
             scheduler_thread_handle: Some(scheduler_thread_handle),
             executing_thread_handles: Some(executing_thread_handles),
             error_collector_thread_handle: Some(error_collector_thread_handle),
@@ -783,7 +783,7 @@ impl Scheduler {
         };
         info!(
             "scheduler: id_{:016x} setup done with {}us",
-            random_id,
+            scheduler_id,
             start.elapsed().as_micros()
         );
 
@@ -825,7 +825,7 @@ impl Scheduler {
 
         info!(
             "Scheduler::trigger_stop(): {} triggering stop..",
-            SchedulingContext::log_prefix(self.random_id, self.scheduler_context().as_ref()),
+            SchedulingContext::log_prefix(self.scheduler_id, self.scheduler_context().as_ref()),
         );
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
@@ -879,16 +879,16 @@ impl Drop for Scheduler {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         warn!("Scheduler::drop() by {}...", current_thread_name);
         todo!();
-        //info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
+        //info!("Scheduler::drop(): id_{:016x} begin..", self.scheduler_id);
         //self.gracefully_stop().unwrap();
-        //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
+        //info!("Scheduler::drop(): id_{:016x} end...", self.scheduler_id);
     }
 }
 
 
 impl InstalledScheduler for Scheduler {
-    fn random_id(&self) -> u64 {
-        self.random_id
+    fn scheduler_id(&self) -> SchedulerId {
+        self.scheduler_id
     }
 
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize) {
@@ -934,7 +934,7 @@ impl InstalledScheduler for Scheduler {
 
     fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool) -> Option<(ExecuteTimings, Result<()>)> {
         self.do_trigger_stop(is_restart);
-        let label = format!("id_{:016x}", self.random_id); //SchedulingContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
+        let label = format!("id_{:016x}", self.scheduler_id); //SchedulingContext::log_prefix(self.scheduler_id, self.scheduler_context().as_ref());
         info!(
             "Scheduler::gracefully_stop(): {} {} waiting.. from_internal: {from_internal} is_restart: {is_restart}", label, std::thread::current().name().unwrap().to_string()
         );
@@ -961,8 +961,8 @@ impl InstalledScheduler for Scheduler {
         let error_collector_thread_duration_pairs = h.join().unwrap()?;
         let (error_collector_thread_cpu_us, error_collector_thread_wall_time_us) = (error_collector_thread_duration_pairs.0.as_micros(), error_collector_thread_duration_pairs.1.as_micros());
 
-        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 1/2 (cpu ): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
-        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
+        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 1/2 (cpu ): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.scheduler_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
+        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.scheduler_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
         */
 
         let timings_and_result = if !is_restart {
