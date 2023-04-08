@@ -491,10 +491,9 @@ impl LoadedPrograms {
     ) {
         for (id, program) in remove {
             if let Some(entries) = self.entries.get_mut(id) {
-                entries
-                    .iter_mut()
-                    .find(|entry| entry == &program)
-                    .map(|candidate| *candidate = Arc::new(candidate.to_unloaded()));
+                if let Some(candidate) = entries.iter_mut().find(|entry| entry == &program) {
+                    *candidate = Arc::new(candidate.to_unloaded());
+                }
             }
         }
     }
