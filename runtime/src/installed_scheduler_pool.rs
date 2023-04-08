@@ -99,12 +99,13 @@ impl SchedulingContext {
 
     pub fn log_prefix(scheduler_id: u64, context: Option<&Self>) -> String {
         format!(
-            "id_{:016x}{}",
+            "id_{:width$x}{}",
             scheduler_id,
             context
                 .as_ref()
                 .map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode))
-                .unwrap_or_else(|| "".into())
+                .unwrap_or_else(|| "".into()),
+            width = const { SchedulerId::BITS / 4 },
         )
     }
 
@@ -173,7 +174,7 @@ impl Bank {
         transaction_indexes: impl Iterator<Item = &'a usize>,
     ) {
         trace!(
-            "schedule_and_commit_transactions(): {} txs",
+            "schedule_transaction_executions(): {} txs",
             transactions.len()
         );
 
@@ -200,16 +201,7 @@ impl Bank {
         &self,
     ) -> Option<(ExecuteTimings, Result<()>)> {
         let mut scheduler_guard = self.scheduler.write().unwrap();
-        let current_thread_name = std::thread::current().name().unwrap().to_string();
-        if VIA_DROP {
-            info!(
-                "wait_for_scheduler(VIA_DROP): {}",
-                std::backtrace::Backtrace::force_capture()
-            );
-        }
         if scheduler_guard.0.is_some() {
-            info!("wait_for_scheduler({VIA_DROP}): gracefully stopping bank ({})... from_internal: {FROM_INTERNAL} by {current_thread_name}", self.slot());
-
             let timings_and_result = scheduler_guard
                 .0
                 .as_mut()
@@ -221,10 +213,6 @@ impl Bank {
             }
             timings_and_result
         } else {
-            warn!(
-                "Bank::wait_for_scheduler(via_drop: {VIA_DROP}) skipped from_internal: {FROM_INTERNAL} by {} ...",
-                current_thread_name
-            );
             None
         }
     }
