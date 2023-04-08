@@ -60,7 +60,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
 pub type SchedulerBox = Box<dyn InstalledScheduler>;
 // somewhat arbitrarily new type just to pacify Bank's frozen_abi...
 #[derive(Debug, Default)]
-pub(crate) struct InstalledSchedulerBox(pub(crate) Option<SchedulerBox>);
+pub(crate) struct InstalledSchedulerBox(Option<SchedulerBox>);
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
