@@ -1,24 +1,24 @@
 //! Transaction processing glue code, mainly consisting of Object-safe traits
 //!
-//! `trait InstalledSchedulerPool` is the most crucial piece for this whole integration.
+//! `trait InstalledSchedulerPool` is the most crucial piece of code for this whole integration.
 //!
 //! It lends one of pooled `trait InstalledScheduler`s out to a `Bank`, so that the ubiquitous
-//! `Arc<Bank>` can conveniently work as a facade for transaction scheduling, both to higher-layer
-//! subsystems (i.e. `ReplayStage` and `BankingStage`). `BankForks` is responsible for this
-//! book-keeping.
+//! `Arc<Bank>` can conveniently work as a facade for transaction scheduling, to higher-layer
+//! subsystems (i.e. both `ReplayStage` and `BankingStage`). `BankForks` is responsible for this
+//! book-keeping, including returning the scheduler from the bank to the pool after use.
 //!
 //! `trait InstalledScheduler` can be fed with `SanitizedTransaction`s. Then, it schedules and
 //! commits those transaction execution results into the associated _bank_. That means,
 //! `InstalledScheduler` and `Bank` are mutually linked to each other, resulting in somewhat
 //! special handling as part of their life-cycle.
 //!
-//! Albeit being at this interfaces abstraction level, it's generally assumed that each
+//! Albeit being at this abstract interface level, it's generally assumed that each
 //! `InstalledScheduler` is backed by multiple threads for performant transaction execution and
-//! there's multiple of it inside a single instance of `InstalledSchedulerPool`.
+//! there're multiple independent schedulers inside a single instance of `InstalledSchedulerPool`.
 //!
 //! Dynamic dispatch was inevitable, due to the need of delegating those implementations to the
-//! dependent crate to cut cyclic dependency (`solana-scheduler-pool`, which in turn depends on
-//! `solana-ledger`; another dependent crate of `solana-runtime`...).
+//! dependent crate (`solana-scheduler-pool`, which in turn depends on `solana-ledger`; another
+//! dependent crate of `solana-runtime`...), while cutting cyclic dependency.
 
 use {
     crate::{bank::Bank, bank_forks::BankForks},
@@ -33,17 +33,18 @@ use {
 };
 
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
-    fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler>;
-    fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler>);
+    fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox;
+    fn return_to_pool(&self, scheduler: SchedulerBox);
 }
 
-pub(crate) type InstalledSchedulerPoolBox = Option<Box<dyn InstalledSchedulerPool>>;
+pub(crate) type SchedulerPoolBox = Box<dyn InstalledSchedulerPool>;
+pub(crate) type InstalledSchedulerPoolBox = Option<SchedulerPoolBox>;
 
 pub type SchedulerId = u64;
 
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
-    fn scheduler_pool(&self) -> Box<dyn InstalledSchedulerPool>;
+    fn scheduler_pool(&self) -> SchedulerPoolBox;
 
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
     fn schedule_termination(&mut self);
@@ -56,9 +57,11 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     fn replace_scheduler_context(&self, context: SchedulingContext);
 }
 
+pub type SchedulerBox = Box<dyn InstalledSchedulerBox>;
+
 // somewhat arbitrarily new type just to pacify Bank's frozen_abi...
 #[derive(Debug, Default)]
-pub(crate) struct InstalledSchedulerBox(pub(crate) Option<Box<dyn InstalledScheduler>>);
+pub(crate) struct InstalledSchedulerBox(pub(crate) Option<SchedulerBox>);
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;

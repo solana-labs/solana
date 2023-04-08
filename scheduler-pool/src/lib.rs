@@ -162,7 +162,7 @@ use solana_transaction_status::TransactionTokenBalance;
 
 #[derive(Debug)]
 pub(crate) struct Scheduler {
-    scheduler_id: u64,
+    scheduler_id: SchedulerId,
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
     executing_thread_handles: Option<Vec<std::thread::JoinHandle<Result<(Duration, Duration)>>>>,
     error_collector_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
