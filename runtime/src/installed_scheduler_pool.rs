@@ -149,7 +149,7 @@ impl BankForks {
     }
 
     pub(crate) fn install_scheduler_into_bank(&self, bank: &Arc<Bank>) {
-        if let Some(scheduler_pool) = self.scheduler_pool {
+        if let Some(scheduler_pool) = &self.scheduler_pool {
             let new_context =
                 SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
             bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
@@ -158,7 +158,7 @@ impl BankForks {
 }
 
 impl Bank {
-    pub(crate) fn install_scheduler(&self, scheduler: Box<dyn InstalledScheduler>) {
+    pub(crate) fn install_scheduler(&self, scheduler: SchedulerBox) {
         let mut scheduler_guard = self.scheduler.write().unwrap();
         assert!(scheduler_guard.0.replace(scheduler).is_none());
     }
@@ -180,8 +180,8 @@ impl Bank {
         let scheduler_guard = self.scheduler.read().unwrap();
         let scheduler = scheduler_guard.0.as_ref().unwrap();
 
-        for (st, &i) in transactions.iter().zip(transaction_indexes) {
-            scheduler.schedule_execution(st, i);
+        for (sanitized_transaction, &index) in transactions.iter().zip(transaction_indexes) {
+            scheduler.schedule_execution(sanitized_transaction, index);
         }
     }
 
