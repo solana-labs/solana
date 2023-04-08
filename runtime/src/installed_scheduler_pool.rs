@@ -129,7 +129,7 @@ impl BankWithScheduler {
     }
 
     pub(crate) fn arc_bank(&self) -> &Arc<Bank> {
-        self.0
+        &self.0
     }
 
     pub(crate) fn into_arc_bank(self) -> Arc<Bank> {
