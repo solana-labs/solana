@@ -219,9 +219,8 @@ impl Bank {
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART));
             if !IS_RESTART {
-                if let Some(scheduler) = scheduler_guard.0.take() {
-                    scheduler.scheduler_pool().return_to_pool(scheduler);
-                }
+                let scheduler = scheduler_guard.0.take().expect("scheduler after waiting");
+                scheduler.scheduler_pool().return_to_pool(scheduler);
             }
             timings_and_result
         } else {
