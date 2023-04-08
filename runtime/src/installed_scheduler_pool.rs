@@ -39,9 +39,10 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 
 pub(crate) type InstalledSchedulerPoolBox = Option<Box<dyn InstalledSchedulerPool>>;
 
+pub type SchedulerId = u64;
+
 pub trait InstalledScheduler: Send + Sync + Debug {
-    // fn scheduler_id() -> SchedulerId
-    fn random_id(&self) -> u64;
+    fn scheduler_id(&self) -> SchedulerId;
     fn scheduler_pool(&self) -> Box<dyn InstalledSchedulerPool>;
 
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
