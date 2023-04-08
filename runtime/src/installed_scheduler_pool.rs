@@ -170,8 +170,6 @@ impl BankForks {
     }
 }
 
-struct AA;
-
 impl Bank {
     fn install_scheduler(&self, scheduler: SchedulerBox) {
         let mut scheduler_guard = self.scheduler.write().unwrap();
@@ -210,7 +208,7 @@ impl Bank {
     fn wait_for_scheduler<
         const VIA_DROP: bool,
         const FROM_INTERNAL: bool,
-        const IS_RESTART: AA,
+        const IS_RESTART: bool,
     >(
         &self,
     ) -> Option<(ExecuteTimings, Result<()>)> {
