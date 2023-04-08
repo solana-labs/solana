@@ -74,7 +74,7 @@ pub struct BankForks {
 impl Index<u64> for BankForks {
     type Output = Arc<Bank>;
     fn index(&self, bank_slot: Slot) -> &Self::Output {
-        &self.banks[&bank_slot].0
+        &self.banks[&bank_slot].bank()
     }
 }
 
