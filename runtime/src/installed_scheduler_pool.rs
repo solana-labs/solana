@@ -57,7 +57,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     fn replace_scheduler_context(&self, context: SchedulingContext);
 }
 
-pub type SchedulerBox = Box<dyn InstalledSchedulerBox>;
+pub type SchedulerBox = Box<dyn InstalledScheduler>;
 
 // somewhat arbitrarily new type just to pacify Bank's frozen_abi...
 #[derive(Debug, Default)]
