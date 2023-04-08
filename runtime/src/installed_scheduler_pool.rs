@@ -117,7 +117,7 @@ impl SchedulingContext {
     }
 }
 
-pub(crate) struct BankWithScheduler(pub(crate) Arc<Bank>);
+pub(crate) struct BankWithScheduler(Arc<Bank>);
 
 impl BankWithScheduler {
     pub(crate) fn new_arc(&self) -> Arc<Bank> {
@@ -161,7 +161,7 @@ impl BankForks {
 }
 
 impl Bank {
-    pub(crate) fn install_scheduler(&self, scheduler: SchedulerBox) {
+    fn install_scheduler(&self, scheduler: SchedulerBox) {
         let mut scheduler_guard = self.scheduler.write().unwrap();
         assert!(scheduler_guard.0.replace(scheduler).is_none());
     }
@@ -188,7 +188,7 @@ impl Bank {
         }
     }
 
-    pub(crate) fn schedule_termination(&self) {
+    fn schedule_termination(&self) {
         let mut scheduler_guard = self.scheduler.write().unwrap();
         if let Some(scheduler) = scheduler_guard.0.as_mut() {
             scheduler.schedule_termination();
