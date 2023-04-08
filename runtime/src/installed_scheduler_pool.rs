@@ -229,7 +229,7 @@ impl Bank {
         } else {
             None
         };
-        debug!("wait_for_scheduler<VIA_DROP = {VIA_DROP}, FROM_INTERNAL = {FROM_INTERNAL}, IS_RESTART = {IS_RESTART}(slot: {}): finished with: {}...", self.slot(), timings_and_result.1);
+        debug!("wait_for_scheduler<VIA_DROP = {VIA_DROP}, FROM_INTERNAL = {FROM_INTERNAL}, IS_RESTART = {IS_RESTART}(slot: {}): finished with: {:?}...", self.slot(), timings_and_result.map(|(_, result) result));
 
         timings_and_result
     }
