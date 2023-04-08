@@ -14,6 +14,7 @@ use {
         pubkey::Pubkey, saturating_add_assign,
     },
     std::{
+        cmp,
         collections::HashMap,
         fmt::{Debug, Formatter},
         sync::{
@@ -24,8 +25,8 @@ use {
 };
 
 const MAX_LOADED_ENTRY_COUNT: usize = 256;
-const MAX_UNLOADED_ENTRY_COUNT: usize = 512;
-const MAX_TOMBSTONE_COUNT: usize = 512;
+const MAX_UNLOADED_ENTRY_COUNT: usize = 1024;
+const MAX_TOMBSTONE_COUNT: usize = 1024;
 
 /// Relationship between two fork IDs
 #[derive(Copy, Clone, PartialEq)]
@@ -339,6 +340,7 @@ impl LoadedPrograms {
         });
 
         self.remove_expired_entries(new_root);
+        self.remove_programs_with_no_entries();
     }
 
     /// Extracts a subset of the programs relevant to a transaction batch
@@ -428,15 +430,25 @@ impl LoadedPrograms {
         let num_to_unload = num_loaded.saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
         self.unload_program_entries(sorted_candidates.iter().take(num_to_unload));
 
-        let num_unloaded_to_evict =
-            num_unloaded.saturating_sub(shrink_to.apply_to(MAX_UNLOADED_ENTRY_COUNT));
-        let (sorted_candidates, unloaded) = sorted_candidates.split_at(num_loaded);
-        self.remove_program_entries(unloaded.iter().take(num_unloaded_to_evict));
+        let num_unloaded_to_evict = num_unloaded
+            .saturating_add(num_to_unload)
+            .saturating_sub(shrink_to.apply_to(MAX_UNLOADED_ENTRY_COUNT));
+        let (newly_unloaded_programs, sorted_candidates) = sorted_candidates.split_at(num_loaded);
+        let num_old_unloaded_to_evict = cmp::min(sorted_candidates.len(), num_unloaded_to_evict);
+        self.remove_program_entries(sorted_candidates.iter().take(num_old_unloaded_to_evict));
+
+        let num_newly_unloaded_to_evict =
+            num_unloaded_to_evict.saturating_sub(sorted_candidates.len());
+        self.remove_program_entries(
+            newly_unloaded_programs
+                .iter()
+                .take(num_newly_unloaded_to_evict),
+        );
 
         let num_tombstones_to_evict =
             num_tombstones.saturating_sub(shrink_to.apply_to(MAX_TOMBSTONE_COUNT));
-        let (_sorted_candidates, tombstones) = sorted_candidates.split_at(num_unloaded);
-        self.remove_program_entries(tombstones.iter().take(num_tombstones_to_evict));
+        let (_, sorted_candidates) = sorted_candidates.split_at(num_unloaded);
+        self.remove_program_entries(sorted_candidates.iter().take(num_tombstones_to_evict));
 
         self.remove_programs_with_no_entries();
     }
@@ -471,7 +483,6 @@ impl LoadedPrograms {
                     .unwrap_or(true)
             });
         }
-        self.remove_programs_with_no_entries();
     }
 
     fn unload_program_entries<'a>(
@@ -533,22 +544,40 @@ mod tests {
         )
     }
 
+    fn insert_unloaded_program(
+        cache: &mut LoadedPrograms,
+        key: Pubkey,
+        slot: Slot,
+    ) -> Arc<LoadedProgram> {
+        let unloaded = Arc::new(LoadedProgram {
+            program: LoadedProgramType::Unloaded,
+            account_size: 0,
+            deployment_slot: slot,
+            effective_slot: slot.saturating_add(1),
+            maybe_expiration_slot: None,
+            usage_counter: AtomicU64::default(),
+        });
+        cache.replenish(key, unloaded).1
+    }
+
+    fn num_matching_entries<P>(cache: &LoadedPrograms, predicate: P) -> usize
+    where
+        P: Fn(&LoadedProgramType) -> bool,
+    {
+        cache
+            .entries
+            .values()
+            .map(|programs| {
+                programs
+                    .iter()
+                    .filter(|program| predicate(&program.program))
+                    .count()
+            })
+            .sum()
+    }
+
     #[test]
     fn test_eviction() {
-        // Fork graph created for the test
-        //                   0
-        //                 /   \
-        //                10    5
-        //                |     |
-        //                20    11
-        //                |     | \
-        //                22   15  25
-        //                      |   |
-        //                     16  27
-        let mut fork_graph = TestForkGraphSpecific::default();
-        fork_graph.insert_fork(&[0, 10, 20, 22]);
-        fork_graph.insert_fork(&[0, 5, 11, 15, 16]);
-        fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
         let mut programs = vec![];
         let mut num_total_programs: usize = 0;
 
@@ -556,7 +585,7 @@ mod tests {
 
         let program1 = Pubkey::new_unique();
         let program1_deployment_slots = vec![0, 10, 20];
-        let program1_usage_counters = vec![1, 5, 25];
+        let program1_usage_counters = vec![4, 5, 25];
         program1_deployment_slots
             .iter()
             .enumerate()
@@ -574,9 +603,17 @@ mod tests {
                 programs.push((program1, *deployment_slot, usage_counter));
             });
 
+        for slot in 21..31 {
+            set_tombstone(&mut cache, program1, slot);
+        }
+
+        for slot in 31..41 {
+            insert_unloaded_program(&mut cache, program1, slot);
+        }
+
         let program2 = Pubkey::new_unique();
         let program2_deployment_slots = vec![5, 11];
-        let program2_usage_counters = vec![0, 10];
+        let program2_usage_counters = vec![0, 2];
         program2_deployment_slots
             .iter()
             .enumerate()
@@ -593,6 +630,14 @@ mod tests {
                 num_total_programs += 1;
                 programs.push((program2, *deployment_slot, usage_counter));
             });
+
+        for slot in 21..31 {
+            set_tombstone(&mut cache, program2, slot);
+        }
+
+        for slot in 31..41 {
+            insert_unloaded_program(&mut cache, program2, slot);
+        }
 
         let program3 = Pubkey::new_unique();
         let program3_deployment_slots = vec![0, 5, 15];
@@ -614,8 +659,39 @@ mod tests {
                 programs.push((program3, *deployment_slot, usage_counter));
             });
 
+        for slot in 21..31 {
+            set_tombstone(&mut cache, program3, slot);
+        }
+
+        for slot in 31..41 {
+            insert_unloaded_program(&mut cache, program3, slot);
+        }
+
         programs.sort_by_key(|(_id, _slot, usage_count)| *usage_count);
 
+        let num_loaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::TestLoaded)
+        });
+        let num_unloaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::Unloaded)
+        });
+        let num_tombstones = num_matching_entries(&cache, |program_type| {
+            matches!(
+                program_type,
+                LoadedProgramType::DelayVisibility
+                    | LoadedProgramType::FailedVerification
+                    | LoadedProgramType::Closed
+            )
+        });
+
+        assert_eq!(num_loaded, 8);
+        assert_eq!(num_unloaded, 30);
+        assert_eq!(num_tombstones, 30);
+
+        // Evicting to 2% should update cache with
+        // * 5 active entries
+        // * 20 unloaded entries
+        // * 20 tombstones
         cache.sort_and_evict(Percentage::from(2));
         // Check that every program is still in the cache.
         programs.iter().for_each(|entry| {
@@ -637,6 +713,98 @@ mod tests {
             let expected = programs.get(index).expect("Missing program");
             assert!(unloaded.contains(&(expected.0, expected.2)));
         }
+
+        let num_loaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::TestLoaded)
+        });
+        let num_unloaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::Unloaded)
+        });
+        let num_tombstones = num_matching_entries(&cache, |program_type| {
+            matches!(
+                program_type,
+                LoadedProgramType::DelayVisibility
+                    | LoadedProgramType::FailedVerification
+                    | LoadedProgramType::Closed
+            )
+        });
+
+        assert_eq!(num_loaded, 5);
+        assert_eq!(num_unloaded, 20);
+        assert_eq!(num_tombstones, 20);
+    }
+
+    #[test]
+    fn test_eviction_unload_underflow() {
+        // Test: Eviction of unloaded programs requires eviction of newly unloaded programs.
+        // 1. Load 26 programs
+        // 2. Insert 1 unloaded program
+        // Eviction will unload 21 programs.
+        // 2 unloaded programs need to be evicted. So 1 old and 1 new unloaded program will be evicted.
+
+        let mut cache = LoadedPrograms::default();
+
+        let program1 = Pubkey::new_unique();
+        let num_total_programs = 26;
+        (0..num_total_programs).for_each(|i| {
+            cache.replenish(
+                program1,
+                new_test_loaded_program_with_usage(i, i + 2, AtomicU64::new(i)),
+            );
+        });
+
+        let program2 = Pubkey::new_unique();
+        insert_unloaded_program(&mut cache, program2, 26);
+
+        let num_loaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::TestLoaded)
+        });
+        let num_unloaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::Unloaded)
+        });
+        let num_tombstones = num_matching_entries(&cache, |program_type| {
+            matches!(
+                program_type,
+                LoadedProgramType::DelayVisibility
+                    | LoadedProgramType::FailedVerification
+                    | LoadedProgramType::Closed
+            )
+        });
+
+        assert_eq!(num_loaded, 26);
+        assert_eq!(num_unloaded, 1);
+        assert_eq!(num_tombstones, 0);
+
+        // Test that program2 exists in the cache. It'll get removed after eviction.
+        assert!(cache.entries.get(&program2).is_some());
+
+        // Evicting to 2% should update cache with
+        // * 5 active entries
+        // * 20 unloaded entries
+        // * 0 tombstones
+        cache.sort_and_evict(Percentage::from(2));
+
+        let num_loaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::TestLoaded)
+        });
+        let num_unloaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::Unloaded)
+        });
+        let num_tombstones = num_matching_entries(&cache, |program_type| {
+            matches!(
+                program_type,
+                LoadedProgramType::DelayVisibility
+                    | LoadedProgramType::FailedVerification
+                    | LoadedProgramType::Closed
+            )
+        });
+
+        assert_eq!(num_loaded, 5);
+        assert_eq!(num_unloaded, 20);
+        assert_eq!(num_tombstones, 0);
+
+        // Test that program2 has been removed after eviction.
+        assert!(cache.entries.get(&program2).is_none());
     }
 
     #[test]
@@ -1111,5 +1279,103 @@ mod tests {
 
         // program3 was deployed on slot 25, which has been pruned
         assert!(missing.contains(&program3));
+    }
+
+    #[test]
+    fn test_prune_expired() {
+        let mut cache = LoadedPrograms::default();
+
+        // Fork graph created for the test
+        //                   0
+        //                 /   \
+        //                10    5
+        //                |     |
+        //                20    11
+        //                |     | \
+        //                22   15  25
+        //                      |   |
+        //                     16  27
+        //                      |
+        //                     19
+        //                      |
+        //                     23
+
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 10, 20, 22]);
+        fork_graph.insert_fork(&[0, 5, 11, 15, 16, 19, 21, 23]);
+        fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
+
+        let program1 = Pubkey::new_unique();
+        assert!(!cache.replenish(program1, new_test_loaded_program(10, 11)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(20, 21)).0);
+
+        let program2 = Pubkey::new_unique();
+        assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
+        assert!(!cache.replenish(program2, new_test_loaded_program(11, 12)).0);
+
+        let program3 = Pubkey::new_unique();
+        assert!(!cache.replenish(program3, new_test_loaded_program(25, 26)).0);
+
+        // The following is a special case, where there's an expiration slot
+        let test_program = Arc::new(LoadedProgram {
+            program: LoadedProgramType::DelayVisibility,
+            account_size: 0,
+            deployment_slot: 11,
+            effective_slot: 11,
+            maybe_expiration_slot: Some(15),
+            usage_counter: AtomicU64::default(),
+        });
+        assert!(!cache.replenish(program1, test_program).0);
+
+        // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
+        let working_slot = TestWorkingSlot::new(12, &[0, 5, 11, 12, 15, 16, 18, 19, 21, 23]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3].into_iter(),
+        );
+
+        // Program1 deployed at slot 11 should not be expired yet
+        assert!(match_slot(&found, &program1, 11));
+        assert!(match_slot(&found, &program2, 11));
+
+        assert!(missing.contains(&program3));
+
+        // Testing fork 0 - 5 - 11 - 12 - 15 - 16 - 19 - 21 - 23 with current slot at 15
+        // This would cause program4 deployed at slot 15 to be expired.
+        let working_slot = TestWorkingSlot::new(15, &[0, 5, 11, 15, 16, 18, 19, 21, 23]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program2, 11));
+
+        assert!(missing.contains(&program1));
+        assert!(missing.contains(&program3));
+
+        // Test that the program still exists in the cache, even though it is expired.
+        assert_eq!(
+            cache
+                .entries
+                .get(&program1)
+                .expect("Didn't find program1")
+                .len(),
+            3
+        );
+
+        // Nww root 5 should not evict the expired entry for program1
+        cache.prune(&fork_graph, 5);
+        assert_eq!(
+            cache
+                .entries
+                .get(&program1)
+                .expect("Didn't find program1")
+                .len(),
+            1
+        );
+
+        // Nww root 15 should evict the expired entry for program1
+        cache.prune(&fork_graph, 15);
+        assert!(cache.entries.get(&program1).is_none());
     }
 }

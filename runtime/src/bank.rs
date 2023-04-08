@@ -4642,11 +4642,11 @@ impl Bank {
 
         execution_time.stop();
 
-        const PRUNE_CACHE_TO_PERCENTAGE: u8 = 90;
+        const EVICT_CACHE_TO_PERCENTAGE: u8 = 90;
         self.loaded_programs_cache
             .write()
             .unwrap()
-            .sort_and_evict(Percentage::from(PRUNE_CACHE_TO_PERCENTAGE));
+            .sort_and_evict(Percentage::from(EVICT_CACHE_TO_PERCENTAGE));
 
         debug!(
             "check: {}us load: {}us execute: {}us txs_len={}",
