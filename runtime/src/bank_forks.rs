@@ -5,7 +5,7 @@ use {
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
         bank::Bank,
         epoch_accounts_hash,
-        installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerPool},
+        installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerPoolBox},
         snapshot_config::SnapshotConfig,
     },
     log::*,
@@ -188,7 +188,7 @@ impl BankForks {
             accounts_hash_interval_slots: std::u64::MAX,
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
-            scheduler_pool: Default::default(), // type InstalledSchedulerPoolBox
+            scheduler_pool: InstalledSchedulerPoolBox::default(),
         }
     }
 
