@@ -3,16 +3,16 @@
 Services:
 1. Prometheus
 2. AlertManager
-3. Chronograf2 (on port 8888)
+3. Chronograf (on port 8888)
 4. Chronograf_8889 (on port 8889)
 5. Grafana (on port 3000)
-6. Grafana2 (on port 3001)
+6. AlertManager_Discord
 7. Kapacitor
 
-To install all the services on the metrics-internal server, you need to run the ./start.sh script.
+To install all the services on the metrics-main server you need to run the `start.sh` script.
 
-Install the Buildkite-agent to run the pipeline to get the status of the container.
+Install the Buildkite-agent to run the `status.sh` script to periodically check for the status of the containers.
 
-If any of the containers is not in running state or in exited state then it will redeploy the container as per the specific container status.
+If any of the containers is not in running state or in exited state then it will try to redeploy the container, if it fails to do so an alert will be triggered to Discord and PagerDuty.
 
-**Note:** If you delete or remove the container manually then you can also run the script to redeploy it  again.
+**Note:** If you deleted or removed any of containers manually you need to run the `start.sh` script.
