@@ -13,4 +13,4 @@ Install the Buildkite-agent to run the `status.sh` script to periodically check 
 
 If any of the containers is not in running state or in exited state then it will try to redeploy the container, if it fails to do so an alert will be triggered to Discord and PagerDuty.
 
-**Note:** If you deleted or removed any of containers manually you need to run the `start.sh` script. 
+**Note:** If you deleted or removed any of containers manually you need to run the `start.sh` script.

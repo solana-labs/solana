@@ -27,4 +27,4 @@ To replace the data nodes or add more you can use the `setup-data-nodes.sh` scri
 
 ### Status Check
 
-The `status.sh` script runs periodically on BuildKite to make sure that both, the data and meta services are running properly in all the servers of the cluster. If it detects that the service is not running it will try to redeploy it and send an alert to Discord and PagerDuty in case it fails to do so. 
+The `status.sh` script runs periodically on BuildKite to make sure that both, the data and meta services are running properly in all the servers of the cluster. If it detects that the service is not running it will try to redeploy it and send an alert to Discord and PagerDuty in case it fails to do so.
