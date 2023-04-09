@@ -27,7 +27,7 @@ install_influxdb_meta_node() {
   ssh "$1" "echo 'reporting-disabled = false
 hostname=\"\$1\"
 bind-address = \":8091\"
-license-key = \"$LICENSE_KEY\"
+license-key = "${LICENSE_KEY}"
 
 [meta]
   dir = \"/var/lib/influxdb/meta\"
