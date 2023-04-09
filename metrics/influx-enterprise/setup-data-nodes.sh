@@ -27,10 +27,10 @@ install_influxdb_data_node() {
   ssh "$1" "sudo apt-get update && sudo apt-get install -y wget"
 
   # Download InfluxDB Enterprise data node binary
-  ssh "$1" "wget -q \$'${INFLUXDB_DATA_DOWNLOAD_URL//\'/\'\\\'\'}' -O /tmp/influxdb-data.tar.gz"
+  ssh "$1" "wget -q '$INFLUXDB_DATA_DOWNLOAD_URL' -O /tmp/influxdb-data.tar.gz"
 
   # Extract and install InfluxDB Enterprise data node
-  ssh "$1" "sudo mkdir -p \"$INSTALL_DIR\" && sudo tar xf /tmp/influxdb-data.tar.gz -C \"\$INSTALL_DIR\" --strip-components=2"
+  ssh "$1" "sudo mkdir -p '$INSTALL_DIR' && sudo tar xf /tmp/influxdb-data.tar.gz -C '$INSTALL_DIR' --strip-components=2"
 
   # Create configuration directory
   ssh "$1" "sudo mkdir -p \"\$CONFIG_DIR\""
@@ -39,7 +39,7 @@ install_influxdb_data_node() {
   ssh "$1" "echo 'reporting-disabled = false
 hostname=\"\$1\"
 bind-address = \":8088\"
-license-key = \"$LICENSE_KEY\"
+license-key = "$LICENSE_KEY"
 
 [data]
   dir = \"/var/lib/influxdb/data\"
@@ -57,7 +57,7 @@ license-key = \"$LICENSE_KEY\"
   ssh "$1" "sudo useradd -rs /bin/false influxdb && sudo mkdir -p /var/lib/influxdb/{data,wal,hh} && sudo chown -R influxdb:influxdb /var/lib/influxdb"
 
   # Create systemd service file
-  ssh "$1" "echo '[Unit]
+  ssh "$1" 'echo '\''[Unit]
 Description=InfluxDB Enterprise data node
 Documentation=https://docs.influxdata.com/enterprise_influxdb/v1.9/
 After=network-online.target
@@ -65,12 +65,12 @@ After=network-online.target
 [Service]
 User=influxdb
 Group=influxdb
-ExecStart="$INSTALL_DIR/influxd -config \$CONFIG_DIR/influxdb.conf"
+ExecStart='\''"$INSTALL_DIR/influxd -config \$CONFIG_DIR/influxdb.conf"'\''"
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
-' | sudo tee /etc/systemd/system/influxdb-data.service"
+'\'' | sudo tee /etc/systemd/system/influxdb-data.service'
 
   # Enable and start InfluxDB data node service
   ssh "$1" "sudo systemctl daemon-reload && sudo systemctl enable influxdb-data.service && sudo systemctl start influxdb-data.service"
