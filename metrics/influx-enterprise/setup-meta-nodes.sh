@@ -7,18 +7,6 @@ SERVERS=(
   # Add more servers if needed
 )
 
-# InfluxDB Enterprise license key
-LICENSE_KEY="<YOUR_LICENSE_KEY>"
-
-# InfluxDB Enterprise download links
-INFLUXDB_META_DOWNLOAD_URL="https://dl.influxdata.com/enterprise/releases/influxdb-meta-<VERSION>_linux_amd64.tar.gz"
-
-# Installation directory
-INSTALL_DIR="/opt/influxdb"
-
-# Config directory
-CONFIG_DIR="/etc/influxdb"
-
 # Install InfluxDB meta node
 install_influxdb_meta_node() {
   echo "Setting up InfluxDB meta node on $1..."
