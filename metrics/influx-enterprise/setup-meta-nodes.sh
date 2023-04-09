@@ -24,22 +24,22 @@ install_influxdb_meta_node() {
   ssh "$1" "sudo mkdir -p \"\$CONFIG_DIR\""
 
   # Generate InfluxDB meta node configuration file
-  ssh "$1" "echo 'reporting-disabled = false
-hostname=\"\$1\"
-bind-address = \":8091\"
-license-key = "${LICENSE_KEY}"
+  ssh "$1" "echo \"reporting-disabled = false
+hostname=\\\"\$1\\\"
+bind-address = :8091
+license-key = \\\"${LICENSE_KEY}\\\"
 
 [meta]
-  dir = \"/var/lib/influxdb/meta\"
+  dir = /var/lib/influxdb/meta
   retention-autocreate = true
   logging-enabled = true
-' | sudo tee \"$CONFIG_DIR/influxdb-meta.conf\""
+\" | sudo tee \"\$CONFIG_DIR/influxdb-meta.conf\""
 
 # Create InfluxDB user and directories
 ssh "$1" 'sudo useradd -rs /bin/false influxdb && sudo mkdir -p /var/lib/influxdb/meta && sudo chown -R influxdb:influxdb /var/lib/influxdb'
 
 # Create systemd service file
-ssh "$1" 'echo '\''[Unit]
+ssh "$1" "echo '[Unit]
 Description=InfluxDB Enterprise meta node
 Documentation=https://docs.influxdata.com/enterprise_influxdb/v1.9/
 After=network-online.target
@@ -47,12 +47,12 @@ After=network-online.target
 [Service]
 User=influxdb
 Group=influxdb
-ExecStart='\''"${INSTALL_DIR}/influxd-meta -config ${CONFIG_DIR}/influxdb-meta.conf"'\''"
+ExecStart=${INSTALL_DIR}/influxd-meta -config ${CONFIG_DIR}/influxdb-meta.conf
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
-'\'' | sudo tee /etc/systemd/system/influxdb-meta.service'
+' | sudo tee /etc/systemd/system/influxdb-meta.service"
 
   # Enable and start InfluxDB meta node service
   ssh "$1" "sudo systemctl daemon-reload && sudo systemctl enable influxdb-meta.service && sudo systemctl start influxdb-meta.service"
