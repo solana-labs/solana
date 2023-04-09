@@ -12,8 +12,6 @@ echo "HOST: $HOST"
 
 servers_data=("dev-equinix-washington-27")
 servers_meta=("dev-equinix-washington-24")
-discord_webhook="$DISCORD_WEBHOOK"
-pagerduty_webhook="$PAGERDUTY_WEBHOOK"
 
 # Check the service on a list of servers
 check_service() {
@@ -37,7 +35,7 @@ check_service() {
   if [[ "$status" == "unknown" ]]; then
     message="The $service service is not running on $server. Restarting..."
     echo "$message"
-    curl -H "Content-Type: application/json" -d '{"content":"'"$message"'"}' "$discord_webhook"
+    curl -H "Content-Type: application/json" -d '{"content":"'"$message"'"}' "$DISCORD_WEBHOOK"
 
     for server in "${servers[@]}"; do
       # Try to restart the service
@@ -59,12 +57,12 @@ check_service() {
       ;;
     "restarted")
       echo "$message"
-      curl -H "Content-Type: application/json" -d '{"content":"'"$message"'"}' "$discord_webhook"
+      curl -H "Content-Type: application/json" -d '{"content":"'"$message"'"}' "$DISCORD_WEBHOOK"
       ;;
     *)
-      echo "ERROR: The $service service failed to restart on '"$server"'."
-      curl -H "Content-Type: application/json" -d '{"content":"ERROR: The '"$service"' service failed to restart on '"$server"', manual intervention is required."}' "$discord_webhook"
-      curl -H "Content-Type: application/json" -d '{"routing_key":"<your-pagerduty-service-key>","event_action":"trigger","payload":{"summary":"The '"$service"' service failed to restart on '"$server"'.","severity":"critical"}}' "$pagerduty_webhook"
+      echo "ERROR: The '$service' service failed to restart on '$server'."
+      curl -H "Content-Type: application/json" -d '{"content":"ERROR: The '"$service"' service failed to restart on '"$server"', manual intervention is required."}' "$DISCORD_WEBHOOK"
+      curl -H "Content-Type: application/json" -d '{"routing_key":"<your-pagerduty-service-key>","event_action":"trigger","payload":{"summary":"The '"$service"' service failed to restart on '"$server"'.","severity":"critical"}}' "$PAGERDUTY_WEBHOOK"
       ;;
   esac
 }
