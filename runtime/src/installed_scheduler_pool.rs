@@ -4,8 +4,9 @@
 //!
 //! It lends one of pooled `trait InstalledScheduler`s out to a `Bank`, so that the ubiquitous
 //! `Arc<Bank>` can conveniently work as a facade for transaction scheduling, to higher-layer
-//! subsystems (i.e. both `ReplayStage` and `BankingStage`). `BankForks` is responsible for this
-//! book-keeping, including returning the scheduler from the bank to the pool after use.
+//! subsystems (i.e. both `ReplayStage` and `BankingStage`). `BankForks`/`BankWithScheduler` and
+//! some `Bank` methods are responsible for this book-keeping, including returning the scheduler
+//! from the bank to the pool after use.
 //!
 //! `trait InstalledScheduler` can be fed with `SanitizedTransaction`s. Then, it schedules and
 //! commits those transaction execution results into the associated _bank_. That means,
