@@ -122,9 +122,9 @@ impl QuicConfig {
                         (ConnectionPeerType::Unstaked, 0, 0),
                         |stakes| {
                             let rstakes = stakes.read().unwrap();
-                            rstakes.pubkey_stake_map.get(&pubkey).map_or(
-                                (ConnectionPeerType::Unstaked, 0, rstakes.total_stake),
-                                |stake| (ConnectionPeerType::Staked, *stake, rstakes.total_stake),
+                            rstakes.get_node_stake(&pubkey).map_or(
+                                (ConnectionPeerType::Unstaked, 0, rstakes.total_stake()),
+                                |stake| (ConnectionPeerType::Staked, stake, rstakes.total_stake()),
                             )
                         },
                     )
@@ -233,6 +233,7 @@ mod tests {
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
             QUIC_TOTAL_STAKED_CONCURRENT_STREAMS,
         },
+        std::collections::HashMap,
     };
 
     #[test]
@@ -252,19 +253,18 @@ mod tests {
             connection_config.compute_max_parallel_streams(),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
-
-        staked_nodes.write().unwrap().total_stake = 10000;
+        let overrides = HashMap::<Pubkey, u64>::default();
+        let mut stakes = HashMap::from([(Pubkey::new_unique(), 10_000)]);
+        *staked_nodes.write().unwrap() =
+            StakedNodes::new(Arc::new(stakes.clone()), overrides.clone());
         assert_eq!(
             connection_config.compute_max_parallel_streams(),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
 
-        staked_nodes
-            .write()
-            .unwrap()
-            .pubkey_stake_map
-            .insert(pubkey, 1);
-
+        stakes.insert(pubkey, 1);
+        *staked_nodes.write().unwrap() =
+            StakedNodes::new(Arc::new(stakes.clone()), overrides.clone());
         let delta =
             (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS - QUIC_MIN_STAKED_CONCURRENT_STREAMS) as f64;
 
@@ -272,17 +272,8 @@ mod tests {
             connection_config.compute_max_parallel_streams(),
             (QUIC_MIN_STAKED_CONCURRENT_STREAMS as f64 + (1f64 / 10000f64) * delta) as usize
         );
-
-        staked_nodes
-            .write()
-            .unwrap()
-            .pubkey_stake_map
-            .remove(&pubkey);
-        staked_nodes
-            .write()
-            .unwrap()
-            .pubkey_stake_map
-            .insert(pubkey, 1000);
+        stakes.insert(pubkey, 1_000);
+        *staked_nodes.write().unwrap() = StakedNodes::new(Arc::new(stakes.clone()), overrides);
         assert_ne!(
             connection_config.compute_max_parallel_streams(),
             QUIC_MIN_STAKED_CONCURRENT_STREAMS

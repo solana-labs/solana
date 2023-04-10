@@ -9,6 +9,7 @@ use {
     },
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     histogram::Histogram,
+    itertools::Itertools,
     solana_sdk::{packet::Packet, pubkey::Pubkey, timing::timestamp},
     std::{
         cmp::Reverse,
@@ -27,10 +28,11 @@ use {
 // Total stake and nodes => stake map
 #[derive(Default)]
 pub struct StakedNodes {
-    pub total_stake: u64,
-    pub max_stake: u64,
-    pub min_stake: u64,
-    pub pubkey_stake_map: HashMap<Pubkey, u64>,
+    stakes: Arc<HashMap<Pubkey, u64>>,
+    overrides: HashMap<Pubkey, u64>,
+    total_stake: u64,
+    max_stake: u64,
+    min_stake: u64,
 }
 
 pub type PacketBatchReceiver = Receiver<PacketBatch>;
@@ -289,6 +291,49 @@ impl StreamerSendStats {
         let ent = self.host_map.entry(pkt.meta().addr).or_default();
         ent.count += 1;
         ent.bytes += pkt.data(..).map(<[u8]>::len).unwrap_or_default() as u64;
+    }
+}
+
+impl StakedNodes {
+    pub fn new(stakes: Arc<HashMap<Pubkey, u64>>, overrides: HashMap<Pubkey, u64>) -> Self {
+        let values = stakes
+            .iter()
+            .filter(|(pubkey, _)| !overrides.contains_key(pubkey))
+            .map(|(_, &stake)| stake)
+            .chain(overrides.values().copied())
+            .filter(|&stake| stake > 0);
+        let total_stake = values.clone().sum();
+        let (min_stake, max_stake) = values.minmax().into_option().unwrap_or_default();
+        Self {
+            stakes,
+            overrides,
+            total_stake,
+            max_stake,
+            min_stake,
+        }
+    }
+
+    pub fn get_node_stake(&self, pubkey: &Pubkey) -> Option<u64> {
+        self.overrides
+            .get(pubkey)
+            .or_else(|| self.stakes.get(pubkey))
+            .filter(|&&stake| stake > 0)
+            .copied()
+    }
+
+    #[inline]
+    pub fn total_stake(&self) -> u64 {
+        self.total_stake
+    }
+
+    #[inline]
+    pub(super) fn min_stake(&self) -> u64 {
+        self.min_stake
+    }
+
+    #[inline]
+    pub(super) fn max_stake(&self) -> u64 {
+        self.max_stake
     }
 }
 
