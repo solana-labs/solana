@@ -33,8 +33,8 @@ use {
         },
         crds_value::{
             self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex,
-            IncrementalSnapshotHashes, LowestSlot, NodeInstance, SnapshotHashes, Version, Vote,
-            MAX_WALLCLOCK,
+            IncrementalSnapshotHashes, LegacySnapshotHashes, LowestSlot, NodeInstance, Version,
+            Vote, MAX_WALLCLOCK,
         },
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
@@ -119,10 +119,10 @@ pub(crate) const DUPLICATE_SHRED_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 11
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
 pub const MAX_ACCOUNTS_HASHES: usize = 16;
-/// Maximum number of hashes in SnapshotHashes a node publishes
+/// Maximum number of hashes in LegacySnapshotHashes a node publishes
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
-pub const MAX_SNAPSHOT_HASHES: usize = 16;
+pub const MAX_LEGACY_SNAPSHOT_HASHES: usize = 16;
 /// Maximum number of hashes in IncrementalSnapshotHashes a node publishes
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
@@ -273,7 +273,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "5rGt5M3ujgfduA2dtN3rYg1CmvrGpZdRBq7KW4U58C8H")]
+#[frozen_abi(digest = "9pQAWSpV411icPZjDnBcTJKjLyzYPVFWgYxx3bqWQbtg")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -390,7 +390,7 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // Unstaked nodes can still help repair.
             CrdsData::EpochSlots(_, _) => true,
             // Unstaked nodes can still serve snapshots.
-            CrdsData::SnapshotHashes(_) | CrdsData::IncrementalSnapshotHashes(_) => true,
+            CrdsData::LegacySnapshotHashes(_) | CrdsData::IncrementalSnapshotHashes(_) => true,
             // Otherwise unstaked voting nodes will show up with no version in
             // the various dashboards.
             CrdsData::Version(_) => true,
@@ -982,8 +982,8 @@ impl ClusterInfo {
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
-    pub fn push_snapshot_hashes(&self, snapshot_hashes: Vec<(Slot, Hash)>) {
-        if snapshot_hashes.len() > MAX_SNAPSHOT_HASHES {
+    pub fn push_legacy_snapshot_hashes(&self, snapshot_hashes: Vec<(Slot, Hash)>) {
+        if snapshot_hashes.len() > MAX_LEGACY_SNAPSHOT_HASHES {
             warn!(
                 "snapshot hashes too large, ignored: {}",
                 snapshot_hashes.len(),
@@ -991,7 +991,8 @@ impl ClusterInfo {
             return;
         }
 
-        let message = CrdsData::SnapshotHashes(SnapshotHashes::new(self.id(), snapshot_hashes));
+        let message =
+            CrdsData::LegacySnapshotHashes(LegacySnapshotHashes::new(self.id(), snapshot_hashes));
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
@@ -1194,12 +1195,12 @@ impl ClusterInfo {
             .map(map)
     }
 
-    pub fn get_snapshot_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
+    pub fn get_legacy_snapshot_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
     where
         F: FnOnce(&Vec<(Slot, Hash)>) -> Y,
     {
         let gossip_crds = self.gossip.crds.read().unwrap();
-        let hashes = &gossip_crds.get::<&SnapshotHashes>(*pubkey)?.hashes;
+        let hashes = &gossip_crds.get::<&LegacySnapshotHashes>(*pubkey)?.hashes;
         Some(map(hashes))
     }
 
@@ -3497,12 +3498,14 @@ RPC Enabled Nodes: 1"#;
     }
 
     #[test]
-    fn test_max_snapshot_hashes_with_push_messages() {
+    fn test_max_legecy_snapshot_hashes_with_push_messages() {
         let mut rng = rand::thread_rng();
         for _ in 0..256 {
-            let snapshot_hash = SnapshotHashes::new_rand(&mut rng, None);
-            let crds_value =
-                CrdsValue::new_signed(CrdsData::SnapshotHashes(snapshot_hash), &Keypair::new());
+            let snapshot_hash = LegacySnapshotHashes::new_rand(&mut rng, None);
+            let crds_value = CrdsValue::new_signed(
+                CrdsData::LegacySnapshotHashes(snapshot_hash),
+                &Keypair::new(),
+            );
             let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
             let socket = new_rand_socket_addr(&mut rng);
             assert!(Packet::from_data(Some(&socket), message).is_ok());
@@ -3510,12 +3513,14 @@ RPC Enabled Nodes: 1"#;
     }
 
     #[test]
-    fn test_max_snapshot_hashes_with_pull_responses() {
+    fn test_max_legacy_snapshot_hashes_with_pull_responses() {
         let mut rng = rand::thread_rng();
         for _ in 0..256 {
-            let snapshot_hash = SnapshotHashes::new_rand(&mut rng, None);
-            let crds_value =
-                CrdsValue::new_signed(CrdsData::SnapshotHashes(snapshot_hash), &Keypair::new());
+            let snapshot_hash = LegacySnapshotHashes::new_rand(&mut rng, None);
+            let crds_value = CrdsValue::new_signed(
+                CrdsData::LegacySnapshotHashes(snapshot_hash),
+                &Keypair::new(),
+            );
             let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
             let socket = new_rand_socket_addr(&mut rng);
             assert!(Packet::from_data(Some(&socket), response).is_ok());
@@ -4194,15 +4199,16 @@ RPC Enabled Nodes: 1"#;
     fn test_split_messages_packet_size() {
         // Test that if a value is smaller than payload size but too large to be wrapped in a vec
         // that it is still dropped
-        let mut value = CrdsValue::new_unsigned(CrdsData::SnapshotHashes(SnapshotHashes {
-            from: Pubkey::default(),
-            hashes: vec![],
-            wallclock: 0,
-        }));
+        let mut value =
+            CrdsValue::new_unsigned(CrdsData::LegacySnapshotHashes(LegacySnapshotHashes {
+                from: Pubkey::default(),
+                hashes: vec![],
+                wallclock: 0,
+            }));
 
         let mut i = 0;
         while value.size() < PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64 {
-            value.data = CrdsData::SnapshotHashes(SnapshotHashes {
+            value.data = CrdsData::LegacySnapshotHashes(LegacySnapshotHashes {
                 from: Pubkey::default(),
                 hashes: vec![(0, Hash::default()); i],
                 wallclock: 0,

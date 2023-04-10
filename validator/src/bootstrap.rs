@@ -855,7 +855,7 @@ fn get_snapshot_hashes_from_known_validators(
     // Get the full snapshot hashes for a node from CRDS
     let get_full_snapshot_hashes_for_node = |node| {
         let mut full_snapshot_hashes = Vec::new();
-        cluster_info.get_snapshot_hash_for_node(node, |snapshot_hashes| {
+        cluster_info.get_legacy_snapshot_hash_for_node(node, |snapshot_hashes| {
             full_snapshot_hashes = snapshot_hashes.clone();
         });
         full_snapshot_hashes
@@ -1429,7 +1429,7 @@ fn get_highest_full_snapshot_hash_for_peer(
     peer: &Pubkey,
 ) -> Option<SnapshotHash> {
     let mut full_snapshot_hashes = Vec::new();
-    cluster_info.get_snapshot_hash_for_node(peer, |snapshot_hashes| {
+    cluster_info.get_legacy_snapshot_hash_for_node(peer, |snapshot_hashes| {
         full_snapshot_hashes = snapshot_hashes.clone()
     });
     full_snapshot_hashes
