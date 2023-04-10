@@ -42,7 +42,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 // Send + Sync is needed to be a field of Bank
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
-    fn scheduler_pool(&self) -> SchedulerPoolBox;
+    fn scheduler_pool(&self) -> SchedulerPoolArc;
 
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
     fn schedule_termination(&mut self);
@@ -52,8 +52,8 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     fn replace_scheduler_context(&self, context: SchedulingContext);
 }
 
-pub(crate) type SchedulerPoolBox = Box<dyn InstalledSchedulerPool>;
-pub(crate) type InstalledSchedulerPoolBox = Option<SchedulerPoolBox>;
+pub(crate) type SchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;
+pub(crate) type InstalledSchedulerPoolBox = Option<SchedulerPoolArc>;
 
 pub type SchedulerId = u64;
 
@@ -166,7 +166,7 @@ impl Deref for BankWithScheduler {
 }
 
 impl BankForks {
-    pub fn install_scheduler_pool(&mut self, pool: SchedulerPoolBox) {
+    pub fn install_scheduler_pool(&mut self, pool: SchedulerPoolArc) {
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         assert!(self.scheduler_pool.replace(pool).is_none());
     }
