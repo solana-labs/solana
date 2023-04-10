@@ -33,9 +33,21 @@ use {
     std::{fmt::Debug, ops::Deref, sync::Arc},
 };
 
-pub trait InstalledSchedulerPool: Send + Sync + Debug {
+pub trait InstalledSchedulerPool: Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox;
     fn return_to_pool(&self, scheduler: SchedulerBox);
+}
+
+pub trait InstalledScheduler: Sync + Debug {
+    fn scheduler_id(&self) -> SchedulerId;
+    fn scheduler_pool(&self) -> SchedulerPoolBox;
+
+    fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
+    fn schedule_termination(&mut self);
+    fn wait_for_termination(&mut self, source: &WaitSource)
+        -> Option<(ExecuteTimings, Result<()>)>;
+
+    fn replace_scheduler_context(&self, context: SchedulingContext);
 }
 
 pub(crate) type SchedulerPoolBox = Box<dyn InstalledSchedulerPool>;
@@ -53,17 +65,6 @@ pub enum WaitSource {
     FromSchedulerDrop,
 }
 
-pub trait InstalledScheduler: Send + Sync + Debug {
-    fn scheduler_id(&self) -> SchedulerId;
-    fn scheduler_pool(&self) -> SchedulerPoolBox;
-
-    fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
-    fn schedule_termination(&mut self);
-    fn wait_for_termination(&mut self, source: &WaitSource)
-        -> Option<(ExecuteTimings, Result<()>)>;
-
-    fn replace_scheduler_context(&self, context: SchedulingContext);
-}
 
 pub type SchedulerBox = Box<dyn InstalledScheduler>;
 // somewhat arbitrarily new type just to pacify Bank's frozen_abi...
