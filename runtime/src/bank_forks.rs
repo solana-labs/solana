@@ -68,7 +68,7 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
-    pub(crate) scheduler_pool: InstalledSchedulerPoolBox,
+    pub(crate) scheduler_pool: InstalledSchedulerPoolArc,
 }
 
 impl Index<u64> for BankForks {
@@ -191,7 +191,7 @@ impl BankForks {
             accounts_hash_interval_slots: std::u64::MAX,
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
-            scheduler_pool: InstalledSchedulerPoolBox::default(),
+            scheduler_pool: InstalledSchedulerPoolArc::default(),
         }
     }
 
