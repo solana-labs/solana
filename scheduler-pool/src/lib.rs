@@ -127,7 +127,7 @@ impl InstalledScheduler for Scheduler {
         let b: TransactionBatchWithIndexes = {
             panic!();
         };
-        execute_batch(&b, bank, self.0.transaction_status_sender);
+        execute_batch(&b, bank, self.0.transaction_status_sender.as_ref());
     }
     fn schedule_termination(&mut self) {
         todo!()
