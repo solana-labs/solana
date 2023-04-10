@@ -936,7 +936,7 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn wait_for_termination(&mut self, source: &WaitSource) -> Option<(ExecuteTimings, Result<()>)> {
-        self.do_trigger_stop(matches!(source, WaitSource::InsideBlock);
+        self.do_trigger_stop(matches!(source, WaitSource::InsideBlock));
         let label = format!("id_{:016x}", self.scheduler_id); //SchedulingContext::log_prefix(self.scheduler_id, self.scheduler_context().as_ref());
         info!(
             "Scheduler::gracefully_stop(): {} {} waiting.. {source:?}", label, std::thread::current().name().unwrap().to_string()
