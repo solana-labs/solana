@@ -20,9 +20,12 @@ impl SchedulerPool {
     pub fn new_boxed(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>, prioritization_fee_cache: Arc<PrioritizationFeeCache>) -> Box<dyn InstalledSchedulerPool> {
         Box::new(SchedulerPoolWrapper::new(poh_recorder, log_messages_bytes_limit, transaction_status_sender, replay_vote_sender, prioritization_fee_cache))
     }
-}
 
-impl SchedulerPool {
+    fn prepare_new_scheduler(self: &Arc<Self>, context: SchedulingContext) {
+        // block on some max count of borrowed schdulers!
+        self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
+    }
+
     fn take_from_pool(self: &Arc<Self>, context: Option<SchedulingContext>) -> Box<dyn InstalledScheduler> {
         let mut schedulers = self.schedulers.lock().unwrap();
         let maybe_scheduler = schedulers.pop();
