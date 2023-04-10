@@ -4,3 +4,6 @@ pub enum SchedulingMode {
     //BlockProduction,
 }
 
+pub trait WithSchedulingMode {
+    fn mode(&self) -> SchedulingMode;
+}
