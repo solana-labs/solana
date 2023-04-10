@@ -85,7 +85,7 @@ impl BankForks {
     }
 
     pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
-        self.banks.iter().map(|(&s, b)| (s, b.new_bank())).collect()
+        self.banks.iter().map(|(&k, b)| (k, b.bank_cloned())).collect()
     }
 
     pub fn get_vote_only_mode_signal(&self) -> Arc<AtomicBool> {
@@ -121,7 +121,7 @@ impl BankForks {
         self.banks
             .iter()
             .filter(|(_, b)| b.is_frozen())
-            .map(|(k, b)| (*k, b.new_bank()))
+            .map(|(k, b)| (*k, b.bank_cloned()))
             .collect()
     }
 
@@ -134,7 +134,7 @@ impl BankForks {
     }
 
     pub fn get(&self, bank_slot: Slot) -> Option<Arc<Bank>> {
-        self.banks.get(&bank_slot).map(|b| b.new_bank())
+        self.banks.get(&bank_slot).map(|b| b.bank_cloned())
     }
 
     pub fn get_with_checked_hash(

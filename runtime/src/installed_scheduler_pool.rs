@@ -133,7 +133,7 @@ impl BankWithScheduler {
         Self(bank)
     }
 
-    pub(crate) fn new_bank(&self) -> Arc<Bank> {
+    pub(crate) fn bank_cloned(&self) -> Arc<Bank> {
         self.0.clone()
     }
 
@@ -142,7 +142,7 @@ impl BankWithScheduler {
     }
 
     pub(crate) fn into_bank(self) -> Arc<Bank> {
-        let bank = self.new_bank();
+        let bank = self.bank_cloned();
         drop(self);
         bank
     }
