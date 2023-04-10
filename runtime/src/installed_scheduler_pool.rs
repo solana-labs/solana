@@ -52,7 +52,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     fn replace_scheduler_context(&self, context: SchedulingContext);
 }
 
-pub(crate) type SchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;
+pub type SchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;
 pub(crate) type InstalledSchedulerPoolBox = Option<SchedulerPoolArc>;
 
 pub type SchedulerId = u64;
