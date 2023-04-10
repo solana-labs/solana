@@ -1,3 +1,5 @@
+use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
+
 #[derive(Debug)]
 pub struct SchedulerPool {
     schedulers: std::sync::Mutex<Vec<Box<dyn InstalledScheduler>>>,
