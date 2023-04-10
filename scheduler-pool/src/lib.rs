@@ -69,7 +69,7 @@ impl SchedulerPool {
             .push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
 
-    fn take_from_pool(
+    fn take_from_pool2(
         self: &Arc<Self>,
         context: Option<SchedulingContext>,
     ) -> Box<dyn InstalledScheduler> {
@@ -92,7 +92,7 @@ impl SchedulerPool {
             drop(schedulers);
 
             self.prepare_new_scheduler(context.unwrap());
-            self.take_from_pool(None)
+            self.take_from_pool2(None)
         }
     }
 
@@ -133,7 +133,7 @@ impl SchedulerPoolWrapper {
 
 impl InstalledSchedulerPool for SchedulerPool {
     fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler> {
-        self.take_from_pool(Some(context))
+        self.take_from_pool2(Some(context))
     }
 
     fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler>) {
