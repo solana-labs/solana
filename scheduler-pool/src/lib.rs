@@ -16,7 +16,7 @@ pub struct SchedulerPool {
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
 }
 
-struct SchedulerPool {
+struct Scheduler {
 }
 
 impl SchedulerPool {
