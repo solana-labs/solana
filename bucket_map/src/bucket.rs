@@ -903,4 +903,27 @@ mod tests {
             }
         }
     }
+
+    #[should_panic(expected = "batch insertion can only occur prior to any deletes")]
+    #[test]
+    fn batch_insert_after_delete() {
+        solana_logger::setup();
+
+        let tmpdir = tempdir().unwrap();
+        let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
+        assert!(!paths.is_empty());
+        let max_search = 2;
+        let mut bucket = Bucket::new(Arc::new(paths), max_search, 
+            Arc::default(),
+            Arc::default(),
+        );
+
+        let key = Pubkey::new_unique();
+        assert_eq!(bucket.read_value(&key), None);
+
+        bucket.update(&key, |_| Some((vec![0], 0)));
+        bucket.delete_key(&key);
+
+        bucket.batch_insert_non_duplicates(std::iter::empty(), 0);
+    }
 }
