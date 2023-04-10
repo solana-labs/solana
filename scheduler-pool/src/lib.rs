@@ -28,6 +28,7 @@ use solana_runtime::installed_scheduler_pool::InstalledScheduler;
 use solana_runtime::installed_scheduler_pool::InstalledSchedulerPool;
 use solana_runtime::installed_scheduler_pool::SchedulingContext;
 use solana_runtime::installed_scheduler_pool::SchedulerId;
+use solana_runtime::installed_scheduler_pool::WaitSource;
 use std::sync::atomic::AtomicBool;
 use solana_sdk::transaction::SanitizedTransaction;
 use solana_sdk::transaction::Result;
