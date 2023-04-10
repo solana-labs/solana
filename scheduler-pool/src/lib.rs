@@ -146,6 +146,6 @@ impl InstalledScheduler for Scheduler {
         &self,
         c: solana_runtime::installed_scheduler_pool::SchedulingContext,
     ) {
-        *self.0.c.lock().unwrap() = c;
+        *self.0.c.lock().unwrap() = Some(c);
     }
 }
