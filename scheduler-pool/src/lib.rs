@@ -131,7 +131,7 @@ impl SchedulerPoolWrapper {
     }
 }
 
-impl InstalledSchedulerPool for SchedulerPoolWrapper {
+impl InstalledSchedulerPool for SchedulerPool {
     fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler> {
         self.0.take_from_pool(Some(context))
     }
