@@ -22,7 +22,7 @@ struct Scheduler {
 }
 
 impl Scheduler {
-    fn spawn() {
+    fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
         panic!();
     }
 }
