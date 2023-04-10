@@ -32,6 +32,7 @@ impl Scheduler {
 
 impl SchedulerPool {
     fn new(
+        weak: &Weak<Self>,
         poh_recorder: Option<&Arc<RwLock<PohRecorder>>>,
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -44,6 +45,7 @@ impl SchedulerPool {
             transaction_status_sender,
             replay_vote_sender,
             prioritization_fee_cache,
+            weak: weak.clone(),
         }
     }
     pub fn new_boxed(
