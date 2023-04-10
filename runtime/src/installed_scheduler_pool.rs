@@ -47,7 +47,7 @@ pub enum WaitSource {
     // most normal termination waiting mode
     AcrossBlock,
     // scheduler will be restarted without being returned to pool in order to reuse it immediately.
-    InsideBlock, 
+    InsideBlock,
     FromBankDrop,
     FromSchedulerDrop,
 }
@@ -58,10 +58,8 @@ pub trait InstalledScheduler: Send + Sync + Debug {
 
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
     fn schedule_termination(&mut self);
-    fn wait_for_termination(
-        &mut self,
-        source: &WaitSource,
-    ) -> Option<(ExecuteTimings, Result<()>)>;
+    fn wait_for_termination(&mut self, source: &WaitSource)
+        -> Option<(ExecuteTimings, Result<()>)>;
 
     fn replace_scheduler_context(&self, context: SchedulingContext);
 }
@@ -214,11 +212,11 @@ impl Bank {
         }
     }
 
-    fn wait_for_scheduler(
-        &self,
-        source: WaitSource,
-    ) -> Option<(ExecuteTimings, Result<()>)> {
-        debug!("wait_for_scheduler(slot: {}, source: {source:?}): started...", self.slot());
+    fn wait_for_scheduler(&self, source: WaitSource) -> Option<(ExecuteTimings, Result<()>)> {
+        debug!(
+            "wait_for_scheduler(slot: {}, source: {source:?}): started...",
+            self.slot()
+        );
 
         let mut scheduler_guard = self.scheduler.write().unwrap();
         let scheduler = &mut scheduler_guard.0;
@@ -235,7 +233,11 @@ impl Bank {
         } else {
             None
         };
-        debug!("wait_for_scheduler(slot: {}, source: {source:?}): finished with: {:?}...", self.slot(), timings_and_result.as_ref().map(|(_, result)| result));
+        debug!(
+            "wait_for_scheduler(slot: {}, source: {source:?}): finished with: {:?}...",
+            self.slot(),
+            timings_and_result.as_ref().map(|(_, result)| result)
+        );
 
         timings_and_result
     }
