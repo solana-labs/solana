@@ -336,7 +336,6 @@ impl Checkpoint {
         let did_drop = if let Some(scheduler_context) = scheduler_context {
             if let Some(bank) = scheduler_context.into_bank() {
                 bank.wait_for_completed_scheduler_from_scheduler_drop();
-                drop(bank);
                 true
             } else {
                 false
