@@ -44,9 +44,11 @@ pub type SchedulerId = u64;
 
 #[derive(Debug)]
 pub enum WaitSource {
+    // most normal termination waiting mode
     AcrossBlock,
-    InsideBlock,
-    FromDrop,
+    // scheduler will be restarted without being returned to pool in order to reuse it immediately.
+    InsideBlock, 
+    FromBankDrop,
     FromSchedulerDrop,
 }
 
@@ -244,7 +246,7 @@ impl Bank {
     }
 
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::FromDrop);
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::FromBankDrop);
         maybe_timings_and_result.map(|(_timings, result)| result)
     }
 
