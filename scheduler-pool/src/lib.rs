@@ -942,7 +942,7 @@ impl InstalledScheduler for Scheduler {
         );
 
         info!("just before wait for restart...");
-        if matches!(source, WaitSource::FromBankDrop) {
+        if matches!(source, WaitSource::FromSchedulerDrop) {
             self.checkpoint.ignore_external_thread();
         }
         self.checkpoint.wait_for_restart();
