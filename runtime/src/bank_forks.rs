@@ -276,7 +276,7 @@ impl BankForks {
         let mut is_root_bank_squashed = false;
         let mut banks = vec![&root_bank];
         let parents = root_bank.parents();
-        banks.extend(parents);
+        banks.extend(parents.iter());
         let total_parent_banks = banks.len();
         let mut total_squash_accounts_ms = 0;
         let mut total_squash_accounts_index_ms = 0;
