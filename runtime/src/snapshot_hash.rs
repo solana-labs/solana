@@ -33,6 +33,14 @@ pub struct IncrementalSnapshotHash {
     pub hash: (Slot, SnapshotHash),
 }
 
+/// bprumo TODO: doc
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FullSnapshotHashNew(pub Slot, pub SnapshotHash);
+
+/// bprumo TODO: doc
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IncrementalSnapshotHashNew(pub Slot, pub SnapshotHash);
+
 /// FullSnapshotHashes is used by SnapshotPackagerService to collect the snapshot hashes from full
 /// snapshots and then push those hashes to CRDS.
 #[derive(Debug, Clone, PartialEq, Eq)]
