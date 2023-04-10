@@ -19,6 +19,12 @@ pub struct SchedulerPool {
 struct Scheduler {
 }
 
+impl Scheduler {
+    fn spawn() {
+        panic!();
+    }
+}
+
 impl SchedulerPool {
     fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>, prioritization_fee_cache: Arc<PrioritizationFeeCache>) -> Self {
         Self {
