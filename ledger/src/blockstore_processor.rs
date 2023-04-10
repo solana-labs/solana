@@ -65,7 +65,7 @@ use {
     thiserror::Error,
 };
 
-struct TransactionBatchWithIndexes<'a, 'b> {
+pub struct TransactionBatchWithIndexes<'a, 'b> {
     pub batch: TransactionBatch<'a, 'b>,
     pub transaction_indexes: Vec<usize>,
 }
