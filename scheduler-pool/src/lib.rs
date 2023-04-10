@@ -135,7 +135,7 @@ impl InstalledScheduler for Scheduler {
         todo!()
     }
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
-        todo!()
+        execute_batch();
     }
     fn schedule_termination(&mut self) {
         todo!()

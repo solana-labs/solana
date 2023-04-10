@@ -125,7 +125,7 @@ fn get_first_error(
     first_err
 }
 
-fn execute_batch(
+pub fn execute_batch(
     batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
