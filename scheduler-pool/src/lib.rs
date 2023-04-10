@@ -140,6 +140,7 @@ impl InstalledScheduler for Scheduler {
         std::result::Result<(), TransactionError>,
     )> {
         // no-op
+        None
     }
     fn replace_scheduler_context(
         &self,
