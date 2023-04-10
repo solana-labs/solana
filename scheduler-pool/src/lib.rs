@@ -61,16 +61,16 @@ impl SchedulerPool {
         ))
     }
 
-    fn prepare_new_scheduler(self: &Arc<Self>, context: SchedulingContext) {
+    fn prepare_new_scheduler(&self, context: SchedulingContext) {
         // block on some max count of borrowed schdulers!
         self.schedulers
             .lock()
             .unwrap()
-            .push(Box::new(Scheduler::spawn(self.clone(), context)));
+            .push(Box::new(Scheduler::spawn(self.weak.upgrade(), context)));
     }
 
     fn take_from_pool2(
-        self: &Arc<Self>,
+        &self,
         context: Option<SchedulingContext>,
     ) -> Box<dyn InstalledScheduler> {
         let mut schedulers = self.schedulers.lock().unwrap();
