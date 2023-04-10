@@ -170,8 +170,7 @@ impl BankForks {
 
     pub(crate) fn install_scheduler_into_bank(&self, bank: &Arc<Bank>) {
         if let Some(scheduler_pool) = &self.scheduler_pool {
-            let context =
-                SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
+            let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
             bank.install_scheduler(scheduler_pool.take_from_pool(context));
         }
     }
