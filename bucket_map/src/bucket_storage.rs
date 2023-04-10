@@ -218,7 +218,8 @@ impl<O: BucketOccupied> BucketStorage<O> {
         self.contents.is_free(entry, ix as usize)
     }
 
-    fn try_lock(&mut self, ix: u64) -> bool {
+    /// try to occupy `ix`. return true if successful
+    pub(crate) fn try_lock(&mut self, ix: u64) -> bool {
         let start = self.get_start_offset_with_header(ix);
         let entry = &mut self.mmap[start..];
         if self.contents.is_free(entry, ix as usize) {
