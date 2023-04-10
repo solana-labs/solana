@@ -53,7 +53,8 @@ impl SchedulerPool {
         replay_vote_sender: Option<ReplayVoteSender>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<dyn InstalledSchedulerPool> {
-        Arc::new(SchedulerPool::new(
+        Arc::new_cyclic(|weak_pool| SchedulerPool::new(
+            weak_pool,
             poh_recorder,
             log_messages_bytes_limit,
             transaction_status_sender,
