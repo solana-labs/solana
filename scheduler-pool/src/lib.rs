@@ -4,6 +4,7 @@ use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
 use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_runtime::installed_scheduler_pool::InstalledScheduler;
 use solana_poh::poh_recorder::PohRecorder;
+use std::sync::RwLock;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
