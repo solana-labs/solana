@@ -42,6 +42,13 @@ pub(crate) type InstalledSchedulerPoolBox = Option<SchedulerPoolBox>;
 
 pub type SchedulerId = u64;
 
+enum WaitSource {
+    AcrossBlock,
+    InsideBlock,
+    ViaDrop,
+    ViaInternalDrop,
+};
+
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
     fn scheduler_pool(&self) -> SchedulerPoolBox;
