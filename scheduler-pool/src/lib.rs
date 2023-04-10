@@ -32,23 +32,6 @@ impl Scheduler {
 }
 
 impl SchedulerPool {
-    fn new(
-        weak: &Weak<Self>,
-        poh_recorder: Option<&Arc<RwLock<PohRecorder>>>,
-        log_messages_bytes_limit: Option<usize>,
-        transaction_status_sender: Option<TransactionStatusSender>,
-        replay_vote_sender: Option<ReplayVoteSender>,
-        prioritization_fee_cache: Arc<PrioritizationFeeCache>,
-    ) -> Self {
-        Self {
-            schedulers: std::sync::Mutex::new(Vec::new()),
-            log_messages_bytes_limit,
-            transaction_status_sender,
-            replay_vote_sender,
-            prioritization_fee_cache,
-            weak: weak.clone(),
-        }
-    }
     pub fn new_boxed(
         poh_recorder: Option<&Arc<RwLock<PohRecorder>>>,
         log_messages_bytes_limit: Option<usize>,
@@ -56,14 +39,14 @@ impl SchedulerPool {
         replay_vote_sender: Option<ReplayVoteSender>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<dyn InstalledSchedulerPool> {
-        Arc::new_cyclic(|weak_pool| SchedulerPool::new(
-            weak_pool,
-            poh_recorder,
+        Arc::new_cyclic(|weak_pool| Self {
+            schedulers: std::sync::Mutex::new(Vec::new()),
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
             prioritization_fee_cache,
-        ))
+            weak: weak.clone(),
+        })
     }
 
     fn prepare_new_scheduler(&self, context: SchedulingContext) {
