@@ -33,12 +33,12 @@ use {
     std::{fmt::Debug, ops::Deref, sync::Arc},
 };
 
-pub trait InstalledSchedulerPool: Sync + Debug {
+pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox;
     fn return_to_pool(&self, scheduler: SchedulerBox);
 }
 
-pub trait InstalledScheduler: Sync + Debug {
+pub trait InstalledScheduler: Debug {
     fn scheduler_id(&self) -> SchedulerId;
     fn scheduler_pool(&self) -> SchedulerPoolBox;
 
