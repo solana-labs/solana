@@ -331,10 +331,11 @@ impl Checkpoint {
             .unwrap();
     }
 
-    fn wait_for_restart_from_internal_thread(&self, scheduler_context: Option<SchedulingContext>) {
+    fn wait_for_restart_from_scheduler_thread(&self, scheduler_context: Option<SchedulingContext>) {
         let did_drop = if let Some(scheduler_context) = scheduler_context {
             if let Some(bank) = scheduler_context.into_bank() {
-                bank.wait_for_completed_scheduler_via_internal_drop();
+                bank.wait_for_completed_scheduler_from_scheduler_drop();
+                drop(bank);
                 true
             } else {
                 false
@@ -622,7 +623,7 @@ impl Scheduler {
                 }
                 },
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush) => {
-                    checkpoint.wait_for_restart_from_internal_thread(latest_scheduler_context.take());
+                    checkpoint.wait_for_restart_from_scheduler_thread(latest_scheduler_context.take());
                 }
                 }
             }
@@ -709,7 +710,7 @@ impl Scheduler {
                                 first_error = Ok(());
                             }
                             checkpoint.register_return_value((std::mem::take(&mut cumulative_timings), std::mem::replace(&mut first_error, Ok(()))));
-                            checkpoint.wait_for_restart_from_internal_thread(latest_scheduler_context.take());
+                            checkpoint.wait_for_restart_from_scheduler_thread(latest_scheduler_context.take());
                         },
                     }
                 }
@@ -752,7 +753,7 @@ impl Scheduler {
                     if scheduler_context.is_none() {
                        scheduler_context = checkpoint.use_context_value();
                     }
-                    checkpoint.wait_for_restart_from_internal_thread(scheduler_context);
+                    checkpoint.wait_for_restart_from_scheduler_thread(scheduler_context);
                     continue;
                 }
 
@@ -845,10 +846,10 @@ impl Scheduler {
         }
     }
 
-    fn do_clear_stop(&mut self, is_restart: bool) {
+    fn do_clear_stop(&mut self, source: &WaitSource) {
         assert!(self.graceful_stop_initiated);
         self.graceful_stop_initiated = false;
-        if is_restart {
+        if matches!(source, WaitSource::InsideBlock) {
             assert_eq!(
                 self.stopped_mode.is_none(),
                 true,
@@ -859,7 +860,7 @@ impl Scheduler {
             assert!(self.current_scheduler_context.write().unwrap().is_none());
         }
         self.checkpoint.wait_for_completed_restart();
-        if is_restart {
+        if matches!(source, WaitSource::InsideBlock) {
             self.checkpoint.replace_context_value(self.current_scheduler_context.write().unwrap().take().unwrap());
         }
     }
@@ -933,15 +934,15 @@ impl InstalledScheduler for Scheduler {
             .unwrap();
     }
 
-    fn wait_for_termination(&mut self, from_internal: bool, is_restart: bool) -> Option<(ExecuteTimings, Result<()>)> {
-        self.do_trigger_stop(is_restart);
+    fn wait_for_termination(&mut self, source: &WaitSource) -> Option<(ExecuteTimings, Result<()>)> {
+        self.do_trigger_stop(source);
         let label = format!("id_{:016x}", self.scheduler_id); //SchedulingContext::log_prefix(self.scheduler_id, self.scheduler_context().as_ref());
         info!(
-            "Scheduler::gracefully_stop(): {} {} waiting.. from_internal: {from_internal} is_restart: {is_restart}", label, std::thread::current().name().unwrap().to_string()
+            "Scheduler::gracefully_stop(): {} {} waiting.. {source:?}", label, std::thread::current().name().unwrap().to_string()
         );
 
         info!("just before wait for restart...");
-        if from_internal {
+        if matches!(source, WaitSource::FromBankDrop) {
             self.checkpoint.ignore_external_thread();
         }
         self.checkpoint.wait_for_restart();
@@ -966,13 +967,13 @@ impl InstalledScheduler for Scheduler {
         info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.scheduler_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
         */
 
-        let timings_and_result = if !is_restart {
+        let timings_and_result = if !matches!(source, WaitSource::InsideBlock) {
             self.timings_and_result.take()
         } else {
             None
         };
 
-        self.do_clear_stop(is_restart);
+        self.do_clear_stop(source);
 
         info!(
             "Scheduler::gracefully_stop(): {} waiting done.. from_internal: {from_internal} is_restart: {is_restart}", label,
