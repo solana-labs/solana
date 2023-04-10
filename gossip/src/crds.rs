@@ -688,7 +688,7 @@ impl CrdsDataStats {
             CrdsData::Version(_) => 7,
             CrdsData::NodeInstance(_) => 8,
             CrdsData::DuplicateShred(_, _) => 9,
-            CrdsData::IncrementalSnapshotHashes(_) => 10,
+            CrdsData::SnapshotHashes(_) => 10,
             CrdsData::ContactInfo(_) => 11,
             // Update CrdsCountsArray if new items are added here.
         }
