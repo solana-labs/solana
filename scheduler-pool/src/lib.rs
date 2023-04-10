@@ -849,7 +849,7 @@ impl Scheduler {
     fn do_clear_stop(&mut self, is_restart: bool) {
         assert!(self.graceful_stop_initiated);
         self.graceful_stop_initiated = false;
-        if matches!(source, WaitSource::InsideBlock) {
+        if is_restart {
             assert_eq!(
                 self.stopped_mode.is_none(),
                 true,
@@ -860,7 +860,7 @@ impl Scheduler {
             assert!(self.current_scheduler_context.write().unwrap().is_none());
         }
         self.checkpoint.wait_for_completed_restart();
-        if matches!(source, WaitSource::InsideBlock) {
+        if is_restart {
             self.checkpoint.replace_context_value(self.current_scheduler_context.write().unwrap().take().unwrap());
         }
     }
