@@ -67,7 +67,6 @@ pub enum WaitSource {
     FromSchedulerDrop,
 }
 
-
 pub type SchedulerBox = Box<dyn InstalledScheduler>;
 // somewhat arbitrarily new type just to pacify Bank's frozen_abi...
 #[derive(Debug, Default)]
