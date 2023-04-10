@@ -130,9 +130,7 @@ impl InstalledScheduler for Scheduler {
     }
     fn scheduler_pool(
         &self,
-    ) -> std::boxed::Box<
-        (dyn solana_runtime::installed_scheduler_pool::InstalledSchedulerPool + 'static),
-    > {
+    ) -> SchedulerPoolArc {
         todo!()
     }
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
