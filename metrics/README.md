@@ -12,6 +12,7 @@ In oder to explore validator specific metrics from mainnet-beta, testnet or devn
 For local cluster deployments you should use:
 
 * https://internal-metrics.solana.com:8888/
+* https://internal-metrics.solana.com:8889/
 
 ## Public Grafana Dashboards
 
