@@ -260,7 +260,7 @@ impl Bank {
 
     pub(crate) fn drop_scheduler(&mut self) {
         if self.with_scheduler() {
-            if let Some(Err(err)) = self.wait_for_completed_scheduler_via_drop() {
+            if let Some(Err(err)) = self.wait_for_completed_scheduler_from_drop() {
                 warn!(
                     "Bank::drop(): slot: {} discarding error from scheduler: {:?}",
                     self.slot(),
