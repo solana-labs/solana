@@ -47,7 +47,7 @@ enum WaitSource {
     InsideBlock,
     ViaDrop,
     ViaInternalDrop,
-};
+}
 
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
