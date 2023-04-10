@@ -83,6 +83,7 @@ use {
     dashmap::{DashMap, DashSet},
     itertools::Itertools,
     log::*,
+    percentage::Percentage,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
@@ -4672,10 +4673,11 @@ impl Bank {
 
         execution_time.stop();
 
+        const EVICT_CACHE_TO_PERCENTAGE: u8 = 90;
         self.loaded_programs_cache
             .write()
             .unwrap()
-            .sort_and_evict(None);
+            .sort_and_evict(Percentage::from(EVICT_CACHE_TO_PERCENTAGE));
 
         debug!(
             "check: {}us load: {}us execute: {}us txs_len={}",
