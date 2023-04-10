@@ -1672,12 +1672,7 @@ impl Bank {
         let parent_epoch = parent.epoch();
         let (_, update_epoch_time_us) = measure_us!({
             if parent_epoch < new.epoch() {
-                new.process_new_epoch(
-                    &epoch_schedule,
-                    parent_epoch,
-                    parent.slot(),
-                    reward_calc_tracer,
-                );
+                new.process_new_epoch(parent_epoch, parent.slot(), reward_calc_tracer);
             } else {
                 // Save a snapshot of stakes for use in consensus and stake weighted networking
                 let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
@@ -1734,7 +1729,6 @@ impl Bank {
     /// process for the start of a new epoch
     fn process_new_epoch(
         &mut self,
-        epoch_schedule: &EpochSchedule,
         parent_epoch: Epoch,
         parent_slot: Slot,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
@@ -1760,7 +1754,7 @@ impl Bank {
         );
 
         // Save a snapshot of stakes for use in consensus and stake weighted networking
-        let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+        let leader_schedule_epoch = self.epoch_schedule.get_leader_schedule_epoch(slot);
         let (_, update_epoch_stakes_time) = measure!(
             self.update_epoch_stakes(leader_schedule_epoch),
             "update_epoch_stakes",
