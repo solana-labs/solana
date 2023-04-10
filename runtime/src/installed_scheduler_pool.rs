@@ -42,6 +42,7 @@ pub(crate) type InstalledSchedulerPoolBox = Option<SchedulerPoolBox>;
 
 pub type SchedulerId = u64;
 
+#[derive(Debug)]
 enum WaitSource {
     AcrossBlock,
     InsideBlock,
