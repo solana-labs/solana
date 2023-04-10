@@ -11,6 +11,7 @@ use {
     log::*,
 };
 use solana_sdk::transaction::SanitizedTransaction;
+use solana_sdk::transaction::TransactionError;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
@@ -112,6 +113,6 @@ fn scheduler_id(&self) -> u64 { todo!() }
 fn scheduler_pool(&self) -> std::boxed::Box<(dyn solana_runtime::installed_scheduler_pool::InstalledSchedulerPool + 'static)> { todo!() }
 fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) { todo!() }
 fn schedule_termination(&mut self) { todo!() }
-fn wait_for_termination(&mut self, _: &solana_runtime::installed_scheduler_pool::WaitSource) -> std::option::Option<(solana_program_runtime::timings::ExecuteTimings, std::result::Result<(), solana_sdk::transaction::error::TransactionError>)> { todo!() }
+fn wait_for_termination(&mut self, _: &solana_runtime::installed_scheduler_pool::WaitSource) -> std::option::Option<(solana_program_runtime::timings::ExecuteTimings, std::result::Result<(), TransactionError>)> { todo!() }
 fn replace_scheduler_context(&self, _: solana_runtime::installed_scheduler_pool::SchedulingContext) { todo!() }
 }
