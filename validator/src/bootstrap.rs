@@ -398,36 +398,15 @@ pub fn attempt_download_genesis_and_snapshot(
     vote_account: &Pubkey,
     authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
 ) -> Result<(), String> {
-    let genesis_config = download_then_check_genesis_hash(
+    download_then_check_genesis_hash(
         &rpc_contact_info.rpc,
         ledger_path,
-        validator_config.expected_genesis_hash,
+        &mut validator_config.expected_genesis_hash,
         bootstrap_config.max_genesis_archive_unpacked_size,
         bootstrap_config.no_genesis_fetch,
         use_progress_bar,
-    );
-
-    if let Ok(genesis_config) = genesis_config {
-        let genesis_hash = genesis_config.hash();
-        if validator_config.expected_genesis_hash.is_none() {
-            info!("Expected genesis hash set to {}", genesis_hash);
-            validator_config.expected_genesis_hash = Some(genesis_hash);
-        }
-    }
-
-    if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
-        // Sanity check that the RPC node is using the expected genesis hash before
-        // downloading a snapshot from it
-        let rpc_genesis_hash = rpc_client
-            .get_genesis_hash()
-            .map_err(|err| format!("Failed to get genesis hash: {err}"))?;
-
-        if expected_genesis_hash != rpc_genesis_hash {
-            return Err(format!(
-                "Genesis hash mismatch: expected {expected_genesis_hash} but RPC node genesis hash is {rpc_genesis_hash}"
-            ));
-        }
-    }
+        rpc_client,
+    )?;
 
     if let Some(gossip) = gossip.take() {
         shutdown_gossip_service(gossip);

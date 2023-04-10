@@ -5745,7 +5745,9 @@ dependencies = [
 name = "solana-genesis-utils"
 version = "1.16.0"
 dependencies = [
+ "log",
  "solana-download-utils",
+ "solana-rpc-client",
  "solana-runtime",
  "solana-sdk 1.16.0",
 ]
