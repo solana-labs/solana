@@ -170,9 +170,9 @@ impl BankForks {
 
     pub(crate) fn install_scheduler_into_bank(&self, bank: &Arc<Bank>) {
         if let Some(scheduler_pool) = &self.scheduler_pool {
-            let new_context =
+            let context =
                 SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
-            bank.install_scheduler(scheduler_pool.take_from_pool(new_context));
+            bank.install_scheduler(scheduler_pool.take_from_pool(context));
         }
     }
 }
@@ -266,9 +266,8 @@ impl Bank {
         if self.with_scheduler() {
             if let Some(Err(err)) = self.wait_for_completed_scheduler_from_drop() {
                 warn!(
-                    "Bank::drop(): slot: {} discarding error from scheduler: {:?}",
+                    "Bank::drop(): slot: {} discarding error from scheduler: {err:?}",
                     self.slot(),
-                    err
                 );
             }
         }
