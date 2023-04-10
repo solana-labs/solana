@@ -275,9 +275,9 @@ impl BankForks {
             .unwrap_or(0);
         // Calculate the accounts hash at a fixed interval
         let mut is_root_bank_squashed = false;
-        let mut banks = vec![root_bank.clone()];
+        let mut banks = vec![root_bank];
         let parents = root_bank.parents();
-        banks.extend(parents.clone());
+        banks.extend(parents);
         let total_parent_banks = banks.len();
         let mut total_squash_accounts_ms = 0;
         let mut total_squash_accounts_index_ms = 0;
@@ -294,7 +294,7 @@ impl BankForks {
         // `.find()`.
         let eah_banks: Vec<_> = banks
             .iter()
-            .filter(|&&bank| self.should_request_epoch_accounts_hash(bank))
+            .filter(|&bank| self.should_request_epoch_accounts_hash(bank))
             .collect();
         assert!(
             eah_banks.len() <= 1,
