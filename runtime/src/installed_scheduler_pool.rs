@@ -225,7 +225,7 @@ impl Bank {
             let timings_and_result = scheduler
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(source));
-            if !matches(source, WaitSource::InsideBlock) {
+            if !matches!(source, WaitSource::InsideBlock) {
                 let scheduler = scheduler.take().expect("scheduler after waiting");
                 scheduler.scheduler_pool().return_to_pool(scheduler);
             }
