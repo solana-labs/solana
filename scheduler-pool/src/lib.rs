@@ -31,3 +31,12 @@ impl SchedulerPoolWrapper {
     }
 }
 
+impl InstalledSchedulerPool for SchedulerPoolWrapper {
+    fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler> {
+        self.0.take_from_pool(Some(context))
+    }
+
+    fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler>) {
+        self.0.return_to_pool(scheduler);
+    }
+}
