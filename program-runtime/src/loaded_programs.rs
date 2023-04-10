@@ -65,6 +65,7 @@ pub enum LoadedProgramType {
     FailedVerification,
     Closed,
     DelayVisibility,
+    /// Successfully verified but not currently compiled, used to track usage statistics when a compiled program is evicted from memory.
     Unloaded,
     LegacyV0(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     LegacyV1(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
@@ -805,6 +806,58 @@ mod tests {
     }
 
     #[test]
+    fn test_usage_count_of_unloaded_program() {
+        let mut cache = LoadedPrograms::default();
+
+        let program = Pubkey::new_unique();
+        let num_total_programs = 6;
+        (0..num_total_programs).for_each(|i| {
+            cache.replenish(
+                program,
+                new_test_loaded_program_with_usage(i, i + 2, AtomicU64::new(i + 10)),
+            );
+        });
+
+        // This will unload the program deployed at slot 0, with usage count = 10
+        cache.sort_and_evict(Percentage::from(2));
+
+        let num_unloaded = num_matching_entries(&cache, |program_type| {
+            matches!(program_type, LoadedProgramType::Unloaded)
+        });
+        assert_eq!(num_unloaded, 1);
+
+        cache.entries.values().for_each(|programs| {
+            programs.iter().for_each(|program| {
+                if matches!(program.program, LoadedProgramType::Unloaded) {
+                    // Test that the usage counter is retained for the unloaded program
+                    assert_eq!(program.usage_counter.load(Ordering::Relaxed), 10);
+                    assert_eq!(program.deployment_slot, 0);
+                    assert_eq!(program.effective_slot, 2);
+                }
+            })
+        });
+
+        // Replenish the program that was just unloaded. Use 0 as the usage counter. This should be
+        // updated with the usage counter from the unloaded program.
+        cache.replenish(
+            program,
+            new_test_loaded_program_with_usage(0, 2, AtomicU64::new(0)),
+        );
+
+        cache.entries.values().for_each(|programs| {
+            programs.iter().for_each(|program| {
+                if matches!(program.program, LoadedProgramType::Unloaded)
+                    && program.deployment_slot == 0
+                    && program.effective_slot == 2
+                {
+                    // Test that the usage counter was correctly updated.
+                    assert_eq!(program.usage_counter.load(Ordering::Relaxed), 10);
+                }
+            })
+        });
+    }
+
+    #[test]
     fn test_tombstone() {
         let tombstone = LoadedProgram::new_tombstone(0, LoadedProgramType::FailedVerification);
         assert!(matches!(
@@ -1360,7 +1413,7 @@ mod tests {
             3
         );
 
-        // Nww root 5 should not evict the expired entry for program1
+        // New root 5 should not evict the expired entry for program1
         cache.prune(&fork_graph, 5);
         assert_eq!(
             cache
@@ -1371,7 +1424,7 @@ mod tests {
             1
         );
 
-        // Nww root 15 should evict the expired entry for program1
+        // New root 15 should evict the expired entry for program1
         cache.prune(&fork_graph, 15);
         assert!(cache.entries.get(&program1).is_none());
     }
