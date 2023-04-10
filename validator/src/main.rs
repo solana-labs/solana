@@ -1702,9 +1702,9 @@ pub fn main() {
         }),
     );
 
-    let public_tpu_addr = matches.value_of("public_tpu_addr").map(|public_tpu_addr| {
-        solana_net_utils::parse_host_port(public_tpu_addr).unwrap_or_else(|err| {
-            eprintln!("Failed to parse --public-tpu-address: {err}");
+    let overwrite_tpu_addr = matches.value_of("tpu_host_addr").map(|tpu_addr| {
+        solana_net_utils::parse_host_port(tpu_addr).unwrap_or_else(|err| {
+            eprintln!("Failed to parse --overwrite-tpu-addr: {err}");
             exit(1);
         })
     });
@@ -1719,7 +1719,7 @@ pub fn main() {
         &gossip_addr,
         dynamic_port_range,
         bind_address,
-        public_tpu_addr,
+        overwrite_tpu_addr,
     );
 
     if restricted_repair_only_mode {
