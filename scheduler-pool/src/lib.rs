@@ -117,7 +117,7 @@ impl InstalledScheduler for Scheduler {
     fn scheduler_pool(
         &self,
     ) -> SchedulerPoolArc {
-        todo!()
+        self.0
     }
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
         use solana_ledger::blockstore_processor::execute_batch;
@@ -130,7 +130,6 @@ impl InstalledScheduler for Scheduler {
         execute_batch(&b, bank, self.0.transaction_status_sender.as_ref(), self.0.replay_vote_sender.as_ref(), &mut Default::default(), self.0.log_messages_bytes_limit, &self.0.prioritization_fee_cache);
     }
     fn schedule_termination(&mut self) {
-        todo!()
     }
     fn wait_for_termination(
         &mut self,
