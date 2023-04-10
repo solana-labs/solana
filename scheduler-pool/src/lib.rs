@@ -17,6 +17,7 @@ pub struct SchedulerPool {
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
 }
 
+#[derive(Debug)]
 struct Scheduler {
 }
 
