@@ -33,14 +33,13 @@ use {
     std::{fmt::Debug, ops::Deref, sync::Arc},
 };
 
-trait SendAndSyncFor<T>: Send + Sync {
-}
-
+// Send + Sync is needed to be a field of BankForks
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox;
     fn return_to_pool(&self, scheduler: SchedulerBox);
 }
 
+// Send + Sync is needed to be a field of Bank
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
     fn scheduler_pool(&self) -> SchedulerPoolBox;
