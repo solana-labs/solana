@@ -18,6 +18,7 @@ pub struct SchedulerPool {
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
+    weak: std::sync::Weak<SchedulerPool>,
 }
 
 #[derive(Debug)]
