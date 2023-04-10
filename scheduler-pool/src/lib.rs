@@ -123,9 +123,9 @@ impl InstalledScheduler for Scheduler {
         use solana_ledger::blockstore_processor::execute_batch;
         self.0.c.lock().unwrap().unwrap().bank();
 
-        //TransactionBatchWithIndexes {
-        //    transaction_indexes: [],
-        //}
+        let b: TransactionBatchWithIndexes = {
+            panic!();
+        };
         execute_batch();
     }
     fn schedule_termination(&mut self) {
