@@ -157,6 +157,14 @@ impl Drop for BankWithScheduler {
     }
 }
 
+impl Deref for BankWithScheduler {
+    type Target = Bank;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl BankForks {
     pub fn install_scheduler_pool(&mut self, pool: SchedulerPoolBox) {
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
