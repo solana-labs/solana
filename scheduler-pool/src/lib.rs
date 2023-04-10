@@ -1,3 +1,4 @@
+use solana_runtime::vote_sender_types::ReplayVoteSender;
 use std::sync::Arc;
 use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
 
