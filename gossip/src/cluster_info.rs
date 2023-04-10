@@ -33,8 +33,8 @@ use {
         },
         crds_value::{
             self, AccountsHashes, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex,
-            IncrementalSnapshotHashes, LegacySnapshotHashes, LowestSlot, NodeInstance, Version,
-            Vote, MAX_WALLCLOCK,
+            LegacySnapshotHashes, LowestSlot, NodeInstance, SnapshotHashes, Version, Vote,
+            MAX_WALLCLOCK,
         },
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
@@ -123,7 +123,7 @@ pub const MAX_ACCOUNTS_HASHES: usize = 16;
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
 pub const MAX_LEGACY_SNAPSHOT_HASHES: usize = 16;
-/// Maximum number of hashes in IncrementalSnapshotHashes a node publishes
+/// Maximum number of incremental hashes in SnapshotHashes a node publishes
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
 pub const MAX_INCREMENTAL_SNAPSHOT_HASHES: usize = 25;
@@ -273,7 +273,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "BvYH2igMaoJKhi9L98rnNSKTVF4jvu3KAArJfW3EoUqD")]
+#[frozen_abi(digest = "FsZnSeTYNH7F51AxTaKUixXxjT6if2ThmPN1mhDWtXZM")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -390,7 +390,7 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // Unstaked nodes can still help repair.
             CrdsData::EpochSlots(_, _) => true,
             // Unstaked nodes can still serve snapshots.
-            CrdsData::LegacySnapshotHashes(_) | CrdsData::IncrementalSnapshotHashes(_) => true,
+            CrdsData::LegacySnapshotHashes(_) | CrdsData::SnapshotHashes(_) => true,
             // Otherwise unstaked voting nodes will show up with no version in
             // the various dashboards.
             CrdsData::Version(_) => true,
@@ -1005,7 +1005,7 @@ impl ClusterInfo {
             return Err(ClusterInfoError::TooManyIncrementalSnapshotHashes);
         }
 
-        let message = CrdsData::IncrementalSnapshotHashes(IncrementalSnapshotHashes {
+        let message = CrdsData::SnapshotHashes(SnapshotHashes {
             from: self.id(),
             full,
             incremental,
@@ -1207,12 +1207,12 @@ impl ClusterInfo {
     pub fn get_incremental_snapshot_hashes_for_node(
         &self,
         pubkey: &Pubkey,
-    ) -> Option<IncrementalSnapshotHashes> {
+    ) -> Option<SnapshotHashes> {
         self.gossip
             .crds
             .read()
             .unwrap()
-            .get::<&IncrementalSnapshotHashes>(*pubkey)
+            .get::<&SnapshotHashes>(*pubkey)
             .cloned()
     }
 
@@ -3530,14 +3530,14 @@ RPC Enabled Nodes: 1"#;
     #[test]
     fn test_max_incremental_snapshot_hashes_with_push_messages() {
         let mut rng = rand::thread_rng();
-        let incremental_snapshot_hashes = IncrementalSnapshotHashes {
+        let incremental_snapshot_hashes = SnapshotHashes {
             from: Pubkey::new_unique(),
             full: (Slot::default(), Hash::default()),
             incremental: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
             wallclock: timestamp(),
         };
         let crds_value = CrdsValue::new_signed(
-            CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
+            CrdsData::SnapshotHashes(incremental_snapshot_hashes),
             &Keypair::new(),
         );
         let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
@@ -3548,14 +3548,14 @@ RPC Enabled Nodes: 1"#;
     #[test]
     fn test_max_incremental_snapshot_hashes_with_pull_responses() {
         let mut rng = rand::thread_rng();
-        let incremental_snapshot_hashes = IncrementalSnapshotHashes {
+        let incremental_snapshot_hashes = SnapshotHashes {
             from: Pubkey::new_unique(),
             full: (Slot::default(), Hash::default()),
             incremental: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
             wallclock: timestamp(),
         };
         let crds_value = CrdsValue::new_signed(
-            CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
+            CrdsData::SnapshotHashes(incremental_snapshot_hashes),
             &Keypair::new(),
         );
         let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
