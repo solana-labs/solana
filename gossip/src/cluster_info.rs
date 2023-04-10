@@ -273,7 +273,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "9pQAWSpV411icPZjDnBcTJKjLyzYPVFWgYxx3bqWQbtg")]
+#[frozen_abi(digest = "BvYH2igMaoJKhi9L98rnNSKTVF4jvu3KAArJfW3EoUqD")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -998,17 +998,17 @@ impl ClusterInfo {
 
     pub fn push_incremental_snapshot_hashes(
         &self,
-        base: (Slot, Hash),
-        hashes: Vec<(Slot, Hash)>,
+        full: (Slot, Hash),
+        incremental: Vec<(Slot, Hash)>,
     ) -> Result<(), ClusterInfoError> {
-        if hashes.len() > MAX_INCREMENTAL_SNAPSHOT_HASHES {
+        if incremental.len() > MAX_INCREMENTAL_SNAPSHOT_HASHES {
             return Err(ClusterInfoError::TooManyIncrementalSnapshotHashes);
         }
 
         let message = CrdsData::IncrementalSnapshotHashes(IncrementalSnapshotHashes {
             from: self.id(),
-            base,
-            hashes,
+            full,
+            incremental,
             wallclock: timestamp(),
         });
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
@@ -3532,8 +3532,8 @@ RPC Enabled Nodes: 1"#;
         let mut rng = rand::thread_rng();
         let incremental_snapshot_hashes = IncrementalSnapshotHashes {
             from: Pubkey::new_unique(),
-            base: (Slot::default(), Hash::default()),
-            hashes: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
+            full: (Slot::default(), Hash::default()),
+            incremental: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
             wallclock: timestamp(),
         };
         let crds_value = CrdsValue::new_signed(
@@ -3550,8 +3550,8 @@ RPC Enabled Nodes: 1"#;
         let mut rng = rand::thread_rng();
         let incremental_snapshot_hashes = IncrementalSnapshotHashes {
             from: Pubkey::new_unique(),
-            base: (Slot::default(), Hash::default()),
-            hashes: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
+            full: (Slot::default(), Hash::default()),
+            incremental: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
             wallclock: timestamp(),
         };
         let crds_value = CrdsValue::new_signed(

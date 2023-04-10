@@ -216,22 +216,22 @@ pub type LegacySnapshotHashes = AccountsHashes;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct IncrementalSnapshotHashes {
     pub from: Pubkey,
-    pub base: (Slot, Hash),
-    pub hashes: Vec<(Slot, Hash)>,
+    pub full: (Slot, Hash),
+    pub incremental: Vec<(Slot, Hash)>,
     pub wallclock: u64,
 }
 
 impl Sanitize for IncrementalSnapshotHashes {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         sanitize_wallclock(self.wallclock)?;
-        if self.base.0 >= MAX_SLOT {
+        if self.full.0 >= MAX_SLOT {
             return Err(SanitizeError::ValueOutOfBounds);
         }
-        for (slot, _) in &self.hashes {
+        for (slot, _) in &self.incremental {
             if *slot >= MAX_SLOT {
                 return Err(SanitizeError::ValueOutOfBounds);
             }
-            if self.base.0 >= *slot {
+            if self.full.0 >= *slot {
                 return Err(SanitizeError::InvalidValue);
             }
         }
