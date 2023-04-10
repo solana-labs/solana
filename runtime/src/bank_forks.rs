@@ -246,11 +246,11 @@ impl BankForks {
         let old_epoch = self.root_bank().epoch();
         self.root.store(root, Ordering::Relaxed);
 
-        let root_bank: &Arc<Bank> = self
+        let root_bank: = self
             .banks
             .get(&root)
             .expect("root bank didn't exist in bank_forks")
-            .deref();
+            .bank();
         let new_epoch = root_bank.epoch();
         if old_epoch != new_epoch {
             info!(
