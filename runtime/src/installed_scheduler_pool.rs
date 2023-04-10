@@ -45,8 +45,8 @@ pub type SchedulerId = u64;
 enum WaitSource {
     AcrossBlock,
     InsideBlock,
-    ViaDrop,
-    ViaInternalDrop,
+    FromDrop,
+    FromInternalDrop,
 }
 
 pub trait InstalledScheduler: Send + Sync + Debug {
@@ -211,14 +211,11 @@ impl Bank {
         }
     }
 
-    fn wait_for_scheduler<
-        const VIA_DROP: bool,
-        const FROM_INTERNAL: bool,
-        const IS_RESTART: bool,
-    >(
+    fn wait_for_scheduler(
         &self,
+        source: WaitSource,
     ) -> Option<(ExecuteTimings, Result<()>)> {
-        debug!("wait_for_scheduler<VIA_DROP = {VIA_DROP}, FROM_INTERNAL = {FROM_INTERNAL}, IS_RESTART = {IS_RESTART}(slot: {}): started...", self.slot());
+        debug!("wait_for_scheduler(slot: {}, source: {source:?}): started...", self.slot());
 
         let mut scheduler_guard = self.scheduler.write().unwrap();
         let scheduler = &mut scheduler_guard.0;
@@ -226,8 +223,8 @@ impl Bank {
         let timings_and_result = if scheduler.is_some() {
             let timings_and_result = scheduler
                 .as_mut()
-                .and_then(|scheduler| scheduler.wait_for_termination(FROM_INTERNAL, IS_RESTART));
-            if !IS_RESTART {
+                .and_then(|scheduler| scheduler.wait_for_termination(source));
+            if !matches(source, WaitSource::InsideBlock) {
                 let scheduler = scheduler.take().expect("scheduler after waiting");
                 scheduler.scheduler_pool().return_to_pool(scheduler);
             }
@@ -235,28 +232,28 @@ impl Bank {
         } else {
             None
         };
-        debug!("wait_for_scheduler<VIA_DROP = {VIA_DROP}, FROM_INTERNAL = {FROM_INTERNAL}, IS_RESTART = {IS_RESTART}(slot: {}): finished with: {:?}...", self.slot(), timings_and_result.as_ref().map(|(_, result)| result));
+        debug!("wait_for_scheduler(slot: {}, source: {source:?}): finished with: {:?}...", self.slot(), timings_and_result.as_ref().map(|(_, result)| result));
 
         timings_and_result
     }
 
     pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<()>) {
-        let maybe_timings_and_result = self.wait_for_scheduler::<false, false, false>();
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::AcrossBlock);
         maybe_timings_and_result.unwrap_or((ExecuteTimings::default(), Ok(())))
     }
 
     fn wait_for_completed_scheduler_via_drop(&self) -> Option<Result<()>> {
-        let maybe_timings_and_result = self.wait_for_scheduler::<true, false, false>();
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::FromDrop);
         maybe_timings_and_result.map(|(_timings, result)| result)
     }
 
     pub fn wait_for_completed_scheduler_via_internal_drop(self) {
-        let maybe_timings_and_result = self.wait_for_scheduler::<true, true, false>();
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::FromInternalDrop);
         assert!(maybe_timings_and_result.is_some());
     }
 
     pub(crate) fn wait_for_reusable_scheduler(&self) {
-        let maybe_timings_and_result = self.wait_for_scheduler::<false, false, true>();
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::InsideBlock);
         assert!(maybe_timings_and_result.is_none());
     }
 
