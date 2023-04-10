@@ -136,7 +136,7 @@ impl InstalledScheduler for Scheduler {
     }
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
         use solana_ledger::blockstore_processor::execute_batch;
-        execute_batch();
+        //execute_batch();
     }
     fn schedule_termination(&mut self) {
         todo!()
