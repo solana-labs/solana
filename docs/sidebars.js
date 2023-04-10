@@ -184,6 +184,18 @@ module.exports = {
     },
     {
       type: "category",
+      label: "Advanced Concepts",
+      // collapsed: false,
+      items: [
+        {
+          type: "doc",
+          id: "learn/state-compression",
+          label: "State Compression",
+        },
+      ],
+    },
+    {
+      type: "category",
       label: "Clients",
       items: [
         {
@@ -205,6 +217,17 @@ module.exports = {
           type: "doc",
           id: "developing/clients/rust-api",
           label: "Rust API",
+        },
+      ],
+    },
+    {
+      type: "category",
+      label: "Guides",
+      items: [
+        {
+          type: "doc",
+          id: "developing/guides/compressed-nfts",
+          label: "Compressed NFTs",
         },
       ],
     },
