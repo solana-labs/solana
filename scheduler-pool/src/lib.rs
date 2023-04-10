@@ -111,7 +111,7 @@ impl SchedulerPool {
 }
 
 impl InstalledSchedulerPool for SchedulerPool {
-    fn take_from_pool(self: &Arc<Self>, context: SchedulingContext) -> Box<dyn InstalledScheduler> {
+    fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler> {
         self.take_from_pool2(Some(context))
     }
 
