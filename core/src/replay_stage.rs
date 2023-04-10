@@ -111,6 +111,7 @@ pub enum HeaviestForkFailures {
     LockedOut(u64),
     FailedThreshold(
         Slot,
+        /* vote depth */ u64,
         /* Observed stake */ u64,
         /* Total stake */ u64,
     ),
@@ -3013,8 +3014,11 @@ impl ReplayStage {
                 .get_fork_stats_mut(bank_slot)
                 .expect("All frozen banks must exist in the Progress map");
 
-            stats.vote_threshold =
-                tower.check_vote_stake_threshold(bank_slot, &stats.voted_stakes, stats.total_stake);
+            stats.vote_threshold = tower.check_vote_stake_thresholds(
+                bank_slot,
+                &stats.voted_stakes,
+                stats.total_stake,
+            );
             stats.is_locked_out = tower.is_locked_out(
                 bank_slot,
                 ancestors
@@ -3253,9 +3257,10 @@ impl ReplayStage {
             if is_locked_out {
                 failure_reasons.push(HeaviestForkFailures::LockedOut(bank.slot()));
             }
-            if let ThresholdDecision::FailedThreshold(fork_stake) = vote_threshold {
+            if let ThresholdDecision::FailedThreshold(vote_depth, fork_stake) = vote_threshold {
                 failure_reasons.push(HeaviestForkFailures::FailedThreshold(
                     bank.slot(),
+                    vote_depth,
                     fork_stake,
                     total_threshold_stake,
                 ));
