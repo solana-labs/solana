@@ -70,7 +70,7 @@ impl SchedulerPool {
         self.schedulers
             .lock()
             .unwrap()
-            .push(Box::new(Scheduler::spawn(self.weak.upgrade(), context)));
+            .push(Box::new(Scheduler::spawn(self.weak.upgrade().unwrap(), context)));
     }
 
     fn take_from_pool2(
