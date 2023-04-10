@@ -47,7 +47,7 @@ pub enum WaitSource {
     AcrossBlock,
     InsideBlock,
     FromDrop,
-    FromInternalDrop,
+    FromSchedulerDrop,
 }
 
 pub trait InstalledScheduler: Send + Sync + Debug {
@@ -243,13 +243,13 @@ impl Bank {
         maybe_timings_and_result.unwrap_or((ExecuteTimings::default(), Ok(())))
     }
 
-    fn wait_for_completed_scheduler_via_drop(&self) -> Option<Result<()>> {
+    fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
         let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::FromDrop);
         maybe_timings_and_result.map(|(_timings, result)| result)
     }
 
-    pub fn wait_for_completed_scheduler_via_internal_drop(self) {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::FromInternalDrop);
+    pub fn wait_for_completed_scheduler_from_scheduler_drop(self) {
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::FromSchedulerDrop);
         assert!(maybe_timings_and_result.is_some());
     }
 
