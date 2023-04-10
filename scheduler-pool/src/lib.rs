@@ -23,7 +23,7 @@ pub struct SchedulerPool {
 }
 
 #[derive(Debug)]
-struct Scheduler {}
+struct Scheduler(Arc<SchedulerPool>);
 
 impl Scheduler {
     fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
@@ -119,6 +119,10 @@ impl InstalledScheduler for Scheduler {
     }
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
         use solana_ledger::blockstore_processor::execute_batch;
+
+        //TransactionBatchWithIndexes {
+        //    transaction_indexes: [],
+        //}
         execute_batch();
     }
     fn schedule_termination(&mut self) {
