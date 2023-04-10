@@ -6,6 +6,7 @@ use solana_runtime::installed_scheduler_pool::InstalledScheduler;
 use solana_poh::poh_recorder::PohRecorder;
 use std::sync::RwLock;
 use solana_runtime::installed_scheduler_pool::InstalledSchedulerPool;
+use solana_runtime::installed_scheduler_pool::SchedulingContext;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
