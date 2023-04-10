@@ -1672,8 +1672,7 @@ impl Bank {
         let parent_epoch = parent.epoch();
         let (_, update_epoch_time_us) = measure_us!({
             if parent_epoch < new.epoch() {
-                Self::new_epoch(
-                    &mut new,
+                new.process_new_epoch(
                     &epoch_schedule,
                     parent_epoch,
                     parent.slot(),
@@ -1733,22 +1732,22 @@ impl Bank {
     }
 
     /// process for the start of a new epoch
-    fn new_epoch(
-        new: &mut Bank,
+    fn process_new_epoch(
+        &mut self,
         epoch_schedule: &EpochSchedule,
         parent_epoch: Epoch,
         parent_slot: Slot,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
     ) {
-        let epoch = new.epoch();
-        let slot = new.slot();
+        let epoch = self.epoch();
+        let slot = self.slot();
         let (thread_pool, thread_pool_time) = measure!(
             ThreadPoolBuilder::new().build().unwrap(),
             "thread_pool_creation",
         );
 
         let (_, apply_feature_activations_time) = measure!(
-            new.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false),
+            self.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false),
             "apply_feature_activation",
         );
 
@@ -1756,14 +1755,14 @@ impl Bank {
         // update vote accounts with warmed up stakes before saving a
         // snapshot of stakes in epoch stakes
         let (_, activate_epoch_time) = measure!(
-            new.stakes_cache.activate_epoch(epoch, &thread_pool),
+            self.stakes_cache.activate_epoch(epoch, &thread_pool),
             "activate_epoch",
         );
 
         // Save a snapshot of stakes for use in consensus and stake weighted networking
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
         let (_, update_epoch_stakes_time) = measure!(
-            new.update_epoch_stakes(leader_schedule_epoch),
+            self.update_epoch_stakes(leader_schedule_epoch),
             "update_epoch_stakes",
         );
 
@@ -1771,7 +1770,7 @@ impl Bank {
         // After saving a snapshot of stakes, apply stake rewards and commission
         let (_, update_rewards_with_thread_pool_time) = measure!(
             {
-                new.update_rewards_with_thread_pool(
+                self.update_rewards_with_thread_pool(
                     parent_epoch,
                     reward_calc_tracer,
                     &thread_pool,
@@ -1782,7 +1781,7 @@ impl Bank {
         );
 
         report_new_epoch_metrics(
-            new.epoch(),
+            epoch,
             slot,
             parent_slot,
             NewEpochTimings {
