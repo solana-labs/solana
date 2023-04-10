@@ -6,7 +6,7 @@
 
 use {
     crossbeam_channel::{Receiver, Sender},
-    solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
+    solana_gossip::cluster_info::{ClusterInfo, MAX_ACCOUNTS_HASHES},
     solana_measure::measure_us,
     solana_runtime::{
         accounts_db::CalcAccountsHashFlavor,
@@ -465,7 +465,7 @@ impl AccountsHashVerifier {
             .or(Some(*accounts_hash.as_hash()));
         hashes.push((accounts_package.slot, hash.unwrap()));
 
-        retain_max_n_elements(hashes, MAX_SNAPSHOT_HASHES);
+        retain_max_n_elements(hashes, MAX_ACCOUNTS_HASHES);
 
         if halt_on_known_validator_accounts_hash_mismatch {
             let mut slot_to_hash = HashMap::new();
@@ -623,7 +623,7 @@ mod tests {
             ..SnapshotConfig::default()
         };
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
-        for i in 0..MAX_SNAPSHOT_HASHES + 1 {
+        for i in 0..MAX_ACCOUNTS_HASHES + 1 {
             let slot = full_snapshot_archive_interval_slots + i as u64;
             let accounts_package = AccountsPackage {
                 slot,
@@ -652,16 +652,16 @@ mod tests {
             .get_accounts_hash_for_node(&cluster_info.id(), |c| c.clone())
             .unwrap();
         info!("{:?}", cluster_hashes);
-        assert_eq!(hashes.len(), MAX_SNAPSHOT_HASHES);
-        assert_eq!(cluster_hashes.len(), MAX_SNAPSHOT_HASHES);
+        assert_eq!(hashes.len(), MAX_ACCOUNTS_HASHES);
+        assert_eq!(cluster_hashes.len(), MAX_ACCOUNTS_HASHES);
         assert_eq!(
             cluster_hashes[0],
             (full_snapshot_archive_interval_slots + 1, expected_hash)
         );
         assert_eq!(
-            cluster_hashes[MAX_SNAPSHOT_HASHES - 1],
+            cluster_hashes[MAX_ACCOUNTS_HASHES - 1],
             (
-                full_snapshot_archive_interval_slots + MAX_SNAPSHOT_HASHES as u64,
+                full_snapshot_archive_interval_slots + MAX_ACCOUNTS_HASHES as u64,
                 expected_hash
             )
         );
