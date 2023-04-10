@@ -57,8 +57,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     fn schedule_termination(&mut self);
     fn wait_for_termination(
         &mut self,
-        from_internal: bool,
-        is_restart: bool,
+        source: WaitSource,
     ) -> Option<(ExecuteTimings, Result<()>)>;
 
     fn replace_scheduler_context(&self, context: SchedulingContext);
