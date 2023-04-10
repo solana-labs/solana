@@ -101,3 +101,6 @@ impl InstalledSchedulerPool for SchedulerPoolWrapper {
         self.0.return_to_pool(scheduler);
     }
 }
+
+impl InstalledScheduler for Scheduler {
+}
