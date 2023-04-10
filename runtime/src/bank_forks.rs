@@ -294,7 +294,7 @@ impl BankForks {
         // `.find()`.
         let eah_banks: Vec<_> = banks
             .iter()
-            .filter(|&bank| self.should_request_epoch_accounts_hash(bank))
+            .filter(|&&bank| self.should_request_epoch_accounts_hash(bank))
             .collect();
         assert!(
             eah_banks.len() <= 1,
