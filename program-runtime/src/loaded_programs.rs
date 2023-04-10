@@ -295,6 +295,11 @@ impl LoadedPrograms {
             {
                 if matches!(existing.program, LoadedProgramType::Unloaded) {
                     // The unloaded program is getting reloaded
+                    // Copy over the usage counter to the new entry
+                    entry.usage_counter.store(
+                        existing.usage_counter.load(Ordering::Relaxed),
+                        Ordering::Relaxed,
+                    );
                     second_level.swap_remove(entry_index);
                 } else {
                     return (true, existing.clone());
@@ -418,12 +423,11 @@ impl LoadedPrograms {
             .unzip();
 
         for order in ordering {
-            if order == 0 {
-                num_loaded = num_loaded.saturating_add(1);
-            } else if order == 1 {
-                num_unloaded = num_unloaded.saturating_add(1);
-            } else if order == 2 {
-                num_tombstones = num_tombstones.saturating_add(1);
+            match order {
+                0 => num_loaded = num_loaded.saturating_add(1),
+                1 => num_unloaded = num_unloaded.saturating_add(1),
+                2 => num_tombstones = num_tombstones.saturating_add(1),
+                _ => unreachable!(),
             }
         }
 
@@ -548,14 +552,8 @@ mod tests {
         key: Pubkey,
         slot: Slot,
     ) -> Arc<LoadedProgram> {
-        let unloaded = Arc::new(LoadedProgram {
-            program: LoadedProgramType::Unloaded,
-            account_size: 0,
-            deployment_slot: slot,
-            effective_slot: slot.saturating_add(1),
-            maybe_expiration_slot: None,
-            usage_counter: AtomicU64::default(),
-        });
+        let unloaded =
+            Arc::new(new_test_loaded_program(slot, slot.saturating_add(1)).to_unloaded());
         cache.replenish(key, unloaded).1
     }
 
