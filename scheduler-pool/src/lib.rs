@@ -10,6 +10,7 @@ use {
     solana_sdk::transaction::{SanitizedTransaction, TransactionError},
     std::sync::{Arc, RwLock, Weak},
 };
+use solana_runtime::installed_scheduler_pool::SchedulerPoolArc;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
