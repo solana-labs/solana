@@ -249,8 +249,7 @@ impl BankForks {
         let root_bank = self
             .banks
             .get(&root)
-            .expect("root bank didn't exist in bank_forks")
-            .new_bank();
+            .expect("root bank didn't exist in bank_forks");
         let new_epoch = root_bank.epoch();
         if old_epoch != new_epoch {
             info!(
@@ -275,7 +274,7 @@ impl BankForks {
             .unwrap_or(0);
         // Calculate the accounts hash at a fixed interval
         let mut is_root_bank_squashed = false;
-        let mut banks = vec![root_bank];
+        let mut banks = vec![&root_bank];
         let parents = root_bank.parents();
         banks.extend(parents);
         let total_parent_banks = banks.len();
