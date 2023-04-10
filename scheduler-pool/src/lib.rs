@@ -117,7 +117,7 @@ impl InstalledScheduler for Scheduler {
     fn scheduler_pool(
         &self,
     ) -> SchedulerPoolArc {
-        self.0
+        self.0.clone()
     }
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
         use solana_ledger::blockstore_processor::execute_batch;
