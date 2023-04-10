@@ -489,16 +489,34 @@ mod tests {
                             && thread_rng().gen_range(0, 2) == 0;
                         if batch_insert_now {
                             // batch insert into the map with 1 bucket 50% of the time
-                            assert!(map
-                                .get_bucket_from_index(0)
-                                .batch_insert_non_duplicates(
-                                    additions
-                                        .clone()
-                                        .into_iter()
-                                        .map(|(k, mut v)| (k, v.0.pop().unwrap())),
-                                    to_add,
-                                )
-                                .is_empty());
+                            let mut batch_additions = additions
+                                .clone()
+                                .into_iter()
+                                .map(|(k, mut v)| (k, v.0.pop().unwrap()))
+                                .collect::<Vec<_>>();
+                            let mut duplicates = 0;
+                            if batch_additions.len() > 1 && thread_rng().gen_range(0, 2) == 0 {
+                                // insert a duplicate sometimes
+                                let item_to_duplicate =
+                                    thread_rng().gen_range(0, batch_additions.len());
+                                let where_to_insert_duplicate =
+                                    thread_rng().gen_range(0, batch_additions.len());
+                                batch_additions.insert(
+                                    where_to_insert_duplicate,
+                                    batch_additions[item_to_duplicate],
+                                );
+                                duplicates += 1;
+                            }
+                            let count = batch_additions.len();
+                            assert_eq!(
+                                map.get_bucket_from_index(0)
+                                    .batch_insert_non_duplicates(
+                                        batch_additions.into_iter(),
+                                        count,
+                                    )
+                                    .len(),
+                                duplicates
+                            );
                         } else {
                             additions.clone().into_iter().for_each(|(k, v)| {
                                 if insert {

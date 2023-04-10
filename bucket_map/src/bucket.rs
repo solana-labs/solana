@@ -804,6 +804,50 @@ mod tests {
     }
 
     #[test]
+    fn batch_insert_duplicates_internal_simple() {
+        solana_logger::setup();
+        // add the same duplicate key several times.
+        // make sure the resulting index and returned `duplicates` is correct.
+        let random = 1;
+        let data_buckets = Vec::default();
+        let k = Pubkey::from([1u8; 32]);
+        for v in 10..12u64 {
+            for len in 1..4 {
+                let raw = (0..len).map(|l| (k, v + (l as u64))).collect::<Vec<_>>();
+                let mut hashed = Bucket::index_entries(raw.clone().into_iter(), len, random);
+                let hashed_raw = hashed.clone();
+
+                let mut index = create_test_index(None);
+
+                let mut duplicates = Vec::default();
+                assert!(Bucket::<u64>::batch_insert_non_duplicates_internal(
+                    &mut index,
+                    &Vec::default(),
+                    &mut hashed,
+                    &mut duplicates,
+                )
+                .is_ok());
+
+                assert_eq!(duplicates.len(), len - 1);
+                assert_eq!(hashed.len(), 0);
+                let single_hashed_raw_inserted = hashed_raw.last().unwrap();
+                let elem =
+                    IndexEntryPlaceInBucket::new(single_hashed_raw_inserted.0 % index.capacity());
+                let (value, ref_count) = elem.read_value(&index, &data_buckets);
+                assert_eq!(ref_count, 1);
+                assert_eq!(value, &[single_hashed_raw_inserted.2]);
+                let expected_duplicates = hashed_raw
+                    .iter()
+                    .rev()
+                    .skip(1)
+                    .map(|(_hash, k, v)| (*k, *v, single_hashed_raw_inserted.2))
+                    .collect::<Vec<_>>();
+                assert_eq!(expected_duplicates, duplicates);
+            }
+        }
+    }
+
+    #[test]
     fn batch_insert_non_duplicates_internal_simple() {
         solana_logger::setup();
         // add 2 entries, make sure they are added in the buckets we expect
@@ -906,5 +950,25 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[should_panic(expected = "batch insertion can only occur prior to any deletes")]
+    #[test]
+    fn batch_insert_after_delete() {
+        solana_logger::setup();
+
+        let tmpdir = tempdir().unwrap();
+        let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
+        assert!(!paths.is_empty());
+        let max_search = 2;
+        let mut bucket = Bucket::new(Arc::new(paths), max_search, Arc::default(), Arc::default());
+
+        let key = Pubkey::new_unique();
+        assert_eq!(bucket.read_value(&key), None);
+
+        bucket.update(&key, |_| Some((vec![0], 0)));
+        bucket.delete_key(&key);
+
+        bucket.batch_insert_non_duplicates(std::iter::empty(), 0);
     }
 }
