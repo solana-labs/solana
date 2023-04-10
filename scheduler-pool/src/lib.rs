@@ -8,7 +8,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::transaction::{SanitizedTransaction, TransactionError},
-    std::sync::{Arc, RwLock},
+    std::sync::{Arc, RwLock, Weak},
 };
 
 #[derive(Debug)]
