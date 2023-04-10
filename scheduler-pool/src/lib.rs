@@ -5,6 +5,7 @@ use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_runtime::installed_scheduler_pool::InstalledScheduler;
 use solana_poh::poh_recorder::PohRecorder;
 use std::sync::RwLock;
+use solana_runtime::installed_scheduler_pool::InstalledSchedulerPool;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
