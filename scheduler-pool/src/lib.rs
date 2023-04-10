@@ -144,8 +144,8 @@ impl InstalledScheduler for Scheduler {
     }
     fn replace_scheduler_context(
         &self,
-        _: solana_runtime::installed_scheduler_pool::SchedulingContext,
+        c: solana_runtime::installed_scheduler_pool::SchedulingContext,
     ) {
-        todo!()
+        self.0.c.lock().unwrap() = c;
     }
 }
