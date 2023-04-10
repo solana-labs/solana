@@ -3,6 +3,7 @@ use std::sync::Arc;
 use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
 use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_runtime::installed_scheduler_pool::InstalledScheduler;
+use solana_poh::poh_recorder::PohRecorder;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
