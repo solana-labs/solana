@@ -22,6 +22,45 @@ impl SchedulerPool {
     }
 }
 
+impl SchedulerPool {
+    fn take_from_pool(self: &Arc<Self>, context: Option<SchedulingContext>) -> Box<dyn InstalledScheduler> {
+        let mut schedulers = self.schedulers.lock().unwrap();
+        let maybe_scheduler = schedulers.pop();
+        if let Some(scheduler) = maybe_scheduler {
+            trace!(
+                "SchedulerPool: id_{:016x} is taken... len: {} => {}",
+                scheduler.scheduler_id(),
+                schedulers.len() + 1,
+                schedulers.len()
+            );
+            drop(schedulers);
+
+            if let Some(context) = context {
+                scheduler.replace_scheduler_context(context);
+            }
+            scheduler
+        } else {
+            drop(schedulers);
+
+            self.prepare_new_scheduler(context.unwrap());
+            self.take_from_pool(None)
+        }
+    }
+
+    fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn InstalledScheduler>) {
+        let mut schedulers = self.schedulers.lock().unwrap();
+
+        trace!(
+            "SchedulerPool: id_{:016x} is returned... len: {} => {}",
+            scheduler.scheduler_id(),
+            schedulers.len(),
+            schedulers.len() + 1
+        );
+
+        schedulers.push(scheduler);
+    }
+}
+
 #[derive(Debug)]
 struct SchedulerPoolWrapper(Arc<SchedulerPool>);
 
