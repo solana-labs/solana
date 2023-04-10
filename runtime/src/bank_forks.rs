@@ -274,7 +274,7 @@ impl BankForks {
             .unwrap_or(0);
         // Calculate the accounts hash at a fixed interval
         let mut is_root_bank_squashed = false;
-        let mut banks = vec![&root_bank];
+        let mut banks = vec![root_bank];
         let parents = root_bank.parents();
         banks.extend(parents.iter());
         let total_parent_banks = banks.len();
