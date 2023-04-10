@@ -975,9 +975,7 @@ impl InstalledScheduler for Scheduler {
 
         self.do_clear_stop(source);
 
-        info!(
-            "Scheduler::gracefully_stop(): {} waiting done.. from_internal: {from_internal} is_restart: {is_restart}", label,
-        );
+        info!("Scheduler::gracefully_stop(): {label} waiting done.. {source:?}");
 
         timings_and_result
     }
