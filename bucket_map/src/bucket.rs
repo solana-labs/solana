@@ -329,6 +329,10 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 Ok(_result) => {
                     // everything added
                     self.set_anticipated_count(0);
+                    self.index.count.fetch_add(
+                        count.saturating_sub(duplicates.len()) as u64,
+                        Ordering::Relaxed,
+                    );
                     return duplicates;
                 }
                 Err(error) => {

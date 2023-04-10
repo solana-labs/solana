@@ -400,9 +400,14 @@ mod tests {
             };
 
             let verify = || {
+                let expected_count = hash_map.read().unwrap().len();
                 let mut maps = maps
                     .iter()
                     .map(|map| {
+                        let total_entries = (0..map.num_buckets())
+                            .map(|bucket| map.get_bucket_from_index(bucket).bucket_len() as usize)
+                            .sum::<usize>();
+                        assert_eq!(total_entries, expected_count);
                         let mut r = vec![];
                         for bin in 0..map.num_buckets() {
                             r.append(
