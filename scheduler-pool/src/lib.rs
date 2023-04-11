@@ -150,9 +150,9 @@ impl InstalledScheduler for Scheduler {
     fn wait_for_termination(
         &mut self,
         _: &solana_runtime::installed_scheduler_pool::WaitSource,
-    ) -> std::option::Option<(
-        solana_program_runtime::timings::ExecuteTimings,
-        std::result::Result<(), TransactionError>,
+    ) -> Option<(
+        ExecuteTimings,
+        Result<()>,
     )> {
         // no-op
         None
