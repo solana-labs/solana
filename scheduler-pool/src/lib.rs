@@ -30,7 +30,7 @@ pub struct SchedulerPool {
 #[derive(Debug)]
 struct Scheduler(
     Arc<SchedulerPool>,
-    Mutex<(SchedulingContext, Option<(ExecuteTimings, Result<()>)>)>,
+    Mutex<(SchedulingContext, Option<TimingAndResult>)>,
 );
 
 impl Scheduler {
@@ -45,7 +45,7 @@ impl SchedulerPool {
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: Option<ReplayVoteSender>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
-    ) -> Arc<dyn InstalledSchedulerPool> {
+    ) -> SchedulerPoolArc {
         Arc::new_cyclic(|weak_pool| Self {
             schedulers: Mutex::new(Vec::new()),
             log_messages_bytes_limit,
