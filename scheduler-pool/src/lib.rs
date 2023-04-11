@@ -11,6 +11,7 @@ use {
     std::sync::{Arc, RwLock, Weak, Mutex},
 };
 use solana_runtime::installed_scheduler_pool::SchedulerPoolArc;
+use solana_runtime::installed_scheduler_pool::SchedulerBox;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
