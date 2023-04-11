@@ -102,13 +102,13 @@ impl InstalledScheduler for Scheduler {
         };
         let (timings, result) = &mut timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
-        if a.1.is_ok() {
-            a.1 = execute_batch(
+        if result.is_ok() {
+            result = execute_batch(
                 &batch_with_indexes,
                 bank,
                 pool.transaction_status_sender.as_ref(),
                 pool.replay_vote_sender.as_ref(),
-                &mut a.0,
+                &mut timings,
                 pool.log_messages_bytes_limit,
                 &pool.prioritization_fee_cache,
             );
