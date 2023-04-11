@@ -127,12 +127,14 @@ impl InstalledScheduler for Scheduler {
         self.0.clone()
     }
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
-        let a = self.1.lock().unwrap();
-        let bank = a.0.bank();
+        let aa = self.1.lock().unwrap();
+        let bank = aa.0.bank();
 
         let b: TransactionBatchWithIndexes = {
             panic!();
         };
+        let mut a = aa.1.get_or_insert((ExecuteTimings::default(), Ok(())));
+
         if a.2.is_ok() {
             a.2 = execute_batch(
                 &b,
