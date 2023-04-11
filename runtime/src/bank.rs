@@ -3784,7 +3784,7 @@ impl Bank {
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
 
-    pub(crate) fn prepare_sanitized_batch_without_locking(
+    pub fn prepare_sanitized_batch_without_locking(
         &self,
         transaction: SanitizedTransaction,
     ) -> TransactionBatch<'_, '_> {
