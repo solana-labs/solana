@@ -150,7 +150,7 @@ impl InstalledScheduler for Scheduler {
     }
     fn wait_for_termination(
         &mut self,
-        _wait_source: WaitSource,
+        _wait_source: &WaitSource,
     ) -> Option<(ExecuteTimings, Result<()>)> {
         // no-op
         None
