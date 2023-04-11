@@ -37,7 +37,7 @@ impl Scheduler {
     fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
         Self(
             scheduler_pool,
-            Mutex::new((initial_context, ExecuteTimings::default(), Ok(()))),
+            Mutex::new((initial_context, None)),
         )
     }
 }
