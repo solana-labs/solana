@@ -90,7 +90,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_utils::{self, move_and_async_delete_path},
+        snapshot_utils::{self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path},
     },
     solana_sdk::{
         clock::Slot,
@@ -553,17 +553,8 @@ impl Validator {
         start.stop();
         info!("done. {}", start);
 
-        info!("Cleaning up incomplete snapshot dirs..");
-        if let Err(e) = snapshot_utils::remove_incomplete_bank_snapshot_dir(
-            &config.snapshot_config.bank_snapshots_dir,
-        ) {
-            return Err(format!(
-                "Failed to clean up incomplete snapshot dirs: {e:?}"
-            ));
-        }
-
         info!("Cleaning orphaned account snapshot directories..");
-        if let Err(e) = snapshot_utils::clean_orphaned_account_snapshot_dirs(
+        if let Err(e) = clean_orphaned_account_snapshot_dirs(
             &config.snapshot_config.bank_snapshots_dir,
             &config.account_snapshot_paths,
         ) {

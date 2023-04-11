@@ -74,9 +74,9 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, create_all_accounts_run_and_snapshot_dirs, move_and_async_delete_path,
-            ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
-            SUPPORTED_ARCHIVE_COMPRESSION,
+            self, clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
+            move_and_async_delete_path, ArchiveFormat, SnapshotVersion,
+            DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
@@ -1205,19 +1205,14 @@ fn load_bank_forks(
     });
     measure.stop();
     info!("done. {}", measure);
-    info!("Cleaning up incomplete snapshot dirs..");
-    if let Err(e) = snapshot_utils::remove_incomplete_bank_snapshot_dir(&bank_snapshots_dir) {
-        eprintln!("Failed to clean up incomplete snapshot dirs: {e:?}");
-        exit(1);
-    }
+
     info!(
         "Cleaning contents of account snapshot paths: {:?}",
         account_snapshot_paths
     );
-    if let Err(e) = snapshot_utils::clean_orphaned_account_snapshot_dirs(
-        &bank_snapshots_dir,
-        &account_snapshot_paths,
-    ) {
+    if let Err(e) =
+        clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths)
+    {
         eprintln!("Failed to clean orphaned account snapshot dirs.  Error: {e:?}");
         exit(1);
     }

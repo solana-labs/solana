@@ -789,65 +789,6 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
     bank_snapshots
 }
 
-/// Remove any incomplete bank snapshot directories.  Creating the bank snapshot directory takes
-/// multiple steps.  If the process dies in the middle, the directory may be left incomplete, not
-/// good to use for constructing a bank.  Remove such directories to avoid booting from incomplete
-/// snapshot dirs.
-pub fn remove_incomplete_bank_snapshot_dir(bank_snapshots_dir: impl AsRef<Path>) -> Result<()> {
-    let entries = fs::read_dir(&bank_snapshots_dir).map_err(|err| {
-        SnapshotError::IoWithSourceAndFile(
-            err,
-            "Unable to read bank snapshots directory",
-            bank_snapshots_dir.as_ref().to_path_buf(),
-        )
-    })?;
-
-    let mut final_result = Ok(());
-
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-
-        if !entry.path().is_dir() {
-            continue;
-        }
-
-        let slot = match entry.path().file_name().and_then(|file_name| {
-            file_name
-                .to_str()
-                .and_then(|file_name| file_name.parse::<Slot>().ok())
-        }) {
-            Some(slot) => slot,
-            None => continue,
-        };
-
-        let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
-        let file_complete = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
-        if file_complete.exists() {
-            continue;
-        }
-
-        match fs::remove_dir_all(bank_snapshot_dir) {
-            Ok(()) => {}
-            Err(err) => {
-                let snapshot_error = SnapshotError::IoWithSourceAndFile(
-                    err,
-                    "Unable to remove bank snapshots directory",
-                    bank_snapshots_dir.as_ref().to_path_buf(),
-                );
-
-                if final_result.is_ok() {
-                    final_result = Err(snapshot_error);
-                }
-            }
-        }
-    }
-
-    final_result
-}
-
 /// Get the bank snapshots in a directory
 ///
 /// This function retains only the bank snapshots of type BankSnapshotType::Pre
