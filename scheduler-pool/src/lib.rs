@@ -92,7 +92,8 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
-        let (pool, (ref context, ref mut timings_and_result)) = (&self.0, &mut *self.1.lock().unwrap());
+        let (pool, (ref context, ref mut timings_and_result)) =
+            (&self.0, &mut *self.1.lock().unwrap());
         let bank = context.bank();
 
         let transactions = [transaction.clone()];
@@ -100,7 +101,8 @@ impl InstalledScheduler for Scheduler {
             batch: bank.prepare_sanitized_batch(&transactions),
             transaction_indexes: vec![index],
         };
-        let (timings, result) = timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
+        let (timings, result) =
+            timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
         if result.is_ok() {
             *result = execute_batch(
