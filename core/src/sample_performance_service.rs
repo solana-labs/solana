@@ -19,7 +19,6 @@ pub struct SamplePerformanceService {
 }
 
 impl SamplePerformanceService {
-    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         bank_forks: &Arc<RwLock<BankForks>>,
         blockstore: &Arc<Blockstore>,

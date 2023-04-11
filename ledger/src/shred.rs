@@ -82,7 +82,7 @@ pub use {
 mod common;
 mod legacy;
 mod merkle;
-mod shred_code;
+pub mod shred_code;
 mod shred_data;
 mod stats;
 mod traits;
@@ -258,7 +258,7 @@ impl ShredId {
         self.0
     }
 
-    pub(crate) fn unwrap(&self) -> (Slot, /*shred index:*/ u32, ShredType) {
+    pub(crate) fn unpack(&self) -> (Slot, /*shred index:*/ u32, ShredType) {
         (self.0, self.1, self.2)
     }
 

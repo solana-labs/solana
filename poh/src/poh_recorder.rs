@@ -12,7 +12,7 @@
 //!
 pub use solana_sdk::clock::Slot;
 use {
-    crate::poh_service::PohService,
+    crate::{leader_bank_notifier::LeaderBankNotifier, poh_service::PohService},
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, SendError, Sender, TrySendError},
     log::*,
     solana_entry::{
@@ -47,9 +47,6 @@ pub const MAX_GRACE_SLOTS: u64 = 2;
 
 #[derive(Error, Debug, Clone)]
 pub enum PohRecorderError {
-    #[error("invalid calling object")]
-    InvalidCallingObject,
-
     #[error("max height reached")]
     MaxHeightReached,
 
@@ -140,24 +137,17 @@ pub struct RecordTransactionsSummary {
     pub starting_transaction_index: Option<usize>,
 }
 
+#[derive(Clone)]
 pub struct TransactionRecorder {
     // shared by all users of PohRecorder
     pub record_sender: Sender<Record>,
     pub is_exited: Arc<AtomicBool>,
 }
 
-impl Clone for TransactionRecorder {
-    fn clone(&self) -> Self {
-        TransactionRecorder::new(self.record_sender.clone(), self.is_exited.clone())
-    }
-}
-
 impl TransactionRecorder {
     pub fn new(record_sender: Sender<Record>, is_exited: Arc<AtomicBool>) -> Self {
         Self {
-            // shared
             record_sender,
-            // shared
             is_exited,
         }
     }
@@ -308,13 +298,14 @@ pub struct PohRecorder {
     ticks_from_record: u64,
     last_metric: Instant,
     record_sender: Sender<Record>,
+    leader_bank_notifier: Arc<LeaderBankNotifier>,
     pub is_exited: Arc<AtomicBool>,
 }
 
 impl PohRecorder {
     fn clear_bank(&mut self) {
-        if let Some(working_bank) = self.working_bank.take() {
-            let bank = working_bank.bank;
+        if let Some(WorkingBank { bank, start, .. }) = self.working_bank.take() {
+            self.leader_bank_notifier.set_completed(bank.slot());
             let next_leader_slot = self.leader_schedule_cache.next_leader_slot(
                 &self.id,
                 bank.slot(),
@@ -336,7 +327,7 @@ impl PohRecorder {
             datapoint_info!(
                 "leader-slot-start-to-cleared-elapsed-ms",
                 ("slot", bank.slot(), i64),
-                ("elapsed", working_bank.start.elapsed().as_millis(), i64),
+                ("elapsed", start.elapsed().as_millis(), i64),
             );
         }
 
@@ -421,8 +412,12 @@ impl PohRecorder {
         self.ticks_per_slot
     }
 
-    pub fn recorder(&self) -> TransactionRecorder {
+    pub fn new_recorder(&self) -> TransactionRecorder {
         TransactionRecorder::new(self.record_sender.clone(), self.is_exited.clone())
+    }
+
+    pub fn new_leader_bank_notifier(&self) -> Arc<LeaderBankNotifier> {
+        self.leader_bank_notifier.clone()
     }
 
     fn is_same_fork_as_previous_leader(&self, slot: Slot) -> bool {
@@ -579,6 +574,8 @@ impl PohRecorder {
     }
 
     pub fn set_bank(&mut self, bank: &Arc<Bank>, track_transaction_indexes: bool) {
+        assert!(self.working_bank.is_none());
+        self.leader_bank_notifier.set_in_progress(bank);
         let working_bank = WorkingBank {
             bank: bank.clone(),
             start: Arc::new(Instant::now()),
@@ -964,6 +961,7 @@ impl PohRecorder {
                 ticks_from_record: 0,
                 last_metric: Instant::now(),
                 record_sender,
+                leader_bank_notifier: Arc::default(),
                 is_exited,
             },
             receiver,

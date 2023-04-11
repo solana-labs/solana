@@ -10,7 +10,7 @@ use {
         cluster_info_metrics::GossipStats,
         crds::{Crds, GossipRoute},
         crds_gossip_error::CrdsGossipError,
-        crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
+        crds_gossip_pull::{CrdsFilter, CrdsGossipPull, CrdsTimeouts, ProcessPullStats},
         crds_gossip_push::CrdsGossipPush,
         crds_value::{CrdsData, CrdsValue},
         duplicate_shred::{self, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
@@ -258,7 +258,7 @@ impl CrdsGossip {
 
     pub fn filter_pull_responses(
         &self,
-        timeouts: &HashMap<Pubkey, u64>,
+        timeouts: &CrdsTimeouts,
         response: Vec<CrdsValue>,
         now: u64,
         process_pull_stats: &mut ProcessPullStats,
@@ -292,12 +292,12 @@ impl CrdsGossip {
         );
     }
 
-    pub fn make_timeouts(
+    pub fn make_timeouts<'a>(
         &self,
         self_pubkey: Pubkey,
-        stakes: &HashMap<Pubkey, u64>,
+        stakes: &'a HashMap<Pubkey, u64>,
         epoch_duration: Duration,
-    ) -> HashMap<Pubkey, u64> {
+    ) -> CrdsTimeouts<'a> {
         self.pull.make_timeouts(self_pubkey, stakes, epoch_duration)
     }
 
@@ -306,13 +306,12 @@ impl CrdsGossip {
         self_pubkey: &Pubkey,
         thread_pool: &ThreadPool,
         now: u64,
-        timeouts: &HashMap<Pubkey, u64>,
+        timeouts: &CrdsTimeouts,
     ) -> usize {
         let mut rv = 0;
         if now > self.pull.crds_timeout {
-            //sanity check
-            assert_eq!(timeouts[self_pubkey], std::u64::MAX);
-            assert!(timeouts.contains_key(&Pubkey::default()));
+            debug_assert_eq!(timeouts[self_pubkey], u64::MAX);
+            debug_assert_ne!(timeouts[&Pubkey::default()], 0u64);
             rv = CrdsGossipPull::purge_active(thread_pool, &self.crds, now, timeouts);
         }
         self.crds

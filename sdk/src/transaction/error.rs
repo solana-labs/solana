@@ -153,6 +153,10 @@ pub enum TransactionError {
     /// Transaction exceeded max loaded accounts data size cap
     #[error("Transaction exceeded max loaded accounts data size cap")]
     MaxLoadedAccountsDataSizeExceeded,
+
+    /// LoadedAccountsDataSizeLimit set for transaction must be greater than 0.
+    #[error("LoadedAccountsDataSizeLimit set for transaction must be greater than 0.")]
+    InvalidLoadedAccountsDataSizeLimit,
 }
 
 impl From<SanitizeError> for TransactionError {

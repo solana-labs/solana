@@ -5,7 +5,8 @@ use {
     },
     log::*,
     solana_program_runtime::{
-        ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
+        declare_process_instruction, ic_msg, invoke_context::InvokeContext,
+        sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -315,10 +316,7 @@ fn transfer_with_seed(
     )
 }
 
-pub fn process_instruction(
-    _first_instruction_account: IndexOfAccount,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+declare_process_instruction!(process_instruction, 150, |invoke_context| {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -557,7 +555,7 @@ pub fn process_instruction(
             assign(&mut account, &address, &owner, &signers, invoke_context)
         }
     }
-}
+});
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SystemAccountKind {
@@ -607,14 +605,13 @@ mod tests {
         system_instruction, system_program,
         sysvar::{self, recent_blockhashes::IterItem, rent::Rent},
         transaction::TransactionError,
-        transaction_context::TransactionContext,
     };
     use {
         super::*,
         crate::{bank::Bank, bank_client::BankClient},
         bincode::serialize,
-        solana_program_runtime::invoke_context::{
-            mock_process_instruction, InvokeContext, ProcessInstructionWithContext,
+        solana_program_runtime::{
+            invoke_context::mock_process_instruction, with_mock_invoke_context,
         },
         std::sync::Arc,
     };
@@ -633,7 +630,6 @@ mod tests {
         transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
         instruction_accounts: Vec<AccountMeta>,
         expected_result: Result<(), InstructionError>,
-        process_instruction: ProcessInstructionWithContext,
     ) -> Vec<AccountSharedData> {
         mock_process_instruction(
             &system_program::id(),
@@ -641,10 +637,10 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            None,
             expected_result,
-            process_instruction,
+            super::process_instruction,
+            |_invoke_context| {},
+            |_invoke_context| {},
         )
     }
 
@@ -691,7 +687,6 @@ mod tests {
                 },
             ],
             Ok(()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 50);
         assert_eq!(accounts[1].lamports(), 50);
@@ -731,7 +726,6 @@ mod tests {
                 },
             ],
             Ok(()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 50);
         assert_eq!(accounts[1].lamports(), 50);
@@ -778,7 +772,6 @@ mod tests {
                 },
             ],
             Ok(()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 50);
         assert_eq!(accounts[1].lamports(), 50);
@@ -788,9 +781,7 @@ mod tests {
 
     #[test]
     fn test_address_create_with_seed_mismatch() {
-        let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, Vec::new());
         let from = Pubkey::new_unique();
         let seed = "dull boy";
         let to = Pubkey::new_unique();
@@ -832,7 +823,6 @@ mod tests {
                 },
             ],
             Err(InstructionError::MissingRequiredSignature),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 100);
         assert_eq!(accounts[1], AccountSharedData::default());
@@ -868,7 +858,6 @@ mod tests {
                 },
             ],
             Ok(()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 100);
         assert_eq!(accounts[1].lamports(), 0);
@@ -906,7 +895,6 @@ mod tests {
                 },
             ],
             Err(SystemError::ResultWithNegativeLamports.into()),
-            super::process_instruction,
         );
     }
 
@@ -940,7 +928,6 @@ mod tests {
             vec![(from, from_account.clone()), (to, to_account.clone())],
             instruction_accounts.clone(),
             Err(SystemError::InvalidAccountDataLength.into()),
-            super::process_instruction,
         );
 
         // Trying to request equal or less data length than permitted will be successful
@@ -954,7 +941,6 @@ mod tests {
             vec![(from, from_account), (to, to_account)],
             instruction_accounts,
             Ok(()),
-            super::process_instruction,
         );
         assert_eq!(accounts[1].lamports(), 50);
         assert_eq!(accounts[1].data().len() as u64, MAX_PERMITTED_DATA_LENGTH);
@@ -992,7 +978,6 @@ mod tests {
                 },
             ],
             Err(SystemError::AccountAlreadyInUse.into()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 100);
         assert_eq!(accounts[1], unchanged_account);
@@ -1021,7 +1006,6 @@ mod tests {
                 },
             ],
             Err(SystemError::AccountAlreadyInUse.into()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 100);
         assert_eq!(accounts[1], unchanged_account);
@@ -1050,7 +1034,6 @@ mod tests {
                 },
             ],
             Err(SystemError::AccountAlreadyInUse.into()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 100);
         assert_eq!(accounts[1], unchanged_account);
@@ -1090,7 +1073,6 @@ mod tests {
                 },
             ],
             Err(InstructionError::MissingRequiredSignature),
-            super::process_instruction,
         );
 
         // Haven't signed to account
@@ -1115,7 +1097,6 @@ mod tests {
                 },
             ],
             Err(InstructionError::MissingRequiredSignature),
-            super::process_instruction,
         );
 
         // Don't support unsigned creation with zero lamports (ephemeral account)
@@ -1141,7 +1122,6 @@ mod tests {
                 },
             ],
             Err(InstructionError::MissingRequiredSignature),
-            super::process_instruction,
         );
     }
 
@@ -1175,7 +1155,6 @@ mod tests {
                 },
             ],
             Ok(()),
-            super::process_instruction,
         );
     }
 
@@ -1212,7 +1191,6 @@ mod tests {
                 },
             ],
             Err(SystemError::AccountAlreadyInUse.into()),
-            super::process_instruction,
         );
     }
 
@@ -1249,7 +1227,6 @@ mod tests {
                 },
             ],
             Err(InstructionError::InvalidArgument),
-            super::process_instruction,
         );
     }
 
@@ -1272,7 +1249,6 @@ mod tests {
                 is_writable: true,
             }],
             Ok(()),
-            super::process_instruction,
         );
 
         // owner does change, signature needed
@@ -1285,7 +1261,6 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::MissingRequiredSignature),
-            super::process_instruction,
         );
 
         process_instruction(
@@ -1297,7 +1272,6 @@ mod tests {
                 is_writable: true,
             }],
             Ok(()),
-            super::process_instruction,
         );
 
         // assign to sysvar instead of system_program
@@ -1313,7 +1287,6 @@ mod tests {
                 is_writable: true,
             }],
             Ok(()),
-            super::process_instruction,
         );
     }
 
@@ -1329,7 +1302,6 @@ mod tests {
             Vec::new(),
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
-            super::process_instruction,
         );
 
         // Attempt to transfer with no destination
@@ -1346,7 +1318,6 @@ mod tests {
                 is_writable: false,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
-            super::process_instruction,
         );
     }
 
@@ -1376,7 +1347,6 @@ mod tests {
             transaction_accounts.clone(),
             instruction_accounts.clone(),
             Ok(()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 50);
         assert_eq!(accounts[1].lamports(), 51);
@@ -1387,7 +1357,6 @@ mod tests {
             transaction_accounts.clone(),
             instruction_accounts.clone(),
             Err(SystemError::ResultWithNegativeLamports.into()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 100);
         assert_eq!(accounts[1].lamports(), 1);
@@ -1398,7 +1367,6 @@ mod tests {
             transaction_accounts.clone(),
             instruction_accounts,
             Ok(()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 100);
         assert_eq!(accounts[1].lamports(), 1);
@@ -1420,7 +1388,6 @@ mod tests {
                 },
             ],
             Err(InstructionError::MissingRequiredSignature),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 100);
         assert_eq!(accounts[1].lamports(), 1);
@@ -1467,7 +1434,6 @@ mod tests {
             transaction_accounts.clone(),
             instruction_accounts.clone(),
             Ok(()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 50);
         assert_eq!(accounts[2].lamports(), 51);
@@ -1483,7 +1449,6 @@ mod tests {
             transaction_accounts.clone(),
             instruction_accounts.clone(),
             Err(SystemError::ResultWithNegativeLamports.into()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 100);
         assert_eq!(accounts[2].lamports(), 1);
@@ -1499,7 +1464,6 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             Ok(()),
-            super::process_instruction,
         );
         assert_eq!(accounts[0].lamports(), 100);
         assert_eq!(accounts[2].lamports(), 1);
@@ -1540,7 +1504,6 @@ mod tests {
                 },
             ],
             Err(InstructionError::InvalidArgument),
-            super::process_instruction,
         );
     }
 
@@ -1768,7 +1731,6 @@ mod tests {
             transaction_accounts,
             instruction.accounts,
             expected_result,
-            super::process_instruction,
         )
     }
 
@@ -1788,7 +1750,6 @@ mod tests {
             Vec::new(),
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
-            super::process_instruction,
         );
     }
 
@@ -1804,7 +1765,6 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
-            super::process_instruction,
         );
     }
 
@@ -1839,7 +1799,6 @@ mod tests {
                 },
             ],
             Ok(()),
-            super::process_instruction,
         );
         let blockhash = hash(&serialize(&0).unwrap());
         #[allow(deprecated)]
@@ -1848,7 +1807,9 @@ mod tests {
                 vec![IterItem(0u64, &blockhash, 0); sysvar::recent_blockhashes::MAX_ENTRIES]
                     .into_iter(),
             );
-        process_instruction(
+        mock_process_instruction(
+            &system_program::id(),
+            Vec::new(),
             &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             vec![
                 (nonce_address, accounts[0].clone()),
@@ -1867,10 +1828,11 @@ mod tests {
                 },
             ],
             Ok(()),
-            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
+            super::process_instruction,
+            |invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
-                super::process_instruction(first_instruction_account, invoke_context)
             },
+            |_invoke_context| {},
         );
     }
 
@@ -1895,7 +1857,6 @@ mod tests {
             Vec::new(),
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
-            super::process_instruction,
         );
     }
 
@@ -1911,7 +1872,6 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
-            super::process_instruction,
         );
     }
 
@@ -1953,7 +1913,6 @@ mod tests {
                 },
             ],
             Ok(()),
-            super::process_instruction,
         );
     }
 
@@ -1964,7 +1923,6 @@ mod tests {
             Vec::new(),
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
-            super::process_instruction,
         );
     }
 
@@ -1981,7 +1939,6 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
-            super::process_instruction,
         );
     }
 
@@ -2016,7 +1973,6 @@ mod tests {
                 },
             ],
             Ok(()),
-            super::process_instruction,
         );
     }
 
@@ -2051,7 +2007,6 @@ mod tests {
                 },
             ],
             Ok(()),
-            super::process_instruction,
         );
         process_instruction(
             &serialize(&SystemInstruction::AuthorizeNonceAccount(nonce_address)).unwrap(),
@@ -2062,7 +2017,6 @@ mod tests {
                 is_writable: true,
             }],
             Ok(()),
-            super::process_instruction,
         );
     }
 
@@ -2164,7 +2118,6 @@ mod tests {
                 },
             ],
             Err(NonceError::NoRecentBlockhashes.into()),
-            super::process_instruction,
         );
     }
 
@@ -2199,14 +2152,15 @@ mod tests {
                 },
             ],
             Ok(()),
-            super::process_instruction,
         );
         #[allow(deprecated)]
         let new_recent_blockhashes_account =
             solana_sdk::recent_blockhashes_account::create_account_with_data_for_test(
                 vec![].into_iter(),
             );
-        process_instruction(
+        mock_process_instruction(
+            &system_program::id(),
+            Vec::new(),
             &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             vec![
                 (nonce_address, accounts[0].clone()),
@@ -2225,10 +2179,11 @@ mod tests {
                 },
             ],
             Err(NonceError::NoRecentBlockhashes.into()),
-            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
+            super::process_instruction,
+            |invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
-                super::process_instruction(first_instruction_account, invoke_context)
             },
+            |_invoke_context| {},
         );
     }
 
@@ -2251,7 +2206,6 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::InvalidAccountOwner),
-            super::process_instruction,
         );
         assert_eq!(accounts.len(), 1);
         assert_eq!(accounts[0], nonce_account);
@@ -2285,7 +2239,6 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::InvalidArgument),
-            super::process_instruction,
         );
         assert_eq!(accounts.len(), 1);
         assert_eq!(accounts[0], nonce_account);
@@ -2300,7 +2253,6 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::InvalidArgument),
-            super::process_instruction,
         );
         assert_eq!(accounts.len(), 1);
         assert_eq!(accounts[0], nonce_account);
@@ -2324,7 +2276,6 @@ mod tests {
                 is_writable: false, // Should fail!
             }],
             Err(InstructionError::InvalidArgument),
-            super::process_instruction,
         );
         assert_eq!(accounts.len(), 1);
         assert_eq!(accounts[0], nonce_account);
@@ -2337,7 +2288,6 @@ mod tests {
                 is_writable: true,
             }],
             Ok(()),
-            super::process_instruction,
         );
         assert_eq!(accounts.len(), 1);
         let nonce_account = accounts.remove(0);
@@ -2362,7 +2312,6 @@ mod tests {
                 is_writable: true,
             }],
             Err(InstructionError::InvalidArgument),
-            super::process_instruction,
         );
         assert_eq!(accounts.len(), 1);
         assert_eq!(

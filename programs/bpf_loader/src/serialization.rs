@@ -447,14 +447,14 @@ pub fn deserialize_parameters_aligned(
 mod tests {
     use {
         super::*,
-        solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext},
+        solana_program_runtime::with_mock_invoke_context,
         solana_sdk::{
-            account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+            account::{Account, AccountSharedData, WritableAccount},
             account_info::AccountInfo,
             bpf_loader,
             entrypoint::deserialize,
-            instruction::AccountMeta,
             sysvar::rent::Rent,
+            transaction_context::InstructionAccount,
         },
         std::{
             cell::RefCell,
@@ -537,13 +537,9 @@ mod tests {
                     rent_epoch: 0,
                 }),
             )];
-
-            let instruction_account_keys: Vec<Pubkey> =
-                (0..num_ix_accounts).map(|_| Pubkey::new_unique()).collect();
-
-            for key in &instruction_account_keys {
+            for _ in 0..num_ix_accounts {
                 transaction_accounts.push((
-                    *key,
+                    Pubkey::new_unique(),
                     AccountSharedData::from(Account {
                         lamports: 0,
                         data: vec![],
@@ -553,22 +549,19 @@ mod tests {
                     }),
                 ));
             }
-
-            let mut instruction_account_metas: Vec<_> = instruction_account_keys
-                .iter()
-                .map(|key| AccountMeta::new_readonly(*key, false))
+            let mut instruction_accounts: Vec<_> = (0..num_ix_accounts as IndexOfAccount)
+                .map(|index_in_callee| InstructionAccount {
+                    index_in_transaction: index_in_callee + 1,
+                    index_in_caller: index_in_callee + 1,
+                    index_in_callee,
+                    is_signer: false,
+                    is_writable: false,
+                })
                 .collect();
             if append_dup_account {
-                instruction_account_metas.push(instruction_account_metas.last().cloned().unwrap());
+                instruction_accounts.push(instruction_accounts.last().cloned().unwrap());
             }
-
             let program_indices = [0];
-            let instruction_accounts = prepare_mock_invoke_context(
-                transaction_accounts.clone(),
-                instruction_account_metas,
-                &program_indices,
-            )
-            .instruction_accounts;
             let instruction_data = vec![];
 
             let mut transaction_context =
@@ -693,41 +686,28 @@ mod tests {
                 }),
             ),
         ];
-        let instruction_accounts = [1, 1, 2, 3, 4, 4, 5, 6]
+        let instruction_accounts: Vec<InstructionAccount> = [1, 1, 2, 3, 4, 4, 5, 6]
             .into_iter()
             .enumerate()
             .map(
-                |(instruction_account_index, index_in_transaction)| AccountMeta {
-                    pubkey: transaction_accounts.get(index_in_transaction).unwrap().0,
+                |(index_in_instruction, index_in_transaction)| InstructionAccount {
+                    index_in_transaction,
+                    index_in_caller: index_in_transaction,
+                    index_in_callee: index_in_transaction - 1,
                     is_signer: false,
-                    is_writable: instruction_account_index >= 4,
+                    is_writable: index_in_instruction >= 4,
                 },
             )
             .collect();
         let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
         let program_indices = [0];
         let mut original_accounts = transaction_accounts.clone();
-        let preparation = prepare_mock_invoke_context(
-            transaction_accounts,
-            instruction_accounts,
-            &program_indices,
-        );
-        let mut transaction_context = TransactionContext::new(
-            preparation.transaction_accounts,
-            Some(Rent::default()),
-            1,
-            1,
-        );
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         invoke_context
             .transaction_context
             .get_next_instruction_context()
             .unwrap()
-            .configure(
-                &program_indices,
-                &preparation.instruction_accounts,
-                &instruction_data,
-            );
+            .configure(&program_indices, &instruction_accounts, &instruction_data);
         invoke_context.push().unwrap();
         let instruction_context = invoke_context
             .transaction_context

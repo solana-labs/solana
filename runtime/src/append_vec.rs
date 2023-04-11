@@ -7,13 +7,22 @@
 use {
     crate::{
         account_storage::meta::{
-            AccountMeta, StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta, StoredMeta,
+            AccountMeta, StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo,
+            StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
         },
+        accounts_file::ALIGN_BOUNDARY_OFFSET,
         storable_accounts::StorableAccounts,
+        u64_align,
     },
     log::*,
     memmap2::MmapMut,
-    solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
+    solana_sdk::{
+        account::{Account, AccountSharedData, ReadableAccount},
+        clock::Slot,
+        hash::Hash,
+        pubkey::Pubkey,
+        stake_history::Epoch,
+    },
     std::{
         borrow::Borrow,
         convert::TryFrom,
@@ -30,15 +39,6 @@ use {
 };
 
 pub mod test_utils;
-
-// Data placement should be aligned at the next boundary. Without alignment accessing the memory may
-// crash on some architectures.
-pub const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
-macro_rules! u64_align {
-    ($addr: expr) => {
-        ($addr + (ALIGN_BOUNDARY_OFFSET - 1)) & !(ALIGN_BOUNDARY_OFFSET - 1)
-    };
-}
 
 /// size of the fixed sized fields in an append vec
 /// we need to add data len and align it to get the actual stored size
@@ -86,6 +86,108 @@ pub enum MatchAccountOwnerError {
     NoMatch,
     #[error("Unable to load the account")]
     UnableToLoad,
+}
+
+/// References to account data stored elsewhere. Getting an `Account` requires cloning
+/// (see `StoredAccountMeta::clone_account()`).
+#[derive(PartialEq, Eq, Debug)]
+pub struct AppendVecStoredAccountMeta<'a> {
+    pub meta: &'a StoredMeta,
+    /// account data
+    pub account_meta: &'a AccountMeta,
+    pub(crate) data: &'a [u8],
+    pub(crate) offset: usize,
+    pub(crate) stored_size: usize,
+    pub(crate) hash: &'a Hash,
+}
+
+impl<'a> AppendVecStoredAccountMeta<'a> {
+    pub fn clone_account(&self) -> AccountSharedData {
+        AccountSharedData::from(Account {
+            lamports: self.account_meta.lamports,
+            owner: self.account_meta.owner,
+            executable: self.account_meta.executable,
+            rent_epoch: self.account_meta.rent_epoch,
+            data: self.data.to_vec(),
+        })
+    }
+
+    pub fn pubkey(&self) -> &'a Pubkey {
+        &self.meta.pubkey
+    }
+
+    pub fn hash(&self) -> &'a Hash {
+        self.hash
+    }
+
+    pub fn stored_size(&self) -> usize {
+        self.stored_size
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn data(&self) -> &'a [u8] {
+        self.data
+    }
+
+    pub fn data_len(&self) -> u64 {
+        self.meta.data_len
+    }
+
+    pub fn write_version(&self) -> StoredMetaWriteVersion {
+        self.meta.write_version_obsolete
+    }
+
+    pub fn meta(&self) -> &StoredMeta {
+        self.meta
+    }
+
+    pub fn set_meta(&mut self, meta: &'a StoredMeta) {
+        self.meta = meta;
+    }
+
+    pub(crate) fn sanitize(&self) -> bool {
+        self.sanitize_executable() && self.sanitize_lamports()
+    }
+
+    fn sanitize_executable(&self) -> bool {
+        // Sanitize executable to ensure higher 7-bits are cleared correctly.
+        self.ref_executable_byte() & !1 == 0
+    }
+
+    fn sanitize_lamports(&self) -> bool {
+        // Sanitize 0 lamports to ensure to be same as AccountSharedData::default()
+        self.account_meta.lamports != 0 || self.clone_account() == AccountSharedData::default()
+    }
+
+    fn ref_executable_byte(&self) -> &u8 {
+        // Use extra references to avoid value silently clamped to 1 (=true) and 0 (=false)
+        // Yes, this really happens; see test_new_from_file_crafted_executable
+        let executable_bool: &bool = &self.account_meta.executable;
+        // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
+        let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
+        executable_byte
+    }
+}
+
+impl<'a> ReadableAccount for AppendVecStoredAccountMeta<'a> {
+    fn lamports(&self) -> u64 {
+        self.account_meta.lamports
+    }
+    fn data(&self) -> &[u8] {
+        self.data()
+    }
+    fn owner(&self) -> &Pubkey {
+        &self.account_meta.owner
+    }
+    fn executable(&self) -> bool {
+        self.account_meta.executable
+    }
+    fn rent_epoch(&self) -> Epoch {
+        self.account_meta.rent_epoch
+    }
 }
 
 /// A thread-safe, file-backed block of memory used to store `Account` instances. Append operations
@@ -400,14 +502,14 @@ impl AppendVec {
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         let stored_size = next - offset;
         Some((
-            StoredAccountMeta {
+            StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
                 meta,
                 account_meta,
                 data,
                 offset,
                 stored_size,
                 hash,
-            },
+            }),
             next,
         ))
     }
@@ -449,7 +551,7 @@ impl AppendVec {
         offset: usize,
     ) -> Option<(StoredMeta, solana_sdk::account::AccountSharedData)> {
         let (stored_account, _) = self.get_account(offset)?;
-        let meta = stored_account.meta.clone();
+        let meta = stored_account.meta().clone();
         Some((meta, stored_account.clone_account()))
     }
 
@@ -489,12 +591,12 @@ impl AppendVec {
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
-    ) -> Option<Vec<usize>> {
+    ) -> Option<Vec<StoredAccountInfo>> {
         let _lock = self.append_lock.lock().unwrap();
         let mut offset = self.len();
 
         let len = accounts.accounts.len();
-        let mut rv = Vec::with_capacity(len);
+        let mut offsets = Vec::with_capacity(len);
         for i in skip..len {
             let (account, pubkey, hash, write_version_obsolete) = accounts.get(i);
             let account_meta = account
@@ -528,18 +630,25 @@ impl AppendVec {
                 (data_ptr, data_len),
             ];
             if let Some(res) = self.append_ptrs_locked(&mut offset, &ptrs) {
-                rv.push(res)
+                offsets.push(res)
             } else {
                 break;
             }
         }
 
-        if rv.is_empty() {
+        if offsets.is_empty() {
             None
         } else {
             // The last entry in this offset needs to be the u64 aligned offset, because that's
             // where the *next* entry will begin to be stored.
-            rv.push(u64_align!(offset));
+            offsets.push(u64_align!(offset));
+            let mut rv = Vec::with_capacity(len);
+            for offsets in offsets.windows(2) {
+                rv.push(StoredAccountInfo {
+                    offset: offsets[0],
+                    size: offsets[1] - offsets[0],
+                });
+            }
 
             Some(rv)
         }
@@ -580,11 +689,19 @@ pub mod tests {
                 );
 
             self.append_accounts(&storable_accounts, 0)
-                .map(|res| res[0])
+                .map(|res| res[0].offset)
         }
     }
 
     impl<'a> StoredAccountMeta<'a> {
+        pub(crate) fn ref_executable_byte(&self) -> &u8 {
+            match self {
+                Self::AppendVec(av) => av.ref_executable_byte(),
+            }
+        }
+    }
+
+    impl<'a> AppendVecStoredAccountMeta<'a> {
         #[allow(clippy::cast_ref_to_mut)]
         fn set_data_len_unsafe(&self, new_data_len: u64) {
             // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
@@ -594,7 +711,7 @@ pub mod tests {
         }
 
         fn get_executable_byte(&self) -> u8 {
-            let executable_bool: bool = self.account_meta.executable;
+            let executable_bool: bool = self.executable();
             // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
             let executable_byte: u8 = unsafe { std::mem::transmute::<bool, u8>(executable_bool) };
             executable_byte
@@ -1063,14 +1180,14 @@ pub mod tests {
         av.append_account_test(&create_test_account(10)).unwrap();
 
         let accounts = av.accounts(0);
-        let account = accounts.first().unwrap();
+        let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
         account.set_data_len_unsafe(crafted_data_len);
-        assert_eq!(account.meta.data_len, crafted_data_len);
+        assert_eq!(account.data_len(), crafted_data_len);
 
         // Reload accounts and observe crafted_data_len
         let accounts = av.accounts(0);
         let account = accounts.first().unwrap();
-        assert_eq!(account.meta.data_len, crafted_data_len);
+        assert_eq!(account.data_len(), crafted_data_len);
 
         av.flush().unwrap();
         let accounts_len = av.len();
@@ -1090,9 +1207,9 @@ pub mod tests {
         av.append_account_test(&create_test_account(10)).unwrap();
 
         let accounts = av.accounts(0);
-        let account = accounts.first().unwrap();
+        let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
         account.set_data_len_unsafe(too_large_data_len);
-        assert_eq!(account.meta.data_len, too_large_data_len);
+        assert_eq!(account.data_len(), too_large_data_len);
 
         // Reload accounts and observe no account with bad offset
         let accounts = av.accounts(0);
@@ -1125,14 +1242,14 @@ pub mod tests {
         assert_eq!(*accounts[0].ref_executable_byte(), 0);
         assert_eq!(*accounts[1].ref_executable_byte(), 1);
 
-        let account = &accounts[0];
+        let StoredAccountMeta::AppendVec(account) = &accounts[0];
         let crafted_executable = u8::max_value() - 1;
 
         account.set_executable_as_byte(crafted_executable);
 
         // reload crafted accounts
         let accounts = av.accounts(0);
-        let account = accounts.first().unwrap();
+        let StoredAccountMeta::AppendVec(account) = accounts.first().unwrap();
 
         // upper 7-bits are not 0, so sanitization should fail
         assert!(!account.sanitize_executable());
@@ -1155,7 +1272,7 @@ pub mod tests {
 
         // we can NOT observe crafted value by value
         {
-            let executable_bool: bool = account.account_meta.executable;
+            let executable_bool: bool = account.executable();
             assert!(!executable_bool);
             assert_eq!(account.get_executable_byte(), 0); // Wow, not crafted_executable!
         }

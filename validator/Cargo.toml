@@ -18,12 +18,14 @@ core_affinity = { workspace = true }
 crossbeam-channel = { workspace = true }
 fd-lock = { workspace = true }
 indicatif = { workspace = true }
+itertools = { workspace = true }
 jsonrpc-core = { workspace = true }
 jsonrpc-core-client = { workspace = true, features = ["ipc"] }
 jsonrpc-derive = { workspace = true }
 jsonrpc-ipc-server = { workspace = true }
 jsonrpc-server-utils = { workspace = true }
 lazy_static = { workspace = true }
+libloading = { workspace = true }
 log = { workspace = true }
 num_cpus = { workspace = true }
 rand = { workspace = true }
@@ -38,6 +40,8 @@ solana-download-utils = { workspace = true }
 solana-entry = { workspace = true }
 solana-faucet = { workspace = true }
 solana-genesis-utils = { workspace = true }
+solana-geyser-plugin-interface = { workspace = true }
+solana-geyser-plugin-manager = { workspace = true }
 solana-gossip = { workspace = true }
 solana-ledger = { workspace = true }
 solana-logger = { workspace = true }

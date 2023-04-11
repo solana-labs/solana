@@ -26,8 +26,11 @@ use {
     solana_ledger::blockstore_processor::TransactionStatusSender,
     solana_measure::{measure, measure_us},
     solana_perf::{data_budget::DataBudget, packet::PACKETS_PER_BATCH},
-    solana_poh::poh_recorder::{PohRecorder, TransactionRecorder},
-    solana_runtime::{bank_forks::BankForks, vote_sender_types::ReplayVoteSender},
+    solana_poh::poh_recorder::PohRecorder,
+    solana_runtime::{
+        bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
+        vote_sender_types::ReplayVoteSender,
+    },
     solana_sdk::{feature_set::allow_votes_to_directly_update_vote_state, timing::AtomicInterval},
     std::{
         cmp, env,
@@ -45,6 +48,9 @@ pub mod consumer;
 mod decision_maker;
 mod forwarder;
 mod packet_receiver;
+
+#[allow(dead_code)]
+mod thread_aware_account_locks;
 
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 6;
@@ -290,6 +296,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -303,6 +310,7 @@ impl BankingStage {
             log_messages_bytes_limit,
             connection_cache,
             bank_forks,
+            prioritization_fee_cache,
         )
     }
 
@@ -319,6 +327,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         // Single thread to generate entries from many banks.
@@ -385,6 +394,7 @@ impl BankingStage {
                 let committer = Committer::new(
                     transaction_status_sender.clone(),
                     replay_vote_sender.clone(),
+                    prioritization_fee_cache.clone(),
                 );
                 let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
                 let forwarder = Forwarder::new(
@@ -394,6 +404,12 @@ impl BankingStage {
                     connection_cache.clone(),
                     data_budget.clone(),
                 );
+                let consumer = Consumer::new(
+                    committer,
+                    poh_recorder.read().unwrap().new_recorder(),
+                    QosService::new(id),
+                    log_messages_bytes_limit,
+                );
 
                 Builder::new()
                     .name(format!("solBanknStgTx{id:02}"))
@@ -402,10 +418,8 @@ impl BankingStage {
                             &mut packet_receiver,
                             &decision_maker,
                             &forwarder,
-                            &committer,
-                            &poh_recorder,
+                            &consumer,
                             id,
-                            log_messages_bytes_limit,
                             unprocessed_transaction_storage,
                         );
                     })
@@ -419,20 +433,18 @@ impl BankingStage {
     fn process_buffered_packets(
         decision_maker: &DecisionMaker,
         forwarder: &Forwarder,
-        committer: &Committer,
+        consumer: &Consumer,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         banking_stage_stats: &BankingStageStats,
-        recorder: &TransactionRecorder,
-        qos_service: &QosService,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-        log_messages_bytes_limit: Option<usize>,
         tracer_packet_stats: &mut TracerPacketStats,
     ) {
         if unprocessed_transaction_storage.should_not_process() {
             return;
         }
-        let ((metrics_action, decision), make_decision_time) =
-            measure!(decision_maker.make_consume_or_forward_decision(slot_metrics_tracker));
+        let (decision, make_decision_time) =
+            measure!(decision_maker.make_consume_or_forward_decision());
+        let metrics_action = slot_metrics_tracker.check_leader_slot_boundary(decision.bank_start());
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
         match decision {
@@ -443,16 +455,11 @@ impl BankingStage {
                 // of the previous slot
                 slot_metrics_tracker.apply_action(metrics_action);
                 let (_, consume_buffered_packets_time) = measure!(
-                    Consumer::consume_buffered_packets(
+                    consumer.consume_buffered_packets(
                         &bank_start,
                         unprocessed_transaction_storage,
-                        None::<Box<dyn Fn()>>,
                         banking_stage_stats,
-                        committer,
-                        recorder,
-                        qos_service,
                         slot_metrics_tracker,
-                        log_messages_bytes_limit
                     ),
                     "consume_buffered_packets",
                 );
@@ -492,16 +499,12 @@ impl BankingStage {
         packet_receiver: &mut PacketReceiver,
         decision_maker: &DecisionMaker,
         forwarder: &Forwarder,
-        committer: &Committer,
-        poh_recorder: &Arc<RwLock<PohRecorder>>,
+        consumer: &Consumer,
         id: u32,
-        log_messages_bytes_limit: Option<usize>,
         mut unprocessed_transaction_storage: UnprocessedTransactionStorage,
     ) {
-        let recorder = poh_recorder.read().unwrap().recorder();
         let mut banking_stage_stats = BankingStageStats::new(id);
         let mut tracer_packet_stats = TracerPacketStats::new(id);
-        let qos_service = QosService::new(id);
 
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
         let mut last_metrics_update = Instant::now();
@@ -514,13 +517,10 @@ impl BankingStage {
                     Self::process_buffered_packets(
                         decision_maker,
                         forwarder,
-                        committer,
+                        consumer,
                         &mut unprocessed_transaction_storage,
                         &banking_stage_stats,
-                        &recorder,
-                        &qos_service,
                         &mut slot_metrics_tracker,
-                        log_messages_bytes_limit,
                         &mut tracer_packet_stats,
                     ),
                     "process_buffered_packets",
@@ -650,6 +650,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
             drop(non_vote_sender);
             drop(tpu_vote_sender);
@@ -705,6 +706,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
             trace!("sending bank");
             drop(non_vote_sender);
@@ -785,6 +787,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -946,6 +949,7 @@ mod tests {
                     None,
                     Arc::new(ConnectionCache::default()),
                     bank_forks,
+                    &Arc::new(PrioritizationFeeCache::new(0u64)),
                 );
 
                 // wait for banking_stage to eat the packets
@@ -1009,7 +1013,7 @@ mod tests {
                 &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
-            let recorder = poh_recorder.recorder();
+            let recorder = poh_recorder.new_recorder();
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
@@ -1139,6 +1143,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
 
             let keypairs = (0..100).map(|_| Keypair::new()).collect_vec();

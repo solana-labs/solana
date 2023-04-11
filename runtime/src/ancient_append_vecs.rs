@@ -706,7 +706,7 @@ impl<'a> AccountsToStore<'a> {
         if alive_total_bytes > available_bytes as usize {
             // not all the alive bytes fit, so we have to find how many accounts fit within available_bytes
             for (i, account) in accounts.iter().enumerate() {
-                let account_size = account.stored_size as u64;
+                let account_size = account.stored_size() as u64;
                 if available_bytes >= account_size {
                     available_bytes = available_bytes.saturating_sub(account_size);
                 } else if index_first_item_overflow == num_accounts {
@@ -770,7 +770,7 @@ pub mod tests {
                 },
                 INCLUDE_SLOT_IN_HASH_TESTS,
             },
-            append_vec::{aligned_stored_size, AppendVec},
+            append_vec::{aligned_stored_size, AppendVec, AppendVecStoredAccountMeta},
             storable_accounts::StorableAccountsBySlot,
         },
         solana_sdk::{
@@ -1618,7 +1618,7 @@ pub mod tests {
             pubkey,
             data_len: 43,
         };
-        let account = StoredAccountMeta {
+        let account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &stored_meta,
             /// account data
             account_meta: &account_meta,
@@ -1626,7 +1626,7 @@ pub mod tests {
             offset,
             stored_size: account_size,
             hash: &hash,
-        };
+        });
         let map = vec![&account];
         for (selector, available_bytes) in [
             (StorageSelector::Primary, account_size),

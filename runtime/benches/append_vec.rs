@@ -4,7 +4,9 @@ extern crate test;
 use {
     rand::{thread_rng, Rng},
     solana_runtime::{
-        account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredMeta},
+        account_storage::meta::{
+            StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredMeta,
+        },
         accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
         append_vec::{
             test_utils::{create_test_account, get_append_vec_path},
@@ -32,7 +34,7 @@ fn append_account(
     storage_meta: StoredMeta,
     account: &AccountSharedData,
     hash: Hash,
-) -> Option<usize> {
+) -> Option<StoredAccountInfo> {
     let slot_ignored = Slot::MAX;
     let accounts = [(&storage_meta.pubkey, account)];
     let slice = &accounts[..];
@@ -63,7 +65,7 @@ fn add_test_accounts(vec: &AppendVec, size: usize) -> Vec<(usize, usize)> {
     (0..size)
         .filter_map(|sample| {
             let (meta, account) = create_test_account(sample);
-            append_account(vec, meta, &account, Hash::default()).map(|pos| (sample, pos))
+            append_account(vec, meta, &account, Hash::default()).map(|info| (sample, info.offset))
         })
         .collect()
 }
@@ -79,7 +81,7 @@ fn append_vec_sequential_read(bencher: &mut Bencher) {
         println!("reading pos {sample} {pos}");
         let (account, _next) = vec.get_account(pos).unwrap();
         let (_meta, test) = create_test_account(sample);
-        assert_eq!(account.data, test.data());
+        assert_eq!(account.data(), test.data());
         indexes.push((sample, pos));
     });
 }
@@ -94,7 +96,7 @@ fn append_vec_random_read(bencher: &mut Bencher) {
         let (sample, pos) = &indexes[random_index];
         let (account, _next) = vec.get_account(*pos).unwrap();
         let (_meta, test) = create_test_account(*sample);
-        assert_eq!(account.data, test.data());
+        assert_eq!(account.data(), test.data());
     });
 }
 
@@ -108,8 +110,8 @@ fn append_vec_concurrent_append_read(bencher: &mut Bencher) {
     spawn(move || loop {
         let sample = indexes1.lock().unwrap().len();
         let (meta, account) = create_test_account(sample);
-        if let Some(pos) = append_account(&vec1, meta, &account, Hash::default()) {
-            indexes1.lock().unwrap().push((sample, pos))
+        if let Some(info) = append_account(&vec1, meta, &account, Hash::default()) {
+            indexes1.lock().unwrap().push((sample, info.offset))
         } else {
             break;
         }
@@ -123,7 +125,7 @@ fn append_vec_concurrent_append_read(bencher: &mut Bencher) {
         let (sample, pos) = *indexes.lock().unwrap().get(random_index).unwrap();
         let (account, _next) = vec.get_account(pos).unwrap();
         let (_meta, test) = create_test_account(sample);
-        assert_eq!(account.data, test.data());
+        assert_eq!(account.data(), test.data());
     });
 }
 
@@ -143,13 +145,13 @@ fn append_vec_concurrent_read_append(bencher: &mut Bencher) {
         let (sample, pos) = *indexes1.lock().unwrap().get(random_index % len).unwrap();
         let (account, _next) = vec1.get_account(pos).unwrap();
         let (_meta, test) = create_test_account(sample);
-        assert_eq!(account.data, test.data());
+        assert_eq!(account.data(), test.data());
     });
     bencher.iter(|| {
         let sample: usize = thread_rng().gen_range(0, 256);
         let (meta, account) = create_test_account(sample);
-        if let Some(pos) = append_account(&vec, meta, &account, Hash::default()) {
-            indexes.lock().unwrap().push((sample, pos))
+        if let Some(info) = append_account(&vec, meta, &account, Hash::default()) {
+            indexes.lock().unwrap().push((sample, info.offset))
         }
     });
 }

@@ -4,11 +4,18 @@
 
 use {
     crate::{
+        derivation_path::DerivationPath,
         pubkey::Pubkey,
         signature::{PresignerError, Signature},
         transaction::TransactionError,
     },
     itertools::Itertools,
+    std::{
+        error,
+        fs::{self, File, OpenOptions},
+        io::{Read, Write},
+        path::Path,
+    },
     thiserror::Error,
 };
 
@@ -101,6 +108,51 @@ impl std::fmt::Debug for dyn Signer {
 /// Removes duplicate signers while preserving order. O(n²)
 pub fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
     signers.into_iter().unique_by(|s| s.pubkey()).collect()
+}
+
+/// The `EncodableKey` trait defines the interface by which cryptographic keys/keypairs are read,
+/// written, and derived from sources.
+pub trait EncodableKey: Sized {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>>;
+    fn read_from_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
+        let mut file = File::open(path.as_ref())?;
+        Self::read(&mut file)
+    }
+    fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>>;
+    fn write_to_file<F: AsRef<Path>>(&self, outfile: F) -> Result<String, Box<dyn error::Error>> {
+        let outfile = outfile.as_ref();
+
+        if let Some(outdir) = outfile.parent() {
+            fs::create_dir_all(outdir)?;
+        }
+
+        let mut f = {
+            #[cfg(not(unix))]
+            {
+                OpenOptions::new()
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                OpenOptions::new().mode(0o600)
+            }
+        }
+        .write(true)
+        .truncate(true)
+        .create(true)
+        .open(outfile)?;
+
+        self.write(&mut f)
+    }
+    fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>>;
+    fn from_seed_and_derivation_path(
+        seed: &[u8],
+        derivation_path: Option<DerivationPath>,
+    ) -> Result<Self, Box<dyn error::Error>>;
+    fn from_seed_phrase_and_passphrase(
+        seed_phrase: &str,
+        passphrase: &str,
+    ) -> Result<Self, Box<dyn error::Error>>;
 }
 
 #[cfg(test)]

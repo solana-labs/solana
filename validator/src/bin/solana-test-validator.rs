@@ -1,6 +1,7 @@
 use {
     clap::{crate_name, value_t, value_t_or_exit, values_t_or_exit},
     crossbeam_channel::unbounded,
+    itertools::Itertools,
     log::*,
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
@@ -203,79 +204,61 @@ fn main() {
 
     let mut upgradeable_programs_to_load = vec![];
     if let Some(values) = matches.values_of("bpf_program") {
-        let values: Vec<&str> = values.collect::<Vec<_>>();
-        for address_program in values.chunks(2) {
-            match address_program {
-                [address, program] => {
-                    let address = parse_address(address, "address");
-                    let program_path = parse_program_path(program);
+        for (address, program) in values.into_iter().tuples() {
+            let address = parse_address(address, "address");
+            let program_path = parse_program_path(program);
 
-                    upgradeable_programs_to_load.push(UpgradeableProgramInfo {
-                        program_id: address,
-                        loader: solana_sdk::bpf_loader_upgradeable::id(),
-                        upgrade_authority: Pubkey::default(),
-                        program_path,
-                    });
-                }
-                _ => unreachable!(),
-            }
+            upgradeable_programs_to_load.push(UpgradeableProgramInfo {
+                program_id: address,
+                loader: solana_sdk::bpf_loader_upgradeable::id(),
+                upgrade_authority: Pubkey::default(),
+                program_path,
+            });
         }
     }
 
     if let Some(values) = matches.values_of("upgradeable_program") {
-        let values: Vec<&str> = values.collect::<Vec<_>>();
-        for address_program_upgrade_authority in values.chunks(3) {
-            match address_program_upgrade_authority {
-                [address, program, upgrade_authority] => {
-                    let address = parse_address(address, "address");
-                    let program_path = parse_program_path(program);
-                    let upgrade_authority_address = if *upgrade_authority == "none" {
-                        Pubkey::default()
-                    } else {
-                        upgrade_authority
-                            .parse::<Pubkey>()
-                            .or_else(|_| {
-                                read_keypair_file(upgrade_authority).map(|keypair| keypair.pubkey())
-                            })
-                            .unwrap_or_else(|err| {
-                                println!(
-                                    "Error: invalid upgrade_authority {upgrade_authority}: {err}"
-                                );
-                                exit(1);
-                            })
-                    };
+        for (address, program, upgrade_authority) in
+            values.into_iter().tuples::<(&str, &str, &str)>()
+        {
+            let address = parse_address(address, "address");
+            let program_path = parse_program_path(program);
+            let upgrade_authority_address = if upgrade_authority == "none" {
+                Pubkey::default()
+            } else {
+                upgrade_authority
+                    .parse::<Pubkey>()
+                    .or_else(|_| {
+                        read_keypair_file(upgrade_authority).map(|keypair| keypair.pubkey())
+                    })
+                    .unwrap_or_else(|err| {
+                        println!("Error: invalid upgrade_authority {upgrade_authority}: {err}");
+                        exit(1);
+                    })
+            };
 
-                    upgradeable_programs_to_load.push(UpgradeableProgramInfo {
-                        program_id: address,
-                        loader: solana_sdk::bpf_loader_upgradeable::id(),
-                        upgrade_authority: upgrade_authority_address,
-                        program_path,
-                    });
-                }
-                _ => unreachable!(),
-            }
+            upgradeable_programs_to_load.push(UpgradeableProgramInfo {
+                program_id: address,
+                loader: solana_sdk::bpf_loader_upgradeable::id(),
+                upgrade_authority: upgrade_authority_address,
+                program_path,
+            });
         }
     }
 
     let mut accounts_to_load = vec![];
     if let Some(values) = matches.values_of("account") {
-        let values: Vec<&str> = values.collect::<Vec<_>>();
-        for address_filename in values.chunks(2) {
-            match address_filename {
-                [address, filename] => {
-                    let address = if *address == "-" {
-                        None
-                    } else {
-                        Some(address.parse::<Pubkey>().unwrap_or_else(|err| {
-                            println!("Error: invalid address {address}: {err}");
-                            exit(1);
-                        }))
-                    };
+        for (address, filename) in values.into_iter().tuples() {
+            let address = if address == "-" {
+                None
+            } else {
+                Some(address.parse::<Pubkey>().unwrap_or_else(|err| {
+                    println!("Error: invalid address {address}: {err}");
+                    exit(1);
+                }))
+            };
 
-                    accounts_to_load.push(AccountInfo { address, filename });
-                }
-                _ => unreachable!(),
-            }
+            accounts_to_load.push(AccountInfo { address, filename });
         }
     }
 
@@ -398,6 +381,14 @@ fn main() {
     let tower_storage = Arc::new(FileTowerStorage::new(ledger_path.clone()));
 
     let admin_service_post_init = Arc::new(RwLock::new(None));
+    // If geyser_plugin_config value is invalid, the validator will exit when the values are extracted below
+    let (rpc_to_plugin_manager_sender, rpc_to_plugin_manager_receiver) =
+        if matches.is_present("geyser_plugin_config") {
+            let (sender, receiver) = unbounded();
+            (Some(sender), Some(receiver))
+        } else {
+            (None, None)
+        };
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -407,8 +398,9 @@ fn main() {
             validator_exit: genesis.validator_exit.clone(),
             authorized_voter_keypairs: genesis.authorized_voter_keypairs.clone(),
             staked_nodes_overrides: genesis.staked_nodes_overrides.clone(),
-            post_init: admin_service_post_init.clone(),
+            post_init: admin_service_post_init,
             tower_storage: tower_storage.clone(),
+            rpc_to_plugin_manager_sender,
         },
     );
     let dashboard = if output == Output::Dashboard {
@@ -559,15 +551,12 @@ fn main() {
         genesis.compute_unit_limit(compute_unit_limit);
     }
 
-    match genesis.start_with_mint_address(mint_address, socket_addr_space) {
+    match genesis.start_with_mint_address_and_geyser_plugin_rpc(
+        mint_address,
+        socket_addr_space,
+        rpc_to_plugin_manager_receiver,
+    ) {
         Ok(test_validator) => {
-            *admin_service_post_init.write().unwrap() =
-                Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
-                    bank_forks: test_validator.bank_forks(),
-                    cluster_info: test_validator.cluster_info(),
-                    vote_account: test_validator.vote_account_address(),
-                    repair_whitelist: test_validator.repair_whitelist(),
-                });
             if let Some(dashboard) = dashboard {
                 dashboard.run(Duration::from_millis(250));
             }

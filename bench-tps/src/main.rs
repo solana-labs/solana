@@ -98,11 +98,14 @@ fn create_connection_cache(
     let (stake, total_stake) =
         find_node_activated_stake(rpc_client, client_node_id.pubkey()).unwrap_or_default();
     info!("Stake for specified client_node_id: {stake}, total stake: {total_stake}");
-    let staked_nodes = Arc::new(RwLock::new(StakedNodes {
-        total_stake,
-        pubkey_stake_map: HashMap::from([(client_node_id.pubkey(), stake)]),
-        ..StakedNodes::default()
-    }));
+    let stakes = HashMap::from([
+        (client_node_id.pubkey(), stake),
+        (Pubkey::new_unique(), total_stake - stake),
+    ]);
+    let staked_nodes = Arc::new(RwLock::new(StakedNodes::new(
+        Arc::new(stakes),
+        HashMap::<Pubkey, u64>::default(), // overrides
+    )));
     ConnectionCache::new_with_client_options(
         tpu_connection_pool_size,
         None,

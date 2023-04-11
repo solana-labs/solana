@@ -41,6 +41,7 @@ use {
         convert::TryInto,
         iter::{repeat, repeat_with},
         net::SocketAddr,
+        ops::Index,
         sync::{
             atomic::{AtomicI64, AtomicUsize, Ordering},
             Mutex, RwLock,
@@ -316,19 +317,18 @@ impl CrdsGossipPull {
     pub(crate) fn filter_pull_responses(
         &self,
         crds: &RwLock<Crds>,
-        timeouts: &HashMap<Pubkey, u64>,
+        timeouts: &CrdsTimeouts,
         responses: Vec<CrdsValue>,
         now: u64,
         stats: &mut ProcessPullStats,
     ) -> (Vec<CrdsValue>, Vec<CrdsValue>, Vec<Hash>) {
         let mut active_values = vec![];
         let mut expired_values = vec![];
-        let default_timeout = timeouts[&Pubkey::default()];
         let crds = crds.read().unwrap();
         let upsert = |response: CrdsValue| {
             let owner = response.label().pubkey();
             // Check if the crds value is older than the msg_timeout
-            let timeout = timeouts.get(&owner).copied().unwrap_or(default_timeout);
+            let timeout = timeouts[&owner];
             // Before discarding this value, check if a ContactInfo for the
             // owner exists in the table. If it doesn't, that implies that this
             // value can be discarded
@@ -514,28 +514,13 @@ impl CrdsGossipPull {
         ret
     }
 
-    pub(crate) fn make_timeouts(
+    pub(crate) fn make_timeouts<'a>(
         &self,
         self_pubkey: Pubkey,
-        stakes: &HashMap<Pubkey, u64>,
+        stakes: &'a HashMap<Pubkey, u64>,
         epoch_duration: Duration,
-    ) -> HashMap<Pubkey, u64> {
-        let extended_timeout = self.crds_timeout.max(epoch_duration.as_millis() as u64);
-        let default_timeout = if stakes.values().all(|stake| *stake == 0) {
-            extended_timeout
-        } else {
-            self.crds_timeout
-        };
-        stakes
-            .iter()
-            .filter(|(_, &stake)| stake > 0u64)
-            .map(|(&pubkey, _)| pubkey)
-            .zip(repeat(extended_timeout))
-            .chain([
-                (Pubkey::default(), default_timeout),
-                (self_pubkey, u64::MAX),
-            ])
-            .collect()
+    ) -> CrdsTimeouts<'a> {
+        CrdsTimeouts::new(self_pubkey, self.crds_timeout, epoch_duration, stakes)
     }
 
     /// Purge values from the crds that are older then `active_timeout`
@@ -543,7 +528,7 @@ impl CrdsGossipPull {
         thread_pool: &ThreadPool,
         crds: &RwLock<Crds>,
         now: u64,
-        timeouts: &HashMap<Pubkey, u64>,
+        timeouts: &CrdsTimeouts,
     ) -> usize {
         let mut crds = crds.write().unwrap();
         let labels = crds.find_old_labels(thread_pool, now, timeouts);
@@ -559,7 +544,7 @@ impl CrdsGossipPull {
         &self,
         crds: &RwLock<Crds>,
         from: &Pubkey,
-        timeouts: &HashMap<Pubkey, u64>,
+        timeouts: &CrdsTimeouts,
         response: Vec<CrdsValue>,
         now: u64,
     ) -> (usize, usize, usize) {
@@ -580,6 +565,49 @@ impl CrdsGossipPull {
             stats.timeout_count,
             stats.success,
         )
+    }
+}
+
+pub struct CrdsTimeouts<'a> {
+    pubkey: Pubkey,
+    stakes: &'a HashMap<Pubkey, /*lamports:*/ u64>,
+    default_timeout: u64,
+    extended_timeout: u64,
+}
+
+impl<'a> CrdsTimeouts<'a> {
+    pub fn new(
+        pubkey: Pubkey,
+        default_timeout: u64,
+        epoch_duration: Duration,
+        stakes: &'a HashMap<Pubkey, u64>,
+    ) -> Self {
+        let extended_timeout = default_timeout.max(epoch_duration.as_millis() as u64);
+        let default_timeout = if stakes.values().all(|&stake| stake == 0u64) {
+            extended_timeout
+        } else {
+            default_timeout
+        };
+        Self {
+            pubkey,
+            stakes,
+            default_timeout,
+            extended_timeout,
+        }
+    }
+}
+
+impl<'a> Index<&Pubkey> for CrdsTimeouts<'a> {
+    type Output = u64;
+
+    fn index(&self, pubkey: &Pubkey) -> &Self::Output {
+        if pubkey == &self.pubkey {
+            &u64::MAX
+        } else if self.stakes.get(pubkey) > Some(&0u64) {
+            &self.extended_timeout
+        } else {
+            &self.default_timeout
+        }
     }
 }
 
@@ -1218,7 +1246,8 @@ pub(crate) mod tests {
         );
         // purge
         let node_crds = RwLock::new(node_crds);
-        let timeouts = node.make_timeouts(node_pubkey, &HashMap::new(), Duration::default());
+        let stakes = HashMap::from([(Pubkey::new_unique(), 1u64)]);
+        let timeouts = node.make_timeouts(node_pubkey, &stakes, Duration::default());
         CrdsGossipPull::purge_active(&thread_pool, &node_crds, node.crds_timeout, &timeouts);
 
         //verify self is still valid after purge
@@ -1333,9 +1362,13 @@ pub(crate) mod tests {
         let peer_entry = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(
             ContactInfo::new_localhost(&peer_pubkey, 0),
         ));
-        let mut timeouts = HashMap::new();
-        timeouts.insert(Pubkey::default(), node.crds_timeout);
-        timeouts.insert(peer_pubkey, node.crds_timeout + 1);
+        let stakes = HashMap::from([(peer_pubkey, 1u64)]);
+        let timeouts = CrdsTimeouts::new(
+            Pubkey::new_unique(),
+            node.crds_timeout, // default_timeout
+            Duration::from_millis(node.crds_timeout + 1),
+            &stakes,
+        );
         // inserting a fresh value should be fine.
         assert_eq!(
             node.process_pull_response(

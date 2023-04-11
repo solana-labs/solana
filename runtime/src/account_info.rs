@@ -5,8 +5,8 @@
 use {
     crate::{
         accounts_db::AppendVecId,
+        accounts_file::ALIGN_BOUNDARY_OFFSET,
         accounts_index::{IsCached, ZeroLamport},
-        append_vec::ALIGN_BOUNDARY_OFFSET,
     },
     modular_bitfield::prelude::*,
 };

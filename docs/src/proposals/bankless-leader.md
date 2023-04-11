@@ -55,3 +55,5 @@ The same fee account can be reused many times in the same block until it is used
 Clients that transmit a large number of transactions per second should use a dedicated fee account that is not used as Credit-Debit in any instruction.
 
 Once an account fee is used as Credit-Debit, it will fail the balance check until the balance cache is reset.
+
+### Check out the [SIMD here to contribute](https://github.com/solana-foundation/solana-improvement-documents/pull/5)

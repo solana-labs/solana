@@ -148,10 +148,10 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         true
     }
     fn hash(&self, index: usize) -> &Hash {
-        self.account(index).hash
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
-        self.account(index).meta.write_version_obsolete
+        self.account(index).write_version()
     }
 }
 
@@ -252,10 +252,10 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<
         true
     }
     fn hash(&self, index: usize) -> &Hash {
-        self.account(index).hash
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
-        self.account(index).meta.write_version_obsolete
+        self.account(index).write_version()
     }
 }
 
@@ -292,10 +292,10 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         true
     }
     fn hash(&self, index: usize) -> &Hash {
-        self.account(index).hash
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
-        self.account(index).meta.write_version_obsolete
+        self.account(index).write_version()
     }
 }
 
@@ -306,6 +306,7 @@ pub mod tests {
         crate::{
             account_storage::meta::{AccountMeta, StoredAccountMeta, StoredMeta},
             accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
+            append_vec::AppendVecStoredAccountMeta,
         },
         solana_sdk::{
             account::{accounts_equal, AccountSharedData, WritableAccount},
@@ -353,14 +354,14 @@ pub mod tests {
         let offset = 99;
         let stored_size = 101;
         let hash = Hash::new_unique();
-        let stored_account = StoredAccountMeta {
+        let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
             data: &data,
             offset,
             stored_size,
             hash: &hash,
-        };
+        });
 
         let test3 = (
             slot,
@@ -411,14 +412,14 @@ pub mod tests {
                     for entry in 0..entries {
                         let offset = 99;
                         let stored_size = 101;
-                        raw2.push(StoredAccountMeta {
+                        raw2.push(StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
                             meta: &raw[entry as usize].3,
                             account_meta: &raw[entry as usize].4,
                             data: &data,
                             offset,
                             stored_size,
                             hash: &hash,
-                        });
+                        }));
                     }
 
                     let mut two = Vec::new();
@@ -508,14 +509,14 @@ pub mod tests {
             for entry in 0..entries {
                 let offset = 99;
                 let stored_size = 101;
-                raw2.push(StoredAccountMeta {
+                raw2.push(StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
                     meta: &raw[entry as usize].2,
                     account_meta: &raw[entry as usize].3,
                     data: &data,
                     offset,
                     stored_size,
                     hash: &hashes[entry as usize],
-                });
+                }));
             }
             let raw2_refs = raw2.iter().collect::<Vec<_>>();
 
@@ -556,12 +557,9 @@ pub mod tests {
                             let index = index as usize;
                             assert_eq!(storable.account(index), &raw2[index]);
                             assert_eq!(storable.pubkey(index), raw2[index].pubkey());
-                            assert_eq!(storable.hash(index), raw2[index].hash);
+                            assert_eq!(storable.hash(index), raw2[index].hash());
                             assert_eq!(storable.slot(index), expected_slots[index]);
-                            assert_eq!(
-                                storable.write_version(index),
-                                raw2[index].meta.write_version_obsolete
-                            );
+                            assert_eq!(storable.write_version(index), raw2[index].write_version());
                         })
                     }
                 }

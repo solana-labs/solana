@@ -11,7 +11,9 @@ use {
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_bpf_loader_program::syscalls::create_loader,
-    solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_clap_utils::{
+        self, hidden_unless_forced, input_parsers::*, input_validators::*, keypair::*,
+    },
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
         CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
@@ -35,6 +37,7 @@ use {
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        feature_set::FeatureSet,
         instruction::{Instruction, InstructionError},
         loader_instruction,
         message::Message,
@@ -44,9 +47,7 @@ use {
         signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
         system_instruction::{self, SystemError},
         system_program,
-        sysvar::rent::Rent,
         transaction::{Transaction, TransactionError},
-        transaction_context::TransactionContext,
     },
     std::{
         fs::File,
@@ -134,7 +135,7 @@ impl ProgramSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("skip_fee_check")
                         .long("skip-fee-check")
-                        .hidden(true)
+                        .hidden(hidden_unless_forced())
                         .takes_value(false)
                         .global(true)
                 )
@@ -2016,12 +2017,10 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {err}"))?;
-    let mut transaction_context = TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-    let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
     let loader = create_loader(
-        &invoke_context.feature_set,
+        &FeatureSet::default(),
         &ComputeBudget::default(),
         true,
         true,

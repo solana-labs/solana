@@ -68,7 +68,7 @@ By default, the `solana-keygen` command will create a new file system wallet loc
 > **NOTE:**
 > If you already have a file system wallet saved at the default location, this command will **NOT** override it (unless you explicitly force override using the `--force` flag).
 
-#### Set your new wallet as default
+### Set your new wallet as default
 
 With your new file system wallet created, you must tell the Solana CLI to use this wallet to deploy and take ownership of your on chain program:
 

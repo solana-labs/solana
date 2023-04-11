@@ -5,16 +5,15 @@ use {
     log::*,
     solana_program::vote::{instruction::VoteInstruction, program::id, state::VoteAuthorize},
     solana_program_runtime::{
-        invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
+        declare_process_instruction, invoke_context::InvokeContext,
+        sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        transaction_context::{
-            BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
-        },
+        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
     },
     std::collections::HashSet,
 };
@@ -57,10 +56,9 @@ fn process_authorize_with_seed_instruction(
     )
 }
 
-pub fn process_instruction(
-    _first_instruction_account: IndexOfAccount,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+// Citing `runtime/src/block_cost_limit.rs`, vote has statically defined 2100
+// units; can consume based on instructions in the future like `bpf_loader` does.
+declare_process_instruction!(process_instruction, 2100, |invoke_context| {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
@@ -259,7 +257,7 @@ pub fn process_instruction(
             }
         }
     }
-}
+});
 
 #[cfg(test)]
 mod tests {
@@ -321,10 +319,10 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            None,
             expected_result,
             super::process_instruction,
+            |_invoke_context| {},
+            |_invoke_context| {},
         )
     }
 
@@ -340,10 +338,12 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            Some(std::sync::Arc::new(FeatureSet::default())),
             expected_result,
             super::process_instruction,
+            |invoke_context| {
+                invoke_context.feature_set = std::sync::Arc::new(FeatureSet::default());
+            },
+            |_invoke_context| {},
         )
     }
 

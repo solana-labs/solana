@@ -12,4 +12,4 @@ More information about Solana is available in the [Solana documentation](https:/
 
 The [Solana Program Library](https://github.com/solana-labs/solana-program-library) provides examples of how to use this crate.
 
-Still have questions?  Ask us on [Discord](https://discordapp.com/invite/pquxPsq)
+Still have questions?  Ask us on [Stack Exchange](https://sola.na/sse)

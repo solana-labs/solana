@@ -1,5 +1,10 @@
 pub use bytemuck::{Pod, Zeroable};
-use std::fmt;
+use {
+    crate::zk_token_proof_instruction::ProofType,
+    num_traits::{FromPrimitive, ToPrimitive},
+    solana_program::instruction::InstructionError,
+    std::fmt,
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
@@ -26,6 +31,22 @@ impl From<u64> for PodU64 {
 impl From<PodU64> for u64 {
     fn from(pod: PodU64) -> Self {
         Self::from_le_bytes(pod.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct PodProofType(u8);
+impl From<ProofType> for PodProofType {
+    fn from(proof_type: ProofType) -> Self {
+        Self(ToPrimitive::to_u8(&proof_type).unwrap())
+    }
+}
+impl TryFrom<PodProofType> for ProofType {
+    type Error = InstructionError;
+
+    fn try_from(pod: PodProofType) -> Result<Self, Self::Error> {
+        FromPrimitive::from_u8(pod.0).ok_or(Self::Error::InvalidAccountData)
     }
 }
 

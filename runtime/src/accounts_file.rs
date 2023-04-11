@@ -1,12 +1,28 @@
 use {
     crate::{
-        account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta},
+        account_storage::meta::{
+            StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredAccountMeta,
+        },
         append_vec::{AppendVec, MatchAccountOwnerError},
         storable_accounts::StorableAccounts,
     },
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
-    std::{borrow::Borrow, io, path::PathBuf},
+    std::{
+        borrow::Borrow,
+        io, mem,
+        path::{Path, PathBuf},
+    },
 };
+
+// Data placement should be aligned at the next boundary. Without alignment accessing the memory may
+// crash on some architectures.
+pub const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
+#[macro_export]
+macro_rules! u64_align {
+    ($addr: expr) => {
+        ($addr + (ALIGN_BOUNDARY_OFFSET - 1)) & !(ALIGN_BOUNDARY_OFFSET - 1)
+    };
+}
 
 #[derive(Debug)]
 /// An enum for accessing an accounts file which can be implemented
@@ -16,6 +32,15 @@ pub enum AccountsFile {
 }
 
 impl AccountsFile {
+    /// Create an AccountsFile instance from the specified path.
+    ///
+    /// The second element of the returned tuple is the number of accounts in the
+    /// accounts file.
+    pub fn new_from_file(path: impl AsRef<Path>, current_len: usize) -> io::Result<(Self, usize)> {
+        let (av, num_accounts) = AppendVec::new_from_file(path, current_len)?;
+        Ok((Self::AppendVec(av), num_accounts))
+    }
+
     /// By default, all AccountsFile will remove its underlying file on
     /// drop.  Calling this function to disable such behavior for this
     /// instance.
@@ -120,7 +145,7 @@ impl AccountsFile {
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
-    ) -> Option<Vec<usize>> {
+    ) -> Option<Vec<StoredAccountInfo>> {
         match self {
             Self::AppendVec(av) => av.append_accounts(accounts, skip),
         }

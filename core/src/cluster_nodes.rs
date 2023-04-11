@@ -17,6 +17,7 @@ use {
     solana_sdk::{
         clock::{Epoch, Slot},
         feature_set,
+        native_token::LAMPORTS_PER_SOL,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         timing::timestamp,
@@ -107,32 +108,42 @@ impl Node {
 
 impl<T> ClusterNodes<T> {
     pub(crate) fn submit_metrics(&self, name: &'static str, now: u64) {
+        let mut epoch_stakes = 0;
         let mut num_nodes_dead = 0;
         let mut num_nodes_staked = 0;
         let mut num_nodes_stale = 0;
+        let mut stake_dead = 0;
+        let mut stake_stale = 0;
         for node in &self.nodes {
+            epoch_stakes += node.stake;
             if node.stake != 0u64 {
                 num_nodes_staked += 1;
             }
             match node.contact_info() {
                 None => {
                     num_nodes_dead += 1;
+                    stake_dead += node.stake;
                 }
-                Some(node) => {
-                    let age = now.saturating_sub(node.wallclock);
+                Some(&ContactInfo { wallclock, .. }) => {
+                    let age = now.saturating_sub(wallclock);
                     if age > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
                         num_nodes_stale += 1;
+                        stake_stale += node.stake;
                     }
                 }
             }
         }
         num_nodes_stale += num_nodes_dead;
+        stake_stale += stake_dead;
         datapoint_info!(
             name,
+            ("epoch_stakes", epoch_stakes / LAMPORTS_PER_SOL, i64),
             ("num_nodes", self.nodes.len(), i64),
             ("num_nodes_dead", num_nodes_dead, i64),
             ("num_nodes_staked", num_nodes_staked, i64),
             ("num_nodes_stale", num_nodes_stale, i64),
+            ("stake_dead", stake_dead / LAMPORTS_PER_SOL, i64),
+            ("stake_stale", stake_stale / LAMPORTS_PER_SOL, i64),
         );
     }
 }

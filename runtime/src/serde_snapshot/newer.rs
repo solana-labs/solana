@@ -282,7 +282,7 @@ impl<'a> TypeContext<'a> for Context {
         let accounts_hash = serializable_db
             .accounts_db
             .get_accounts_hash(slot)
-            .map(Into::into)
+            .map(|(accounts_hash, _)| accounts_hash.into())
             .unwrap_or_default();
         let stats = serializable_db
             .accounts_db

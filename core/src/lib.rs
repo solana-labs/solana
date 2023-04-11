@@ -9,6 +9,7 @@
 //!
 
 pub mod accounts_hash_verifier;
+pub mod admin_rpc_post_init;
 pub mod ancestor_hashes_service;
 pub mod banking_stage;
 pub mod banking_trace;
@@ -26,7 +27,6 @@ pub mod cost_update_service;
 pub mod drop_bank_service;
 pub mod duplicate_repair_status;
 pub mod fetch_stage;
-pub mod find_packet_sender_stake_stage;
 pub mod fork_choice;
 pub mod forward_packet_batches_by_accounts;
 pub mod gen_keys;
@@ -43,7 +43,6 @@ pub mod next_leader;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
 pub mod packet_deserializer;
-mod packet_hasher;
 pub mod packet_threshold;
 pub mod poh_timing_report_service;
 pub mod poh_timing_reporter;

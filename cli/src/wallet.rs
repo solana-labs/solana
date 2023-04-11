@@ -13,6 +13,7 @@ use {
     solana_clap_utils::{
         compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         fee_payer::*,
+        hidden_unless_forced,
         input_parsers::*,
         input_validators::*,
         keypair::{DefaultSigner, SignerIndex},
@@ -252,7 +253,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .value_name("SEED_STRING")
                         .requires("derived_address_program_id")
                         .validator(is_derived_address_seed)
-                        .hidden(true)
+                        .hidden(hidden_unless_forced())
                 )
                 .arg(
                     Arg::with_name("derived_address_program_id")
@@ -260,7 +261,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .value_name("PROGRAM_ID")
                         .requires("derived_address_seed")
-                        .hidden(true)
+                        .hidden(hidden_unless_forced())
                 )
                 .arg(
                     Arg::with_name("allow_unfunded_recipient")

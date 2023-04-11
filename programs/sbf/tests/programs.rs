@@ -1,4 +1,13 @@
 #![cfg(any(feature = "sbf_c", feature = "sbf_rust"))]
+#![allow(clippy::clone_on_copy)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::redundant_clone)]
+#![allow(clippy::needless_borrow)]
+#![allow(clippy::cmp_owned)]
+#![allow(clippy::needless_collect)]
+#![allow(clippy::match_like_matches_macro)]
+#![allow(clippy::unnecessary_cast)]
+#![allow(clippy::uninlined_format_args)]
 
 #[macro_use]
 extern crate solana_bpf_loader_program;
@@ -10,9 +19,8 @@ use {
         parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
     },
     solana_ledger::token_balances::collect_token_balances,
-    solana_program_runtime::{
-        compute_budget::ComputeBudget, invoke_context::InvokeContext, timings::ExecuteTimings,
-    },
+    solana_program_runtime::{compute_budget::ComputeBudget, timings::ExecuteTimings},
+    solana_rbpf::vm::ContextObject,
     solana_runtime::{
         bank::{
             DurableNonceFee, InnerInstruction, TransactionBalancesSet, TransactionExecutionDetails,
@@ -36,10 +44,8 @@ use {
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
         feature_set::FeatureSet,
         fee::FeeStructure,
-        fee_calculator::FeeRateGovernor,
         loader_instruction,
         message::{v0::LoadedAddresses, SanitizedMessage},
-        rent::Rent,
         signature::keypair_from_seed,
         stake,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
@@ -50,157 +56,36 @@ use {
         ConfirmedTransactionWithStatusMeta, InnerInstructions, TransactionStatusMeta,
         TransactionWithStatusMeta, VersionedTransactionWithStatusMeta,
     },
-    std::{collections::HashMap, str::FromStr},
+    std::collections::HashMap,
 };
 use {
-    solana_bpf_loader_program::{
-        create_vm,
-        serialization::{deserialize_parameters, serialize_parameters},
-        syscalls::create_loader,
-    },
-    solana_program_runtime::invoke_context::with_mock_invoke_context,
-    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::VerifiedExecutable},
+    solana_program_runtime::invoke_context::mock_process_instruction,
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        genesis_utils::{
+            bootstrap_validator_stake_lamports, create_genesis_config,
+            create_genesis_config_with_leader_ex, GenesisConfigInfo,
+        },
     },
     solana_sdk::{
         account::AccountSharedData,
         bpf_loader, bpf_loader_deprecated,
         client::SyncClient,
-        entrypoint::SUCCESS,
+        clock::UnixTimestamp,
+        fee_calculator::FeeRateGovernor,
+        genesis_config::ClusterType,
+        hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
         pubkey::Pubkey,
+        rent::Rent,
         signature::{Keypair, Signer},
         system_program,
         transaction::{SanitizedTransaction, Transaction, TransactionError},
     },
-    std::sync::Arc,
+    std::{cell::RefCell, str::FromStr, sync::Arc, time::Duration},
 };
-
-fn run_program(name: &str) -> u64 {
-    let elf = load_program_from_file(name);
-    let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 0, false, |invoke_context| {
-        let loader = create_loader(
-            &invoke_context.feature_set,
-            &ComputeBudget::default(),
-            true,
-            true,
-            true,
-        )
-        .unwrap();
-        let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
-
-        #[allow(unused_mut)]
-        let mut verified_executable =
-            VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-                .unwrap();
-
-        let run_program_iterations = {
-            #[cfg(target_arch = "x86_64")]
-            {
-                verified_executable.jit_compile().unwrap();
-                2
-            }
-            #[cfg(not(target_arch = "x86_64"))]
-            1
-        };
-
-        let mut instruction_count = 0;
-        let mut trace_log = None;
-        for i in 0..run_program_iterations {
-            let transaction_context = &mut invoke_context.transaction_context;
-            let instruction_context = transaction_context
-                .get_current_instruction_context()
-                .unwrap();
-            let caller = *instruction_context
-                .get_last_program_key(transaction_context)
-                .unwrap();
-            transaction_context
-                .set_return_data(caller, Vec::new())
-                .unwrap();
-
-            let (parameter_bytes, regions, account_lengths) = serialize_parameters(
-                invoke_context.transaction_context,
-                invoke_context
-                    .transaction_context
-                    .get_current_instruction_context()
-                    .unwrap(),
-                true, // should_cap_ix_accounts
-            )
-            .unwrap();
-
-            {
-                let mut vm = create_vm(
-                    &verified_executable,
-                    regions,
-                    account_lengths.clone(),
-                    invoke_context,
-                )
-                .unwrap();
-                let (compute_units_consumed, result) = vm.execute_program(i == 0);
-                assert_eq!(SUCCESS, result.unwrap());
-                if i == 1 {
-                    assert_eq!(instruction_count, compute_units_consumed);
-                }
-                instruction_count = compute_units_consumed;
-                if i == 0 {
-                    trace_log = Some(
-                        vm.env
-                            .context_object_pointer
-                            .trace_log_stack
-                            .last()
-                            .expect("Inconsistent trace log stack")
-                            .trace_log
-                            .clone(),
-                    );
-                } else {
-                    let interpreter = trace_log.as_ref().unwrap().as_slice();
-                    let mut jit = vm
-                        .env
-                        .context_object_pointer
-                        .trace_log_stack
-                        .last()
-                        .expect("Inconsistent trace log stack")
-                        .trace_log
-                        .as_slice();
-                    if jit.len() > interpreter.len() {
-                        jit = &jit[0..interpreter.len()];
-                    }
-                    assert_eq!(interpreter, jit);
-                    trace_log = None;
-                }
-            }
-            assert!(match deserialize_parameters(
-                invoke_context.transaction_context,
-                invoke_context
-                    .transaction_context
-                    .get_current_instruction_context()
-                    .unwrap(),
-                parameter_bytes.as_slice(),
-                &account_lengths,
-            ) {
-                Ok(()) => true,
-                Err(InstructionError::ModifiedProgramId) => true,
-                Err(InstructionError::ExternalAccountLamportSpend) => true,
-                Err(InstructionError::ReadonlyLamportChange) => true,
-                Err(InstructionError::ExecutableLamportChange) => true,
-                Err(InstructionError::ExecutableAccountNotRentExempt) => true,
-                Err(InstructionError::ExecutableModified) => true,
-                Err(InstructionError::AccountDataSizeChanged) => true,
-                Err(InstructionError::InvalidRealloc) => true,
-                Err(InstructionError::ExecutableDataModified) => true,
-                Err(InstructionError::ReadonlyDataModified) => true,
-                Err(InstructionError::ExternalAccountDataModified) => true,
-                _ => false,
-            });
-        }
-        instruction_count
-    })
-}
 
 #[cfg(feature = "sbf_rust")]
 fn process_transaction_and_record_inner(
@@ -1031,6 +916,7 @@ fn test_program_sbf_invoke_sanity() {
                 assert_eq!(result, Err(expected_error));
                 assert_eq!(invoked_programs, expected_invoked_programs);
                 if let Some(expected_log_messages) = expected_log_messages {
+                    assert_eq!(log_messages.len(), expected_log_messages.len());
                     expected_log_messages
                         .into_iter()
                         .zip(log_messages)
@@ -1098,8 +984,7 @@ fn test_program_sbf_invoke_sanity() {
                 format!("Program log: invoke {program_lang} program"),
                 "Program log: Test max instruction data len exceeded".into(),
                 "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with data that is too large (10241 > 10240)".into(),
-                format!("Program {invoke_program_id} failed: Program failed to complete"),
+                format!("Program {invoke_program_id} failed: Invoked an instruction with data that is too large (10241 > 10240)"),
             ]),
         );
 
@@ -1112,8 +997,7 @@ fn test_program_sbf_invoke_sanity() {
                 format!("Program log: invoke {program_lang} program"),
                 "Program log: Test max instruction accounts exceeded".into(),
                 "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with too many accounts (256 > 255)".into(),
-                format!("Program {invoke_program_id} failed: Program failed to complete"),
+                format!("Program {invoke_program_id} failed: Invoked an instruction with too many accounts (256 > 255)"),
             ]),
         );
 
@@ -1126,8 +1010,7 @@ fn test_program_sbf_invoke_sanity() {
                 format!("Program log: invoke {program_lang} program"),
                 "Program log: Test max account infos exceeded".into(),
                 "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with too many account info's (129 > 128)".into(),
-                format!("Program {invoke_program_id} failed: Program failed to complete"),
+                format!("Program {invoke_program_id} failed: Invoked an instruction with too many account info's (129 > 128)"),
             ]),
         );
 
@@ -1458,7 +1341,7 @@ fn test_program_sbf_compute_budget() {
     );
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::set_compute_unit_limit(1),
+            ComputeBudgetInstruction::set_compute_unit_limit(150),
             Instruction::new_with_bincode(program_id, &0, vec![]),
         ],
         Some(&mint_keypair.pubkey()),
@@ -1498,9 +1381,8 @@ fn assert_instruction_count() {
         programs.extend_from_slice(&[
             ("solana_sbf_rust_128bit", 1218),
             ("solana_sbf_rust_alloc", 5067),
-            ("solana_sbf_rust_custom_heap", 422),
+            ("solana_sbf_rust_custom_heap", 398),
             ("solana_sbf_rust_dep_crate", 2),
-            ("solana_sbf_rust_external_spend", 288),
             ("solana_sbf_rust_iter", 1013),
             ("solana_sbf_rust_many_args", 1289),
             ("solana_sbf_rust_mem", 2067),
@@ -1508,30 +1390,61 @@ fn assert_instruction_count() {
             ("solana_sbf_rust_noop", 275),
             ("solana_sbf_rust_param_passing", 146),
             ("solana_sbf_rust_rand", 378),
-            ("solana_sbf_rust_sanity", 51814),
+            ("solana_sbf_rust_sanity", 51931),
             ("solana_sbf_rust_secp256k1_recover", 91185),
-            ("solana_sbf_rust_sha", 24075),
+            ("solana_sbf_rust_sha", 24059),
         ]);
     }
 
-    let mut passed = true;
     println!("\n  {:36} expected actual  diff", "SBF program");
-    for program in programs.iter() {
-        let count = run_program(program.0);
-        let diff: i64 = count as i64 - program.1 as i64;
-        println!(
-            "  {:36} {:8} {:6} {:+5} ({:+3.0}%)",
-            program.0,
-            program.1,
-            count,
-            diff,
-            100.0_f64 * count as f64 / program.1 as f64 - 100.0_f64,
+    for (program_name, expected_consumption) in programs.iter() {
+        let loader_id = bpf_loader::id();
+        let program_key = Pubkey::new_unique();
+        let mut transaction_accounts = vec![
+            (program_key, AccountSharedData::new(0, 0, &loader_id)),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(0, 0, &program_key),
+            ),
+        ];
+        let instruction_accounts = vec![AccountMeta {
+            pubkey: transaction_accounts[1].0,
+            is_signer: false,
+            is_writable: false,
+        }];
+        transaction_accounts[0]
+            .1
+            .set_data_from_slice(&load_program_from_file(program_name));
+        transaction_accounts[0].1.set_executable(true);
+
+        let prev_compute_meter = RefCell::new(0);
+        print!("  {:36} {:8}", program_name, *expected_consumption);
+        mock_process_instruction(
+            &loader_id,
+            vec![0],
+            &[],
+            transaction_accounts,
+            instruction_accounts,
+            Ok(()),
+            solana_bpf_loader_program::process_instruction,
+            |invoke_context| {
+                *prev_compute_meter.borrow_mut() = invoke_context.get_remaining();
+            },
+            |invoke_context| {
+                let consumption = prev_compute_meter
+                    .borrow()
+                    .saturating_sub(invoke_context.get_remaining());
+                let diff: i64 = consumption as i64 - *expected_consumption as i64;
+                println!(
+                    "{:6} {:+5} ({:+3.0}%)",
+                    consumption,
+                    diff,
+                    100.0_f64 * consumption as f64 / *expected_consumption as f64 - 100.0_f64,
+                );
+                assert_eq!(consumption, *expected_consumption);
+            },
         );
-        if count > program.1 {
-            passed = false;
-        }
     }
-    assert!(passed);
 }
 
 #[test]
@@ -1754,6 +1667,221 @@ fn test_program_sbf_upgrade() {
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(42))
     );
+}
+
+fn get_stable_genesis_config() -> GenesisConfigInfo {
+    let validator_pubkey =
+        Pubkey::from_str("GLh546CXmtZdvpEzL8sxzqhhUf7KPvmGaRpFHB5W1sjV").unwrap();
+    let mint_keypair = Keypair::from_base58_string(
+        "4YTH9JSRgZocmK9ezMZeJCCV2LVeR2NatTBA8AFXkg2x83fqrt8Vwyk91961E7ns4vee9yUBzuDfztb8i9iwTLFd",
+    );
+    let voting_keypair = Keypair::from_base58_string(
+        "4EPWEn72zdNY1JSKkzyZ2vTZcKdPW3jM5WjAgUadnoz83FR5cDFApbo7s5mwBcYXn8afVe2syReJaqBi4fkhG3mH",
+    );
+    let stake_pubkey = Pubkey::from_str("HGq9JF77xFXRgWRJy8VQuhdbdugrT856RvQDzr1KJo6E").unwrap();
+
+    let mut genesis_config = create_genesis_config_with_leader_ex(
+        123,
+        &mint_keypair.pubkey(),
+        &validator_pubkey,
+        &voting_keypair.pubkey(),
+        &stake_pubkey,
+        bootstrap_validator_stake_lamports(),
+        42,
+        FeeRateGovernor::new(0, 0), // most tests can't handle transaction fees
+        Rent::free(),               // most tests don't expect rent
+        ClusterType::Development,
+        vec![],
+    );
+    genesis_config.creation_time = Duration::ZERO.as_secs() as UnixTimestamp;
+
+    GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        voting_keypair,
+        validator_pubkey,
+    }
+}
+
+#[test]
+#[ignore]
+#[cfg(feature = "sbf_rust")]
+fn test_program_sbf_invoke_stable_genesis_and_bank() {
+    // The purpose of this test is to exercise various code branches of runtime/VM and
+    // assert that the resulting bank hash matches with the expected value.
+    // The assert check is commented out by default. Please refer to the last few lines
+    // of the test to enable the assertion.
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = get_stable_genesis_config();
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
+    bank.add_builtin(&name, &id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    // Deploy upgradeable program
+    let buffer_keypair = Keypair::from_base58_string(
+        "4q4UvWxh2oMifTGbChDeWCbdN8eJEUQ1E6cuNnmymJ6AN5CMUT2VW5A1RKnG9dy7ypLczB9inMUAafh5TkpXrtxg",
+    );
+    let program_keypair = Keypair::from_base58_string(
+        "3LQpBxgpaFNJPit5a8t51pJKMkUmNUn5PhSTcuuhuuBxe43cTeqVPhMtKkFNr5VpFzCExf4ihibvuZgGxmjy6t8n",
+    );
+    let program_id = program_keypair.pubkey();
+    let authority_keypair = Keypair::from_base58_string(
+        "285XFW2NTWd6CMvtHzvYYS1kWzmzcGBnyEXbH1v8hq6YJqJsLMTYMPkbEQqeE7m7UqhoMeK5V3HMJLf9DdxwU2Gy",
+    );
+
+    let instruction =
+        Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
+
+    // Call program before its deployed
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::ProgramAccountNotFound
+    );
+
+    load_upgradeable_program(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &program_keypair,
+        &authority_keypair,
+        "solana_sbf_rust_noop",
+    );
+
+    // Deploy indirect invocation program
+    let indirect_program_keypair = Keypair::from_base58_string(
+        "2BgE4gD5wUCwiAVPYbmWd2xzXSsD9W2fWgNjwmVkm8WL7i51vK9XAXNnX1VB6oKQZmjaUPRd5RzE6RggB9DeKbZC",
+    );
+    load_upgradeable_program(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &indirect_program_keypair,
+        &authority_keypair,
+        "solana_sbf_rust_invoke_and_return",
+    );
+
+    let invoke_instruction =
+        Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
+    let indirect_invoke_instruction = Instruction::new_with_bytes(
+        indirect_program_keypair.pubkey(),
+        &[0],
+        vec![
+            AccountMeta::new_readonly(program_id, false),
+            AccountMeta::new_readonly(clock::id(), false),
+        ],
+    );
+
+    // Prepare redeployment
+    let buffer_keypair = Keypair::from_base58_string(
+        "5T5L31FiUphXh4N6mxiWhEKPrdLhvMJSbaHo1Ne7zZYkw6YT1fVkqsWdA6pHMtqATiMTc4sfx5yTV9M9AnWDoBkW",
+    );
+    load_upgradeable_buffer(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &authority_keypair,
+        "solana_sbf_rust_panic",
+    );
+    let redeployment_instruction = bpf_loader_upgradeable::upgrade(
+        &program_id,
+        &buffer_keypair.pubkey(),
+        &authority_keypair.pubkey(),
+        &mint_keypair.pubkey(),
+    );
+
+    // Redeployment causes programs to be unavailable to both top-level-instructions and CPI instructions
+    for invoke_instruction in [invoke_instruction, indirect_invoke_instruction] {
+        // Call upgradeable program
+        let result =
+            bank_client.send_and_confirm_instruction(&mint_keypair, invoke_instruction.clone());
+        assert!(result.is_ok());
+
+        // Upgrade the program and invoke in same tx
+        let message = Message::new(
+            &[redeployment_instruction.clone(), invoke_instruction],
+            Some(&mint_keypair.pubkey()),
+        );
+        let tx = Transaction::new(
+            &[&mint_keypair, &authority_keypair],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
+        );
+    }
+
+    // Prepare undeployment
+    let (programdata_address, _) = Pubkey::find_program_address(
+        &[program_keypair.pubkey().as_ref()],
+        &bpf_loader_upgradeable::id(),
+    );
+    let undeployment_instruction = bpf_loader_upgradeable::close_any(
+        &programdata_address,
+        &mint_keypair.pubkey(),
+        Some(&authority_keypair.pubkey()),
+        Some(&program_id),
+    );
+
+    let invoke_instruction =
+        Instruction::new_with_bytes(program_id, &[1], vec![AccountMeta::new(clock::id(), false)]);
+    let indirect_invoke_instruction = Instruction::new_with_bytes(
+        indirect_program_keypair.pubkey(),
+        &[1],
+        vec![
+            AccountMeta::new_readonly(program_id, false),
+            AccountMeta::new_readonly(clock::id(), false),
+        ],
+    );
+
+    // Undeployment is visible to both top-level-instructions and CPI instructions
+    for invoke_instruction in [invoke_instruction, indirect_invoke_instruction] {
+        // Call upgradeable program
+        let result =
+            bank_client.send_and_confirm_instruction(&mint_keypair, invoke_instruction.clone());
+        assert!(result.is_ok());
+
+        // Undeploy the program and invoke in same tx
+        let message = Message::new(
+            &[undeployment_instruction.clone(), invoke_instruction],
+            Some(&mint_keypair.pubkey()),
+        );
+        let tx = Transaction::new(
+            &[&mint_keypair, &authority_keypair],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
+        );
+    }
+
+    bank.freeze();
+    let expected_hash = Hash::from_str("2A2vqbUKExRbnaAzSnDFXdsBZRZSpCjGZCAA3mFZG2sV")
+        .expect("Failed to generate hash");
+    println!("Stable test produced bank hash: {}", bank.hash());
+    println!("Expected hash: {}", expected_hash);
+
+    // Enable the following code to match the bank hash with the expected bank hash.
+    // Follow these steps.
+    // 1. Run this test on the baseline/master commit, and get the expected bank hash.
+    // 2. Update the `expected_hash` to match the expected bank hash.
+    // 3. Run the test in the PR branch that's being tested.
+    // If the hash doesn't match, the PR likely has runtime changes that can lead to
+    // consensus failure.
+    //  assert_eq!(bank.hash(), expected_hash);
 }
 
 #[test]
@@ -2173,9 +2301,18 @@ fn test_program_sbf_disguised_as_sbf_loader() {
             mint_keypair,
             ..
         } = create_genesis_config(50);
+
         let mut bank = Bank::new_for_tests(&genesis_config);
+        // disable native_programs_consume_cu feature to allow test program
+        // not consume units.
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&solana_sdk::feature_set::native_programs_consume_cu::id());
+        bank.feature_set = Arc::new(feature_set);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
         bank.add_builtin(&name, &id, entrypoint);
+        bank.deactivate_feature(
+            &solana_sdk::feature_set::remove_bpf_loader_incorrect_program_id::id(),
+        );
         let bank_client = BankClient::new(bank);
 
         let program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
@@ -2187,6 +2324,34 @@ fn test_program_sbf_disguised_as_sbf_loader() {
             TransactionError::InstructionError(0, InstructionError::IncorrectProgramId)
         );
     }
+}
+
+#[test]
+#[cfg(feature = "sbf_c")]
+fn test_program_reads_from_program_account() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, &id, entrypoint);
+    let bank_client = BankClient::new(bank);
+
+    let program_id = load_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "read_program",
+    );
+    let account_metas = vec![AccountMeta::new_readonly(program_id, false)];
+    let instruction = Instruction::new_with_bytes(program_id, &[], account_metas);
+    bank_client
+        .send_and_confirm_instruction(&mint_keypair, instruction)
+        .unwrap();
 }
 
 #[test]
@@ -3591,6 +3756,7 @@ fn test_program_fees() {
         true,
         true,
         true,
+        false,
     );
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -3616,6 +3782,7 @@ fn test_program_fees() {
         true,
         true,
         true,
+        false,
     );
     assert!(expected_normal_fee < expected_prioritized_fee);
 

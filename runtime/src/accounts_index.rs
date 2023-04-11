@@ -4,7 +4,7 @@ use {
         ancestors::Ancestors,
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
-        in_mem_accounts_index::InMemAccountsIndex,
+        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
@@ -1356,11 +1356,13 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     /// For each pubkey, find the slot list in the accounts index
     ///   apply 'avoid_callback_result' if specified.
     ///   otherwise, call `callback`
+    /// if 'provide_entry_in_callback' is true, populate callback with the Arc of the entry itself.
     pub(crate) fn scan<'a, F, I>(
         &self,
         pubkeys: I,
         mut callback: F,
         avoid_callback_result: Option<AccountsIndexScanResult>,
+        provide_entry_in_callback: bool,
     ) where
         // params:
         //  pubkey looked up
@@ -1368,9 +1370,14 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         //    None if 'pubkey' is not in accounts index.
         //   slot_list: comes from accounts index for 'pubkey'
         //   ref_count: refcount of entry in index
+        //   entry, if 'provide_entry_in_callback' is true
         // if 'avoid_callback_result' is Some(_), then callback is NOT called
         //  and _ is returned as if callback were called.
-        F: FnMut(&'a Pubkey, Option<(&SlotList<T>, RefCount)>) -> AccountsIndexScanResult,
+        F: FnMut(
+            &'a Pubkey,
+            Option<(&SlotList<T>, RefCount)>,
+            Option<&AccountMapEntry<T>>,
+        ) -> AccountsIndexScanResult,
         I: Iterator<Item = &'a Pubkey>,
     {
         let mut lock = None;
@@ -1390,7 +1397,11 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                             *result
                         } else {
                             let slot_list = &locked_entry.slot_list.read().unwrap();
-                            callback(pubkey, Some((slot_list, locked_entry.ref_count())))
+                            callback(
+                                pubkey,
+                                Some((slot_list, locked_entry.ref_count())),
+                                provide_entry_in_callback.then_some(locked_entry),
+                            )
                         };
                         cache = match result {
                             AccountsIndexScanResult::Unref => {
@@ -1404,7 +1415,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                         };
                     }
                     None => {
-                        avoid_callback_result.unwrap_or_else(|| callback(pubkey, None));
+                        avoid_callback_result.unwrap_or_else(|| callback(pubkey, None, None));
                     }
                 }
                 (cache, ())
@@ -1626,7 +1637,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                 (pubkey_bin, Vec::with_capacity(expected_items_per_bin))
             })
             .collect::<Vec<_>>();
-        let dirty_pubkeys = items
+        let mut dirty_pubkeys = items
             .filter_map(|(pubkey, account_info)| {
                 let pubkey_bin = self.bin_calculator.bin_from_pubkey(&pubkey);
                 let binned_index = (pubkey_bin + random_offset) % bins;
@@ -1657,7 +1668,13 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                         &self.storage.storage,
                         use_disk,
                     );
-                    r_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_entry);
+                    match r_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_entry) {
+                        InsertNewEntryResults::DidNotExist => {}
+                        InsertNewEntryResults::ExistedNewEntryZeroLamports => {}
+                        InsertNewEntryResults::ExistedNewEntryNonZeroLamports => {
+                            dirty_pubkeys.push(pubkey);
+                        }
+                    }
                 });
             }
             insert_time.stop();
@@ -1668,11 +1685,14 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     }
 
     /// return Vec<Vec<>> because the internal vecs are already allocated per bin
-    pub fn retrieve_duplicate_keys_from_startup(&self) -> Vec<Vec<(Slot, Pubkey)>> {
+    pub(crate) fn populate_and_retrieve_duplicate_keys_from_startup(
+        &self,
+    ) -> Vec<Vec<(Slot, Pubkey)>> {
         (0..self.bins())
+            .into_par_iter()
             .map(|pubkey_bin| {
                 let r_account_maps = &self.account_maps[pubkey_bin];
-                r_account_maps.retrieve_duplicate_keys_from_startup()
+                r_account_maps.populate_and_retrieve_duplicate_keys_from_startup()
             })
             .collect()
     }
@@ -2471,8 +2491,8 @@ pub mod tests {
         assert_eq!(num, 1);
 
         // not zero lamports
-        let index = AccountsIndex::<AccountInfoTest, AccountInfoTest>::default_for_tests();
-        let account_info: AccountInfoTest = 0 as AccountInfoTest;
+        let index = AccountsIndex::<bool, bool>::default_for_tests();
+        let account_info = false;
         let items = vec![(*pubkey, account_info)];
         index.set_startup(Startup::Startup);
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
@@ -2496,7 +2516,7 @@ pub mod tests {
         assert!(index
             .get_for_tests(pubkey, Some(&ancestors), None)
             .is_some());
-        assert_eq!(index.ref_count_from_storage(pubkey), 0); // cached, so 0
+        assert_eq!(index.ref_count_from_storage(pubkey), 1);
         index.unchecked_scan_accounts(
             "",
             &ancestors,
@@ -2682,6 +2702,7 @@ pub mod tests {
             index.set_startup(Startup::Normal);
         }
         assert!(gc.is_empty());
+        index.populate_and_retrieve_duplicate_keys_from_startup();
 
         for lock in &[false, true] {
             let read_lock = if *lock {
