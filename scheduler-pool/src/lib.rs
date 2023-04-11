@@ -1,12 +1,14 @@
 use {
     log::*,
-    solana_ledger::blockstore_processor::TransactionStatusSender,
+    solana_ledger::blockstore_processor::{
+        execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
+    },
     solana_poh::poh_recorder::PohRecorder,
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         installed_scheduler_pool::{
             InstalledScheduler, InstalledSchedulerPool, SchedulerBox, SchedulerPoolArc,
-            SchedulingContext,
+            SchedulingContext, WaitSource,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
@@ -125,7 +127,6 @@ impl InstalledScheduler for Scheduler {
         self.0.clone()
     }
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
-        use solana_ledger::blockstore_processor::{execute_batch, TransactionBatchWithIndexes};
         let a = self.1.lock().unwrap();
         let bank = a.0.bank();
 
@@ -150,10 +151,7 @@ impl InstalledScheduler for Scheduler {
     fn wait_for_termination(
         &mut self,
         _wait_source: WaitSource,
-    ) -> Option<(
-        ExecuteTimings,
-        Result<()>,
-    )> {
+    ) -> Option<(ExecuteTimings, Result<()>)> {
         // no-op
         None
     }
