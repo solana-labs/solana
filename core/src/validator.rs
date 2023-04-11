@@ -754,23 +754,20 @@ impl Validator {
         // (by both replay stage and banking stage)
         let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
 
-        if matches!(
-            &config.block_verification_method,
-            BlockVerificationMethod::UnifiedScheduler
-        ) {
-            use solana_scheduler_pool::SchedulerPool;
-            let scheduler_pool = SchedulerPool::new_dyn(
-                config.runtime_config.log_messages_bytes_limit,
-                transaction_status_sender.clone(),
-                Some(replay_vote_sender.clone()),
-                prioritization_fee_cache.clone(),
-            );
-            bank_forks
-                .write()
-                .unwrap()
-                .install_scheduler_pool(scheduler_pool);
-        } else {
-            info!("not installing scheduler pool...");
+        match &config.block_verification_method {
+            BlockVerificationMethod::UnifiedScheduler => {
+                use solana_scheduler_pool::SchedulerPool;
+                let scheduler_pool = SchedulerPool::new_dyn(
+                    config.runtime_config.log_messages_bytes_limit,
+                    transaction_status_sender.clone(),
+                    Some(replay_vote_sender.clone()),
+                    prioritization_fee_cache.clone(),
+                );
+                bank_forks
+                    .write()
+                    .unwrap()
+                    .install_scheduler_pool(scheduler_pool);
+            }
         }
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
