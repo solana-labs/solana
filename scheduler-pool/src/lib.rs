@@ -1,5 +1,4 @@
 use {
-    log::*,
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
     },
