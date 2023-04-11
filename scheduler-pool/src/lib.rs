@@ -146,6 +146,6 @@ impl InstalledScheduler for Scheduler {
         &self,
         c: SchedulingContext,
     ) {
-        *self.1.lock().unwrap() = c;
+        *self.1.lock().unwrap() = (c, None);
     }
 }
