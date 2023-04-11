@@ -46,8 +46,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
 
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
     fn schedule_termination(&mut self);
-    fn wait_for_termination(&mut self, source: &WaitSource)
-        -> Option<(ExecuteTimings, Result<()>)>;
+    fn wait_for_termination(&mut self, source: &WaitSource) -> Option<TimingAndResult>;
 
     fn replace_scheduler_context(&self, context: SchedulingContext);
 }
@@ -56,6 +55,8 @@ pub type SchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;
 pub(crate) type InstalledSchedulerPoolArc = Option<SchedulerPoolArc>;
 
 pub type SchedulerId = u64;
+
+pub type TimingAndResult = (ExecuteTimings, Result<()>);
 
 #[derive(Debug)]
 pub enum WaitSource {
