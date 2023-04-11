@@ -67,7 +67,6 @@ use {
         snapshot_hash::SnapshotHash,
         sorted_storages::SortedStorages,
         stake_account::{self, StakeAccount},
-        stake_history::StakeHistory,
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW_V2,
@@ -2873,7 +2872,6 @@ impl Bank {
         metrics: &mut RewardsMetrics,
         update_rewards_from_cached_accounts: bool,
     ) {
-        let stake_history = self.stakes_cache.stakes().history().clone();
         let vote_with_stake_delegations_map = self.load_vote_and_stake_accounts(
             thread_pool,
             reward_calc_tracer.as_ref(),
@@ -2884,7 +2882,6 @@ impl Bank {
         let point_value = self.calculate_reward_points(
             &vote_with_stake_delegations_map,
             rewards,
-            &stake_history,
             thread_pool,
             metrics,
         );
@@ -2895,7 +2892,6 @@ impl Bank {
                 rewarded_epoch,
                 point_value,
                 credits_auto_rewind,
-                &stake_history,
                 thread_pool,
                 reward_calc_tracer.as_ref(),
                 metrics,
@@ -2952,10 +2948,10 @@ impl Bank {
         &self,
         vote_with_stake_delegations_map: &VoteWithStakeDelegationsMap,
         rewards: u64,
-        stake_history: &StakeHistory,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) -> Option<PointValue> {
+        let stake_history = self.stakes_cache.stakes().history().clone();
         let (points, measure) = measure!(thread_pool.install(|| {
             vote_with_stake_delegations_map
                 .par_iter()
@@ -2972,7 +2968,7 @@ impl Bank {
                             stake_state::calculate_points(
                                 stake_account.stake_state(),
                                 vote_state,
-                                Some(stake_history),
+                                Some(&stake_history),
                             )
                             .unwrap_or(0)
                         })
@@ -2993,11 +2989,11 @@ impl Bank {
         rewarded_epoch: Epoch,
         point_value: PointValue,
         credits_auto_rewind: bool,
-        stake_history: &StakeHistory,
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
     ) -> (VoteRewards, StakeRewards) {
+        let stake_history = self.stakes_cache.stakes().history().clone();
         let vote_account_rewards: VoteRewards =
             DashMap::with_capacity(vote_with_stake_delegations_map.len());
         let stake_delegation_iterator = vote_with_stake_delegations_map.into_par_iter().flat_map(
@@ -3035,7 +3031,7 @@ impl Bank {
                         &mut stake_account,
                         &vote_state,
                         &point_value,
-                        Some(stake_history),
+                        Some(&stake_history),
                         reward_calc_tracer.as_ref(),
                         credits_auto_rewind,
                     );
