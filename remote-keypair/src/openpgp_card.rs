@@ -20,14 +20,14 @@ use {
 };
 
 /// Locator for smart cards supporting OpenPGP connected to the local machine.
-/// 
+///
 /// Field `aid` contains a data struct with fields for application ID, version,
 /// manufacturer ID (of the smart card), and serial number. An instance of
 /// `ApplicationIdentifier` is logically equivalent to an AID string as
 /// specified in the OpenPGP specification v3.4 (section 4.2.1), used to
 /// uniquely identify an instance of an OpenPGP application on a unique smart
 /// card.
-/// 
+///
 /// A null `aid` indicates the default locator which chooses the first smart
 /// card supporting OpenPGP that it finds connected to the machine.
 #[derive(Debug, PartialEq, Eq)]
@@ -49,9 +49,9 @@ impl TryFrom<&URIReference<'_>> for Locator {
     type Error = LocatorError;
 
     /// Extract a locator from a URI.
-    /// 
+    ///
     /// "pgpcard://" => Default locator.
-    /// 
+    ///
     /// "pgpcard://D2760001240103040006123456780000" => Locator pointing to a
     /// OpenPGP instance identifiable by AID D2760001240103040006123456780000.
     /// As per the OpenPGP specification:
@@ -62,12 +62,12 @@ impl TryFrom<&URIReference<'_>> for Locator {
     ///   * 0006       => unique manufacturer ID, Yubico in this case
     ///   * 12345678   => smart card serial number
     ///   * 0000       => reserved for future use
-    /// 
+    ///
     /// No other URI formats are valid.
     fn try_from(uri: &URIReference<'_>) -> Result<Self, Self::Error> {
         let scheme = uri.scheme().map(|s| s.as_str().to_ascii_lowercase());
         let ident = uri.host().map(|h| h.to_string());
-        
+
         match (scheme, ident) {
             (Some(scheme), Some(ident)) if scheme == "pgpcard" => {
                 if ident.is_empty() {
@@ -95,15 +95,15 @@ impl TryFrom<&URIReference<'_>> for Locator {
 }
 
 /// An ongoing connection to the OpenPGP application on a smart card.
-/// 
+///
 /// Field `pgp: OpenPgp` is a long-lived card access object. When OpenpgpCard
 /// is initialized via TryFrom<&Locator>, this object contains a `PcscBackend`
 /// connector object that communicates with the card using PC/SC.
-/// 
-/// Actual operations on the card are done through short-lived 
+///
+/// Actual operations on the card are done through short-lived
 /// OpenPgpTransaction objects that are instantiated from `OpenPgp` on an ad
 /// hoc basis. There should only exist one active OpenPgpTransaction at a time.
-/// 
+///
 /// Field `pin_verified` indicates whether a successful PIN verification has
 /// already happened in the past (specifically for PW1 used to authorize
 /// signing). This allows redundant PIN verification to be skipped for cards
