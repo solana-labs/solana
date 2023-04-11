@@ -759,8 +759,7 @@ impl Validator {
             BlockVerificationMethod::UnifiedScheduler
         ) {
             use solana_scheduler_pool::SchedulerPool;
-            let scheduler_pool = SchedulerPool::new_boxed(
-                None,
+            let scheduler_pool = SchedulerPool::new_dyn(
                 config.runtime_config.log_messages_bytes_limit,
                 transaction_status_sender.clone(),
                 Some(replay_vote_sender.clone()),
