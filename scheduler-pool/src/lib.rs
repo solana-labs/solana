@@ -154,7 +154,7 @@ impl InstalledScheduler for Scheduler {
         &mut self,
         _wait_source: &WaitSource,
     ) -> Option<(ExecuteTimings, Result<()>)> {
-        None
+        self.1.lock().unwrap().1.take()
     }
     fn replace_scheduler_context(&self, c: SchedulingContext) {
         *self.1.lock().unwrap() = (c, None);
