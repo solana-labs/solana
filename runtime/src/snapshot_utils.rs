@@ -5090,8 +5090,13 @@ mod tests {
 
         let complete_flag_file = snapshot.snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
         fs::remove_file(complete_flag_file).unwrap();
+        // The incomplete snapshot dir should still exist
+        let snapshot_dir_4 = snapshot.snapshot_dir;
+        assert!(snapshot_dir_4.exists());
         let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 3);
+        // The incomplete snapshot dir should have been deleted
+        assert!(!snapshot_dir_4.exists());
 
         let snapshot_version_file = snapshot.snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
         fs::remove_file(snapshot_version_file).unwrap();
