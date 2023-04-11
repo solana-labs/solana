@@ -7,8 +7,8 @@ use {
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         installed_scheduler_pool::{
-            InstalledScheduler, InstalledSchedulerPool, SchedulerBox, SchedulerPoolArc,
-            SchedulingContext, WaitSource,
+            InstalledScheduler, InstalledSchedulerPool, SchedulerBox, SchedulerId,
+            SchedulerPoolArc, SchedulingContext, WaitSource,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
@@ -16,7 +16,6 @@ use {
     solana_sdk::transaction::{Result, SanitizedTransaction, TransactionError},
     std::sync::{Arc, Mutex, RwLock, Weak},
 };
-use solana_runtime::installed_scheduler_pool::SchedulerId;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
