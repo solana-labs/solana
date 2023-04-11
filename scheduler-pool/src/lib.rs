@@ -86,9 +86,8 @@ impl InstalledScheduler for Scheduler {
             (&self.0, &mut *self.1.lock().unwrap());
         let bank = context.bank();
 
-        let transactions = [transaction.clone()];
         let batch_with_indexes = TransactionBatchWithIndexes {
-            batch: bank.prepare_sanitized_batch_without_locking(&transactions),
+            batch: bank.prepare_sanitized_batch_without_locking(transaction.clone()),
             transaction_indexes: vec![index],
         };
         let (timings, result) =
