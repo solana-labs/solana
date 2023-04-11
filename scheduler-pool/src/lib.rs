@@ -8,7 +8,7 @@ use {
     solana_runtime::{
         installed_scheduler_pool::{
             InstalledScheduler, InstalledSchedulerPool, SchedulerBox, SchedulerId,
-            SchedulerPoolArc, SchedulingContext, WaitSource,
+            SchedulerPoolArc, SchedulingContext, TimingAndResult, WaitSource,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
@@ -16,7 +16,6 @@ use {
     solana_sdk::transaction::{Result, SanitizedTransaction, TransactionError},
     std::sync::{Arc, Mutex, RwLock, Weak},
 };
-use solana_runtime::installed_scheduler_pool::TimingAndResult;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
@@ -154,10 +153,7 @@ impl InstalledScheduler for Scheduler {
         // no-op
     }
 
-    fn wait_for_termination(
-        &mut self,
-        wait_source: &WaitSource,
-    ) -> Option<TimingAndResult> {
+    fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<TimingAndResult> {
         match wait_source {
             WaitSource::InsideBlock => None,
             _ => self.1.lock().unwrap().1.take(),
