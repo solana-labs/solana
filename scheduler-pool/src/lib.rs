@@ -149,7 +149,7 @@ impl InstalledScheduler for Scheduler {
     }
     fn wait_for_termination(
         &mut self,
-        _: &solana_runtime::installed_scheduler_pool::WaitSource,
+        _wait_source: WaitSource,
     ) -> Option<(
         ExecuteTimings,
         Result<()>,
