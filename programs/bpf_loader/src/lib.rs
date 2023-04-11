@@ -225,9 +225,15 @@ pub fn load_program_from_account(
     Ok((loaded_program, Some(load_program_metrics)))
 }
 
+enum ProgramDeployReason {
+    Finalize,
+    DeployWithMaxDataLen,
+    Upgrade,
+}
+
 macro_rules! deploy_program {
     ($invoke_context:expr, $use_jit:expr, $program_id:expr, $loader_key:expr,
-     $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
+     $account_size:expr, $slot:expr, $drop:expr, $reason:expr, $new_programdata:expr $(,)?) => {{
         let delay_visibility_of_program_deployment = $invoke_context
             .feature_set
             .is_active(&delay_visibility_of_program_deployment::id());
@@ -244,6 +250,13 @@ macro_rules! deploy_program {
             $use_jit,
             true,
         )?;
+        let upgrade = matches!($reason, ProgramDeployReason::Upgrade);
+        if upgrade {
+            if let Some(old_entry) = $invoke_context.tx_executor_cache.borrow().get(&$program_id) {
+                let usage_counter = old_entry.usage_counter.load(Ordering::Relaxed);
+                executor.usage_counter.store(usage_counter, Ordering::Relaxed);
+            }
+        }
         $drop
         load_program_metrics.program_id = $program_id.to_string();
         load_program_metrics.submit_datapoint(&mut $invoke_context.timings);
@@ -793,6 +806,7 @@ fn process_loader_upgradeable_instruction(
                 {
                     drop(buffer);
                 },
+                ProgramDeployReason::DeployWithMaxDataLen,
                 buffer
                     .get_data()
                     .get(buffer_data_offset..)
@@ -982,6 +996,7 @@ fn process_loader_upgradeable_instruction(
                 {
                     drop(buffer);
                 },
+                ProgramDeployReason::Upgrade,
                 buffer
                     .get_data()
                     .get(buffer_data_offset..)
@@ -1503,6 +1518,7 @@ fn process_loader_instruction(
                 program.get_data().len(),
                 0,
                 {},
+                ProgramDeployReason::Finalize,
                 program.get_data(),
             );
             program.set_executable(true)?;
@@ -1641,6 +1657,8 @@ fn execute<'a, 'b: 'a>(
 
 #[cfg(test)]
 mod tests {
+    use solana_program_runtime::with_mock_invoke_context;
+    use std::sync::atomic::AtomicU64;
     use {
         super::*,
         rand::Rng,
@@ -4045,5 +4063,107 @@ mod tests {
                 calculate_heap_cost(64_u64 * 1024, heap_cost, true)
             );
         }
+    }
+
+    fn deploy_test_program(
+        invoke_context: &mut InvokeContext,
+        program_id: Pubkey,
+        reason: ProgramDeployReason,
+    ) -> Result<(), InstructionError> {
+        let mut file = File::open("test_elfs/out/noop_unaligned.so").expect("file open failed");
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
+        deploy_program!(
+            invoke_context,
+            false,
+            program_id,
+            &bpf_loader_upgradeable::id(),
+            elf.len(),
+            2,
+            {},
+            reason,
+            &elf
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_program_usage_count_on_upgrade() {
+        let transaction_accounts = vec![];
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+        let program_id = Pubkey::new_unique();
+        let program = LoadedProgram {
+            program: LoadedProgramType::Unloaded,
+            account_size: 0,
+            deployment_slot: 0,
+            effective_slot: 0,
+            maybe_expiration_slot: None,
+            usage_counter: AtomicU64::new(100),
+        };
+        invoke_context.tx_executor_cache.borrow_mut().set(
+            program_id,
+            Arc::new(program),
+            false,
+            false,
+            0,
+        );
+
+        assert!(matches!(
+            deploy_test_program(
+                &mut invoke_context,
+                program_id,
+                ProgramDeployReason::Upgrade
+            ),
+            Ok(())
+        ));
+
+        let updated_program = invoke_context
+            .tx_executor_cache
+            .borrow()
+            .get(&program_id)
+            .expect("Didn't find upgraded program in the cache");
+
+        assert_eq!(updated_program.deployment_slot, 2);
+        assert_eq!(updated_program.usage_counter.load(Ordering::Relaxed), 100);
+    }
+
+    #[test]
+    fn test_program_usage_count_on_non_upgrade() {
+        let transaction_accounts = vec![];
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+        let program_id = Pubkey::new_unique();
+        let program = LoadedProgram {
+            program: LoadedProgramType::Unloaded,
+            account_size: 0,
+            deployment_slot: 0,
+            effective_slot: 0,
+            maybe_expiration_slot: None,
+            usage_counter: AtomicU64::new(100),
+        };
+        invoke_context.tx_executor_cache.borrow_mut().set(
+            program_id,
+            Arc::new(program),
+            false,
+            false,
+            0,
+        );
+
+        assert!(matches!(
+            deploy_test_program(
+                &mut invoke_context,
+                program_id,
+                ProgramDeployReason::DeployWithMaxDataLen
+            ),
+            Ok(())
+        ));
+
+        let updated_program = invoke_context
+            .tx_executor_cache
+            .borrow()
+            .get(&program_id)
+            .expect("Didn't find upgraded program in the cache");
+
+        assert_eq!(updated_program.deployment_slot, 2);
+        assert_eq!(updated_program.usage_counter.load(Ordering::Relaxed), 0);
     }
 }
