@@ -126,7 +126,7 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
-        let aa = self.1.lock().unwrap();
+        let mut aa = self.1.lock().unwrap();
         let bank = aa.0.bank();
 
         let b = TransactionBatchWithIndexes {
