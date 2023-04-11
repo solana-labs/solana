@@ -92,20 +92,20 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
-        let mut aa = self.1.lock().unwrap();
+        let mut (pool, contet_timing_and_result) = &self.1.lock().unwrap();
         let (ref mut context, ref mut timings_and_result) = &mut *aa;
         let bank = context.bank();
 
-        let tt = [transaction.clone()];
-        let b = TransactionBatchWithIndexes {
-            batch: bank.prepare_sanitized_batch(&tt),
+        let transactions = [transaction.clone()];
+        let batch_with_indexes = TransactionBatchWithIndexes {
+            batch: bank.prepare_sanitized_batch(&transactions),
             transaction_indexes: vec![index],
         };
         let mut a = timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
         if a.1.is_ok() {
             a.1 = execute_batch(
-                &b,
+                &batch_with_indexes,
                 bank,
                 self.0.transaction_status_sender.as_ref(),
                 self.0.replay_vote_sender.as_ref(),
