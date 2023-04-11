@@ -2,17 +2,18 @@ use {
     log::*,
     solana_ledger::blockstore_processor::TransactionStatusSender,
     solana_poh::poh_recorder::PohRecorder,
+    solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
-        installed_scheduler_pool::{InstalledScheduler, InstalledSchedulerPool, SchedulingContext},
+        installed_scheduler_pool::{
+            InstalledScheduler, InstalledSchedulerPool, SchedulerBox, SchedulerPoolArc,
+            SchedulingContext,
+        },
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::transaction::{SanitizedTransaction, TransactionError, Result},
-    std::sync::{Arc, RwLock, Weak, Mutex},
+    solana_sdk::transaction::{Result, SanitizedTransaction, TransactionError},
+    std::sync::{Arc, Mutex, RwLock, Weak},
 };
-use solana_runtime::installed_scheduler_pool::SchedulerPoolArc;
-use solana_runtime::installed_scheduler_pool::SchedulerBox;
-use solana_program_runtime::timings::ExecuteTimings;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
@@ -25,11 +26,17 @@ pub struct SchedulerPool {
 }
 
 #[derive(Debug)]
-struct Scheduler(Arc<SchedulerPool>, Mutex<(SchedulingContext, ExecuteTimings, Result<()>)>);
+struct Scheduler(
+    Arc<SchedulerPool>,
+    Mutex<(SchedulingContext, ExecuteTimings, Result<()>)>,
+);
 
 impl Scheduler {
     fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
-        Self(scheduler_pool, Mutex::new((initial_context, ExecuteTimings::default(), Ok(()))))
+        Self(
+            scheduler_pool,
+            Mutex::new((initial_context, ExecuteTimings::default(), Ok(()))),
+        )
     }
 }
 
@@ -56,13 +63,13 @@ impl SchedulerPool {
         self.schedulers
             .lock()
             .unwrap()
-            .push(Box::new(Scheduler::spawn(self.weak.upgrade().unwrap(), context)));
+            .push(Box::new(Scheduler::spawn(
+                self.weak.upgrade().unwrap(),
+                context,
+            )));
     }
 
-    fn take_from_pool2(
-        &self,
-        context: Option<SchedulingContext>,
-    ) -> Box<dyn InstalledScheduler> {
+    fn take_from_pool2(&self, context: Option<SchedulingContext>) -> Box<dyn InstalledScheduler> {
         let mut schedulers = self.schedulers.lock().unwrap();
         let maybe_scheduler = schedulers.pop();
         if let Some(scheduler) = maybe_scheduler {
@@ -114,14 +121,11 @@ impl InstalledScheduler for Scheduler {
     fn scheduler_id(&self) -> u64 {
         0
     }
-    fn scheduler_pool(
-        &self,
-    ) -> SchedulerPoolArc {
+    fn scheduler_pool(&self) -> SchedulerPoolArc {
         self.0.clone()
     }
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
-        use solana_ledger::blockstore_processor::execute_batch;
-        use solana_ledger::blockstore_processor::TransactionBatchWithIndexes;
+        use solana_ledger::blockstore_processor::{execute_batch, TransactionBatchWithIndexes};
         let a = self.1.lock().unwrap();
         let bank = a.0.bank();
 
@@ -129,7 +133,15 @@ impl InstalledScheduler for Scheduler {
             panic!();
         };
         if a.2.is_ok() {
-            a.2 = execute_batch(&b, bank, self.0.transaction_status_sender.as_ref(), self.0.replay_vote_sender.as_ref(), &mut a.1, self.0.log_messages_bytes_limit, &self.0.prioritization_fee_cache);
+            a.2 = execute_batch(
+                &b,
+                bank,
+                self.0.transaction_status_sender.as_ref(),
+                self.0.replay_vote_sender.as_ref(),
+                &mut a.1,
+                self.0.log_messages_bytes_limit,
+                &self.0.prioritization_fee_cache,
+            );
         }
     }
     fn schedule_termination(&mut self) {
@@ -145,10 +157,7 @@ impl InstalledScheduler for Scheduler {
         // no-op
         None
     }
-    fn replace_scheduler_context(
-        &self,
-        c: SchedulingContext,
-    ) {
+    fn replace_scheduler_context(&self, c: SchedulingContext) {
         *self.1.lock().unwrap() = (c, ExecuteTimings::default(), Ok(()));
     }
 }
