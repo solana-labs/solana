@@ -152,9 +152,12 @@ impl InstalledScheduler for Scheduler {
     }
     fn wait_for_termination(
         &mut self,
-        _wait_source: &WaitSource,
+        wait_source: &WaitSource,
     ) -> Option<(ExecuteTimings, Result<()>)> {
-        self.1.lock().unwrap().1.take()
+        match wait_source {
+            WaitSource::InsideBlock => None,
+            _ => self.1.lock().unwrap().1.take(),
+        }
     }
     fn replace_scheduler_context(&self, c: SchedulingContext) {
         *self.1.lock().unwrap() = (c, None);
