@@ -122,12 +122,13 @@ impl InstalledScheduler for Scheduler {
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
         use solana_ledger::blockstore_processor::execute_batch;
         use solana_ledger::blockstore_processor::TransactionBatchWithIndexes;
-        let bank = self.1.lock().unwrap().0.bank();
+        let a = self.1.lock().unwrap();
+        let bank = a.0.bank();
 
         let b: TransactionBatchWithIndexes = {
             panic!();
         };
-        execute_batch(&b, bank, self.0.transaction_status_sender.as_ref(), self.0.replay_vote_sender.as_ref(), &mut Default::default(), self.0.log_messages_bytes_limit, &self.0.prioritization_fee_cache);
+        execute_batch(&b, bank, self.0.transaction_status_sender.as_ref(), self.0.replay_vote_sender.as_ref(), &mut a.1, self.0.log_messages_bytes_limit, &self.0.prioritization_fee_cache);
     }
     fn schedule_termination(&mut self) {
         // no-op
