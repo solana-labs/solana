@@ -157,6 +157,6 @@ impl InstalledScheduler for Scheduler {
         None
     }
     fn replace_scheduler_context(&self, c: SchedulingContext) {
-        *self.1.lock().unwrap() = (c, ExecuteTimings::default(), Ok(()));
+        *self.1.lock().unwrap() = (c, None);
     }
 }
