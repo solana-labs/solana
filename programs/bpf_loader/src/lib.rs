@@ -1645,12 +1645,12 @@ fn execute<'a, 'b: 'a>(
 
 #[cfg(test)]
 mod tests {
-    use solana_program_runtime::with_mock_invoke_context;
-    use std::sync::atomic::AtomicU64;
     use {
         super::*,
         rand::Rng,
-        solana_program_runtime::invoke_context::mock_process_instruction,
+        solana_program_runtime::{
+            invoke_context::mock_process_instruction, with_mock_invoke_context,
+        },
         solana_rbpf::{
             ebpf::MM_INPUT_START,
             elf::Executable,
@@ -1669,7 +1669,7 @@ mod tests {
             rent::Rent,
             system_program, sysvar,
         },
-        std::{fs::File, io::Read, ops::Range},
+        std::{fs::File, io::Read, ops::Range, sync::atomic::AtomicU64},
     };
 
     struct TestContextObject {
