@@ -222,7 +222,6 @@ before execting it in the virtual machine.",
         }
     };
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-    invoke_context.enable_instruction_tracing = true;
     invoke_context
         .transaction_context
         .get_next_instruction_context()
@@ -257,8 +256,9 @@ before execting it in the virtual machine.",
             &bpf_loader::id(),
             contents.len(),
             Slot::default(),
-            false,
-            true,
+            false, /* use_jit */
+            true,  /* reject_deployment_of_broken_elfs */
+            true,  /* debugging_features */
         );
         match result {
             Ok(loaded_program) => match loaded_program.program {

@@ -82,6 +82,7 @@ pub fn load_program_from_bytes(
     deployment_slot: Slot,
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
+    debugging_features: bool,
 ) -> Result<LoadedProgram, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
@@ -91,7 +92,7 @@ pub fn load_program_from_bytes(
         compute_budget,
         reject_deployment_of_broken_elfs,
         disable_deploy_of_alloc_free_syscall,
-        false,
+        debugging_features,
     )
     .map_err(|e| {
         ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
@@ -161,6 +162,7 @@ pub fn load_program_from_account(
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
     use_jit: bool,
+    debugging_features: bool,
 ) -> Result<(Arc<LoadedProgram>, Option<LoadProgramMetrics>), InstructionError> {
     if !check_loader_id(program.get_owner()) {
         ic_logger_msg!(
@@ -209,6 +211,7 @@ pub fn load_program_from_account(
         deployment_slot,
         use_jit,
         false, /* reject_deployment_of_broken_elfs */
+        debugging_features,
     )?);
     if let Some(mut tx_executor_cache) = tx_executor_cache {
         tx_executor_cache.set(
@@ -240,7 +243,8 @@ macro_rules! deploy_program {
             $account_size,
             $slot,
             $use_jit,
-            true,
+            true, /* reject_deployment_of_broken_elfs */
+            false, /* debugging_features */
         )?;
         if let Some(old_entry) = $invoke_context.tx_executor_cache.borrow().get(&$program_id) {
             let usage_counter = old_entry.usage_counter.load(Ordering::Relaxed);
@@ -570,6 +574,7 @@ fn process_instruction_inner(
         &program_account,
         programdata_account.as_ref().unwrap_or(&program_account),
         use_jit,
+        false, /* debugging_features */
     )?;
     drop(program_account);
     drop(programdata_account);

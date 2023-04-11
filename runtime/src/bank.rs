@@ -4271,6 +4271,7 @@ impl Bank {
             &program,
             programdata.as_ref().unwrap_or(&program),
             self.runtime_config.bpf_jit,
+            false, /* debugging_features */
         )
         .map(|(loaded_program, _create_executor_metrics)| loaded_program)
         .map_err(|err| TransactionError::InstructionError(0, err))

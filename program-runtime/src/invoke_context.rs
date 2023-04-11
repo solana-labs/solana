@@ -174,7 +174,6 @@ pub struct InvokeContext<'a> {
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
     pub syscall_context: Vec<Option<SyscallContext>>,
-    pub enable_instruction_tracing: bool,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -209,7 +208,6 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
-            enable_instruction_tracing: false,
         }
     }
 
