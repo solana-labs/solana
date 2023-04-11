@@ -64,10 +64,7 @@ impl InstalledSchedulerPool for SchedulerPool {
             scheduler.replace_scheduler_context(context);
             scheduler
         } else {
-            Box::new(Scheduler::spawn(
-                self.weak.upgrade().unwrap(),
-                context,
-            ))
+            Box::new(Scheduler::spawn(self.weak.upgrade().unwrap(), context))
         }
     }
 
