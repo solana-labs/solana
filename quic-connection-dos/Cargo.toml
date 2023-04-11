@@ -23,10 +23,12 @@ solana-version = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
+crossbeam-channel = { workspace = true }
 solana-client = { workspace = true }
 solana-core = { workspace = true }
 solana-gossip = { workspace = true }
 solana-local-cluster = { workspace = true }
+solana-perf = { workspace = true }
 solana-rpc = { workspace = true }
 
 [package.metadata.docs.rs]

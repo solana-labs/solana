@@ -90,7 +90,7 @@ pub async fn make_client_connection(
 // to be configurable as client-side writes don't correspond to
 // quic-level packets/writes (but by doing multiple writes we are generally able
 // to get multiple writes on the quic level despite the spec not guaranteeing this)
-pub async fn check_multiple_writes(conn: Arc<Connection>) {
+pub async fn check_multiple_writes(conn: &Connection) {
     // Send a full size packet with single byte writes.
     let num_bytes = PACKET_DATA_SIZE;
     let mut s1 = conn.open_uni().await.unwrap();
@@ -105,17 +105,27 @@ async fn run_connection_dos(
     num_connections: u64,
     num_streams_per_conn: u64,
 ) {
+    let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let mut endpoint =
+        quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime).unwrap();
+    let default_keypair = Keypair::new();
+    endpoint.set_default_client_config(get_client_config(&default_keypair));
+
     let mut connections = vec![];
     for _ in 0..num_connections {
-        connections.push(make_client_connection(&server_address, None).await);
+        connections.push(
+            endpoint
+                .connect(server_address, "localhost")
+                .expect("Failed in connecting")
+                .await
+                .expect("Failed in waiting"),
+        );
     }
 
     let futures: Vec<_> = connections
-        .into_iter()
-        .map(|conn| {
-            let conn = Arc::new(conn);
-            join_all((0..num_streams_per_conn).map(|_| check_multiple_writes(conn.clone())))
-        })
+        .iter()
+        .map(|conn| (0..num_streams_per_conn).map(|_| check_multiple_writes(conn)))
+        .flatten()
         .collect();
 
     join_all(futures).await;
@@ -168,6 +178,7 @@ fn main() {
 pub mod test {
     use {
         super::*,
+        crossbeam_channel::{unbounded, Receiver},
         log::warn,
         solana_core::validator::ValidatorConfig,
         solana_gossip::contact_info::LegacyContactInfo,
@@ -177,12 +188,110 @@ pub mod test {
             local_cluster::{ClusterConfig, LocalCluster},
             validator_configs::make_identical_validator_configs,
         },
+        solana_perf::packet::PacketBatch,
         //solana_client::thin_client::ThinClient,
         solana_rpc::rpc::JsonRpcConfig,
-        solana_streamer::socket::SocketAddrSpace,
+        solana_sdk::net::DEFAULT_TPU_COALESCE,
+        solana_streamer::{
+            nonblocking::quic::spawn_server,
+            quic::{StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+            socket::SocketAddrSpace,
+            streamer::StakedNodes,
+        },
+        std::{
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                RwLock,
+            },
+            time::{Duration, Instant},
+        },
+        tokio::{task::JoinHandle, time::sleep},
     };
 
+    fn setup_quic_server(
+        option_staked_nodes: Option<StakedNodes>,
+        max_connections_per_peer: usize,
+    ) -> (
+        JoinHandle<()>,
+        Arc<AtomicBool>,
+        Receiver<PacketBatch>,
+        SocketAddr,
+        Arc<StreamStats>,
+    ) {
+        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let (sender, receiver) = unbounded();
+        let keypair = Keypair::new();
+        let ip = "127.0.0.1".parse().unwrap();
+        let server_address = s.local_addr().unwrap();
+        let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
+        let stats = Arc::new(StreamStats::default());
+        let (_, t) = spawn_server(
+            s,
+            &keypair,
+            ip,
+            sender,
+            exit.clone(),
+            max_connections_per_peer,
+            staked_nodes,
+            MAX_STAKED_CONNECTIONS,
+            MAX_UNSTAKED_CONNECTIONS,
+            stats.clone(),
+            Duration::from_secs(2),
+            DEFAULT_TPU_COALESCE,
+        )
+        .unwrap();
+        (t, exit, receiver, server_address, stats)
+    }
+
+    #[tokio::test]
+    async fn test_connection_dos() {
+        solana_logger::setup();
+        let (t, exit, receiver, server_address, _stats) = setup_quic_server(None, 1);
+
+        //let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
+
+        const NUM_CONN: u64 = 1;
+        const NUM_STREAMS_PER_CONN: u64 = 2;
+
+        tokio::spawn(run_connection_dos(
+            server_address,
+            NUM_CONN,
+            NUM_STREAMS_PER_CONN,
+        ));
+
+        let mut all_packets = vec![];
+        let now = Instant::now();
+        let mut total_packets = 0;
+        let num_expected_packets = (NUM_CONN * NUM_STREAMS_PER_CONN) as usize;
+        // Send a full size packet with single byte writes.
+        let num_bytes = PACKET_DATA_SIZE;
+        while now.elapsed().as_secs() < 60 {
+            // We're running in an async environment, we (almost) never
+            // want to block
+            if let Ok(packets) = receiver.try_recv() {
+                total_packets += packets.len();
+                all_packets.push(packets)
+            } else {
+                sleep(Duration::from_secs(1)).await;
+            }
+            if total_packets >= num_expected_packets {
+                break;
+            }
+        }
+        for batch in all_packets {
+            for p in batch.iter() {
+                assert_eq!(p.meta().size, num_bytes);
+            }
+        }
+        assert_eq!(total_packets, num_expected_packets);
+
+        exit.store(true, Ordering::Relaxed);
+        t.await.unwrap();
+    }
+
     #[test]
+    #[ignore]
     fn test_local_cluster() {
         solana_logger::setup();
 

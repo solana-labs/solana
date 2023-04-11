@@ -5456,6 +5456,7 @@ name = "solana-connection-dos"
 version = "1.16.0"
 dependencies = [
  "clap 2.33.3",
+ "crossbeam-channel",
  "futures 0.3.24",
  "log",
  "quinn",
@@ -5467,6 +5468,7 @@ dependencies = [
  "solana-local-cluster",
  "solana-logger 1.16.0",
  "solana-measure",
+ "solana-perf",
  "solana-rpc",
  "solana-sdk 1.16.0",
  "solana-streamer",
