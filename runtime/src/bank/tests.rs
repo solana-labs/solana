@@ -10820,10 +10820,13 @@ fn test_calculate_prioritization_fee() {
         ..FeeStructure::default()
     };
 
-    let request_units = 1_000_000;
-    let request_unit_price = 2_000_000_000; // 2B micro-lamports/CU
-                                            // prioritization_fee = 2B micro-lamports/CU * 1M CUs = (2B / 1M) * 1M = 2B lamports
-    let prioritization_fee = 2_000_000_000;
+    let request_units = 1_000_000_u32;
+    let request_unit_price = 2_000_000_000_u64;
+    let prioritization_fee_details = PrioritizationFeeDetails::new(
+        PrioritizationFeeType::ComputeUnitPrice(request_unit_price),
+        request_units as u64,
+    );
+    let prioritization_fee = prioritization_fee_details.get_fee();
 
     let message = SanitizedMessage::try_from(Message::new(
         &[
