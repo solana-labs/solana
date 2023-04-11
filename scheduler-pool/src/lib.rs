@@ -21,15 +21,14 @@ pub struct SchedulerPool {
     replay_vote_sender: Option<ReplayVoteSender>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     weak: Weak<SchedulerPool>,
-    c: Mutex<Option<SchedulingContext>>,
 }
 
 #[derive(Debug)]
-struct Scheduler(Arc<SchedulerPool>);
+struct Scheduler(Arc<SchedulerPool>, Mutex<SchedulingContext>);
 
 impl Scheduler {
     fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
-        panic!();
+        Self(scheduler_pool, initial_context)
     }
 }
 
@@ -48,7 +47,6 @@ impl SchedulerPool {
             replay_vote_sender,
             prioritization_fee_cache,
             weak: weak_pool.clone(),
-            c: Default::default(),
         })
     }
 
@@ -123,7 +121,7 @@ impl InstalledScheduler for Scheduler {
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
         use solana_ledger::blockstore_processor::execute_batch;
         use solana_ledger::blockstore_processor::TransactionBatchWithIndexes;
-        let bank = self.0.c.lock().unwrap().as_ref().unwrap().bank();
+        let bank = self.1.lock().unwrap().bank();
 
         let b: TransactionBatchWithIndexes = {
             panic!();
@@ -145,8 +143,8 @@ impl InstalledScheduler for Scheduler {
     }
     fn replace_scheduler_context(
         &self,
-        c: solana_runtime::installed_scheduler_pool::SchedulingContext,
+        c: SchedulingContext,
     ) {
-        *self.0.c.lock().unwrap() = Some(c);
+        *self.1.lock().unwrap() = c;
     }
 }
