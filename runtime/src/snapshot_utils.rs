@@ -204,6 +204,7 @@ impl BankSnapshotInfo {
         // filled.  Check the completion to avoid using a highest found slot directory with missing content.
         let completion_flag_file = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
         if !fs::metadata(&completion_flag_file)?.is_file() {
+            fs::remove_dir_all(bank_snapshot_dir)?;
             return Err(SnapshotNewFromDirError::IncompleteDir(completion_flag_file));
         }
 
