@@ -1981,6 +1981,12 @@ fn main() {
                     .help("Skip ledger PoH and transaction verification."),
             )
             .arg(
+                Arg::with_name("run_final_hash_calc")
+                    .long("run-final-accounts-hash-calculation")
+                    .takes_value(false)
+                    .help("After 'verify' completes, run a final accounts hash calculation. Final hash calculation could race with accounts background service tasks and assert."),
+            )
+            .arg(
                 Arg::with_name("print_accounts_stats")
                     .long("print-accounts-stats")
                     .takes_value(false)
@@ -2927,8 +2933,7 @@ fn main() {
                         || arg_matches.is_present("skip_verification")),
                     on_halt_store_hash_raw_data_for_debug: arg_matches
                         .is_present("halt_at_slot_store_hash_raw_data"),
-                    // ledger tool verify always runs the accounts hash calc at the end of processing the blockstore
-                    run_final_accounts_hash_calc: true,
+                    run_final_accounts_hash_calc: arg_matches.is_present("run_final_hash_calc"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
                     limit_load_slot_count_from_snapshot: value_t!(
