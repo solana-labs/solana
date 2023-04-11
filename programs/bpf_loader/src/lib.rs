@@ -244,6 +244,10 @@ macro_rules! deploy_program {
             $use_jit,
             true,
         )?;
+        if let Some(old_entry) = $invoke_context.tx_executor_cache.borrow().get(&$program_id) {
+            let usage_counter = old_entry.usage_counter.load(Ordering::Relaxed);
+            executor.usage_counter.store(usage_counter, Ordering::Relaxed);
+        }
         $drop
         load_program_metrics.program_id = $program_id.to_string();
         load_program_metrics.submit_datapoint(&mut $invoke_context.timings);
@@ -1644,7 +1648,9 @@ mod tests {
     use {
         super::*,
         rand::Rng,
-        solana_program_runtime::invoke_context::mock_process_instruction,
+        solana_program_runtime::{
+            invoke_context::mock_process_instruction, with_mock_invoke_context,
+        },
         solana_rbpf::{
             ebpf::MM_INPUT_START,
             elf::Executable,
@@ -1663,7 +1669,7 @@ mod tests {
             rent::Rent,
             system_program, sysvar,
         },
-        std::{fs::File, io::Read, ops::Range},
+        std::{fs::File, io::Read, ops::Range, sync::atomic::AtomicU64},
     };
 
     struct TestContextObject {
@@ -4045,5 +4051,98 @@ mod tests {
                 calculate_heap_cost(64_u64 * 1024, heap_cost, true)
             );
         }
+    }
+
+    fn deploy_test_program(
+        invoke_context: &mut InvokeContext,
+        program_id: Pubkey,
+    ) -> Result<(), InstructionError> {
+        let mut file = File::open("test_elfs/out/noop_unaligned.so").expect("file open failed");
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
+        deploy_program!(
+            invoke_context,
+            false,
+            program_id,
+            &bpf_loader_upgradeable::id(),
+            elf.len(),
+            2,
+            {},
+            &elf
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_program_usage_count_on_upgrade() {
+        let transaction_accounts = vec![];
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+        let program_id = Pubkey::new_unique();
+        let program = LoadedProgram {
+            program: LoadedProgramType::Unloaded,
+            account_size: 0,
+            deployment_slot: 0,
+            effective_slot: 0,
+            maybe_expiration_slot: None,
+            usage_counter: AtomicU64::new(100),
+        };
+        invoke_context.tx_executor_cache.borrow_mut().set(
+            program_id,
+            Arc::new(program),
+            false,
+            false,
+            0,
+        );
+
+        assert!(matches!(
+            deploy_test_program(&mut invoke_context, program_id,),
+            Ok(())
+        ));
+
+        let updated_program = invoke_context
+            .tx_executor_cache
+            .borrow()
+            .get(&program_id)
+            .expect("Didn't find upgraded program in the cache");
+
+        assert_eq!(updated_program.deployment_slot, 2);
+        assert_eq!(updated_program.usage_counter.load(Ordering::Relaxed), 100);
+    }
+
+    #[test]
+    fn test_program_usage_count_on_non_upgrade() {
+        let transaction_accounts = vec![];
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+        let program_id = Pubkey::new_unique();
+        let program = LoadedProgram {
+            program: LoadedProgramType::Unloaded,
+            account_size: 0,
+            deployment_slot: 0,
+            effective_slot: 0,
+            maybe_expiration_slot: None,
+            usage_counter: AtomicU64::new(100),
+        };
+        invoke_context.tx_executor_cache.borrow_mut().set(
+            program_id,
+            Arc::new(program),
+            false,
+            false,
+            0,
+        );
+
+        let program_id2 = Pubkey::new_unique();
+        assert!(matches!(
+            deploy_test_program(&mut invoke_context, program_id2),
+            Ok(())
+        ));
+
+        let program2 = invoke_context
+            .tx_executor_cache
+            .borrow()
+            .get(&program_id2)
+            .expect("Didn't find upgraded program in the cache");
+
+        assert_eq!(program2.deployment_slot, 2);
+        assert_eq!(program2.usage_counter.load(Ordering::Relaxed), 0);
     }
 }
