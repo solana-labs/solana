@@ -12,6 +12,7 @@ use {
 };
 use solana_runtime::installed_scheduler_pool::SchedulerPoolArc;
 use solana_runtime::installed_scheduler_pool::SchedulerBox;
+use solana_program_runtime::timings::ExecuteTimings;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
