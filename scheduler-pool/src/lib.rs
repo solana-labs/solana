@@ -14,7 +14,7 @@ use solana_runtime::installed_scheduler_pool::SchedulerPoolArc;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
-    schedulers: std::sync::Mutex<Vec<Box<dyn InstalledScheduler>>>,
+    schedulers: Mutex<Vec<InstalledSchedulerBox>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
