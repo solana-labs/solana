@@ -40,8 +40,7 @@ impl Scheduler {
 }
 
 impl SchedulerPool {
-    pub fn new_boxed(
-        poh_recorder: Option<&Arc<RwLock<PohRecorder>>>,
+    pub fn new_dyn(
         log_messages_bytes_limit: Option<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: Option<ReplayVoteSender>,
