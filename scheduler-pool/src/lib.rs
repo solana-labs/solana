@@ -91,7 +91,7 @@ impl InstalledScheduler for Scheduler {
             transaction_indexes: vec![index],
         };
         let (timings, result) =
-            timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Default::default()));
+            timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
         if result.is_ok() {
             *result = execute_batch(
