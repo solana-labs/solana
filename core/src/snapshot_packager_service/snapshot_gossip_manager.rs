@@ -42,7 +42,7 @@ impl SnapshotGossipManager {
         starting_snapshot_hashes: Option<StartingSnapshotHashes>,
     ) {
         let Some(starting_snapshot_hashes) = starting_snapshot_hashes else {
-            return; 
+            return;
         };
 
         self.update_latest_full_snapshot_hash(starting_snapshot_hashes.full.hash);
@@ -111,8 +111,10 @@ impl SnapshotGossipManager {
         incremental_snapshot_hash: (Slot, SnapshotHash),
         base_slot: Slot,
     ) {
-
-        let latest_snapshot_hashes = self.latest_snapshot_hashes.as_mut().expect("there must already be a full snapshot hash");
+        let latest_snapshot_hashes = self
+            .latest_snapshot_hashes
+            .as_mut()
+            .expect("there must already be a full snapshot hash");
         assert_eq!(
             base_slot, latest_snapshot_hashes.full.0,
             "the incremental snapshot's base slot ({}) must match the latest full snapshot's slot ({})",
