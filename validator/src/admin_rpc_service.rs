@@ -612,8 +612,9 @@ impl AdminRpc for AdminRpcImpl {
                     jsonrpc_core::error::Error::internal_error()
                 })?;
             warn!(
-                "Public TPU address set to {}",
-                post_init.cluster_info.my_contact_info().tpu().unwrap()
+                "Public TPU addresses set to {} (udp) and {} (quic)",
+                post_init.cluster_info.my_contact_info().tpu().unwrap(),
+                post_init.cluster_info.my_contact_info().tpu_quic().unwrap(),
             );
             Ok(())
         })
