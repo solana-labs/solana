@@ -157,7 +157,7 @@ impl InstalledScheduler for Scheduler {
     fn wait_for_termination(
         &mut self,
         wait_source: &WaitSource,
-    ) -> Option<(ExecuteTimings, Result<()>)> {
+    ) -> Option<TimingAndResult> {
         match wait_source {
             WaitSource::InsideBlock => None,
             _ => self.1.lock().unwrap().1.take(),
