@@ -225,15 +225,9 @@ pub fn load_program_from_account(
     Ok((loaded_program, Some(load_program_metrics)))
 }
 
-enum ProgramDeployReason {
-    Finalize,
-    DeployWithMaxDataLen,
-    Upgrade,
-}
-
 macro_rules! deploy_program {
     ($invoke_context:expr, $use_jit:expr, $program_id:expr, $loader_key:expr,
-     $account_size:expr, $slot:expr, $drop:expr, $reason:expr, $new_programdata:expr $(,)?) => {{
+     $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
         let delay_visibility_of_program_deployment = $invoke_context
             .feature_set
             .is_active(&delay_visibility_of_program_deployment::id());
@@ -250,12 +244,9 @@ macro_rules! deploy_program {
             $use_jit,
             true,
         )?;
-        let upgrade = matches!($reason, ProgramDeployReason::Upgrade);
-        if upgrade {
-            if let Some(old_entry) = $invoke_context.tx_executor_cache.borrow().get(&$program_id) {
-                let usage_counter = old_entry.usage_counter.load(Ordering::Relaxed);
-                executor.usage_counter.store(usage_counter, Ordering::Relaxed);
-            }
+        if let Some(old_entry) = $invoke_context.tx_executor_cache.borrow().get(&$program_id) {
+            let usage_counter = old_entry.usage_counter.load(Ordering::Relaxed);
+            executor.usage_counter.store(usage_counter, Ordering::Relaxed);
         }
         $drop
         load_program_metrics.program_id = $program_id.to_string();
@@ -806,7 +797,6 @@ fn process_loader_upgradeable_instruction(
                 {
                     drop(buffer);
                 },
-                ProgramDeployReason::DeployWithMaxDataLen,
                 buffer
                     .get_data()
                     .get(buffer_data_offset..)
@@ -996,7 +986,6 @@ fn process_loader_upgradeable_instruction(
                 {
                     drop(buffer);
                 },
-                ProgramDeployReason::Upgrade,
                 buffer
                     .get_data()
                     .get(buffer_data_offset..)
@@ -1518,7 +1507,6 @@ fn process_loader_instruction(
                 program.get_data().len(),
                 0,
                 {},
-                ProgramDeployReason::Finalize,
                 program.get_data(),
             );
             program.set_executable(true)?;
@@ -4068,7 +4056,6 @@ mod tests {
     fn deploy_test_program(
         invoke_context: &mut InvokeContext,
         program_id: Pubkey,
-        reason: ProgramDeployReason,
     ) -> Result<(), InstructionError> {
         let mut file = File::open("test_elfs/out/noop_unaligned.so").expect("file open failed");
         let mut elf = Vec::new();
@@ -4081,7 +4068,6 @@ mod tests {
             elf.len(),
             2,
             {},
-            reason,
             &elf
         );
         Ok(())
@@ -4109,11 +4095,7 @@ mod tests {
         );
 
         assert!(matches!(
-            deploy_test_program(
-                &mut invoke_context,
-                program_id,
-                ProgramDeployReason::Upgrade
-            ),
+            deploy_test_program(&mut invoke_context, program_id,),
             Ok(())
         ));
 
@@ -4148,22 +4130,19 @@ mod tests {
             0,
         );
 
+        let program_id2 = Pubkey::new_unique();
         assert!(matches!(
-            deploy_test_program(
-                &mut invoke_context,
-                program_id,
-                ProgramDeployReason::DeployWithMaxDataLen
-            ),
+            deploy_test_program(&mut invoke_context, program_id2),
             Ok(())
         ));
 
-        let updated_program = invoke_context
+        let program2 = invoke_context
             .tx_executor_cache
             .borrow()
-            .get(&program_id)
+            .get(&program_id2)
             .expect("Didn't find upgraded program in the cache");
 
-        assert_eq!(updated_program.deployment_slot, 2);
-        assert_eq!(updated_program.usage_counter.load(Ordering::Relaxed), 0);
+        assert_eq!(program2.deployment_slot, 2);
+        assert_eq!(program2.usage_counter.load(Ordering::Relaxed), 0);
     }
 }
