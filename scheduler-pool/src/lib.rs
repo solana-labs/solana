@@ -7,7 +7,7 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::transaction::{SanitizedTransaction, TransactionError},
+    solana_sdk::transaction::{SanitizedTransaction, TransactionError, Result},
     std::sync::{Arc, RwLock, Weak, Mutex},
 };
 use solana_runtime::installed_scheduler_pool::SchedulerPoolArc;
