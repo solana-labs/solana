@@ -1258,24 +1258,24 @@ fn load_bank_forks(
         "Using: block-verification-method: {}",
         block_verification_method,
     );
-    if matches!(
-        block_verification_method,
-        BlockVerificationMethod::UnifiedScheduler
-    ) {
-        use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
-        let no_transaction_status_sender = None;
-        let no_replay_vote_sender = None::<ReplayVoteSender>;
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-        bank_forks.write().unwrap().install_scheduler_pool(
-            solana_scheduler_pool::SchedulerPool::new_dyn(
-                process_options.runtime_config.log_messages_bytes_limit,
-                no_transaction_status_sender,
-                no_replay_vote_sender,
-                _ignored_prioritization_fee_cache,
-            ),
-        );
-    } else {
-        info!("not installing scheduler pool...");
+    match block_verification_method {
+        BlockVerificationMethod::BlockstoreProcessor => {
+            info!("not installing scheduler pool...");
+        }
+        BlockVerificationMethod::UnifiedScheduler => {
+            use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
+            let no_transaction_status_sender = None;
+            let no_replay_vote_sender = None::<ReplayVoteSender>;
+            let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+            bank_forks.write().unwrap().install_scheduler_pool(
+                solana_scheduler_pool::SchedulerPool::new_dyn(
+                    process_options.runtime_config.log_messages_bytes_limit,
+                    no_transaction_status_sender,
+                    no_replay_vote_sender,
+                    _ignored_prioritization_fee_cache,
+                ),
+            );
+        }
     }
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
