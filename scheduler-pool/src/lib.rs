@@ -20,7 +20,7 @@ pub struct SchedulerPool {
     replay_vote_sender: Option<ReplayVoteSender>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     weak: Weak<SchedulerPool>,
-    c: std::sync::Mutex<Option<SchedulingContext>>,
+    c: Mutex<Option<SchedulingContext>>,
 }
 
 #[derive(Debug)]
