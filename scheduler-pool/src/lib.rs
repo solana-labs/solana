@@ -30,7 +30,7 @@ pub struct SchedulerPool {
 #[derive(Debug)]
 struct Scheduler(
     Arc<SchedulerPool>,
-    Mutex<(SchedulingContext, ExecuteTimings, Result<()>)>,
+    Mutex<(SchedulingContext, Option<(ExecuteTimings, Result<()>)>)>,
 );
 
 impl Scheduler {
@@ -152,7 +152,6 @@ impl InstalledScheduler for Scheduler {
         &mut self,
         _wait_source: &WaitSource,
     ) -> Option<(ExecuteTimings, Result<()>)> {
-        // no-op
         None
     }
     fn replace_scheduler_context(&self, c: SchedulingContext) {
