@@ -129,7 +129,7 @@ impl InstalledScheduler for Scheduler {
         let aa = self.1.lock().unwrap();
         let bank = aa.0.bank();
 
-        let b: TransactionBatchWithIndexes = {
+        let b = TransactionBatchWithIndexes {
             batch: bank.prepare_sanitized_batch([transaction]),
             transaction_indexes: [index],
         };
