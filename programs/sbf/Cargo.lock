@@ -6014,7 +6014,6 @@ dependencies = [
  "solana-sdk-macro 1.16.0",
  "thiserror",
  "uriparse",
- "variant_counter",
  "wasm-bindgen",
 ]
 

@@ -6,21 +6,11 @@ use {
     },
     serde::Serialize,
     thiserror::Error,
-    variant_counter::VariantCount,
 };
 
 /// Reasons a transaction might be rejected.
 #[derive(
-    Error,
-    Serialize,
-    Deserialize,
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    AbiExample,
-    AbiEnumVisitor,
-    VariantCount,
+    Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor,
 )]
 pub enum TransactionError {
     /// An account is already being processed in another transaction in a way
@@ -159,6 +149,7 @@ pub enum TransactionError {
         "Transaction results in an account ({account_index}) with insufficient funds for rent"
     )]
     InsufficientFundsForRent { account_index: u8 },
+
     /// Transaction exceeded max loaded accounts data size cap
     #[error("Transaction exceeded max loaded accounts data size cap")]
     MaxLoadedAccountsDataSizeExceeded,

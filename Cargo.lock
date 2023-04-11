@@ -6718,7 +6718,6 @@ dependencies = [
  "thiserror",
  "tiny-bip39",
  "uriparse",
- "variant_counter",
  "wasm-bindgen",
 ]
 

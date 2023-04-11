@@ -69,16 +69,7 @@ impl InstalledSchedulerPool for SchedulerPool {
     }
 
     fn return_to_pool(&self, scheduler: SchedulerBox) {
-        let mut schedulers = self.schedulers.lock().unwrap();
-
-        trace!(
-            "SchedulerPool: id_{:016x} is returned... len: {} => {}",
-            scheduler.scheduler_id(),
-            schedulers.len(),
-            schedulers.len() + 1
-        );
-
-        schedulers.push(scheduler);
+        self.schedulers.lock().unwrap().push(scheduler);
     }
 }
 

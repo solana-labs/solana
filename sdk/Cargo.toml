@@ -80,7 +80,6 @@ solana-program = { workspace = true }
 solana-sdk-macro = { workspace = true }
 thiserror = { workspace = true }
 uriparse = { workspace = true }
-variant_counter = { workspace = true }
 wasm-bindgen = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
