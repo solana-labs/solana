@@ -125,12 +125,13 @@ impl InstalledScheduler for Scheduler {
         self.0.clone()
     }
 
-    fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
+    fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
         let aa = self.1.lock().unwrap();
         let bank = aa.0.bank();
 
         let b: TransactionBatchWithIndexes = {
-            panic!();
+            batch: bank.prepare_sanitized_batch([transaction]),
+            transaction_indexes: [index],
         };
         let mut a =
             aa.1.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
