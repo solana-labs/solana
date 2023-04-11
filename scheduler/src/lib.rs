@@ -1,6 +1,6 @@
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum SchedulingMode {
-    BlockVerification, //BlockProduction,
+    BlockVerification,
 }
 
 pub trait WithSchedulingMode {
