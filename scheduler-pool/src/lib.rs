@@ -103,7 +103,7 @@ impl InstalledScheduler for Scheduler {
         let (timings, result) = &mut timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
         if result.is_ok() {
-            result = execute_batch(
+            *result = execute_batch(
                 &batch_with_indexes,
                 bank,
                 pool.transaction_status_sender.as_ref(),
