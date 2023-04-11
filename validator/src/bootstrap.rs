@@ -864,8 +864,8 @@ fn get_snapshot_hashes_from_known_validators(
     // Get the incremental snapshot hashes for a node from CRDS
     let get_incremental_snapshot_hashes_for_node = |node| {
         cluster_info
-            .get_incremental_snapshot_hashes_for_node(node)
-            .map(|hashes| (hashes.base, hashes.hashes))
+            .get_snapshot_hashes_for_node(node)
+            .map(|hashes| (hashes.full, hashes.incremental))
     };
 
     if !do_known_validators_have_all_snapshot_hashes(
@@ -1446,17 +1446,17 @@ fn get_highest_incremental_snapshot_hash_for_peer(
     cluster_info: &ClusterInfo,
     peer: &Pubkey,
 ) -> Option<SnapshotHash> {
-    cluster_info
-        .get_incremental_snapshot_hashes_for_node(peer)
-        .map(
-            |crds_value::IncrementalSnapshotHashes { base, hashes, .. }| {
-                let highest_incremental_snapshot_hash = hashes.into_iter().max();
-                SnapshotHash {
-                    full: base,
-                    incr: highest_incremental_snapshot_hash,
-                }
-            },
-        )
+    cluster_info.get_snapshot_hashes_for_node(peer).map(
+        |crds_value::SnapshotHashes {
+             full, incremental, ..
+         }| {
+            let highest_incremental_snapshot_hash = incremental.into_iter().max();
+            SnapshotHash {
+                full,
+                incr: highest_incremental_snapshot_hash,
+            }
+        },
+    )
 }
 
 #[cfg(test)]

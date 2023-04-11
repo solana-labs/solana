@@ -310,15 +310,15 @@ impl SnapshotGossipManager {
         // Pushing incremental snapshot hashes to the cluster should never fail.  The only error
         // case is when the length of the hashes is too big, but we account for that with
         // `max_incremental_snapshot_hashes`.  If this call ever does error, it's a programmer bug!
-        // Check to see what changed in `push_incremental_snapshot_hashes()` and handle the new
+        // Check to see what changed in `push_snapshot_hashes()` and handle the new
         // error condition here.
         self.cluster_info
-            .push_incremental_snapshot_hashes(
+            .push_snapshot_hashes(
                 Self::clone_hash_for_crds(&self.incremental_snapshot_hashes.base),
                 Self::clone_hashes_for_crds(&self.incremental_snapshot_hashes.hashes),
             )
             .expect(
-                "Bug! The programmer contract has changed for push_incremental_snapshot_hashes() \
+                "Bug! The programmer contract has changed for push_snapshot_hashes() \
                  and a new error case has been added, which has not been handled here.",
             );
     }
