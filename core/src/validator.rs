@@ -755,6 +755,9 @@ impl Validator {
         let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
 
         match &config.block_verification_method {
+            BlockVerificationMethod::BlockstoreProcessor => {
+                info!("not installing scheduler pool...");
+            },
             BlockVerificationMethod::UnifiedScheduler => {
                 use solana_scheduler_pool::SchedulerPool;
                 let scheduler_pool = SchedulerPool::new_dyn(
