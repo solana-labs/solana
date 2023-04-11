@@ -1455,10 +1455,14 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::executor_cache::TransactionExecutorCache,
+        solana_program_runtime::{
+            executor_cache::TransactionExecutorCache,
+            prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+        },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             bpf_loader_upgradeable::UpgradeableLoaderState,
+            compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,
             hash::Hash,
@@ -4256,5 +4260,65 @@ mod tests {
         test(tx_not_set_limit, &feature_set, &result_default_limit);
         test(tx_set_limit_99, &feature_set, &result_requested_limit);
         test(tx_set_limit_0, &feature_set, &result_invalid_limit);
+    }
+
+    #[test]
+    fn test_load_accounts_too_high_prioritization_fee() {
+        solana_logger::setup();
+        let lamports_per_signature = 5000_u64;
+        let request_units = 1_000_000_u32;
+        let request_unit_price = 2_000_000_000_u64;
+        let prioritization_fee_details = PrioritizationFeeDetails::new(
+            PrioritizationFeeType::ComputeUnitPrice(request_unit_price),
+            request_units as u64,
+        );
+        let prioritization_fee = prioritization_fee_details.get_fee();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+        // set up account with balance of `prioritization_fee`
+        let account = AccountSharedData::new(prioritization_fee, 0, &Pubkey::default());
+        let accounts = vec![(key0, account)];
+
+        let instructions = &[
+            ComputeBudgetInstruction::set_compute_unit_limit(request_units),
+            ComputeBudgetInstruction::set_compute_unit_price(request_unit_price),
+        ];
+        let tx = Transaction::new(
+            &[&keypair],
+            Message::new(instructions, Some(&key0)),
+            Hash::default(),
+        );
+
+        let fee = Bank::calculate_fee(
+            &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+            lamports_per_signature,
+            &FeeStructure::default(),
+            true,
+            false,
+            true,
+            true,
+            true,
+            false,
+        );
+        assert_eq!(fee, lamports_per_signature + prioritization_fee);
+
+        // assert fail to load account with 2B lamport balance for transaction asking for 2B
+        // lamports as prioritization fee.
+        let mut error_counters = TransactionErrorMetrics::default();
+        let loaded_accounts = load_accounts_with_fee(
+            tx,
+            &accounts,
+            lamports_per_signature,
+            &mut error_counters,
+            None,
+        );
+
+        assert_eq!(error_counters.insufficient_funds, 1);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(
+            loaded_accounts[0].clone(),
+            (Err(TransactionError::InsufficientFundsForFee), None),
+        );
     }
 }
