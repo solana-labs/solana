@@ -2589,7 +2589,7 @@ impl ReplayStage {
                     let cumulative_timings2 =
                         solana_program_runtime::timings::ThreadExecuteTimings {
                             execute_timings: cumulative_timings,
-                            ..Default::default()
+                            ..solana_program_runtime::timings::ThreadExecuteTimings::default()
                         };
                     let mut metrics =
                         solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default(
