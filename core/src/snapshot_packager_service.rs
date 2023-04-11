@@ -57,11 +57,9 @@ impl SnapshotPackagerService {
                     SnapshotGossipManager::new(
                         cluster_info,
                         max_full_snapshot_hashes,
+                        starting_snapshot_hashes,
                     )
                 );
-                if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
-                    snapshot_gossip_manager.push_starting_snapshot_hashes(starting_snapshot_hashes);
-                }
 
                 loop {
                     if exit.load(Ordering::Relaxed) {
