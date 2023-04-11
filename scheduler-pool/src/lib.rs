@@ -122,7 +122,7 @@ impl InstalledScheduler for Scheduler {
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
         use solana_ledger::blockstore_processor::execute_batch;
         use solana_ledger::blockstore_processor::TransactionBatchWithIndexes;
-        let bank = self.1.lock().unwrap().bank();
+        let bank = self.1.lock().unwrap().0.bank();
 
         let b: TransactionBatchWithIndexes = {
             panic!();
