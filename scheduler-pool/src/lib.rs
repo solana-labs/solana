@@ -35,10 +35,7 @@ struct Scheduler(
 
 impl Scheduler {
     fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
-        Self(
-            scheduler_pool,
-            Mutex::new((initial_context, None)),
-        )
+        Self(scheduler_pool, Mutex::new((initial_context, None)))
     }
 }
 
@@ -133,7 +130,8 @@ impl InstalledScheduler for Scheduler {
         let b: TransactionBatchWithIndexes = {
             panic!();
         };
-        let mut a = aa.1.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
+        let mut a =
+            aa.1.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
         if a.1.is_ok() {
             a.1 = execute_batch(
