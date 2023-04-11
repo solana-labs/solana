@@ -11,11 +11,10 @@ use {
     std::sync::{Arc, RwLock, Weak, Mutex},
 };
 use solana_runtime::installed_scheduler_pool::SchedulerPoolArc;
-use solana_runtime::installed_scheduler_pool::InstalledSchedulerBox;
 
 #[derive(Debug)]
 pub struct SchedulerPool {
-    schedulers: Mutex<Vec<InstalledSchedulerBox>>,
+    schedulers: Mutex<Vec<SchedulerBox>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
