@@ -128,7 +128,9 @@ impl InstalledScheduler for Scheduler {
         let b: TransactionBatchWithIndexes = {
             panic!();
         };
-        execute_batch(&b, bank, self.0.transaction_status_sender.as_ref(), self.0.replay_vote_sender.as_ref(), &mut a.1, self.0.log_messages_bytes_limit, &self.0.prioritization_fee_cache);
+        if a.2.is_ok() {
+            *a.2 = execute_batch(&b, bank, self.0.transaction_status_sender.as_ref(), self.0.replay_vote_sender.as_ref(), &mut a.1, self.0.log_messages_bytes_limit, &self.0.prioritization_fee_cache);
+        }
     }
     fn schedule_termination(&mut self) {
         // no-op
