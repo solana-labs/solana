@@ -127,6 +127,8 @@ impl InstalledScheduler for Scheduler {
 
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
         let mut aa = self.1.lock().unwrap();
+        let mut a =
+            aa.1.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
         let bank = aa.0.bank();
 
         let tt = [transaction.clone()];
@@ -134,8 +136,6 @@ impl InstalledScheduler for Scheduler {
             batch: bank.prepare_sanitized_batch(&tt),
             transaction_indexes: vec![index],
         };
-        let mut a =
-            aa.1.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
         if a.1.is_ok() {
             a.1 = execute_batch(
