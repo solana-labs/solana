@@ -107,11 +107,11 @@ impl SchedulerPool {
 }
 
 impl InstalledSchedulerPool for SchedulerPool {
-    fn take_from_pool(&self, context: SchedulingContext) -> Box<dyn InstalledScheduler> {
+    fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox {
         self.take_from_pool2(Some(context))
     }
 
-    fn return_to_pool(&self, scheduler: Box<dyn InstalledScheduler>) {
+    fn return_to_pool(&self, scheduler: SchedulerBox) {
         self.return_to_pool(scheduler);
     }
 }
