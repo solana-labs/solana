@@ -128,7 +128,7 @@ impl InstalledScheduler for Scheduler {
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
         let mut aa = self.1.lock().unwrap();
         let (ref mut context, ref mut timings_and_result) = &mut *aa;
-        let bank = aa.0.bank();
+        let bank = context.bank();
 
         let tt = [transaction.clone()];
         let b = TransactionBatchWithIndexes {
