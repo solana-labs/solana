@@ -27,7 +27,6 @@ pub struct SchedulerPool {
     weak: Weak<SchedulerPool>,
 }
 
-#[allow(clippy::type_complexity)]
 #[derive(Debug)]
 struct Scheduler(
     Arc<SchedulerPool>,
