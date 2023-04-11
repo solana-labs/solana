@@ -3784,8 +3784,7 @@ impl Bank {
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
 
-    /// Prepare a transaction batch without locking accounts for transaction simulation.
-    pub(crate) fn prepare_simulation_batch(
+    pub(crate) fn prepare_sanitized_batch_without_locking(
         &self,
         transaction: SanitizedTransaction,
     ) -> TransactionBatch<'_, '_> {
@@ -3818,7 +3817,7 @@ impl Bank {
         let account_keys = transaction.message().account_keys();
         let number_of_accounts = account_keys.len();
         let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
-        let batch = self.prepare_simulation_batch(transaction);
+        let batch = self.prepare_sanitized_batch_without_locking(transaction);
         let mut timings = ExecuteTimings::default();
 
         let LoadAndExecuteTransactionsOutput {
