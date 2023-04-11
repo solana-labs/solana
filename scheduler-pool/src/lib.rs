@@ -108,7 +108,7 @@ impl InstalledScheduler for Scheduler {
                 bank,
                 pool.transaction_status_sender.as_ref(),
                 pool.replay_vote_sender.as_ref(),
-                &mut timings,
+                timings,
                 pool.log_messages_bytes_limit,
                 &pool.prioritization_fee_cache,
             );
