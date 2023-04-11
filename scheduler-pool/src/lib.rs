@@ -130,7 +130,7 @@ impl InstalledScheduler for Scheduler {
         let bank = aa.0.bank();
 
         let b = TransactionBatchWithIndexes {
-            batch: bank.prepare_sanitized_batch([transaction]),
+            batch: bank.prepare_sanitized_batch(&[transaction]),
             transaction_indexes: vec![index],
         };
         let mut a =
