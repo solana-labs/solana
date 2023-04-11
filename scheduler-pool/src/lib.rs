@@ -12,7 +12,7 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::transaction::{Result, SanitizedTransaction},
+    solana_sdk::transaction::SanitizedTransaction,
     std::sync::{Arc, Mutex, Weak},
 };
 
