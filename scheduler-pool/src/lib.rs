@@ -131,7 +131,7 @@ impl InstalledScheduler for Scheduler {
 
         let b = TransactionBatchWithIndexes {
             batch: bank.prepare_sanitized_batch([transaction]),
-            transaction_indexes: [index],
+            transaction_indexes: vec![index],
         };
         let mut a =
             aa.1.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
