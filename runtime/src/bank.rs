@@ -1155,15 +1155,22 @@ struct VoteWithStakeDelegations {
     delegations: Vec<(Pubkey, StakeAccount<()>)>,
 }
 
+type VoteWithStakeDelegationsMap = DashMap<Pubkey, VoteWithStakeDelegations>;
+
+type InvalidCacheKeyMap = DashMap<Pubkey, InvalidCacheEntryReason>;
+
 struct LoadVoteAndStakeAccountsResult {
-    vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
-    invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
-    invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
+    vote_with_stake_delegations_map: VoteWithStakeDelegationsMap,
+    invalid_stake_keys: InvalidCacheKeyMap,
+    invalid_vote_keys: InvalidCacheKeyMap,
     invalid_cached_vote_accounts: usize,
     invalid_cached_stake_accounts: usize,
     invalid_cached_stake_accounts_rent_epoch: usize,
     vote_accounts_cache_miss_count: usize,
 }
+
+type VoteRewards = DashMap<Pubkey, (AccountSharedData, u8, u64, bool)>;
+type StakeRewards = Vec<StakeReward>;
 
 #[derive(Debug, Default)]
 pub struct NewBankOptions {
@@ -2548,7 +2555,7 @@ impl Bank {
     fn load_vote_and_stake_accounts_with_thread_pool(
         &self,
         thread_pool: &ThreadPool,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
     ) -> LoadVoteAndStakeAccountsResult {
         let stakes = self.stakes_cache.stakes();
         let cached_vote_accounts = stakes.vote_accounts();
@@ -2737,14 +2744,11 @@ impl Bank {
         }
     }
 
-    fn load_vote_and_stake_accounts<F>(
+    fn load_vote_and_stake_accounts(
         &self,
         thread_pool: &ThreadPool,
-        reward_calc_tracer: Option<F>,
-    ) -> LoadVoteAndStakeAccountsResult
-    where
-        F: Fn(&RewardCalculationEvent) + Send + Sync,
-    {
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
+    ) -> LoadVoteAndStakeAccountsResult {
         let stakes = self.stakes_cache.stakes();
         let stake_delegations = self.filter_stake_delegations(&stakes);
 
@@ -2959,7 +2963,7 @@ impl Bank {
         );
 
         let mut m = Measure::start("redeem_rewards");
-        let stake_rewards: Vec<StakeReward> = thread_pool.install(|| {
+        let stake_rewards: StakeRewards = thread_pool.install(|| {
             stake_delegation_iterator
                 .filter_map(|(vote_pubkey, vote_state, (stake_pubkey, stake_account))| {
                     // curry closure to add the contextual stake_pubkey
@@ -3036,7 +3040,7 @@ impl Bank {
 
     fn store_vote_accounts(
         &self,
-        vote_account_rewards: DashMap<Pubkey, (AccountSharedData, u8, u64, bool)>,
+        vote_account_rewards: VoteRewards,
         metrics: &mut RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
         let mut m = Measure::start("store_vote_accounts");
@@ -3073,7 +3077,7 @@ impl Bank {
 
     fn update_reward_history(
         &self,
-        stake_rewards: Vec<StakeReward>,
+        stake_rewards: StakeRewards,
         mut vote_rewards: Vec<(Pubkey, RewardInfo)>,
     ) {
         let additional_reserve = stake_rewards.len() + vote_rewards.len();
