@@ -41,7 +41,7 @@ impl SchedulerPool {
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Arc<dyn InstalledSchedulerPool> {
         Arc::new_cyclic(|weak_pool| Self {
-            schedulers: std::sync::Mutex::new(Vec::new()),
+            schedulers: Mutex::new(Vec::new()),
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
