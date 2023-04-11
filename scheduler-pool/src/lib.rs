@@ -133,10 +133,10 @@ impl InstalledScheduler for Scheduler {
         let b: TransactionBatchWithIndexes = {
             panic!();
         };
-        let mut a = aa.1.get_or_insert((ExecuteTimings::default(), Ok(())));
+        let mut a = aa.1.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
-        if a.2.is_ok() {
-            a.2 = execute_batch(
+        if a.1.is_ok() {
+            a.1 = execute_batch(
                 &b,
                 bank,
                 self.0.transaction_status_sender.as_ref(),
