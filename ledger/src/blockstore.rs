@@ -3034,13 +3034,14 @@ impl Blockstore {
         entries.into_iter().flatten().collect()
     }
 
-    // Returns slots connecting to any element of the list `slots`.
-    pub fn get_slots_since(&self, slots: &[u64]) -> Result<HashMap<u64, Vec<u64>>> {
+    /// Returns a mapping from each elements of `slots` to a list of the
+    /// element's children slots.
+    pub fn get_slots_since(&self, slots: &[Slot]) -> Result<HashMap<Slot, Vec<Slot>>> {
         let slot_metas: Result<Vec<Option<SlotMeta>>> =
             self.meta_cf.multi_get(slots.to_vec()).into_iter().collect();
         let slot_metas = slot_metas?;
 
-        let result: HashMap<u64, Vec<u64>> = slots
+        let result: HashMap<Slot, Vec<Slot>> = slots
             .iter()
             .zip(slot_metas)
             .filter_map(|(slot, meta)| meta.map(|meta| (*slot, meta.next_slots.to_vec())))
