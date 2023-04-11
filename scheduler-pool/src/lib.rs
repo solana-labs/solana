@@ -3,7 +3,6 @@ use {
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
     },
-    solana_poh::poh_recorder::PohRecorder,
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         installed_scheduler_pool::{
@@ -13,8 +12,8 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::transaction::{Result, SanitizedTransaction, TransactionError},
-    std::sync::{Arc, Mutex, RwLock, Weak},
+    solana_sdk::transaction::{Result, SanitizedTransaction},
+    std::sync::{Arc, Mutex, Weak},
 };
 
 #[derive(Debug)]
