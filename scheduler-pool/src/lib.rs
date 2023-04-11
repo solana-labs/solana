@@ -106,11 +106,11 @@ impl InstalledScheduler for Scheduler {
             a.1 = execute_batch(
                 &batch_with_indexes,
                 bank,
-                self.0.transaction_status_sender.as_ref(),
-                self.0.replay_vote_sender.as_ref(),
+                pool.transaction_status_sender.as_ref(),
+                pool.replay_vote_sender.as_ref(),
                 &mut a.0,
-                self.0.log_messages_bytes_limit,
-                &self.0.prioritization_fee_cache,
+                pool.log_messages_bytes_limit,
+                &pool.prioritization_fee_cache,
             );
         }
     }
