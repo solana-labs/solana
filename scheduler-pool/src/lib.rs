@@ -100,7 +100,7 @@ impl InstalledScheduler for Scheduler {
             batch: bank.prepare_sanitized_batch(&transactions),
             transaction_indexes: vec![index],
         };
-        let mut a = timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
+        let (timings, result) = &mut timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
         if a.1.is_ok() {
             a.1 = execute_batch(
