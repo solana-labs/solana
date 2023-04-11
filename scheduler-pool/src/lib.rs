@@ -136,7 +136,7 @@ impl InstalledScheduler for Scheduler {
             transaction_indexes: vec![index],
         };
         let mut a =
-            aa.1.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
+            timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
         if a.1.is_ok() {
             a.1 = execute_batch(
