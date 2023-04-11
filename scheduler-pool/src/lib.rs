@@ -25,7 +25,7 @@ pub struct SchedulerPool {
 }
 
 #[derive(Debug)]
-struct Scheduler(Arc<SchedulerPool>, Mutex<(SchedulingContext, Option<(ExecuteTimings, Result<()>)>)>);
+struct Scheduler(Arc<SchedulerPool>, Mutex<(SchedulingContext, ExecuteTimings, Result<()>)>);
 
 impl Scheduler {
     fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
