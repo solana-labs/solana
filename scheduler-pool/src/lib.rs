@@ -117,12 +117,14 @@ impl InstalledSchedulerPool for SchedulerPool {
 }
 
 impl InstalledScheduler for Scheduler {
-    fn scheduler_id(&self) -> u64 {
+    fn scheduler_id(&self) -> SchedulerId {
         0
     }
+
     fn scheduler_pool(&self) -> SchedulerPoolArc {
         self.0.clone()
     }
+
     fn schedule_execution(&self, _: &SanitizedTransaction, _: usize) {
         let aa = self.1.lock().unwrap();
         let bank = aa.0.bank();
@@ -145,9 +147,11 @@ impl InstalledScheduler for Scheduler {
             );
         }
     }
+
     fn schedule_termination(&mut self) {
         // no-op
     }
+
     fn wait_for_termination(
         &mut self,
         wait_source: &WaitSource,
@@ -157,7 +161,8 @@ impl InstalledScheduler for Scheduler {
             _ => self.1.lock().unwrap().1.take(),
         }
     }
-    fn replace_scheduler_context(&self, c: SchedulingContext) {
-        *self.1.lock().unwrap() = (c, None);
+
+    fn replace_scheduler_context(&self, context: SchedulingContext) {
+        *self.1.lock().unwrap() = (context, None);
     }
 }
