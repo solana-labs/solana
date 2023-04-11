@@ -129,9 +129,9 @@ impl InstalledScheduler for Scheduler {
         let mut aa = self.1.lock().unwrap();
         let bank = aa.0.bank();
 
-        let tt = transaction.clone();
+        let tt = [transaction.clone()];
         let b = TransactionBatchWithIndexes {
-            batch: bank.prepare_sanitized_batch(&[tt]),
+            batch: bank.prepare_sanitized_batch(&tt),
             transaction_indexes: vec![index],
         };
         let mut a =
