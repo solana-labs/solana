@@ -47,7 +47,7 @@ impl SchedulerPool {
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> SchedulerPoolArc {
         Arc::new_cyclic(|weak_pool| Self {
-            schedulers: Mutex::new(Vec::new()),
+            schedulers: Mutex<Vec<SchedulerBox>>::default(),
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
@@ -55,43 +55,24 @@ impl SchedulerPool {
             weak: weak_pool.clone(),
         })
     }
+}
 
-    fn prepare_new_scheduler(&self, context: SchedulingContext) {
-        // block on some max count of borrowed schdulers!
-        self.schedulers
-            .lock()
-            .unwrap()
-            .push(Box::new(Scheduler::spawn(
-                self.weak.upgrade().unwrap(),
-                context,
-            )));
-    }
-
-    fn take_from_pool2(&self, context: Option<SchedulingContext>) -> Box<dyn InstalledScheduler> {
+impl InstalledSchedulerPool for SchedulerPool {
+    fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox {
         let mut schedulers = self.schedulers.lock().unwrap();
         let maybe_scheduler = schedulers.pop();
         if let Some(scheduler) = maybe_scheduler {
-            trace!(
-                "SchedulerPool: id_{:016x} is taken... len: {} => {}",
-                scheduler.scheduler_id(),
-                schedulers.len() + 1,
-                schedulers.len()
-            );
-            drop(schedulers);
-
-            if let Some(context) = context {
-                scheduler.replace_scheduler_context(context);
-            }
+            scheduler.replace_scheduler_context(context);
             scheduler
         } else {
-            drop(schedulers);
-
-            self.prepare_new_scheduler(context.unwrap());
-            self.take_from_pool2(None)
+            SchedulerBox::new(Scheduler::spawn(
+                self.weak.upgrade().unwrap(),
+                context,
+            ))
         }
     }
 
-    fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn InstalledScheduler>) {
+    fn return_to_pool(&self, scheduler: SchedulerBox) {
         let mut schedulers = self.schedulers.lock().unwrap();
 
         trace!(
@@ -102,16 +83,6 @@ impl SchedulerPool {
         );
 
         schedulers.push(scheduler);
-    }
-}
-
-impl InstalledSchedulerPool for SchedulerPool {
-    fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox {
-        self.take_from_pool2(Some(context))
-    }
-
-    fn return_to_pool(&self, scheduler: SchedulerBox) {
-        self.return_to_pool(scheduler);
     }
 }
 
