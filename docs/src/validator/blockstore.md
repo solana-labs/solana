@@ -62,7 +62,7 @@ Repair requests for recent shreds are served out of RAM or recent files and out 
 
 ## Blockstore APIs
 
-The Blockstore offers a subscription based API that ReplayStage uses to ask for entries it's interested in. 
+The Blockstore offers a subscription based API that ReplayStage uses to ask for entries it's interested in.
 
 These subscription API's are as follows:
 
