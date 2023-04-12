@@ -24,7 +24,7 @@ use {
         cluster_info_metrics::{
             submit_gossip_stats, Counter, GossipStats, ScopedTimer, TimedGuard,
         },
-        contact_info::{ContactInfo, LegacyContactInfo},
+        contact_info::{ContactInfo, Error as ContactInfoError, LegacyContactInfo},
         crds::{Crds, Cursor, GossipRoute},
         crds_gossip::CrdsGossip,
         crds_gossip_error::CrdsGossipError,
@@ -675,6 +675,13 @@ impl ClusterInfo {
             &self.keypair(),
         ));
         self.push_self();
+    }
+
+    pub fn set_tpu(&self, tpu_addr: SocketAddr) -> Result<(), ContactInfoError> {
+        self.my_contact_info.write().unwrap().set_tpu(tpu_addr)?;
+        self.insert_self();
+        self.push_self();
+        Ok(())
     }
 
     pub fn lookup_contact_info<F, Y>(&self, id: &Pubkey, map: F) -> Option<Y>
