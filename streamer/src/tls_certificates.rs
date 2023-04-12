@@ -1,15 +1,15 @@
 use {
     pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
-    rcgen::{CertificateParams, DistinguishedName, DnType, SanType},
+    rcgen::{CertificateParams, DistinguishedName, DnType, RcgenError, SanType},
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
-    std::{error::Error, net::IpAddr},
+    std::net::IpAddr,
     x509_parser::{prelude::*, public_key::PublicKey},
 };
 
 pub fn new_self_signed_tls_certificate(
     keypair: &Keypair,
     san: IpAddr,
-) -> Result<(rustls::Certificate, rustls::PrivateKey), Box<dyn Error>> {
+) -> Result<(rustls::Certificate, rustls::PrivateKey), RcgenError> {
     // TODO(terorie): Is it safe to sign the TLS cert with the identity private key?
 
     // Unfortunately, rcgen does not accept a "raw" Ed25519 key.

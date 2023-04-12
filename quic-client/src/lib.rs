@@ -15,6 +15,7 @@ use {
         quic_client::QuicClientConnection as BlockingQuicClientConnection,
     },
     quinn::Endpoint,
+    rcgen::RcgenError,
     solana_connection_cache::{
         connection_cache::{
             BaseClientConnection, ClientError, ConnectionManager, ConnectionPool,
@@ -29,7 +30,6 @@ use {
         tls_certificates::new_self_signed_tls_certificate,
     },
     std::{
-        error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{Arc, RwLock},
     },
@@ -39,7 +39,7 @@ use {
 #[derive(Error, Debug)]
 pub enum QuicClientError {
     #[error("Certificate error: {0}")]
-    CertificateError(String),
+    CertificateError(#[from] RcgenError),
 }
 
 pub struct QuicPool {
@@ -92,8 +92,7 @@ pub struct QuicConfig {
 impl NewConnectionConfig for QuicConfig {
     fn new() -> Result<Self, ClientError> {
         let (cert, priv_key) =
-            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))
-                .map_err(|err| ClientError::CertificateError(err.to_string()))?;
+            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))?;
         Ok(Self {
             client_certificate: Arc::new(QuicClientCertificate {
                 certificate: cert,
@@ -136,7 +135,7 @@ impl QuicConfig {
         &mut self,
         keypair: &Keypair,
         ipaddr: IpAddr,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), RcgenError> {
         let (cert, priv_key) = new_self_signed_tls_certificate(keypair, ipaddr)?;
         self.client_certificate = Arc::new(QuicClientCertificate {
             certificate: cert,

@@ -24,7 +24,7 @@ use {
         cluster_info_metrics::{
             submit_gossip_stats, Counter, GossipStats, ScopedTimer, TimedGuard,
         },
-        contact_info::{ContactInfo, LegacyContactInfo},
+        contact_info::{ContactInfo, Error as ContactInfoError, LegacyContactInfo},
         crds::{Crds, Cursor, GossipRoute},
         crds_gossip::CrdsGossip,
         crds_gossip_error::CrdsGossipError,
@@ -675,6 +675,13 @@ impl ClusterInfo {
             &self.keypair(),
         ));
         self.push_self();
+    }
+
+    pub fn set_tpu(&self, tpu_addr: SocketAddr) -> Result<(), ContactInfoError> {
+        self.my_contact_info.write().unwrap().set_tpu(tpu_addr)?;
+        self.insert_self();
+        self.push_self();
+        Ok(())
     }
 
     pub fn lookup_contact_info<F, Y>(&self, id: &Pubkey, map: F) -> Option<Y>
@@ -3000,7 +3007,7 @@ impl Node {
         gossip_addr: &SocketAddr,
         port_range: PortRange,
         bind_ip_addr: IpAddr,
-        overwrite_tpu_addr: Option<SocketAddr>,
+        public_tpu_addr: Option<SocketAddr>,
     ) -> Node {
         let (gossip_port, (gossip, ip_echo)) =
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
@@ -3054,7 +3061,7 @@ impl Node {
         let _ = info.set_tvu((addr, tvu_port));
         let _ = info.set_tvu_forwards((addr, tvu_forwards_port));
         let _ = info.set_repair((addr, repair_port));
-        let _ = info.set_tpu(overwrite_tpu_addr.unwrap_or_else(|| SocketAddr::new(addr, tpu_port)));
+        let _ = info.set_tpu(public_tpu_addr.unwrap_or_else(|| SocketAddr::new(addr, tpu_port)));
         let _ = info.set_tpu_forwards((addr, tpu_forwards_port));
         let _ = info.set_tpu_vote((addr, tpu_vote_port));
         let _ = info.set_serve_repair((addr, serve_repair_port));

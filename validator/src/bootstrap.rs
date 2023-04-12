@@ -14,9 +14,8 @@ use {
     solana_metrics::datapoint_info,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
-        snapshot_package::SnapshotType,
-        snapshot_utils::{self},
+        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::SnapshotType,
+        snapshot_utils,
     },
     solana_sdk::{
         clock::Slot,

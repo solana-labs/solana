@@ -2413,10 +2413,10 @@ fn test_rent_eager_collect_rent_zero_lamport_deterministic() {
 fn test_bank_update_vote_stake_rewards() {
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
     check_bank_update_vote_stake_rewards(|bank: &Bank| {
-        bank.load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
+        bank._load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
     });
     check_bank_update_vote_stake_rewards(|bank: &Bank| {
-        bank.load_vote_and_stake_accounts(&thread_pool, null_tracer())
+        bank._load_vote_and_stake_accounts(&thread_pool, null_tracer())
     });
 }
 #[cfg(test)]
@@ -9678,7 +9678,7 @@ fn test_stake_vote_account_validity() {
     check_stake_vote_account_validity(
         true, // check owner change,
         |bank: &Bank| {
-            bank.load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
+            bank._load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
         },
     );
     // TODO: stakes cache should be hardened for the case when the account
@@ -9686,7 +9686,7 @@ fn test_stake_vote_account_validity() {
     // https://github.com/solana-labs/solana/pull/24200#discussion_r849935444
     check_stake_vote_account_validity(
         false, // check owner change
-        |bank: &Bank| bank.load_vote_and_stake_accounts(&thread_pool, null_tracer()),
+        |bank: &Bank| bank._load_vote_and_stake_accounts(&thread_pool, null_tracer()),
     );
 }
 
@@ -10811,6 +10811,47 @@ fn test_calculate_fee_compute_units() {
             );
         }
     }
+}
+
+#[test]
+fn test_calculate_prioritization_fee() {
+    let fee_structure = FeeStructure {
+        lamports_per_signature: 1,
+        ..FeeStructure::default()
+    };
+
+    let request_units = 1_000_000_u32;
+    let request_unit_price = 2_000_000_000_u64;
+    let prioritization_fee_details = PrioritizationFeeDetails::new(
+        PrioritizationFeeType::ComputeUnitPrice(request_unit_price),
+        request_units as u64,
+    );
+    let prioritization_fee = prioritization_fee_details.get_fee();
+
+    let message = SanitizedMessage::try_from(Message::new(
+        &[
+            ComputeBudgetInstruction::set_compute_unit_limit(request_units),
+            ComputeBudgetInstruction::set_compute_unit_price(request_unit_price),
+        ],
+        Some(&Pubkey::new_unique()),
+    ))
+    .unwrap();
+
+    let fee = Bank::calculate_fee(
+        &message,
+        fee_structure.lamports_per_signature,
+        &fee_structure,
+        true,  // use_default_units_per_instruction
+        false, // not support_request_units_deprecated
+        true,  // remove_congestion_multiplier
+        true,  // enable_request_heap_frame_ix
+        true,  // support_set_accounts_data_size_limit_ix,
+        false, // include_loaded_account_data_size_in_fee
+    );
+    assert_eq!(
+        fee,
+        fee_structure.lamports_per_signature + prioritization_fee
+    );
 }
 
 #[test]
