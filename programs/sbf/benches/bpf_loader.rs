@@ -128,13 +128,14 @@ fn bench_program_alu(bencher: &mut Bencher) {
             .unwrap();
 
     verified_executable.jit_compile().unwrap();
-    let mut vm = create_vm(
+    create_vm!(
+        vm,
         &verified_executable,
         vec![MemoryRegion::new_writable(&mut inner_iter, MM_INPUT_START)],
         vec![],
         &mut invoke_context,
-    )
-    .unwrap();
+    );
+    let mut vm = vm.unwrap();
 
     println!("Interpreted:");
     vm.env
@@ -252,13 +253,14 @@ fn bench_create_vm(bencher: &mut Bencher) {
     .unwrap();
 
     bencher.iter(|| {
-        create_vm(
+        create_vm!(
+            vm,
             &verified_executable,
             clone_regions(&regions),
             account_lengths.clone(),
             &mut invoke_context,
-        )
-        .unwrap();
+        );
+        vm.unwrap();
     });
 }
 
@@ -294,13 +296,14 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
             .unwrap();
 
-    let mut vm = create_vm(
+    create_vm!(
+        vm,
         &verified_executable,
         regions,
         account_lengths,
         &mut invoke_context,
-    )
-    .unwrap();
+    );
+    let mut vm = vm.unwrap();
 
     let mut measure = Measure::start("tune");
     let (instructions, _result) = vm.execute_program(true);

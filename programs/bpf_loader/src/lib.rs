@@ -38,8 +38,7 @@ use {
             delay_visibility_of_program_deployment, disable_deploy_of_alloc_free_syscall,
             enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
             enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id, round_up_heap_size,
-            FeatureSet,
+            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -294,7 +293,8 @@ fn check_loader_id(id: &Pubkey) -> bool {
         || bpf_loader_upgradeable::check_id(id)
 }
 
-fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
+/// Only used in macro, do not use directly!
+pub fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
     const KIBIBYTE: u64 = 1024;
     const PAGE_SIZE_KB: u64 = 32;
     let mut rounded_heap_size = heap_size;
@@ -308,43 +308,20 @@ fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool
         .saturating_mul(heap_cost)
 }
 
-/// Create the SBF virtual machine
+/// Only used in macro, do not use directly!
 pub fn create_vm<'a, 'b>(
     program: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>,
     regions: Vec<MemoryRegion>,
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
+    stack: &mut AlignedMemory<HOST_ALIGN>,
+    heap: &mut AlignedMemory<HOST_ALIGN>,
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
-    let stack_size = program.get_executable().get_config().stack_size();
-    let heap_size = invoke_context
-        .get_compute_budget()
-        .heap_size
-        .unwrap_or(solana_sdk::entrypoint::HEAP_LENGTH);
-    let round_up_heap_size = invoke_context
-        .feature_set
-        .is_active(&round_up_heap_size::id());
-    let heap_cost_result = invoke_context.consume_checked(calculate_heap_cost(
-        heap_size as u64,
-        invoke_context.get_compute_budget().heap_cost,
-        round_up_heap_size,
-    ));
-    if round_up_heap_size {
-        heap_cost_result?;
-    }
-    let mut stack = solana_rbpf::aligned_memory::AlignedMemory::<
-        { solana_rbpf::ebpf::HOST_ALIGN },
-    >::zero_filled(stack_size);
-    let mut heap = solana_rbpf::aligned_memory::AlignedMemory::<{ solana_rbpf::ebpf::HOST_ALIGN }>::zero_filled(heap_size);
-    let memory_mapping = create_memory_mapping(
-        program.get_executable(),
-        &mut stack,
-        &mut heap,
-        regions,
-        None,
-    )?;
+    let stack_size = stack.len();
+    let heap_size = heap.len();
+    let memory_mapping =
+        create_memory_mapping(program.get_executable(), stack, heap, regions, None)?;
     invoke_context.set_syscall_context(SyscallContext {
-        stack,
-        heap,
         allocator: BpfAllocator::new(heap_size as u64),
         orig_account_lengths,
         trace_log: Vec::new(),
@@ -357,9 +334,52 @@ pub fn create_vm<'a, 'b>(
     ))
 }
 
+/// Create the SBF virtual machine
+#[macro_export]
+macro_rules! create_vm {
+    ($vm:ident, $program:expr, $regions:expr, $orig_account_lengths:expr, $invoke_context:expr $(,)?) => {
+        let invoke_context = &*$invoke_context;
+        let stack_size = $program.get_executable().get_config().stack_size();
+        let heap_size = invoke_context
+            .get_compute_budget()
+            .heap_size
+            .unwrap_or(solana_sdk::entrypoint::HEAP_LENGTH);
+        let round_up_heap_size = invoke_context
+            .feature_set
+            .is_active(&solana_sdk::feature_set::round_up_heap_size::id());
+        let mut heap_cost_result = invoke_context.consume_checked($crate::calculate_heap_cost(
+            heap_size as u64,
+            invoke_context.get_compute_budget().heap_cost,
+            round_up_heap_size,
+        ));
+        if !round_up_heap_size {
+            heap_cost_result = Ok(());
+        }
+        let mut allocations = None;
+        let $vm = heap_cost_result.and_then(|_| {
+            let mut stack = solana_rbpf::aligned_memory::AlignedMemory::<
+                { solana_rbpf::ebpf::HOST_ALIGN },
+            >::zero_filled(stack_size);
+            let mut heap = solana_rbpf::aligned_memory::AlignedMemory::<
+                { solana_rbpf::ebpf::HOST_ALIGN },
+            >::zero_filled(heap_size);
+            let vm = $crate::create_vm(
+                $program,
+                $regions,
+                $orig_account_lengths,
+                $invoke_context,
+                &mut stack,
+                &mut heap,
+            );
+            allocations = Some((stack, heap));
+            vm
+        });
+    };
+}
+
 #[macro_export]
 macro_rules! mock_create_vm {
-    ($vm_name:ident, $additional_regions:expr, $orig_account_lengths:expr, $invoke_context:expr $(,)?) => {
+    ($vm:ident, $additional_regions:expr, $orig_account_lengths:expr, $invoke_context:expr $(,)?) => {
         let loader = std::sync::Arc::new(BuiltInProgram::new_loader(
             solana_rbpf::vm::Config::default(),
         ));
@@ -375,7 +395,8 @@ macro_rules! mock_create_vm {
             InvokeContext,
         >::from_executable(executable)
         .unwrap();
-        let $vm_name = $crate::create_vm(
+        $crate::create_vm!(
+            $vm,
             &verified_executable,
             $additional_regions,
             $orig_account_lengths,
@@ -1539,7 +1560,8 @@ fn execute<'a, 'b: 'a>(
     let mut execute_time;
     let execution_result = {
         let compute_meter_prev = invoke_context.get_remaining();
-        let vm = create_vm(
+        create_vm!(
+            vm,
             // We dropped the lifetime tracking in the Executor by setting it to 'static,
             // thus we need to reintroduce the correct lifetime of InvokeContext here again.
             unsafe {

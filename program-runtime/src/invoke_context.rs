@@ -11,11 +11,7 @@ use {
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_measure::measure::Measure,
-    solana_rbpf::{
-        aligned_memory::AlignedMemory,
-        ebpf::{HOST_ALIGN, MM_HEAP_START},
-        vm::ContextObject,
-    },
+    solana_rbpf::{ebpf::MM_HEAP_START, vm::ContextObject},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_deprecated,
@@ -150,8 +146,6 @@ impl BpfAllocator {
 }
 
 pub struct SyscallContext {
-    pub stack: AlignedMemory<HOST_ALIGN>,
-    pub heap: AlignedMemory<HOST_ALIGN>,
     pub allocator: BpfAllocator,
     pub orig_account_lengths: Vec<usize>,
     pub trace_log: Vec<[u64; 12]>,

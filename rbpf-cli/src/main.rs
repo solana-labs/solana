@@ -304,13 +304,14 @@ before execting it in the virtual machine.",
         }
         _ => {}
     }
-    let mut vm = create_vm(
+    create_vm!(
+        vm,
         &verified_executable,
         regions,
         account_lengths,
         &mut invoke_context,
-    )
-    .unwrap();
+    );
+    let mut vm = vm.unwrap();
     let start_time = Instant::now();
     if matches.value_of("use").unwrap() == "debugger" {
         vm.debug_port = Some(matches.value_of("port").unwrap().parse::<u16>().unwrap());

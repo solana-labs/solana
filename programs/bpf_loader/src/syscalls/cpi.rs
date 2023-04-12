@@ -1506,7 +1506,7 @@ mod tests {
             _vm,
             Vec::new(),
             vec![original_data_len],
-            &mut invoke_context,
+            &mut invoke_context
         );
 
         let vm_addr = MM_INPUT_START;
