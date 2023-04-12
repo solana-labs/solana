@@ -242,7 +242,7 @@ num-derive = "0.3"
 num-traits = "0.2"
 once_cell = "1.13.0"
 openpgp-card = "0.3.3"
-openpgp-card-pcsc = "0.3.0"
+openpgp-card-pcsc = { version = "0.3.0", default-features = false }
 openssl = "0.10"
 ouroboros = "0.15.6"
 parking_lot = "0.12"
