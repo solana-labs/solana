@@ -382,6 +382,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     when --entrypoint is not provided]"),
         )
         .arg(
+            Arg::with_name("public_tpu_forwards_addr")
+                .long("public-tpu-forwards-address")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host_port)
+                .help("Specify TPU Forwards address to advertise in gossip [default: ask --entrypoint or localhost\
+                    when --entrypoint is not provided]"),
+        )
+        .arg(
             Arg::with_name("public_rpc_addr")
                 .long("public-rpc-address")
                 .value_name("HOST:PORT")

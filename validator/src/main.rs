@@ -1709,6 +1709,16 @@ pub fn main() {
         })
     });
 
+    let public_tpu_forwards_addr =
+        matches
+            .value_of("public_tpu_forwards_addr")
+            .map(|public_tpu_forwards_addr| {
+                solana_net_utils::parse_host_port(public_tpu_forwards_addr).unwrap_or_else(|err| {
+                    eprintln!("Failed to parse --public-tpu-forwards-address: {err}");
+                    exit(1);
+                })
+            });
+
     let cluster_entrypoints = entrypoint_addrs
         .iter()
         .map(ContactInfo::new_gossip_entry_point)
@@ -1720,6 +1730,7 @@ pub fn main() {
         dynamic_port_range,
         bind_address,
         public_tpu_addr,
+        public_tpu_forwards_addr,
     );
 
     if restricted_repair_only_mode {
