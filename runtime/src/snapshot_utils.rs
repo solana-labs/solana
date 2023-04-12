@@ -5556,11 +5556,6 @@ mod tests {
         }
 
         let account_paths = &bank.rc.accounts.accounts_db.paths;
-        // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
-        // files will be extracted from the snapshot hardlink directories into these run/ directories.
-        for path in account_paths {
-            delete_contents_of_path(path);
-        }
 
         let deserialized_bank = bank_from_latest_snapshot_dir(
             bank_snapshots_dir,
