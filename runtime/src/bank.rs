@@ -2552,7 +2552,7 @@ impl Bank {
     ///   ( Vec<(staker info)> (voter account) ) keyed by voter pubkey
     ///
     /// Filters out invalid pairs
-    fn load_vote_and_stake_accounts_impl_with_thread_pool(
+    fn _load_vote_and_stake_accounts_with_thread_pool(
         &self,
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
@@ -2744,7 +2744,7 @@ impl Bank {
         }
     }
 
-    fn load_vote_and_stake_accounts_impl(
+    fn _load_vote_and_stake_accounts(
         &self,
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
@@ -3018,9 +3018,9 @@ impl Bank {
             measure,
         ) = measure!({
             if update_rewards_from_cached_accounts {
-                self.load_vote_and_stake_accounts_impl(thread_pool, reward_calc_tracer.as_ref())
+                self._load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref())
             } else {
-                self.load_vote_and_stake_accounts_impl_with_thread_pool(
+                self._load_vote_and_stake_accounts_with_thread_pool(
                     thread_pool,
                     reward_calc_tracer.as_ref(),
                 )
