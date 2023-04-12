@@ -684,6 +684,16 @@ impl ClusterInfo {
         Ok(())
     }
 
+    pub fn set_tpu_forwards(&self, tpu_forwards_addr: SocketAddr) -> Result<(), ContactInfoError> {
+        self.my_contact_info
+            .write()
+            .unwrap()
+            .set_tpu_forwards(tpu_forwards_addr)?;
+        self.insert_self();
+        self.push_self();
+        Ok(())
+    }
+
     pub fn lookup_contact_info<F, Y>(&self, id: &Pubkey, map: F) -> Option<Y>
     where
         F: FnOnce(&LegacyContactInfo) -> Y,
