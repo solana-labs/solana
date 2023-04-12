@@ -97,6 +97,8 @@ impl SnapshotGossipManager {
     fn update_latest_full_snapshot_hash(&mut self, full_snapshot_hash: (Slot, SnapshotHash)) {
         self.latest_snapshot_hashes = Some(LatestSnapshotHashes {
             full: full_snapshot_hash,
+            // If we've gotten a new full snapshot, we know there cannot be any
+            // incremental snapshots yet (based on this full snapshot).
             incremental: None,
         });
     }
