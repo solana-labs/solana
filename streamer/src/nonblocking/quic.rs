@@ -178,7 +178,7 @@ pub async fn run_server(
 }
 
 fn prune_unstaked_connection_table(
-    unstaked_connection_table: &mut MutexGuard<ConnectionTable>,
+    unstaked_connection_table: &mut ConnectionTable,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
 ) {
@@ -374,7 +374,6 @@ fn handle_and_cache_new_connection(
 
 fn prune_unstaked_connections_and_add_new_connection(
     connection: Connection,
-    mut connection_table_l: MutexGuard<ConnectionTable>,
     connection_table: Arc<Mutex<ConnectionTable>>,
     max_connections: usize,
     params: &NewConnectionHandlerParams,
@@ -382,11 +381,13 @@ fn prune_unstaked_connections_and_add_new_connection(
 ) -> Result<(), ConnectionHandlerError> {
     let stats = params.stats.clone();
     if max_connections > 0 {
-        prune_unstaked_connection_table(&mut connection_table_l, max_connections, stats);
+        let connection_table_clone = connection_table.clone();
+        let mut connection_table = connection_table.lock().unwrap();
+        prune_unstaked_connection_table(&mut connection_table, max_connections, stats);
         handle_and_cache_new_connection(
             connection,
-            connection_table_l,
             connection_table,
+            connection_table_clone,
             params,
             wait_for_chunk_timeout,
         )
@@ -509,7 +510,6 @@ async fn setup_connection(
                         // connection from the unstaked connection table.
                         if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
                             new_connection,
-                            unstaked_connection_table.lock().unwrap(),
                             unstaked_connection_table.clone(),
                             max_unstaked_connections,
                             &params,
@@ -529,7 +529,6 @@ async fn setup_connection(
                     }
                 } else if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
                     new_connection,
-                    unstaked_connection_table.lock().unwrap(),
                     unstaked_connection_table.clone(),
                     max_unstaked_connections,
                     &params,
