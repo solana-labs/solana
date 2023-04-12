@@ -489,7 +489,7 @@ impl VoteStorage {
             }
         }
 
-        scanner.finalize().reached_end_of_slot
+        scanner.finalize().payload.reached_end_of_slot
     }
 }
 
@@ -901,7 +901,7 @@ impl ThreadLocalUnprocessedPackets {
             new_retryable_packets.extend(retryable_packets);
         }
 
-        let reached_end_of_slot = scanner.finalize().reached_end_of_slot;
+        let reached_end_of_slot = scanner.finalize().payload.reached_end_of_slot;
 
         self.unprocessed_packet_batches.packet_priority_queue = new_retryable_packets;
         self.verify_priority_queue(original_capacity);

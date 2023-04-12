@@ -21,6 +21,9 @@ solana-sdk = { workspace = true }
 solana-version = { workspace = true }
 tiny-bip39 = { workspace = true }
 
+[dev-dependencies]
+tempfile = "3.4.0"
+
 [[bin]]
 name = "solana-keygen"
 path = "src/keygen.rs"

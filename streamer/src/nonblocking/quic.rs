@@ -211,10 +211,10 @@ fn get_connection_stake(
     let staked_nodes = staked_nodes.read().unwrap();
     Some((
         pubkey,
-        staked_nodes.pubkey_stake_map.get(&pubkey).copied()?,
-        staked_nodes.total_stake,
-        staked_nodes.max_stake,
-        staked_nodes.min_stake,
+        staked_nodes.get_node_stake(&pubkey)?,
+        staked_nodes.total_stake(),
+        staked_nodes.max_stake(),
+        staked_nodes.min_stake(),
     ))
 }
 
@@ -351,7 +351,6 @@ fn handle_and_cache_new_connection(
                 connection_table,
                 stream_exit,
                 params.stats.clone(),
-                params.stake,
                 peer_type,
                 wait_for_chunk_timeout,
             ));
@@ -461,95 +460,139 @@ async fn setup_connection(
     wait_for_chunk_timeout: Duration,
 ) {
     const PRUNE_RANDOM_SAMPLE_SIZE: usize = 2;
+    let from = connecting.remote_address();
     if let Ok(connecting_result) = timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await {
-        if let Ok(new_connection) = connecting_result {
-            stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
+        match connecting_result {
+            Ok(new_connection) => {
+                stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
 
-            let params = get_connection_stake(&new_connection, &staked_nodes).map_or(
-                NewConnectionHandlerParams::new_unstaked(
-                    packet_sender.clone(),
-                    max_connections_per_peer,
-                    stats.clone(),
-                ),
-                |(pubkey, stake, total_stake, max_stake, min_stake)| NewConnectionHandlerParams {
-                    packet_sender,
-                    remote_pubkey: Some(pubkey),
-                    stake,
-                    total_stake,
-                    max_connections_per_peer,
-                    stats: stats.clone(),
-                    max_stake,
-                    min_stake,
-                },
-            );
+                let params = get_connection_stake(&new_connection, &staked_nodes).map_or(
+                    NewConnectionHandlerParams::new_unstaked(
+                        packet_sender.clone(),
+                        max_connections_per_peer,
+                        stats.clone(),
+                    ),
+                    |(pubkey, stake, total_stake, max_stake, min_stake)| {
+                        NewConnectionHandlerParams {
+                            packet_sender,
+                            remote_pubkey: Some(pubkey),
+                            stake,
+                            total_stake,
+                            max_connections_per_peer,
+                            stats: stats.clone(),
+                            max_stake,
+                            min_stake,
+                        }
+                    },
+                );
 
-            if params.stake > 0 {
-                let mut connection_table_l = staked_connection_table.lock().unwrap();
-                if connection_table_l.total_size >= max_staked_connections {
-                    let num_pruned =
-                        connection_table_l.prune_random(PRUNE_RANDOM_SAMPLE_SIZE, params.stake);
-                    stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                }
-
-                if connection_table_l.total_size < max_staked_connections {
-                    if let Ok(()) = handle_and_cache_new_connection(
-                        new_connection,
-                        connection_table_l,
-                        staked_connection_table.clone(),
-                        &params,
-                        wait_for_chunk_timeout,
-                    ) {
-                        stats
-                            .connection_added_from_staked_peer
-                            .fetch_add(1, Ordering::Relaxed);
+                if params.stake > 0 {
+                    let mut connection_table_l = staked_connection_table.lock().unwrap();
+                    if connection_table_l.total_size >= max_staked_connections {
+                        let num_pruned =
+                            connection_table_l.prune_random(PRUNE_RANDOM_SAMPLE_SIZE, params.stake);
+                        stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
                     }
-                } else {
-                    // If we couldn't prune a connection in the staked connection table, let's
-                    // put this connection in the unstaked connection table. If needed, prune a
-                    // connection from the unstaked connection table.
-                    if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
-                        new_connection,
-                        unstaked_connection_table.lock().unwrap(),
-                        unstaked_connection_table.clone(),
-                        max_unstaked_connections,
-                        &params,
-                        wait_for_chunk_timeout,
-                    ) {
-                        stats
-                            .connection_added_from_staked_peer
-                            .fetch_add(1, Ordering::Relaxed);
+
+                    if connection_table_l.total_size < max_staked_connections {
+                        if let Ok(()) = handle_and_cache_new_connection(
+                            new_connection,
+                            connection_table_l,
+                            staked_connection_table.clone(),
+                            &params,
+                            wait_for_chunk_timeout,
+                        ) {
+                            stats
+                                .connection_added_from_staked_peer
+                                .fetch_add(1, Ordering::Relaxed);
+                        }
                     } else {
-                        stats
-                            .connection_add_failed_on_pruning
-                            .fetch_add(1, Ordering::Relaxed);
-                        stats
-                            .connection_add_failed_staked_node
-                            .fetch_add(1, Ordering::Relaxed);
+                        // If we couldn't prune a connection in the staked connection table, let's
+                        // put this connection in the unstaked connection table. If needed, prune a
+                        // connection from the unstaked connection table.
+                        if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
+                            new_connection,
+                            unstaked_connection_table.lock().unwrap(),
+                            unstaked_connection_table.clone(),
+                            max_unstaked_connections,
+                            &params,
+                            wait_for_chunk_timeout,
+                        ) {
+                            stats
+                                .connection_added_from_staked_peer
+                                .fetch_add(1, Ordering::Relaxed);
+                        } else {
+                            stats
+                                .connection_add_failed_on_pruning
+                                .fetch_add(1, Ordering::Relaxed);
+                            stats
+                                .connection_add_failed_staked_node
+                                .fetch_add(1, Ordering::Relaxed);
+                        }
                     }
+                } else if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
+                    new_connection,
+                    unstaked_connection_table.lock().unwrap(),
+                    unstaked_connection_table.clone(),
+                    max_unstaked_connections,
+                    &params,
+                    wait_for_chunk_timeout,
+                ) {
+                    stats
+                        .connection_added_from_unstaked_peer
+                        .fetch_add(1, Ordering::Relaxed);
+                } else {
+                    stats
+                        .connection_add_failed_unstaked_node
+                        .fetch_add(1, Ordering::Relaxed);
                 }
-            } else if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
-                new_connection,
-                unstaked_connection_table.lock().unwrap(),
-                unstaked_connection_table.clone(),
-                max_unstaked_connections,
-                &params,
-                wait_for_chunk_timeout,
-            ) {
-                stats
-                    .connection_added_from_unstaked_peer
-                    .fetch_add(1, Ordering::Relaxed);
-            } else {
-                stats
-                    .connection_add_failed_unstaked_node
-                    .fetch_add(1, Ordering::Relaxed);
             }
-        } else {
-            stats.connection_setup_error.fetch_add(1, Ordering::Relaxed);
+            Err(e) => {
+                handle_connection_error(e, &stats, from);
+            }
         }
     } else {
         stats
             .connection_setup_timeout
             .fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+fn handle_connection_error(e: quinn::ConnectionError, stats: &StreamStats, from: SocketAddr) {
+    debug!("error: {:?} from: {:?}", e, from);
+    stats.connection_setup_error.fetch_add(1, Ordering::Relaxed);
+    match e {
+        quinn::ConnectionError::TimedOut => {
+            stats
+                .connection_setup_error_timed_out
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        quinn::ConnectionError::ConnectionClosed(_) => {
+            stats
+                .connection_setup_error_closed
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        quinn::ConnectionError::TransportError(_) => {
+            stats
+                .connection_setup_error_transport
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        quinn::ConnectionError::ApplicationClosed(_) => {
+            stats
+                .connection_setup_error_app_closed
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        quinn::ConnectionError::Reset => {
+            stats
+                .connection_setup_error_reset
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        quinn::ConnectionError::LocallyClosed => {
+            stats
+                .connection_setup_error_locally_closed
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        _ => {}
     }
 }
 
@@ -645,7 +688,6 @@ async fn handle_connection(
     connection_table: Arc<Mutex<ConnectionTable>>,
     stream_exit: Arc<AtomicBool>,
     stats: Arc<StreamStats>,
-    stake: u64,
     peer_type: ConnectionPeerType,
     wait_for_chunk_timeout: Duration,
 ) {
@@ -692,7 +734,6 @@ async fn handle_connection(
                                     &remote_addr,
                                     &packet_sender,
                                     stats.clone(),
-                                    stake,
                                     peer_type,
                                 )
                                 .await
@@ -744,7 +785,6 @@ async fn handle_chunk(
     remote_addr: &SocketAddr,
     packet_sender: &AsyncSender<PacketAccumulator>,
     stats: Arc<StreamStats>,
-    stake: u64,
     peer_type: ConnectionPeerType,
 ) -> bool {
     match chunk {
@@ -773,7 +813,6 @@ async fn handle_chunk(
                 if packet_accum.is_none() {
                     let mut meta = Meta::default();
                     meta.set_socket_addr(remote_addr);
-                    meta.sender_stake = stake;
                     *packet_accum = Some(PacketAccumulator {
                         meta,
                         chunks: Vec::new(),
@@ -1063,7 +1102,7 @@ pub mod test {
             signature::Keypair,
             signer::Signer,
         },
-        std::net::Ipv4Addr,
+        std::{collections::HashMap, net::Ipv4Addr},
         tokio::time::sleep,
     };
 
@@ -1479,12 +1518,11 @@ pub mod test {
         solana_logger::setup();
 
         let client_keypair = Keypair::new();
-        let mut staked_nodes = StakedNodes::default();
-        staked_nodes
-            .pubkey_stake_map
-            .insert(client_keypair.pubkey(), 100000);
-        staked_nodes.total_stake = 100000;
-
+        let stakes = HashMap::from([(client_keypair.pubkey(), 100_000)]);
+        let staked_nodes = StakedNodes::new(
+            Arc::new(stakes),
+            HashMap::<Pubkey, u64>::default(), // overrides
+        );
         let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes), 1);
         check_multiple_writes(receiver, server_address, Some(&client_keypair)).await;
         exit.store(true, Ordering::Relaxed);
@@ -1506,12 +1544,11 @@ pub mod test {
         solana_logger::setup();
 
         let client_keypair = Keypair::new();
-        let mut staked_nodes = StakedNodes::default();
-        staked_nodes
-            .pubkey_stake_map
-            .insert(client_keypair.pubkey(), 0);
-        staked_nodes.total_stake = 0;
-
+        let stakes = HashMap::from([(client_keypair.pubkey(), 0)]);
+        let staked_nodes = StakedNodes::new(
+            Arc::new(stakes),
+            HashMap::<Pubkey, u64>::default(), // overrides
+        );
         let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes), 1);
         check_multiple_writes(receiver, server_address, Some(&client_keypair)).await;
         exit.store(true, Ordering::Relaxed);

@@ -40,6 +40,7 @@ thiserror = { workspace = true }
 ark-bn254 = { workspace = true }
 ark-ec = { workspace = true }
 ark-ff = { workspace = true }
+ark-serialize = { workspace = true }
 array-bytes = { workspace = true }
 bitflags = { workspace = true }
 base64 = { workspace = true, features = ["alloc", "std"] }

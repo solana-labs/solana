@@ -118,6 +118,20 @@ impl<T: Clone + Copy> BucketApi<T> {
         bucket.as_mut().unwrap().set_anticipated_count(count);
     }
 
+    /// batch insert of `items`. Assumption is a single slot list element and ref_count == 1.
+    /// For any pubkeys that already exist, the failed insertion data and the existing data are returned.
+    pub fn batch_insert_non_duplicates(
+        &self,
+        items: impl Iterator<Item = (Pubkey, T)>,
+        count: usize,
+    ) -> Vec<(Pubkey, T, T)> {
+        let mut bucket = self.get_write_bucket();
+        bucket
+            .as_mut()
+            .unwrap()
+            .batch_insert_non_duplicates(items, count)
+    }
+
     pub fn update<F>(&self, key: &Pubkey, updatefn: F)
     where
         F: FnMut(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,

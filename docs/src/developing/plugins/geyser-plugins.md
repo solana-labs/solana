@@ -141,7 +141,7 @@ The following method is used for notifying transactions:
     ) -> Result<()>
 ```
 
-The `ReplicaTransactionInfoVersionsoVersions` struct
+The `ReplicaTransactionInfoVersions` struct
 contains the information about a streamed transaction. It wraps `ReplicaTransactionInfo`
 
 ```

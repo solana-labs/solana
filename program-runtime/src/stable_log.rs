@@ -5,7 +5,7 @@
 use {
     crate::{ic_logger_msg, log_collector::LogCollector},
     itertools::Itertools,
-    solana_sdk::{instruction::InstructionError, pubkey::Pubkey},
+    solana_sdk::pubkey::Pubkey,
     std::{cell::RefCell, rc::Rc},
 };
 
@@ -103,7 +103,7 @@ pub fn program_success(log_collector: &Option<Rc<RefCell<LogCollector>>>, progra
 pub fn program_failure(
     log_collector: &Option<Rc<RefCell<LogCollector>>>,
     program_id: &Pubkey,
-    err: &InstructionError,
+    err: &dyn std::error::Error,
 ) {
     ic_logger_msg!(log_collector, "Program {} failed: {}", program_id, err);
 }

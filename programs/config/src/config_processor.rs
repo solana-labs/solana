@@ -3,7 +3,7 @@
 use {
     crate::ConfigKeys,
     bincode::deserialize,
-    solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
+    solana_program_runtime::{declare_process_instruction, ic_msg},
     solana_sdk::{
         feature_set, instruction::InstructionError, program_utils::limited_deserialize,
         pubkey::Pubkey, transaction_context::IndexOfAccount,
@@ -11,18 +11,10 @@ use {
     std::collections::BTreeSet,
 };
 
-pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+declare_process_instruction!(process_instruction, 450, |invoke_context| {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
-
-    // Consume compute units if feature `native_programs_consume_cu` is activated,
-    if invoke_context
-        .feature_set
-        .is_active(&feature_set::native_programs_consume_cu::id())
-    {
-        invoke_context.consume_checked(450)?;
-    }
 
     let key_list: ConfigKeys = limited_deserialize(data)?;
     let config_account_key = transaction_context.get_key_of_account_at_index(
@@ -139,7 +131,7 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
     }
     config_account.get_data_mut()?[..data.len()].copy_from_slice(data);
     Ok(())
-}
+});
 
 #[cfg(test)]
 mod tests {
@@ -172,6 +164,7 @@ mod tests {
             instruction_accounts,
             expected_result,
             super::process_instruction,
+            |_invoke_context| {},
             |_invoke_context| {},
         )
     }

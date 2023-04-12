@@ -66,9 +66,14 @@ scrape_configs:
     static_configs:
             - targets: ['dev-equinix-washington-24:9100','dev-equinix-washington-25:9100','dev-equinix-washington-26:9100']
 
-
   - job_name: 'Influx-Data'
     scrape_interval: 15s
     scrape_timeout: 14s
     static_configs:
             - targets: ['dev-equinix-washington-27:9100','dev-equinix-washington-28:9100','dev-equinix-washington-29:9100','dev-equinix-washington-30:9100','dev-equinix-washington-31:9100','dev-equinix-washington-32:9100','dev-equinix-amsterdam-19:9100','dev-equinix-amsterdam-20:9100','dev-equinix-amsterdam-21:9100','dev-equinix-amsterdam-22:9100','dev-equinix-chicago-17:9100','dev-equinix-chicago-19:9100','dev-equinix-chicago-25:9100','dev-equinix-dallas-1:9100','dev-equinix-frankfurt-1:9100','dev-equinix-toronto-5:9100']
+
+  - job_name: 'Kin'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['kin-rpc-am6-1:9100','kin-rpc-da11-1:9100','kin-validator-am6-1:9100','kin-validator-da11-1:9100','kin-validator-ny5-1:9100','kin-validator-sg1-1:9100','kin-spare-sg1-1:9100']

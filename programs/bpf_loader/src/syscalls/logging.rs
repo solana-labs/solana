@@ -11,7 +11,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         let cost = invoke_context
             .get_compute_budget()
             .syscall_base_cost
@@ -47,7 +47,7 @@ declare_syscall!(
         arg4: u64,
         arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         let cost = invoke_context.get_compute_budget().log_64_units;
         consume_compute_meter(invoke_context, cost)?;
 
@@ -70,7 +70,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         let cost = invoke_context.get_compute_budget().syscall_base_cost;
         consume_compute_meter(invoke_context, cost)?;
 
@@ -94,7 +94,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
         consume_compute_meter(invoke_context, cost)?;
 
@@ -119,7 +119,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         let budget = invoke_context.get_compute_budget();
 
         consume_compute_meter(invoke_context, budget.syscall_base_cost)?;

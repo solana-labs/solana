@@ -39,11 +39,27 @@ use {
     thiserror::Error,
 };
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
+pub enum ThresholdDecision {
+    #[default]
+    PassedThreshold,
+    FailedThreshold(/* Observed stake */ u64),
+}
+
+impl ThresholdDecision {
+    pub fn passed(&self) -> bool {
+        matches!(self, Self::PassedThreshold)
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Debug, AbiExample)]
 pub enum SwitchForkDecision {
     SwitchProof(Hash),
     SameFork,
-    FailedSwitchThreshold(u64, u64),
+    FailedSwitchThreshold(
+        /* Switch proof stake */ u64,
+        /* Total stake */ u64,
+    ),
     FailedSwitchDuplicateRollback(Slot),
 }
 
@@ -978,12 +994,15 @@ impl Tower {
         self.last_switch_threshold_check.is_none()
     }
 
+    /// Performs threshold check for `slot`
+    ///
+    /// If it passes the check returns None, otherwise returns Some(fork_stake)
     pub fn check_vote_stake_threshold(
         &self,
         slot: Slot,
         voted_stakes: &VotedStakes,
         total_stake: Stake,
-    ) -> bool {
+    ) -> ThresholdDecision {
         let mut vote_state = self.vote_state.clone();
         process_slot_vote_unchecked(&mut vote_state, slot);
         let vote = vote_state.nth_recent_vote(self.threshold_depth);
@@ -999,16 +1018,20 @@ impl Tower {
                         if old_vote.slot() == vote.slot()
                             && old_vote.confirmation_count() == vote.confirmation_count()
                         {
-                            return true;
+                            return ThresholdDecision::PassedThreshold;
                         }
                     }
                 }
-                lockout > self.threshold_size
+                if lockout > self.threshold_size {
+                    return ThresholdDecision::PassedThreshold;
+                }
+                ThresholdDecision::FailedThreshold(*fork_stake)
             } else {
-                false
+                // We haven't seen any votes on this fork yet, so no stake
+                ThresholdDecision::FailedThreshold(0)
             }
         } else {
-            true
+            ThresholdDecision::PassedThreshold
         }
     }
 
@@ -2009,16 +2032,17 @@ pub mod test {
             &node_pubkey,
             &mut tower,
         );
-        for slot in 46..=48 {
-            if slot == 48 {
-                assert!(results.get(&slot).unwrap().is_empty());
-            } else {
-                assert_eq!(
-                    *results.get(&slot).unwrap(),
-                    vec![HeaviestForkFailures::FailedSwitchThreshold(slot)]
-                );
-            }
-        }
+        assert_eq!(
+            *results.get(&46).unwrap(),
+            vec![HeaviestForkFailures::FailedSwitchThreshold(46, 0, 40000)]
+        );
+        assert_eq!(
+            *results.get(&47).unwrap(),
+            vec![HeaviestForkFailures::FailedSwitchThreshold(
+                47, 10000, 40000
+            )]
+        );
+        assert!(results.get(&48).unwrap().is_empty());
     }
 
     #[test]
@@ -2202,7 +2226,7 @@ pub mod test {
     fn test_check_vote_threshold_without_votes() {
         let tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, 1)].into_iter().collect();
-        assert!(tower.check_vote_stake_threshold(0, &stakes, 2));
+        assert!(tower.check_vote_stake_threshold(0, &stakes, 2).passed());
     }
 
     #[test]
@@ -2214,7 +2238,9 @@ pub mod test {
             stakes.insert(i, 1);
             tower.record_vote(i, Hash::default());
         }
-        assert!(!tower.check_vote_stake_threshold(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2,));
+        assert!(!tower
+            .check_vote_stake_threshold(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2,)
+            .passed());
     }
 
     #[test]
@@ -2329,14 +2355,14 @@ pub mod test {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, 1)].into_iter().collect();
         tower.record_vote(0, Hash::default());
-        assert!(!tower.check_vote_stake_threshold(1, &stakes, 2));
+        assert!(!tower.check_vote_stake_threshold(1, &stakes, 2).passed());
     }
     #[test]
     fn test_check_vote_threshold_above_threshold() {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, 2)].into_iter().collect();
         tower.record_vote(0, Hash::default());
-        assert!(tower.check_vote_stake_threshold(1, &stakes, 2));
+        assert!(tower.check_vote_stake_threshold(1, &stakes, 2).passed());
     }
 
     #[test]
@@ -2346,7 +2372,7 @@ pub mod test {
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         tower.record_vote(2, Hash::default());
-        assert!(tower.check_vote_stake_threshold(6, &stakes, 2));
+        assert!(tower.check_vote_stake_threshold(6, &stakes, 2).passed());
     }
 
     #[test]
@@ -2354,7 +2380,7 @@ pub mod test {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = HashMap::new();
         tower.record_vote(0, Hash::default());
-        assert!(!tower.check_vote_stake_threshold(1, &stakes, 2));
+        assert!(!tower.check_vote_stake_threshold(1, &stakes, 2).passed());
     }
 
     #[test]
@@ -2365,7 +2391,7 @@ pub mod test {
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         tower.record_vote(2, Hash::default());
-        assert!(tower.check_vote_stake_threshold(6, &stakes, 2,));
+        assert!(tower.check_vote_stake_threshold(6, &stakes, 2,).passed());
     }
 
     #[test]
@@ -2483,7 +2509,9 @@ pub mod test {
             |_| None,
             &mut LatestValidatorVotesForFrozenBanks::default(),
         );
-        assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &voted_stakes, total_stake,));
+        assert!(tower
+            .check_vote_stake_threshold(vote_to_evaluate, &voted_stakes, total_stake,)
+            .passed());
 
         // CASE 2: Now we want to evaluate a vote for slot VOTE_THRESHOLD_DEPTH + 1. This slot
         // will expire the vote in one of the vote accounts, so we should have insufficient
@@ -2501,7 +2529,9 @@ pub mod test {
             |_| None,
             &mut LatestValidatorVotesForFrozenBanks::default(),
         );
-        assert!(!tower.check_vote_stake_threshold(vote_to_evaluate, &voted_stakes, total_stake,));
+        assert!(!tower
+            .check_vote_stake_threshold(vote_to_evaluate, &voted_stakes, total_stake,)
+            .passed());
     }
 
     fn vote_and_check_recent(num_votes: usize) {

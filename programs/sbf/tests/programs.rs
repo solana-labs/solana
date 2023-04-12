@@ -19,9 +19,7 @@ use {
         parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
     },
     solana_ledger::token_balances::collect_token_balances,
-    solana_program_runtime::{
-        compute_budget::ComputeBudget, invoke_context::InvokeContext, timings::ExecuteTimings,
-    },
+    solana_program_runtime::{compute_budget::ComputeBudget, timings::ExecuteTimings},
     solana_rbpf::vm::ContextObject,
     solana_runtime::{
         bank::{
@@ -86,7 +84,7 @@ use {
         system_program,
         transaction::{SanitizedTransaction, Transaction, TransactionError},
     },
-    std::{str::FromStr, sync::Arc, time::Duration},
+    std::{cell::RefCell, str::FromStr, sync::Arc, time::Duration},
 };
 
 #[cfg(feature = "sbf_rust")]
@@ -918,6 +916,7 @@ fn test_program_sbf_invoke_sanity() {
                 assert_eq!(result, Err(expected_error));
                 assert_eq!(invoked_programs, expected_invoked_programs);
                 if let Some(expected_log_messages) = expected_log_messages {
+                    assert_eq!(log_messages.len(), expected_log_messages.len());
                     expected_log_messages
                         .into_iter()
                         .zip(log_messages)
@@ -985,8 +984,7 @@ fn test_program_sbf_invoke_sanity() {
                 format!("Program log: invoke {program_lang} program"),
                 "Program log: Test max instruction data len exceeded".into(),
                 "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with data that is too large (10241 > 10240)".into(),
-                format!("Program {invoke_program_id} failed: Program failed to complete"),
+                format!("Program {invoke_program_id} failed: Invoked an instruction with data that is too large (10241 > 10240)"),
             ]),
         );
 
@@ -999,8 +997,7 @@ fn test_program_sbf_invoke_sanity() {
                 format!("Program log: invoke {program_lang} program"),
                 "Program log: Test max instruction accounts exceeded".into(),
                 "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with too many accounts (256 > 255)".into(),
-                format!("Program {invoke_program_id} failed: Program failed to complete"),
+                format!("Program {invoke_program_id} failed: Invoked an instruction with too many accounts (256 > 255)"),
             ]),
         );
 
@@ -1013,8 +1010,7 @@ fn test_program_sbf_invoke_sanity() {
                 format!("Program log: invoke {program_lang} program"),
                 "Program log: Test max account infos exceeded".into(),
                 "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with too many account info's (129 > 128)".into(),
-                format!("Program {invoke_program_id} failed: Program failed to complete"),
+                format!("Program {invoke_program_id} failed: Invoked an instruction with too many account info's (129 > 128)"),
             ]),
         );
 
@@ -1372,8 +1368,8 @@ fn assert_instruction_count() {
             ("noop++", 5),
             ("relative_call", 210),
             ("return_data", 980),
-            ("sanity", 3259),
-            ("sanity++", 3159),
+            ("sanity", 2377),
+            ("sanity++", 2277),
             ("secp256k1_recover", 25383),
             ("sha", 1355),
             ("struct_pass", 108),
@@ -1387,7 +1383,6 @@ fn assert_instruction_count() {
             ("solana_sbf_rust_alloc", 5067),
             ("solana_sbf_rust_custom_heap", 398),
             ("solana_sbf_rust_dep_crate", 2),
-            ("solana_sbf_rust_external_spend", 288),
             ("solana_sbf_rust_iter", 1013),
             ("solana_sbf_rust_many_args", 1289),
             ("solana_sbf_rust_mem", 2067),
@@ -1395,7 +1390,7 @@ fn assert_instruction_count() {
             ("solana_sbf_rust_noop", 275),
             ("solana_sbf_rust_param_passing", 146),
             ("solana_sbf_rust_rand", 378),
-            ("solana_sbf_rust_sanity", 10759),
+            ("solana_sbf_rust_sanity", 51931),
             ("solana_sbf_rust_secp256k1_recover", 91185),
             ("solana_sbf_rust_sha", 24059),
         ]);
@@ -1409,7 +1404,7 @@ fn assert_instruction_count() {
             (program_key, AccountSharedData::new(0, 0, &loader_id)),
             (
                 Pubkey::new_unique(),
-                AccountSharedData::new(0, 8, &program_key),
+                AccountSharedData::new(0, 0, &program_key),
             ),
         ];
         let instruction_accounts = vec![AccountMeta {
@@ -1421,11 +1416,8 @@ fn assert_instruction_count() {
             .1
             .set_data_from_slice(&load_program_from_file(program_name));
         transaction_accounts[0].1.set_executable(true);
-        transaction_accounts[1]
-            .1
-            .set_state(expected_consumption)
-            .unwrap();
 
+        let prev_compute_meter = RefCell::new(0);
         print!("  {:36} {:8}", program_name, *expected_consumption);
         mock_process_instruction(
             &loader_id,
@@ -1434,29 +1426,23 @@ fn assert_instruction_count() {
             transaction_accounts,
             instruction_accounts,
             Ok(()),
-            |invoke_context: &mut InvokeContext| {
-                let expected_consumption: u64 = invoke_context
-                    .transaction_context
-                    .get_current_instruction_context()
-                    .unwrap()
-                    .try_borrow_instruction_account(&invoke_context.transaction_context, 0)
-                    .unwrap()
-                    .get_state()
-                    .unwrap();
-                let prev_compute_meter = invoke_context.get_remaining();
-                let _result = solana_bpf_loader_program::process_instruction(invoke_context);
-                let consumption = prev_compute_meter.saturating_sub(invoke_context.get_remaining());
-                let diff: i64 = consumption as i64 - expected_consumption as i64;
+            solana_bpf_loader_program::process_instruction,
+            |invoke_context| {
+                *prev_compute_meter.borrow_mut() = invoke_context.get_remaining();
+            },
+            |invoke_context| {
+                let consumption = prev_compute_meter
+                    .borrow()
+                    .saturating_sub(invoke_context.get_remaining());
+                let diff: i64 = consumption as i64 - *expected_consumption as i64;
                 println!(
                     "{:6} {:+5} ({:+3.0}%)",
                     consumption,
                     diff,
-                    100.0_f64 * consumption as f64 / expected_consumption as f64 - 100.0_f64,
+                    100.0_f64 * consumption as f64 / *expected_consumption as f64 - 100.0_f64,
                 );
-                assert_eq!(consumption, expected_consumption);
-                Ok(())
+                assert_eq!(consumption, *expected_consumption);
             },
-            |_invoke_context| {},
         );
     }
 }
