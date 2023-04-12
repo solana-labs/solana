@@ -3007,7 +3007,7 @@ impl Node {
         gossip_addr: &SocketAddr,
         port_range: PortRange,
         bind_ip_addr: IpAddr,
-        overwrite_tpu_addr: Option<SocketAddr>,
+        public_tpu_addr: Option<SocketAddr>,
     ) -> Node {
         let (gossip_port, (gossip, ip_echo)) =
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
@@ -3061,7 +3061,7 @@ impl Node {
         let _ = info.set_tvu((addr, tvu_port));
         let _ = info.set_tvu_forwards((addr, tvu_forwards_port));
         let _ = info.set_repair((addr, repair_port));
-        let _ = info.set_tpu(overwrite_tpu_addr.unwrap_or_else(|| SocketAddr::new(addr, tpu_port)));
+        let _ = info.set_tpu(public_tpu_addr.unwrap_or_else(|| SocketAddr::new(addr, tpu_port)));
         let _ = info.set_tpu_forwards((addr, tpu_forwards_port));
         let _ = info.set_tpu_vote((addr, tpu_vote_port));
         let _ = info.set_serve_repair((addr, serve_repair_port));

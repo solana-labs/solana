@@ -372,8 +372,9 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
         )
         .arg(
-            Arg::with_name("tpu_host_addr")
-                .long("tpu-host-addr")
+            Arg::with_name("public_tpu_addr")
+                .long("public-tpu-address")
+                .alias("tpu-host-addr")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host_port)
