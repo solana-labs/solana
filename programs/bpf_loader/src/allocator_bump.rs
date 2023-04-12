@@ -2,32 +2,24 @@
 
 use {
     solana_program_runtime::invoke_context::{Alloc, AllocErr},
-    solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN},
     std::alloc::Layout,
 };
 
 #[derive(Debug)]
 pub struct BpfAllocator {
     #[allow(dead_code)]
-    heap: AlignedMemory<HOST_ALIGN>,
     start: u64,
     len: u64,
     pos: u64,
 }
 
 impl BpfAllocator {
-    pub fn new(heap: AlignedMemory<HOST_ALIGN>, virtual_address: u64) -> Self {
-        let len = heap.len() as u64;
+    pub fn new(len: u64, virtual_address: u64) -> Self {
         Self {
-            heap,
             start: virtual_address,
             len,
             pos: 0,
         }
-    }
-
-    pub fn heap_mut(&mut self) -> &mut AlignedMemory<HOST_ALIGN> {
-        &mut self.heap
     }
 }
 

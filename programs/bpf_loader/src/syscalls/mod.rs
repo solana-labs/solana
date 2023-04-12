@@ -2310,7 +2310,10 @@ mod tests {
                     true,
                     true,
                     vec![],
-                    Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
+                    Rc::new(RefCell::new(BpfAllocator::new(
+                        heap.len() as u64,
+                        ebpf::MM_HEAP_START,
+                    ))),
                 )
                 .unwrap();
             let mut result = ProgramResult::Ok(0);
@@ -2370,7 +2373,10 @@ mod tests {
                     false,
                     true,
                     vec![],
-                    Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
+                    Rc::new(RefCell::new(BpfAllocator::new(
+                        heap.len() as u64,
+                        ebpf::MM_HEAP_START,
+                    ))),
                 )
                 .unwrap();
             for _ in 0..100 {
@@ -2420,7 +2426,10 @@ mod tests {
                     true,
                     true,
                     vec![],
-                    Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
+                    Rc::new(RefCell::new(BpfAllocator::new(
+                        heap.len() as u64,
+                        ebpf::MM_HEAP_START,
+                    ))),
                 )
                 .unwrap();
             for _ in 0..12 {
@@ -2472,7 +2481,10 @@ mod tests {
                     true,
                     true,
                     vec![],
-                    Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
+                    Rc::new(RefCell::new(BpfAllocator::new(
+                        heap.len() as u64,
+                        ebpf::MM_HEAP_START,
+                    ))),
                 )
                 .unwrap();
             let mut result = ProgramResult::Ok(0);

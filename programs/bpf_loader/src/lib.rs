@@ -41,7 +41,7 @@ use {
             disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
             enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
             limit_max_instruction_trace_length, native_programs_consume_cu,
-            remove_bpf_loader_incorrect_program_id, round_up_heap_size, FeatureSet,
+            remove_bpf_loader_incorrect_program_id, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -292,7 +292,7 @@ fn check_loader_id(id: &Pubkey) -> bool {
         || bpf_loader_upgradeable::check_id(id)
 }
 
-fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
+pub fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
     const KIBIBYTE: u64 = 1024;
     const PAGE_SIZE_KB: u64 = 32;
     let mut rounded_heap_size = heap_size;
@@ -310,22 +310,11 @@ fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool
 pub fn create_ebpf_vm<'a, 'b>(
     program: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>,
     stack: &'a mut AlignedMemory<HOST_ALIGN>,
-    heap: AlignedMemory<HOST_ALIGN>,
+    heap: &'a mut AlignedMemory<HOST_ALIGN>,
     regions: Vec<MemoryRegion>,
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
-    let round_up_heap_size = invoke_context
-        .feature_set
-        .is_active(&round_up_heap_size::id());
-    let heap_cost_result = invoke_context.consume_checked(calculate_heap_cost(
-        heap.len() as u64,
-        invoke_context.get_compute_budget().heap_cost,
-        round_up_heap_size,
-    ));
-    if round_up_heap_size {
-        heap_cost_result?;
-    }
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
             .transaction_context
@@ -338,21 +327,19 @@ pub fn create_ebpf_vm<'a, 'b>(
     let check_size = invoke_context
         .feature_set
         .is_active(&check_slice_translation_size::id());
-    let allocator = Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START)));
+    let allocator = Rc::new(RefCell::new(BpfAllocator::new(
+        heap.len() as u64,
+        MM_HEAP_START,
+    )));
     invoke_context.set_syscall_context(
         check_aligned,
         check_size,
         orig_account_lengths,
-        allocator.clone(),
+        allocator,
     )?;
     let stack_len = stack.len();
-    let memory_mapping = create_memory_mapping(
-        program.get_executable(),
-        stack,
-        allocator.borrow_mut().heap_mut(),
-        regions,
-        None,
-    )?;
+    let memory_mapping =
+        create_memory_mapping(program.get_executable(), stack, heap, regions, None)?;
 
     Ok(EbpfVm::new(
         program,
@@ -365,28 +352,51 @@ pub fn create_ebpf_vm<'a, 'b>(
 #[macro_export]
 macro_rules! create_vm {
     ($vm_name:ident, $executable:expr, $stack:ident, $heap:ident, $additional_regions:expr, $orig_account_lengths:expr, $invoke_context:expr) => {
+        // reborrow as & for the cases where $invoke_context is "&mut invoke_context"
+        let invoke_context = &*$invoke_context;
+
         let mut $stack = solana_rbpf::aligned_memory::AlignedMemory::<
             { solana_rbpf::ebpf::HOST_ALIGN },
         >::zero_filled($executable.get_executable().get_config().stack_size());
 
-        // this is needed if the caller passes "&mut invoke_context" to the
-        // macro. The lint complains that (&mut invoke_context).get_compute_budget()
-        // does an unnecessary mutable borrow
         #[allow(clippy::unnecessary_mut_passed)]
-        let heap_size = $invoke_context
+        let heap_size = invoke_context
             .get_compute_budget()
             .heap_size
             .unwrap_or(solana_sdk::entrypoint::HEAP_LENGTH);
-        let $heap = solana_rbpf::aligned_memory::AlignedMemory::<{ solana_rbpf::ebpf::HOST_ALIGN }>::zero_filled(heap_size);
+        let round_up_heap_size = invoke_context
+            .feature_set
+            .is_active(&solana_sdk::feature_set::round_up_heap_size::id());
+        let heap_cost_result = invoke_context.consume_checked($crate::calculate_heap_cost(
+            heap_size as u64,
+            invoke_context.get_compute_budget().heap_cost,
+            round_up_heap_size,
+        ));
 
-        let $vm_name = create_ebpf_vm(
-            $executable,
-            &mut $stack,
-            $heap,
-            $additional_regions,
-            $orig_account_lengths,
-            $invoke_context,
-        );
+        // FIXME: make AlignedMemory::new() a nop like Vec::new() and friends
+        // so we don't need this Option hack
+        let mut $heap: Option<
+            solana_rbpf::aligned_memory::AlignedMemory<{ solana_rbpf::ebpf::HOST_ALIGN }>,
+        > = None;
+
+        let res = if round_up_heap_size {
+            heap_cost_result
+        } else {
+            Ok(())
+        };
+        let $vm_name = res.and_then(|_| {
+            $heap = Some(solana_rbpf::aligned_memory::AlignedMemory::<
+                { solana_rbpf::ebpf::HOST_ALIGN },
+            >::zero_filled(heap_size));
+            $crate::create_ebpf_vm(
+                $executable,
+                &mut $stack,
+                $heap.as_mut().unwrap(),
+                $additional_regions,
+                $orig_account_lengths,
+                $invoke_context,
+            )
+        });
     };
 }
 

@@ -1502,15 +1502,13 @@ mod tests {
             &[0],
             &[1, 1]
         );
+        let heap = AlignedMemory::<{ solana_rbpf::ebpf::HOST_ALIGN }>::with_capacity(0);
         invoke_context
             .set_syscall_context(
                 true,
                 true,
                 vec![original_data_len],
-                Rc::new(RefCell::new(BpfAllocator::new(
-                    AlignedMemory::with_capacity(0),
-                    0,
-                ))),
+                Rc::new(RefCell::new(BpfAllocator::new(heap.len() as u64, 0))),
             )
             .unwrap();
 

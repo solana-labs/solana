@@ -3,7 +3,7 @@ use {
     serde::{Deserialize, Serialize},
     serde_json::Result,
     solana_bpf_loader_program::{
-        create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
+        create_ebpf_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
     solana_program_runtime::{invoke_context::InvokeContext, with_mock_invoke_context},
     solana_rbpf::{

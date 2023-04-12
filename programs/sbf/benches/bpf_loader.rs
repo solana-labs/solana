@@ -11,9 +11,7 @@ extern crate solana_bpf_loader_program;
 
 use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
-    solana_bpf_loader_program::{
-        create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
-    },
+    solana_bpf_loader_program::{serialization::serialize_parameters, syscalls::create_loader},
     solana_measure::measure::Measure,
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
     solana_rbpf::{
