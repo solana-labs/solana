@@ -2,9 +2,7 @@ mod snapshot_gossip_manager;
 use {
     crossbeam_channel::{Receiver, Sender},
     snapshot_gossip_manager::SnapshotGossipManager,
-    solana_gossip::cluster_info::{
-        ClusterInfo, MAX_INCREMENTAL_SNAPSHOT_HASHES, MAX_LEGACY_SNAPSHOT_HASHES,
-    },
+    solana_gossip::cluster_info::{ClusterInfo, MAX_LEGACY_SNAPSHOT_HASHES},
     solana_measure::measure_us,
     solana_perf::thread::renice_this_thread,
     solana_runtime::{
@@ -49,12 +47,6 @@ impl SnapshotPackagerService {
                 .maximum_full_snapshot_archives_to_retain
                 .get(),
         );
-        let max_incremental_snapshot_hashes = std::cmp::min(
-            MAX_INCREMENTAL_SNAPSHOT_HASHES,
-            snapshot_config
-                .maximum_incremental_snapshot_archives_to_retain
-                .get(),
-        );
 
         let t_snapshot_packager = Builder::new()
             .name("solSnapshotPkgr".to_string())
@@ -65,7 +57,6 @@ impl SnapshotPackagerService {
                     SnapshotGossipManager::new(
                         cluster_info,
                         max_full_snapshot_hashes,
-                        max_incremental_snapshot_hashes,
                     )
                 );
                 if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {

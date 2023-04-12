@@ -21,11 +21,7 @@ pub struct SnapshotGossipManager {
 impl SnapshotGossipManager {
     /// Construct a new SnapshotGossipManager with empty snapshot hashes
     #[must_use]
-    pub fn new(
-        cluster_info: Arc<ClusterInfo>,
-        max_full_snapshot_hashes: usize,
-        _max_incremental_snapshot_hashes: usize,
-    ) -> Self {
+    pub fn new(cluster_info: Arc<ClusterInfo>, max_full_snapshot_hashes: usize) -> Self {
         SnapshotGossipManager {
             cluster_info,
             latest_snapshot_hashes: None,
