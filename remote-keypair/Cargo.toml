@@ -19,7 +19,7 @@ thiserror = { workspace = true }
 uriparse = { workspace = true }
 
 [features]
-default = ["openpgp-card-pcsc"]
+pcsc = ["openpgp-card-pcsc"]
 
 [lib]
 name = "solana_remote_keypair"

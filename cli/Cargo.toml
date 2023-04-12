@@ -60,7 +60,7 @@ solana-test-validator = { workspace = true }
 tempfile = { workspace = true }
 
 [features]
-pcsc = ["solana-remote-keypair/default"]
+pcsc = ["solana-remote-keypair/pcsc"]
 
 [[bin]]
 name = "solana"

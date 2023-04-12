@@ -147,7 +147,8 @@ impl TryFrom<&Locator> for OpenpgpCard {
     #[cfg(not(feature = "openpgp-card-pcsc"))]
     fn try_from(_locator: &Locator) -> Result<Self, Self::Error> {
         Err(Self::Error::UnsupportedFeature(
-            "openpgp-card-pcsc crate compilation disabled in solana-remote-keypair.".to_string(),
+            "openpgp-card-pcsc crate compilation disabled in solana-remote-keypair. \
+            Rebuild with `--features pcsc`.".to_string(),
         ))
     }
 }
