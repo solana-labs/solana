@@ -25,11 +25,9 @@ pub struct FullSnapshotHash {
 }
 
 /// Used by SnapshotPackagerService and SnapshotGossipManager, this struct adds type safety to
-/// ensure an incremental snapshot hash is pushed to the right CRDS.  `base` is the (full) snapshot
-/// this incremental snapshot (`hash`) is based on.
+/// ensure an incremental snapshot hash is pushed to the right CRDS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IncrementalSnapshotHash {
-    pub base: (Slot, SnapshotHash),
     pub hash: (Slot, SnapshotHash),
 }
 
