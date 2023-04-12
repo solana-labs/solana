@@ -290,7 +290,7 @@ mod tests {
         // no identifier in URI => default locator
         let uri = URIReference::try_from("pgpcard://").unwrap();
         assert_eq!(
-            Locator::new_from_uri(&uri),
+            Locator::try_from(&uri),
             Ok(Locator { aid: None }),
         );
 
@@ -305,21 +305,21 @@ mod tests {
             0x00, 0x00                      // reserved
         ];
         assert_eq!(
-            Locator::new_from_uri(&uri),
+            Locator::try_from(&uri),
             Ok(Locator { aid: Some(ApplicationIdentifier::try_from(&expected_ident_bytes[..]).unwrap()) }),
         );
 
         // non-hex character in identifier
         let uri = URIReference::try_from("pgpcard://G2760001240103040006123456780000").unwrap();
         assert_eq!(
-            Locator::new_from_uri(&uri),
+            Locator::try_from(&uri),
             Err(LocatorError::IdentifierParseError("non-hex character found in identifier".to_string())),
         );
 
         // invalid identifier length
         let uri = URIReference::try_from("pgpcard://D27600012401030400061234567800").unwrap();
         assert_eq!(
-            Locator::new_from_uri(&uri),
+            Locator::try_from(&uri),
             Err(LocatorError::IdentifierParseError("invalid identifier format".to_string())),
         );
     }
