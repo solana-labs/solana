@@ -6567,6 +6567,7 @@ dependencies = [
 name = "solana-remote-keypair"
 version = "1.16.0"
 dependencies = [
+ "itertools",
  "openpgp-card",
  "openpgp-card-pcsc",
  "pinentry",
