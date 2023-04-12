@@ -19,9 +19,7 @@ use {
     clap::ArgMatches,
     rpassword::prompt_password,
     solana_remote_keypair::openpgp_card::{
-        Locator as OpenpgpCardLocator,
-        LocatorError as OpenpgpCardLocatorError,
-        OpenpgpCard,
+        Locator as OpenpgpCardLocator, LocatorError as OpenpgpCardLocatorError, OpenpgpCard,
     },
     solana_remote_wallet::{
         locator::{Locator as RemoteWalletLocator, LocatorError as RemoteWalletLocatorError},
@@ -493,7 +491,7 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
                     }),
                     SIGNER_SOURCE_STDIN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
                     SIGNER_SOURCE_PGPCARD => Ok(SignerSource::new(SignerSourceKind::Pgpcard(
-                        OpenpgpCardLocator::try_from(&uri)?
+                        OpenpgpCardLocator::try_from(&uri)?,
                     ))),
                     _ => {
                         #[cfg(target_family = "windows")]
@@ -1272,8 +1270,7 @@ mod tests {
                 kind: SignerSourceKind::Usb(u),
                 derivation_path: None,
                 legacy: false,
-            } if u == expected_locator)
-        );
+            } if u == expected_locator));
         let usb = "usb://ledger?key=0/0".to_string();
         let expected_locator = RemoteWalletLocator {
             manufacturer: Manufacturer::Ledger,
@@ -1284,15 +1281,13 @@ mod tests {
                 kind: SignerSourceKind::Usb(u),
                 derivation_path: d,
                 legacy: false,
-            } if u == expected_locator && d == expected_derivation_path)
-        );
+            } if u == expected_locator && d == expected_derivation_path));
 
         // pgpcard signer source tests
         let pgpcard = "pgpcard://".to_string();
-        let expected_locator = OpenpgpCardLocator {
-            aid: None
-        };
-        assert!(matches!(parse_signer_source(pgpcard).unwrap(), SignerSource {
+        let expected_locator = OpenpgpCardLocator { aid: None };
+        assert!(
+            matches!(parse_signer_source(pgpcard).unwrap(), SignerSource {
                 kind: SignerSourceKind::Pgpcard(p),
                 derivation_path: None,
                 legacy: false,
@@ -1300,17 +1295,18 @@ mod tests {
         );
         let pgpcard = "pgpcard://D2760001240103040006123456780000".to_string();
         let expected_ident_bytes: [u8; 16] = [
-            0xD2, 0x76, 0x00, 0x01, 0x24,   // preamble
-            0x01,                           // application id (OpenPGP)
-            0x03, 0x04,                     // version
-            0x00, 0x06,                     // manufacturer id
-            0x12, 0x34, 0x56, 0x78,         // serial number
-            0x00, 0x00                      // reserved
+            0xD2, 0x76, 0x00, 0x01, 0x24, // preamble
+            0x01, // application id (OpenPGP)
+            0x03, 0x04, // version
+            0x00, 0x06, // manufacturer id
+            0x12, 0x34, 0x56, 0x78, // serial number
+            0x00, 0x00, // reserved
         ];
         let expected_locator = OpenpgpCardLocator {
-            aid: Some(ApplicationIdentifier::try_from(&expected_ident_bytes[..]).unwrap())
+            aid: Some(ApplicationIdentifier::try_from(&expected_ident_bytes[..]).unwrap()),
         };
-        assert!(matches!(parse_signer_source(pgpcard).unwrap(), SignerSource {
+        assert!(
+            matches!(parse_signer_source(pgpcard).unwrap(), SignerSource {
                 kind: SignerSourceKind::Pgpcard(p),
                 derivation_path: None,
                 legacy: false,
