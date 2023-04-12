@@ -5402,6 +5402,7 @@ dependencies = [
  "solana-logger 1.16.0",
  "solana-program-runtime",
  "solana-pubsub-client",
+ "solana-remote-keypair",
  "solana-remote-wallet",
  "solana-rpc-client",
  "solana-rpc-client-api",

@@ -1,13 +1,16 @@
+#[cfg(feature = "openpgp-card-pcsc")]
+use {
+    openpgp_card::SmartcardError,
+    openpgp_card_pcsc::PcscBackend,
+};
 use {
     openpgp_card::{
         algorithm::{Algo, Curve},
         crypto_data::{EccType, PublicKeyMaterial, Hash},
         OpenPgp,
-        SmartcardError,
         card_do::{UIF, ApplicationIdentifier},
         OpenPgpTransaction
     },
-    openpgp_card_pcsc::PcscBackend,
     pinentry::PassphraseInput,
     secrecy::ExposeSecret,
     solana_sdk::{
@@ -116,6 +119,7 @@ pub struct OpenpgpCard {
 impl TryFrom<&Locator> for OpenpgpCard {
     type Error = openpgp_card::Error;
 
+    #[cfg(feature = "openpgp-card-pcsc")]
     fn try_from(locator: &Locator) -> Result<Self, Self::Error> {
         let pcsc_identifier = locator.aid.as_ref().map(|x| x.ident());
         let backend = match pcsc_identifier {
@@ -123,7 +127,7 @@ impl TryFrom<&Locator> for OpenpgpCard {
             None => {
                 let mut cards = PcscBackend::cards(None)?;
                 if cards.is_empty() {
-                    return Err(openpgp_card::Error::Smartcard(SmartcardError::NoReaderFoundError))
+                    return Err(Self::Error::Smartcard(SmartcardError::NoReaderFoundError))
                 } else {
                     cards.remove(0)
                 }
@@ -138,6 +142,14 @@ impl TryFrom<&Locator> for OpenpgpCard {
             pgp: RefCell::new(pgp),
             pin_verified: RefCell::new(false),
         })
+    }
+
+    #[cfg(not(feature = "openpgp-card-pcsc"))]
+    fn try_from(_locator: &Locator) -> Result<Self, Self::Error> {
+        Err(Self::Error::UnsupportedFeature(
+            "openpgp-card-pcsc crate compilation disabled in solana-remote-keypair. \
+            Rebuild with `--features pcsc`.".to_string(),
+        ))
     }
 }
 

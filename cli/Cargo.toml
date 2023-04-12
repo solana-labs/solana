@@ -39,6 +39,7 @@ solana-faucet = { workspace = true }
 solana-logger = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-pubsub-client = { workspace = true }
+solana-remote-keypair = { workspace = true }
 solana-remote-wallet = { workspace = true, features = ["default"] }
 solana-rpc-client = { workspace = true, features = ["default"] }
 solana-rpc-client-api = { workspace = true }
@@ -57,6 +58,9 @@ tiny-bip39 = { workspace = true }
 solana-streamer = { workspace = true }
 solana-test-validator = { workspace = true }
 tempfile = { workspace = true }
+
+[features]
+pcsc = ["solana-remote-keypair/pcsc"]
 
 [[bin]]
 name = "solana"
