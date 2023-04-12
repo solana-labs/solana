@@ -259,55 +259,24 @@ pub enum RepairProtocol {
 }
 
 const REPAIR_REQUEST_PONG_SERIALIZED_BYTES: usize = PUBKEY_BYTES + HASH_BYTES + SIGNATURE_BYTES;
-const REPAIR_REQUEST_HEADER_SERIALIZED_BYTES: usize =
-    SIGNATURE_BYTES + PUBKEY_BYTES + PUBKEY_BYTES + 8 + 4;
+const REPAIR_REQUEST_MIN_BYTES: usize = REPAIR_REQUEST_PONG_SERIALIZED_BYTES;
 
 fn check_well_formed_repair_request(packet: &Packet, stats: &mut ServeRepairStats) -> Result<()> {
-    if let Some(discriminator) = packet
-        .data(..4)
-        .and_then(|data| <[u8; 4]>::try_from(data).ok())
-        .map(u32::from_le_bytes)
-    {
-        let expected_size = match discriminator {
-            0..=6 => {
-                // deprecated requests
-                stats.err_unsigned += 1;
-                return Err(Error::from(RepairVerifyError::Unsigned));
-            }
-            7 => 4 + REPAIR_REQUEST_PONG_SERIALIZED_BYTES, // Pong
-            8 => 4 + REPAIR_REQUEST_HEADER_SERIALIZED_BYTES + 8 + 8, // WindowIndex
-            9 => 4 + REPAIR_REQUEST_HEADER_SERIALIZED_BYTES + 8 + 8, // HighestWindowIndex
-            10 => 4 + REPAIR_REQUEST_HEADER_SERIALIZED_BYTES + 8, // Orphan
-            11 => 4 + REPAIR_REQUEST_HEADER_SERIALIZED_BYTES + 8, // AncestorHashes
-            _ => {
-                // invalid repair request type
-                stats.err_malformed += 1;
-                return Err(Error::from(RepairVerifyError::Malformed));
-            }
-        };
-        if packet.meta().size == expected_size {
-            return Ok(());
-        }
+    if packet.meta().size < REPAIR_REQUEST_MIN_BYTES {
+        stats.err_malformed += 1;
+        return Err(Error::from(RepairVerifyError::Malformed));
     }
-    stats.err_malformed += 1;
-    Err(Error::from(RepairVerifyError::Malformed))
+    Ok(())
 }
 
 fn discard_malformed_repair_requests(
     batch: &mut PacketBatch,
     stats: &mut ServeRepairStats,
-    cluster_type: ClusterType,
 ) -> usize {
     let mut well_formed_requests = 0;
     for packet in batch.iter_mut() {
         match check_well_formed_repair_request(packet, stats) {
             Ok(()) => well_formed_requests += 1,
-            Err(Error::RepairVerify(RepairVerifyError::Unsigned)) => match cluster_type {
-                ClusterType::Testnet | ClusterType::Development => {
-                    packet.meta_mut().set_discard(true)
-                }
-                ClusterType::MainnetBeta | ClusterType::Devnet => well_formed_requests += 1,
-            },
             Err(_) => packet.meta_mut().set_discard(true),
         }
     }
@@ -694,14 +663,13 @@ impl ServeRepair {
         };
 
         let mut dropped_requests = 0;
-        let mut well_formed_requests =
-            discard_malformed_repair_requests(&mut reqs_v[0], stats, cluster_type);
+        let mut well_formed_requests = discard_malformed_repair_requests(&mut reqs_v[0], stats);
         while let Ok(mut more) = requests_receiver.try_recv() {
             total_requests += more.len();
             if well_formed_requests > max_buffered_packets {
                 dropped_requests += more.len();
             } else {
-                let retained = discard_malformed_repair_requests(&mut more, stats, cluster_type);
+                let retained = discard_malformed_repair_requests(&mut more, stats);
                 if retained > 0 {
                     reqs_v.push(more);
                 }
@@ -1464,6 +1432,17 @@ mod tests {
 
     #[test]
     fn test_check_well_formed_repair_request() {
+        let request = RepairProtocol::Pong(Pong::default());
+        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut stats = ServeRepairStats::default();
+        let res = check_well_formed_repair_request(&pkt, &mut stats);
+        assert!(res.is_ok());
+        pkt.meta_mut().size = 5;
+        let mut stats = ServeRepairStats::default();
+        let res = check_well_formed_repair_request(&pkt, &mut stats);
+        assert!(res.is_err());
+        assert_eq!(stats.err_malformed, 1);
+
         let request = RepairProtocol::WindowIndex {
             header: RepairRequestHeader::default(),
             slot: 123,
@@ -1487,7 +1466,7 @@ mod tests {
         let mut stats = ServeRepairStats::default();
         let res = check_well_formed_repair_request(&pkt, &mut stats);
         assert!(res.is_ok());
-        pkt.meta_mut().size = 8;
+        pkt.meta_mut().size = 1;
         let mut stats = ServeRepairStats::default();
         let res = check_well_formed_repair_request(&pkt, &mut stats);
         assert!(res.is_err());
@@ -1497,8 +1476,7 @@ mod tests {
         let mut pkt = Packet::from_data(None, &request).unwrap();
         let mut stats = ServeRepairStats::default();
         let res = check_well_formed_repair_request(&pkt, &mut stats);
-        assert!(res.is_err());
-        assert_eq!(stats.err_unsigned, 1);
+        assert!(res.is_ok());
         pkt.meta_mut().size = 3;
         let mut stats = ServeRepairStats::default();
         let res = check_well_formed_repair_request(&pkt, &mut stats);

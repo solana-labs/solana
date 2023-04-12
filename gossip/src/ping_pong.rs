@@ -25,7 +25,7 @@ pub struct Ping<T> {
     signature: Signature,
 }
 
-#[derive(AbiExample, Debug, Deserialize, Serialize)]
+#[derive(AbiExample, Debug, Default, Deserialize, Serialize)]
 pub struct Pong {
     from: Pubkey,
     hash: Hash, // Hash of received ping token.
