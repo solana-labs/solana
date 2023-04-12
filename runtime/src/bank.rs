@@ -67,6 +67,7 @@ use {
         snapshot_hash::SnapshotHash,
         sorted_storages::SortedStorages,
         stake_account::{self, StakeAccount},
+        stake_history::StakeHistory,
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW_V2,
@@ -2880,40 +2881,20 @@ impl Bank {
             update_rewards_from_cached_accounts,
         );
 
-        let mut m = Measure::start("calculate_points");
-        let points: u128 = thread_pool.install(|| {
-            vote_with_stake_delegations_map
-                .par_iter()
-                .map(|entry| {
-                    let VoteWithStakeDelegations {
-                        vote_state,
-                        delegations,
-                        ..
-                    } = entry.value();
+        let point_value = self.calculate_reward_points(
+            &vote_with_stake_delegations_map,
+            rewards,
+            &stake_history,
+            thread_pool,
+            metrics,
+        );
 
-                    delegations
-                        .par_iter()
-                        .map(|(_stake_pubkey, stake_account)| {
-                            stake_state::calculate_points(
-                                stake_account.stake_state(),
-                                vote_state,
-                                Some(&stake_history),
-                            )
-                            .unwrap_or(0)
-                        })
-                        .sum::<u128>()
-                })
-                .sum()
-        });
-        m.stop();
-        metrics.calculate_points_us.fetch_add(m.as_us(), Relaxed);
-
-        if points == 0 {
+        if point_value.is_none() {
             return;
         }
 
         // pay according to point value
-        let point_value = PointValue { rewards, points };
+        let point_value = point_value.unwrap();
         let vote_account_rewards: DashMap<Pubkey, (AccountSharedData, u8, u64, bool)> =
             DashMap::with_capacity(vote_with_stake_delegations_map.len());
         let stake_delegation_iterator = vote_with_stake_delegations_map.into_par_iter().flat_map(
@@ -3039,15 +3020,54 @@ impl Bank {
         vote_with_stake_delegations_map
     }
 
+    fn calculate_reward_points(
+        &self,
+        vote_with_stake_delegations_map: &VoteWithStakeDelegationsMap,
+        rewards: u64,
+        stake_history: &StakeHistory,
+        thread_pool: &ThreadPool,
+        metrics: &mut RewardsMetrics,
+    ) -> Option<PointValue> {
+        let (points, measure) = measure!(thread_pool.install(|| {
+            vote_with_stake_delegations_map
+                .par_iter()
+                .map(|entry| {
+                    let VoteWithStakeDelegations {
+                        vote_state,
+                        delegations,
+                        ..
+                    } = entry.value();
+
+                    delegations
+                        .par_iter()
+                        .map(|(_stake_pubkey, stake_account)| {
+                            stake_state::calculate_points(
+                                stake_account.stake_state(),
+                                vote_state,
+                                Some(stake_history),
+                            )
+                            .unwrap_or(0)
+                        })
+                        .sum::<u128>()
+                })
+                .sum()
+        }));
+        metrics
+            .calculate_points_us
+            .fetch_add(measure.as_us(), Relaxed);
+
+        (points > 0).then_some(PointValue { rewards, points })
+    }
+
     fn store_stake_accounts(&self, stake_rewards: &[StakeReward], metrics: &mut RewardsMetrics) {
-        // store stake account even if stakers_reward is 0
+        // store stake account even if stake_reward is 0
         // because credits observed has changed
-        let mut m = Measure::start("store_stake_account");
-        self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()));
-        m.stop();
+        let (_, measure) = measure!({
+            self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()))
+        });
         metrics
             .store_stake_accounts_us
-            .fetch_add(m.as_us(), Relaxed);
+            .fetch_add(measure.as_us(), Relaxed);
     }
 
     fn store_vote_accounts(
@@ -3055,8 +3075,7 @@ impl Bank {
         vote_account_rewards: VoteRewards,
         metrics: &mut RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
-        let mut m = Measure::start("store_vote_accounts");
-        let vote_rewards = vote_account_rewards
+        let (vote_rewards, measure) = measure!(vote_account_rewards
             .into_iter()
             .filter_map(
                 |(vote_pubkey, (mut vote_account, commission, vote_rewards, vote_needs_store))| {
@@ -3080,10 +3099,11 @@ impl Bank {
                     ))
                 },
             )
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>());
 
-        m.stop();
-        metrics.store_vote_accounts_us.fetch_add(m.as_us(), Relaxed);
+        metrics
+            .store_vote_accounts_us
+            .fetch_add(measure.as_us(), Relaxed);
         vote_rewards
     }
 
