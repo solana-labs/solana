@@ -11,12 +11,15 @@ edition = { workspace = true }
 
 [dependencies]
 openpgp-card = { workspace = true }
-openpgp-card-pcsc = { workspace = true }
+openpgp-card-pcsc = { workspace = true, optional = true }
 pinentry = { workspace = true }
 secrecy = { workspace = true }
 solana-sdk = { workspace = true }
 thiserror = { workspace = true }
 uriparse = { workspace = true }
+
+[features]
+default = ["openpgp-card-pcsc"]
 
 [lib]
 name = "solana_remote_keypair"
