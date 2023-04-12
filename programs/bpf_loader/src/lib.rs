@@ -1644,9 +1644,8 @@ mod tests {
             invoke_context::mock_process_instruction, with_mock_invoke_context,
         },
         solana_rbpf::{
-            ebpf::MM_INPUT_START,
             verifier::{Verifier, VerifierError},
-            vm::{BuiltInProgram, Config, ContextObject, FunctionRegistry},
+            vm::{Config, ContextObject, FunctionRegistry},
         },
         solana_sdk::{
             account::{
@@ -1718,44 +1717,6 @@ mod tests {
         ) -> std::result::Result<(), VerifierError> {
             Ok(())
         }
-    }
-
-    #[test]
-    #[ignore]
-    #[should_panic(expected = "ExceededMaxInstructions(31)")]
-    fn test_bpf_loader_non_terminating_program() {
-        #[rustfmt::skip]
-        let program = &[
-            0x07, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, // r6 + 1
-            0x05, 0x00, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x00, // goto -2
-            0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
-        ];
-        let mut input_mem = [0x00];
-        let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
-        with_mock_invoke_context!(invoke_context, transaction_context, Vec::new());
-        let loader = std::sync::Arc::new(BuiltInProgram::new_loader(
-            solana_rbpf::vm::Config::default(),
-        ));
-        let function_registry = solana_rbpf::vm::FunctionRegistry::default();
-        let executable = solana_rbpf::elf::Executable::<InvokeContext>::from_text_bytes(
-            program,
-            loader,
-            function_registry,
-        )
-        .unwrap();
-        let verified_executable = solana_rbpf::vm::VerifiedExecutable::<
-            solana_rbpf::verifier::RequisiteVerifier,
-            InvokeContext,
-        >::from_executable(executable)
-        .unwrap();
-        let mut vm = create_vm(
-            &verified_executable,
-            vec![input_region],
-            Vec::new(),
-            &mut invoke_context,
-        )
-        .unwrap();
-        vm.execute_program(true).1.unwrap();
     }
 
     #[test]
