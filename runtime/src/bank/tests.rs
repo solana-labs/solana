@@ -2413,10 +2413,10 @@ fn test_rent_eager_collect_rent_zero_lamport_deterministic() {
 fn test_bank_update_vote_stake_rewards() {
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
     check_bank_update_vote_stake_rewards(|bank: &Bank| {
-        bank.load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
+        bank._load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
     });
     check_bank_update_vote_stake_rewards(|bank: &Bank| {
-        bank.load_vote_and_stake_accounts(&thread_pool, null_tracer())
+        bank._load_vote_and_stake_accounts(&thread_pool, null_tracer())
     });
 }
 #[cfg(test)]
@@ -9678,7 +9678,7 @@ fn test_stake_vote_account_validity() {
     check_stake_vote_account_validity(
         true, // check owner change,
         |bank: &Bank| {
-            bank.load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
+            bank._load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
         },
     );
     // TODO: stakes cache should be hardened for the case when the account
@@ -9686,7 +9686,7 @@ fn test_stake_vote_account_validity() {
     // https://github.com/solana-labs/solana/pull/24200#discussion_r849935444
     check_stake_vote_account_validity(
         false, // check owner change
-        |bank: &Bank| bank.load_vote_and_stake_accounts(&thread_pool, null_tracer()),
+        |bank: &Bank| bank._load_vote_and_stake_accounts(&thread_pool, null_tracer()),
     );
 }
 
