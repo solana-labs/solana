@@ -4,6 +4,7 @@ use {
     openpgp_card_pcsc::PcscBackend,
 };
 use {
+    itertools::Itertools,
     openpgp_card::{
         algorithm::{Algo, Curve},
         crypto_data::{EccType, PublicKeyMaterial, Hash},
@@ -76,12 +77,12 @@ impl TryFrom<&URIReference<'_>> for Locator {
                 if ident.is_empty() {
                     return Ok(Self { aid: None });
                 }
-                if ident.len() % 2 != 0 {
-                    return Err(LocatorError::IdentifierParseError("OpenPGP AID must have even length".to_string()));
+                if ident.len() != 32 {
+                    return Err(LocatorError::IdentifierParseError("OpenPGP AID must be 32 digits".to_string()));
                 }
                 let mut ident_bytes = Vec::<u8>::new();
-                for i in (0..ident.len()).step_by(2) {
-                    ident_bytes.push(u8::from_str_radix(&ident[i..i + 2], 16).map_err(
+                for hex_byte in &ident.chars().chunks(2) {
+                    ident_bytes.push(u8::from_str_radix(hex_byte.collect::<String>().as_str(), 16).map_err(
                         |_| LocatorError::IdentifierParseError("non-hex character found in identifier".to_string())
                     )?);
                 }
@@ -157,13 +158,13 @@ impl Signer for OpenpgpCard {
     fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
         let mut pgp_mut = self.pgp.borrow_mut();
         let opt = &mut pgp_mut.transaction().map_err(
-            |e| SignerError::Connection(format!("could not start transaction with card: {}", e))
+            |e| SignerError::Connection(format!("could not start transaction with card: {e}"))
         )?;
 
         // Verify smart card's PGP signing key is an ed25519 key using EdDSA
         // and extract the pubkey as bytes.
         let pk_material = opt.public_key(openpgp_card::KeyType::Signing).map_err(
-            |e| SignerError::Connection(format!("could not find signing keypair on card: {}", e))
+            |e| SignerError::Connection(format!("could not find signing keypair on card: {e}"))
         )?;
         let pk_bytes: [u8; 32] = match pk_material {
             PublicKeyMaterial::E(pk) => match pk.algo() {
@@ -174,7 +175,7 @@ impl Signer for OpenpgpCard {
                         ));
                     }
                     pk.data().try_into().map_err(
-                        |e| SignerError::Connection(format!("key on card is malformed: {}", e))
+                        |e| SignerError::Connection(format!("key on card is malformed: {e}"))
                     )?
                 },
                 _ => return Err(SignerError::Connection("expected ECC key, got RSA".to_string())),
@@ -191,10 +192,10 @@ impl Signer for OpenpgpCard {
 
         let mut pgp_mut = self.pgp.borrow_mut();
         let opt = &mut pgp_mut.transaction().map_err(
-            |e| SignerError::Connection(format!("could not start transaction with card: {}", e))
+            |e| SignerError::Connection(format!("could not start transaction with card: {e}"))
         )?;
         let card_info: OpenpgpCardInfo = opt.try_into().map_err(
-            |e| SignerError::Connection(format!("could not get card info: {}", e))
+            |e| SignerError::Connection(format!("could not get card info: {e}"))
         )?;
 
         // Prompt user for PIN verification if and only if
@@ -220,7 +221,7 @@ impl Signer for OpenpgpCard {
         // Delegate message signing to card
         let hash = Hash::EdDSA(message);
         let sig = opt.signature_for_hash(hash).map_err(
-            |e| SignerError::Protocol(format!("card failed to sign message: {}", e))
+            |e| SignerError::Protocol(format!("card failed to sign message: {e}"))
         )?;
 
         Ok(Signature::new(&sig[..]))
@@ -273,7 +274,7 @@ fn get_pin_from_user_as_bytes(card_info: &OpenpgpCardInfo, first_attempt: bool) 
     );
     let pin = if let Some(mut input) = PassphraseInput::with_default_binary() {
         input.with_description(description.as_str()).with_prompt("PIN").interact().map_err(
-            |e| SignerError::InvalidInput(format!("cannot read PIN from user: {}", e))
+            |e| SignerError::InvalidInput(format!("cannot read PIN from user: {e}"))
         )?
     } else {
         return Err(SignerError::Custom("pinentry binary not found, please install".to_string()));
@@ -320,7 +321,7 @@ mod tests {
         let uri = URIReference::try_from("pgpcard://D27600012401030400061234567800").unwrap();
         assert_eq!(
             Locator::try_from(&uri),
-            Err(LocatorError::IdentifierParseError("invalid identifier format".to_string())),
+            Err(LocatorError::IdentifierParseError("OpenPGP AID must be 32 digits".to_string())),
         );
     }
 }
