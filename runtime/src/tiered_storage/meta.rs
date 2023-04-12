@@ -22,6 +22,52 @@ pub struct AccountMetaFlags {
     reserved: B29,
 }
 
+/// A trait that allows different implementations of the account meta that
+/// support different tiers of the accounts storage.
+pub trait TieredAccountMeta {
+    /// Construct a TieredAcountMeta instance.
+    fn new() -> Self;
+
+    /// Returns true if the TieredAccountMeta implementation supports multiple
+    /// accounts sharing one byte block.
+    fn support_shared_byte_block() -> bool;
+
+    /// A builder function that initializes lamports.
+    fn with_lamports(&mut self, lamports: u64) -> &mut Self;
+
+    /// A builder function that initializes the number of padding bytes
+    /// for the account data associated with the current meta.
+    fn with_account_data_padding(&mut self, paddings: u8) -> &mut Self;
+
+    /// A builder function that initializes the owner's local id.
+    fn with_owner_local_id(&mut self, local_id: u32) -> &mut Self;
+
+    /// A builder function that initializes the raw account data size.
+    fn with_raw_data_size(&mut self, data_size: u64) -> &mut Self;
+
+    /// A builder function that initializes the AccountMetaFlags of the current
+    /// meta.
+    fn with_flags(&mut self, flags: &AccountMetaFlags) -> &mut Self;
+
+    /// Returns the balance of the lamports associated with the account.
+    fn lamports(&self) -> u64;
+
+    /// Returns the number of padding bytes for the associated account data
+    fn account_data_padding(&self) -> u8;
+
+    /// Returns the raw size of its account data if the current accout meta
+    /// shares its byte block with other account meta entries.
+    ///
+    /// Otherwise, None will be returned.
+    fn raw_data_size_for_shared_block(&self) -> Option<usize>;
+
+    /// Returns the local id to the accounts' owner in the current AccountsFile.
+    fn owner_local_id(&self) -> u32;
+
+    /// Returns the AccountMetaFlags of the current meta.
+    fn flags(&self) -> &AccountMetaFlags;
+}
+
 impl AccountMetaFlags {
     pub fn new_from(optional_fields: &AccountMetaOptionalFields) -> Self {
         let mut flags = AccountMetaFlags::default();
