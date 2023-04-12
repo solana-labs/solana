@@ -110,10 +110,7 @@ fn verify_reachable_ports(
                 tcp_listeners.push((
                     bind_addr.port(),
                     TcpListener::bind(bind_addr).unwrap_or_else(|err| {
-                        error!(
-                            "Unable to bind to tcp {:?} for {}: {}",
-                            bind_addr, purpose, err
-                        );
+                        error!("Unable to bind to tcp {bind_addr:?} for {purpose}: {err}");
                         exit(1);
                     }),
                 ));
@@ -203,8 +200,7 @@ fn get_rpc_peers(
     }
 
     info!(
-        "Searching for an RPC service with shred version {}{}...",
-        shred_version,
+        "Searching for an RPC service with shred version {shred_version}{}...",
         retry_reason
             .as_ref()
             .map(|s| format!(" (Retrying: {s})"))
@@ -236,10 +232,7 @@ fn get_rpc_peers(
         .filter(|rpc_peer| is_known_validator(&rpc_peer.id, &validator_config.known_validators))
         .count();
 
-    info!(
-        "Total {} RPC nodes found. {} known, {} blacklisted ",
-        rpc_peers_total, rpc_known_peers, rpc_peers_blacklisted
-    );
+    info!("Total {rpc_peers_total} RPC nodes found. {rpc_known_peers} known, {rpc_peers_blacklisted} blacklisted");
 
     if rpc_peers_blacklisted == rpc_peers_total {
         *retry_reason = if !blacklisted_rpc_nodes.is_empty()
@@ -358,14 +351,14 @@ pub fn fail_rpc_node(
     rpc_id: &Pubkey,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey, RandomState>,
 ) {
-    warn!("{}", err);
+    warn!("{err}");
     if let Some(ref known_validators) = known_validators {
         if known_validators.contains(rpc_id) {
             return;
         }
     }
 
-    info!("Excluding {} as a future RPC candidate", rpc_id);
+    info!("Excluding {rpc_id} as a future RPC candidate");
     blacklisted_rpc_nodes.insert(*rpc_id);
 }
 
@@ -414,7 +407,7 @@ pub fn attempt_download_genesis_and_snapshot(
     let rpc_client_slot = rpc_client
         .get_slot_with_commitment(CommitmentConfig::finalized())
         .map_err(|err| format!("Failed to get RPC node slot: {err}"))?;
-    info!("RPC node root slot: {}", rpc_client_slot);
+    info!("RPC node root slot: {rpc_client_slot}");
 
     download_snapshots(
         full_snapshot_archives_dir,
@@ -451,7 +444,7 @@ pub fn attempt_download_genesis_and_snapshot(
             //
             // Power users can always use the `--no-check-vote-account` option to
             // bypass this check entirely
-            error!("{}", err);
+            error!("{err}");
             exit(1);
         });
     }
@@ -986,9 +979,8 @@ where
             if is_any_same_slot_and_different_hash(full_snapshot_hash, known_snapshot_hashes.keys())
             {
                 warn!(
-                    "Ignoring all snapshot hashes from node {} since we've seen a different full snapshot hash with this slot.\nfull snapshot hash: {:?}",
-                    node,
-                    full_snapshot_hash,
+                    "Ignoring all snapshot hashes from node {node} since we've seen a different full snapshot hash with this slot.\"
+                    \nfull snapshot hash: {full_snapshot_hash:?}"
                 );
                 debug!(
                     "known full snapshot hashes: {:#?}",
@@ -1015,10 +1007,9 @@ where
                 // has a full snapshot hash that matches its base snapshot hash.
                 if !full_snapshot_hashes.contains(&base_snapshot_hash) {
                     warn!(
-                        "Ignoring all incremental snapshot hashes from node {} since its base snapshot hash does not match any of its full snapshot hashes.\nbase snapshot hash: {:?}\nfull snapshot hashes: {:?}",
-                        node,
-                        base_snapshot_hash,
-                        full_snapshot_hashes
+                        "Ignoring all incremental snapshot hashes from node {node} since its base snapshot hash does not match any of its full snapshot hashes.\
+                        \nbase snapshot hash: {base_snapshot_hash:?}\
+                        \nfull snapshot hashes: {full_snapshot_hashes:?}"
                     );
                     continue 'to_next_node;
                 }
@@ -1038,10 +1029,9 @@ where
                             known_incremental_snapshot_hashes.iter(),
                         ) {
                             warn!(
-                                "Ignoring incremental snapshot hash from node {} since we've seen a different incremental snapshot hash with this slot.\nbase snapshot hash: {:?}\nincremental snapshot hash: {:?}",
-                                node,
-                                base_snapshot_hash,
-                                incremental_snapshot_hash,
+                                "Ignoring incremental snapshot hash from node {node} since we've seen a different incremental snapshot hash with this slot.\
+                                \nbase snapshot hash: {base_snapshot_hash:?}\
+                                \nincremental snapshot hash: {incremental_snapshot_hash:?}"
                             );
                             debug!(
                                 "known incremental snapshot hashes at this slot: {:#?}",
@@ -1063,9 +1053,9 @@ where
                         "There must exist a full snapshot hash already in the known snapshot hashes with the same slot but a different hash!",
                     );
                     debug!(
-                        "Ignoring incremental snapshot hashes from node {} since we've seen a different base snapshot hash with this slot.\nbase snapshot hash: {:?}\nknown full snapshot hashes: {:?}",
-                        node,
-                        base_snapshot_hash,
+                        "Ignoring incremental snapshot hashes from node {node} since we've seen a different base snapshot hash with this slot.\
+                        \nbase snapshot hash: {base_snapshot_hash:?}\
+                        \nknown full snapshot hashes: {:?}",
                         known_snapshot_hashes.keys(),
                     );
                     continue 'to_next_node;
@@ -1074,7 +1064,7 @@ where
         }
     }
 
-    trace!("known snapshot hashes: {:?}", &known_snapshot_hashes);
+    trace!("known snapshot hashes: {known_snapshot_hashes:?}");
     known_snapshot_hashes
 }
 
@@ -1109,7 +1099,7 @@ fn get_eligible_peer_snapshot_hashes(
         };
     }
 
-    trace!("peer snapshot hashes: {:?}", &peer_snapshot_hashes);
+    trace!("peer snapshot hashes: {peer_snapshot_hashes:?}");
     peer_snapshot_hashes
 }
 
@@ -1135,8 +1125,7 @@ fn retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
     });
 
     trace!(
-        "retain peer snapshot hashes that match known snapshot hashes: {:?}",
-        &peer_snapshot_hashes
+        "retain peer snapshot hashes that match known snapshot hashes: {peer_snapshot_hashes:?}"
     );
 }
 
@@ -1159,10 +1148,7 @@ fn retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(
         peer_snapshot_hash.snapshot_hash.full == highest_full_snapshot_hash
     });
 
-    trace!(
-        "retain peer snapshot hashes with highest full snapshot slot: {:?}",
-        &peer_snapshot_hashes
-    );
+    trace!("retain peer snapshot hashes with highest full snapshot slot: {peer_snapshot_hashes:?}");
 }
 
 /// Retain the peer snapshot hashes with the highest incremental snapshot slot
@@ -1184,10 +1170,7 @@ fn retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
         peer_snapshot_hash.snapshot_hash.incr == highest_incremental_snapshot_hash
     });
 
-    trace!(
-        "retain peer snapshot hashes with highest incremental snapshot slot: {:?}",
-        &peer_snapshot_hashes
-    );
+    trace!("retain peer snapshot hashes with highest incremental snapshot slot: {peer_snapshot_hashes:?}");
 }
 
 /// Check to see if we can use our local snapshots, otherwise download newer ones.
@@ -1331,7 +1314,7 @@ fn download_snapshot(
         maximum_incremental_snapshot_archives_to_retain,
         use_progress_bar,
         &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
-            debug!("Download progress: {:?}", download_progress);
+            debug!("Download progress: {download_progress:?}");
             if download_progress.last_throughput < minimal_snapshot_download_speed
                 && download_progress.notification_count <= 1
                 && download_progress.percentage_done <= 2_f32
@@ -1394,28 +1377,17 @@ fn should_use_local_snapshot(
         incremental_snapshot_fetch,
     ) {
         None => {
-            info!(
-                "Downloading a snapshot for slot {} since there is not a local snapshot.",
-                cluster_snapshot_slot,
-            );
+            info!("Downloading a snapshot for slot {cluster_snapshot_slot} since there is not a local snapshot.");
             false
         }
         Some((local_snapshot_slot, _)) => {
             if local_snapshot_slot
                 >= cluster_snapshot_slot.saturating_sub(maximum_local_snapshot_age)
             {
-                info!(
-                    "Reusing local snapshot at slot {} instead of downloading a snapshot for slot {}.",
-                    local_snapshot_slot,
-                    cluster_snapshot_slot,
-                );
+                info!("Reusing local snapshot at slot {local_snapshot_slot} instead of downloading a snapshot for slot {cluster_snapshot_slot}.");
                 true
             } else {
-                info!(
-                    "Local snapshot from slot {} is too old. Downloading a newer snapshot for slot {}.",
-                    local_snapshot_slot,
-                    cluster_snapshot_slot,
-                );
+                info!("Local snapshot from slot {local_snapshot_slot} is too old. Downloading a newer snapshot for slot {cluster_snapshot_slot}.");
                 false
             }
         }
