@@ -101,11 +101,8 @@ pub fn spawn_server(
     info!("Start quic server on {:?}", sock);
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
-    let endpoint = {
-        Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
-            .map_err(|_e| QuicServerError::EndpointFailed)?
-    };
-
+    let endpoint = Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
+        .map_err(QuicServerError::EndpointFailed)?;
     let handle = tokio::spawn(run_server(
         endpoint.clone(),
         packet_sender,

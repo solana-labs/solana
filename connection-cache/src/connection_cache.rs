@@ -287,7 +287,7 @@ pub enum ConnectionPoolError {
 #[derive(Error, Debug)]
 pub enum ClientError {
     #[error("Certificate error: {0}")]
-    CertificateError(String),
+    CertificateError(#[from] rcgen::RcgenError),
 
     #[error("IO error: {0:?}")]
     IoError(#[from] std::io::Error),

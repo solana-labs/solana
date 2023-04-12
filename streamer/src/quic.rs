@@ -57,8 +57,7 @@ pub(crate) fn configure_server(
     identity_keypair: &Keypair,
     gossip_host: IpAddr,
 ) -> Result<(ServerConfig, String), QuicServerError> {
-    let (cert, priv_key) = new_self_signed_tls_certificate(identity_keypair, gossip_host)
-        .map_err(|_e| QuicServerError::ConfigureFailed)?;
+    let (cert, priv_key) = new_self_signed_tls_certificate(identity_keypair, gossip_host)?;
     let cert_chain_pem_parts = vec![Pem {
         tag: "CERTIFICATE".to_string(),
         contents: cert.0.clone(),
@@ -68,8 +67,7 @@ pub(crate) fn configure_server(
     let mut server_tls_config = rustls::ServerConfig::builder()
         .with_safe_defaults()
         .with_client_cert_verifier(SkipClientVerification::new())
-        .with_single_cert(vec![cert], priv_key)
-        .map_err(|_e| QuicServerError::ConfigureFailed)?;
+        .with_single_cert(vec![cert], priv_key)?;
     server_tls_config.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
     let mut server_config = ServerConfig::with_crypto(Arc::new(server_tls_config));
@@ -106,11 +104,12 @@ fn rt() -> Runtime {
 
 #[derive(thiserror::Error, Debug)]
 pub enum QuicServerError {
-    #[error("Server configure failed")]
-    ConfigureFailed,
-
-    #[error("Endpoint creation failed")]
-    EndpointFailed,
+    #[error("Endpoint creation failed: {0}")]
+    EndpointFailed(std::io::Error),
+    #[error("Certificate error: {0}")]
+    CertificateError(#[from] rcgen::RcgenError),
+    #[error("TLS error: {0}")]
+    TlsError(#[from] rustls::Error),
 }
 
 #[derive(Default)]
