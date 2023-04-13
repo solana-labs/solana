@@ -36,8 +36,7 @@ impl RootBankCache {
                 cached_root_bank
             }
             _ => {
-                let lock = self.bank_forks.read().unwrap();
-                let root_bank = lock.root_bank();
+                let root_bank = self.bank_forks.read().unwrap().root_bank();
                 self.cached_root_bank = Arc::downgrade(&root_bank);
                 root_bank
             }
