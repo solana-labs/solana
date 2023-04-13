@@ -4,14 +4,12 @@ use {
 };
 
 /// A unique identifier for a transaction batch.
-/// The lower 64 bits are based on the order the transaction batch was scheduled.
-/// The upper 64 bits are an optional priority field - currently unused.
-#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TransactionBatchId(u128);
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct TransactionBatchId(u64);
 
 impl TransactionBatchId {
     pub fn new(index: u64) -> Self {
-        Self(index as u128)
+        Self(index)
     }
 }
 
