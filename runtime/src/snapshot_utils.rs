@@ -2955,17 +2955,27 @@ pub fn purge_old_bank_snapshots(
             })
     };
 
+    let mut select_pre = false;
+    let mut select_post = false;
     match type_select {
         Some(BankSnapshotType::Pre) => {
+            select_pre = true;
             do_purge(get_bank_snapshots_pre(&bank_snapshots_dir));
         }
         Some(BankSnapshotType::Post) => {
+            select_post = true;
             do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
         }
         None => {
-            do_purge(get_bank_snapshots_pre(&bank_snapshots_dir));
-            do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
+            select_pre = true;
+            select_post = true;
         }
+    }
+    if select_pre {
+        do_purge(get_bank_snapshots_pre(&bank_snapshots_dir));
+    }
+    if select_post {
+        do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
     }
 }
 
