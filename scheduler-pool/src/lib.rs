@@ -107,7 +107,8 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn schedule_termination(&mut self) {
-        // to cut break circular deps between Scheduler<=>Bank this is subtle but important...
+        // This is subtle but important, to cut break circular deps between Scheduler<=>Bank
+        // regarding Arc<Bank>...
         drop::<Option<SchedulingContext>>(self.1.lock().unwrap().0.take());
     }
 
