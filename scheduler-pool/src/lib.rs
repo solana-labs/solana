@@ -118,6 +118,6 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn replace_scheduler_context(&self, context: SchedulingContext) {
-        *self.1.lock().unwrap() = (context, None);
+        *self.1.lock().unwrap() = (Some(context), None);
     }
 }
