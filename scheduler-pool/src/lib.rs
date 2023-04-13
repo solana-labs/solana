@@ -28,12 +28,12 @@ pub struct SchedulerPool {
 #[derive(Debug)]
 struct Scheduler(
     Arc<SchedulerPool>,
-    Mutex<(SchedulingContext, Option<TimingAndResult>)>,
+    Mutex<(Option<SchedulingContext>, Option<TimingAndResult>)>,
 );
 
 impl Scheduler {
     fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
-        Self(scheduler_pool, Mutex::new((initial_context, None)))
+        Self(scheduler_pool, Mutex::new((Some(initial_context), None)))
     }
 }
 
