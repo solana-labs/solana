@@ -236,7 +236,6 @@ fn bank_forks_from_snapshot(
     let starting_incremental_snapshot_hash =
         incremental_snapshot_archive_info.map(|incremental_snapshot_archive_info| {
             IncrementalSnapshotHash {
-                base: full_snapshot_hash.hash,
                 hash: (
                     incremental_snapshot_archive_info.slot(),
                     *incremental_snapshot_archive_info.hash(),

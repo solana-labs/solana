@@ -47,7 +47,7 @@ impl SnapshotGossipManager {
         if let Some(starting_incremental_snapshot_hash) = starting_snapshot_hashes.incremental {
             self.update_latest_incremental_snapshot_hash(
                 starting_incremental_snapshot_hash.hash,
-                starting_incremental_snapshot_hash.base.0,
+                starting_snapshot_hashes.full.hash.0,
             );
         }
         self.push_latest_snapshot_hashes_to_cluster();
