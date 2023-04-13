@@ -84,7 +84,7 @@ impl InstalledScheduler for Scheduler {
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
         let (pool, (ref context, ref mut timings_and_result)) =
             (&self.0, &mut *self.1.lock().unwrap());
-        let bank = context.bank();
+        let bank = context.as_ref().unwrap().bank();
 
         let batch_with_indexes = TransactionBatchWithIndexes {
             batch: bank.prepare_sanitized_batch_without_locking(transaction.clone()),
