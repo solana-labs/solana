@@ -227,20 +227,16 @@ fn bank_forks_from_snapshot(
         deserialized_bank.set_shrink_paths(shrink_paths);
     }
 
-    let full_snapshot_hash = FullSnapshotHash {
-        hash: (
-            full_snapshot_archive_info.slot(),
-            *full_snapshot_archive_info.hash(),
-        ),
-    };
+    let full_snapshot_hash = FullSnapshotHash((
+        full_snapshot_archive_info.slot(),
+        *full_snapshot_archive_info.hash(),
+    ));
     let starting_incremental_snapshot_hash =
         incremental_snapshot_archive_info.map(|incremental_snapshot_archive_info| {
-            IncrementalSnapshotHash {
-                hash: (
-                    incremental_snapshot_archive_info.slot(),
-                    *incremental_snapshot_archive_info.hash(),
-                ),
-            }
+            IncrementalSnapshotHash((
+                incremental_snapshot_archive_info.slot(),
+                *incremental_snapshot_archive_info.hash(),
+            ))
         });
     let starting_snapshot_hashes = StartingSnapshotHashes {
         full: full_snapshot_hash,

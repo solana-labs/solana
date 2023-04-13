@@ -3449,7 +3449,7 @@ fn main() {
                                 eprintln!("Unable to create incremental snapshot without a base full snapshot");
                                 exit(1);
                             }
-                            let full_snapshot_slot = starting_snapshot_hashes.unwrap().full.hash.0;
+                            let full_snapshot_slot = starting_snapshot_hashes.unwrap().full.0 .0;
                             if bank.slot() <= full_snapshot_slot {
                                 eprintln!(
                                     "Unable to create incremental snapshot: Slot must be greater than full snapshot slot. slot: {}, full snapshot slot: {}",

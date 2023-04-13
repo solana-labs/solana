@@ -20,32 +20,12 @@ pub struct StartingSnapshotHashes {
 /// Used by SnapshotPackagerService and SnapshotGossipManager, this struct adds type safety to
 /// ensure a full snapshot hash is pushed to the right CRDS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FullSnapshotHash {
-    pub hash: (Slot, SnapshotHash),
-}
+pub struct FullSnapshotHash(pub (Slot, SnapshotHash));
 
 /// Used by SnapshotPackagerService and SnapshotGossipManager, this struct adds type safety to
 /// ensure an incremental snapshot hash is pushed to the right CRDS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IncrementalSnapshotHash {
-    pub hash: (Slot, SnapshotHash),
-}
-
-/// FullSnapshotHashes is used by SnapshotPackagerService to collect the snapshot hashes from full
-/// snapshots and then push those hashes to CRDS.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FullSnapshotHashes {
-    pub hashes: Vec<(Slot, SnapshotHash)>,
-}
-
-/// IncrementalSnapshotHashes is used by SnapshotPackagerService to collect the snapshot hashes
-/// from incremental snapshots and then push those hashes to CRDS.  `base` is the (full) snapshot
-/// all the incremental snapshots (`hashes`) are based on.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IncrementalSnapshotHashes {
-    pub base: (Slot, SnapshotHash),
-    pub hashes: Vec<(Slot, SnapshotHash)>,
-}
+pub struct IncrementalSnapshotHash(pub (Slot, SnapshotHash));
 
 /// The hash used for snapshot archives
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
