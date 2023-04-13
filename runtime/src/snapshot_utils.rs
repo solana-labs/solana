@@ -2960,11 +2960,9 @@ pub fn purge_old_bank_snapshots(
     match type_select {
         Some(BankSnapshotType::Pre) => {
             select_pre = true;
-            do_purge(get_bank_snapshots_pre(&bank_snapshots_dir));
         }
         Some(BankSnapshotType::Post) => {
             select_post = true;
-            do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
         }
         None => {
             select_pre = true;
