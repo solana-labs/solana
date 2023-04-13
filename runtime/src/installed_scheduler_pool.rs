@@ -121,11 +121,6 @@ impl SchedulingContext {
             width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
         )
     }
-
-    pub fn into_bank(self) -> Option<Bank> {
-        // X X X: this is racy....
-        Arc::try_unwrap(self.bank).ok()
-    }
 }
 
 // tiny wrapper to ensure to call schedule_termination() via ::drop() inside
