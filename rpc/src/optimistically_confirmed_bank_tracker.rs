@@ -200,16 +200,16 @@ impl OptimisticallyConfirmedBankTracker {
         slot_threshold: Slot,
         bank_notification_subscribers: &Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
     ) {
-        for rooted_bank in bank.clone().parents_inclusive().iter().rev() {
-            if rooted_bank.slot() > slot_threshold {
+        for root_bank in bank.clone().parents_inclusive().iter().rev() {
+            if root_bank.slot() > slot_threshold {
                 debug!(
                     "Doing BankNotification::Root for root_bank {:?}",
-                    rooted_bank.slot()
+                    root_bank.slot()
                 );
 
                 Self::notify_slot_status(
                     bank_notification_subscribers,
-                    BankNotification::Root(rooted_bank.clone()),
+                    BankNotification::Root(root_bank.clone()),
                 );
             }
         }
