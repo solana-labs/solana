@@ -31,10 +31,8 @@ impl RootBankCache {
     }
 
     pub fn root_bank(&mut self) -> Arc<Bank> {
-        let current_root_slot = self.root_slot.get();
-
         match self.cached_root_bank.upgrade() {
-            Some(cached_root_bank) if cached_root_bank.slot() == current_root_slot => {
+            Some(cached_root_bank) if cached_root_bank.slot() == self.root_slot.get() => {
                 cached_root_bank
             }
             _ => {
