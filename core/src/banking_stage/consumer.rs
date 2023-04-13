@@ -441,7 +441,7 @@ impl Consumer {
         self.qos_service.accumulate_actual_execute_time(us);
 
         // reports qos service stats for this batch
-        self.qos_service.report_metrics(bank.clone());
+        self.qos_service.report_metrics(bank.slot());
 
         debug!(
             "bank: {} lock: {}us unlock: {}us txs_len: {}",
