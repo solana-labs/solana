@@ -5553,6 +5553,20 @@ mod tests {
                 slot_deltas,
             )
             .unwrap();
+            // Reserialize the snapshot dir to convert it from PRE to POST, because only the POST type can be used
+            // to construct a bank.
+            bank.accounts()
+                .accounts_db
+                .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new(&[1; 32])));
+            let accounts_hash = &bank.get_accounts_hash().unwrap();
+            assert!(
+                crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+                    bank_snapshots_dir,
+                    bank.slot(),
+                    accounts_hash,
+                    None
+                )
+            );
         }
 
         let account_paths = &bank.rc.accounts.accounts_db.paths;
