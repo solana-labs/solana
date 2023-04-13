@@ -1671,12 +1671,6 @@ pub fn bank_from_snapshot_dir(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromDirTimings)> {
-    // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
-    // files will be extracted from the snapshot hardlink directories into these run/ directories.
-    for path in account_paths {
-        delete_contents_of_path(path);
-    }
-
     let next_append_vec_id = Arc::new(AtomicAppendVecId::new(0));
 
     let (storage, measure_build_storage) = measure!(
@@ -5490,6 +5484,12 @@ mod tests {
         let bank_snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
         let account_paths = &bank.rc.accounts.accounts_db.paths;
 
+        // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
+        // files will be extracted from the snapshot hardlink directories into these run/ directories.
+        for path in account_paths {
+            delete_contents_of_path(path);
+        }
+
         let (bank_constructed, ..) = bank_from_snapshot_dir(
             account_paths,
             &bank_snapshot,
@@ -5570,6 +5570,11 @@ mod tests {
         }
 
         let account_paths = &bank.rc.accounts.accounts_db.paths;
+        // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
+        // files will be extracted from the snapshot hardlink directories into these run/ directories.
+        for path in account_paths {
+            delete_contents_of_path(path);
+        }
 
         let deserialized_bank = bank_from_latest_snapshot_dir(
             bank_snapshots_dir,
