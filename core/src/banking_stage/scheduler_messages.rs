@@ -14,14 +14,12 @@ impl TransactionBatchId {
 }
 
 /// A unique identifier for a transaction.
-/// The lower 64 bits are based on the order the transaction entered banking stage.
-/// The upper 64 bits are the priority of the transaction.
-#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TransactionId(u128);
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct TransactionId(u64);
 
 impl TransactionId {
-    pub fn new(priority: u64, index: u64) -> Self {
-        Self(((priority as u128) << 64) | (index as u128))
+    pub fn new(index: u64) -> Self {
+        Self(index)
     }
 }
 
@@ -52,23 +50,4 @@ pub struct FinishedConsumeWork {
 pub struct FinishedForwardWork {
     pub work: ForwardWork,
     pub successful: bool,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_transaction_id_ordering() {
-        let id1 = TransactionId::new(0, 0);
-        let id2 = TransactionId::new(0, 1);
-        let id3 = TransactionId::new(1, 0);
-        let id4 = TransactionId::new(1, 1);
-        assert!(id1 < id2);
-        assert!(id1 < id3);
-        assert!(id1 < id4);
-        assert!(id2 < id3);
-        assert!(id2 < id4);
-        assert!(id3 < id4);
-    }
 }
