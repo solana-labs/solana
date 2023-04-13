@@ -19,28 +19,30 @@ pub struct SnapshotGossipManager {
 }
 
 impl SnapshotGossipManager {
-    /// Construct a new SnapshotGossipManager with empty snapshot hashes
+    /// Construct a new SnapshotGossipManager and push any
+    /// starting snapshot hashes to the cluster via CRDS
     #[must_use]
-    pub fn new(cluster_info: Arc<ClusterInfo>, max_full_snapshot_hashes: usize) -> Self {
-        SnapshotGossipManager {
+    pub fn new(
+        cluster_info: Arc<ClusterInfo>,
+        max_full_snapshot_hashes: usize,
+        starting_snapshot_hashes: Option<StartingSnapshotHashes>,
+    ) -> Self {
+        let mut this = SnapshotGossipManager {
             cluster_info,
             latest_snapshot_hashes: None,
             max_full_snapshot_hashes,
             legacy_full_snapshot_hashes: FullSnapshotHashes {
                 hashes: Vec::default(),
             },
+        };
+        if let Some(starting_snapshot_hashes) = starting_snapshot_hashes {
+            this.push_starting_snapshot_hashes(starting_snapshot_hashes);
         }
+        this
     }
 
-    /// Push any starting snapshot hashes to the cluster via CRDS
-    pub fn push_starting_snapshot_hashes(
-        &mut self,
-        starting_snapshot_hashes: Option<StartingSnapshotHashes>,
-    ) {
-        let Some(starting_snapshot_hashes) = starting_snapshot_hashes else {
-            return;
-        };
-
+    /// Push starting snapshot hashes to the cluster via CRDS
+    fn push_starting_snapshot_hashes(&mut self, starting_snapshot_hashes: StartingSnapshotHashes) {
         self.update_latest_full_snapshot_hash(starting_snapshot_hashes.full.hash);
         if let Some(starting_incremental_snapshot_hash) = starting_snapshot_hashes.incremental {
             self.update_latest_incremental_snapshot_hash(
