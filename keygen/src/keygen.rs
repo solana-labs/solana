@@ -538,6 +538,13 @@ fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
+                .arg(
+                    Arg::new("confirm_key")
+                        .long("confirm-key")
+                        .takes_value(false)
+                        .hide(true)
+                        .help("Confirm key on device; only relevant if using remote wallet"),
+                ),
         )
         .subcommand(
             Command::new("recover")
