@@ -2936,6 +2936,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
 pub fn purge_old_bank_snapshots(
     bank_snapshots_dir: impl AsRef<Path>,
     num_bank_snapshots_to_retain: usize,
+    type_select: Option<BankSnapshotType>,
 ) {
     let do_purge = |mut bank_snapshots: Vec<BankSnapshotInfo>| {
         bank_snapshots.sort_unstable();
@@ -2954,8 +2955,18 @@ pub fn purge_old_bank_snapshots(
             })
     };
 
-    do_purge(get_bank_snapshots_pre(&bank_snapshots_dir));
-    do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
+    match type_select {
+        Some(BankSnapshotType::Pre) => {
+            do_purge(get_bank_snapshots_pre(&bank_snapshots_dir));
+        }
+        Some(BankSnapshotType::Post) => {
+            do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
+        }
+        None => {
+            do_purge(get_bank_snapshots_pre(&bank_snapshots_dir));
+            do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
+        }
+    }
 }
 
 /// Get the snapshot storages for this bank

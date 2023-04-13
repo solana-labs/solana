@@ -402,6 +402,7 @@ impl SnapshotRequestHandler {
         snapshot_utils::purge_old_bank_snapshots(
             &self.snapshot_config.bank_snapshots_dir,
             MAX_BANK_SNAPSHOTS_TO_RETAIN,
+            None,
         );
         purge_old_snapshots_time.stop();
         total_time.stop();
