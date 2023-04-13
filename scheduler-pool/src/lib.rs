@@ -108,7 +108,7 @@ impl InstalledScheduler for Scheduler {
 
     fn schedule_termination(&mut self) {
         // to cut break circular deps between Scheduler<=>Bank this is subtle but important...
-        drop::<SchedulingContext>(self.1.lock().unwrap().0.take());
+        drop::<Option<SchedulingContext>>(self.1.lock().unwrap().0.take());
     }
 
     fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<TimingAndResult> {
