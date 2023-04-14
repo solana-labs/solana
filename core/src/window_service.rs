@@ -26,7 +26,7 @@ use {
     std::{
         cmp::Reverse,
         collections::{HashMap, HashSet},
-        net::{SocketAddr, UdpSocket},
+        net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -61,6 +61,22 @@ struct WindowServiceMetrics {
 impl WindowServiceMetrics {
     fn report_metrics(&self, metric_name: &'static str) {
         const MAX_NUM_ADDRS: usize = 5;
+        let mut addrs: Vec<_> = self.addrs.iter().collect();
+        let reverse_count = |(_addr, count): &_| Reverse(*count);
+        if addrs.len() > MAX_NUM_ADDRS {
+            addrs.select_nth_unstable_by_key(MAX_NUM_ADDRS, reverse_count);
+            addrs.truncate(MAX_NUM_ADDRS);
+        }
+        addrs.sort_unstable_by_key(reverse_count);
+
+        let mut packed_ips = addrs
+            .iter()
+            .map(|addr| match addr.0.ip() {
+                IpAddr::V4(ip) => u64::from(u32::from_be_bytes(ip.octets())),
+                IpAddr::V6(ip) => u64::from_be_bytes(ip.octets()[8..].try_into().unwrap()),
+            })
+            .take(3);
+
         datapoint_info!(
             metric_name,
             (
@@ -100,15 +116,12 @@ impl WindowServiceMetrics {
                 self.num_errors_cross_beam_recv_timeout,
                 i64
             ),
+            ("num_addrs", self.addrs.len(), i64),
+            ("top_addr_1", packed_ips.next().unwrap_or(0), i64),
+            ("top_addr_2", packed_ips.next().unwrap_or(0), i64),
+            ("top_addr_3", packed_ips.next().unwrap_or(0), i64),
         );
 
-        let mut addrs: Vec<_> = self.addrs.iter().collect();
-        let reverse_count = |(_addr, count): &_| Reverse(*count);
-        if addrs.len() > MAX_NUM_ADDRS {
-            addrs.select_nth_unstable_by_key(MAX_NUM_ADDRS, reverse_count);
-            addrs.truncate(MAX_NUM_ADDRS);
-        }
-        addrs.sort_unstable_by_key(reverse_count);
         info!(
             "num addresses: {}, top packets by source: {:?}",
             self.addrs.len(),
