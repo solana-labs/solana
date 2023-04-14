@@ -11,7 +11,10 @@ edition = { workspace = true }
 
 [dependencies]
 solana-ledger = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-runtime = { workspace = true }
 solana-scheduler = { workspace = true }
+solana-sdk = { workspace = true }
 
 [lib]
 crate-type = ["lib"]

@@ -1074,16 +1074,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cpu-time"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9e393a7668fe1fad3075085b86c781883000b4ede868f43627b34a87c8b7ded"
-dependencies = [
- "libc",
- "winapi 0.3.9",
-]
-
-[[package]]
 name = "cpufeatures"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6573,24 +6563,8 @@ version = "1.16.0"
 name = "solana-scheduler-pool"
 version = "1.16.0"
 dependencies = [
- "assert_matches",
- "cpu-time",
- "crossbeam-channel",
- "log",
- "rand 0.7.3",
- "serde_json",
- "solana-entry",
  "solana-ledger",
- "solana-measure",
- "solana-metrics",
- "solana-poh",
- "solana-program-runtime",
- "solana-runtime",
  "solana-scheduler",
- "solana-sdk 1.16.0",
- "solana-transaction-status",
- "thread-priority",
- "variant_counter",
 ]
 
 [[package]]
@@ -7666,18 +7640,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "thread-priority"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a8a950b52fd40d98ac6ed41c7fa9e8dd62b131f48b74f418e810476b01a7460"
-dependencies = [
- "cfg-if 1.0.0",
- "libc",
- "log",
- "winapi 0.3.9",
-]
-
-[[package]]
 name = "thread-scoped"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8341,26 +8303,6 @@ name = "utf8-width"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cf7d77f457ef8dfa11e4cd5933c5ddb5dc52a94664071951219a97710f0a32b"
-
-[[package]]
-name = "variant_counter"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe25b47ca71aa0a5276396746e13907ac3d9fad6692ccc799c6e1fec4f449d55"
-dependencies = [
- "variant_counter_derived",
-]
-
-[[package]]
-name = "variant_counter_derived"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9a652535ecacd16bdd246845cb3b5cb689f3d663b60d7c80dfa4957b8b4cf0c"
-dependencies = [
- "proc-macro2 1.0.53",
- "quote 1.0.26",
- "syn 1.0.107",
-]
 
 [[package]]
 name = "vcpkg"
