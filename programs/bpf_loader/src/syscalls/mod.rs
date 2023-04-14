@@ -257,6 +257,7 @@ pub fn register_syscalls(
         syscall_registry,
         curve25519_syscall_enabled,
         b"sol_curve_multiscalar_mul",
+        SyscallCurveMultiscalarMultiplication::init,
         SyscallCurveMultiscalarMultiplication::call,
     )?;
 
@@ -1464,18 +1465,27 @@ declare_syscall!(
     //
     // Currently, only curve25519 Edwards and Ristretto representations are supported
     SyscallCurveMultiscalarMultiplication,
-    fn inner_call(
-        invoke_context: &mut InvokeContext,
+    fn call(
+        &mut self,
         curve_id: u64,
         scalars_addr: u64,
         points_addr: u64,
         points_len: u64,
         result_point_addr: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
         use solana_zk_token_sdk::curve25519::{
             curve_syscall_traits::*, edwards, ristretto, scalar,
         };
+
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
         match curve_id {
             CURVE25519_EDWARDS => {
                 let cost = invoke_context
@@ -1487,33 +1497,41 @@ declare_syscall!(
                             .curve25519_edwards_msm_incremental_cost
                             .saturating_mul(points_len.saturating_sub(1)),
                     );
-                invoke_context.get_compute_meter().consume(cost)?;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-                let scalars = translate_slice::<scalar::PodScalar>(
-                    memory_mapping,
-                    scalars_addr,
-                    points_len,
-                    invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
-                )?;
+                let scalars = question_mark!(
+                    translate_slice::<scalar::PodScalar>(
+                        memory_mapping,
+                        scalars_addr,
+                        points_len,
+                        invoke_context.get_check_aligned(),
+                        invoke_context.get_check_size(),
+                    ),
+                    result
+                );
 
-                let points = translate_slice::<edwards::PodEdwardsPoint>(
-                    memory_mapping,
-                    points_addr,
-                    points_len,
-                    invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
-                )?;
+                let points = question_mark!(
+                    translate_slice::<edwards::PodEdwardsPoint>(
+                        memory_mapping,
+                        points_addr,
+                        points_len,
+                        invoke_context.get_check_aligned(),
+                        invoke_context.get_check_size(),
+                    ),
+                    result
+                );
 
                 if let Some(result_point) = edwards::multiscalar_multiply_edwards(scalars, points) {
-                    *translate_type_mut::<edwards::PodEdwardsPoint>(
-                        memory_mapping,
-                        result_point_addr,
-                        invoke_context.get_check_aligned(),
-                    )? = result_point;
-                    Ok(0)
+                    *question_mark!(
+                        translate_type_mut::<edwards::PodEdwardsPoint>(
+                            memory_mapping,
+                            result_point_addr,
+                            invoke_context.get_check_aligned(),
+                        ),
+                        result
+                    ) = result_point;
                 } else {
-                    Ok(1)
+                    *result = Ok(1);
                 }
             }
 
@@ -1527,39 +1545,49 @@ declare_syscall!(
                             .curve25519_ristretto_msm_incremental_cost
                             .saturating_mul(points_len.saturating_sub(1)),
                     );
-                invoke_context.get_compute_meter().consume(cost)?;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-                let scalars = translate_slice::<scalar::PodScalar>(
-                    memory_mapping,
-                    scalars_addr,
-                    points_len,
-                    invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
-                )?;
+                let scalars = question_mark!(
+                    translate_slice::<scalar::PodScalar>(
+                        memory_mapping,
+                        scalars_addr,
+                        points_len,
+                        invoke_context.get_check_aligned(),
+                        invoke_context.get_check_size(),
+                    ),
+                    result
+                );
 
-                let points = translate_slice::<ristretto::PodRistrettoPoint>(
-                    memory_mapping,
-                    points_addr,
-                    points_len,
-                    invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
-                )?;
+                let points = question_mark!(
+                    translate_slice::<ristretto::PodRistrettoPoint>(
+                        memory_mapping,
+                        points_addr,
+                        points_len,
+                        invoke_context.get_check_aligned(),
+                        invoke_context.get_check_size(),
+                    ),
+                    result
+                );
 
                 if let Some(result_point) =
                     ristretto::multiscalar_multiply_ristretto(scalars, points)
                 {
-                    *translate_type_mut::<ristretto::PodRistrettoPoint>(
-                        memory_mapping,
-                        result_point_addr,
-                        invoke_context.get_check_aligned(),
-                    )? = result_point;
-                    Ok(0)
+                    *question_mark!(
+                        translate_type_mut::<ristretto::PodRistrettoPoint>(
+                            memory_mapping,
+                            result_point_addr,
+                            invoke_context.get_check_aligned(),
+                        ),
+                        result
+                    ) = result_point;
                 } else {
-                    Ok(1)
+                    *result = Ok(1);
                 }
             }
 
-            _ => Ok(1),
+            _ => {
+                *result = Ok(1);
+            }
         }
     }
 );
@@ -3637,7 +3665,7 @@ mod tests {
         let result_point: [u8; 32] = [0; 32];
         let result_point_va = 0x400000000;
 
-        let mut memory_mapping = MemoryMapping::new(
+        let mut memory_mapping = MemoryMapping::new::<UserError>(
             vec![
                 MemoryRegion {
                     host_addr: scalars.as_ptr() as *const _ as u64,
@@ -3690,9 +3718,12 @@ mod tests {
                         .curve25519_ristretto_msm_incremental_cost,
             );
 
-        let mut result = ProgramResult::Ok(0);
-        SyscallCurveMultiscalarMultiplication::call(
-            &mut invoke_context,
+        let mut syscall = SyscallCurveMultiscalarMultiplication {
+            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+        };
+
+        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        syscall.call(
             CURVE25519_EDWARDS,
             scalars_va,
             edwards_points_va,
@@ -3709,9 +3740,8 @@ mod tests {
         ];
         assert_eq!(expected_product, result_point);
 
-        let mut result = ProgramResult::Ok(0);
-        SyscallCurveMultiscalarMultiplication::call(
-            &mut invoke_context,
+        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        syscall.call(
             CURVE25519_RISTRETTO,
             scalars_va,
             ristretto_points_va,
