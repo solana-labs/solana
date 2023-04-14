@@ -33,9 +33,9 @@ pub enum QosMetrics {
 
 // QosService is local to each banking thread, each instance of QosService provides services to
 // one banking thread.
-// It hosts a private thread for async metrics reporting, tagged with banking thredas ID. Banking
-// threda calls `report_metrics(&bank)` at end of `process_and_record_tramsaction()`, or any time
-// it wants, QosService sends `&bank` to reporting thread via channel, signalling stats to be
+// It hosts a private thread for async metrics reporting, tagged with banking threads ID. Banking
+// thread calls `report_metrics(slot)` at end of `process_and_record_tramsaction()`, or any time
+// it wants, QosService sends `slot` to reporting thread via channel, signalling stats to be
 // reported if new bank slot has changed.
 //
 pub struct QosService {
