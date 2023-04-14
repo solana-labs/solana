@@ -79,7 +79,7 @@ use {
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
-        vote_account::{VoteAccount, VoteAccountsHashMap},
+        vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
@@ -1105,6 +1105,12 @@ struct LoadVoteAndStakeAccountsResult {
 
 type VoteRewards = DashMap<Pubkey, (AccountSharedData, u8, u64, bool)>;
 type StakeRewards = Vec<StakeReward>;
+
+struct EpochRewardCalculatePramInfo<'a> {
+    stake_history: StakeHistory,
+    stake_delegations: Vec<(&'a Pubkey, &'a StakeAccount<Delegation>)>,
+    cached_vote_accounts: &'a VoteAccounts,
+}
 
 #[derive(Debug, Default)]
 pub struct NewBankOptions {
@@ -2809,6 +2815,23 @@ impl Bank {
         }
     }
 
+    fn get_epoch_reward_calculate_param_info<'a>(
+        &self,
+        stakes: &'a Stakes<StakeAccount<Delegation>>,
+    ) -> EpochRewardCalculatePramInfo<'a> {
+        let stake_history = self.stakes_cache.stakes().history().clone();
+
+        let stake_delegations = self.filter_stake_delegations(&stakes);
+
+        let cached_vote_accounts = stakes.vote_accounts();
+
+        EpochRewardCalculatePramInfo {
+            stake_history: stake_history,
+            stake_delegations,
+            cached_vote_accounts: cached_vote_accounts,
+        }
+    }
+
     /// Load, calculate and payout epoch rewards for stake and vote accounts (no join of vote/stake accounts)
     fn pay_validator_rewards_with_thread_pool_no_join(
         &mut self,
@@ -2819,10 +2842,15 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) {
-        let point_value = self.calculate_reward_points2(rewards, thread_pool, metrics);
+        let stakes = self.stakes_cache.stakes();
+        let reward_calculate_param = self.get_epoch_reward_calculate_param_info(&stakes);
+
+        let point_value =
+            self.calculate_reward_points2(&reward_calculate_param, rewards, thread_pool, metrics);
 
         if let Some(point_value) = point_value {
             let (vote_account_rewards, stake_rewards) = self.redeem_rewards2(
+                &reward_calculate_param,
                 rewarded_epoch,
                 point_value,
                 credits_auto_rewind,
@@ -2923,17 +2951,19 @@ impl Bank {
         vote_with_stake_delegations_map
     }
 
-    fn calculate_reward_points2(
+    fn calculate_reward_points2<'a>(
         &self,
+        reward_calculate_params: &EpochRewardCalculatePramInfo<'a>,
         rewards: u64,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) -> Option<PointValue> {
-        let stake_history = self.stakes_cache.stakes().history().clone();
-        let stakes = self.stakes_cache.stakes();
-        let stake_delegations = self.filter_stake_delegations(&stakes);
+        let EpochRewardCalculatePramInfo {
+            stake_history,
+            stake_delegations,
+            cached_vote_accounts,
+        } = reward_calculate_params;
 
-        let cached_vote_accounts = stakes.vote_accounts();
         let solana_vote_program: Pubkey = solana_vote_program::id();
 
         let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
@@ -3022,8 +3052,9 @@ impl Bank {
         (points > 0).then_some(PointValue { rewards, points })
     }
 
-    fn redeem_rewards2(
+    fn redeem_rewards2<'a>(
         &self,
+        reward_calculate_params: &EpochRewardCalculatePramInfo<'a>,
         rewarded_epoch: Epoch,
         point_value: PointValue,
         credits_auto_rewind: bool,
@@ -3031,12 +3062,12 @@ impl Bank {
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
     ) -> (VoteRewards, StakeRewards) {
-        let stake_history = self.stakes_cache.stakes().history().clone();
+        let EpochRewardCalculatePramInfo {
+            stake_history,
+            stake_delegations,
+            cached_vote_accounts,
+        } = reward_calculate_params;
 
-        let stakes = self.stakes_cache.stakes();
-        let stake_delegations = self.filter_stake_delegations(&stakes);
-
-        let cached_vote_accounts = stakes.vote_accounts();
         let solana_vote_program: Pubkey = solana_vote_program::id();
 
         let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
@@ -3266,13 +3297,6 @@ impl Bank {
             .store_vote_accounts_us
             .fetch_add(measure.as_us(), Relaxed);
         vote_rewards
-    }
-
-    fn update_reward_history2(&self, new_rewards: &mut Vec<(Pubkey, RewardInfo)>) {
-        let additional_reserve = new_rewards.len();
-        let mut rewards = self.rewards.write().unwrap();
-        rewards.reserve(additional_reserve);
-        rewards.append(new_rewards);
     }
 
     fn update_reward_history(
