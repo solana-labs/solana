@@ -491,7 +491,8 @@ pub fn parse_create_address_with_seed(
 pub fn parse_find_program_derived_address(
     matches: &ArgMatches<'_>,
 ) -> Result<CliCommandInfo, CliError> {
-    let program_id = resolve_derived_address_program_id(matches, "program_id").unwrap();
+    let program_id = resolve_derived_address_program_id(matches, "program_id")
+        .ok_or_else(|| CliError::BadParameter("PROGRAM_ID".to_string()))?;
     let seeds = matches
         .values_of("seeds")
         .map(|seeds| {
