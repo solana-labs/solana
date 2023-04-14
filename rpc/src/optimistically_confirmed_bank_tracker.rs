@@ -561,20 +561,11 @@ mod tests {
     }
 
     // Receive the Root notifications from the channel, if no item received within 100 ms, break and return all
-    // of the interested.
+    // of the received.
     fn get_root_notifications(receiver: &Receiver<BankNotification>) -> Vec<BankNotification> {
         let mut notifications = Vec::new();
-        loop {
-            match receiver.recv_timeout(Duration::from_millis(100)) {
-                Ok(notification) => {
-                    if matches!(notification, BankNotification::Root(_)) {
-                        notifications.push(notification);
-                    }
-                }
-                Err(_) => {
-                    break;
-                }
-            }
+        while let Ok(notification) = receiver.recv_timeout(Duration::from_millis(100)) {
+            notifications.push(notification);
         }
         notifications
     }
