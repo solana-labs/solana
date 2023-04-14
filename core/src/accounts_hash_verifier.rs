@@ -84,8 +84,9 @@ impl AccountsHashVerifier {
                         continue;
                     };
                     info!("handling accounts package: {accounts_package:?}");
-                    let snapshot_storages = accounts_package.snapshot_storages.clone();
                     let enqueued_time = accounts_package.enqueued.elapsed();
+
+                    let snapshot_storages = accounts_package.snapshot_storages.clone();
 
                     let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
