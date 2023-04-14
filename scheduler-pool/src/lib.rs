@@ -24,6 +24,7 @@ use {
     solana_sdk::transaction::SanitizedTransaction,
     std::sync::{Arc, Mutex, Weak},
 };
+use solana_scheduler::WithSchedulingMode;
 
 // SchedulerPool must be accessed via dyn because of its internal fields, whose type isn't
 // available at solana-runtime...
