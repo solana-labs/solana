@@ -24,7 +24,7 @@ use {
     },
     solana_cli_output::{
         display::{build_balance_message, BuildBalanceMessageConfig},
-        return_signers_with_config, CliAccount, CliBalance, CliFindProgramAddress,
+        return_signers_with_config, CliAccount, CliBalance, CliFindProgramDerivedAddress,
         CliSignatureVerificationStatus, CliTransaction, CliTransactionConfirmation, OutputFormat,
         ReturnSignersConfig,
     },
@@ -182,7 +182,7 @@ impl WalletSubCommands for App<'_, '_> {
                 ),
         )
             .subcommand(
-                SubCommand::with_name("find-program-address")
+                SubCommand::with_name("find-program-derived-address")
                     .about("Generate a program derived account address with a seed")
                     .arg(
                         Arg::with_name("program_id")
@@ -488,7 +488,9 @@ pub fn parse_create_address_with_seed(
     })
 }
 
-pub fn parse_find_program_address(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_find_program_derived_address(
+    matches: &ArgMatches<'_>,
+) -> Result<CliCommandInfo, CliError> {
     let program_id = resolve_derived_address_program_id(matches, "program_id").unwrap();
     let seeds = matches
         .values_of("seeds")
@@ -518,7 +520,7 @@ pub fn parse_find_program_address(matches: &ArgMatches<'_>) -> Result<CliCommand
                         "i64be" => i64::from_str(value).unwrap().to_be_bytes().to_vec(),
                         "i128be" => i128::from_str(value).unwrap().to_be_bytes().to_vec(),
                         // Must be unreachable due to arg validator
-                        _ => unreachable!("parse_find_program_address: {prefix}:{value}"),
+                        _ => unreachable!("parse_find_program_derived_address: {prefix}:{value}"),
                     }
                 })
                 .collect::<Vec<_>>()
@@ -526,7 +528,7 @@ pub fn parse_find_program_address(matches: &ArgMatches<'_>) -> Result<CliCommand
         .unwrap_or_default();
 
     Ok(CliCommandInfo {
-        command: CliCommand::FindProgramAddress { seeds, program_id },
+        command: CliCommand::FindProgramDerivedAddress { seeds, program_id },
         signers: vec![],
     })
 }
@@ -833,7 +835,7 @@ pub fn process_create_address_with_seed(
     Ok(address.to_string())
 }
 
-pub fn process_find_program_address(
+pub fn process_find_program_derived_address(
     config: &CliConfig,
     seeds: &Vec<Vec<u8>>,
     program_id: &Pubkey,
@@ -843,7 +845,7 @@ pub fn process_find_program_address(
     }
     let seeds_slice = seeds.iter().map(|x| &x[..]).collect::<Vec<_>>();
     let (address, bump_seed) = Pubkey::find_program_address(&seeds_slice[..], program_id);
-    let result = CliFindProgramAddress {
+    let result = CliFindProgramDerivedAddress {
         address: address.to_string(),
         bump_seed,
     };

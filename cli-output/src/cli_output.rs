@@ -2988,15 +2988,15 @@ impl fmt::Display for CliBalance {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CliFindProgramAddress {
+pub struct CliFindProgramDerivedAddress {
     pub address: String,
     pub bump_seed: u8,
 }
 
-impl QuietDisplay for CliFindProgramAddress {}
-impl VerboseDisplay for CliFindProgramAddress {}
+impl QuietDisplay for CliFindProgramDerivedAddress {}
+impl VerboseDisplay for CliFindProgramDerivedAddress {}
 
-impl fmt::Display for CliFindProgramAddress {
+impl fmt::Display for CliFindProgramDerivedAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.address)?;
         Ok(())
