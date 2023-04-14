@@ -104,7 +104,7 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
-        let (ref context, ref mut timings_and_result) = &mut *self.1.lock().expect("not poisoned");
+        let (ref context, ref mut timings_and_result) = &mut *self.context_and_result_with_timing.lock().expect("not poisoned");
         let context = context.as_ref().expect("active context");
 
         let batch = context
