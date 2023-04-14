@@ -7,13 +7,13 @@ use {
         bank::Bank,
         bank_forks::{BankForks, ReadOnlyAtomicSlot},
     },
-    std::sync::{Arc, RwLock},
+    std::sync::{Arc, RwLock, Weak},
 };
 
 /// Cached root bank that only loads from bank forks if the root has been updated.
 pub struct RootBankCache {
     bank_forks: Arc<RwLock<BankForks>>,
-    cached_root_bank: Arc<Bank>,
+    cached_root_bank: Weak<Bank>,
     root_slot: ReadOnlyAtomicSlot,
 }
 
@@ -21,7 +21,7 @@ impl RootBankCache {
     pub fn new(bank_forks: Arc<RwLock<BankForks>>) -> Self {
         let (cached_root_bank, root_slot) = {
             let lock = bank_forks.read().unwrap();
-            (lock.root_bank(), lock.get_atomic_root())
+            (Arc::downgrade(&lock.root_bank()), lock.get_atomic_root())
         };
         Self {
             bank_forks,
@@ -31,12 +31,16 @@ impl RootBankCache {
     }
 
     pub fn root_bank(&mut self) -> Arc<Bank> {
-        let current_root_slot = self.root_slot.get();
-        if self.cached_root_bank.slot() != current_root_slot {
-            let lock = self.bank_forks.read().unwrap();
-            self.cached_root_bank = lock.root_bank();
+        match self.cached_root_bank.upgrade() {
+            Some(cached_root_bank) if cached_root_bank.slot() == self.root_slot.get() => {
+                cached_root_bank
+            }
+            _ => {
+                let root_bank = self.bank_forks.read().unwrap().root_bank();
+                self.cached_root_bank = Arc::downgrade(&root_bank);
+                root_bank
+            }
         }
-        self.cached_root_bank.clone()
     }
 }
 
@@ -68,7 +72,8 @@ mod tests {
             bank_forks.write().unwrap().insert(child_bank);
 
             // cached slot is still 0 since we have not set root
-            assert_eq!(bank.slot(), root_bank_cache.cached_root_bank.slot());
+            let cached_root_bank = root_bank_cache.cached_root_bank.upgrade().unwrap();
+            assert_eq!(bank.slot(), cached_root_bank.slot());
         }
         {
             bank_forks
@@ -76,8 +81,17 @@ mod tests {
                 .unwrap()
                 .set_root(1, &AbsRequestSender::default(), None);
             let bank = bank_forks.read().unwrap().root_bank();
-            assert!(bank.slot() != root_bank_cache.cached_root_bank.slot());
-            assert!(bank != root_bank_cache.cached_root_bank);
+
+            // cached slot and bank are not updated until we call `root_bank()`
+            let cached_root_bank = root_bank_cache.cached_root_bank.upgrade().unwrap();
+            assert!(bank.slot() != cached_root_bank.slot());
+            assert!(bank != cached_root_bank);
+            assert_eq!(bank, root_bank_cache.root_bank());
+
+            // cached slot and bank are updated
+            let cached_root_bank = root_bank_cache.cached_root_bank.upgrade().unwrap();
+            assert_eq!(bank.slot(), cached_root_bank.slot());
+            assert_eq!(bank, cached_root_bank);
             assert_eq!(bank, root_bank_cache.root_bank());
         }
     }
