@@ -25,18 +25,6 @@ pub struct SchedulerPool {
     weak: Weak<SchedulerPool>,
 }
 
-#[derive(Debug)]
-struct Scheduler(
-    Arc<SchedulerPool>,
-    Mutex<(Option<SchedulingContext>, Option<TimingAndResult>)>,
-);
-
-impl Scheduler {
-    fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
-        Self(scheduler_pool, Mutex::new((Some(initial_context), None)))
-    }
-}
-
 impl SchedulerPool {
     pub fn new_dyn(
         log_messages_bytes_limit: Option<usize>,
@@ -69,6 +57,18 @@ impl InstalledSchedulerPool for SchedulerPool {
 
     fn return_to_pool(&self, scheduler: SchedulerBox) {
         self.schedulers.lock().unwrap().push(scheduler);
+    }
+}
+
+#[derive(Debug)]
+struct Scheduler(
+    Arc<SchedulerPool>,
+    Mutex<(Option<SchedulingContext>, Option<TimingAndResult>)>,
+);
+
+impl Scheduler {
+    fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
+        Self(scheduler_pool, Mutex::new((Some(initial_context), None)))
     }
 }
 
