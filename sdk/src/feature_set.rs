@@ -650,6 +650,10 @@ pub mod stop_truncating_strings_in_syscalls {
     solana_sdk::declare_id!("16FMCmgLzCNNz6eTwGanbyN2ZxvTBSLuQ6DZhgeMshg");
 }
 
+pub mod clean_up_delegation_errors {
+    solana_sdk::declare_id!("Bj2jmUsM2iRhfdLLDSTkhM5UQRQvQHm57HSmPibPtEyu");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -807,6 +811,7 @@ lazy_static! {
         (native_programs_consume_cu::id(), "Native program should consume compute units #30620"),
         (simplify_writable_program_account_check::id(), "Simplify checks performed for writable upgradeable program accounts #30559"),
         (stop_truncating_strings_in_syscalls::id(), "Stop truncating strings in syscalls #31029"),
+        (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
