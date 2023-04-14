@@ -138,7 +138,7 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn schedule_termination(&mut self) {
-        drop::<Option<SchedulingContext>>(self.1.lock().expect("not poisoned").0.take());
+        drop::<Option<SchedulingContext>>(self.context_and_result_with_timing.lock().expect("not poisoned").0.take());
     }
 
     fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<ResultWithTiming> {
