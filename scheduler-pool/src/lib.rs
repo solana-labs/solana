@@ -141,12 +141,14 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<TimingAndResult> {
-        let should_block = match wait_source {
+        let should_block_current_thread = match wait_source {
             WaitSource::InsideBlock => false,
             WaitSource::AcrossBlock | WaitSource::FromBankDrop | WaitSource::FromSchedulerDrop => true,
         };
 
-        if should_block {
+        if should_block_current_thread {
+            // current simplest form of this trait impl doesn't block the current thread
+            // materially with the following single mutex lock....
             self.1.lock().expect("not poisoned").1.take()
         } else {
             None
