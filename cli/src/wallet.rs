@@ -200,7 +200,7 @@ impl WalletSubCommands for App<'_, '_> {
                             .min_values(0)
                             .value_name("SEED")
                             .takes_value(true)
-                            .validator(is_complex_seed)
+                            .validator(is_structured_seed)
                             .help(
                                 "The seeds. \n\
                                 Each one must match the pattern PREFIX:VALUE. \n\

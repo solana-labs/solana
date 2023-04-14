@@ -334,7 +334,7 @@ where
         .map(|_| ())
 }
 
-pub fn is_complex_seed<T>(value: T) -> Result<(), String>
+pub fn is_structured_seed<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
 {
