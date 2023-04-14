@@ -10,9 +10,8 @@ documentation = "https://docs.rs/solana-clap-utils"
 edition = "2021"
 
 [dependencies]
-<<<<<<< HEAD
 chrono = "0.4"
-clap = { version = "3.1.5", features = ["cargo"] }
+clap = { version = "3.2.23", features = ["cargo"] }
 rpassword = "6.0"
 solana-perf = { path = "../perf", version = "=1.14.18" }
 solana-remote-wallet = { path = "../remote-wallet", version = "=1.14.18", default-features = false }
@@ -21,18 +20,6 @@ thiserror = "1.0.31"
 tiny-bip39 = "0.8.2"
 uriparse = "0.6.4"
 url = "2.2.2"
-=======
-chrono = { workspace = true, features = ["default"] }
-clap = { version = "3.2.23", features = ["cargo"] }
-rpassword = { workspace = true }
-solana-perf = { workspace = true }
-solana-remote-wallet = { workspace = true }
-solana-sdk = { workspace = true }
-thiserror = { workspace = true }
-tiny-bip39 = { workspace = true }
-uriparse = { workspace = true }
-url = { workspace = true }
->>>>>>> 2147f0d05 (Fix keygen usb panic (debug only) (#31194))
 
 [dev-dependencies]
 tempfile = "3.3.0"

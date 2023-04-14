@@ -4724,15 +4724,8 @@ name = "solana-cargo-build-bpf"
 version = "1.14.18"
 dependencies = [
  "cargo_metadata",
-<<<<<<< HEAD
- "clap 3.1.8",
- "solana-sdk 1.14.18",
-=======
  "clap 3.2.23",
- "log",
- "solana-logger 1.16.0",
- "solana-sdk 1.16.0",
->>>>>>> 2147f0d05 (Fix keygen usb panic (debug only) (#31194))
+ "solana-sdk 1.14.18",
 ]
 
 [[package]]
@@ -4764,13 +4757,7 @@ name = "solana-cargo-test-sbf"
 version = "1.14.18"
 dependencies = [
  "cargo_metadata",
-<<<<<<< HEAD
- "clap 3.1.8",
-=======
  "clap 3.2.23",
- "log",
- "solana-logger 1.16.0",
->>>>>>> 2147f0d05 (Fix keygen usb panic (debug only) (#31194))
 ]
 
 [[package]]
