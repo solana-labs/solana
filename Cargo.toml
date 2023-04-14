@@ -195,7 +195,6 @@ generic-array = { version = "0.14.7", default-features = false }
 gethostname = "0.2.3"
 getrandom = "0.1.14"
 goauth = "0.13.1"
-hashbrown = "0.12"
 hex = "0.4.3"
 hidapi = { version = "2.2.0", default-features = false }
 histogram = "0.6.9"
