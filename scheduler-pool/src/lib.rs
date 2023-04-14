@@ -89,8 +89,8 @@ struct Scheduler {
 }
 
 impl Scheduler {
-    fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
-        Self(scheduler_pool, Mutex::new((Some(initial_context), None)))
+    fn spawn(pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
+        Self{pool, context_and_result_with_timing: Mutex::new((Some(initial_context), None))}
     }
 }
 
