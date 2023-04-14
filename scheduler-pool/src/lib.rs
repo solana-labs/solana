@@ -25,6 +25,7 @@ use {
     std::sync::{Arc, Mutex, Weak},
 };
 use solana_scheduler::WithSchedulingMode;
+use solana_scheduler::SchedulingMode;
 
 // SchedulerPool must be accessed via dyn because of its internal fields, whose type isn't
 // available at solana-runtime...
