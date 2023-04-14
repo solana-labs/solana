@@ -142,8 +142,13 @@ impl InstalledScheduler for Scheduler {
 
     fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<TimingAndResult> {
         let should_block_current_thread = match wait_source {
-            WaitSource::InsideBlock => false,
-            WaitSource::AcrossBlock | WaitSource::FromBankDrop | WaitSource::FromSchedulerDrop => true,
+            WaitSource::InsideBlock => {
+                // rustfmt...
+                false
+            }
+            WaitSource::AcrossBlock | WaitSource::FromBankDrop | WaitSource::FromSchedulerDrop => {
+                true
+            }
         };
 
         if should_block_current_thread {
