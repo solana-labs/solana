@@ -19,14 +19,11 @@ usage() {
   exit 1
 }
 
-if [[ -z $1 ]]; then # default behavior
-  $solana_bench_tps \
-    --entrypoint 127.0.0.1:8001 \
-    --faucet 127.0.0.1:9900 \
-    --duration 90 \
-    --tx_count 50000 \
-    --thread-batch-sleep-ms 0 \
+args=("$@")
+default_arg --entrypoint "127.0.0.1:8001"
+default_arg --faucet "127.0.0.1:9900"
+default_arg --duration 90
+default_arg --tx_count 50000
+default_arg --thread-batch-sleep-ms 0
 
-else
-  $solana_bench_tps "$@"
-fi
+$solana_bench_tps "${args[@]}"
