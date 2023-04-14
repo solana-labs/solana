@@ -86,7 +86,7 @@ impl InstalledSchedulerPool for SchedulerPool {
 struct Scheduler {
     pool: Arc<SchedulerPool>,
     context_and_result_with_timing: Mutex<(Option<SchedulingContext>, Option<ResultWithTiming>)>,
-};
+}
 
 impl Scheduler {
     fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
@@ -163,6 +163,6 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn replace_scheduler_context(&self, context: SchedulingContext) {
-        *self.1.lock().expect("not poisoned") = (Some(context), None);
+        *self.timings_and_result.lock().expect("not poisoned") = (Some(context), None);
     }
 }
