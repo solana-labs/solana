@@ -64,6 +64,7 @@ impl InstalledSchedulerPool for SchedulerPool {
 
 // Currently, simplest possible implementation (i.e. single-threaded)
 // this will be replaced with more proper implementation...
+// not usable at all, especially for mainnnet-beta
 // for that reason, tuple structs are used internally.
 #[derive(Debug)]
 struct Scheduler(
