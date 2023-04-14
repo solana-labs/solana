@@ -53,7 +53,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     // prevent Bank::drop()'s last resort scheduling termination attempt indefinitely
     fn schedule_termination(&mut self);
 
-    fn wait_for_termination(&mut self, source: &WaitSource) -> Option<TimingAndResult>;
+    fn wait_for_termination(&mut self, source: &WaitSource) -> Option<ResultWithTiming>;
 
     fn replace_scheduler_context(&self, context: SchedulingContext);
 }
@@ -63,7 +63,7 @@ pub(crate) type InstalledSchedulerPoolArc = Option<SchedulerPoolArc>;
 
 pub type SchedulerId = u64;
 
-pub type TimingAndResult = (ExecuteTimings, Result<()>);
+pub type ResultWithTiming = (ExecuteTimings, Result<()>);
 
 #[derive(Debug)]
 pub enum WaitSource {
@@ -76,7 +76,7 @@ pub enum WaitSource {
 }
 
 pub type SchedulerBox = Box<dyn InstalledScheduler>;
-// somewhat arbitrarily new type just to pacify Bank's frozen_abi...
+// somewhat arbitrary new type just to pacify Bank's frozen_abi...
 #[derive(Debug, Default)]
 pub(crate) struct InstalledSchedulerBox(Option<SchedulerBox>);
 

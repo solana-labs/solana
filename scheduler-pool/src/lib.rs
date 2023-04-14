@@ -4,7 +4,7 @@
 //! `InstalledSchedulerPool`) to provide concrete transaction scheduling implementation (including
 //! executing txes and committing tx results).
 //!
-//! At highest level, this crate inputs SanitizedTransaction via its `schedule_execution()` and
+//! At highest level, this crate takes `SanitizedTransaction`s via its `schedule_execution()` and
 //! commits any side-effects (i.e. on-chain state changes) into `Bank`s via `solana-ledger`'s
 //! helper fun called `execute_batch()`.
 
@@ -16,7 +16,7 @@ use {
     solana_runtime::{
         installed_scheduler_pool::{
             InstalledScheduler, InstalledSchedulerPool, SchedulerBox, SchedulerId,
-            SchedulerPoolArc, SchedulingContext, TimingAndResult, WaitSource,
+            SchedulerPoolArc, SchedulingContext, ResultWithTiming, WaitSource,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
@@ -26,8 +26,8 @@ use {
     std::sync::{Arc, Mutex, Weak},
 };
 
-// SchedulerPool must be accessed via dyn because of its internal fields, whose type isn't
-// available at solana-runtime...
+// SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
+// types aren't available there...
 #[derive(Debug)]
 pub struct SchedulerPool {
     schedulers: Mutex<Vec<SchedulerBox>>,
@@ -82,12 +82,11 @@ impl InstalledSchedulerPool for SchedulerPool {
 // Currently, simplest possible implementation (i.e. single-threaded)
 // this will be replaced with more proper implementation...
 // not usable at all, especially for mainnnet-beta
-// for that reason, tuple structs are used internally.
 #[derive(Debug)]
-struct Scheduler(
-    Arc<SchedulerPool>,
-    Mutex<(Option<SchedulingContext>, Option<TimingAndResult>)>,
-);
+struct Scheduler {
+    pool: Arc<SchedulerPool>,
+    context_and_result_with_timing: Mutex<(Option<SchedulingContext>, Option<ResultWithTiming>)>,
+};
 
 impl Scheduler {
     fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
@@ -143,7 +142,7 @@ impl InstalledScheduler for Scheduler {
         drop::<Option<SchedulingContext>>(self.1.lock().expect("not poisoned").0.take());
     }
 
-    fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<TimingAndResult> {
+    fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<ResultWithTiming> {
         let should_block_current_thread = match wait_source {
             WaitSource::InsideBlock => {
                 // rustfmt...

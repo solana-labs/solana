@@ -3645,8 +3645,9 @@ impl Bank {
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
-        // this is needed until we activate fix_recent_blockhashes because those intra-slot
-        // updates forces synchronization for consistent tx check_age handling.
+        // This is needed until we activate fix_recent_blockhashes because intra-slot
+        // recent_blockhash updates necessitates synchronization for consistent tx check_age
+        // handling.
         self.wait_for_reusable_scheduler();
         // Only acquire the write lock for the blockhash queue on block boundaries because
         // readers can starve this write lock acquisition and ticks would be slowed down too
