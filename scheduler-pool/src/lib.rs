@@ -162,6 +162,6 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn replace_scheduler_context(&self, context: SchedulingContext) {
-        *self.timings_and_result.lock().expect("not poisoned") = (Some(context), None);
+        *self.context_and_timings_and_result.lock().expect("not poisoned") = (Some(context), None);
     }
 }
