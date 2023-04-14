@@ -262,7 +262,7 @@ impl Bank {
 
     pub fn wait_for_completed_scheduler(&self) -> (ExecuteTimings, Result<()>) {
         let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::AcrossBlock);
-        maybe_timings_and_result.unwrap_or((ExecuteTimings::default(), Ok(())))
+        maybe_timings_and_result.unwrap_or((Ok(()), ExecuteTimings::default()))
     }
 
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
