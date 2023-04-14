@@ -118,6 +118,7 @@ impl InstalledScheduler for Scheduler {
             timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
         let fail_fast = match context.mode() {
+            // for upcoming BlockGeneration variant this should be false basically.
             SchedulingMode::BlockVerification => true,
         };
 
