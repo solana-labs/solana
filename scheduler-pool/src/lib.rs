@@ -115,7 +115,7 @@ impl InstalledScheduler for Scheduler {
         let (timings, result) =
             timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
-        let fail_fast = context.mode() {
+        let fail_fast = match context.mode() {
             Veriication => true,
         };
 
