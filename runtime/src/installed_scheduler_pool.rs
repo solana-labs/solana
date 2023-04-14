@@ -267,7 +267,7 @@ impl Bank {
 
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
         let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::FromBankDrop);
-        maybe_timings_and_result.map(|(_timings, result)| result)
+        maybe_timings_and_result.map(|(result, _timings)| result)
     }
 
     pub fn wait_for_completed_scheduler_from_scheduler_drop(self) {
