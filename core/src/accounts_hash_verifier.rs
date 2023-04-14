@@ -100,6 +100,20 @@ impl AccountsHashVerifier {
                         &snapshot_config,
                     ));
 
+                    // Done processing the current snapshot, so the current snapshot dir
+                    // has been converted to POST state.  It is the time to update
+                    // last_snapshot_storages to release the reference counts for the
+                    // previous POST snapshot dir, and save the new ones for the new
+                    // POST snapshot dir.
+                    last_snapshot_storages = Some(snapshot_storages);
+                    debug!(
+                        "Number of snapshot storages kept alive for fastboot: {}",
+                        last_snapshot_storages
+                            .as_ref()
+                            .map(|storages| storages.len())
+                            .unwrap_or(0)
+                    );
+
                     datapoint_info!(
                         "accounts_hash_verifier",
                         (
@@ -115,23 +129,9 @@ impl AccountsHashVerifier {
                         ("enqueued-time-us", enqueued_time.as_micros(), i64),
                         ("handling-time-us", handling_time_us, i64),
                     );
-
-                    // Done processing the current snapshot, so the current snapshot dir
-                    // has been converted to POST state.  It is the time to update
-                    // last_snapshot_storages to release the reference counts for the
-                    // previous POST snapshot dir, and save the new ones for the new
-                    // POST snapshot dir.
-                    last_snapshot_storages = Some(snapshot_storages);
-                    debug!(
-                        "Number of snapshot storages kept alive for fastboot: {}",
-                        last_snapshot_storages
-                            .as_ref()
-                            .map(|storages| storages.len())
-                            .unwrap_or(0)
-                    );
                 }
                 debug!(
-                    "Storages kept alive for fastboot: {}",
+                    "Number of snapshot storages kept alive for fastboot: {}",
                     last_snapshot_storages
                         .as_ref()
                         .map(|storages| storages.len())
