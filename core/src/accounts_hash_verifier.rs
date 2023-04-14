@@ -9,7 +9,7 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::measure_us,
     solana_runtime::{
-        accounts_db::{AccountStorageEntry, CalcAccountsHashFlavor},
+        accounts_db::CalcAccountsHashFlavor,
         accounts_hash::{
             AccountsHash, AccountsHashEnum, CalcAccountsHashConfig, HashStats,
             IncrementalAccountsHash,
@@ -66,7 +66,7 @@ impl AccountsHashVerifier {
                 // To support fastboot, we must ensure the storages used in the latest POST snapshot are
                 // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
                 // expiring.
-                let mut last_snapshot_storages: Option<Vec<Arc<AccountStorageEntry>>> = None;
+                let mut last_snapshot_storages = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
