@@ -2409,25 +2409,29 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        // self.pay_validator_rewards_with_thread_pool(
-        //     prev_epoch,
-        //     validator_rewards,
-        //     reward_calc_tracer,
-        //     self.credits_auto_rewind(),
-        //     thread_pool,
-        //     metrics,
-        //     update_rewards_from_cached_accounts,
-        // );
-
-        self.pay_validator_rewards_with_thread_pool2(
-            prev_epoch,
-            validator_rewards,
-            reward_calc_tracer,
-            self.credits_auto_rewind(),
-            thread_pool,
-            metrics,
-            update_rewards_from_cached_accounts,
-        );
+        if self
+            .feature_set
+            .is_active(&feature_set::update_rewards_no_join::id())
+        {
+            self.pay_validator_rewards_with_thread_pool_no_join(
+                prev_epoch,
+                validator_rewards,
+                reward_calc_tracer,
+                self.credits_auto_rewind(),
+                thread_pool,
+                metrics,
+            );
+        } else {
+            self.pay_validator_rewards_with_thread_pool(
+                prev_epoch,
+                validator_rewards,
+                reward_calc_tracer,
+                self.credits_auto_rewind(),
+                thread_pool,
+                metrics,
+                update_rewards_from_cached_accounts,
+            );
+        }
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
