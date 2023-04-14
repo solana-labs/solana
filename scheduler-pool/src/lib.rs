@@ -115,7 +115,11 @@ impl InstalledScheduler for Scheduler {
         let (timings, result) =
             timings_and_result.get_or_insert_with(|| (ExecuteTimings::default(), Ok(())));
 
-        if result.is_ok() {
+        let fail_fast = context.mode() {
+            Veriication => true,
+        };
+
+        if !fail_fast {
             *result = execute_batch(
                 &batch_with_indexes,
                 context.bank(),
