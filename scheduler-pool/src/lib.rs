@@ -63,12 +63,18 @@ impl InstalledSchedulerPool for SchedulerPool {
             scheduler.replace_scheduler_context(context);
             scheduler
         } else {
-            Box::new(Scheduler::spawn(self.weak.upgrade().expect("self-referencing Arc-ed pool"), context))
+            Box::new(Scheduler::spawn(
+                self.weak.upgrade().expect("self-referencing Arc-ed pool"),
+                context,
+            ))
         }
     }
 
     fn return_to_pool(&self, scheduler: SchedulerBox) {
-        self.schedulers.lock().expect("not poisoned").push(scheduler);
+        self.schedulers
+            .lock()
+            .expect("not poisoned")
+            .push(scheduler);
     }
 }
 
