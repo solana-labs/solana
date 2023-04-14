@@ -65,6 +65,10 @@ impl AccountsHashVerifier {
             .spawn(move || {
                 info!("AccountsHashVerifier has started");
                 let mut hashes = vec![];
+                // To support fastboot, we must ensure the storages used in the latest POST snapshot are
+                // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
+                // expiring.
+                let mut last_snapshot_storages = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -84,6 +88,8 @@ impl AccountsHashVerifier {
                     info!("handling accounts package: {accounts_package:?}");
                     let enqueued_time = accounts_package.enqueued.elapsed();
 
+                    let snapshot_storages = accounts_package.snapshot_storages.clone();
+
                     let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
                         &cluster_info,
@@ -95,6 +101,20 @@ impl AccountsHashVerifier {
                         &snapshot_config,
                         accounts_hash_fault_injector,
                     ));
+
+                    // Done processing the current snapshot, so the current snapshot dir
+                    // has been converted to POST state.  It is the time to update
+                    // last_snapshot_storages to release the reference counts for the
+                    // previous POST snapshot dir, and save the new ones for the new
+                    // POST snapshot dir.
+                    last_snapshot_storages = Some(snapshot_storages);
+                    debug!(
+                        "Number of snapshot storages kept alive for fastboot: {}",
+                        last_snapshot_storages
+                            .as_ref()
+                            .map(|storages| storages.len())
+                            .unwrap_or(0)
+                    );
 
                     datapoint_info!(
                         "accounts_hash_verifier",
@@ -112,6 +132,13 @@ impl AccountsHashVerifier {
                         ("handling-time-us", handling_time_us, i64),
                     );
                 }
+                debug!(
+                    "Number of snapshot storages kept alive for fastboot: {}",
+                    last_snapshot_storages
+                        .as_ref()
+                        .map(|storages| storages.len())
+                        .unwrap_or(0)
+                );
                 info!("AccountsHashVerifier has stopped");
             })
             .unwrap();
