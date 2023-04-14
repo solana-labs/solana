@@ -144,7 +144,7 @@ impl InstalledScheduler for Scheduler {
         let should_block = match wait_source {
             WaitSource::InsideBlock => false,
             WaitSource::AcrossBlock | WaitSource::FromBankDrop | WaitSource::FromSchedulerDrop => true,
-        }
+        };
 
         if should_block {
             self.1.lock().expect("not poisoned").1.take()
