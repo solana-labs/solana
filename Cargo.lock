@@ -6564,7 +6564,10 @@ name = "solana-scheduler-pool"
 version = "1.16.0"
 dependencies = [
  "solana-ledger",
+ "solana-program-runtime",
+ "solana-runtime",
  "solana-scheduler",
+ "solana-sdk 1.16.0",
 ]
 
 [[package]]
