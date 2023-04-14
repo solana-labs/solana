@@ -682,12 +682,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "by_address"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf8dba2868114ed769a1f2590fc9ae5eb331175b44313b6c9b922f8f7ca813d0"
-
-[[package]]
 name = "byte-tools"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6574,19 +6568,6 @@ dependencies = [
 [[package]]
 name = "solana-scheduler"
 version = "1.16.0"
-dependencies = [
- "by_address",
- "cpu-time",
- "crossbeam-channel",
- "dashmap 4.0.2",
- "enum_dispatch",
- "log",
- "rand 0.7.3",
- "sha2 0.10.6",
- "solana-logger 1.16.0",
- "solana-sdk 1.16.0",
- "triomphe",
-]
 
 [[package]]
 name = "solana-scheduler-pool"
@@ -8171,16 +8152,6 @@ name = "trees"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0de5f738ceab88e2491a94ddc33c3feeadfa95fedc60363ef110845df12f3878"
-
-[[package]]
-name = "triomphe"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1ee9bd9239c339d714d657fac840c6d2a4f9c45f4f9ec7b0975113458be78db"
-dependencies = [
- "serde",
- "stable_deref_trait",
-]
 
 [[package]]
 name = "try-lock"

@@ -10,24 +10,8 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-assert_matches = { workspace = true }
-cpu-time = { workspace = true }
-crossbeam-channel = { workspace = true }
-log = { workspace = true }
-rand = { workspace = true }
-serde_json = { workspace = true }
-solana-entry = { workspace = true }
 solana-ledger = { workspace = true }
-solana-measure = { workspace = true }
-solana-metrics = { workspace = true }
-solana-poh = { workspace = true }
-solana-program-runtime = { workspace = true }
-solana-runtime = { workspace = true }
 solana-scheduler = { workspace = true }
-solana-sdk = { workspace = true }
-solana-transaction-status = { workspace = true }
-thread-priority = { workspace = true }
-variant_counter = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
