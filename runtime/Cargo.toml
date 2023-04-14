@@ -11,7 +11,6 @@ edition = { workspace = true }
 
 [dependencies]
 arrayref = { workspace = true }
-assert_matches = { workspace = true }
 bincode = { workspace = true }
 blake3 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
@@ -73,6 +72,7 @@ crate-type = ["lib"]
 name = "solana_runtime"
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 ed25519-dalek = { workspace = true }
 libsecp256k1 = { workspace = true }
 memoffset = { workspace = true }
