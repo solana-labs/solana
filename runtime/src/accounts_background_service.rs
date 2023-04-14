@@ -5,7 +5,7 @@
 mod stats;
 use {
     crate::{
-        accounts_db::{AccountStorageEntry, CalcAccountsHashDataSource},
+        accounts_db::CalcAccountsHashDataSource,
         accounts_hash::CalcAccountsHashConfig,
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
@@ -150,7 +150,7 @@ impl SnapshotRequestHandler {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<(u64, Vec<Arc<AccountStorageEntry>>), SnapshotError>> {
+    ) -> Option<Result<u64, SnapshotError>> {
         let (
             snapshot_request,
             accounts_package_type,
@@ -267,7 +267,7 @@ impl SnapshotRequestHandler {
         last_full_snapshot_slot: &mut Option<Slot>,
         snapshot_request: SnapshotRequest,
         accounts_package_type: AccountsPackageType,
-    ) -> Result<(u64, Vec<Arc<AccountStorageEntry>>), SnapshotError> {
+    ) -> Result<u64, SnapshotError> {
         debug!(
             "handling snapshot request: {:?}, {:?}",
             snapshot_request, accounts_package_type
@@ -369,7 +369,7 @@ impl SnapshotRequestHandler {
                     &self.snapshot_config.bank_snapshots_dir,
                     &self.snapshot_config.full_snapshot_archives_dir,
                     &self.snapshot_config.incremental_snapshot_archives_dir,
-                    snapshot_storages.clone(),
+                    snapshot_storages,
                     self.snapshot_config.archive_format,
                     self.snapshot_config.snapshot_version,
                     accounts_hash_for_testing,
@@ -381,7 +381,7 @@ impl SnapshotRequestHandler {
                 AccountsPackage::new_for_epoch_accounts_hash(
                     accounts_package_type,
                     &snapshot_root_bank,
-                    snapshot_storages.clone(),
+                    snapshot_storages,
                     accounts_hash_for_testing,
                 )
             }
@@ -424,7 +424,7 @@ impl SnapshotRequestHandler {
             ("total_us", total_time.as_us(), i64),
             ("non_snapshot_time_us", non_snapshot_time_us, i64),
         );
-        Ok((snapshot_root_bank.block_height(), snapshot_storages))
+        Ok(snapshot_root_bank.block_height())
     }
 }
 
@@ -512,7 +512,7 @@ impl AbsRequestHandlers {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<(u64, Vec<Arc<AccountStorageEntry>>), SnapshotError>> {
+    ) -> Option<Result<u64, SnapshotError>> {
         self.snapshot_request_handler.handle_snapshot_requests(
             test_hash_calculation,
             non_snapshot_time_us,
@@ -545,10 +545,6 @@ impl AccountsBackgroundService {
                 let mut stats = StatsManager::new();
                 let mut last_snapshot_end_time = None;
 
-                // To support fastboot, we must ensure the storages used in the latest bank snapshot are
-                // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
-                // expiring.
-                let mut last_snapshot_storages: Option<Vec<Arc<AccountStorageEntry>>> = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -620,21 +616,9 @@ impl AccountsBackgroundService {
                     if let Some(snapshot_handle_result) = snapshot_handle_result {
                         // Safe, see proof above
 
-                        if let Ok((snapshot_block_height, snapshot_storages)) =
-                            snapshot_handle_result
-                        {
+                        if let Ok(snapshot_block_height) = snapshot_handle_result {
                             assert!(last_cleaned_block_height <= snapshot_block_height);
                             last_cleaned_block_height = snapshot_block_height;
-                            // Update the option, so the older one is released, causing the release of
-                            // its reference counts of the appendvecs
-                            last_snapshot_storages = Some(snapshot_storages);
-                            debug!(
-                                "Number of snapshot storages kept alive for fastboot: {}",
-                                last_snapshot_storages
-                                    .as_ref()
-                                    .map(|storages| storages.len())
-                                    .unwrap_or(0)
-                            );
                         } else {
                             exit.store(true, Ordering::Relaxed);
                             return;
@@ -656,13 +640,6 @@ impl AccountsBackgroundService {
                     stats.record_and_maybe_submit(start_time.elapsed());
                     sleep(Duration::from_millis(INTERVAL_MS));
                 }
-                debug!(
-                    "Storages kept alive for fastboot: {}",
-                    last_snapshot_storages
-                        .as_ref()
-                        .map(|storages| storages.len())
-                        .unwrap_or(0)
-                );
                 info!("AccountsBackgroundService has stopped");
             })
             .unwrap();
