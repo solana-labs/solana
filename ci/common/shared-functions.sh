@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-need_to_generate_test_result() {
+need_to_upload_test_result() {
   local branches=(
     "$EDGE_CHANNEL"
     "$BETA_CHANNEL"
