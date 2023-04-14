@@ -2821,14 +2821,14 @@ impl Bank {
     ) -> EpochRewardCalculateParamInfo<'a> {
         let stake_history = self.stakes_cache.stakes().history().clone();
 
-        let stake_delegations = self.filter_stake_delegations(&stakes);
+        let stake_delegations = self.filter_stake_delegations(stakes);
 
         let cached_vote_accounts = stakes.vote_accounts();
 
         EpochRewardCalculateParamInfo {
-            stake_history: stake_history,
+            stake_history,
             stake_delegations,
-            cached_vote_accounts: cached_vote_accounts,
+            cached_vote_accounts,
         }
     }
 
@@ -2951,9 +2951,9 @@ impl Bank {
         vote_with_stake_delegations_map
     }
 
-    fn calculate_reward_points2<'a>(
+    fn calculate_reward_points2(
         &self,
-        reward_calculate_params: &EpochRewardCalculateParamInfo<'a>,
+        reward_calculate_params: &EpochRewardCalculateParamInfo,
         rewards: u64,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
@@ -3000,7 +3000,7 @@ impl Bank {
                     stake_state::calculate_points(
                         stake_account.stake_state(),
                         &vote_state,
-                        Some(&stake_history),
+                        Some(stake_history),
                     )
                     .unwrap_or(0)
                 })
@@ -3052,9 +3052,9 @@ impl Bank {
         (points > 0).then_some(PointValue { rewards, points })
     }
 
-    fn redeem_rewards2<'a>(
+    fn redeem_rewards2(
         &self,
-        reward_calculate_params: &EpochRewardCalculateParamInfo<'a>,
+        reward_calculate_params: &EpochRewardCalculateParamInfo,
         rewarded_epoch: Epoch,
         point_value: PointValue,
         credits_auto_rewind: bool,
@@ -3087,12 +3087,12 @@ impl Bank {
                     let reward_calc_tracer = reward_calc_tracer.as_ref().map(|outer| {
                         // inner
                         move |inner_event: &_| {
-                            outer(&RewardCalculationEvent::Staking(&stake_pubkey, inner_event))
+                            outer(&RewardCalculationEvent::Staking(stake_pubkey, inner_event))
                         }
                     });
 
                     let stake_pubkey = **stake_pubkey;
-                    let stake_account = StakeAccount::from((*stake_account).clone());
+                    let stake_account = (*stake_account).clone();
 
                     let delegation = stake_account.delegation();
                     let (mut stake_account, stake_state) =
@@ -3119,7 +3119,7 @@ impl Bank {
                         &mut stake_account,
                         &vote_state,
                         &point_value,
-                        Some(&stake_history),
+                        Some(stake_history),
                         reward_calc_tracer.as_ref(),
                         credits_auto_rewind,
                     );
