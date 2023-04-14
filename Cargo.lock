@@ -5378,6 +5378,7 @@ dependencies = [
  "solana-rpc",
  "solana-rpc-client-api",
  "solana-runtime",
+ "solana-scheduler-pool",
  "solana-sdk 1.16.0",
  "solana-send-transaction-service",
  "solana-stake-program",
@@ -5846,6 +5847,7 @@ dependencies = [
  "solana-measure",
  "solana-rpc",
  "solana-runtime",
+ "solana-scheduler-pool",
  "solana-sdk 1.16.0",
  "solana-stake-program",
  "solana-storage-bigtable",
@@ -6539,6 +6541,7 @@ dependencies = [
  "solana-perf",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
+ "solana-scheduler",
  "solana-sdk 1.16.0",
  "solana-stake-program",
  "solana-vote-program",
@@ -6553,6 +6556,21 @@ dependencies = [
  "test-case",
  "thiserror",
  "zstd",
+]
+
+[[package]]
+name = "solana-scheduler"
+version = "1.16.0"
+
+[[package]]
+name = "solana-scheduler-pool"
+version = "1.16.0"
+dependencies = [
+ "solana-ledger",
+ "solana-program-runtime",
+ "solana-runtime",
+ "solana-scheduler",
+ "solana-sdk 1.16.0",
 ]
 
 [[package]]
