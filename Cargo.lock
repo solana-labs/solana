@@ -5468,6 +5468,7 @@ dependencies = [
  "solana-local-cluster",
  "solana-logger 1.16.0",
  "solana-measure",
+ "solana-net-utils",
  "solana-perf",
  "solana-rpc",
  "solana-sdk 1.16.0",

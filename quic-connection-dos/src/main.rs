@@ -2,7 +2,12 @@
 use {
     clap::{crate_description, crate_name, value_t, App, Arg},
     futures::future::join_all,
-    quinn::{ClientConfig, Connection, EndpointConfig, IdleTimeout, TokioRuntime, TransportConfig},
+    quinn::{
+        ClientConfig, Connection, Endpoint, EndpointConfig, IdleTimeout, TokioRuntime,
+        TransportConfig,
+    },
+    solana_client::nonblocking::quic_client::QuicClientCertificate,
+    solana_net_utils::{bind_in_range, VALIDATOR_PORT_RANGE},
     //rayon::prelude::*,
     //solana_measure::measure::Measure,
     solana_sdk::{
@@ -42,6 +47,44 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
     }
 }
 
+fn _create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
+    quinn::Endpoint::new(config, None, client_socket, TokioRuntime)
+        .expect("QuicNewConnection::create_endpoint quinn::Endpoint::new")
+}
+
+fn create_endpoint(client_certificate: Arc<QuicClientCertificate>) -> Endpoint {
+    let mut endpoint = {
+        let client_socket = bind_in_range(IpAddr::V4(Ipv4Addr::UNSPECIFIED), VALIDATOR_PORT_RANGE)
+            .expect("QuicLazyInitializedEndpoint::create_endpoint bind_in_range")
+            .1;
+
+        _create_endpoint(EndpointConfig::default(), client_socket)
+    };
+
+    let mut crypto = rustls::ClientConfig::builder()
+        .with_safe_defaults()
+        .with_custom_certificate_verifier(SkipServerVerification::new())
+        .with_single_cert(
+            vec![client_certificate.certificate.clone()],
+            client_certificate.key.clone(),
+        )
+        .expect("Failed to set QUIC client certificates");
+    crypto.enable_early_data = true;
+    crypto.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
+
+    let mut config = ClientConfig::new(Arc::new(crypto));
+    let mut transport_config = TransportConfig::default();
+
+    let timeout = IdleTimeout::try_from(QUIC_MAX_TIMEOUT).unwrap();
+    transport_config.max_idle_timeout(Some(timeout));
+    transport_config.keep_alive_interval(Some(QUIC_KEEP_ALIVE));
+    config.transport_config(Arc::new(transport_config));
+
+    endpoint.set_default_client_config(config);
+
+    endpoint
+}
+
 pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
     let ipaddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
     let (cert, key) = new_self_signed_tls_certificate(keypair, ipaddr)
@@ -67,24 +110,6 @@ pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
     config
 }
 
-pub async fn make_client_connection(
-    addr: &SocketAddr,
-    client_keypair: Option<&Keypair>,
-) -> Connection {
-    let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-    let mut endpoint =
-        quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime).unwrap();
-    let default_keypair = Keypair::new();
-    endpoint.set_default_client_config(get_client_config(
-        client_keypair.unwrap_or(&default_keypair),
-    ));
-    endpoint
-        .connect(*addr, "localhost")
-        .expect("Failed in connecting")
-        .await
-        .expect("Failed in waiting")
-}
-
 // Opens a slow stream and tries to send PACKET_DATA_SIZE bytes of junk
 // in as many chunks as possible. We don't allow the number of chunks
 // to be configurable as client-side writes don't correspond to
@@ -105,17 +130,22 @@ async fn run_connection_dos(
     num_connections: u64,
     num_streams_per_conn: u64,
 ) {
-    let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-    let mut endpoint =
-        quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime).unwrap();
-    let default_keypair = Keypair::new();
-    endpoint.set_default_client_config(get_client_config(&default_keypair));
+    let (cert, priv_key) =
+        new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))
+            .expect("Failed to create cert");
+
+    let cert = Arc::new(QuicClientCertificate {
+        certificate: cert,
+        key: priv_key,
+    });
+
+    let endpoint = create_endpoint(cert);
 
     let mut connections = vec![];
     for _ in 0..num_connections {
         connections.push(
             endpoint
-                .connect(server_address, "localhost")
+                .connect(server_address, "connect")
                 .expect("Failed in connecting")
                 .await
                 .expect("Failed in waiting"),
