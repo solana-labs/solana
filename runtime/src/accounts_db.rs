@@ -2920,10 +2920,6 @@ impl AccountsDb {
             *accounts_hash_complete_oldest_non_ancient_slot,
             one_epoch_old_slot,
         );
-        if let Some(offset) = self.ancient_append_vec_offset {
-            *accounts_hash_complete_oldest_non_ancient_slot =
-                Self::apply_offset_to_slot(*accounts_hash_complete_oldest_non_ancient_slot, offset);
-        }
 
         let accounts_hash_complete_oldest_non_ancient_slot =
             *accounts_hash_complete_oldest_non_ancient_slot;
@@ -2935,10 +2931,14 @@ impl AccountsDb {
     /// get the oldest slot that is within one epoch of the highest slot that has been used for hash calculation.
     /// The slot will have been offset by `self.ancient_append_vec_offset`
     fn get_accounts_hash_complete_oldest_non_ancient_slot(&self) -> Slot {
-        *self
+        let mut result = *self
             .accounts_hash_complete_oldest_non_ancient_slot
             .read()
-            .unwrap()
+            .unwrap();
+        if let Some(offset) = self.ancient_append_vec_offset {
+            result = Self::apply_offset_to_slot(result, offset);
+        }
+        result
     }
 
     /// Collect all the uncleaned slots, up to a max slot
@@ -7558,9 +7558,12 @@ impl AccountsDb {
     /// if we ever try to calc hash where there are squashed append vecs within the last epoch, we will fail
     fn assert_safe_squashing_accounts_hash(&self, slot: Slot, epoch_schedule: &EpochSchedule) {
         let previous = self.get_accounts_hash_complete_oldest_non_ancient_slot();
-        let current = Self::get_oldest_slot_within_one_epoch_prior(slot, epoch_schedule);
+        let mut current = Self::get_oldest_slot_within_one_epoch_prior(slot, epoch_schedule);
+        if let Some(offset) = self.ancient_append_vec_offset {
+            current = Self::apply_offset_to_slot(current, offset);
+        }
         assert!(
-            previous <= current,
+             previous <= current,
             "get_accounts_hash_complete_oldest_non_ancient_slot: {previous}, get_oldest_slot_within_one_epoch_prior: {current}, slot: {slot}"
         );
     }
