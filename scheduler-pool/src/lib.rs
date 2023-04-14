@@ -1,3 +1,13 @@
+//! Transaction scheduling code.
+//!
+//! This crate implements two solana-runtime traits (InstalledScheduler and InstalledSchedulerPool)
+//! to provide concrete implement transaction scheduling (including executing txes and committing
+//! tx results).
+//!
+//! At highest level, this crate inputs SanitizedTransaction via its `schedule_execution()` and
+//! commits any side-effects (i.e. on-chain state changes) into `Bank`s via `solana-ledger`'s
+//! helper fun called `execute_batch()`.
+
 use {
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
