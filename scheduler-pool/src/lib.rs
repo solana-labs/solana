@@ -21,11 +21,10 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
     },
+    solana_scheduler::{SchedulingMode, WithSchedulingMode},
     solana_sdk::transaction::SanitizedTransaction,
     std::sync::{Arc, Mutex, Weak},
 };
-use solana_scheduler::WithSchedulingMode;
-use solana_scheduler::SchedulingMode;
 
 // SchedulerPool must be accessed via dyn because of its internal fields, whose type isn't
 // available at solana-runtime...
@@ -111,7 +110,9 @@ impl InstalledScheduler for Scheduler {
         let context = context.as_ref().expect("active context");
 
         let batch_with_indexes = TransactionBatchWithIndexes {
-            batch: context.bank().prepare_sanitized_batch_without_locking(transaction.clone()),
+            batch: context
+                .bank()
+                .prepare_sanitized_batch_without_locking(transaction.clone()),
             transaction_indexes: vec![index],
         };
         let (timings, result) =
