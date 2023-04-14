@@ -62,7 +62,7 @@ use {
         inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
-        rent_debit::RentDebits,
+        rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
         serde_snapshot::{SerdeAccountsHash, SerdeIncrementalAccountsHash},
         snapshot_hash::SnapshotHash,

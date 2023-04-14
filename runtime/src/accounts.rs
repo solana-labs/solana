@@ -16,7 +16,7 @@ use {
         bank::{Bank, NonceFull, NonceInfo, TransactionCheckResult, TransactionExecutionResult},
         blockhash_queue::BlockhashQueue,
         rent_collector::RentCollector,
-        rent_debit::RentDebits,
+        rent_debits::RentDebits,
         storable_accounts::StorableAccounts,
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_error_metrics::TransactionErrorMetrics,

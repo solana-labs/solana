@@ -229,7 +229,7 @@ pub(crate) mod tests {
         solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
         solana_runtime::{
             bank::{Bank, NonceFull, NoncePartial, TransactionBalancesSet},
-            rent_debit::RentDebits,
+            rent_debits::RentDebits,
         },
         solana_sdk::{
             account_utils::StateMut,
