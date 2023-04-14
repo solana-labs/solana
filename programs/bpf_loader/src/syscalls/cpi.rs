@@ -675,7 +675,10 @@ where
 
     // unwrapping here is fine: we're in a syscall and the method below fails
     // only outside syscalls
-    let orig_data_lens = invoke_context.get_orig_account_lengths().unwrap();
+    let orig_data_lens = &invoke_context
+        .get_syscall_context()
+        .unwrap()
+        .orig_account_lengths;
 
     for (instruction_account_index, instruction_account) in instruction_accounts.iter().enumerate()
     {
@@ -1083,12 +1086,9 @@ fn update_caller_account(
 mod tests {
     use {
         super::*,
-        crate::allocator_bump::BpfAllocator,
+        crate::mock_create_vm,
         solana_program_runtime::with_mock_invoke_context,
-        solana_rbpf::{
-            aligned_memory::AlignedMemory, ebpf::MM_INPUT_START, memory_region::MemoryRegion,
-            vm::Config,
-        },
+        solana_rbpf::{ebpf::MM_INPUT_START, memory_region::MemoryRegion, vm::Config},
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Epoch,
@@ -1502,17 +1502,12 @@ mod tests {
             &[0],
             &[1, 1]
         );
-        invoke_context
-            .set_syscall_context(
-                true,
-                true,
-                vec![original_data_len],
-                Rc::new(RefCell::new(BpfAllocator::new(
-                    AlignedMemory::with_capacity(0),
-                    0,
-                ))),
-            )
-            .unwrap();
+        mock_create_vm!(
+            _vm,
+            Vec::new(),
+            vec![original_data_len],
+            &mut invoke_context
+        );
 
         let vm_addr = MM_INPUT_START;
         let (_mem, region) = MockAccountInfo::new(key, &account).into_region(vm_addr);

@@ -11,12 +11,13 @@ use {
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_measure::measure::Measure,
-    solana_rbpf::vm::ContextObject,
+    solana_rbpf::{ebpf::MM_HEAP_START, vm::ContextObject},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
+        bpf_loader_deprecated,
         feature_set::{
-            enable_early_verification_of_account_modifications, native_programs_consume_cu,
-            FeatureSet,
+            check_slice_translation_size, enable_early_verification_of_account_modifications,
+            native_programs_consume_cu, FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
@@ -87,15 +88,16 @@ impl std::fmt::Debug for BuiltinProgram {
 
 impl<'a> ContextObject for InvokeContext<'a> {
     fn trace(&mut self, state: [u64; 12]) {
-        self.trace_log_stack
+        self.syscall_context
             .last_mut()
-            .expect("Inconsistent trace log stack")
+            .unwrap()
+            .as_mut()
+            .unwrap()
             .trace_log
             .push(state);
     }
 
     fn consume(&mut self, amount: u64) {
-        self.log_consumed_bpf_units(amount);
         // 1 to 1 instruction to compute unit mapping
         // ignore overflow, Ebpf will bail if exceeded
         let mut compute_meter = self.compute_meter.borrow_mut();
@@ -107,32 +109,46 @@ impl<'a> ContextObject for InvokeContext<'a> {
     }
 }
 
-/// Based loosely on the unstable std::alloc::Alloc trait
-pub trait Alloc {
-    fn alloc(&mut self, layout: Layout) -> Result<u64, AllocErr>;
-    fn dealloc(&mut self, addr: u64, layout: Layout);
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AllocErr;
-
 impl fmt::Display for AllocErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("Error: Memory allocation failed")
     }
 }
 
-struct SyscallContext {
-    check_aligned: bool,
-    check_size: bool,
-    orig_account_lengths: Vec<usize>,
-    allocator: Rc<RefCell<dyn Alloc>>,
+pub struct BpfAllocator {
+    len: u64,
+    pos: u64,
 }
 
-#[derive(Default)]
-pub struct TraceLogStackFrame {
+impl BpfAllocator {
+    pub fn new(len: u64) -> Self {
+        Self { len, pos: 0 }
+    }
+
+    pub fn alloc(&mut self, layout: Layout) -> Result<u64, AllocErr> {
+        let bytes_to_align = (self.pos as *const u8).align_offset(layout.align()) as u64;
+        if self
+            .pos
+            .saturating_add(bytes_to_align)
+            .saturating_add(layout.size() as u64)
+            <= self.len
+        {
+            self.pos = self.pos.saturating_add(bytes_to_align);
+            let addr = MM_HEAP_START.saturating_add(self.pos);
+            self.pos = self.pos.saturating_add(layout.size() as u64);
+            Ok(addr)
+        } else {
+            Err(AllocErr)
+        }
+    }
+}
+
+pub struct SyscallContext {
+    pub allocator: BpfAllocator,
+    pub orig_account_lengths: Vec<usize>,
     pub trace_log: Vec<[u64; 12]>,
-    pub consumed_bpf_units: RefCell<Vec<(usize, u64)>>,
 }
 
 pub struct InvokeContext<'a> {
@@ -141,7 +157,6 @@ pub struct InvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
     sysvar_cache: &'a SysvarCache,
-    pub trace_log_stack: Vec<TraceLogStackFrame>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
@@ -152,8 +167,7 @@ pub struct InvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
-    syscall_context: Vec<Option<SyscallContext>>,
-    pub enable_instruction_tracing: bool,
+    pub syscall_context: Vec<Option<SyscallContext>>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -177,7 +191,6 @@ impl<'a> InvokeContext<'a> {
             pre_accounts: Vec::new(),
             builtin_programs,
             sysvar_cache,
-            trace_log_stack: vec![TraceLogStackFrame::default()],
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
@@ -189,7 +202,6 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
-            enable_instruction_tracing: false,
         }
     }
 
@@ -273,14 +285,12 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
-        self.trace_log_stack.push(TraceLogStackFrame::default());
         self.syscall_context.push(None);
         self.transaction_context.push()
     }
 
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
-        self.trace_log_stack.pop();
         self.syscall_context.pop();
         self.transaction_context.pop()
     }
@@ -764,7 +774,6 @@ impl<'a> InvokeContext<'a> {
 
     /// Consume compute units
     pub fn consume_checked(&self, amount: u64) -> Result<(), Box<dyn std::error::Error>> {
-        self.log_consumed_bpf_units(amount);
         let mut compute_meter = self.compute_meter.borrow_mut();
         let exceeded = *compute_meter < amount;
         *compute_meter = compute_meter.saturating_sub(amount);
@@ -796,74 +805,52 @@ impl<'a> InvokeContext<'a> {
         self.sysvar_cache
     }
 
-    // Set this instruction syscall context
-    pub fn set_syscall_context(
-        &mut self,
-        check_aligned: bool,
-        check_size: bool,
-        orig_account_lengths: Vec<usize>,
-        allocator: Rc<RefCell<dyn Alloc>>,
-    ) -> Result<(), InstructionError> {
-        *self
-            .syscall_context
-            .last_mut()
-            .ok_or(InstructionError::CallDepth)? = Some(SyscallContext {
-            check_aligned,
-            check_size,
-            orig_account_lengths,
-            allocator,
-        });
-        Ok(())
-    }
-
     // Should alignment be enforced during user pointer translation
     pub fn get_check_aligned(&self) -> bool {
-        self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.check_aligned)
+        self.transaction_context
+            .get_current_instruction_context()
+            .and_then(|instruction_context| {
+                let program_account =
+                    instruction_context.try_borrow_last_program_account(self.transaction_context);
+                debug_assert!(program_account.is_ok());
+                program_account
+            })
+            .map(|program_account| *program_account.get_owner() != bpf_loader_deprecated::id())
             .unwrap_or(true)
     }
 
     // Set should type size be checked during user pointer translation
     pub fn get_check_size(&self) -> bool {
-        self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.check_size)
-            .unwrap_or(true)
+        self.feature_set
+            .is_active(&check_slice_translation_size::id())
     }
 
-    /// Get the original account lengths
-    pub fn get_orig_account_lengths(&self) -> Result<&[usize], InstructionError> {
+    // Set this instruction syscall context
+    pub fn set_syscall_context(
+        &mut self,
+        syscall_context: SyscallContext,
+    ) -> Result<(), InstructionError> {
+        *self
+            .syscall_context
+            .last_mut()
+            .ok_or(InstructionError::CallDepth)? = Some(syscall_context);
+        Ok(())
+    }
+
+    // Get this instruction's SyscallContext
+    pub fn get_syscall_context(&self) -> Result<&SyscallContext, InstructionError> {
         self.syscall_context
             .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.orig_account_lengths.as_slice())
+            .and_then(|syscall_context| syscall_context.as_ref())
             .ok_or(InstructionError::CallDepth)
     }
 
-    // Get this instruction's memory allocator
-    pub fn get_allocator(&self) -> Result<Rc<RefCell<dyn Alloc>>, InstructionError> {
+    // Get this instruction's SyscallContext
+    pub fn get_syscall_context_mut(&mut self) -> Result<&mut SyscallContext, InstructionError> {
         self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.allocator.clone())
+            .last_mut()
+            .and_then(|syscall_context| syscall_context.as_mut())
             .ok_or(InstructionError::CallDepth)
-    }
-
-    fn log_consumed_bpf_units(&self, amount: u64) {
-        if self.enable_instruction_tracing && amount != 0 {
-            let trace_log_stack_frame = self
-                .trace_log_stack
-                .last()
-                .expect("Inconsistent trace log stack");
-
-            trace_log_stack_frame.consumed_bpf_units.borrow_mut().push((
-                trace_log_stack_frame.trace_log.len().saturating_sub(1),
-                amount,
-            ));
-        }
     }
 }
 
