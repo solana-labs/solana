@@ -12,12 +12,6 @@ annotate() {
   }
 }
 
-exit_if_error() {
-  if [[ "$1" -ne 0 ]]; then
-    exit "$1"
-  fi
-}
-
 # Run the appropriate test based on entrypoint
 testName=$(basename "$0" .sh)
 
@@ -33,22 +27,8 @@ source ci/common/limit-threads.sh
 # get channel info
 eval "$(ci/channel-info.sh)"
 
-need_to_generate_test_result() {
-  local branches=(
-    "$EDGE_CHANNEL"
-    "$BETA_CHANNEL"
-    "$STABLE_CHANNEL"
-  )
-
-  for n in "${branches[@]}";
-  do
-    if [[ "$CI_BRANCH" == "$n" ]]; then
-      return 0
-    fi
-  done
-
-  return 1
-}
+#shellcheck source=ci/common/shared-functions.sh
+source ci/common/shared-functions.sh
 
 echo "Executing $testName"
 case $testName in
