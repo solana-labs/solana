@@ -3667,6 +3667,7 @@ mod tests {
 
         let mut memory_mapping = MemoryMapping::new::<UserError>(
             vec![
+                MemoryRegion::default(),
                 MemoryRegion {
                     host_addr: scalars.as_ptr() as *const _ as u64,
                     vm_addr: scalars_va,
