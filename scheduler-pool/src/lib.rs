@@ -124,8 +124,8 @@ impl InstalledScheduler for Scheduler {
             SchedulingMode::BlockVerification => true,
         };
 
-        // so, we're NOT scheduling at all just execute tx straight off.  we doesn't need to solve
-        // inter-tx locking deps only in the case of single-thread fifo like this....
+        // so, we're NOT scheduling at all; rather, just execute tx straight off.  we doesn't need
+        // to solve inter-tx locking deps only in the case of single-thread fifo like this....
         if !fail_fast {
             *result = execute_batch(
                 &batch_with_indexes,
