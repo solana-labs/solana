@@ -141,9 +141,15 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<TimingAndResult> {
-        match wait_source {
-            WaitSource::InsideBlock => None,
-            _ => self.1.lock().expect("not poisoned").1.take(),
+        let should_block = match wait_source {
+            WaitSource::InsideBlock => false,
+            WaitSource::AcrossBlock | WaitSource::FromBankDrop | WaitSource::FromSchedulerDrop => true,
+        }
+
+        if should_block {
+            self.1.lock().expect("not poisoned").1.take()
+        } else {
+            None
         }
     }
 
