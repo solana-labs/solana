@@ -1173,7 +1173,7 @@ struct LoadVoteAndStakeAccountsResult {
 type VoteRewards = DashMap<Pubkey, (AccountSharedData, u8, u64, bool)>;
 type StakeRewards = Vec<StakeReward>;
 
-struct EpochRewardCalculatePramInfo<'a> {
+struct EpochRewardCalculateParamInfo<'a> {
     stake_history: StakeHistory,
     stake_delegations: Vec<(&'a Pubkey, &'a StakeAccount<Delegation>)>,
     cached_vote_accounts: &'a VoteAccounts,
@@ -2885,14 +2885,14 @@ impl Bank {
     fn get_epoch_reward_calculate_param_info<'a>(
         &self,
         stakes: &'a Stakes<StakeAccount<Delegation>>,
-    ) -> EpochRewardCalculatePramInfo<'a> {
+    ) -> EpochRewardCalculateParamInfo<'a> {
         let stake_history = self.stakes_cache.stakes().history().clone();
 
         let stake_delegations = self.filter_stake_delegations(&stakes);
 
         let cached_vote_accounts = stakes.vote_accounts();
 
-        EpochRewardCalculatePramInfo {
+        EpochRewardCalculateParamInfo {
             stake_history: stake_history,
             stake_delegations,
             cached_vote_accounts: cached_vote_accounts,
@@ -3020,12 +3020,12 @@ impl Bank {
 
     fn calculate_reward_points2<'a>(
         &self,
-        reward_calculate_params: &EpochRewardCalculatePramInfo<'a>,
+        reward_calculate_params: &EpochRewardCalculateParamInfo<'a>,
         rewards: u64,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) -> Option<PointValue> {
-        let EpochRewardCalculatePramInfo {
+        let EpochRewardCalculateParamInfo {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
@@ -3121,7 +3121,7 @@ impl Bank {
 
     fn redeem_rewards2<'a>(
         &self,
-        reward_calculate_params: &EpochRewardCalculatePramInfo<'a>,
+        reward_calculate_params: &EpochRewardCalculateParamInfo<'a>,
         rewarded_epoch: Epoch,
         point_value: PointValue,
         credits_auto_rewind: bool,
@@ -3129,7 +3129,7 @@ impl Bank {
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
     ) -> (VoteRewards, StakeRewards) {
-        let EpochRewardCalculatePramInfo {
+        let EpochRewardCalculateParamInfo {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
