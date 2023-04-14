@@ -109,10 +109,11 @@ impl InstalledScheduler for Scheduler {
             (&self.0, &mut *self.1.lock().expect("not poisoned"));
         let context = context.as_ref().expect("active context");
 
+        let batch = context
+            .bank()
+            .prepare_sanitized_batch_without_locking(transaction.clone());
         let batch_with_indexes = TransactionBatchWithIndexes {
-            batch: context
-                .bank()
-                .prepare_sanitized_batch_without_locking(transaction.clone()),
+            batch,
             transaction_indexes: vec![index],
         };
         let (timings, result) =
@@ -123,6 +124,8 @@ impl InstalledScheduler for Scheduler {
             SchedulingMode::BlockVerification => true,
         };
 
+        // so, we're NOT scheduling at all just execute tx straight off.  we doesn't need to solve
+        // inter-tx locking deps only in the case of single-thread fifo like this....
         if !fail_fast {
             *result = execute_batch(
                 &batch_with_indexes,
