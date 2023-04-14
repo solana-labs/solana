@@ -285,7 +285,7 @@ async fn stake_rewards_filter_bench_100() {
 }
 
 #[tokio::test]
-async fn stake_rewards_bench_550_K() {
+async fn stake_rewards_bench_550_k() {
     stake_rewards_filter_bench_core(55 * 1000, false).await;
 }
 
