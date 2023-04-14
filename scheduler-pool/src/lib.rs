@@ -106,10 +106,10 @@ impl InstalledScheduler for Scheduler {
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
         let (pool, (ref context, ref mut timings_and_result)) =
             (&self.0, &mut *self.1.lock().expect("not poisoned"));
-        let bank = context.as_ref().expect("active bank").bank();
+        let context = context.as_ref().expect("active context");
 
         let batch_with_indexes = TransactionBatchWithIndexes {
-            batch: bank.prepare_sanitized_batch_without_locking(transaction.clone()),
+            batch: context.bank().prepare_sanitized_batch_without_locking(transaction.clone()),
             transaction_indexes: vec![index],
         };
         let (timings, result) =
@@ -118,7 +118,7 @@ impl InstalledScheduler for Scheduler {
         if result.is_ok() {
             *result = execute_batch(
                 &batch_with_indexes,
-                bank,
+                context.bank(),
                 pool.transaction_status_sender.as_ref(),
                 pool.replay_vote_sender.as_ref(),
                 timings,
