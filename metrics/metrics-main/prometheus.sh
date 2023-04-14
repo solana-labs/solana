@@ -35,6 +35,7 @@ sudo chmod 0444 certs/*
 
 # (Re) start prometheus container
 sudo docker run -it -d \
+  --memory=10g \
   --user root:root \
   --publish 9090:9090 \
   --name=prometheus \
