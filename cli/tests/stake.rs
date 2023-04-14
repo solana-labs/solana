@@ -35,6 +35,8 @@ use {
 
 #[test]
 fn test_stake_redelegation() {
+    //solana_logger::setup();
+
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let authorized_withdrawer = Keypair::new().pubkey();
