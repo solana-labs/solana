@@ -261,6 +261,18 @@ macro_rules! set_public_address {
             );
 
             meta.with_post_init(|post_init| {
+                if post_init
+                    .cluster_info
+                    .my_contact_info()
+                    .$get_socket()
+                    .is_err()
+                {
+                    error!(
+                        "The public {} address isn't being published. The node is likely in repair mode \n\
+                        (see help for --restricted-repair-only-mode for more information)",
+                        $address_name
+                    );
+                }
                 post_init
                     .cluster_info
                     .$set_socket(public_addr)
