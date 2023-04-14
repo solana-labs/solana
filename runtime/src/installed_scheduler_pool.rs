@@ -230,7 +230,7 @@ impl Bank {
         }
     }
 
-    fn wait_for_scheduler(&self, source: WaitSource) -> Option<(ExecuteTimings, Result<()>)> {
+    fn wait_for_scheduler(&self, source: WaitSource) -> Option<ResultWithTiming> {
         debug!(
             "wait_for_scheduler(slot: {}, source: {source:?}): started...",
             self.slot()
