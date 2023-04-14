@@ -33,7 +33,7 @@ source ci/common/shared-functions.sh
 echo "Executing $testName"
 case $testName in
 test-stable)
-  if need_to_generate_test_result; then
+  if need_to_upload_test_result; then
     _ cargo test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
@@ -60,7 +60,7 @@ test-stable-sbf)
 
   # SBF C program system tests
   _ make -C programs/sbf/c tests
-  if need_to_generate_test_result; then
+  if need_to_upload_test_result; then
     _ cargo test \
       --manifest-path programs/sbf/Cargo.toml \
       --no-default-features --features=sbf_c,sbf_rust -- -Z unstable-options --format json --report-time | tee results.json
@@ -102,7 +102,7 @@ test-stable-sbf)
 
   # SBF program instruction count assertion
   sbf_target_path=programs/sbf/target
-  if need_to_generate_test_result; then
+  if need_to_upload_test_result; then
     _ cargo test \
       --manifest-path programs/sbf/Cargo.toml \
       --no-default-features --features=sbf_c,sbf_rust assert_instruction_count \
@@ -138,7 +138,7 @@ test-stable-perf)
   fi
 
   _ cargo build --bins ${V:+--verbose}
-  if need_to_generate_test_result; then
+  if need_to_upload_test_result; then
     _ cargo test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
@@ -148,7 +148,7 @@ test-stable-perf)
   ;;
 test-local-cluster)
   _ cargo build --release --bins ${V:+--verbose}
-  if need_to_generate_test_result; then
+  if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
@@ -158,7 +158,7 @@ test-local-cluster)
   ;;
 test-local-cluster-flakey)
   _ cargo build --release --bins ${V:+--verbose}
-  if need_to_generate_test_result; then
+  if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
@@ -168,7 +168,7 @@ test-local-cluster-flakey)
   ;;
 test-local-cluster-slow-1)
   _ cargo build --release --bins ${V:+--verbose}
-  if need_to_generate_test_result; then
+  if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
@@ -178,7 +178,7 @@ test-local-cluster-slow-1)
   ;;
 test-local-cluster-slow-2)
   _ cargo build --release --bins ${V:+--verbose}
-  if need_to_generate_test_result; then
+  if need_to_upload_test_result; then
     _ cargo test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
@@ -200,7 +200,7 @@ test-wasm)
   exit 0
   ;;
 test-docs)
-  if need_to_generate_test_result; then
+  if need_to_upload_test_result; then
     _ cargo test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit "${PIPESTATUS[0]}"
   else
