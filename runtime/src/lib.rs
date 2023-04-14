@@ -54,6 +54,7 @@ pub mod prioritization_fee_cache;
 mod pubkey_bins;
 mod read_only_accounts_cache;
 pub mod rent_collector;
+pub mod rent_debits;
 mod rent_paying_accounts_by_partition;
 mod rolling_bit_field;
 pub mod root_bank_cache;
