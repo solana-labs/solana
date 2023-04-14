@@ -75,6 +75,18 @@ pub enum WaitSource {
     FromSchedulerDrop,
 }
 
+/*
+#[derive(Debug)]
+pub enum WaitReason {
+    // most normal termination waiting mode
+    TerminationForFreezing,
+    // scheduler will be restarted without being returned to pool in order to reuse it immediately.
+    RestartInsideBlock,
+    TerminationFromBankDrop,
+    InternalTerminationByScheduler,
+}
+*/
+
 pub type SchedulerBox = Box<dyn InstalledScheduler>;
 // somewhat arbitrary new type just to pacify Bank's frozen_abi...
 #[derive(Debug, Default)]
