@@ -100,7 +100,7 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn scheduler_pool(&self) -> SchedulerPoolArc {
-        self.0.clone()
+        self.pool.clone()
     }
 
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
