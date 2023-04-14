@@ -63,7 +63,7 @@ pub(crate) type InstalledSchedulerPoolArc = Option<SchedulerPoolArc>;
 
 pub type SchedulerId = u64;
 
-pub type ResultWithTiming = (ExecuteTimings, Result<()>);
+pub type ResultWithTiming = (Result<()>, ExecuteTimings);
 
 #[derive(Debug)]
 pub enum WaitSource {
