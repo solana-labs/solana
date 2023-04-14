@@ -34,7 +34,12 @@ impl RentDebits {
             .unwrap_or_default()
     }
 
-    pub(crate) fn insert(&mut self, address: &Pubkey, rent_collected: u64, post_balance: u64) {
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn insert(&mut self, address: &Pubkey, rent_collected: u64, post_balance: u64) {
         if rent_collected != 0 {
             self.0.insert(
                 *address,
@@ -46,7 +51,7 @@ impl RentDebits {
         }
     }
 
-    pub(crate) fn into_unordered_rewards_iter(self) -> impl Iterator<Item = (Pubkey, RewardInfo)> {
+    pub fn into_unordered_rewards_iter(self) -> impl Iterator<Item = (Pubkey, RewardInfo)> {
         self.0
             .into_iter()
             .filter_map(|(address, rent_debit)| Some((address, rent_debit.try_into_reward_info()?)))
