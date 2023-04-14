@@ -15,6 +15,8 @@ use {
     std::sync::{Arc, Mutex, Weak},
 };
 
+// SchedulerPool must be accessed via dyn because of its internal fields, whose type isn't
+// available at solana-runtime...
 #[derive(Debug)]
 pub struct SchedulerPool {
     schedulers: Mutex<Vec<SchedulerBox>>,
@@ -33,7 +35,7 @@ impl SchedulerPool {
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> SchedulerPoolArc {
         Arc::new_cyclic(|weak_pool| Self {
-            schedulers: _::<Vec<SchedulerBox>>::default(),
+            schedulers: Mutex::<Vec<SchedulerBox>>::default(),
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
@@ -45,18 +47,18 @@ impl SchedulerPool {
 
 impl InstalledSchedulerPool for SchedulerPool {
     fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox {
-        let mut schedulers = self.schedulers.lock().unwrap();
+        let mut schedulers = self.schedulers.lock().expect("not poisoned");
         let maybe_scheduler = schedulers.pop();
         if let Some(scheduler) = maybe_scheduler {
             scheduler.replace_scheduler_context(context);
             scheduler
         } else {
-            Box::new(Scheduler::spawn(self.weak.upgrade().unwrap(), context))
+            Box::new(Scheduler::spawn(self.weak.upgrade().expect("self-referencing Arc-ed pool"), context))
         }
     }
 
     fn return_to_pool(&self, scheduler: SchedulerBox) {
-        self.schedulers.lock().unwrap().push(scheduler);
+        self.schedulers.lock().expect("not poisoned").push(scheduler);
     }
 }
 
@@ -72,6 +74,8 @@ impl Scheduler {
     }
 }
 
+// Currently, simplest possible implementation (i.e. single-threaded)
+// this will be replaced with more proper implementation...
 impl InstalledScheduler for Scheduler {
     fn scheduler_id(&self) -> SchedulerId {
         0
@@ -83,8 +87,8 @@ impl InstalledScheduler for Scheduler {
 
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
         let (pool, (ref context, ref mut timings_and_result)) =
-            (&self.0, &mut *self.1.lock().unwrap());
-        let bank = context.as_ref().unwrap().bank();
+            (&self.0, &mut *self.1.lock().expect("not poisoned"));
+        let bank = context.as_ref().expect("active bank").bank();
 
         let batch_with_indexes = TransactionBatchWithIndexes {
             batch: bank.prepare_sanitized_batch_without_locking(transaction.clone()),
@@ -109,17 +113,17 @@ impl InstalledScheduler for Scheduler {
     fn schedule_termination(&mut self) {
         // This is subtle but important, to break circular dependency of Arc<Bank> => Scheduler =>
         // SchedulerContext => Arc<Bank>.
-        drop::<Option<SchedulingContext>>(self.1.lock().unwrap().0.take());
+        drop::<Option<SchedulingContext>>(self.1.lock().expect("not poisoned").0.take());
     }
 
     fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<TimingAndResult> {
         match wait_source {
             WaitSource::InsideBlock => None,
-            _ => self.1.lock().unwrap().1.take(),
+            _ => self.1.lock().expect("not poisoned").1.take(),
         }
     }
 
     fn replace_scheduler_context(&self, context: SchedulingContext) {
-        *self.1.lock().unwrap() = (Some(context), None);
+        *self.1.lock().expect("not poisoned") = (Some(context), None);
     }
 }
