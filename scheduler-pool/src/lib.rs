@@ -62,6 +62,9 @@ impl InstalledSchedulerPool for SchedulerPool {
     }
 }
 
+// Currently, simplest possible implementation (i.e. single-threaded)
+// this will be replaced with more proper implementation...
+// for that reason, tuple structs are used internally.
 #[derive(Debug)]
 struct Scheduler(
     Arc<SchedulerPool>,
@@ -74,8 +77,6 @@ impl Scheduler {
     }
 }
 
-// Currently, simplest possible implementation (i.e. single-threaded)
-// this will be replaced with more proper implementation...
 impl InstalledScheduler for Scheduler {
     fn scheduler_id(&self) -> SchedulerId {
         0
