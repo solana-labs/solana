@@ -44,8 +44,15 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
     fn scheduler_pool(&self) -> SchedulerPoolArc;
 
+    // Calling this is illegal as soon as schedule_termiantion is called on &self.
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
+
+    // This optioanlly signals scheduling termination request to the scheduler.
+    // This is subtle but important, to break circular dependency of Arc<Bank> => Scheduler =>
+    // SchedulingContext => Arc<Bank> in the middle of the teardown process, otherwise it would
+    // prevent Bank::drop()'s last resort scheduling termination attempt indefinitely
     fn schedule_termination(&mut self);
+
     fn wait_for_termination(&mut self, source: &WaitSource) -> Option<TimingAndResult>;
 
     fn replace_scheduler_context(&self, context: SchedulingContext);
@@ -86,6 +93,7 @@ impl AbiExample for InstalledSchedulerBox {
 #[derive(Clone, Debug)]
 pub struct SchedulingContext {
     mode: SchedulingMode,
+    // Intentionally not using Weak<Bank> for performance reasons
     bank: Arc<Bank>,
 }
 

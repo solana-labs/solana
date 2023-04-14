@@ -113,8 +113,6 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn schedule_termination(&mut self) {
-        // This is subtle but important, to break circular dependency of Arc<Bank> => Scheduler =>
-        // SchedulerContext => Arc<Bank>.
         drop::<Option<SchedulingContext>>(self.1.lock().expect("not poisoned").0.take());
     }
 
