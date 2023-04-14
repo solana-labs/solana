@@ -1,8 +1,8 @@
 //! Transaction scheduling code.
 //!
-//! This crate implements two solana-runtime traits (InstalledScheduler and InstalledSchedulerPool)
-//! to provide concrete implement transaction scheduling (including executing txes and committing
-//! tx results).
+//! This crate implements two solana-runtime traits (`InstalledScheduler` and
+//! `InstalledSchedulerPool`) to provide concrete transaction scheduling implementation (including
+//! executing txes and committing tx results).
 //!
 //! At highest level, this crate inputs SanitizedTransaction via its `schedule_execution()` and
 //! commits any side-effects (i.e. on-chain state changes) into `Bank`s via `solana-ledger`'s
