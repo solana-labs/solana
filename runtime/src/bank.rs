@@ -2483,8 +2483,6 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        println!("haha start rewarding");
-
         if self
             .feature_set
             .is_active(&feature_set::update_rewards_no_join::id())
@@ -2508,7 +2506,6 @@ impl Bank {
                 update_rewards_from_cached_accounts,
             );
         }
-        println!("haha end rewarding");
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
@@ -2918,10 +2915,7 @@ impl Bank {
         let point_value =
             self.calculate_reward_points2(&reward_calculate_param, rewards, thread_pool, metrics);
 
-        println!("haha point_value: {:?}", point_value);
-
         if let Some(point_value) = point_value {
-            println!("haha redeem start");
             let (vote_account_rewards, stake_rewards) = self.redeem_rewards2(
                 &reward_calculate_param,
                 rewarded_epoch,
@@ -2931,7 +2925,6 @@ impl Bank {
                 reward_calc_tracer.as_ref(),
                 metrics,
             );
-            println!("haha redeem end");
 
             drop(reward_calculate_param);
             drop(stakes);
@@ -2969,8 +2962,6 @@ impl Bank {
             thread_pool,
             metrics,
         );
-
-        println!("haha point_value: {:?}", point_value);
 
         if let Some(point_value) = point_value {
             let (vote_account_rewards, stake_rewards) = self.redeem_rewards(
@@ -3332,8 +3323,6 @@ impl Bank {
     }
 
     fn store_stake_accounts(&self, stake_rewards: &[StakeReward], metrics: &mut RewardsMetrics) {
-        println!("haha store stake start: {}", stake_rewards.len());
-
         // store stake account even if stake_reward is 0
         // because credits observed has changed
         let (_, measure) = measure!({
@@ -3342,8 +3331,6 @@ impl Bank {
         metrics
             .store_stake_accounts_us
             .fetch_add(measure.as_us(), Relaxed);
-
-        println!("haha store stake end");
     }
 
     fn store_vote_accounts(
@@ -3351,8 +3338,6 @@ impl Bank {
         vote_account_rewards: VoteRewards,
         metrics: &mut RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
-        println!("haha store vote start");
-
         let (vote_rewards, measure) = measure!(vote_account_rewards
             .into_iter()
             .filter_map(
@@ -3382,8 +3367,6 @@ impl Bank {
         metrics
             .store_vote_accounts_us
             .fetch_add(measure.as_us(), Relaxed);
-
-        println!("haha store vote end: {}", vote_rewards.len());
 
         vote_rewards
     }
