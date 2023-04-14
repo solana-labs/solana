@@ -281,10 +281,15 @@ async fn stake_rewards_from_warp() {
 
 #[tokio::test]
 async fn stake_rewards_filter_bench_100() {
-    stake_rewards_filter_bench_core(550 * 1000).await;
+    stake_rewards_filter_bench_core(100, true).await;
 }
 
-async fn stake_rewards_filter_bench_core(num_stake_accounts: u64) {
+#[tokio::test]
+async fn stake_rewards_filter_bench_550_K() {
+    stake_rewards_filter_bench_core(55 * 1000, false).await;
+}
+
+async fn stake_rewards_filter_bench_core(num_stake_accounts: u64, filter: bool) {
     // Initialize and start the test network
     let mut program_test = ProgramTest::default();
 
@@ -296,10 +301,16 @@ async fn stake_rewards_filter_bench_core(num_stake_accounts: u64) {
     program_test.add_account(vote_address, vote_account.clone().into());
 
     // create stake accounts with 0.9 sol to test min-stake filtering
-    const TEST_FILTER_STAKE: u64 = 99900_000_000; // 0.9 sol
+    const TEST_FILTER_STAKE: u64 = 900_000_000; // 0.9 sol
+    const TEST_UNFILTER_STAKE: u64 = 1100_000_000; // 1.1 sol
     let mut to_filter = vec![];
     for i in 0..num_stake_accounts {
         let stake_pubkey = Pubkey::new_unique();
+        let lamports = if filter {
+            TEST_FILTER_STAKE
+        } else {
+            TEST_UNFILTER_STAKE
+        };
         let stake_account = Account::from(stake_state::create_account(
             &stake_pubkey,
             &vote_address,
@@ -308,7 +319,9 @@ async fn stake_rewards_filter_bench_core(num_stake_accounts: u64) {
             TEST_FILTER_STAKE,
         ));
         program_test.add_account(stake_pubkey, stake_account);
-        to_filter.push(stake_pubkey);
+        if lamports == TEST_FILTER_STAKE {
+            to_filter.push(stake_pubkey);
+        }
         if i % 100 == 0 {
             debug!("create stake account {} {}", i, stake_pubkey);
         }
@@ -357,16 +370,16 @@ async fn stake_rewards_filter_bench_core(num_stake_accounts: u64) {
         .unwrap();
     assert!(account.lamports > stake_lamports);
 
-    // // check that filtered stake accounts are excluded from receiving epoch rewards
-    // for stake_address in to_filter {
-    //     let account = context
-    //         .banks_client
-    //         .get_account(stake_address)
-    //         .await
-    //         .expect("account exists")
-    //         .unwrap();
-    //     assert_eq!(account.lamports, TEST_FILTER_STAKE);
-    // }
+    // check that filtered stake accounts are excluded from receiving epoch rewards
+    for stake_address in to_filter {
+        let account = context
+            .banks_client
+            .get_account(stake_address)
+            .await
+            .expect("account exists")
+            .unwrap();
+        assert_eq!(account.lamports, TEST_FILTER_STAKE);
+    }
 
     // check that stake is fully active
     let stake_history_account = context
