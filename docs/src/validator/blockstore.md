@@ -62,9 +62,7 @@ Repair requests for recent shreds are served out of RAM or recent files and out 
 
 ## Blockstore APIs
 
-The Blockstore offers a subscription based API that ReplayStage uses to ask for entries it's interested in.
-
-These subscription API's are as follows:
+The Blockstore offers a subscription based API that ReplayStage uses to ask for entries it's interested in. These subscription API's are as follows:
 
 1. `fn get_slots_since(slots: &[u64]) -> Result<HashMap<u64, Vec<u64>>>`: Returns slots that are connected to any of the elements of `slots`. This method enables the discovery of new children slots.
 
