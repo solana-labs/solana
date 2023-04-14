@@ -117,9 +117,9 @@ impl WindowServiceMetrics {
                 i64
             ),
             ("num_addrs", self.addrs.len(), i64),
-            ("top_addr_1", packed_ips.next().unwrap_or(0), i64),
-            ("top_addr_2", packed_ips.next().unwrap_or(0), i64),
-            ("top_addr_3", packed_ips.next().unwrap_or(0), i64),
+            ("top_addr_as_int_1", packed_ips.next().unwrap_or(0), i64),
+            ("top_addr_as_int_2", packed_ips.next().unwrap_or(0), i64),
+            ("top_addr_as_int_3", packed_ips.next().unwrap_or(0), i64),
         );
 
         info!(
