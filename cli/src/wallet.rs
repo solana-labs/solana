@@ -204,9 +204,15 @@ impl WalletSubCommands for App<'_, '_> {
                             .help(
                                 "The seeds. \n\
                                 Each one must match the pattern PREFIX:VALUE. \n\
-                                PREFIX - the one of [string, pubkey, hex, u8] \n\
-                                or matches the pattern [u,i][16,32,64,128][le,be] (for example u64le) \n\
-                                where first two parts represent a number type and last one (le/be) - byte order"
+                                PREFIX can be one of [string, pubkey, hex, u8] \n\
+                                or matches the pattern [u,i][16,32,64,128][le,be] (for example, u64le) \n\
+                                This pattern contains information on how a number is stored in computer memory, \n\
+                                as different computer languages/architectures can store numbers using different schemas, \n\
+                                and so it affects to derived address.\n\
+                                [u,i] - represents whether the number type includes only unsigned numbers \n\
+                                or both signed and unsigned numbers, \n\
+                                [16,32,64,128] - represents the bit length, and \n\
+                                [le,be] - represents the byte order - little endian or big endian"
                             ),
                     ),
             )
