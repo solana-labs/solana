@@ -298,6 +298,10 @@ impl Bank {
 
 #[cfg(test)]
 mod tests {
+    use {
+        super::*,
+    };
+
     #[test]
     fn test_scheduler_wait_via_drop() {
         let m = MockInstalledScheduler::new();
