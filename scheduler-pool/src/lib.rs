@@ -68,7 +68,8 @@ impl InstalledSchedulerPool for SchedulerPool {
             scheduler
         } else {
             let this = self.weak_self.upgrade().expect("self-referencing Arc-ed pool");
-            Box::new(Scheduler::spawn(this, context))
+            let scheduler = Box::new(Scheduler::spawn(this, context));
+            scheduler
         }
     }
 
