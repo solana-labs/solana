@@ -184,3 +184,22 @@ impl InstalledScheduler for Scheduler {
             .expect("not poisoned") = (Some(context), None);
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_scheduler_pool_new() {
+        SchedulerPool::new_dyn();
+    }
+
+    #[test]
+    fn test_scheduler_pool_filo() {
+        SchedulerPool::new_dyn();
+    }
+
+    #[test]
+    fn test_scheduler_pool_context_replace() {
+        SchedulerPool::new_dyn();
+    }
+}
