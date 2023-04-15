@@ -47,9 +47,9 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     // Calling this is illegal as soon as schedule_termiantion is called on &self.
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
 
-    // This optioanlly signals scheduling termination request to the scheduler.
+    // This optionally signals scheduling termination request to the scheduler.
     // This is subtle but important, to break circular dependency of Arc<Bank> => Scheduler =>
-    // SchedulingContext => Arc<Bank> in the middle of the teardown process, otherwise it would
+    // SchedulingContext => Arc<Bank> in the middle of the tear-down process, otherwise it would
     // prevent Bank::drop()'s last resort scheduling termination attempt indefinitely
     fn schedule_termination(&mut self);
 
