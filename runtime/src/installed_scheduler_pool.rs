@@ -34,6 +34,7 @@ use {
 };
 
 // Send + Sync is needed to be a field of BankForks
+#[cfg_attr(test, automock)]
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox;
     fn return_to_pool(&self, scheduler: SchedulerBox);
@@ -308,6 +309,8 @@ mod tests {
         mocked_scheduler.expect_wait_for_termination()
             .times(1)
             .returning(|_| None);
+
+        let mut mocked_scheduler_pool = Box::new(MockInstalledSchedulerPool::new());
         let bank = Bank::default_for_tests();
         bank.install_scheduler(mocked_scheduler);
         drop(bank);
