@@ -219,6 +219,7 @@ mod tests {
         std::sync::Arc,
     };
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::genesis_config::create_genesis_config;
 
     #[test]
     fn test_scheduler_pool_new() {
