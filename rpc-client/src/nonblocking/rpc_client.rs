@@ -2553,6 +2553,7 @@ impl RpcClient {
     ///     rewards: Some(true),
     ///     commitment: None,
     ///     max_supported_transaction_version: Some(0),
+    ///     exclude_addresses: None,
     /// };
     /// let block = rpc_client.get_block_with_config(
     ///     slot,

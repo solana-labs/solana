@@ -1077,6 +1077,7 @@ impl JsonRpcRequestProcessor {
                 transaction_details: config.transaction_details.unwrap_or_default(),
                 show_rewards: config.rewards.unwrap_or(true),
                 max_supported_transaction_version: config.max_supported_transaction_version,
+                exclude_addresses: config.exclude_addresses,
             };
             let commitment = config.commitment.unwrap_or_default();
             check_is_at_least_confirmed(commitment)?;
@@ -4692,6 +4693,7 @@ pub mod tests {
         },
         std::{borrow::Cow, collections::HashMap, net::Ipv4Addr},
     };
+    use solana_transaction_status::UiMessage;
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000_000;
     const TEST_SIGNATURE_FEE: u64 = 5_000;
@@ -6923,6 +6925,64 @@ pub mod tests {
     }
 
     #[test]
+    fn test_get_block_filtered() {
+        let rpc = RpcHandler::start();
+        rpc.create_test_transactions_and_populate_blockstore();
+
+        // Exclude an address which should never be present
+        let request = create_test_request(
+            "getBlock",
+            Some(json!([
+                0u64,
+                RpcBlockConfig {
+                    encoding: None,
+                    transaction_details: None,
+                    rewards: None,
+                    commitment: None,
+                    max_supported_transaction_version: None,
+                    exclude_addresses: Some(vec!["00000000000000000000000000000000000000000000".to_string()]),
+                },
+            ])),
+        );
+        let result: Option<EncodedConfirmedBlock> =
+            parse_success_result(rpc.handle_request_sync(request));
+
+        let confirmed_block = result.unwrap();
+        assert_eq!(confirmed_block.transactions.len(), 2);
+
+        let account_keys = confirmed_block.transactions.into_iter()
+            .fold(vec![], |mut res, tran| {
+                if let EncodedTransaction::Json(transaction) = tran.transaction {
+                    if let UiMessage::Raw(message) = transaction.message {
+                        res.push(message.account_keys[0].clone());
+                    }
+                }
+                res
+            });
+
+        // Exclude addresses we know are present
+        let request = create_test_request(
+            "getBlock",
+            Some(json!([
+                0u64,
+                RpcBlockConfig {
+                    encoding: None,
+                    transaction_details: None,
+                    rewards: None,
+                    commitment: None,
+                    max_supported_transaction_version: None,
+                    exclude_addresses: Some(account_keys),
+                },
+            ])),
+        );
+        let result: Option<EncodedConfirmedBlock> =
+            parse_success_result(rpc.handle_request_sync(request));
+        let confirmed_block = result.unwrap();
+
+        assert_eq!(confirmed_block.transactions.len(), 0);
+    }
+
+    #[test]
     fn test_get_block_config() {
         let rpc = RpcHandler::start();
         let confirmed_block_signatures = rpc.create_test_transactions_and_populate_blockstore();
@@ -6937,6 +6997,7 @@ pub mod tests {
                     rewards: Some(false),
                     commitment: None,
                     max_supported_transaction_version: None,
+                    exclude_addresses: None,
                 },
             ])),
         );
@@ -6960,6 +7021,7 @@ pub mod tests {
                     rewards: Some(true),
                     commitment: None,
                     max_supported_transaction_version: None,
+                    exclude_addresses: None,
                 },
             ])),
         );

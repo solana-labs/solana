@@ -230,11 +230,16 @@ pub enum RpcEncodingConfigWrapper<T> {
     Current(Option<T>),
 }
 
-impl<T: EncodingConfig + Default + Copy> RpcEncodingConfigWrapper<T> {
+impl<T: EncodingConfig + Default + Clone> RpcEncodingConfigWrapper<T> {
     pub fn convert_to_current(&self) -> T {
         match self {
             RpcEncodingConfigWrapper::Deprecated(encoding) => T::new_with_encoding(encoding),
-            RpcEncodingConfigWrapper::Current(config) => config.unwrap_or_default(),
+            RpcEncodingConfigWrapper::Current(config) => {
+                match config {
+                    Some(config) => (*config).clone(),
+                    None => T::default()
+                }
+            }
         }
     }
 
@@ -244,7 +249,7 @@ impl<T: EncodingConfig + Default + Copy> RpcEncodingConfigWrapper<T> {
                 RpcEncodingConfigWrapper::Deprecated(*encoding)
             }
             RpcEncodingConfigWrapper::Current(config) => {
-                RpcEncodingConfigWrapper::Current(config.map(|config| config.into()))
+                RpcEncodingConfigWrapper::Current(config.clone().map(|config| config.into()))
             }
         }
     }
@@ -254,7 +259,7 @@ pub trait EncodingConfig {
     fn new_with_encoding(encoding: &Option<UiTransactionEncoding>) -> Self;
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcBlockConfig {
     pub encoding: Option<UiTransactionEncoding>,
@@ -263,6 +268,7 @@ pub struct RpcBlockConfig {
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
     pub max_supported_transaction_version: Option<u8>,
+    pub exclude_addresses: Option<Vec<String>>,
 }
 
 impl EncodingConfig for RpcBlockConfig {

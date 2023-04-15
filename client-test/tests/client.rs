@@ -309,6 +309,7 @@ fn test_block_subscription() {
                         transaction_details: TransactionDetails::Signatures,
                         show_rewards: false,
                         max_supported_transaction_version: None,
+                        exclude_addresses: None,
                     },
                 )
                 .unwrap();

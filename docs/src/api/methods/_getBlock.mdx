@@ -97,6 +97,20 @@ the max transaction version to return in responses.
   default includes rewards.
 </Field>
 
+<Field name="excludeAddresses" type="array" optional={true}>
+
+a list of addresses whose transactions should be excluded from the response.
+
+<details>
+
+- If the requested block contains transactions which involve the excluded addresses,
+  then these transactions will be excluded from the response.
+- If this parameter is omitted, no transactions will be excluded (all will be returned).
+
+</details>
+
+</Field>
+
 </Parameter>
 
 ### Result:

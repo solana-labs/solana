@@ -127,6 +127,7 @@ async fn block(
                 transaction_details: TransactionDetails::Full,
                 show_rewards: true,
                 max_supported_transaction_version: None,
+                exclude_addresses: None,
             },
         )
         .map_err(|err| match err {

@@ -72,6 +72,7 @@ impl From<RpcConfirmedBlockConfig> for RpcBlockConfig {
             rewards: config.rewards,
             commitment: config.commitment,
             max_supported_transaction_version: None,
+            exclude_addresses: None,
         }
     }
 }

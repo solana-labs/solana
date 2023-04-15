@@ -24,7 +24,10 @@ use {
         },
         transaction_context::TransactionReturnData,
     },
-    std::fmt,
+    std::{
+        fmt,
+        str::FromStr
+    },
     thiserror::Error,
 };
 
@@ -50,6 +53,7 @@ pub struct BlockEncodingOptions {
     pub transaction_details: TransactionDetails,
     pub show_rewards: bool,
     pub max_supported_transaction_version: Option<u8>,
+    pub exclude_addresses: Option<Vec<String>>,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -692,11 +696,18 @@ impl ConfirmedBlock {
         encoding: UiTransactionEncoding,
         options: BlockEncodingOptions,
     ) -> Result<UiConfirmedBlock, EncodeError> {
+        let exclude_keys = options.exclude_addresses.unwrap_or(vec![])
+            .into_iter()
+            .filter_map(|address| { Pubkey::from_str(&address).ok() })
+            .collect::<Vec<Pubkey>>();
         let (transactions, signatures) = match options.transaction_details {
             TransactionDetails::Full => (
                 Some(
                     self.transactions
                         .into_iter()
+                        .filter(|tx_with_meta| {
+                            ! tx_with_meta.involves_account_key(&exclude_keys)
+                        })
                         .map(|tx_with_meta| {
                             tx_with_meta.encode(
                                 encoding,
@@ -713,6 +724,9 @@ impl ConfirmedBlock {
                 Some(
                     self.transactions
                         .into_iter()
+                        .filter(|tx_with_meta| {
+                            ! tx_with_meta.involves_account_key(&exclude_keys)
+                        })
                         .map(|tx_with_meta| tx_with_meta.transaction_signature().to_string())
                         .collect(),
                 ),
@@ -722,6 +736,9 @@ impl ConfirmedBlock {
                 Some(
                     self.transactions
                         .into_iter()
+                        .filter(|tx_with_meta| {
+                            tx_with_meta.involves_account_key(&exclude_keys)
+                        })
                         .map(|tx_with_meta| {
                             tx_with_meta.build_json_accounts(
                                 options.max_supported_transaction_version,
@@ -854,6 +871,13 @@ impl TransactionWithStatusMeta {
             Self::MissingMetadata(tx) => AccountKeys::new(&tx.message.account_keys, None),
             Self::Complete(tx_with_meta) => tx_with_meta.account_keys(),
         }
+    }
+
+    fn involves_account_key(&self, search_keys: &[Pubkey]) -> bool {
+        search_keys.iter().any(|search_key| {
+            TransactionWithStatusMeta::account_keys(self).iter()
+                .any(|acc_key| acc_key.eq(search_key))
+        })
     }
 
     fn build_json_accounts(

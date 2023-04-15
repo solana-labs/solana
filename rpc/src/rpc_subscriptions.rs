@@ -349,6 +349,7 @@ fn filter_block_result_txs(
                 transaction_details: params.transaction_details,
                 show_rewards: params.show_rewards,
                 max_supported_transaction_version: params.max_supported_transaction_version,
+                exclude_addresses: None,
             },
         )
         .map_err(|err| match err {
@@ -1541,6 +1542,7 @@ pub(crate) mod tests {
                     transaction_details: params.transaction_details,
                     show_rewards: false,
                     max_supported_transaction_version: None,
+                    exclude_addresses: None,
                 },
             )
             .unwrap();
@@ -1669,6 +1671,7 @@ pub(crate) mod tests {
                     transaction_details: params.transaction_details,
                     show_rewards: false,
                     max_supported_transaction_version: None,
+                    exclude_addresses: None,
                 },
             )
             .unwrap();
@@ -1783,6 +1786,7 @@ pub(crate) mod tests {
                     transaction_details: params.transaction_details,
                     show_rewards: false,
                     max_supported_transaction_version: None,
+                    exclude_addresses: None,
                 },
             )
             .unwrap();
