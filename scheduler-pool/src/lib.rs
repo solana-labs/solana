@@ -92,7 +92,7 @@ struct Scheduler {
 impl Scheduler {
     fn spawn(pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
         Self {
-            id: thread_rng().gen::<SchedulerId>,
+            id: thread_rng().gen::<SchedulerId>(),
             pool,
             context_and_result_with_timing: Mutex::new((Some(initial_context), None)),
         }
