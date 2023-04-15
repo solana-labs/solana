@@ -198,7 +198,7 @@ mod tests {
     fn test_scheduler_pool_new() {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
-        Arc::downcast_unchecked(pool);
+        let pool2: SchedulerPool = unsafe { std::mem::transmute(pool) };
         assert!(Arc::is_same(pool, pool.weak_self));
     }
 
