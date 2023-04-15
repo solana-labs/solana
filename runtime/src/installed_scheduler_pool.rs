@@ -67,7 +67,8 @@ pub type ResultWithTiming = (Result<()>, ExecuteTimings);
 
 #[derive(Debug)]
 pub enum WaitSource {
-    // most normal termination waiting mode
+    // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
+    // the result and timing in some way to higher-layer subsystems;
     AcrossBlock,
     // scheduler will be restarted without being returned to pool in order to reuse it immediately.
     InsideBlock,
