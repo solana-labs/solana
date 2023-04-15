@@ -70,7 +70,7 @@ pub type SchedulerId = u64;
 
 pub type ResultWithTiming = (Result<()>, ExecuteTimings);
 
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub enum WaitSource {
     // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
     // the result and timing in some way to higher-layer subsystems;
@@ -315,7 +315,7 @@ mod tests {
         let setup_mocked_scheduler = || {
             let mut mock = MockInstalledScheduler::new();
             mock.expect_wait_for_termination()
-                .with(mockall::predicate::matches(3))
+                .with(mockall::predicate::eq(3))
                 .times(1)
                 .returning(|_| None);
             mock.expect_scheduler_pool()
