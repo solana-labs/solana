@@ -2585,31 +2585,32 @@ impl ReplayStage {
                 let replay_stats = bank_progress.replay_stats.clone();
                 let mut r_replay_stats = replay_stats.write().unwrap();
 
-                let (result, complete_execute_timings) = bank.wait_for_completed_scheduler();
-                let metrics = ExecuteBatchesInternalMetrics::new_with_timings_from_all_threads(
-                    complete_execute_timings,
-                );
-                r_replay_stats.process_execute_batches_internal_metrics(metrics);
-
-                if let Err(err) = result {
-                    // Error means the slot needs to be marked as dead
-                    Self::mark_dead_slot(
-                        blockstore,
-                        bank,
-                        bank_forks.read().unwrap().root(),
-                        &BlockstoreProcessorError::InvalidTransaction(err),
-                        rpc_subscriptions,
-                        duplicate_slots_tracker,
-                        gossip_duplicate_confirmed_slots,
-                        epoch_slots_frozen_slots,
-                        progress,
-                        heaviest_subtree_fork_choice,
-                        duplicate_slots_to_repair,
-                        ancestor_hashes_replay_update_sender,
-                        purge_repair_slot_counter,
+                if let Some(result, complete_execute_timings) = bank.wait_for_completed_scheduler() {
+                    let metrics = ExecuteBatchesInternalMetrics::new_with_timings_from_all_threads(
+                        complete_execute_timings,
                     );
-                    // If the bank was corrupted, abort now to prevent further normal processing
-                    continue;
+                    r_replay_stats.process_execute_batches_internal_metrics(metrics);
+
+                    if let Err(err) = result {
+                        // Error means the slot needs to be marked as dead
+                        Self::mark_dead_slot(
+                            blockstore,
+                            bank,
+                            bank_forks.read().unwrap().root(),
+                            &BlockstoreProcessorError::InvalidTransaction(err),
+                            rpc_subscriptions,
+                            duplicate_slots_tracker,
+                            gossip_duplicate_confirmed_slots,
+                            epoch_slots_frozen_slots,
+                            progress,
+                            heaviest_subtree_fork_choice,
+                            duplicate_slots_to_repair,
+                            ancestor_hashes_replay_update_sender,
+                            purge_repair_slot_counter,
+                        );
+                        // If the bank was corrupted, abort now to prevent further normal processing
+                        continue;
+                    }
                 }
 
                 let replay_progress = bank_progress.replay_progress.clone();
