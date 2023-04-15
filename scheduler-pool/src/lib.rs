@@ -162,7 +162,7 @@ impl InstalledScheduler for Scheduler {
                 .lock()
                 .expect("not poisoned")
                 .0
-                .take(),
+                .take()
         );
     }
 
