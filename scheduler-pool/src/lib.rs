@@ -51,7 +51,7 @@ impl SchedulerPool {
             transaction_status_sender,
             replay_vote_sender,
             prioritization_fee_cache,
-            weak: weak_self.clone(),
+            weak_self: weak_self.clone(),
         })
     }
 }
@@ -65,7 +65,7 @@ impl InstalledSchedulerPool for SchedulerPool {
             scheduler
         } else {
             Box::new(Scheduler::spawn(
-                self.weak.upgrade().expect("self-referencing Arc-ed pool"),
+                self.weak_self.upgrade().expect("self-referencing Arc-ed pool"),
                 context,
             ))
         }
