@@ -305,7 +305,12 @@ mod tests {
 
     #[test]
     fn test_scheduler_wait_via_drop() {
-        let mut setup_mocked_scheduler_pool = || Arc::new(MockInstalledSchedulerPool::new());
+        let mut setup_mocked_scheduler_pool = || {
+            let mut mock = Arc::new(MockInstalledSchedulerPool::new());
+            mock.expect_return_to_pool()
+                .times(1)
+            mock
+        };
 
         let mut setup_mocked_scheduler = || {
             let mut mock = Box::new(MockInstalledScheduler::new());
