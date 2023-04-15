@@ -274,7 +274,7 @@ mod tests {
         scheduler.wait_for_termination(&WaitSource::AcrossBlock);
         pool.return_to_pool(scheduler);
 
-        let scheduler = pool.take_from_pool(new_context);
+        let scheduler = pool.take_from_pool(new_context.clone());
         assert_eq!(scheduler_id, scheduler.scheduler_id());
         assert!(Arc::ptr_eq(
             scheduler.scheduling_context().unwrap().bank(),
