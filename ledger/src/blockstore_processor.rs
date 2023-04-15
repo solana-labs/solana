@@ -1720,7 +1720,9 @@ fn process_single_slot(
         err
     })?;
 
-    bank.wait_for_completed_scheduler().map(|(result, timing)| result?);
+    if Some((result, timings)) = bank.wait_for_completed_scheduler() {
+        result?
+    }
     bank.freeze(); // all banks handled by this routine are created from complete slots
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
