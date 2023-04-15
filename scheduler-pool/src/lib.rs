@@ -81,6 +81,8 @@ impl InstalledSchedulerPool for SchedulerPool {
     }
 
     fn return_to_pool(&self, scheduler: SchedulerBox) {
+        assert!(!scheduler.scheduling_context());
+
         self.schedulers
             .lock()
             .expect("not poisoned")
