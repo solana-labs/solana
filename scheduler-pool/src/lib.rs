@@ -35,7 +35,7 @@ pub struct SchedulerPool {
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
-    weak_self: Weak<dyn InstalledSchedulerPool>,
+    weak_self: Weak<SchedulerPool>,
 }
 
 impl SchedulerPool {
@@ -199,7 +199,7 @@ mod tests {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let pool2: Arc<SchedulerPool> = unsafe { std::mem::transmute(pool) };
-        assert!(Arc::ptr_eq(&pool, &pool2.weak_self.upgrade().unwrap()));
+        assert!(Arc::ptr_eq(&pool2, &pool2.weak_self.upgrade().unwrap()));
     }
 
     #[test]
