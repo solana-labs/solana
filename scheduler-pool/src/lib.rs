@@ -215,13 +215,13 @@ mod tests {
 
         let scheduler1 = pool.take_from_pool(context.clone());
 
-        let scheduler2 = pool.take_from_pool(context);
+        let scheduler2 = pool.take_from_pool(context.clone());
 
         pool.return_to_pool(scheduler1);
         pool.return_to_pool(scheduler2);
 
-        let scheduler2 = pool.take_from_pool(context);
-        let scheduler2 = pool.take_from_pool(context);
+        let scheduler2 = pool.take_from_pool(context.clone());
+        let scheduler2 = pool.take_from_pool(context.clone());
     }
 
     #[test]
