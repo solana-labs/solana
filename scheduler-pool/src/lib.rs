@@ -283,11 +283,11 @@ mod tests {
 
     #[test]
     fn test_scheduler_install_into_bank() {
-        let bank = Bank::default_for_tests();
+        let bank = Arc::new(Bank::default_for_tests());
 
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
-        let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
+        let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
         let mut scheduler = pool.take_from_pool(context);
 
         bank.install_scheduler(scheduler);
