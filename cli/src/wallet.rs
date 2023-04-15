@@ -208,12 +208,8 @@ impl WalletSubCommands for App<'_, '_> {
                                 "The seeds. \n\
                                 Each one must match the pattern PREFIX:VALUE. \n\
                                 PREFIX can be one of [string, pubkey, hex, u8] \n\
-                                or matches the pattern [u,i][16,32,64,128][le,be] (for example, u64le) \n\
-                                This pattern contains information on how a number is stored in computer memory, \n\
-                                as different computer languages/architectures can store numbers using different schemas, \n\
-                                and so it affects to derived address.\n\
-                                [u,i] - represents whether the number type includes only unsigned numbers \n\
-                                or both signed and unsigned numbers, \n\
+                                or matches the pattern [u,i][16,32,64,128][le,be] (for example u64le) for number values \n\
+                                [u,i] - represents whether the number is unsigned or signed, \n\
                                 [16,32,64,128] - represents the bit length, and \n\
                                 [le,be] - represents the byte order - little endian or big endian"
                             ),
