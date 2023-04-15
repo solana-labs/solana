@@ -320,6 +320,7 @@ mod tests {
 
     #[test]
     fn test_wait_via_drop() {
-        MockScheduler::new();
+        let m = MockScheduler::new();
+        assert_eq!(m.scheduler_id(), 3);
     }
 }
