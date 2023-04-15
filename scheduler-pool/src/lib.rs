@@ -188,6 +188,8 @@ impl InstalledScheduler for Scheduler {
 
 #[cfg(test)]
 mod tests {
+    use crate::SchedulerPool;
+
     #[test]
     fn test_scheduler_pool_new() {
         SchedulerPool::new_dyn();
@@ -201,5 +203,16 @@ mod tests {
     #[test]
     fn test_scheduler_pool_context_replace() {
         SchedulerPool::new_dyn();
+    }
+
+    #[test]
+    fn test_scheduler_pool_install() {
+         Arc::new(Bank::default_for_tests());
+        let mut bank_forks = BankForks::new(bank);
+    }
+
+    #[test]
+    fn test_scheduler_install() {
+         Arc::new(Bank::default_for_tests());
     }
 }
