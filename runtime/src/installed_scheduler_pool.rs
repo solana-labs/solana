@@ -299,7 +299,7 @@ impl Bank {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test_wait_via_drop() {
+    fn test_scheduler_wait_via_drop() {
         let m = MockInstalledScheduler::new();
         assert_eq!(m.scheduler_id(), 3);
     }
