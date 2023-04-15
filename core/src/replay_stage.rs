@@ -2552,7 +2552,6 @@ impl ReplayStage {
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
                     Err(err) => {
-                        // Error means the slot needs to be marked as dead
                         Self::mark_dead_slot(
                             blockstore,
                             bank,
@@ -2594,7 +2593,6 @@ impl ReplayStage {
                     replay_stats.process_execute_batches_internal_metrics(metrics);
 
                     if let Err(err) = result {
-                        // Error means the slot needs to be marked as dead
                         Self::mark_dead_slot(
                             blockstore,
                             bank,
