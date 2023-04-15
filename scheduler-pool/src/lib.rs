@@ -210,14 +210,19 @@ mod tests {
     fn test_scheduler_pool_filo() {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+        let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank1);
 
         let bank1 = Arc::new(Bank::default_for_tests());
-        let context1 = SchedulingContext::new(SchedulingMode::BlockVerification, bank1);
-        let scheduler1 = pool.take_from_pool(context1);
+        let scheduler1 = pool.take_from_pool(context);
 
         let bank2 = Arc::new(Bank::default_for_tests());
-        let context2 = SchedulingContext::new(SchedulingMode::BlockVerification, bank2);
-        let scheduler2 = pool.take_from_pool(context2);
+        let scheduler2 = pool.take_from_pool(context);
+
+        pool.return_to_pool(scheduler1);
+        pool.return_to_pool(scheduler2);
+
+        let scheduler2 = pool.take_from_pool(context);
+        let scheduler2 = pool.take_from_pool(context);
     }
 
     #[test]
