@@ -101,7 +101,7 @@ impl Scheduler {
 
 impl InstalledScheduler for Scheduler {
     fn scheduler_id(&self) -> SchedulerId {
-        
+        self.id
     }
 
     fn scheduler_pool(&self) -> SchedulerPoolArc {
