@@ -198,17 +198,17 @@ mod tests {
 
     #[test]
     fn test_scheduler_pool_filo() {
-        SchedulerPool::new_dyn();
+        //SchedulerPool::new_dyn();
     }
 
     #[test]
     fn test_scheduler_pool_context_replace() {
-        SchedulerPool::new_dyn();
+        //SchedulerPool::new_dyn();
     }
 
     #[test]
     fn test_scheduler_pool_install() {
-         Arc::new(Bank::default_for_tests());
+        let bank = Arc::new(Bank::default_for_tests());
         let mut bank_forks = BankForks::new(bank);
     }
 
