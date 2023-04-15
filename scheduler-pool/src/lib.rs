@@ -246,7 +246,7 @@ mod tests {
 
         let scheduler = pool.take_from_pool(old_context);
         let scheduler_id = scheduler.scheduler_id();
-        pool.return_to_pool(scheduler2);
+        pool.return_to_pool(scheduler);
 
         let scheduler = pool.take_from_pool(new_context);
         assert_eq!(scheduler_id, scheduler.scheduler_id());
