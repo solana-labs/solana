@@ -296,6 +296,6 @@ mod tests {
 
         let bank = Bank::default_for_tests();
         bank_forks.insert(bank);
-        //bank.install_scheduler(scheduler);
+        assert!(bank.with_scheduler());
     }
 }
