@@ -218,6 +218,7 @@ mod tests {
         },
         std::sync::Arc,
     };
+    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_scheduler_pool_new() {
