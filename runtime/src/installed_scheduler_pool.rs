@@ -305,15 +305,13 @@ mod tests {
 
     #[test]
     fn test_scheduler_wait_via_drop() {
-        let mut mocked_scheduler_pool = Arc::new(MockInstalledSchedulerPool::new());
-
         let mut mocked_scheduler = Box::new(MockInstalledScheduler::new());
         mocked_scheduler.expect_wait_for_termination()
             .times(1)
             .returning(|_| None);
         mocked_scheduler.expect_scheduler_pool()
             .times(1)
-            .returning(move || mocked_scheduler_pool);
+            .returning(|| Arc::new(MockInstalledSchedulerPool::new()));
 
         let bank = Bank::default_for_tests();
         bank.install_scheduler(mocked_scheduler);
