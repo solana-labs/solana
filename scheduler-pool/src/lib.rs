@@ -198,8 +198,8 @@ mod tests {
     fn test_scheduler_pool_new() {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
-        assert_eq!(Arc::strong_count(pool), 1);
-        assert_eq!(Arc::weak_count(pool), 1);
+        assert_eq!(Arc::strong_count(&pool), 1);
+        assert_eq!(Arc::weak_count(&pool), 1);
     }
 
     #[test]
