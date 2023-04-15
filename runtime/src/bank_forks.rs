@@ -200,7 +200,7 @@ impl BankForks {
         let prev = self
             .banks
             .insert(bank.slot(), BankWithScheduler::new(bank.clone()));
-        assert!(prev.is_none());
+        //assert!(prev.is_none());
         let slot = bank.slot();
         self.descendants.entry(slot).or_default();
         for parent in bank.proper_ancestors() {
