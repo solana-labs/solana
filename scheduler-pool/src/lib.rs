@@ -220,6 +220,7 @@ mod tests {
     };
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::genesis_config::create_genesis_config;
+    use solana_runtime::genesis_utils::GenesisConfigInfo;
 
     #[test]
     fn test_scheduler_pool_new() {
