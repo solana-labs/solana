@@ -276,6 +276,9 @@ mod tests {
     fn test_scheduler_pool_install() {
         let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
+        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+        bank_forks.install_scheduler_pool(pool);
     }
 
     #[test]
