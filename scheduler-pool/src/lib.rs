@@ -213,7 +213,7 @@ mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
-        let scheduler1 = pool.take_from_pool(context);
+        let scheduler1 = pool.take_from_pool(context.clone());
 
         let scheduler2 = pool.take_from_pool(context);
 
