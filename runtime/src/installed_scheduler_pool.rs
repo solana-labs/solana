@@ -70,7 +70,7 @@ pub type SchedulerId = u64;
 
 pub type ResultWithTiming = (Result<()>, ExecuteTimings);
 
-#[derive(Debug, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum WaitSource {
     // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
     // the result and timing in some way to higher-layer subsystems;
