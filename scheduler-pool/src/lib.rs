@@ -108,9 +108,6 @@ impl Scheduler {
         }
     }
 }
-use mockall::*;
-
-#[automock]
 impl InstalledScheduler for Scheduler {
     fn scheduler_id(&self) -> SchedulerId {
         self.id
@@ -316,11 +313,5 @@ mod tests {
         bank_forks.insert(child_bank);
         let child_bank = bank_forks.working_bank();
         assert!(child_bank.with_scheduler());
-    }
-
-    #[test]
-    fn test_wait_via_drop() {
-        let m = MockScheduler::new();
-        assert_eq!(m.scheduler_id(), 3);
     }
 }

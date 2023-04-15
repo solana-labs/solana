@@ -39,6 +39,9 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn return_to_pool(&self, scheduler: SchedulerBox);
 }
 
+use mockall::*;
+
+#[automock]
 // Send + Sync is needed to be a field of Bank
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
@@ -290,5 +293,14 @@ impl Bank {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_wait_via_drop() {
+        let m = MockInstalledScheduler::new();
+        assert_eq!(m.scheduler_id(), 3);
     }
 }
