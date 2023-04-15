@@ -192,7 +192,8 @@ mod tests {
 
     #[test]
     fn test_scheduler_pool_new() {
-        SchedulerPool::new_dyn();
+        let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+        SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
     }
 
     #[test]
