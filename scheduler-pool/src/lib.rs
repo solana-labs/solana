@@ -290,9 +290,9 @@ mod tests {
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
         let mut scheduler = pool.take_from_pool(context);
 
+        let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
         bank_forks.install_scheduler_pool(pool);
-        let bank = Bank::default_for_tests();
         bank_forks.insert(bank);
         //bank.install_scheduler(scheduler);
     }
