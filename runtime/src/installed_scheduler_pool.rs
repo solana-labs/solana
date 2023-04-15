@@ -311,10 +311,10 @@ mod tests {
         Arc::new(mock)
     }
 
-    fn setup_mocked_scheduler() -> SchedulerBox {
+    fn setup_mocked_scheduler(wait_source: WaitSource) -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         mock.expect_wait_for_termination()
-            .with(mockall::predicate::eq(WaitSource::FromBankDrop))
+            .with(mockall::predicate::eq(wait_source))
             .times(1)
             .returning(|_| None);
         mock.expect_scheduler_pool()
@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn test_scheduler_wait_via_drop() {
         let bank = Bank::default_for_tests();
-        bank.install_scheduler(setup_mocked_scheduler());
+        bank.install_scheduler(setup_mocked_scheduler(WaitSource::FromBankDrop));
         drop(bank);
     }
 }
