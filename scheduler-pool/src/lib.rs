@@ -281,6 +281,7 @@ mod tests {
             scheduler.scheduling_context().unwrap().bank(),
             &new_bank
         ));
+        drop((old_context, new_context));
     }
 
     #[test]
