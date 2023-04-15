@@ -9,6 +9,7 @@
 //! helper fun called `execute_batch()`.
 
 use {
+    rand::{thread_rng, Rng},
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
     },
@@ -25,9 +26,6 @@ use {
     solana_sdk::transaction::SanitizedTransaction,
     std::sync::{Arc, Mutex, Weak},
 };
-use rand::thread_rng;
-use rand::Rng;
-
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types aren't available there...
@@ -59,7 +57,9 @@ impl SchedulerPool {
     }
 
     pub fn self_arc(&self) -> Arc<Self> {
-        self.weak_self.upgrade().expect("self-referencing Arc-ed pool")
+        self.weak_self
+            .upgrade()
+            .expect("self-referencing Arc-ed pool")
     }
 }
 
@@ -162,7 +162,7 @@ impl InstalledScheduler for Scheduler {
                 .lock()
                 .expect("not poisoned")
                 .0
-                .take()
+                .take(),
         );
     }
 
@@ -192,10 +192,11 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn scheduling_context(&self) -> Option<SchedulingContext> {
-        self
-            .context_and_result_with_timing
+        self.context_and_result_with_timing
             .lock()
-            .expect("not poisoned").0.clone()
+            .expect("not poisoned")
+            .0
+            .clone()
     }
 
     fn replace_scheduler_context(&mut self, context: SchedulingContext) {
@@ -206,16 +207,17 @@ impl InstalledScheduler for Scheduler {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::SchedulerPool;
-    use std::sync::Arc;
-    use solana_runtime::bank::Bank;
-    use solana_runtime::bank_forks::BankForks;
-    use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
-    use solana_runtime::installed_scheduler_pool::SchedulingContext;
+    use {
+        super::*,
+        crate::SchedulerPool,
+        solana_runtime::{
+            bank::Bank, bank_forks::BankForks, installed_scheduler_pool::SchedulingContext,
+            prioritization_fee_cache::PrioritizationFeeCache,
+        },
+        std::sync::Arc,
+    };
 
     #[test]
     fn test_scheduler_pool_new() {
@@ -259,8 +261,10 @@ mod tests {
         let new_bank = Arc::new(Bank::default_for_tests());
         assert!(!Arc::ptr_eq(&old_bank, &new_bank));
 
-        let old_context = SchedulingContext::new(SchedulingMode::BlockVerification, old_bank.clone());
-        let new_context = SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
+        let old_context =
+            SchedulingContext::new(SchedulingMode::BlockVerification, old_bank.clone());
+        let new_context =
+            SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
 
         let mut scheduler = pool.take_from_pool(old_context.clone());
         let scheduler_id = scheduler.scheduler_id();
@@ -269,7 +273,10 @@ mod tests {
 
         let scheduler = pool.take_from_pool(new_context);
         assert_eq!(scheduler_id, scheduler.scheduler_id());
-        assert!(Arc::ptr_eq(scheduler.scheduling_context().unwrap().bank(), &new_bank));
+        assert!(Arc::ptr_eq(
+            scheduler.scheduling_context().unwrap().bank(),
+            &new_bank
+        ));
     }
 
     #[test]
