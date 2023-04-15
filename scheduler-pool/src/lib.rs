@@ -246,7 +246,7 @@ mod tests {
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let old_bank = Arc::new(Bank::default_for_tests());
         let new_bank = Arc::new(Bank::default_for_tests());
-        assert_ne!(old_bank, new_bank);
+        assert_ne!(&old_bank, &new_bank);
 
         let old_context = SchedulingContext::new(SchedulingMode::BlockVerification, old_bank);
         let new_context = SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
