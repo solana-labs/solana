@@ -109,6 +109,7 @@ impl Scheduler {
     }
 }
 
+#[automock]
 impl InstalledScheduler for Scheduler {
     fn scheduler_id(&self) -> SchedulerId {
         self.id
