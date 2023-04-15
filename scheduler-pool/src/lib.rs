@@ -213,14 +213,15 @@ mod tests {
         super::*,
         crate::SchedulerPool,
         solana_runtime::{
-            bank::Bank, bank_forks::BankForks, installed_scheduler_pool::SchedulingContext,
+            bank::Bank,
+            bank_forks::BankForks,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            installed_scheduler_pool::SchedulingContext,
             prioritization_fee_cache::PrioritizationFeeCache,
         },
+        solana_sdk::pubkey::Pubkey,
         std::sync::Arc,
     };
-    use solana_sdk::pubkey::Pubkey;
-    use solana_runtime::genesis_utils::create_genesis_config;
-    use solana_runtime::genesis_utils::GenesisConfigInfo;
 
     #[test]
     fn test_scheduler_pool_new() {
