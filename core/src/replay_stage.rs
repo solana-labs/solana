@@ -2583,7 +2583,7 @@ impl ReplayStage {
                     .expect("Bank fork progress entry missing for completed bank");
 
                 let replay_stats = bank_progress.replay_stats.clone();
-                let mut r_replay_stats = replay_stats.write().unwrap();
+                let mut replay_stats = replay_stats.write().unwrap();
 
                 if let Some((result, complete_execute_timings)) =
                     bank.wait_for_completed_scheduler()
@@ -2591,7 +2591,7 @@ impl ReplayStage {
                     let metrics = ExecuteBatchesInternalMetrics::new_with_timings_from_all_threads(
                         complete_execute_timings,
                     );
-                    r_replay_stats.process_execute_batches_internal_metrics(metrics);
+                    replay_stats.process_execute_batches_internal_metrics(metrics);
 
                     if let Err(err) = result {
                         // Error means the slot needs to be marked as dead
@@ -2619,7 +2619,7 @@ impl ReplayStage {
                 let r_replay_progress = replay_progress.read().unwrap();
                 debug!("bank {} is completed replay from blockstore, contribute to update cost with {:?}",
                     bank.slot(),
-                    r_replay_stats.execute_timings
+                    replay_stats.execute_timings
                     );
                 did_complete_bank = true;
                 let _ = cluster_slots_update_sender.send(vec![bank_slot]);
@@ -2707,14 +2707,14 @@ impl ReplayStage {
                 }
                 bank_complete_time.stop();
 
-                r_replay_stats.report_stats(
+                replay_stats.report_stats(
                     bank.slot(),
                     r_replay_progress.num_txs,
                     r_replay_progress.num_entries,
                     r_replay_progress.num_shreds,
                     bank_complete_time.as_us(),
                 );
-                execute_timings.accumulate(&r_replay_stats.execute_timings);
+                execute_timings.accumulate(&replay_stats.execute_timings);
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
