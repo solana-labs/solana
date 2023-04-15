@@ -8,8 +8,6 @@
 //! commits any side-effects (i.e. on-chain state changes) into `Bank`s via `solana-ledger`'s
 //! helper fun called `execute_batch()`.
 
-#![feature(downcast_unchecked)]
-
 use {
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
@@ -200,8 +198,8 @@ mod tests {
     fn test_scheduler_pool_new() {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
-        let pool2 = Arc::downcast_unchecked(pool);
-        assert!(Arc::ptr_eq(&pool2, &pool2.weak_self.upgrade().unwrap()));
+        assert_eq!(Arc::strong_count(pool), 1);
+        assert_eq!(Arc::weak_count(pool), 1);
     }
 
     #[test]
