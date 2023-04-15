@@ -2584,7 +2584,7 @@ impl ReplayStage {
                 let replay_stats = bank_progress.replay_stats.clone();
                 let mut r_replay_stats = replay_stats.write().unwrap();
 
-                let (cumulative_timings, r) = bank.wait_for_completed_scheduler();
+                let (r, cumulative_timings) = bank.wait_for_completed_scheduler();
                 {
                     let cumulative_timings2 =
                         solana_program_runtime::timings::ThreadExecuteTimings {
