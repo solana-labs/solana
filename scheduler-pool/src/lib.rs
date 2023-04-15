@@ -183,8 +183,8 @@ impl InstalledScheduler for Scheduler {
         }
     }
 
-    fn scheduling_context(&self) -> SchedulingContext {
-        *self
+    fn scheduling_context(&self) -> Option<SchedulingContext> {
+        self
             .context_and_result_with_timing
             .lock()
             .expect("not poisoned").0.clone()
