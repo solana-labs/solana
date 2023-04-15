@@ -51,7 +51,7 @@ impl SchedulerPool {
             transaction_status_sender,
             replay_vote_sender,
             prioritization_fee_cache,
-            weak_self: Default::default()//weak_self.clone(),
+            weak_self: weak_self.clone(),
         })
     }
 }
@@ -198,8 +198,7 @@ mod tests {
     fn test_scheduler_pool_new() {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
-        assert_eq!(Arc::strong_count(&pool), 1);
-        assert_eq!(Arc::weak_count(&pool), 1);
+        assert_eq!((Arc::strong_count(&pool), Arc::weak_count(&pool)), (1, 1));
     }
 
     #[test]
