@@ -308,7 +308,7 @@ mod tests {
         let mut setup_mocked_scheduler_pool = || Arc::new(MockInstalledSchedulerPool::new());
 
         let mut setup_mocked_scheduler = || {
-            let mock = Box::new(MockInstalledScheduler::new());
+            let mut mock = Box::new(MockInstalledScheduler::new());
             mock.expect_wait_for_termination()
                 .times(1)
                 .returning(|_| None);
