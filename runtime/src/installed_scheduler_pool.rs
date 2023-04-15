@@ -308,7 +308,7 @@ mod tests {
         let mut setup_mocked_scheduler_pool = || {
             let mut mock = Arc::new(MockInstalledSchedulerPool::new());
             mock.expect_return_to_pool()
-                .times(1)
+                .times(1);
             mock
         };
 
