@@ -249,7 +249,7 @@ mod tests {
         assert_ne!(old_bank, new_bank);
 
         let old_context = SchedulingContext::new(SchedulingMode::BlockVerification, old_bank);
-        let new_context = SchedulingContext::new(SchedulingMode::BlockVerification, new_bank);
+        let new_context = SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
 
         let scheduler = pool.take_from_pool(old_context);
         let scheduler_id = scheduler.scheduler_id();
