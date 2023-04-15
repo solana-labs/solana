@@ -187,7 +187,7 @@ impl InstalledScheduler for Scheduler {
         self
             .context_and_result_with_timing
             .lock()
-            .expect("not poisoned").0.cloned()
+            .expect("not poisoned").0.clone()
     }
 
     fn replace_scheduler_context(&mut self, context: SchedulingContext) {
