@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn test_scheduler_pool_install() {
-        let bank = Arc::new(Bank::default_for_tests());
+        let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
     }
 
