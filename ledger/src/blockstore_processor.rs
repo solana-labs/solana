@@ -214,7 +214,7 @@ pub struct ExecuteBatchesInternalMetrics {
 }
 
 impl ExecuteBatchesInternalMetrics {
-    fn new_with_timings_from_all_threads(execute_timings: ExecuteTimings) -> Self {
+    pub fn new_with_timings_from_all_threads(execute_timings: ExecuteTimings) -> Self {
         let thread_timings =
             ThreadExecuteTimings {
                 execute_timings,
