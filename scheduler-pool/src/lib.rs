@@ -15,8 +15,8 @@ use {
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         installed_scheduler_pool::{
-            InstalledScheduler, InstalledSchedulerPool, SchedulerBox, SchedulerId,
-            SchedulerPoolArc, SchedulingContext, ResultWithTiming, WaitSource,
+            InstalledScheduler, InstalledSchedulerPool, ResultWithTiming, SchedulerBox,
+            SchedulerId, SchedulerPoolArc, SchedulingContext, WaitSource,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
@@ -90,7 +90,10 @@ struct Scheduler {
 
 impl Scheduler {
     fn spawn(pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
-        Self{pool, context_and_result_with_timing: Mutex::new((Some(initial_context), None))}
+        Self {
+            pool,
+            context_and_result_with_timing: Mutex::new((Some(initial_context), None)),
+        }
     }
 }
 
@@ -104,7 +107,10 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
-        let (ref context, ref mut result_with_timing) = &mut *self.context_and_result_with_timing.lock().expect("not poisoned");
+        let (ref context, ref mut result_with_timing) = &mut *self
+            .context_and_result_with_timing
+            .lock()
+            .expect("not poisoned");
         let context = context.as_ref().expect("active context");
 
         let batch = context
@@ -138,7 +144,13 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn schedule_termination(&mut self) {
-        drop::<Option<SchedulingContext>>(self.context_and_result_with_timing.lock().expect("not poisoned").0.take());
+        drop::<Option<SchedulingContext>>(
+            self.context_and_result_with_timing
+                .lock()
+                .expect("not poisoned")
+                .0
+                .take(),
+        );
     }
 
     fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<ResultWithTiming> {
@@ -155,13 +167,20 @@ impl InstalledScheduler for Scheduler {
         if should_block_current_thread {
             // current simplest form of this trait impl doesn't block the current thread
             // materially with the following single mutex lock....
-            self.context_and_result_with_timing.lock().expect("not poisoned").1.take()
+            self.context_and_result_with_timing
+                .lock()
+                .expect("not poisoned")
+                .1
+                .take()
         } else {
             None
         }
     }
 
     fn replace_scheduler_context(&self, context: SchedulingContext) {
-        *self.context_and_result_with_timing.lock().expect("not poisoned") = (Some(context), None);
+        *self
+            .context_and_result_with_timing
+            .lock()
+            .expect("not poisoned") = (Some(context), None);
     }
 }
