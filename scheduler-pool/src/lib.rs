@@ -198,6 +198,9 @@ mod tests {
     fn test_scheduler_pool_new() {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+
+        // this indirectly proves that there should be circular link because there's only one Arc
+        // at this moment now
         assert_eq!((Arc::strong_count(&pool), Arc::weak_count(&pool)), (1, 1));
     }
 
