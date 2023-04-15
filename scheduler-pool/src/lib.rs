@@ -51,7 +51,7 @@ impl SchedulerPool {
             transaction_status_sender,
             replay_vote_sender,
             prioritization_fee_cache,
-            weak_self: weak_self.clone(),
+            weak_self: Default::default()//weak_self.clone(),
         })
     }
 }
