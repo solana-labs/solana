@@ -257,7 +257,7 @@ mod tests {
 
         let scheduler = pool.take_from_pool(new_context);
         assert_eq!(scheduler_id, scheduler.scheduler_id());
-        assert_eq!(scheduler.scheduling_context().unwrap().bank(), new_bank);
+        assert_eq!(scheduler.scheduling_context().unwrap().bank(), &new_bank);
     }
 
     #[test]
