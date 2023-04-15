@@ -41,7 +41,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 
 use mockall::*;
 
-#[automock]
+#[cfg_attr(test, automock)]
 // Send + Sync is needed to be a field of Bank
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
