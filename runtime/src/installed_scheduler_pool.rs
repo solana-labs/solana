@@ -260,9 +260,8 @@ impl Bank {
         result_with_timing
     }
 
-    pub fn wait_for_completed_scheduler(&self) -> ResultWithTiming {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::AcrossBlock);
-        maybe_timings_and_result.unwrap_or((Ok(()), ExecuteTimings::default()))
+    pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTiming> {
+        self.wait_for_scheduler(WaitSource::AcrossBlock)
     }
 
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
