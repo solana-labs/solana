@@ -328,6 +328,7 @@ mod tests {
         let bank = Bank::default_for_tests();
         bank.install_scheduler(setup_mocked_scheduler(WaitSource::FromBankDrop));
         bank.wait_for_completed_scheduler();
+        std::mem::forget(bank);
     }
 
     #[test]
