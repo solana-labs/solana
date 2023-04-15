@@ -246,7 +246,7 @@ mod tests {
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let old_bank = Arc::new(Bank::default_for_tests());
         let new_bank = Arc::new(Bank::default_for_tests());
-        assert_ne!(&old_bank, &new_bank);
+        assert!(!Arc::ptr_eq(&old_bank, &new_bank));
 
         let old_context = SchedulingContext::new(SchedulingMode::BlockVerification, old_bank);
         let new_context = SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
@@ -257,7 +257,7 @@ mod tests {
 
         let scheduler = pool.take_from_pool(new_context);
         assert_eq!(scheduler_id, scheduler.scheduler_id());
-        assert_eq!(scheduler.scheduling_context().unwrap().bank(), &new_bank);
+        assert!(Arc::ptr_eq(scheduler.scheduling_context().unwrap().bank(), &new_bank));
     }
 
     #[test]
