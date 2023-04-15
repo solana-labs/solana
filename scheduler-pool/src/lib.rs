@@ -188,6 +188,7 @@ impl InstalledScheduler for Scheduler {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::SchedulerPool;
     use std::sync::Arc;
     use solana_runtime::bank::Bank;
