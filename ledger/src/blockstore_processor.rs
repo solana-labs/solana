@@ -1720,7 +1720,7 @@ fn process_single_slot(
         err
     })?;
 
-    if Some((result, timings)) = bank.wait_for_completed_scheduler() {
+    if let Some((result, timings)) = bank.wait_for_completed_scheduler() {
         result?
     }
     bank.freeze(); // all banks handled by this routine are created from complete slots
