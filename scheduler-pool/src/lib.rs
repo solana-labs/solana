@@ -254,6 +254,9 @@ mod tests {
         assert_eq!(scheduler_id2, scheduler3.scheduler_id());
         let scheduler4 = pool.take_from_pool(context.clone());
         assert_eq!(scheduler_id1, scheduler4.scheduler_id());
+
+        // explicit drop just for consistent .clone()-ing above
+        drop(context);
     }
 
     #[test]
@@ -280,6 +283,8 @@ mod tests {
             scheduler.scheduling_context().unwrap().bank(),
             &new_bank
         ));
+
+        // explicit drop just for consistent .clone()-ing above
         drop((old_context, new_context));
     }
 
