@@ -57,6 +57,10 @@ impl SchedulerPool {
             weak_self: weak_self.clone(),
         })
     }
+
+    pub fn self_arc(&self) -> Arc<Self> {
+        self.weak_self.upgrade().expect("self-referencing Arc-ed pool")
+    }
 }
 
 impl InstalledSchedulerPool for SchedulerPool {
@@ -69,8 +73,7 @@ impl InstalledSchedulerPool for SchedulerPool {
             scheduler.replace_scheduler_context(context);
             scheduler
         } else {
-            let this = self.weak_self.upgrade().expect("self-referencing Arc-ed pool");
-            let scheduler = Box::new(Scheduler::spawn(this, context));
+            let scheduler = Box::new(Scheduler::spawn(self.self_arc(), context));
             scheduler
         }
     }
