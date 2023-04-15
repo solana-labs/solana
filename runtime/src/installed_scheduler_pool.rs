@@ -315,6 +315,7 @@ mod tests {
             mock.expect_scheduler_pool()
                 .times(1)
                 .returning(move || setup_mocked_scheduler_pool());
+            mock
         };
 
         let mocked_scheduler = setup_mocked_scheduler();
