@@ -303,7 +303,7 @@ mod tests {
         super::*,
     };
 
-    fn setup_mocked_scheduler_pool() -> Arc<usize> {
+    fn setup_mocked_scheduler_pool() -> SchedulerPoolArc {
         let mut mock = MockInstalledSchedulerPool::new();
         mock.expect_return_to_pool()
             .times(1)
