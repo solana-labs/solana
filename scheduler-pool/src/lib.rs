@@ -91,6 +91,8 @@ struct Scheduler {
 
 impl Scheduler {
     fn spawn(pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
+        use rand::thread_rng;
+
         Self {
             id: thread_rng().gen::<SchedulerId>(),
             pool,
