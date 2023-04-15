@@ -65,11 +65,12 @@ impl SchedulerPool {
 
 impl InstalledSchedulerPool for SchedulerPool {
     fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox {
+        assert!(!context.bank().with_scheduler());
+
         let mut schedulers = self.schedulers.lock().expect("not poisoned");
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
         let mut maybe_scheduler = schedulers.pop();
-        assert!(!context.bank().with_scheduler());
         if let Some(mut scheduler) = maybe_scheduler {
             scheduler.replace_scheduler_context(context);
             scheduler
