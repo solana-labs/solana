@@ -25,6 +25,9 @@ use {
     solana_sdk::transaction::SanitizedTransaction,
     std::sync::{Arc, Mutex, Weak},
 };
+use rand::thread_rng;
+use rand::Rng;
+
 
 // SchedulerPool must be accessed via dyn by solana-runtime code, because of its internal fields'
 // types aren't available there...
@@ -91,9 +94,6 @@ struct Scheduler {
 
 impl Scheduler {
     fn spawn(pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
-        use rand::thread_rng;
-        use rand::Rng;
-
         Self {
             id: thread_rng().gen::<SchedulerId>(),
             pool,
@@ -219,14 +219,17 @@ mod tests {
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
         let scheduler1 = pool.take_from_pool(context.clone());
-
+        let scheduler_id1 = scheduler1.scheduler_id();
         let scheduler2 = pool.take_from_pool(context.clone());
+        let scheduler_id2 = scheduler2.scheduler_id();
 
         pool.return_to_pool(scheduler1);
         pool.return_to_pool(scheduler2);
 
-        let scheduler2 = pool.take_from_pool(context.clone());
-        let scheduler2 = pool.take_from_pool(context.clone());
+        let scheduler3 = pool.take_from_pool(context.clone());
+        assert_eq!(scheduler_id2, scheduler3.scheduler_id());
+        let scheduler4 = pool.take_from_pool(context.clone());
+        assert_eq!(scheduler_id1, scheduler4.scheduler_id());
     }
 
     #[test]
