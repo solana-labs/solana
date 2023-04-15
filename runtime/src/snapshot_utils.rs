@@ -5514,7 +5514,7 @@ mod tests {
         num_total: usize,
         num_posts: usize,
     ) -> Bank {
-        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let mut bank = Arc::new(Bank::new_for_tests(genesis_config));
 
         let collecter_id = Pubkey::new_unique();
         let snapshot_version = SnapshotVersion::default();
@@ -5565,7 +5565,7 @@ mod tests {
         let genesis_config = GenesisConfig::default();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let bank_snapshots_dir = tmp_dir.path();
-        let bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 3, 3);
+        let bank = create_snapshot_dirs_for_tests(&genesis_config, bank_snapshots_dir, 3, 3);
 
         let account_paths = &bank.rc.accounts.accounts_db.paths;
 
@@ -5599,27 +5599,27 @@ mod tests {
         let genesis_config = GenesisConfig::default();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let bank_snapshots_dir = tmp_dir.path();
-        let bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 10, 5);
+        let bank = create_snapshot_dirs_for_tests(&genesis_config, bank_snapshots_dir, 10, 5);
         // Keep bank in this scope so that its account_paths tmp dirs are not released, and purge_old_bank_snapshots
         // can clear the account hardlinks correctly.
         let account_paths = &bank.rc.accounts.accounts_db.paths;
         info!("account_paths: {:?}", account_paths);
 
-        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 10);
+        assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 10);
 
-        purge_old_bank_snapshots(&bank_snapshots_dir, 3, Some(BankSnapshotType::Pre));
-        assert_eq!(get_bank_snapshots_pre(&bank_snapshots_dir).len(), 3);
+        purge_old_bank_snapshots(bank_snapshots_dir, 3, Some(BankSnapshotType::Pre));
+        assert_eq!(get_bank_snapshots_pre(bank_snapshots_dir).len(), 3);
 
-        purge_old_bank_snapshots(&bank_snapshots_dir, 2, Some(BankSnapshotType::Post));
-        assert_eq!(get_bank_snapshots_post(&bank_snapshots_dir).len(), 2);
+        purge_old_bank_snapshots(bank_snapshots_dir, 2, Some(BankSnapshotType::Post));
+        assert_eq!(get_bank_snapshots_post(bank_snapshots_dir).len(), 2);
 
-        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 5);
+        assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 5);
 
-        purge_old_bank_snapshots(&bank_snapshots_dir, 2, None);
+        purge_old_bank_snapshots(bank_snapshots_dir, 2, None);
         // In the current implementation num_bank_snapshots_to_retain is really per type, so 2 PREs and 2 POSTs are retained
-        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 4);
+        assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 4);
 
-        purge_old_bank_snapshots(&bank_snapshots_dir, 0, None);
-        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 0);
+        purge_old_bank_snapshots(bank_snapshots_dir, 0, None);
+        assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 0);
     }
 }
