@@ -306,6 +306,7 @@ mod tests {
 
         assert!(!child_bank.with_scheduler());
         bank_forks.insert(child_bank);
-        assert!(bank_forks.working_bank().with_scheduler());
+        let child_bank = bank_forks.working_bank();
+        assert!(child_bank.with_scheduler());
     }
 }
