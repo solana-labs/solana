@@ -239,7 +239,9 @@ mod tests {
         let scheduler2 = pool.take_from_pool(context.clone());
         let scheduler_id2 = scheduler2.scheduler_id();
 
+        scheduler1.wait_for_termination(WaitSource::AcrossBlock);
         pool.return_to_pool(scheduler1);
+        scheduler2.wait_for_termination(WaitSource::AcrossBlock);
         pool.return_to_pool(scheduler2);
 
         let scheduler3 = pool.take_from_pool(context.clone());
