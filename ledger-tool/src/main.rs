@@ -4156,6 +4156,9 @@ fn main() {
                 let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
                 let end_slot = value_t!(arg_matches, "end_slot", Slot).ok();
                 let perform_compaction = arg_matches.is_present("enable_compaction");
+                if arg_matches.is_present("no_compaction") {
+                    warn!("--no-compaction is deprecated and is now the default behavior.");
+                }
                 let dead_slots_only = arg_matches.is_present("dead_slots_only");
                 let batch_size = value_t_or_exit!(arg_matches, "batch_size", usize);
 
