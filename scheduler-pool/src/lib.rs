@@ -71,11 +71,12 @@ impl InstalledSchedulerPool for SchedulerPool {
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
         let maybe_scheduler = schedulers.pop();
-        maybe_scheduler.inspect(|scheduler| {
+        if let Some(mut scheduler) = maybe_scheduler {
             scheduler.replace_scheduler_context(context);
-        }).unwrap_or_else(||
+            scheduler
+        } else {
             Box::new(Scheduler::spawn(self.self_arc(), context))
-        )
+        }
     }
 
     fn return_to_pool(&self, scheduler: SchedulerBox) {
