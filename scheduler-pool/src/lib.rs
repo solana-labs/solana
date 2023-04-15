@@ -81,7 +81,7 @@ impl InstalledSchedulerPool for SchedulerPool {
     }
 
     fn return_to_pool(&self, scheduler: SchedulerBox) {
-        assert!(!scheduler.scheduling_context().is_none());
+        assert!(scheduler.scheduling_context().is_none());
 
         self.schedulers
             .lock()
