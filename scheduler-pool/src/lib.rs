@@ -65,7 +65,7 @@ impl InstalledSchedulerPool for SchedulerPool {
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
         let mut maybe_scheduler = schedulers.pop();
-        if let Some(scheduler) = maybe_scheduler {
+        if let Some(mut scheduler) = maybe_scheduler {
             scheduler.replace_scheduler_context(context);
             scheduler
         } else {
