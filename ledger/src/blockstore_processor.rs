@@ -213,6 +213,24 @@ pub struct ExecuteBatchesInternalMetrics {
     execute_batches_us: u64,
 }
 
+impl ExecuteBatchesInternalMetrics {
+    fn new_with_timings_from_all_threads() -> Self {
+        let cumulative_timings2 =
+            solana_program_runtime::timings::ThreadExecuteTimings {
+                execute_timings: cumulative_timings,
+                ..solana_program_runtime::timings::ThreadExecuteTimings::default()
+            };
+        let mut metrics =
+            solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default(
+            );
+        metrics
+            .execution_timings_per_thread
+            .insert(0, cumulative_timings2);
+
+        metrics
+    }
+}
+
 fn execute_batches_internal(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],

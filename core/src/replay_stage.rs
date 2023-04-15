@@ -2584,22 +2584,11 @@ impl ReplayStage {
                 let replay_stats = bank_progress.replay_stats.clone();
                 let mut r_replay_stats = replay_stats.write().unwrap();
 
-                let (r, cumulative_timings) = bank.wait_for_completed_scheduler();
-                {
-                    let cumulative_timings2 =
-                        solana_program_runtime::timings::ThreadExecuteTimings {
-                            execute_timings: cumulative_timings,
-                            ..solana_program_runtime::timings::ThreadExecuteTimings::default()
-                        };
-                    let mut metrics =
-                        solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default(
-                        );
-                    metrics
-                        .execution_timings_per_thread
-                        .insert(0, cumulative_timings2);
-                    r_replay_stats.process_execute_batches_internal_metrics(metrics);
-                }
-                if let Err(err) = r {
+                let (result, cumulative_timings) = bank.wait_for_completed_scheduler();
+                let metrics = ExecuteBatchesInternalMetrics::new_with_timings_from_all_threads(cumulative_timings);
+                r_replay_stats.process_execute_batches_internal_metrics(metrics);
+
+                if let Err(err) = result {
                     // Error means the slot needs to be marked as dead
                     Self::mark_dead_slot(
                         blockstore,
