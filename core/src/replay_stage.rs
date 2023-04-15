@@ -2585,8 +2585,8 @@ impl ReplayStage {
                 let replay_stats = bank_progress.replay_stats.clone();
                 let mut r_replay_stats = replay_stats.write().unwrap();
 
-                let (result, execute_timings) = bank.wait_for_completed_scheduler();
-                let metrics = ExecuteBatchesInternalMetrics::new_with_timings_from_all_threads(execute_timings);
+                let (result, complete_execute_timings) = bank.wait_for_completed_scheduler();
+                let metrics = ExecuteBatchesInternalMetrics::new_with_timings_from_all_threads(complete_execute_timings);
                 r_replay_stats.process_execute_batches_internal_metrics(metrics);
 
                 if let Err(err) = result {
