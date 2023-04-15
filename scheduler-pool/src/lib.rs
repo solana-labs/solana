@@ -219,7 +219,7 @@ mod tests {
         std::sync::Arc,
     };
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::genesis_config::create_genesis_config;
+    use solana_runtime::genesis_utils::create_genesis_config;
     use solana_runtime::genesis_utils::GenesisConfigInfo;
 
     #[test]
