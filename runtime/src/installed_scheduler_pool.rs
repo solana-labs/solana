@@ -315,7 +315,7 @@ mod tests {
         let setup_mocked_scheduler = || {
             let mut mock = MockInstalledScheduler::new();
             mock.expect_wait_for_termination()
-                .with(mockall::predicate::eq(3))
+                .with(mockall::predicate::eq(WaitSource::FromBankDrop))
                 .times(1)
                 .returning(|_| None);
             mock.expect_scheduler_pool()
