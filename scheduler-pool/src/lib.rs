@@ -206,7 +206,11 @@ mod tests {
 
     #[test]
     fn test_scheduler_pool_filo() {
-        //SchedulerPool::new_dyn();
+        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+
+        let bank = Bank::default_for_tests();
+        pool.take_from_pool(SchedulingContext::new(SchedulingMode::BlockVerification, bank));
     }
 
     #[test]
@@ -216,7 +220,6 @@ mod tests {
 
     #[test]
     fn test_scheduler_pool_install() {
-        let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
     }
 
