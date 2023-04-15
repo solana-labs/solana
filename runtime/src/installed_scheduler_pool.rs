@@ -313,7 +313,7 @@ mod tests {
             .returning(|_| None);
         mocked_scheduler.expect_scheduler_pool()
             .times(1)
-            .returning(|| setup_mocked_scheduler_pool());
+            .returning(move || setup_mocked_scheduler_pool());
 
         let bank = Bank::default_for_tests();
         bank.install_scheduler(mocked_scheduler);
