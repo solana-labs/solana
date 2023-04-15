@@ -76,6 +76,7 @@ assert_matches = { workspace = true }
 ed25519-dalek = { workspace = true }
 libsecp256k1 = { workspace = true }
 memoffset = { workspace = true }
+mockall = { workspace = true }
 rand_chacha = { workspace = true }
 solana-logger = { workspace = true }
 static_assertions = { workspace = true }

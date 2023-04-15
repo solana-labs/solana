@@ -16,7 +16,3 @@ solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }
 solana-scheduler = { workspace = true }
 solana-sdk = { workspace = true }
-
-[dev-dependencies]
-mockall = { workspace = true }
-
