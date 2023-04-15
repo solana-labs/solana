@@ -192,6 +192,7 @@ mod tests {
     use std::sync::Arc;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_forks::BankForks;
+    use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
 
     #[test]
     fn test_scheduler_pool_new() {
