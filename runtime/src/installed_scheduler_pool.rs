@@ -324,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scheduler_wait_via_drop() {
+    fn test_scheduler_termination_from_drop() {
         let bank = Bank::default_for_tests();
         bank.install_scheduler(setup_mocked_scheduler(WaitSource::FromBankDrop));
         drop(bank);
