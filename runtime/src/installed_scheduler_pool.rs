@@ -305,6 +305,9 @@ mod tests {
     #[test]
     fn test_scheduler_wait_via_drop() {
         let mocked_scheduler = Box::new(MockInstalledScheduler::new());
+        mocked_scheduler.expect_wait_for_scheduler()
+            .times(1)
+            .returning(|_| 3);
         let bank = Bank::default_for_tests();
         bank.install_scheduler(mocked_scheduler);
         drop(bank);
