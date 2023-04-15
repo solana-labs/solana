@@ -35,7 +35,7 @@ pub struct SchedulerPool {
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
-    weak_self: Weak<SchedulerPool>,
+    weak_self: Weak<dyn InstalledSchedulerPool>,
 }
 
 impl SchedulerPool {
