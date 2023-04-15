@@ -305,9 +305,10 @@ mod tests {
 
     fn setup_mocked_scheduler_pool() -> SchedulerPoolArc {
         let mut mock = MockInstalledSchedulerPool::new();
-        mock.expect_return_to_pool()
+        /*mock.expect_return_to_pool()
             .times(1)
             .returning(|_| ());
+            */ 
         Arc::new(mock)
     }
 
