@@ -2955,24 +2955,10 @@ pub fn purge_old_bank_snapshots(
             })
     };
 
-    let mut select_pre = false;
-    let mut select_post = false;
-    match filter_by_type {
-        Some(BankSnapshotType::Pre) => {
-            select_pre = true;
-        }
-        Some(BankSnapshotType::Post) => {
-            select_post = true;
-        }
-        None => {
-            select_pre = true;
-            select_post = true;
-        }
-    }
-    if select_pre {
+    if matches!(filter_by_type, Some(BankSnapshotType::Pre) | None) {
         do_purge(get_bank_snapshots_pre(&bank_snapshots_dir));
     }
-    if select_post {
+    if matches!(filter_by_type, Some(BankSnapshotType::Post) | None) {
         do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
     }
 }
