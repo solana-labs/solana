@@ -191,6 +191,7 @@ mod tests {
     use crate::SchedulerPool;
     use std::sync::Arc;
     use solana_runtime::bank::Bank;
+    use solana_runtime::bank_forks::BankForks;
 
     #[test]
     fn test_scheduler_pool_new() {
