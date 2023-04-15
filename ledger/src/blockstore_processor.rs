@@ -214,11 +214,11 @@ pub struct ExecuteBatchesInternalMetrics {
 }
 
 impl ExecuteBatchesInternalMetrics {
-    fn new_with_timings_from_all_threads(cumulative_timings: ExecuteTimings) -> Self {
+    fn new_with_timings_from_all_threads(execute_timings: ExecuteTimings) -> Self {
         let thread_timings =
-            solana_program_runtime::timings::ThreadExecuteTimings {
-                execute_timings: cumulative_timings,
-                ..solana_program_runtime::timings::ThreadExecuteTimings::default()
+            ThreadExecuteTimings {
+                execute_timings,
+                ..ThreadExecuteTimings::default()
             };
         let mut new = Self::default();
         new
