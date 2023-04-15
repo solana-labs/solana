@@ -255,7 +255,7 @@ mod tests {
         let scheduler_id = scheduler.scheduler_id();
         pool.return_to_pool(scheduler);
 
-        let scheduler = pool.take_from_pool(old_context);
+        let scheduler = pool.take_from_pool(new_context);
         assert_eq!(scheduler_id, scheduler.scheduler_id());
         assert!(Arc::ptr_eq(scheduler.scheduling_context().unwrap().bank(), &new_bank));
     }
