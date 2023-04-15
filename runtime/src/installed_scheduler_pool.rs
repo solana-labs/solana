@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_scheduler_wait_via_drop() {
-        let mocked_scheduler = Box::new(MockInstalledScheduler::new());
+        let mut mocked_scheduler = Box::new(MockInstalledScheduler::new());
         mocked_scheduler.expect_wait_for_termination()
             .times(1)
             .returning(|_| None);
