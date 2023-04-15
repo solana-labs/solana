@@ -285,7 +285,7 @@ mod tests {
         ));
 
         // explicit drop just for consistent .clone()-ing above
-        drop((old_context, new_context));
+        drop((old_context, old_bank, new_context, new_bank));
     }
 
     #[test]
