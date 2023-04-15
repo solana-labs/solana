@@ -43,7 +43,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
     fn scheduler_pool(&self) -> SchedulerPoolArc;
-    fn schedulng_context(&self) -> SchedulingContext;
+    fn scheduling_context(&self) -> SchedulingContext;
 
     // Calling this is illegal as soon as schedule_termiantion is called on &self.
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
