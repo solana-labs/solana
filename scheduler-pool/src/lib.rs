@@ -8,6 +8,8 @@
 //! commits any side-effects (i.e. on-chain state changes) into `Bank`s via `solana-ledger`'s
 //! helper fun called `execute_batch()`.
 
+#![feature(downcast_unchecked)]
+
 use {
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
