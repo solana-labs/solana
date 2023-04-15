@@ -43,7 +43,6 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
     fn scheduler_pool(&self) -> SchedulerPoolArc;
-    fn scheduling_context(&self) -> SchedulingContext;
 
     // Calling this is illegal as soon as schedule_termiantion is called on &self.
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
@@ -56,7 +55,8 @@ pub trait InstalledScheduler: Send + Sync + Debug {
 
     fn wait_for_termination(&mut self, source: &WaitSource) -> Option<ResultWithTiming>;
 
-    fn replace_scheduler_context(&self, context: SchedulingContext);
+    fn scheduling_context(&self) -> SchedulingContext;
+    fn replace_scheduler_context(&mut self, context: SchedulingContext);
 }
 
 pub type SchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;
