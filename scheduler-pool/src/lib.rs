@@ -189,6 +189,7 @@ impl InstalledScheduler for Scheduler {
 #[cfg(test)]
 mod tests {
     use crate::SchedulerPool;
+    use std::sync::Arc;
 
     #[test]
     fn test_scheduler_pool_new() {
