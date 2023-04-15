@@ -220,14 +220,12 @@ impl ExecuteBatchesInternalMetrics {
                 execute_timings: cumulative_timings,
                 ..solana_program_runtime::timings::ThreadExecuteTimings::default()
             };
-        let mut metrics =
-            solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default(
-            );
-        metrics
+        let mut new = Self::default();
+        new
             .execution_timings_per_thread
             .insert(0, cumulative_timings2);
 
-        metrics
+        new
     }
 }
 
