@@ -193,6 +193,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_forks::BankForks;
     use solana_runtime::prioritization_fee_cache::PrioritizationFeeCache;
+    use solana_runtime::installed_scheduler_pool::SchedulingContext;
 
     #[test]
     fn test_scheduler_pool_new() {
@@ -220,6 +221,7 @@ mod tests {
 
     #[test]
     fn test_scheduler_pool_install() {
+        let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
     }
 
