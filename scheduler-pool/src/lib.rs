@@ -35,7 +35,7 @@ pub struct SchedulerPool {
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
-    weak: Weak<SchedulerPool>,
+    weak_self: Weak<SchedulerPool>,
 }
 
 impl SchedulerPool {
@@ -45,13 +45,13 @@ impl SchedulerPool {
         replay_vote_sender: Option<ReplayVoteSender>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> SchedulerPoolArc {
-        Arc::new_cyclic(|weak_pool| Self {
+        Arc::new_cyclic(|weak_self| Self {
             schedulers: Mutex::<Vec<SchedulerBox>>::default(),
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
             prioritization_fee_cache,
-            weak: weak_pool.clone(),
+            weak: weak_self.clone(),
         })
     }
 }
@@ -198,7 +198,7 @@ mod tests {
     fn test_scheduler_pool_new() {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
-        assert!(Arc::is_same(pool, pool.weak));
+        assert!(Arc::is_same(pool, pool.weak_self));
     }
 
     #[test]
