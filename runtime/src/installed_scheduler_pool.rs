@@ -306,5 +306,7 @@ mod tests {
     fn test_scheduler_wait_via_drop() {
         let m = MockInstalledScheduler::new();
         assert_eq!(m.scheduler_id(), 3);
+        let bank = Bank::default_for_tests();
+        bank.install_scheduler(m);
     }
 }
