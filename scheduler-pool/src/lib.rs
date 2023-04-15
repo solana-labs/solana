@@ -261,8 +261,9 @@ mod tests {
         let old_context = SchedulingContext::new(SchedulingMode::BlockVerification, old_bank.clone());
         let new_context = SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
 
-        let scheduler = pool.take_from_pool(old_context.clone());
+        let mut scheduler = pool.take_from_pool(old_context.clone());
         let scheduler_id = scheduler.scheduler_id();
+        scheduler.wait_for_termination(&WaitSource::AcrossBlock);
         pool.return_to_pool(scheduler);
 
         let scheduler = pool.take_from_pool(new_context);
