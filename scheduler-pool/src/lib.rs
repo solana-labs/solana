@@ -108,6 +108,7 @@ impl Scheduler {
         }
     }
 }
+use mockall::*;
 
 #[automock]
 impl InstalledScheduler for Scheduler {
