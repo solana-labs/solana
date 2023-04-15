@@ -324,10 +324,8 @@ mod tests {
         };
 
 
-        let mocked_scheduler = setup_mocked_scheduler();
-
         let bank = Bank::default_for_tests();
-        bank.install_scheduler(mocked_scheduler);
+        bank.install_scheduler(setup_mocked_scheduler());
         drop(bank);
     }
 }
