@@ -300,7 +300,6 @@ mod tests {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
-        let scheduler = pool.take_from_pool(context);
 
         let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
