@@ -208,7 +208,7 @@ pub fn execute_batch(
 
 #[derive(Default)]
 pub struct ExecuteBatchesInternalMetrics {
-    pub execution_timings_per_thread: HashMap<usize, ThreadExecuteTimings>,
+    execution_timings_per_thread: HashMap<usize, ThreadExecuteTimings>,
     total_batches_len: u64,
     execute_batches_us: u64,
 }
