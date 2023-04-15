@@ -1329,7 +1329,7 @@ fn process_bank_0(
         &mut ExecuteTimings::default(),
     )
     .expect("Failed to process bank 0 from ledger. Did you forget to provide a snapshot?");
-    bank0.wait_for_completed_scheduler().map(|(result, _tiing)| result.unwrap());
+    bank0.wait_for_completed_scheduler().map(|(result, _timing)| result.unwrap());
     bank0.freeze();
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank0.slot(), bank0.hash(), false);
@@ -1720,7 +1720,7 @@ fn process_single_slot(
         err
     })?;
 
-    bank.wait_for_completed_scheduler().0?;
+    bank.wait_for_completed_scheduler().map(|(result, timing)| result?);
     bank.freeze(); // all banks handled by this routine are created from complete slots
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
