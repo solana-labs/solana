@@ -234,9 +234,9 @@ mod tests {
         let bank = Arc::new(Bank::default_for_tests());
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
-        let scheduler1 = pool.take_from_pool(context.clone());
+        let mut scheduler1 = pool.take_from_pool(context.clone());
         let scheduler_id1 = scheduler1.scheduler_id();
-        let scheduler2 = pool.take_from_pool(context.clone());
+        let mut scheduler2 = pool.take_from_pool(context.clone());
         let scheduler_id2 = scheduler2.scheduler_id();
 
         scheduler1.wait_for_termination(&WaitSource::AcrossBlock);
