@@ -183,7 +183,7 @@ impl InstalledScheduler for Scheduler {
         }
     }
 
-    fn scheduler_context(&self, context: SchedulingContext) -> SchedulingContext {
+    fn scheduling_context(&self, context: SchedulingContext) -> SchedulingContext {
         *self
             .context_and_result_with_timing
             .lock()
