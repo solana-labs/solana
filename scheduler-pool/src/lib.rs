@@ -299,11 +299,10 @@ mod tests {
 
         let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
-        let child_bank = Bank::new_from_parent(&bank_forks[0_Slot], &Pubkey::default(), 1);
         bank_forks.install_scheduler_pool(pool);
 
-        let bank = Bank::default_for_tests();
-        bank_forks.insert(bank);
+        let child_bank = Bank::new_from_parent(&bank_forks[0], &Pubkey::default(), 1);
+        bank_forks.insert(child_bank);
         assert!(bank_forks.working_bank().with_scheduler());
     }
 }
