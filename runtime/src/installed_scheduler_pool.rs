@@ -311,7 +311,7 @@ mod tests {
         Arc::new(mock)
     }
 
-    fn setup_mocked_scheduler() -> Arc<usize> {
+    fn setup_mocked_scheduler() -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         mock.expect_wait_for_termination()
             .with(mockall::predicate::eq(WaitSource::FromBankDrop))
