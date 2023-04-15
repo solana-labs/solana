@@ -248,14 +248,14 @@ mod tests {
         let new_bank = Arc::new(Bank::default_for_tests());
         assert!(!Arc::ptr_eq(&old_bank, &new_bank));
 
-        let old_context = SchedulingContext::new(SchedulingMode::BlockVerification, old_bank);
+        let old_context = SchedulingContext::new(SchedulingMode::BlockVerification, old_bank.clone());
         let new_context = SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
 
         let scheduler = pool.take_from_pool(old_context);
         let scheduler_id = scheduler.scheduler_id();
         pool.return_to_pool(scheduler);
 
-        let scheduler = pool.take_from_pool(new_context);
+        let scheduler = pool.take_from_pool(old_context);
         assert_eq!(scheduler_id, scheduler.scheduler_id());
         assert!(Arc::ptr_eq(scheduler.scheduling_context().unwrap().bank(), &new_bank));
     }
