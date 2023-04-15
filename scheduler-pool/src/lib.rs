@@ -320,6 +320,6 @@ mod tests {
 
     #[test]
     fn test_wait_via_drop() {
-        MockScheduler::new()
+        MockScheduler::new();
     }
 }
