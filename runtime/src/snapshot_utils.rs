@@ -2955,12 +2955,12 @@ pub fn purge_old_bank_snapshots(
             })
     };
 
-    if matches!(filter_by_type, Some(BankSnapshotType::Pre) | None) {
-        do_purge(get_bank_snapshots_pre(&bank_snapshots_dir));
-    }
-    if matches!(filter_by_type, Some(BankSnapshotType::Post) | None) {
-        do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
-    }
+    let bank_snapshots = match filter_by_type {
+        Some(BankSnapshotType::Pre) => get_bank_snapshots_pre(&bank_snapshots_dir),
+        Some(BankSnapshotType::Post) => get_bank_snapshots_post(&bank_snapshots_dir),
+        None => get_bank_snapshots(&bank_snapshots_dir),
+    };
+    do_purge(bank_snapshots);
 }
 
 /// Get the snapshot storages for this bank
@@ -5616,8 +5616,7 @@ mod tests {
         assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 5);
 
         purge_old_bank_snapshots(bank_snapshots_dir, 2, None);
-        // In the current implementation num_bank_snapshots_to_retain is really per type, so 2 PREs and 2 POSTs are retained
-        assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 4);
+        assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 2);
 
         purge_old_bank_snapshots(bank_snapshots_dir, 0, None);
         assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 0);
