@@ -5483,7 +5483,7 @@ mod tests {
             .unwrap();
         }
 
-        let bank_snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
+        let bank_snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         let account_paths = &bank.rc.accounts.accounts_db.paths;
 
         let (bank_constructed, ..) = bank_from_snapshot_dir(
