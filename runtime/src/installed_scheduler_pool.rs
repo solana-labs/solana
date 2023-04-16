@@ -316,9 +316,9 @@ mod tests {
     fn setup_mocked_scheduler(wait_sources: &[WaitSource]) -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
 
-        for &wait_source in wait_sources {
+        for wait_source in wait_sources {
             mock.expect_wait_for_termination()
-                .with(mockall::predicate::eq(wait_source))
+                .with(mockall::predicate::eq(wait_source.clone()))
                 .times(1)
                 .returning(|_| None);
         }
