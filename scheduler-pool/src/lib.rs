@@ -106,7 +106,7 @@ impl Scheduler {
             id: thread_rng().gen::<SchedulerId>(),
             pool,
             context: Some(initial_context),
-            result_with_timing: Mutex::<ResultWithTiming>::default()
+            result_with_timing: Mutex::default()
         }
     }
 }
