@@ -5600,8 +5600,6 @@ mod tests {
         let bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 10, 5);
         // Keep bank in this scope so that its account_paths tmp dirs are not released, and purge_old_bank_snapshots
         // can clear the account hardlinks correctly.
-        let account_paths = &bank.rc.accounts.accounts_db.paths;
-        info!("account_paths: {:?}", account_paths);
 
         assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 10);
 
