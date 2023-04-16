@@ -124,7 +124,7 @@ impl InstalledScheduler for Scheduler {
             .result_with_timing
             .lock()
             .expect("not poisoned")
-            .get_or_insert_with(|| (Ok(()), ExecuteTimings::default()))
+            .get_or_insert_with(|| (Ok(()), ExecuteTimings::default()));
         let context = self.context.as_ref().expect("active context");
 
         let batch = context
