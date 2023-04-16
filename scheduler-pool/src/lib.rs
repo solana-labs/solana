@@ -91,7 +91,7 @@ impl InstalledSchedulerPool for SchedulerPool {
 
 // Currently, simplest possible implementation (i.e. single-threaded)
 // this will be replaced with more proper implementation...
-// not usable at all, especially for mainnnet-beta
+// not usable at all, especially for mainnet-beta
 #[derive(Debug)]
 struct Scheduler {
     id: SchedulerId,
