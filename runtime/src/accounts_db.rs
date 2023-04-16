@@ -2895,10 +2895,15 @@ impl AccountsDb {
         // slot.saturating_sub(epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(slot)))
         // but there are problems with warmup and such on tests and probably test clusters.
         // So, just use the maximum below (epoch_schedule.slots_per_epoch)
-        if slot > epoch_schedule.slots_per_epoch {
+        if slot >= epoch_schedule.slots_per_epoch {
+            // slot - `slots_per_epoch` is the newest ancient slot.
+            // the next slot (ie. + 1) is the oldest slot withIN one epoch prior to `slot`
             slot.saturating_sub(epoch_schedule.slots_per_epoch)
                 .saturating_add(1)
         } else {
+            // If `slot` is less than 1 epoch older than 0, then the result here is 0.
+            // In other words, 0 is the oldest slot withIN one epoch prior of `slot`.
+            // slot 1 is the second oldest slot withIN one epoch prior.
             0
         }
     }
