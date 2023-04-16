@@ -319,6 +319,10 @@ mod tests {
             .with(mockall::predicate::eq(wait_source))
             .times(1)
             .returning(|_| None);
+        mock.expect_wait_for_termination()
+            .with(mockall::predicate::eq(WaitSource::AcrossBlock))
+            .times(1)
+            .returning(|_| None);
         mock.expect_scheduler_pool()
             .times(1)
             .returning(move || setup_mocked_scheduler_pool());
