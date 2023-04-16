@@ -315,11 +315,11 @@ mod tests {
         Arc::new(mock)
     }
 
-    fn setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitSource>) -> SchedulerBox {
+    fn setup_mocked_scheduler(expected_wait_sources: impl Iterator<Item = WaitSource>) -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
 
-        for wait_source in wait_sources {
+        for expected_wait_source in expected_wait_sources {
             mock.expect_wait_for_termination()
                 .with(mockall::predicate::function(|actual_wait_source| matches!(actual_wait_source, expected_wait_source)))
                 .times(1)
