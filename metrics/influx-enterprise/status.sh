@@ -10,8 +10,8 @@ if [[ -z $HOST ]]; then
 fi
 echo "HOST: $HOST"
 
-servers_data=("dev-equinix-washington-27")
-servers_meta=("dev-equinix-washington-24")
+servers_data=("dev-equinix-washington-27" "dev-equinix-washington-28" "dev-equinix-washington-29" "dev-equinix-washington-30" "dev-equinix-washington-31" "dev-equinix-washington-32" "dev-equinix-amsterdam-20" "dev-equinix-amsterdam-21" "dev-equinix-amsterdam-22" "dev-equinix-chicago-17" "dev-equinix-chicago-19" "dev-equinix-chicago-25" "dev-equinix-amsterdam-19" "dev-equinix-dallas-1" "dev-equinix-frankfurt-1" "dev-equinix-toronto-5")
+servers_meta=("dev-equinix-washington-24" "dev-equinix-washington-25" "dev-equinix-washington-26")
 
 # Check the service on a list of servers
 check_service() {
