@@ -306,7 +306,7 @@ mod tests {
     use crate::bank::test_utils::goto_end_of_slot;
     use mockall::Sequence;
 
-    fn setup_mocked_scheduler_pool() -> SchedulerPoolArc {
+    fn setup_mocked_scheduler_pool(seq: &mut Sequence) -> SchedulerPoolArc {
         let mut mock = MockInstalledSchedulerPool::new();
         mock.expect_return_to_pool()
             .times(1)
