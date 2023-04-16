@@ -5526,8 +5526,7 @@ mod tests {
         let genesis_config = GenesisConfig::default();
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
-        let tmp_dir = tempfile::TempDir::new().unwrap();
-        let bank_snapshots_dir = tmp_dir.path();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let collecter_id = Pubkey::new_unique();
         let snapshot_version = SnapshotVersion::default();
 
@@ -5542,7 +5541,7 @@ mod tests {
             let snapshot_storages = bank.get_snapshot_storages(None);
             let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
             add_bank_snapshot(
-                bank_snapshots_dir,
+                &bank_snapshots_dir,
                 &bank,
                 &snapshot_storages,
                 snapshot_version,
@@ -5553,7 +5552,7 @@ mod tests {
             // to construct a bank.
             assert!(
                 crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                    bank_snapshots_dir,
+                    &bank_snapshots_dir,
                     bank.slot(),
                     &AccountsHash(Hash::new_unique()),
                     None
