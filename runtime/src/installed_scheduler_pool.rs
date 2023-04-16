@@ -286,7 +286,6 @@ impl Bank {
     }
 
     pub(crate) fn drop_scheduler(&mut self) {
-        return;
         if self.with_scheduler() {
             if let Some(Err(err)) = self.wait_for_completed_scheduler_from_drop() {
                 warn!(
