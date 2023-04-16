@@ -345,6 +345,7 @@ mod tests {
 
     #[test]
     fn test_scheduler_reinitialization() {
+        solana_logger::setup();
         let mut bank = crate::bank::tests::create_simple_test_bank(42);
         bank.install_scheduler(setup_mocked_scheduler(WaitSource::InsideBlock));
         goto_end_of_slot(&mut bank);
