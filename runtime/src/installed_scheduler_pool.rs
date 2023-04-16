@@ -324,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn test_normal_scheduler_termination() {
+    fn test_scheduler_normal_termination() {
         let bank = Bank::default_for_tests();
         bank.install_scheduler(setup_mocked_scheduler(WaitSource::AcrossBlock));
         bank.wait_for_completed_scheduler();
