@@ -5128,8 +5128,6 @@ mod tests {
         num_total: usize,
         num_posts: usize,
     ) -> Bank {
-        let mut bank = Arc::new(Bank::new_for_tests(genesis_config));
-
         let collecter_id = Pubkey::new_unique();
         let snapshot_version = SnapshotVersion::default();
 
@@ -5179,6 +5177,8 @@ mod tests {
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 4, 0);
 
+=======
+>>>>>>> f9b76e846c (Let bank_snapshots_dir be TempDir)
         let snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 4);
 
@@ -5563,9 +5563,8 @@ mod tests {
         solana_logger::setup();
 
         let genesis_config = GenesisConfig::default();
-        let tmp_dir = tempfile::TempDir::new().unwrap();
-        let bank_snapshots_dir = tmp_dir.path();
-        let bank = create_snapshot_dirs_for_tests(&genesis_config, bank_snapshots_dir, 3, 3);
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+        let bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 3, 3);
 
         let account_paths = &bank.rc.accounts.accounts_db.paths;
 
@@ -5597,28 +5596,27 @@ mod tests {
         solana_logger::setup();
 
         let genesis_config = GenesisConfig::default();
-        let tmp_dir = tempfile::TempDir::new().unwrap();
-        let bank_snapshots_dir = tmp_dir.path();
-        let bank = create_snapshot_dirs_for_tests(&genesis_config, bank_snapshots_dir, 10, 5);
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+        let bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 10, 5);
         // Keep bank in this scope so that its account_paths tmp dirs are not released, and purge_old_bank_snapshots
         // can clear the account hardlinks correctly.
         let account_paths = &bank.rc.accounts.accounts_db.paths;
         info!("account_paths: {:?}", account_paths);
 
-        assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 10);
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 10);
 
-        purge_old_bank_snapshots(bank_snapshots_dir, 3, Some(BankSnapshotType::Pre));
-        assert_eq!(get_bank_snapshots_pre(bank_snapshots_dir).len(), 3);
+        purge_old_bank_snapshots(&bank_snapshots_dir, 3, Some(BankSnapshotType::Pre));
+        assert_eq!(get_bank_snapshots_pre(&bank_snapshots_dir).len(), 3);
 
-        purge_old_bank_snapshots(bank_snapshots_dir, 2, Some(BankSnapshotType::Post));
-        assert_eq!(get_bank_snapshots_post(bank_snapshots_dir).len(), 2);
+        purge_old_bank_snapshots(&bank_snapshots_dir, 2, Some(BankSnapshotType::Post));
+        assert_eq!(get_bank_snapshots_post(&bank_snapshots_dir).len(), 2);
 
-        assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 5);
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 5);
 
-        purge_old_bank_snapshots(bank_snapshots_dir, 2, None);
-        assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 2);
+        purge_old_bank_snapshots(&bank_snapshots_dir, 2, None);
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 2);
 
-        purge_old_bank_snapshots(bank_snapshots_dir, 0, None);
-        assert_eq!(get_bank_snapshots(bank_snapshots_dir).len(), 0);
+        purge_old_bank_snapshots(&bank_snapshots_dir, 0, None);
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 0);
     }
 }
