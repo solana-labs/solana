@@ -141,7 +141,7 @@ impl InstalledScheduler for Scheduler {
 
         // so, we're NOT scheduling at all; rather, just execute tx straight off.  we doesn't need
         // to solve inter-tx locking deps only in the case of single-thread fifo like this....
-        if *result.is_ok() || !fail_fast {
+        if result.is_ok() || !fail_fast {
             *result = execute_batch(
                 &batch_with_indexes,
                 context.bank(),
