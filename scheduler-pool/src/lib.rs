@@ -120,10 +120,11 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
-        let ref mut result_with_timing = &mut *self
+        let (result, timings) = &mut *self
             .result_with_timing
             .lock()
-            .expect("not poisoned");
+            .expect("not poisoned")
+            .get_or_insert_with(|| (Ok(()), ExecuteTimings::default()))
         let context = self.context.as_ref().expect("active context");
 
         let batch = context
@@ -133,8 +134,6 @@ impl InstalledScheduler for Scheduler {
             batch,
             transaction_indexes: vec![index],
         };
-        let (result, timings) =
-            result_with_timing.get_or_insert_with(|| (Ok(()), ExecuteTimings::default()));
 
         let fail_fast = match context.mode() {
             // this should be false, for (upcoming) BlockGeneration variant .
