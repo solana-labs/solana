@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn test_scheduler_reinitialization() {
-        let mut bank = create_simple_test_bank();
+        let mut bank = crate::bank::tests::create_simple_test_bank();
         bank.install_scheduler(setup_mocked_scheduler(WaitSource::FromBankDrop));
         goto_end_of_slot(&mut bank);
     }
