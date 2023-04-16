@@ -5683,7 +5683,6 @@ dependencies = [
  "either",
  "generic-array 0.14.7",
  "getrandom 0.1.16",
- "hashbrown 0.12.3",
  "im",
  "lazy_static",
  "log",
