@@ -5124,8 +5124,7 @@ mod tests {
         let genesis_config = GenesisConfig::default();
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
-        let tmp_dir = tempfile::TempDir::new().unwrap();
-        let bank_snapshots_dir = tmp_dir.path();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let collecter_id = Pubkey::new_unique();
         let snapshot_version = SnapshotVersion::default();
 
@@ -5140,7 +5139,7 @@ mod tests {
             let snapshot_storages = bank.get_snapshot_storages(None);
             let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
             add_bank_snapshot(
-                bank_snapshots_dir,
+                &bank_snapshots_dir,
                 &bank,
                 &snapshot_storages,
                 snapshot_version,
@@ -5149,7 +5148,7 @@ mod tests {
             .unwrap();
         }
 
-        let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
+        let snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 4);
 
         let complete_flag_file = snapshot.snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
@@ -5157,19 +5156,19 @@ mod tests {
         // The incomplete snapshot dir should still exist
         let snapshot_dir_4 = snapshot.snapshot_dir;
         assert!(snapshot_dir_4.exists());
-        let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
+        let snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 3);
         // The incomplete snapshot dir should have been deleted
         assert!(!snapshot_dir_4.exists());
 
         let snapshot_version_file = snapshot.snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
         fs::remove_file(snapshot_version_file).unwrap();
-        let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
+        let snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 2);
 
         let status_cache_file = snapshot.snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
         fs::remove_file(status_cache_file).unwrap();
-        let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
+        let snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 1);
     }
 
@@ -5226,9 +5225,7 @@ mod tests {
         solana_logger::setup();
         let genesis_config = GenesisConfig::default();
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
-
-        let tmp_dir = tempfile::TempDir::new().unwrap();
-        let bank_snapshots_dir = tmp_dir.path();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let collecter_id = Pubkey::new_unique();
         let snapshot_version = SnapshotVersion::default();
 
@@ -5243,7 +5240,7 @@ mod tests {
             let snapshot_storages = bank.get_snapshot_storages(None);
             let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
             add_bank_snapshot(
-                bank_snapshots_dir,
+                &bank_snapshots_dir,
                 &bank,
                 &snapshot_storages,
                 snapshot_version,
@@ -5252,7 +5249,7 @@ mod tests {
             .unwrap();
         }
 
-        let snapshot_dir_slot_2 = bank_snapshots_dir.join("2");
+        let snapshot_dir_slot_2 = bank_snapshots_dir.path().join("2");
         let accounts_link_dir_slot_2 = snapshot_dir_slot_2.join("accounts_hardlinks");
 
         // the symlinks point to the account snapshot hardlink directories <account_path>/snapshot/<slot>/ for slot 2
@@ -5462,8 +5459,7 @@ mod tests {
         let genesis_config = GenesisConfig::default();
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
-        let tmp_dir = tempfile::TempDir::new().unwrap();
-        let bank_snapshots_dir = tmp_dir.path();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let collecter_id = Pubkey::new_unique();
         let snapshot_version = SnapshotVersion::default();
 
@@ -5478,7 +5474,7 @@ mod tests {
             let snapshot_storages = bank.get_snapshot_storages(None);
             let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
             add_bank_snapshot(
-                bank_snapshots_dir,
+                &bank_snapshots_dir,
                 &bank,
                 &snapshot_storages,
                 snapshot_version,
@@ -5568,7 +5564,7 @@ mod tests {
         let account_paths = &bank.rc.accounts.accounts_db.paths;
 
         let deserialized_bank = bank_from_latest_snapshot_dir(
-            bank_snapshots_dir,
+            &bank_snapshots_dir,
             &genesis_config,
             &RuntimeConfig::default(),
             account_paths,
