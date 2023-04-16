@@ -303,6 +303,7 @@ mod tests {
     use {
         super::*,
     };
+    use crate::bank::test_utils::goto_end_of_slot;
 
     fn setup_mocked_scheduler_pool() -> SchedulerPoolArc {
         let mut mock = MockInstalledSchedulerPool::new();
