@@ -12,13 +12,13 @@ use {
             INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
         },
         accounts_file::AccountsFile,
-        accounts_index::ZeroLamport,
+        accounts_index::{AccountsIndexScanResult, ZeroLamport},
         active_stats::ActiveStatItem,
         append_vec::aligned_stored_size,
         storable_accounts::{StorableAccounts, StorableAccountsBySlot},
     },
     rand::{thread_rng, Rng},
-    rayon::prelude::{IntoParallelRefIterator, ParallelIterator},
+    rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     solana_measure::measure_us,
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, saturating_add_assign},
     std::{
@@ -302,7 +302,11 @@ impl AccountsDb {
         );
 
         if pack.len() > accounts_to_combine.target_slots_sorted.len() {
-            return; // not enough slots to contain the storages we are trying to pack
+            // Not enough slots to contain the accounts we are trying to pack.
+            // `shrink_collect` previously unref'd some accounts. We need to addref them
+            // to restore the correct state since we failed to combine anything.
+            self.addref_accounts_failed_to_shrink_ancient(accounts_to_combine);
+            return;
         }
 
         let write_ancient_accounts = self.write_packed_storages(&accounts_to_combine, pack);
@@ -312,6 +316,28 @@ impl AccountsDb {
             write_ancient_accounts,
             metrics,
         );
+    }
+
+    /// for each account in `unrefed_pubkeys`, in each `accounts_to_combine`, addref
+    fn addref_accounts_failed_to_shrink_ancient(&self, accounts_to_combine: AccountsToCombine) {
+        self.thread_pool_clean.install(|| {
+            accounts_to_combine
+                .accounts_to_combine
+                .into_par_iter()
+                .for_each(|combine| {
+                    self.accounts_index.scan(
+                        combine.unrefed_pubkeys.into_iter(),
+                        |_pubkey, _slots_refs, entry| {
+                            if let Some(entry) = entry {
+                                entry.addref();
+                            }
+                            AccountsIndexScanResult::None
+                        },
+                        None,
+                        true,
+                    );
+                });
+        });
     }
 
     /// calculate all storage info for the storages in slots
