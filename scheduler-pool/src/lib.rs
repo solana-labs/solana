@@ -96,7 +96,7 @@ impl InstalledSchedulerPool for SchedulerPool {
 struct Scheduler {
     id: SchedulerId,
     pool: Arc<SchedulerPool>,
-    context: Option<SchedulingContext>, 
+    context: Option<SchedulingContext>,
     result_with_timing: Mutex<Option<ResultWithTiming>>,
 }
 
@@ -106,7 +106,7 @@ impl Scheduler {
             id: thread_rng().gen::<SchedulerId>(),
             pool,
             context: Some(initial_context),
-            result_with_timing: Mutex::default()
+            result_with_timing: Mutex::default(),
         }
     }
 }
@@ -135,10 +135,7 @@ impl InstalledScheduler for Scheduler {
             SchedulingMode::BlockVerification => true,
         };
 
-        let result_with_timing = &mut *self
-            .result_with_timing
-            .lock()
-            .expect("not poisoned");
+        let result_with_timing = &mut *self.result_with_timing.lock().expect("not poisoned");
         let (result, timings) =
             result_with_timing.get_or_insert_with(|| (Ok(()), ExecuteTimings::default()));
 
@@ -176,10 +173,7 @@ impl InstalledScheduler for Scheduler {
             self.schedule_termination();
             // current simplest form of this trait impl doesn't block the current thread
             // materially with the following single mutex lock....
-            self.result_with_timing
-                .lock()
-                .expect("not poisoned")
-                .take()
+            self.result_with_timing.lock().expect("not poisoned").take()
         } else {
             None
         }
@@ -191,10 +185,7 @@ impl InstalledScheduler for Scheduler {
 
     fn replace_scheduler_context(&mut self, context: SchedulingContext) {
         self.context = Some(context);
-        *self
-            .result_with_timing
-            .lock()
-            .expect("not poisoned") = None;
+        *self.result_with_timing.lock().expect("not poisoned") = None;
     }
 }
 
