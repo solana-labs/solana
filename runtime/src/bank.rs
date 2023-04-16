@@ -2955,6 +2955,14 @@ impl Bank {
         vote_with_stake_delegations_map
     }
 
+    /// Calculates epoch reward points from stake/vote accounts with reward calculate parameter struct.
+    ///
+    /// * reward_calculate_params: reward calculate parameter struct - stake history, delegation and vote accounts.
+    /// * rewards: epoch rewards in lamports
+    /// * thread_pool: instance of thread_pool for parallel processing
+    /// * metrics: reward metrics
+    ///
+    /// Returns reward lamports and points for the epoch.
     fn calculate_reward_points2(
         &self,
         reward_calculate_params: &EpochRewardCalculateParamInfo,
@@ -3017,6 +3025,15 @@ impl Bank {
         (points > 0).then_some(PointValue { rewards, points })
     }
 
+    /// Calculates epoch reward points from stake/vote accounts using joined vote/stake account map
+    ///
+    /// * vote_with_stake_delegation_map: joined map of vote_accounts and stake_accounts
+    /// * rewards: epoch rewards in lamports
+    /// * stake_history: stake history
+    /// * thread_pool: instance of thread_pool for parallel processing
+    /// * metrics: reward metrics
+    ///
+    /// Returns reward lamports and points for the epoch.
     fn calculate_reward_points(
         &self,
         vote_with_stake_delegations_map: &VoteWithStakeDelegationsMap,
@@ -3056,6 +3073,17 @@ impl Bank {
         (points > 0).then_some(PointValue { rewards, points })
     }
 
+    /// Calculates epoch rewards for stake/vote accounts
+    ///
+    /// * reward_calculate_params: reward calculate parameter struct - stake history, delegation and vote accounts.
+    /// * rewarded_epoch: reward epoch
+    /// * point_value: reward PointValue
+    /// * credits_auto_rewind: boolean flag for auto rewind vote credits during reward calculation
+    /// * thread_pool: instance of thread_pool for parallel processing
+    /// * reward_calc_tracer: tracer fn for reward calculation
+    /// * metrics: reward metrics
+    ///
+    /// Returns vote rewards and stake rewards
     fn redeem_rewards2(
         &self,
         reward_calculate_params: &EpochRewardCalculateParamInfo,
@@ -3165,6 +3193,17 @@ impl Bank {
         (vote_account_rewards, stake_rewards)
     }
 
+    /// Calculates epoch reward for stake/vote accounts using joined vote/stake account map
+    ///
+    /// * vote_with_stake_delegation_map: joined map of vote_accounts and stake_accounts
+    /// * rewarded_epoch: reward epoch
+    /// * point_value: reward PointValue
+    /// * credits_auto_rewind: boolean flag for auto rewind vote credits during reward calculation
+    /// * thread_pool: instance of thread_pool for parallel processing
+    /// * reward_calc_tracer: tracer fn for reward calculation
+    /// * metrics: reward metrics
+    ///
+    /// Returns vote rewards and stake rewards
     fn redeem_rewards(
         &self,
         vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
