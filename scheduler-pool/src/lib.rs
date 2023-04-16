@@ -124,7 +124,7 @@ impl InstalledScheduler for Scheduler {
             .result_with_timing
             .lock()
             .expect("not poisoned");
-        let context = self.context.expect("active context");
+        let context = self.context.as_ref().expect("active context");
 
         let batch = context
             .bank()
