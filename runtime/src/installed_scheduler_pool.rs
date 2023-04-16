@@ -40,7 +40,8 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn return_to_pool(&self, scheduler: SchedulerBox);
 }
 
-use mockall::*;
+#[cfg(test)]
+use mockall::automock;
 
 #[cfg_attr(test, automock)]
 // Send + Sync is needed to be a field of Bank
