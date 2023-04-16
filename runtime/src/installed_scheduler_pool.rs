@@ -300,11 +300,7 @@ impl Bank {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-    };
-    use crate::bank::test_utils::goto_end_of_slot;
-    use mockall::Sequence;
+    use {super::*, crate::bank::test_utils::goto_end_of_slot, mockall::Sequence};
 
     fn setup_mocked_scheduler_pool(seq: &mut Sequence) -> SchedulerPoolArc {
         let mut mock = MockInstalledSchedulerPool::new();
@@ -338,21 +334,27 @@ mod tests {
     #[test]
     fn test_scheduler_normal_termination() {
         let bank = Bank::default_for_tests();
-        bank.install_scheduler(setup_mocked_scheduler([WaitSource::AcrossBlock].into_iter()));
+        bank.install_scheduler(setup_mocked_scheduler(
+            [WaitSource::AcrossBlock].into_iter(),
+        ));
         bank.wait_for_completed_scheduler();
     }
 
     #[test]
     fn test_scheduler_termination_from_drop() {
         let bank = Bank::default_for_tests();
-        bank.install_scheduler(setup_mocked_scheduler([WaitSource::FromBankDrop].into_iter()));
+        bank.install_scheduler(setup_mocked_scheduler(
+            [WaitSource::FromBankDrop].into_iter(),
+        ));
         drop(bank);
     }
 
     #[test]
     fn test_scheduler_reinitialization() {
         let mut bank = crate::bank::tests::create_simple_test_bank(42);
-        bank.install_scheduler(setup_mocked_scheduler([WaitSource::InsideBlock, WaitSource::FromBankDrop].into_iter()));
+        bank.install_scheduler(setup_mocked_scheduler(
+            [WaitSource::InsideBlock, WaitSource::FromBankDrop].into_iter(),
+        ));
         goto_end_of_slot(&mut bank);
     }
 }
