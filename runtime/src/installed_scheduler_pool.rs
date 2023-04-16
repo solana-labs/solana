@@ -318,7 +318,7 @@ mod tests {
 
         for wait_source in wait_sources {
             mock.expect_wait_for_termination()
-                .with(mockall::predicate::eq(wait_source.clone()))
+                .with(mockall::predicate::eq(wait_source))
                 .times(1)
                 .returning(|_| None);
         }
