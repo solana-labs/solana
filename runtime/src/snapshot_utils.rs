@@ -5275,7 +5275,7 @@ mod tests {
             .map(|dir| dir.parent().unwrap().parent().unwrap().to_path_buf())
             .collect();
         // clean the orphaned hardlink directories
-        clean_orphaned_account_snapshot_dirs(bank_snapshots_dir, &account_snapshot_paths).unwrap();
+        clean_orphaned_account_snapshot_dirs(&bank_snapshots_dir, &account_snapshot_paths).unwrap();
 
         // verify the hardlink directories are gone
         assert!(hardlink_dirs_slot_2
