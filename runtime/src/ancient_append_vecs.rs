@@ -494,13 +494,25 @@ impl AccountsDb {
         let len = accounts_per_storage.len();
         let mut target_slots_sorted = Vec::with_capacity(len);
 
-        let mut accounts_to_combine = Vec::with_capacity(len);
-        for (info, unique_accounts) in accounts_per_storage {
-            let mut shrink_collect = self.shrink_collect::<ShrinkCollectAliveSeparatedByRefs<'_>>(
-                &info.storage,
-                unique_accounts,
-                &self.shrink_ancient_stats.shrink_stats,
-            );
+        // `shrink_collect` all accounts in the append vecs we want to combine.
+        // This also unrefs all dead accounts in those append vecs.
+        let mut accounts_to_combine = self.thread_pool_clean.install(|| {
+            accounts_per_storage
+                .par_iter()
+                .map(|(info, unique_accounts)| {
+                    self.shrink_collect::<ShrinkCollectAliveSeparatedByRefs<'_>>(
+                        &info.storage,
+                        unique_accounts,
+                        &self.shrink_ancient_stats.shrink_stats,
+                    )
+                })
+                .collect::<Vec<_>>()
+        });
+
+        for (shrink_collect, (info, _unique_accounts)) in accounts_to_combine
+            .iter_mut()
+            .zip(accounts_per_storage.iter())
+        {
             let many_refs = &mut shrink_collect.alive_accounts.many_refs;
             if !many_refs.accounts.is_empty() {
                 // there are accounts with ref_count > 1. This means this account must remain IN this slot.
@@ -512,7 +524,6 @@ impl AccountsDb {
                 // we find convenient. There is NO other instance of any account to conflict with.
                 target_slots_sorted.push(info.slot);
             }
-            accounts_to_combine.push(shrink_collect);
         }
         AccountsToCombine {
             accounts_to_combine,
