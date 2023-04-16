@@ -3,9 +3,14 @@ use {
     serde::{Deserialize, Serialize},
     serde_json::Result,
     solana_bpf_loader_program::{
-        create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
+        create_vm, load_program_from_bytes, serialization::serialize_parameters,
+        syscalls::create_loader,
     },
-    solana_program_runtime::{invoke_context::InvokeContext, with_mock_invoke_context},
+    solana_program_runtime::{
+        invoke_context::InvokeContext,
+        loaded_programs::{LoadProgramMetrics, LoadedProgramType},
+        with_mock_invoke_context,
+    },
     solana_rbpf::{
         assembler::assemble, elf::Executable, static_analysis::Analysis,
         verifier::RequisiteVerifier, vm::VerifiedExecutable,
@@ -14,6 +19,7 @@ use {
         account::AccountSharedData,
         bpf_loader,
         pubkey::Pubkey,
+        slot_history::Slot,
         transaction_context::{IndexOfAccount, InstructionAccount},
     },
     std::{
@@ -216,7 +222,6 @@ before execting it in the virtual machine.",
         }
     };
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-    invoke_context.enable_instruction_tracing = true;
     invoke_context
         .transaction_context
         .get_next_instruction_context()
@@ -240,27 +245,44 @@ before execting it in the virtual machine.",
     file.rewind().unwrap();
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
-    let loader = create_loader(
-        &invoke_context.feature_set,
-        &ComputeBudget::default(),
-        true,
-        true,
-        true,
-    )
-    .unwrap();
-    let executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        Executable::<InvokeContext>::from_elf(&contents, loader)
-            .map_err(|err| format!("Executable constructor failed: {err:?}"))
+    let mut verified_executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
+        let mut load_program_metrics = LoadProgramMetrics::default();
+        let result = load_program_from_bytes(
+            &invoke_context.feature_set,
+            invoke_context.get_compute_budget(),
+            None,
+            &mut load_program_metrics,
+            &contents,
+            &bpf_loader::id(),
+            contents.len(),
+            Slot::default(),
+            false, /* use_jit */
+            true,  /* reject_deployment_of_broken_elfs */
+            true,  /* debugging_features */
+        );
+        match result {
+            Ok(loaded_program) => match loaded_program.program {
+                LoadedProgramType::LegacyV1(program) => Ok(unsafe { std::mem::transmute(program) }),
+                _ => unreachable!(),
+            },
+            Err(err) => Err(format!("Loading executable failed: {err:?}")),
+        }
     } else {
-        assemble::<InvokeContext>(std::str::from_utf8(contents.as_slice()).unwrap(), loader)
+        let loader = create_loader(
+            &invoke_context.feature_set,
+            invoke_context.get_compute_budget(),
+            true,
+            true,
+            true,
+        )
+        .unwrap();
+        let executable =
+            assemble::<InvokeContext>(std::str::from_utf8(contents.as_slice()).unwrap(), loader)
+                .unwrap();
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+            .map_err(|err| format!("Assembling executable failed: {err:?}"))
     }
     .unwrap();
-
-    #[allow(unused_mut)]
-    let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-            .map_err(|err| format!("Executable verifier failed: {err:?}"))
-            .unwrap();
 
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();
@@ -285,11 +307,9 @@ before execting it in the virtual machine.",
     create_vm!(
         vm,
         &verified_executable,
-        stack,
-        heap,
         regions,
         account_lengths,
-        &mut invoke_context
+        &mut invoke_context,
     );
     let mut vm = vm.unwrap();
     let start_time = Instant::now();
@@ -299,14 +319,17 @@ before execting it in the virtual machine.",
     let (instruction_count, result) = vm.execute_program(matches.value_of("use").unwrap() != "jit");
     let duration = Instant::now() - start_time;
     if matches.occurrences_of("trace") > 0 {
-        for (frame, trace) in vm
+        for (frame, syscall_context) in vm
             .env
             .context_object_pointer
-            .trace_log_stack
+            .syscall_context
             .iter()
             .enumerate()
         {
-            let trace_log = trace.trace_log.as_slice();
+            if syscall_context.is_none() {
+                continue;
+            }
+            let trace_log = syscall_context.as_ref().unwrap().trace_log.as_slice();
             if matches.value_of("trace").unwrap() == "stdout" {
                 writeln!(&mut std::io::stdout(), "Frame {frame}").unwrap();
                 analysis

@@ -37,6 +37,7 @@ sudo chown buildkite-agent:buildkite-agent certs
 
 #(Re) start the container
 sudo docker run \
+  --memory=10g \
   --detach \
   --env AUTH_DURATION=24h \
   --env inactivity-duration=48h \

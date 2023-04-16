@@ -10318,13 +10318,13 @@ fn test_rent_debits() {
 
     // No entry for 0 rewards
     rent_debits.insert(&Pubkey::new_unique(), 0, 0);
-    assert_eq!(rent_debits.0.len(), 0);
+    assert_eq!(rent_debits.len(), 0);
 
     // Some that actually work
     rent_debits.insert(&Pubkey::new_unique(), 1, 0);
-    assert_eq!(rent_debits.0.len(), 1);
+    assert_eq!(rent_debits.len(), 1);
     rent_debits.insert(&Pubkey::new_unique(), i64::MAX as u64, 0);
-    assert_eq!(rent_debits.0.len(), 2);
+    assert_eq!(rent_debits.len(), 2);
 }
 
 #[test]

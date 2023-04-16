@@ -12,7 +12,7 @@ extern crate solana_bpf_loader_program;
 use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_bpf_loader_program::{
-        create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
+        create_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
     solana_measure::measure::Measure,
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
@@ -131,11 +131,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
     create_vm!(
         vm,
         &verified_executable,
-        stack,
-        heap,
         vec![MemoryRegion::new_writable(&mut inner_iter, MM_INPUT_START)],
         vec![],
-        &mut invoke_context
+        &mut invoke_context,
     );
     let mut vm = vm.unwrap();
 
@@ -258,13 +256,11 @@ fn bench_create_vm(bencher: &mut Bencher) {
         create_vm!(
             vm,
             &verified_executable,
-            stack,
-            heap,
             clone_regions(&regions),
             account_lengths.clone(),
-            &mut invoke_context
+            &mut invoke_context,
         );
-        let _ = vm.unwrap();
+        vm.unwrap();
     });
 }
 
@@ -303,11 +299,9 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     create_vm!(
         vm,
         &verified_executable,
-        stack,
-        heap,
         regions,
         account_lengths,
-        &mut invoke_context
+        &mut invoke_context,
     );
     let mut vm = vm.unwrap();
 

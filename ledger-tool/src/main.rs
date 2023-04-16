@@ -3449,7 +3449,7 @@ fn main() {
                                 eprintln!("Unable to create incremental snapshot without a base full snapshot");
                                 exit(1);
                             }
-                            let full_snapshot_slot = starting_snapshot_hashes.unwrap().full.hash.0;
+                            let full_snapshot_slot = starting_snapshot_hashes.unwrap().full.0 .0;
                             if bank.slot() <= full_snapshot_slot {
                                 eprintln!(
                                     "Unable to create incremental snapshot: Slot must be greater than full snapshot slot. slot: {}, full snapshot slot: {}",
@@ -4156,6 +4156,9 @@ fn main() {
                 let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
                 let end_slot = value_t!(arg_matches, "end_slot", Slot).ok();
                 let perform_compaction = arg_matches.is_present("enable_compaction");
+                if arg_matches.is_present("no_compaction") {
+                    warn!("--no-compaction is deprecated and is now the default behavior.");
+                }
                 let dead_slots_only = arg_matches.is_present("dead_slots_only");
                 let batch_size = value_t_or_exit!(arg_matches, "batch_size", usize);
 

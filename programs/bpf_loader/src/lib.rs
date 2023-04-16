@@ -1,7 +1,6 @@
 #![deny(clippy::integer_arithmetic)]
 #![deny(clippy::indexing_slicing)]
 
-pub mod allocator_bump;
 pub mod deprecated;
 pub mod serialization;
 pub mod syscalls;
@@ -10,13 +9,12 @@ pub mod upgradeable_with_jit;
 pub mod with_jit;
 
 use {
-    crate::allocator_bump::BpfAllocator,
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
-        invoke_context::InvokeContext,
+        invoke_context::{BpfAllocator, InvokeContext, SyscallContext},
         loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
         log_collector::LogCollector,
         stable_log,
@@ -37,11 +35,10 @@ use {
         entrypoint::SUCCESS,
         feature_set::{
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
-            check_slice_translation_size, delay_visibility_of_program_deployment,
-            disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, native_programs_consume_cu,
-            remove_bpf_loader_incorrect_program_id, round_up_heap_size, FeatureSet,
+            delay_visibility_of_program_deployment, disable_deploy_of_alloc_free_syscall,
+            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
+            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
+            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -84,6 +81,7 @@ pub fn load_program_from_bytes(
     deployment_slot: Slot,
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
+    debugging_features: bool,
 ) -> Result<LoadedProgram, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
@@ -93,7 +91,7 @@ pub fn load_program_from_bytes(
         compute_budget,
         reject_deployment_of_broken_elfs,
         disable_deploy_of_alloc_free_syscall,
-        false,
+        debugging_features,
     )
     .map_err(|e| {
         ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
@@ -163,6 +161,7 @@ pub fn load_program_from_account(
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
     use_jit: bool,
+    debugging_features: bool,
 ) -> Result<(Arc<LoadedProgram>, Option<LoadProgramMetrics>), InstructionError> {
     if !check_loader_id(program.get_owner()) {
         ic_logger_msg!(
@@ -211,6 +210,7 @@ pub fn load_program_from_account(
         deployment_slot,
         use_jit,
         false, /* reject_deployment_of_broken_elfs */
+        debugging_features,
     )?);
     if let Some(mut tx_executor_cache) = tx_executor_cache {
         tx_executor_cache.set(
@@ -242,7 +242,8 @@ macro_rules! deploy_program {
             $account_size,
             $slot,
             $use_jit,
-            true,
+            true, /* reject_deployment_of_broken_elfs */
+            false, /* debugging_features */
         )?;
         if let Some(old_entry) = $invoke_context.tx_executor_cache.borrow().get(&$program_id) {
             let usage_counter = old_entry.usage_counter.load(Ordering::Relaxed);
@@ -292,7 +293,8 @@ fn check_loader_id(id: &Pubkey) -> bool {
         || bpf_loader_upgradeable::check_id(id)
 }
 
-fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
+/// Only used in macro, do not use directly!
+pub fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool) -> u64 {
     const KIBIBYTE: u64 = 1024;
     const PAGE_SIZE_KB: u64 = 32;
     let mut rounded_heap_size = heap_size;
@@ -306,83 +308,96 @@ fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: bool
         .saturating_mul(heap_cost)
 }
 
-/// Create the SBF virtual machine
-pub fn create_ebpf_vm<'a, 'b>(
+/// Only used in macro, do not use directly!
+pub fn create_vm<'a, 'b>(
     program: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>,
-    stack: &'a mut AlignedMemory<HOST_ALIGN>,
-    heap: AlignedMemory<HOST_ALIGN>,
     regions: Vec<MemoryRegion>,
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
+    stack: &mut AlignedMemory<HOST_ALIGN>,
+    heap: &mut AlignedMemory<HOST_ALIGN>,
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
-    let round_up_heap_size = invoke_context
-        .feature_set
-        .is_active(&round_up_heap_size::id());
-    let heap_cost_result = invoke_context.consume_checked(calculate_heap_cost(
-        heap.len() as u64,
-        invoke_context.get_compute_budget().heap_cost,
-        round_up_heap_size,
-    ));
-    if round_up_heap_size {
-        heap_cost_result?;
-    }
-    let check_aligned = bpf_loader_deprecated::id()
-        != invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .and_then(|instruction_context| {
-                instruction_context
-                    .try_borrow_last_program_account(invoke_context.transaction_context)
-            })
-            .map(|program_account| *program_account.get_owner())?;
-    let check_size = invoke_context
-        .feature_set
-        .is_active(&check_slice_translation_size::id());
-    let allocator = Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START)));
-    invoke_context.set_syscall_context(
-        check_aligned,
-        check_size,
+    let stack_size = stack.len();
+    let heap_size = heap.len();
+    let memory_mapping =
+        create_memory_mapping(program.get_executable(), stack, heap, regions, None)?;
+    invoke_context.set_syscall_context(SyscallContext {
+        allocator: BpfAllocator::new(heap_size as u64),
         orig_account_lengths,
-        allocator.clone(),
-    )?;
-    let stack_len = stack.len();
-    let memory_mapping = create_memory_mapping(
-        program.get_executable(),
-        stack,
-        allocator.borrow_mut().heap_mut(),
-        regions,
-        None,
-    )?;
-
+        trace_log: Vec::new(),
+    })?;
     Ok(EbpfVm::new(
         program,
         invoke_context,
         memory_mapping,
-        stack_len,
+        stack_size,
     ))
 }
 
+/// Create the SBF virtual machine
 #[macro_export]
 macro_rules! create_vm {
-    ($vm_name:ident, $executable:expr, $stack:ident, $heap:ident, $additional_regions:expr, $orig_account_lengths:expr, $invoke_context:expr) => {
-        let mut $stack = solana_rbpf::aligned_memory::AlignedMemory::<
-            { solana_rbpf::ebpf::HOST_ALIGN },
-        >::zero_filled($executable.get_executable().get_config().stack_size());
-
-        // this is needed if the caller passes "&mut invoke_context" to the
-        // macro. The lint complains that (&mut invoke_context).get_compute_budget()
-        // does an unnecessary mutable borrow
-        #[allow(clippy::unnecessary_mut_passed)]
-        let heap_size = $invoke_context
+    ($vm:ident, $program:expr, $regions:expr, $orig_account_lengths:expr, $invoke_context:expr $(,)?) => {
+        let invoke_context = &*$invoke_context;
+        let stack_size = $program.get_executable().get_config().stack_size();
+        let heap_size = invoke_context
             .get_compute_budget()
             .heap_size
             .unwrap_or(solana_sdk::entrypoint::HEAP_LENGTH);
-        let $heap = solana_rbpf::aligned_memory::AlignedMemory::<{ solana_rbpf::ebpf::HOST_ALIGN }>::zero_filled(heap_size);
+        let round_up_heap_size = invoke_context
+            .feature_set
+            .is_active(&solana_sdk::feature_set::round_up_heap_size::id());
+        let mut heap_cost_result = invoke_context.consume_checked($crate::calculate_heap_cost(
+            heap_size as u64,
+            invoke_context.get_compute_budget().heap_cost,
+            round_up_heap_size,
+        ));
+        if !round_up_heap_size {
+            heap_cost_result = Ok(());
+        }
+        let mut allocations = None;
+        let $vm = heap_cost_result.and_then(|_| {
+            let mut stack = solana_rbpf::aligned_memory::AlignedMemory::<
+                { solana_rbpf::ebpf::HOST_ALIGN },
+            >::zero_filled(stack_size);
+            let mut heap = solana_rbpf::aligned_memory::AlignedMemory::<
+                { solana_rbpf::ebpf::HOST_ALIGN },
+            >::zero_filled(heap_size);
+            let vm = $crate::create_vm(
+                $program,
+                $regions,
+                $orig_account_lengths,
+                $invoke_context,
+                &mut stack,
+                &mut heap,
+            );
+            allocations = Some((stack, heap));
+            vm
+        });
+    };
+}
 
-        let $vm_name = create_ebpf_vm(
-            $executable,
-            &mut $stack,
-            $heap,
+#[macro_export]
+macro_rules! mock_create_vm {
+    ($vm:ident, $additional_regions:expr, $orig_account_lengths:expr, $invoke_context:expr $(,)?) => {
+        let loader = std::sync::Arc::new(BuiltInProgram::new_loader(
+            solana_rbpf::vm::Config::default(),
+        ));
+        let function_registry = solana_rbpf::vm::FunctionRegistry::default();
+        let executable = solana_rbpf::elf::Executable::<InvokeContext>::from_text_bytes(
+            &[0x95, 0, 0, 0, 0, 0, 0, 0],
+            loader,
+            function_registry,
+        )
+        .unwrap();
+        let verified_executable = solana_rbpf::vm::VerifiedExecutable::<
+            solana_rbpf::verifier::RequisiteVerifier,
+            InvokeContext,
+        >::from_executable(executable)
+        .unwrap();
+        $crate::create_vm!(
+            $vm,
+            &verified_executable,
             $additional_regions,
             $orig_account_lengths,
             $invoke_context,
@@ -409,7 +424,7 @@ fn create_memory_mapping<'a, 'b, C: ContextObject>(
                 0
             },
         ),
-        MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
+        MemoryRegion::new_writable(heap.as_slice_mut(), MM_HEAP_START),
     ]
     .into_iter()
     .chain(additional_regions.into_iter())
@@ -580,6 +595,7 @@ fn process_instruction_inner(
         &program_account,
         programdata_account.as_ref().unwrap_or(&program_account),
         use_jit,
+        false, /* debugging_features */
     )?;
     drop(program_account);
     drop(programdata_account);
@@ -1553,11 +1569,9 @@ fn execute<'a, 'b: 'a>(
                     executable,
                 )
             },
-            stack,
-            heap,
             regions,
             account_lengths,
-            invoke_context
+            invoke_context,
         );
         let mut vm = match vm {
             Ok(info) => info,
@@ -1620,7 +1634,7 @@ fn execute<'a, 'b: 'a>(
                 .transaction_context
                 .get_current_instruction_context()?,
             parameter_bytes,
-            invoke_context.get_orig_account_lengths()?,
+            &invoke_context.get_syscall_context()?.orig_account_lengths,
         )
     }
 
@@ -1652,10 +1666,8 @@ mod tests {
             invoke_context::mock_process_instruction, with_mock_invoke_context,
         },
         solana_rbpf::{
-            ebpf::MM_INPUT_START,
-            elf::Executable,
             verifier::{Verifier, VerifierError},
-            vm::{BuiltInProgram, Config, ContextObject, FunctionRegistry},
+            vm::{Config, ContextObject, FunctionRegistry},
         },
         solana_sdk::{
             account::{
@@ -1727,54 +1739,6 @@ mod tests {
         ) -> std::result::Result<(), VerifierError> {
             Ok(())
         }
-    }
-
-    #[test]
-    #[should_panic(expected = "ExceededMaxInstructions(31)")]
-    fn test_bpf_loader_non_terminating_program() {
-        #[rustfmt::skip]
-        let program = &[
-            0x07, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, // r6 + 1
-            0x05, 0x00, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x00, // goto -2
-            0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
-        ];
-        let mut input_mem = [0x00];
-        let bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
-        let executable = Executable::<TestContextObject>::from_text_bytes(
-            program,
-            Arc::new(BuiltInProgram::new_loader(Config::default())),
-            bpf_functions,
-        )
-        .unwrap();
-        let verified_executable =
-            VerifiedExecutable::<TautologyVerifier, TestContextObject>::from_executable(executable)
-                .unwrap();
-        let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
-        let mut context_object = TestContextObject { remaining: 10 };
-        let mut stack = AlignedMemory::zero_filled(
-            verified_executable
-                .get_executable()
-                .get_config()
-                .stack_size(),
-        );
-        let mut heap = AlignedMemory::with_capacity(0);
-        let stack_len = stack.len();
-
-        let memory_mapping = create_memory_mapping(
-            verified_executable.get_executable(),
-            &mut stack,
-            &mut heap,
-            vec![input_region],
-            None,
-        )
-        .unwrap();
-        let mut vm = EbpfVm::new(
-            &verified_executable,
-            &mut context_object,
-            memory_mapping,
-            stack_len,
-        );
-        vm.execute_program(true).1.unwrap();
     }
 
     #[test]

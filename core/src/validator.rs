@@ -731,7 +731,7 @@ impl Validator {
         let pruned_banks_request_handler = PrunedBanksRequestHandler {
             pruned_banks_receiver,
         };
-        let last_full_snapshot_slot = starting_snapshot_hashes.map(|x| x.full.hash.0);
+        let last_full_snapshot_slot = starting_snapshot_hashes.map(|x| x.full.0 .0);
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks.clone(),
             &exit,

@@ -24,8 +24,8 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
-            Bank, RentDebits, TransactionBalancesSet, TransactionExecutionDetails,
-            TransactionExecutionResult, TransactionResults, VerifyAccountsHashConfig,
+            Bank, TransactionBalancesSet, TransactionExecutionDetails, TransactionExecutionResult,
+            TransactionResults, VerifyAccountsHashConfig,
         },
         bank_forks::BankForks,
         bank_utils,
@@ -33,6 +33,7 @@ use {
         cost_model::CostModel,
         epoch_accounts_hash::EpochAccountsHash,
         prioritization_fee_cache::PrioritizationFeeCache,
+        rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
         vote_account::VoteAccountsHashMap,
@@ -743,12 +744,14 @@ pub fn process_blockstore_from_root(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_background_request_sender: &AbsRequestSender,
 ) -> result::Result<(), BlockstoreProcessorError> {
-    // Starting slot must be a root, and thus has no parents
-    assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
-    let bank = bank_forks.read().unwrap().root_bank();
-    assert!(bank.parent().is_none());
+    let (start_slot, start_slot_hash) = {
+        // Starting slot must be a root, and thus has no parents
+        assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
+        let bank = bank_forks.read().unwrap().root_bank();
+        assert!(bank.parent().is_none());
+        (bank.slot(), bank.hash())
+    };
 
-    let start_slot = bank.slot();
     info!("Processing ledger from slot {}...", start_slot);
     let now = Instant::now();
 
@@ -757,16 +760,16 @@ pub fn process_blockstore_from_root(
     if blockstore.is_primary_access() {
         blockstore
             .mark_slots_as_if_rooted_normally_at_startup(
-                vec![(bank.slot(), Some(bank.hash()))],
+                vec![(start_slot, Some(start_slot_hash))],
                 true,
             )
-            .expect("Couldn't mark start_slot as root on startup");
+            .expect("Couldn't mark start_slot as root in startup");
         blockstore
-            .set_and_chain_connected_on_root_and_next_slots(bank.slot())
+            .set_and_chain_connected_on_root_and_next_slots(start_slot)
             .expect("Couldn't mark start_slot as connected during startup")
     } else {
         info!(
-            "Starting slot {} isn't root and won't be updated due to being secondary blockstore access",
+            "Start slot {} isn't a root, and won't be updated due to secondary blockstore access",
             start_slot
         );
     }
