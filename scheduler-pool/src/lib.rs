@@ -120,7 +120,7 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn schedule_execution(&self, transaction: &SanitizedTransaction, index: usize) {
-        let &mut (result, timings) = &mut *self
+        let &mut (mut ref result, timings) = &mut *self
             .result_with_timing
             .lock()
             .expect("not poisoned")
