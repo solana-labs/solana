@@ -337,4 +337,11 @@ mod tests {
         bank.install_scheduler(setup_mocked_scheduler(WaitSource::FromBankDrop));
         drop(bank);
     }
+
+    #[test]
+    fn test_scheduler_reinitialization() {
+        let mut bank = Bank::default_for_tests();
+        bank.install_scheduler(setup_mocked_scheduler(WaitSource::FromBankDrop));
+        goto_end_of_slot(&mut bank);
+    }
 }
