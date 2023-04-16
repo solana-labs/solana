@@ -87,7 +87,7 @@ pub enum WaitReason {
     // most normal termination waiting mode
     TerminationForFreezing,
     // scheduler will be restarted without being returned to pool in order to reuse it immediately.
-    RestartInsideBlock,
+    ReinitializationForRecentBlockhash,
     TerminationFromBankDrop,
     InternalTerminationByScheduler,
 }
