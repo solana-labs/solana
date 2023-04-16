@@ -321,7 +321,7 @@ mod tests {
 
         for wait_source in wait_sources {
             mock.expect_wait_for_termination()
-                .with(mockall::predicate::function(|w| wait_source == 3))
+                .with(mockall::predicate::function(|w| w = wait_source))
                 .times(1)
                 .in_sequence(&mut seq)
                 .returning(|_| None);
