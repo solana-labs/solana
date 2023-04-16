@@ -320,7 +320,7 @@ mod tests {
             .times(1)
             .returning(|_| None);
         mock.expect_wait_for_termination()
-            .with(mockall::predicate::eq(WaitSource::AcrossBlock))
+            .with(mockall::predicate::eq(WaitSource::FromBankDrop))
             .times(1)
             .returning(|_| None);
         mock.expect_scheduler_pool()
