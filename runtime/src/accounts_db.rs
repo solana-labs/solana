@@ -17130,11 +17130,68 @@ pub mod tests {
     }
 
     #[test]
+    fn test_sweep_get_accounts_hash_complete_oldest_non_ancient_slot() {
+        // note that this test has to worry about saturation at 0 as we subtract `slots_per_epoch` and `ancient_append_vec_offset`
+        let epoch_schedule = EpochSchedule::default();
+        for ancient_append_vec_offset in [-10_000i64, 50_000] {
+            // at `starting_slot_offset`=0, with a negative `ancient_append_vec_offset`, we expect saturation to 0
+            // big enough to avoid all saturation issues.
+            let avoid_saturation = 1_000_000;
+            assert!(
+                avoid_saturation
+                    > epoch_schedule.slots_per_epoch + ancient_append_vec_offset.unsigned_abs()
+            );
+            for starting_slot_offset in [0, avoid_saturation] {
+                let db = AccountsDb::new_with_config(
+                    Vec::new(),
+                    &ClusterType::Development,
+                    AccountSecondaryIndexes::default(),
+                    AccountShrinkThreshold::default(),
+                    Some(AccountsDbConfig {
+                        ancient_append_vec_offset: Some(ancient_append_vec_offset),
+                        ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+                    }),
+                    None,
+                    &Arc::default(),
+                );
+                let ancient_append_vec_offset = db.ancient_append_vec_offset.unwrap();
+                // check the default value
+                assert_eq!(
+                    db.get_accounts_hash_complete_oldest_non_ancient_slot(),
+                    AccountsDb::apply_offset_to_slot(0, ancient_append_vec_offset)
+                );
+                assert_ne!(ancient_append_vec_offset, 0);
+                // try a few values to simulate a real validator
+                for inc in [0, 1, 2, 3, 4, 5, 8, 10, 10, 11, 200, 201, 1_000] {
+                    let expected_first_ancient_slot = inc + starting_slot_offset;
+                    // oldest non-ancient slot is 1 greater than first ancient slot
+                    let expected_oldest_non_ancient_slot = expected_first_ancient_slot + 1;
+                    // the return of `get_accounts_hash_complete_oldest_non_ancient_slot` will offset by `ancient_append_vec_offset`
+                    let expected_oldest_non_ancient_slot = AccountsDb::apply_offset_to_slot(
+                        expected_oldest_non_ancient_slot,
+                        ancient_append_vec_offset,
+                    );
+                    let completed_slot =
+                        epoch_schedule.slots_per_epoch + inc + starting_slot_offset;
+                    db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
+                    // check the result after repeated calls increasing the completed slot
+                    assert_eq!(
+                        db.get_accounts_hash_complete_oldest_non_ancient_slot(),
+                        expected_oldest_non_ancient_slot,
+                        "inc: {inc}, completed_slot: {completed_slot}, ancient_append_vec_offset: {ancient_append_vec_offset}, starting_slot_offset: {starting_slot_offset}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_get_accounts_hash_complete_oldest_non_ancient_slot() {
         // note that this test has to worry about saturation at 0 as we subtract `slots_per_epoch` and `ancient_append_vec_offset`
         let db = AccountsDb::new_single_for_tests();
         assert_eq!(db.get_accounts_hash_complete_oldest_non_ancient_slot(), 0);
         let epoch_schedule = EpochSchedule::default();
+        // using default value of `db.ancient_append_vec_offset`. If that default changes, this test may need to change due to saturation issues.
         let ancient_append_vec_offset = db.ancient_append_vec_offset.unwrap();
         for inc in 0..6 {
             let expected_first_ancient_slot = inc;
