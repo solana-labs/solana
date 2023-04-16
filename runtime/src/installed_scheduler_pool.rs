@@ -313,40 +313,41 @@ mod tests {
         Arc::new(mock)
     }
 
-    fn setup_mocked_scheduler(wait_source: WaitSource) -> SchedulerBox {
+    fn setup_mocked_scheduler(wait_sources: [WaitSource]) -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
-        mock.expect_wait_for_termination()
-            .with(mockall::predicate::eq(wait_source))
-            .times(1)
-            .returning(|_| None);
-        mock.expect_wait_for_termination()
-            .with(mockall::predicate::eq(WaitSource::FromBankDrop))
-            .times(1)
-            .returning(|_| None);
+
+        for wait_source in wait_sources {
+            mock.expect_wait_for_termination()
+                .with(mockall::predicate::eq(wait_source))
+                .times(1)
+                .returning(|_| None);
+        }
+
         mock.expect_scheduler_pool()
             .times(1)
             .returning(move || setup_mocked_scheduler_pool());
+
         Box::new(mock)
     }
 
     #[test]
     fn test_scheduler_normal_termination() {
         let bank = Bank::default_for_tests();
-        bank.install_scheduler(setup_mocked_scheduler(WaitSource::AcrossBlock));
+        bank.install_scheduler(setup_mocked_scheduler([WaitSource::AcrossBlock]));
         bank.wait_for_completed_scheduler();
     }
 
     #[test]
     fn test_scheduler_termination_from_drop() {
         let bank = Bank::default_for_tests();
-        bank.install_scheduler(setup_mocked_scheduler(WaitSource::FromBankDrop));
+        bank.install_scheduler(setup_mocked_scheduler([WaitSource::FromBankDrop]));
         drop(bank);
     }
 
     #[test]
     fn test_scheduler_reinitialization() {
         let mut bank = crate::bank::tests::create_simple_test_bank(42);
-        bank.install_scheduler(setup_mocked_scheduler(WaitSource::InsideBlock));
+        bank.install_scheduler(setup_mocked_scheduler([WaitSource::InsideBlock, WaitSource::FromBankDrop]));
         goto_end_of_slot(&mut bank);
     }
 }
