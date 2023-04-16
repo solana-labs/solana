@@ -315,11 +315,13 @@ mod tests {
 
     fn setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitSource>) -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
+        let mut seq = Sequence::new();
 
         for wait_source in wait_sources {
             mock.expect_wait_for_termination()
                 .with(mockall::predicate::eq(wait_source))
                 .times(1)
+                .in_sequence(&mut seq)
                 .returning(|_| None);
         }
 
