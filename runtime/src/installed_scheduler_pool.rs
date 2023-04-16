@@ -328,7 +328,8 @@ mod tests {
 
         mock.expect_scheduler_pool()
             .times(1)
-            .returning(move || setup_mocked_scheduler_pool());
+            .in_sequence(&mut seq)
+            .returning(move || setup_mocked_scheduler_pool(&mut seq));
 
         Box::new(mock)
     }
