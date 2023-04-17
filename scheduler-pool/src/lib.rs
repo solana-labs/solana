@@ -158,8 +158,8 @@ impl InstalledScheduler for Scheduler {
         drop::<Option<SchedulingContext>>(self.context.take());
     }
 
-    fn wait_for_termination(&mut self, wait_source: &WaitReason) -> Option<ResultWithTimings> {
-        let keep_result_with_timings = match wait_source {
+    fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
+        let keep_result_with_timings = match wait_reason {
             WaitReason::ReinitializedForRecentBlockhash => {
                 // rustfmt...
                 true

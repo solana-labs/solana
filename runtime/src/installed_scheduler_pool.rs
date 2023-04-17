@@ -313,15 +313,15 @@ mod tests {
     }
 
     fn do_setup_mocked_scheduler(
-        wait_sources: impl Iterator<Item = WaitReason>,
+        wait_reasons: impl Iterator<Item = WaitReason>,
         f: Option<impl Fn(&mut MockInstalledScheduler)>,
     ) -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
 
-        for wait_source in wait_sources {
+        for wait_reason in wait_reasons {
             mock.expect_wait_for_termination()
-                .with(mockall::predicate::eq(wait_source))
+                .with(mockall::predicate::eq(wait_reason))
                 .times(1)
                 .in_sequence(&mut seq)
                 .returning(|_| None);
@@ -338,8 +338,8 @@ mod tests {
         Box::new(mock)
     }
 
-    fn setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitReason>) -> SchedulerBox {
-        do_setup_mocked_scheduler(wait_sources, None::<fn(&mut MockInstalledScheduler) -> ()>)
+    fn setup_mocked_scheduler(wait_reasons: impl Iterator<Item = WaitReason>) -> SchedulerBox {
+        do_setup_mocked_scheduler(wait_reasons, None::<fn(&mut MockInstalledScheduler) -> ()>)
     }
 
     #[test]
