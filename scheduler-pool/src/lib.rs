@@ -169,7 +169,6 @@ impl InstalledScheduler for Scheduler {
             }
         };
 
-        self.schedule_termination();
 
         // current simplest form of this trait impl doesn't block the current thread materially
         // just with the following single mutex lock. Suppose more elaborated synchronization
@@ -178,6 +177,7 @@ impl InstalledScheduler for Scheduler {
         if keep_result_with_timings {
             None
         } else {
+        self.schedule_termination();
             self.result_with_timings
                 .lock()
                 .expect("not poisoned")
