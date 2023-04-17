@@ -5508,56 +5508,6 @@ mod tests {
         assert_eq!(max_id, next_id - 1);
     }
 
-    fn create_snapshot_dirs_for_tests(
-        genesis_config: &GenesisConfig,
-        bank_snapshots_dir: impl AsRef<Path>,
-        num_total: usize,
-        num_posts: usize,
-    ) -> Bank {
-        let mut bank = Arc::new(Bank::new_for_tests(genesis_config));
-
-        let collecter_id = Pubkey::new_unique();
-        let snapshot_version = SnapshotVersion::default();
-
-        // loop to create the banks at slot 1 to num_total
-        for _ in 0..num_total {
-            // prepare the bank
-            bank = Arc::new(Bank::new_from_parent(&bank, &collecter_id, bank.slot() + 1));
-            bank.fill_bank_with_ticks_for_tests();
-            bank.squash();
-            bank.force_flush_accounts_cache();
-
-            // generate the bank snapshot directory for slot+1
-            let snapshot_storages = bank.get_snapshot_storages(None);
-            let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
-            add_bank_snapshot(
-                &bank_snapshots_dir,
-                &bank,
-                &snapshot_storages,
-                snapshot_version,
-                slot_deltas,
-            )
-            .unwrap();
-
-            if bank.slot() as usize > num_posts {
-                continue; // leave the snapshot dir at PRE stage
-            }
-
-            // Reserialize the snapshot dir to convert it from PRE to POST, because only the POST type can be used
-            // to construct a bank.
-            assert!(
-                crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                    &bank_snapshots_dir,
-                    bank.slot(),
-                    &AccountsHash(Hash::new_unique()),
-                    None
-                )
-            );
-        }
-
-        Arc::try_unwrap(bank).unwrap()
-    }
-
     #[test]
     fn test_bank_from_latest_snapshot_dir() {
         solana_logger::setup();
