@@ -2706,12 +2706,12 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_ledger_simple_with_scheduler {
+    fn test_process_ledger_simple_with_scheduler() {
         do_test_process_ledger_simple(true);
     }
 
     #[test]
-    fn test_process_ledger_simple_without_scheduler {
+    fn test_process_ledger_simple_without_scheduler() {
         do_test_process_ledger_simple(false);
     }
 
