@@ -4406,6 +4406,7 @@ pub mod tests {
 
     #[test]
     fn test_schedule_batches_for_execution() {
+        solana_logger::setup();
         let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
         let GenesisConfigInfo {
             genesis_config,
