@@ -225,6 +225,18 @@ mod tests {
     }
 
     #[test]
+    fn test_scheduler_spawn() {
+        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+        let bank = Arc::new(Bank::default_for_tests());
+        let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
+        let scheduler = Scheduler::spawn(pool, context);
+
+        let debug = format!("{scheduler:#?}");    
+        assert!(!debug.is_empty());
+    }
+
+    #[test]
     fn test_scheduler_pool_filo() {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
