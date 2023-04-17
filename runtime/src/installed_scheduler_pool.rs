@@ -59,7 +59,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     fn schedule_termination(&mut self);
 
     #[must_use]
-    fn wait_for_termination(&mut self, source: &WaitReason) -> Option<ResultWithTimings>;
+    fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
 
     // suppress false clippy arising from mockall
     #[allow(clippy::needless_lifetimes)]
@@ -237,9 +237,9 @@ impl Bank {
         }
     }
 
-    fn wait_for_scheduler(&self, source: WaitReason) -> Option<ResultWithTimings> {
+    fn wait_for_scheduler(&self, reason: WaitReason) -> Option<ResultWithTimings> {
         debug!(
-            "wait_for_scheduler(slot: {}, source: {source:?}): started...",
+            "wait_for_scheduler(slot: {}, reason: {reason:?}): started...",
             self.slot()
         );
 
@@ -249,8 +249,8 @@ impl Bank {
         let result_with_timings = if scheduler.is_some() {
             let result_with_timings = scheduler
                 .as_mut()
-                .and_then(|scheduler| scheduler.wait_for_termination(&source));
-            if !matches!(source, WaitReason::ReinitializedForRecentBlockhash) {
+                .and_then(|scheduler| scheduler.wait_for_termination(&reason));
+            if !matches!(reason, WaitReason::ReinitializedForRecentBlockhash) {
                 let scheduler = scheduler.take().expect("scheduler after waiting");
                 scheduler.scheduler_pool().return_to_pool(scheduler);
             }
@@ -259,7 +259,7 @@ impl Bank {
             None
         };
         debug!(
-            "wait_for_scheduler(slot: {}, source: {source:?}): finished with: {:?}...",
+            "wait_for_scheduler(slot: {}, reason: {reason:?}): finished with: {:?}...",
             self.slot(),
             result_with_timings.as_ref().map(|(result, _)| result)
         );
