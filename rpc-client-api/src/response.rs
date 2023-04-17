@@ -335,8 +335,9 @@ pub struct RpcVersionInfo {
     pub solana_core: String,
     /// first 4 bytes of the FeatureSet identifier
     pub feature_set: Option<u32>,
+    // first 4 bytes of the sha1 commit hash
+    pub commit: Option<u32>,
 }
-
 impl fmt::Debug for RpcVersionInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.solana_core)
