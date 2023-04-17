@@ -139,7 +139,7 @@ impl SchedulingContext {
         self.bank().slot()
     }
 
-    pub fn log_prefix(scheduler_id: SchedulerId, context: Option<&Self>) -> String {
+    pub fn log_prefix(context: Option<&Self>, scheduler_id: SchedulerId) -> String {
         const BITS_PER_HEX_DIGIT: usize = 4;
 
         format!(
