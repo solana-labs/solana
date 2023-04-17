@@ -317,7 +317,7 @@ mod tests {
         Arc::new(mock)
     }
 
-    fn do_setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitSource>, f: Option<impl Fn(MockInstalledScheduler) -> ()>) -> SchedulerBox {
+    fn do_setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitSource>, f: Option<impl Fn(&mut MockInstalledScheduler) -> ()>) -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
 
@@ -334,14 +334,14 @@ mod tests {
             .in_sequence(&mut seq)
             .returning(move || setup_mocked_scheduler_pool(&mut seq));
         if let Some(f) = f {
-            f(mock);
+            f(&mut mock);
         }
 
         Box::new(mock)
     }
 
     fn setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitSource>) -> SchedulerBox {
-        do_setup_mocked_scheduler(wait_sources, None::<fn(MockInstalledScheduler) -> ()>)
+        do_setup_mocked_scheduler(wait_sources, None::<fn(&mut MockInstalledScheduler) -> ()>)
     }
 
     #[test]
@@ -406,7 +406,7 @@ mod tests {
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
         let mocked_scheduler = do_setup_mocked_scheduler(
             [WaitSource::AcrossBlock].into_iter(),
-            Some(|mocked| {
+            Some(|mocked: &mut MockInstalledScheduler| {
                 mocked.expect_schedule_execution
                     .times(1);
             })
