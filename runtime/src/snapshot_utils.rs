@@ -5133,6 +5133,8 @@ mod tests {
             // prepare the bank
             bank = Arc::new(Bank::new_from_parent(&bank, &collecter_id, bank.slot() + 1));
             bank.fill_bank_with_ticks_for_tests();
+            bank.squash();
+            bank.force_flush_accounts_cache();
 
             let snapshot_storages = bank.get_snapshot_storages(None);
             let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
