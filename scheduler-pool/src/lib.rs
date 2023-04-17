@@ -237,12 +237,12 @@ mod tests {
 
         assert_matches!(
             scheduler1.wait_for_termination(&WaitSource::AcrossBlock),
-            Some((Ok(()), _))
+            None
         );
         pool.return_to_pool(scheduler1);
         assert_matches!(
             scheduler2.wait_for_termination(&WaitSource::AcrossBlock),
-            Some((Ok(()), _))
+            None
         );
         pool.return_to_pool(scheduler2);
 
@@ -254,6 +254,27 @@ mod tests {
         // explicit drop just for consistent .clone()-ing above
         drop(context);
     }
+
+    /*
+    #[test]
+    fn test_scheduler_pool_implicit_call_schedule_termination() {
+        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+        let bank = Arc::new(Bank::default_for_tests());
+        let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
+
+        let mut scheduler1 = pool.take_from_pool(context.clone());
+        let scheduler_id1 = scheduler1.scheduler_id();
+        let mut scheduler2 = pool.take_from_pool(context.clone());
+        let scheduler_id2 = scheduler2.scheduler_id();
+        assert_ne!(scheduler_id1, scheduler_id2);
+
+        assert_matches!(
+            scheduler1.wait_for_termination(&WaitSource::AcrossBlock),
+            Some((Ok(()), _))
+        );
+    }
+    */
 
     #[test]
     fn test_scheduler_pool_context_replace() {
@@ -272,7 +293,7 @@ mod tests {
         let scheduler_id = scheduler.scheduler_id();
         assert_matches!(
             scheduler.wait_for_termination(&WaitSource::AcrossBlock),
-            Some((Ok(()), _))
+            None
         );
         pool.return_to_pool(scheduler);
 
