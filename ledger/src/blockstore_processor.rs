@@ -3470,7 +3470,7 @@ pub mod tests {
                     .returning(|| pool.clone());
                 Box::new(mock)
         });
-        bank_forks.install_scheduler_pool(pool);
+        bank_forks.install_scheduler_pool(pool.clone());
         let bank0 = bank_forks.get(0).unwrap();
         let opts = ProcessOptions {
             run_verification: true,
