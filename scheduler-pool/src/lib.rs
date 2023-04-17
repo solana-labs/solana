@@ -164,7 +164,7 @@ impl InstalledScheduler for Scheduler {
                 // rustfmt...
                 true
             }
-            WaitReason::TerminationForFreezing | WaitReason::FromBankDrop | WaitReason::FromSchedulerDrop => {
+            WaitReason::TerminationForFreezing | WaitReason::TerminationFromBankDrop | WaitReason::InternalTerminationByScheduler => {
                 false
             }
         };

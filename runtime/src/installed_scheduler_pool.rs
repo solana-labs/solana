@@ -82,8 +82,8 @@ pub enum WaitReason {
     TerminationForFreezing,
     // scheduler will be restarted without being returned to pool in order to reuse it immediately.
     ReinitializationForRecentBlockhash,
-    FromBankDrop,
-    FromSchedulerDrop,
+    TerminationFromBankDrop,
+    InternalTerminationByScheduler,
 }
 
 /*
@@ -91,7 +91,7 @@ pub enum WaitReason {
 pub enum WaitReason {
     // most usual reason
     TerminationForFreezing,
-    TerminationFromBankDrop,
+    TerminationTerminationFromBankDrop,
     InternalTerminationByScheduler,
     // scheduler will be restarted without being returned to pool in order to reuse it immediately.
     ReinitializationForRecentBlockhash,
@@ -275,12 +275,12 @@ impl Bank {
     }
 
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::FromBankDrop);
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::TerminationFromBankDrop);
         maybe_timings_and_result.map(|(result, _timings)| result)
     }
 
     pub fn wait_for_completed_scheduler_from_scheduler_drop(self) {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::FromSchedulerDrop);
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::InternalTerminationByScheduler);
         assert!(maybe_timings_and_result.is_some());
     }
 
@@ -380,7 +380,7 @@ mod tests {
     fn test_scheduler_termination_from_drop() {
         let bank = Bank::default_for_tests();
         bank.install_scheduler(setup_mocked_scheduler(
-            [WaitReason::FromBankDrop].into_iter(),
+            [WaitReason::TerminationFromBankDrop].into_iter(),
         ));
         drop(bank);
     }
@@ -389,7 +389,7 @@ mod tests {
     fn test_scheduler_reinitialization() {
         let mut bank = crate::bank::tests::create_simple_test_bank(42);
         bank.install_scheduler(setup_mocked_scheduler(
-            [WaitReason::ReinitializationForRecentBlockhash, WaitReason::FromBankDrop].into_iter(),
+            [WaitReason::ReinitializationForRecentBlockhash, WaitReason::TerminationFromBankDrop].into_iter(),
         ));
         goto_end_of_slot(&mut bank);
     }
@@ -409,7 +409,7 @@ mod tests {
         ));
         let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
         let mocked_scheduler = do_setup_mocked_scheduler(
-            [WaitReason::FromBankDrop].into_iter(),
+            [WaitReason::TerminationFromBankDrop].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
                 mocked
                     .expect_schedule_execution()
