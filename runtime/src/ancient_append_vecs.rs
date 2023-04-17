@@ -20,7 +20,9 @@ use {
     rand::{thread_rng, Rng},
     rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     solana_measure::measure_us,
-    solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, saturating_add_assign},
+    solana_sdk::{
+        account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey, saturating_add_assign,
+    },
     std::{
         collections::HashMap,
         num::NonZeroU64,
@@ -539,6 +541,7 @@ impl AccountsDb {
             .iter_mut()
             .zip(accounts_per_storage.iter())
         {
+            self.revisit_accounts_with_many_refs(shrink_collect);
             let many_refs = &mut shrink_collect.alive_accounts.many_refs;
             if !many_refs.accounts.is_empty() {
                 // there are accounts with ref_count > 1. This means this account must remain IN this slot.
@@ -556,6 +559,61 @@ impl AccountsDb {
             accounts_keep_slots,
             target_slots_sorted,
         }
+    }
+
+    /// return pubkeys from `many_refs` accounts
+    fn get_many_refs_pubkeys<'a>(
+        shrink_collect: &ShrinkCollect<'a, ShrinkCollectAliveSeparatedByRefs<'a>>,
+    ) -> Vec<Pubkey> {
+        shrink_collect
+            .alive_accounts
+            .many_refs
+            .accounts
+            .iter()
+            .map(|account| *account.pubkey())
+            .collect::<Vec<_>>()
+    }
+
+    /// After calling `shrink_collect()` on many slots, any dead accounts in those slots would be unref'd.
+    /// Alive accounts which had ref_count > 1 are stored in `shrink_collect.alive_accounts.many_refs`.
+    /// Since many slots were being visited, it is possible that at a point in time, an account was found to be alive and have ref_count > 1.
+    /// Concurrently, another slot was visited which also had the account, but the account was dead and unref'd in that `shrink_collect()` call.
+    /// So, now that all unrefs have occurred, go back through the small number of `many_refs` accounts and for all that now only have 1 ref_count,
+    /// move the account from `many_refs` to `one_ref`.
+    fn revisit_accounts_with_many_refs<'a>(
+        &self,
+        shrink_collect: &mut ShrinkCollect<'a, ShrinkCollectAliveSeparatedByRefs<'a>>,
+    ) {
+        // collect pk values here to avoid borrow checker
+        let pks = Self::get_many_refs_pubkeys(shrink_collect);
+        let mut index = 0;
+        self.accounts_index.scan(
+            pks.iter(),
+            |_pubkey, slots_refs, _entry| {
+                index += 1;
+                if let Some((_slot_list, ref_count)) = slots_refs {
+                    if ref_count == 1 {
+                        // This entry has been unref'd during shrink ancient, so it can now move out of `many_refs` and into `one_ref`.
+                        // This could happen if the same pubkey is in 2 append vecs that are BOTH being shrunk right now.
+                        // Note that `shrink_collect()`, which was previously called to create `shrink_collect`, unrefs any dead accounts.
+                        let account = shrink_collect
+                            .alive_accounts
+                            .many_refs
+                            .accounts
+                            .remove(index - 1);
+                        let bytes = account.stored_size();
+                        shrink_collect.alive_accounts.one_ref.accounts.push(account);
+                        saturating_add_assign!(shrink_collect.alive_accounts.one_ref.bytes, bytes);
+                        shrink_collect.alive_accounts.many_refs.bytes -= bytes;
+                        // since we removed an entry from many_refs.accounts, we need to index one less
+                        index -= 1;
+                    }
+                }
+                AccountsIndexScanResult::None
+            },
+            None,
+            false,
+        );
     }
 
     /// create packed storage and write contents of 'packed' to it.
@@ -816,6 +874,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
+            account_info::AccountInfo,
             account_storage::meta::{AccountMeta, StoredAccountMeta, StoredMeta},
             accounts_db::{
                 get_temp_accounts_paths,
@@ -826,6 +885,7 @@ pub mod tests {
                 },
                 INCLUDE_SLOT_IN_HASH_TESTS,
             },
+            accounts_index::UpsertReclaim,
             append_vec::{aligned_stored_size, AppendVec, AppendVecStoredAccountMeta},
             storable_accounts::StorableAccountsBySlot,
         },
@@ -2617,6 +2677,214 @@ pub mod tests {
     fn test_combine_packed_ancient_slots_simple() {
         for alive in [false, true] {
             _ = get_one_packed_ancient_append_vec_and_others(alive, 0);
+        }
+    }
+
+    #[test]
+    fn test_get_many_refs_pubkeys() {
+        let rent_epoch = 0;
+        let lamports = 0;
+        let executable = false;
+        let owner = Pubkey::default();
+        let data = Vec::new();
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+
+        let meta = StoredMeta {
+            write_version_obsolete: 5,
+            pubkey,
+            data_len: 7,
+        };
+        let meta2 = StoredMeta {
+            write_version_obsolete: 5,
+            pubkey: pubkey2,
+            data_len: 7,
+        };
+        let account_meta = AccountMeta {
+            lamports,
+            owner,
+            executable,
+            rent_epoch,
+        };
+        let offset = 99;
+        let stored_size = 101;
+        let hash = Hash::new_unique();
+        let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
+            meta: &meta,
+            account_meta: &account_meta,
+            data: &data,
+            offset,
+            stored_size,
+            hash: &hash,
+        });
+        let stored_account2 = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
+            meta: &meta2,
+            account_meta: &account_meta,
+            data: &data,
+            offset,
+            stored_size,
+            hash: &hash,
+        });
+        for (many_refs_accounts, expected) in [
+            (Vec::default(), Vec::default()),
+            (vec![&stored_account], vec![pubkey]),
+            (
+                vec![&stored_account, &stored_account2],
+                vec![pubkey, pubkey2],
+            ),
+        ] {
+            let shrink_collect = ShrinkCollect::<ShrinkCollectAliveSeparatedByRefs> {
+                slot: 0,
+                capacity: 0,
+                aligned_total_bytes: 0,
+                unrefed_pubkeys: Vec::default(),
+                alive_accounts: ShrinkCollectAliveSeparatedByRefs {
+                    one_ref: AliveAccounts {
+                        slot: 0,
+                        accounts: Vec::default(),
+                        bytes: 0,
+                    },
+                    many_refs: AliveAccounts {
+                        slot: 0,
+                        accounts: many_refs_accounts,
+                        bytes: 0,
+                    },
+                },
+                alive_total_bytes: 0,
+                total_starting_accounts: 0,
+                all_are_zero_lamports: false,
+                _index_entries_being_shrunk: Vec::default(),
+            };
+            let pks = AccountsDb::get_many_refs_pubkeys(&shrink_collect);
+            assert_eq!(pks, expected);
+        }
+    }
+
+    #[test]
+    fn test_revisit_accounts_with_many_refs() {
+        let db = AccountsDb::new_single_for_tests();
+        let rent_epoch = 0;
+        let lamports = 0;
+        let executable = false;
+        let owner = Pubkey::default();
+        let data = Vec::new();
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+
+        let meta = StoredMeta {
+            write_version_obsolete: 5,
+            pubkey,
+            data_len: 7,
+        };
+        let meta2 = StoredMeta {
+            write_version_obsolete: 5,
+            pubkey: pubkey2,
+            data_len: 7,
+        };
+        let account_meta = AccountMeta {
+            lamports,
+            owner,
+            executable,
+            rent_epoch,
+        };
+        let offset = 99;
+        let stored_size = 1; // size is 1 byte for each entry to test `bytes` later
+        let hash = Hash::new_unique();
+        let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
+            meta: &meta,
+            account_meta: &account_meta,
+            data: &data,
+            offset,
+            stored_size,
+            hash: &hash,
+        });
+        let stored_account2 = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
+            meta: &meta2,
+            account_meta: &account_meta,
+            data: &data,
+            offset,
+            stored_size,
+            hash: &hash,
+        });
+        let empty_account = AccountSharedData::default();
+
+        // sweep through different contents of `many_refs.accounts`
+        for many_refs_accounts in [
+            Vec::default(),
+            vec![&stored_account],
+            vec![&stored_account, &stored_account2],
+        ] {
+            // how many of `many_ref_accounts` should be found in the index with ref_count=1
+            for mut accounts_with_ref_count_one in 0..many_refs_accounts.len() {
+                // if `set_to_two_ref_count`, then add to index with ref_count=2, and expect same results as accounts_with_ref_count_one = 0
+                for set_to_two_ref_count in [false, true] {
+                    many_refs_accounts
+                        .iter()
+                        .take(accounts_with_ref_count_one)
+                        .for_each(|account| {
+                            let k = account.pubkey();
+                            for slot in 1..if set_to_two_ref_count { 3 } else { 2 } {
+                                // each upserting here (to a different slot) adds a refcount of 1 since entry is NOT cached
+                                db.accounts_index.upsert(
+                                    slot,
+                                    slot,
+                                    k,
+                                    &empty_account,
+                                    &crate::accounts_index::AccountSecondaryIndexes::default(),
+                                    AccountInfo::default(),
+                                    &mut Vec::default(),
+                                    UpsertReclaim::IgnoreReclaims,
+                                );
+                            }
+                        });
+                    if set_to_two_ref_count {
+                        // expect same results as accounts_with_ref_count_one = 0 since we set refcounts to 2
+                        accounts_with_ref_count_one = 0;
+                    }
+                    let mut shrink_collect = ShrinkCollect::<ShrinkCollectAliveSeparatedByRefs> {
+                        slot: 0,
+                        capacity: 0,
+                        aligned_total_bytes: 0,
+                        unrefed_pubkeys: Vec::default(),
+                        alive_accounts: ShrinkCollectAliveSeparatedByRefs {
+                            one_ref: AliveAccounts {
+                                slot: 0,
+                                accounts: Vec::default(),
+                                bytes: 0,
+                            },
+                            many_refs: AliveAccounts {
+                                slot: 0,
+                                accounts: many_refs_accounts.clone(),
+                                bytes: many_refs_accounts.len(),
+                            },
+                        },
+                        alive_total_bytes: 0,
+                        total_starting_accounts: 0,
+                        all_are_zero_lamports: false,
+                        _index_entries_being_shrunk: Vec::default(),
+                    };
+                    db.revisit_accounts_with_many_refs(&mut shrink_collect);
+                    // verify what got moved `many_refs` to `one_ref`
+                    assert_eq!(
+                        shrink_collect.alive_accounts.one_ref.accounts.len(),
+                        accounts_with_ref_count_one
+                    );
+                    assert_eq!(
+                        shrink_collect.alive_accounts.one_ref.bytes,
+                        accounts_with_ref_count_one
+                    );
+                    assert_eq!(
+                        shrink_collect.alive_accounts.many_refs.accounts,
+                        many_refs_accounts[accounts_with_ref_count_one..].to_vec(),
+                    );
+                    assert_eq!(
+                        shrink_collect.alive_accounts.many_refs.bytes,
+                        many_refs_accounts.len() - accounts_with_ref_count_one
+                    );
+                }
+            }
         }
     }
 
