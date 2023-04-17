@@ -85,12 +85,12 @@ pub enum WaitSource {
 /*
 #[derive(Debug)]
 pub enum WaitReason {
-    // most normal termination waiting mode
+    // most usual reason
     TerminationForFreezing,
-    // scheduler will be restarted without being returned to pool in order to reuse it immediately.
-    ReinitializationForRecentBlockhash,
     TerminationFromBankDrop,
     InternalTerminationByScheduler,
+    // scheduler will be restarted without being returned to pool in order to reuse it immediately.
+    ReinitializationForRecentBlockhash,
 }
 */
 
