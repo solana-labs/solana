@@ -1171,7 +1171,12 @@ struct LoadVoteAndStakeAccountsResult {
 }
 
 type VoteRewards = DashMap<Pubkey, (AccountSharedData, u8, u64, bool)>;
+
 type StakeRewards = Vec<StakeReward>;
+type VoteRewardsAccounts = Vec<(
+    Option<(Pubkey, RewardInfo)>,
+    Option<(Pubkey, AccountSharedData)>,
+)>;
 
 struct EpochRewardCalculateParamInfo<'a> {
     stake_history: StakeHistory,
@@ -3160,13 +3165,7 @@ impl Bank {
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
-    ) -> (
-        Vec<(
-            Option<(Pubkey, RewardInfo)>,
-            Option<(Pubkey, AccountSharedData)>,
-        )>,
-        StakeRewards,
-    ) {
+    ) -> (VoteRewardsAccounts, StakeRewards) {
         let EpochRewardCalculateParamInfo {
             stake_history,
             stake_delegations,
@@ -3275,11 +3274,7 @@ impl Bank {
                             return (None, None);
                         }
 
-                        //if vote_needs_store {
-                        //    self.store_account(&vote_pubkey, &vote_account);
-                        //}
-
-                        return (
+                        (
                             Some((
                                 vote_pubkey,
                                 RewardInfo {
@@ -3294,7 +3289,7 @@ impl Bank {
                             } else {
                                 None
                             },
-                        );
+                        )
                     },
                 )
             })
@@ -3456,10 +3451,7 @@ impl Bank {
 
     fn store_vote_accounts2(
         &self,
-        vote_account_rewards: Vec<(
-            Option<(Pubkey, RewardInfo)>,
-            Option<(Pubkey, AccountSharedData)>,
-        )>,
+        vote_account_rewards: VoteRewardsAccounts,
         metrics: &mut RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
         let (vote_rewards, measure) = measure!({
