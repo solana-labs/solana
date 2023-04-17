@@ -214,6 +214,8 @@ mod tests {
 
     #[test]
     fn test_scheduler_pool_new() {
+        solana_logger::setup();
+
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
 
@@ -226,6 +228,8 @@ mod tests {
 
     #[test]
     fn test_scheduler_spawn() {
+        solana_logger::setup();
+
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
@@ -238,6 +242,8 @@ mod tests {
 
     #[test]
     fn test_scheduler_pool_filo() {
+        solana_logger::setup();
+
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
@@ -268,6 +274,8 @@ mod tests {
 
     #[test]
     fn test_scheduler_pool_implicit_schedule_termination() {
+        solana_logger::setup();
+
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
@@ -285,6 +293,8 @@ mod tests {
 
     #[test]
     fn test_scheduler_pool_context_replace() {
+        solana_logger::setup();
+
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let old_bank = &Arc::new(Bank::default_for_tests());
@@ -314,6 +324,8 @@ mod tests {
 
     #[test]
     fn test_scheduler_pool_install_into_bank_forks() {
+        solana_logger::setup();
+
         let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
@@ -323,6 +335,8 @@ mod tests {
 
     #[test]
     fn test_scheduler_install_into_bank() {
+        solana_logger::setup();
+
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let child_bank = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
@@ -342,6 +356,8 @@ mod tests {
 
     #[test]
     fn test_schedule_execution() {
+        solana_logger::setup();
+
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
