@@ -97,7 +97,7 @@ struct Scheduler {
     id: SchedulerId,
     pool: Arc<SchedulerPool>,
     context: Option<SchedulingContext>,
-    result_with_timing: Mutex<Option<ResultWithTimings>>,
+    result_with_timings: Mutex<Option<ResultWithTimings>>,
 }
 
 impl Scheduler {
@@ -106,7 +106,7 @@ impl Scheduler {
             id: thread_rng().gen::<SchedulerId>(),
             pool,
             context: Some(initial_context),
-            result_with_timing: Mutex::default(),
+            result_with_timings: Mutex::default(),
         }
     }
 }
@@ -135,9 +135,9 @@ impl InstalledScheduler for Scheduler {
             SchedulingMode::BlockVerification => true,
         };
 
-        let result_with_timing = &mut *self.result_with_timing.lock().expect("not poisoned");
+        let result_with_timings = &mut *self.result_with_timings.lock().expect("not poisoned");
         let (result, timings) =
-            result_with_timing.get_or_insert_with(|| (Ok(()), ExecuteTimings::default()));
+            result_with_timings.get_or_insert_with(|| (Ok(()), ExecuteTimings::default()));
 
         // so, we're NOT scheduling at all; rather, just execute tx straight off.  we doesn't need
         // to solve inter-tx locking deps only in the case of single-thread fifo like this....
@@ -174,7 +174,7 @@ impl InstalledScheduler for Scheduler {
         if should_block_current_thread {
             // current simplest form of this trait impl doesn't block the current thread
             // materially with the following single mutex lock....
-            self.result_with_timing.lock().expect("not poisoned").take()
+            self.result_with_timings.lock().expect("not poisoned").take()
         } else {
             None
         }
@@ -186,7 +186,7 @@ impl InstalledScheduler for Scheduler {
 
     fn replace_scheduler_context(&mut self, context: SchedulingContext) {
         self.context = Some(context);
-        *self.result_with_timing.lock().expect("not poisoned") = None;
+        *self.result_with_timings.lock().expect("not poisoned") = None;
     }
 }
 

@@ -246,25 +246,25 @@ impl Bank {
         let mut scheduler_guard = self.scheduler.write().unwrap();
         let scheduler = &mut scheduler_guard.0;
 
-        let result_with_timing = if scheduler.is_some() {
-            let result_with_timing = scheduler
+        let result_with_timings = if scheduler.is_some() {
+            let result_with_timings = scheduler
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(&source));
             if !matches!(source, WaitSource::InsideBlock) {
                 let scheduler = scheduler.take().expect("scheduler after waiting");
                 scheduler.scheduler_pool().return_to_pool(scheduler);
             }
-            result_with_timing
+            result_with_timings
         } else {
             None
         };
         debug!(
             "wait_for_scheduler(slot: {}, source: {source:?}): finished with: {:?}...",
             self.slot(),
-            result_with_timing.as_ref().map(|(result, _)| result)
+            result_with_timings.as_ref().map(|(result, _)| result)
         );
 
-        result_with_timing
+        result_with_timings
     }
 
     pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
