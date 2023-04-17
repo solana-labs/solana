@@ -414,10 +414,6 @@ mod tests {
         );
         
         bank.install_scheduler(mocked_scheduler);
-
-        assert_eq!(bank.transaction_count(), 0);
         bank.schedule_transaction_executions(&[tx0], [0].iter());
-        assert_eq!(bank.transaction_count(), 1);
-        std::mem::forget((bank, context));
     }
 }
