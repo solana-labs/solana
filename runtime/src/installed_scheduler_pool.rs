@@ -196,7 +196,7 @@ impl BankForks {
 }
 
 impl Bank {
-    fn install_scheduler(&self, scheduler: SchedulerBox) {
+    pub fn install_scheduler(&self, scheduler: SchedulerBox) {
         let mut scheduler_guard = self.scheduler.write().expect("not poisoned");
         assert!(scheduler_guard.0.replace(scheduler).is_none());
     }
@@ -314,7 +314,7 @@ mod tests {
         Arc::new(mock)
     }
 
-    fn do_setup_mocked_scheduler(
+    fn setup_mocked_scheduler_with_extra(
         wait_reasons: impl Iterator<Item = WaitReason>,
         f: Option<impl Fn(&mut MockInstalledScheduler)>,
     ) -> SchedulerBox {
@@ -341,7 +341,7 @@ mod tests {
     }
 
     fn setup_mocked_scheduler(wait_reasons: impl Iterator<Item = WaitReason>) -> SchedulerBox {
-        do_setup_mocked_scheduler(wait_reasons, None::<fn(&mut MockInstalledScheduler) -> ()>)
+        setup_mocked_scheduler_with_extra(wait_reasons, None::<fn(&mut MockInstalledScheduler) -> ()>)
     }
 
     #[test]
@@ -404,7 +404,7 @@ mod tests {
             genesis_config.hash(),
         ));
         let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
-        let mocked_scheduler = do_setup_mocked_scheduler(
+        let mocked_scheduler = setup_mocked_scheduler_with_extra(
             [WaitReason::TerminatedFromBankDrop].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
                 mocked

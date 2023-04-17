@@ -4447,6 +4447,9 @@ pub mod tests {
             transaction_indexes: (0..txs.len()).into_iter().collect()
         };
 
+        let mut mock = Arc::new(MockInstalledScheduler::new());
+        bank.install_scheduler(mock);
+
         assert!(schedule_batches_for_execution(
             &bank,
             &[batch_with_indexes],
