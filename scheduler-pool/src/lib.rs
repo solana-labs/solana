@@ -178,7 +178,10 @@ impl InstalledScheduler for Scheduler {
         if keep_result_with_timings {
             None
         } else {
-            self.result_with_timings.lock().expect("not poisoned").take()
+            self.result_with_timings
+                .lock()
+                .expect("not poisoned")
+                .take()
         }
     }
 
@@ -197,6 +200,7 @@ mod tests {
     use {
         super::*,
         crate::SchedulerPool,
+        assert_matches::assert_matches,
         solana_runtime::{
             bank::Bank,
             bank_forks::BankForks,
@@ -207,7 +211,6 @@ mod tests {
         solana_sdk::pubkey::Pubkey,
         std::sync::Arc,
     };
-    use assert_matches::assert_matches;
 
     #[test]
     fn test_scheduler_pool_new() {
@@ -232,9 +235,15 @@ mod tests {
         let scheduler_id2 = scheduler2.scheduler_id();
         assert_ne!(scheduler_id1, scheduler_id2);
 
-        assert_matches!(scheduler1.wait_for_termination(&WaitSource::AcrossBlock), Some((Ok(()), _)));
+        assert_matches!(
+            scheduler1.wait_for_termination(&WaitSource::AcrossBlock),
+            Some((Ok(()), _))
+        );
         pool.return_to_pool(scheduler1);
-        assert_matches!(scheduler2.wait_for_termination(&WaitSource::AcrossBlock), Some((Ok(()), _)));
+        assert_matches!(
+            scheduler2.wait_for_termination(&WaitSource::AcrossBlock),
+            Some((Ok(()), _))
+        );
         pool.return_to_pool(scheduler2);
 
         let scheduler3 = pool.take_from_pool(context.clone());
@@ -261,7 +270,10 @@ mod tests {
 
         let mut scheduler = pool.take_from_pool(old_context.clone());
         let scheduler_id = scheduler.scheduler_id();
-        assert_matches!(scheduler.wait_for_termination(&WaitSource::AcrossBlock), Some((Ok(()), _)));
+        assert_matches!(
+            scheduler.wait_for_termination(&WaitSource::AcrossBlock),
+            Some((Ok(()), _))
+        );
         pool.return_to_pool(scheduler);
 
         let scheduler = pool.take_from_pool(new_context.clone());
