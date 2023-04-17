@@ -202,7 +202,7 @@ impl Bank {
         self.scheduler.read().expect("not poisoned").0.is_some()
     }
 
-    pub fn scheduler(&self) -> &SchedulerBox{
+    pub fn scheduler(&self) -> Option<&SchedulerBox> {
         self.scheduler.read().expect("not poisoned").0
     }
 
