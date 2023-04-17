@@ -231,7 +231,7 @@ mod tests {
         let scheduler_id2 = scheduler2.scheduler_id();
         assert_ne!(scheduler_id1, scheduler_id2);
 
-        scheduler1.wait_for_termination(&WaitSource::AcrossBlock);
+        assert_matches!(scheduler1.wait_for_termination(&WaitSource::AcrossBlock), Some(Ok()));
         pool.return_to_pool(scheduler1);
         scheduler2.wait_for_termination(&WaitSource::AcrossBlock);
         pool.return_to_pool(scheduler2);
