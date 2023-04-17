@@ -306,7 +306,7 @@ mod tests {
     use {super::*, crate::bank::test_utils::goto_end_of_slot, mockall::Sequence};
     use crate::genesis_utils::create_genesis_config;
     use crate::genesis_utils::GenesisConfigInfo;
-    use solana_sdk::{pubkey::Pubkey, system_transaction};
+    use solana_sdk::system_transaction;
 
     fn setup_mocked_scheduler_pool(seq: &mut Sequence) -> SchedulerPoolArc {
         let mut mock = MockInstalledSchedulerPool::new();
@@ -408,7 +408,8 @@ mod tests {
             [WaitSource::FromBankDrop].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
                 mocked.expect_schedule_execution()
-                    .times(1);
+                    .times(1)
+                    .returning(());
             })
         );
         
