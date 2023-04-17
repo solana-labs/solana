@@ -2583,6 +2583,7 @@ impl ReplayStage {
 
                 let replay_stats = bank_progress.replay_stats.clone();
                 let mut replay_stats = replay_stats.write().unwrap();
+                panic!();
 
                 if let Some((result, complete_execute_timings)) =
                     bank.wait_for_completed_scheduler()
