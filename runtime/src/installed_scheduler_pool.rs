@@ -317,7 +317,7 @@ mod tests {
         Arc::new(mock)
     }
 
-    fn do_setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitSource>, f: Option<impl Fn() -> ()>) -> SchedulerBox {
+    fn do_setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitSource>, f: Option<impl Fn(MockInstalledScheduler) -> ()>) -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
 
