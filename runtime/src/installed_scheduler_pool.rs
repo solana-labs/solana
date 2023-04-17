@@ -305,6 +305,7 @@ impl Bank {
 mod tests {
     use {super::*, crate::bank::test_utils::goto_end_of_slot, mockall::Sequence};
     use crate::genesis_utils::create_genesis_config;
+    use crate::genesis_utils::GenesisConfigInfo;
 
     fn setup_mocked_scheduler_pool(seq: &mut Sequence) -> SchedulerPoolArc {
         let mut mock = MockInstalledSchedulerPool::new();
