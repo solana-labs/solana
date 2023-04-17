@@ -202,6 +202,10 @@ impl Bank {
         self.scheduler.read().expect("not poisoned").0.is_some()
     }
 
+    pub fn scheduler(&self) -> &SchedulerBox{
+        self.scheduler.read().expect("not poisoned").0
+    }
+
     pub fn schedule_transaction_executions<'a>(
         &self,
         transactions: &[SanitizedTransaction],
