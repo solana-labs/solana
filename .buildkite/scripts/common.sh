@@ -35,11 +35,19 @@ step() {
   local agent
   agent="$(echo "$params" | jq -r '.agent')"
 
-  cat <<EOF | indent
+  local parallelism
+  parallelism="$(echo "$params" | jq -r '.parallelism')"
+  maybe_parallelism="EMPTY_LINE"
+  if [ "$parallelism" != "null" ]; then
+    maybe_parallelism="parallelism: $parallelism"
+  fi
+
+  cat <<EOF | indent | sed '/EMPTY_LINE/d'
 - name: "$name"
   command: "$command"
   timeout_in_minutes: $timeout_in_minutes
   agents:
     queue: "$agent"
+  $maybe_parallelism
 EOF
 }
