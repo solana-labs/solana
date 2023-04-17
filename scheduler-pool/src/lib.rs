@@ -16,7 +16,7 @@ use {
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         installed_scheduler_pool::{
-            InstalledScheduler, InstalledSchedulerPool, ResultWithTiming, SchedulerBox,
+            InstalledScheduler, InstalledSchedulerPool, ResultWithTimings, SchedulerBox,
             SchedulerId, SchedulerPoolArc, SchedulingContext, WaitSource,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
@@ -97,7 +97,7 @@ struct Scheduler {
     id: SchedulerId,
     pool: Arc<SchedulerPool>,
     context: Option<SchedulingContext>,
-    result_with_timing: Mutex<Option<ResultWithTiming>>,
+    result_with_timing: Mutex<Option<ResultWithTimings>>,
 }
 
 impl Scheduler {
@@ -158,7 +158,7 @@ impl InstalledScheduler for Scheduler {
         drop::<Option<SchedulingContext>>(self.context.take());
     }
 
-    fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<ResultWithTiming> {
+    fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<ResultWithTimings> {
         let should_block_current_thread = match wait_source {
             WaitSource::InsideBlock => {
                 // rustfmt...

@@ -58,7 +58,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     // prevent Bank::drop()'s last resort scheduling termination attempt indefinitely
     fn schedule_termination(&mut self);
 
-    fn wait_for_termination(&mut self, source: &WaitSource) -> Option<ResultWithTiming>;
+    fn wait_for_termination(&mut self, source: &WaitSource) -> Option<ResultWithTimings>;
 
     fn scheduling_context(&self) -> Option<SchedulingContext>;
     fn replace_scheduler_context(&mut self, context: SchedulingContext);
@@ -69,7 +69,7 @@ pub(crate) type InstalledSchedulerPoolArc = Option<SchedulerPoolArc>;
 
 pub type SchedulerId = u64;
 
-pub type ResultWithTiming = (Result<()>, ExecuteTimings);
+pub type ResultWithTimings = (Result<()>, ExecuteTimings);
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum WaitSource {
@@ -237,7 +237,7 @@ impl Bank {
         }
     }
 
-    fn wait_for_scheduler(&self, source: WaitSource) -> Option<ResultWithTiming> {
+    fn wait_for_scheduler(&self, source: WaitSource) -> Option<ResultWithTimings> {
         debug!(
             "wait_for_scheduler(slot: {}, source: {source:?}): started...",
             self.slot()
@@ -267,7 +267,7 @@ impl Bank {
         result_with_timing
     }
 
-    pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTiming> {
+    pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
         self.wait_for_scheduler(WaitSource::AcrossBlock)
     }
 
