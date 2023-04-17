@@ -79,13 +79,26 @@ struct AncientSlotInfos {
 
 impl AncientSlotInfos {
     /// add info for 'storage'
-    fn add(&mut self, slot: Slot, storage: Arc<AccountStorageEntry>, can_randomly_shrink: bool) {
+    /// return true if item was randomly shrunk
+    fn add(
+        &mut self,
+        slot: Slot,
+        storage: Arc<AccountStorageEntry>,
+        can_randomly_shrink: bool,
+    ) -> bool {
+        let mut was_randomly_shrunk = false;
         let alive_bytes = storage.alive_bytes() as u64;
         if alive_bytes > 0 {
             let capacity = storage.accounts.capacity();
             let should_shrink = if capacity > 0 {
                 let alive_ratio = alive_bytes * 100 / capacity;
-                (alive_ratio < 90) || (can_randomly_shrink && thread_rng().gen_range(0, 10000) == 0)
+                alive_ratio < 90
+                    || if can_randomly_shrink && thread_rng().gen_range(0, 10000) == 0 {
+                        was_randomly_shrunk = true;
+                        true
+                    } else {
+                        false
+                    }
             } else {
                 false
             };
@@ -108,6 +121,7 @@ impl AncientSlotInfos {
             });
             saturating_add_assign!(self.total_alive_bytes, alive_bytes);
         }
+        was_randomly_shrunk
     }
 
     /// modify 'self' to contain only the slot infos for the slots that should be combined
@@ -400,11 +414,19 @@ impl AccountsDb {
             all_infos: Vec::with_capacity(len),
             ..AncientSlotInfos::default()
         };
+        let mut randoms = 0;
 
         for slot in &slots {
             if let Some(storage) = self.storage.get_slot_storage_entry(*slot) {
-                infos.add(*slot, storage, can_randomly_shrink);
+                if infos.add(*slot, storage, can_randomly_shrink) {
+                    randoms += 1;
+                }
             }
+        }
+        if randoms > 0 {
+            self.shrink_ancient_stats
+                .random_shrink
+                .fetch_add(randoms, Ordering::Relaxed);
         }
         infos
     }
