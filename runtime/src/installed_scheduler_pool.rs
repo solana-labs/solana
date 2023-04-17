@@ -183,6 +183,7 @@ impl BankForks {
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         assert!(self.scheduler_pool.replace(pool).is_none());
         for bank in self.banks() {
+            self.install_scheduler_into_bank(bank);
         }
     }
 
