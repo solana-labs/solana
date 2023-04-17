@@ -2,6 +2,7 @@
 set -e
 cd "$(dirname "$0")/.."
 source ci/semver_bash/semver.sh
+export RUST_STABLE_VERSION=1.63.0
 source ci/rust-version.sh stable
 
 cargo="$(readlink -f ./cargo)"
