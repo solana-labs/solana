@@ -203,7 +203,7 @@ impl Bank {
     }
 
     pub fn with_scheduling_context(&self) -> bool {
-        self.scheduler.read().expect("not poisoned").0.as_ref().and_then(|sc| sc.scheduling_context()).is_some()
+        self.scheduler.read().expect("not poisoned").0.as_ref().and_then(|scheduler| scheduler.scheduling_context()).is_some()
     }
 
     pub fn schedule_transaction_executions<'a>(
