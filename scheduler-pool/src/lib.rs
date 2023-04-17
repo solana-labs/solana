@@ -220,7 +220,7 @@ mod tests {
         // this indirectly proves that there should be circular link because there's only one Arc
         // at this moment now
         assert_eq!((Arc::strong_count(&pool), Arc::weak_count(&pool)), (1, 1));
-        let debug = format!("{pool:#?}");    
+        let debug = format!("{pool:#?}");
         assert!(!debug.is_empty());
     }
 
@@ -232,7 +232,7 @@ mod tests {
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
         let scheduler = pool.take_from_pool(context);
 
-        let debug = format!("{scheduler:#?}");    
+        let debug = format!("{scheduler:#?}");
         assert!(!debug.is_empty());
     }
 
