@@ -211,6 +211,7 @@ mod tests {
         solana_sdk::pubkey::Pubkey,
         std::sync::Arc,
     };
+    use solana_sdk::system_transaction;
 
     #[test]
     fn test_scheduler_pool_new() {
