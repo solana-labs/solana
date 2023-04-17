@@ -17,7 +17,7 @@ use {
     solana_runtime::{
         installed_scheduler_pool::{
             InstalledScheduler, InstalledSchedulerPool, ResultWithTimings, SchedulerBox,
-            SchedulerId, SchedulerPoolArc, SchedulingContext, WaitSource,
+            SchedulerId, SchedulerPoolArc, SchedulingContext, WaitReason,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
@@ -158,13 +158,13 @@ impl InstalledScheduler for Scheduler {
         drop::<Option<SchedulingContext>>(self.context.take());
     }
 
-    fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<ResultWithTimings> {
+    fn wait_for_termination(&mut self, wait_source: &WaitReason) -> Option<ResultWithTimings> {
         let keep_result_with_timings = match wait_source {
-            WaitSource::InsideBlock => {
+            WaitReason::InsideBlock => {
                 // rustfmt...
                 true
             }
-            WaitSource::AcrossBlock | WaitSource::FromBankDrop | WaitSource::FromSchedulerDrop => {
+            WaitReason::AcrossBlock | WaitSource::FromBankDrop | WaitSource::FromSchedulerDrop => {
                 false
             }
         };
@@ -250,12 +250,12 @@ mod tests {
         assert_ne!(scheduler_id1, scheduler_id2);
 
         assert_matches!(
-            scheduler1.wait_for_termination(&WaitSource::AcrossBlock),
+            scheduler1.wait_for_termination(&WaitReason::AcrossBlock),
             None
         );
         pool.return_to_pool(scheduler1);
         assert_matches!(
-            scheduler2.wait_for_termination(&WaitSource::AcrossBlock),
+            scheduler2.wait_for_termination(&WaitReason::AcrossBlock),
             None
         );
         pool.return_to_pool(scheduler2);
@@ -277,7 +277,7 @@ mod tests {
 
         assert!(scheduler.scheduling_context().is_some());
         assert_matches!(
-            scheduler.wait_for_termination(&WaitSource::InsideBlock),
+            scheduler.wait_for_termination(&WaitReason::InsideBlock),
             None
         );
         assert!(scheduler.scheduling_context().is_none());
@@ -299,7 +299,7 @@ mod tests {
         let mut scheduler = pool.take_from_pool(old_context.clone());
         let scheduler_id = scheduler.scheduler_id();
         assert_matches!(
-            scheduler.wait_for_termination(&WaitSource::AcrossBlock),
+            scheduler.wait_for_termination(&WaitReason::AcrossBlock),
             None
         );
         pool.return_to_pool(scheduler);

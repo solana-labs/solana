@@ -60,7 +60,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     fn schedule_termination(&mut self);
 
     #[must_use]
-    fn wait_for_termination(&mut self, source: &WaitSource) -> Option<ResultWithTimings>;
+    fn wait_for_termination(&mut self, source: &WaitReason) -> Option<ResultWithTimings>;
 
     // suppress false clippy arising from mockall
     #[allow(clippy::needless_lifetimes)]
@@ -76,7 +76,7 @@ pub type SchedulerId = u64;
 pub type ResultWithTimings = (Result<()>, ExecuteTimings);
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum WaitSource {
+pub enum WaitReason {
     // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
     // the result and timing in some way to higher-layer subsystems;
     AcrossBlock,
@@ -240,7 +240,7 @@ impl Bank {
         }
     }
 
-    fn wait_for_scheduler(&self, source: WaitSource) -> Option<ResultWithTimings> {
+    fn wait_for_scheduler(&self, source: WaitReason) -> Option<ResultWithTimings> {
         debug!(
             "wait_for_scheduler(slot: {}, source: {source:?}): started...",
             self.slot()
@@ -253,7 +253,7 @@ impl Bank {
             let result_with_timings = scheduler
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(&source));
-            if !matches!(source, WaitSource::InsideBlock) {
+            if !matches!(source, WaitReason::InsideBlock) {
                 let scheduler = scheduler.take().expect("scheduler after waiting");
                 scheduler.scheduler_pool().return_to_pool(scheduler);
             }
@@ -271,21 +271,21 @@ impl Bank {
     }
 
     pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
-        self.wait_for_scheduler(WaitSource::AcrossBlock)
+        self.wait_for_scheduler(WaitReason::AcrossBlock)
     }
 
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::FromBankDrop);
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::FromBankDrop);
         maybe_timings_and_result.map(|(result, _timings)| result)
     }
 
     pub fn wait_for_completed_scheduler_from_scheduler_drop(self) {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::FromSchedulerDrop);
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::FromSchedulerDrop);
         assert!(maybe_timings_and_result.is_some());
     }
 
     pub(crate) fn wait_for_reusable_scheduler(&self) {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitSource::InsideBlock);
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::InsideBlock);
         assert!(maybe_timings_and_result.is_none());
     }
 
@@ -323,7 +323,7 @@ mod tests {
     }
 
     fn do_setup_mocked_scheduler(
-        wait_sources: impl Iterator<Item = WaitSource>,
+        wait_sources: impl Iterator<Item = WaitReason>,
         f: Option<impl Fn(&mut MockInstalledScheduler)>,
     ) -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
@@ -348,7 +348,7 @@ mod tests {
         Box::new(mock)
     }
 
-    fn setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitSource>) -> SchedulerBox {
+    fn setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitReason>) -> SchedulerBox {
         do_setup_mocked_scheduler(wait_sources, None::<fn(&mut MockInstalledScheduler) -> ()>)
     }
 
@@ -371,7 +371,7 @@ mod tests {
     fn test_scheduler_normal_termination() {
         let bank = Bank::default_for_tests();
         bank.install_scheduler(setup_mocked_scheduler(
-            [WaitSource::AcrossBlock].into_iter(),
+            [WaitReason::AcrossBlock].into_iter(),
         ));
         bank.wait_for_completed_scheduler();
     }
@@ -380,7 +380,7 @@ mod tests {
     fn test_scheduler_termination_from_drop() {
         let bank = Bank::default_for_tests();
         bank.install_scheduler(setup_mocked_scheduler(
-            [WaitSource::FromBankDrop].into_iter(),
+            [WaitReason::FromBankDrop].into_iter(),
         ));
         drop(bank);
     }
@@ -389,7 +389,7 @@ mod tests {
     fn test_scheduler_reinitialization() {
         let mut bank = crate::bank::tests::create_simple_test_bank(42);
         bank.install_scheduler(setup_mocked_scheduler(
-            [WaitSource::InsideBlock, WaitSource::FromBankDrop].into_iter(),
+            [WaitReason::InsideBlock, WaitSource::FromBankDrop].into_iter(),
         ));
         goto_end_of_slot(&mut bank);
     }
@@ -409,7 +409,7 @@ mod tests {
         ));
         let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
         let mocked_scheduler = do_setup_mocked_scheduler(
-            [WaitSource::FromBankDrop].into_iter(),
+            [WaitReason::FromBankDrop].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
                 mocked
                     .expect_schedule_execution()
