@@ -202,8 +202,8 @@ impl Bank {
         self.scheduler.read().expect("not poisoned").0.is_some()
     }
 
-    pub fn scheduler(&self) -> Option<&SchedulerBox> {
-        self.scheduler.read().expect("not poisoned").0.as_ref()
+    pub fn with_scheduling_context(&self) -> bool {
+        self.scheduler.read().expect("not poisoned").0.and_then(|sc| sc.scheduling_context()).is_some()
     }
 
     pub fn schedule_transaction_executions<'a>(
