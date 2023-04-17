@@ -1,11 +1,11 @@
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use {
+    solana_frozen_abi::abi_example::AbiExample, solana_program_runtime::declare_process_instruction,
+};
 use {
     solana_program_runtime::invoke_context::ProcessInstructionWithContext,
     solana_sdk::{feature_set, pubkey::Pubkey, stake},
     std::fmt,
-};
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-use {
-    solana_frozen_abi::abi_example::AbiExample, solana_program_runtime::declare_process_instruction,
 };
 
 #[derive(Clone)]
