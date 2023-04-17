@@ -4338,7 +4338,7 @@ pub mod tests {
         }
     }
 
-    fn create_test_transactions(mint_keypair: &Pubkey) {
+    fn create_test_transactions(mint_keypair: &Keypair) {
         let pubkey = solana_sdk::pubkey::new_rand();
         let keypair2 = Keypair::new();
         let pubkey2 = solana_sdk::pubkey::new_rand();
