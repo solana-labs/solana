@@ -4442,10 +4442,14 @@ pub mod tests {
         ];
 
         let batch = bank.prepare_sanitized_batch(&txs);
+        let batch_with_indexes = TransactionBatchWithIndexes {
+            batch,
+            transaction_indexes: vec![index],
+        };
 
         assert!(schedule_batches_for_execution(
             &bank,
-            batch
+            batch_with_indexes,
         ).is_ok());
     }
 
