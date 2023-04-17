@@ -80,23 +80,11 @@ pub enum WaitReason {
     // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
     // the result and timing in some way to higher-layer subsystems;
     TerminationForFreezing,
-    // scheduler will be restarted without being returned to pool in order to reuse it immediately.
-    ReinitializationForRecentBlockhash,
     TerminationFromBankDrop,
     InternalTerminationByScheduler,
-}
-
-/*
-#[derive(Debug)]
-pub enum WaitReason {
-    // most usual reason
-    TerminationForFreezing,
-    TerminationTerminationFromBankDrop,
-    InternalTerminationByScheduler,
     // scheduler will be restarted without being returned to pool in order to reuse it immediately.
     ReinitializationForRecentBlockhash,
 }
-*/
 
 pub type SchedulerBox = Box<dyn InstalledScheduler>;
 // somewhat arbitrary new type just to pacify Bank's frozen_abi...
@@ -280,12 +268,14 @@ impl Bank {
     }
 
     pub fn wait_for_completed_scheduler_from_scheduler_drop(self) {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::InternalTerminationByScheduler);
+        let maybe_timings_and_result =
+            self.wait_for_scheduler(WaitReason::InternalTerminationByScheduler);
         assert!(maybe_timings_and_result.is_some());
     }
 
     pub(crate) fn wait_for_reusable_scheduler(&self) {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::ReinitializationForRecentBlockhash);
+        let maybe_timings_and_result =
+            self.wait_for_scheduler(WaitReason::ReinitializationForRecentBlockhash);
         assert!(maybe_timings_and_result.is_none());
     }
 
@@ -389,7 +379,11 @@ mod tests {
     fn test_scheduler_reinitialization() {
         let mut bank = crate::bank::tests::create_simple_test_bank(42);
         bank.install_scheduler(setup_mocked_scheduler(
-            [WaitReason::ReinitializationForRecentBlockhash, WaitReason::TerminationFromBankDrop].into_iter(),
+            [
+                WaitReason::ReinitializationForRecentBlockhash,
+                WaitReason::TerminationFromBankDrop,
+            ]
+            .into_iter(),
         ));
         goto_end_of_slot(&mut bank);
     }
