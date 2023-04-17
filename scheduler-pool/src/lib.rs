@@ -346,7 +346,11 @@ mod tests {
 
         let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
+
+        // existing banks shouldn't process transactions in general, so shouldn't be affected
+        assert!(!bank_forks.working_bank().with_scheduler());
         bank_forks.install_scheduler_pool(pool);
+        assert!(!bank_forks.working_bank().with_scheduler());
 
         assert!(!child_bank.with_scheduler());
         bank_forks.insert(child_bank);
