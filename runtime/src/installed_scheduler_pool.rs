@@ -407,7 +407,7 @@ mod tests {
         let mocked_scheduler = do_setup_mocked_scheduler(
             [WaitSource::AcrossBlock].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
-                mocked.expect_schedule_execution
+                mocked.expect_schedule_execution()
                     .times(1);
             })
         );
