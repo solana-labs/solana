@@ -1,4 +1,4 @@
-pub use crate::legacy_contact_info::LegacyContactInfo;
+pub use self::legacy::LegacyContactInfo;
 use {
     crate::crds_value::MAX_WALLCLOCK,
     matches::{assert_matches, debug_assert_matches},
@@ -19,6 +19,8 @@ use {
     },
     thiserror::Error,
 };
+
+mod legacy;
 
 const SOCKET_TAG_GOSSIP: u8 = 0;
 const SOCKET_TAG_REPAIR: u8 = 1;

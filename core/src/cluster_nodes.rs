@@ -6,10 +6,10 @@ use {
     rand_chacha::ChaChaRng,
     solana_gossip::{
         cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
+        contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
         crds::GossipRoute,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         crds_value::{CrdsData, CrdsValue},
-        legacy_contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
         weighted_shuffle::WeightedShuffle,
     },
     solana_ledger::shred::ShredId,

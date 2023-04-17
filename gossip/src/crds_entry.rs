@@ -1,11 +1,11 @@
 use {
     crate::{
+        contact_info::LegacyContactInfo,
         crds::VersionedCrdsValue,
         crds_value::{
             CrdsData, CrdsValue, CrdsValueLabel, LegacySnapshotHashes, LegacyVersion, LowestSlot,
             SnapshotHashes, Version,
         },
-        legacy_contact_info::LegacyContactInfo,
     },
     indexmap::IndexMap,
     solana_sdk::pubkey::Pubkey,

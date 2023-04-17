@@ -15,11 +15,11 @@ use {
     crate::{
         cluster_info::Ping,
         cluster_info_metrics::GossipStats,
+        contact_info::LegacyContactInfo as ContactInfo,
         crds::{Crds, GossipRoute, VersionedCrdsValue},
         crds_gossip,
         crds_gossip_error::CrdsGossipError,
         crds_value::{CrdsData, CrdsValue},
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
         ping_pong::PingCache,
     },
     itertools::Itertools,

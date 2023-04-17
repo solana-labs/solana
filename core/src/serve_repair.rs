@@ -15,7 +15,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
-        legacy_contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
+        contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
         ping_pong::{self, PingCache, Pong},
         weighted_shuffle::WeightedShuffle,
     },
@@ -228,7 +228,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
-#[frozen_abi(digest = "3bgE3sYHRqetvpo4fcDL6PTV3z2LMAtY6H8BoLFSjCwf")]
+#[frozen_abi(digest = "CmkVppGv98fYpnzq69utQKxDLWMqiA4dtkeQ6GTmE4rY")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
     LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),

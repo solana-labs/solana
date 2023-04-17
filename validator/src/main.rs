@@ -19,7 +19,7 @@ use {
             ValidatorConfig, ValidatorStartProgress,
         },
     },
-    solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},
+    solana_gossip::{cluster_info::Node, contact_info::LegacyContactInfo as ContactInfo},
     solana_ledger::blockstore_options::{
         BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
     },

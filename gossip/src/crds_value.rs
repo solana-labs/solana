@@ -1,11 +1,10 @@
 use {
     crate::{
         cluster_info::MAX_LEGACY_SNAPSHOT_HASHES,
-        contact_info::ContactInfo,
+        contact_info::{ContactInfo, LegacyContactInfo},
         deprecated,
         duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
         epoch_slots::EpochSlots,
-        legacy_contact_info::LegacyContactInfo,
     },
     bincode::{serialize, serialized_size},
     rand::{CryptoRng, Rng},

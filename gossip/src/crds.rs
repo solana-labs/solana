@@ -26,11 +26,11 @@
 
 use {
     crate::{
+        contact_info::LegacyContactInfo as ContactInfo,
         crds_entry::CrdsEntry,
         crds_gossip_pull::CrdsTimeouts,
         crds_shards::CrdsShards,
         crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     bincode::serialize,
     indexmap::{
