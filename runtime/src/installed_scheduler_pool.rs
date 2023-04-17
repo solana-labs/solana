@@ -340,7 +340,7 @@ mod tests {
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
         assert_eq!(context.slot(), 0);
         assert_eq!(SchedulingContext::log_prefix(Some(context), 3), "sch_0000000000000003(slot:0/mode:BlockVerification): ");
-        assert_eq!(SchedulingContext::log_prefix(None, 3), "3");
+        assert_eq!(SchedulingContext::log_prefix(None, 3), "sch_0000000000000003(?): ");
     }
 
     #[test]
