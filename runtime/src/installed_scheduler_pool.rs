@@ -405,7 +405,7 @@ mod tests {
         let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
         let mocked_scheduler = do_setup_mocked_scheduler(
-            [WaitSource::AcrossBlock].into_iter(),
+            [WaitSource::FromBankDrop].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
                 mocked.expect_schedule_execution()
                     .times(1);
@@ -417,6 +417,6 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
         bank.schedule_transaction_executions(&[tx0], [0].iter());
         assert_eq!(bank.transaction_count(), 1);
-        std::mem::forget((bank, context, mocked_scheduler));
+        std::mem::forget((bank, context));
     }
 }
