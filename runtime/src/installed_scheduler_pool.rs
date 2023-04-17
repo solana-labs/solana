@@ -207,12 +207,12 @@ impl BankForks {
 
 impl Bank {
     fn install_scheduler(&self, scheduler: SchedulerBox) {
-        let mut scheduler_guard = self.scheduler.write().unwrap();
+        let mut scheduler_guard = self.scheduler.write().expect("not poisoned");
         assert!(scheduler_guard.0.replace(scheduler).is_none());
     }
 
     pub fn with_scheduler(&self) -> bool {
-        self.scheduler.read().unwrap().0.is_some()
+        self.scheduler.read().expect("not poisoned").0.is_some()
     }
 
     pub fn schedule_transaction_executions<'a>(
@@ -225,7 +225,7 @@ impl Bank {
             transactions.len()
         );
 
-        let scheduler_guard = self.scheduler.read().unwrap();
+        let scheduler_guard = self.scheduler.read().expect("not poisoned");
         let scheduler = scheduler_guard.0.as_ref().expect("active scheduler");
 
         for (sanitized_transaction, &index) in transactions.iter().zip(transaction_indexes) {
@@ -234,7 +234,7 @@ impl Bank {
     }
 
     fn schedule_termination(&self) {
-        let mut scheduler_guard = self.scheduler.write().unwrap();
+        let mut scheduler_guard = self.scheduler.write().expect("not poisoned");
         if let Some(scheduler) = scheduler_guard.0.as_mut() {
             scheduler.schedule_termination();
         }
@@ -246,7 +246,7 @@ impl Bank {
             self.slot()
         );
 
-        let mut scheduler_guard = self.scheduler.write().unwrap();
+        let mut scheduler_guard = self.scheduler.write().expect("not poisoned");
         let scheduler = &mut scheduler_guard.0;
 
         let result_with_timings = if scheduler.is_some() {
