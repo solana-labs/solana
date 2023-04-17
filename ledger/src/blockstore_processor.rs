@@ -309,6 +309,7 @@ fn process_batches(
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     if !bank.with_scheduler() {
+        debug!("process_batches()/rebatch_and_execute_batches({} batches)", batches.len());
         rebatch_and_execute_batches(
             bank,
             batches,
@@ -319,6 +320,7 @@ fn process_batches(
             prioritization_fee_cache,
         )
     } else {
+        debug!("process_batches()/schedule_batches_for_execution({} batches)", batches.len());
         schedule_batches_for_execution(bank, batches)
     }
 }
