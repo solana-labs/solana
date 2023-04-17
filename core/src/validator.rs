@@ -835,7 +835,7 @@ impl Validator {
                 None,
                 bank.ticks_per_slot(),
                 &id,
-                &blockstore,
+                blockstore.clone(),
                 blockstore.get_new_shred_signal(0),
                 &leader_schedule_cache,
                 &genesis_config.poh_config,
