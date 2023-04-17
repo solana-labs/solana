@@ -342,7 +342,7 @@ mod tests {
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
-        let mut scheduler = pool.take_from_pool(context.clone());
+        let scheduler = pool.take_from_pool(context.clone());
         scheduler.schedule_execution(&tx0, 0);
     }
 }
