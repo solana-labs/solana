@@ -4319,7 +4319,7 @@ pub mod tests {
 
         vec![
             SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-                &mint_keypair,
+                mint_keypair,
                 &pubkey,
                 1,
                 *genesis_hash,
@@ -4391,7 +4391,7 @@ pub mod tests {
         let batch = bank.prepare_sanitized_batch(&txs);
         let batch_with_indexes = TransactionBatchWithIndexes {
             batch,
-            transaction_indexes: (0..txs.len()).into_iter().collect(),
+            transaction_indexes: (0..txs.len()).collect(),
         };
 
         use solana_runtime::installed_scheduler_pool::{
