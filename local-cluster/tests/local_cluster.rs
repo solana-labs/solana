@@ -145,6 +145,7 @@ fn test_spend_and_verify_all_nodes_2() {
         DEFAULT_CLUSTER_LAMPORTS,
         DEFAULT_NODE_STAKE,
     );
+    use rand::seq::IteratorRandom;
     config.validator_configs.choose(&mut rand::thread_rng()).block_verification_method = solana_core::validator::BlockVerificationMethod::UnifiedScheduler;
     let local = LocalCluster::new(
         &mut config,
