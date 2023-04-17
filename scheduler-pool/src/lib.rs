@@ -325,4 +325,14 @@ mod tests {
         let child_bank = bank_forks.working_bank();
         assert!(child_bank.with_scheduler());
     }
+
+    #[test]
+    fn test_schedule_execution() {
+        let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            &mint_keypair,
+            &key,
+            2,
+            genesis_config.hash(),
+        ));
+    }
 }
