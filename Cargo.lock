@@ -6606,6 +6606,7 @@ version = "1.16.0"
 name = "solana-scheduler-pool"
 version = "1.16.0"
 dependencies = [
+ "assert_matches",
  "rand 0.7.3",
  "solana-ledger",
  "solana-program-runtime",

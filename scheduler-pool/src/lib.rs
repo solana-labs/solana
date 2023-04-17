@@ -207,6 +207,7 @@ mod tests {
         solana_sdk::pubkey::Pubkey,
         std::sync::Arc,
     };
+    use assert_matches::assert_matches;
 
     #[test]
     fn test_scheduler_pool_new() {
