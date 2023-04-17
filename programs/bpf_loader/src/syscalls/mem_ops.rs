@@ -286,7 +286,7 @@ fn memset_non_contiguous(
     n: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, Error> {
-    let dst_chunk_iter = MemoryChunkIterator::new(memory_mapping, AccessType::Store, dst_addr, n);
+    let dst_chunk_iter = MemoryChunkIterator::new(memory_mapping, AccessType::Store, dst_addr, n)?;
     for item in dst_chunk_iter {
         let (dst_region, dst_vm_addr, dst_len) = item?;
         let dst_host_addr = Result::from(dst_region.vm_to_host(dst_vm_addr, dst_len as u64))?;
@@ -310,7 +310,8 @@ where
     T: Default,
     F: FnMut(*const u8, *const u8, usize) -> Result<T, Error>,
 {
-    let mut src_chunk_iter = MemoryChunkIterator::new(memory_mapping, src_access, src_addr, n);
+    let mut src_chunk_iter = MemoryChunkIterator::new(memory_mapping, src_access, src_addr, n)
+        .map_err(EbpfError::from)?;
     loop {
         // iterate source chunks
         let (src_region, src_vm_addr, mut src_len) = match if reverse {
@@ -323,7 +324,8 @@ where
         };
 
         let mut src_host_addr = Result::from(src_region.vm_to_host(src_vm_addr, src_len as u64))?;
-        let mut dst_chunk_iter = MemoryChunkIterator::new(memory_mapping, dst_access, dst_addr, n);
+        let mut dst_chunk_iter = MemoryChunkIterator::new(memory_mapping, dst_access, dst_addr, n)
+            .map_err(EbpfError::from)?;
         // iterate over destination chunks until this source chunk has been completely copied
         while src_len > 0 {
             loop {
@@ -376,15 +378,22 @@ impl<'a> MemoryChunkIterator<'a> {
         access_type: AccessType,
         vm_addr: u64,
         len: u64,
-    ) -> MemoryChunkIterator<'a> {
-        MemoryChunkIterator {
+    ) -> Result<MemoryChunkIterator<'a>, EbpfError> {
+        let vm_addr_end = vm_addr.checked_add(len).ok_or(EbpfError::AccessViolation(
+            0,
+            access_type,
+            vm_addr,
+            len,
+            "unknown",
+        ))?;
+        Ok(MemoryChunkIterator {
             memory_mapping,
             access_type,
             initial_vm_addr: vm_addr,
             len,
             vm_addr_start: vm_addr,
-            vm_addr_end: vm_addr.saturating_add(len),
-        }
+            vm_addr_end,
+        })
     }
 
     fn region(&mut self, vm_addr: u64) -> Result<&'a MemoryRegion, Error> {
@@ -484,17 +493,6 @@ impl<'a> DoubleEndedIterator for MemoryChunkIterator<'a> {
 mod tests {
     use {super::*, solana_rbpf::ebpf::MM_PROGRAM_START};
 
-    #[test]
-    fn test_memory_chunk_iterator_empty() {
-        let config = Config {
-            aligned_memory_mapping: false,
-            ..Config::default()
-        };
-        let memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
-        let mut src_chunk_iter = MemoryChunkIterator::new(&memory_mapping, AccessType::Load, 0, 1);
-        assert!(src_chunk_iter.next().unwrap().is_err());
-    }
-
     fn to_chunk_vec<'a>(
         iter: impl Iterator<Item = Result<(&'a MemoryRegion, u64, usize), Error>>,
     ) -> Vec<(u64, usize)> {
@@ -511,8 +509,78 @@ mod tests {
         };
         let memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
 
-        let mut src_chunk_iter = MemoryChunkIterator::new(&memory_mapping, AccessType::Load, 0, 1);
+        let mut src_chunk_iter =
+            MemoryChunkIterator::new(&memory_mapping, AccessType::Load, 0, 1).unwrap();
         src_chunk_iter.next().unwrap().unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "AccessViolation")]
+    fn test_memory_chunk_iterator_new_out_of_bounds_upper() {
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+        let memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
+
+        let mut src_chunk_iter =
+            MemoryChunkIterator::new(&memory_mapping, AccessType::Load, u64::MAX, 1).unwrap();
+        src_chunk_iter.next().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_memory_chunk_iterator_out_of_bounds() {
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+        let mem1 = vec![0xFF; 42];
+        let memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion::new_readonly(&mem1, MM_PROGRAM_START)],
+            &config,
+        )
+        .unwrap();
+
+        // check oob at the lower bound on the first next()
+        let mut src_chunk_iter =
+            MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START - 1, 42)
+                .unwrap();
+        assert!(matches!(
+            src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
+            EbpfError::AccessViolation(0, AccessType::Load, addr, 42, "unknown") if *addr == MM_PROGRAM_START - 1
+        ));
+
+        // check oob at the upper bound. Since the memory mapping isn't empty,
+        // this always happens on the second next().
+        let mut src_chunk_iter =
+            MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START, 43)
+                .unwrap();
+        assert!(src_chunk_iter.next().unwrap().is_ok());
+        assert!(matches!(
+            src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
+            EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "program") if *addr == MM_PROGRAM_START
+        ));
+
+        // check oob at the upper bound on the first next_back()
+        let mut src_chunk_iter =
+            MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START, 43)
+                .unwrap()
+                .rev();
+        assert!(matches!(
+            src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
+            EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "program") if *addr == MM_PROGRAM_START
+        ));
+
+        // check oob at the upper bound on the 2nd next_back()
+        let mut src_chunk_iter =
+            MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START - 1, 43)
+                .unwrap()
+                .rev();
+        assert!(src_chunk_iter.next().unwrap().is_ok());
+        assert!(matches!(
+            src_chunk_iter.next().unwrap().unwrap_err().downcast_ref().unwrap(),
+            EbpfError::AccessViolation(0, AccessType::Load, addr, 43, "unknown") if *addr == MM_PROGRAM_START - 1
+        ));
     }
 
     #[test]
@@ -528,8 +596,16 @@ mod tests {
         )
         .unwrap();
 
+        // check lower bound
         let mut src_chunk_iter =
-            MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START - 1, 1);
+            MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START - 1, 1)
+                .unwrap();
+        assert!(src_chunk_iter.next().unwrap().is_err());
+
+        // check upper bound
+        let mut src_chunk_iter =
+            MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START + 42, 1)
+                .unwrap();
         assert!(src_chunk_iter.next().unwrap().is_err());
 
         for (vm_addr, len) in [
@@ -541,7 +617,8 @@ mod tests {
         ] {
             for rev in [true, false] {
                 let iter =
-                    MemoryChunkIterator::new(&memory_mapping, AccessType::Load, vm_addr, len);
+                    MemoryChunkIterator::new(&memory_mapping, AccessType::Load, vm_addr, len)
+                        .unwrap();
                 let res = if rev {
                     to_chunk_vec(iter.rev())
                 } else {
@@ -554,10 +631,6 @@ mod tests {
                 }
             }
         }
-
-        let mut src_chunk_iter =
-            MemoryChunkIterator::new(&memory_mapping, AccessType::Load, MM_PROGRAM_START + 42, 1);
-        assert!(src_chunk_iter.next().unwrap().is_err());
     }
 
     #[test]
@@ -588,7 +661,8 @@ mod tests {
         ] {
             for rev in [false, true] {
                 let iter =
-                    MemoryChunkIterator::new(&memory_mapping, AccessType::Load, vm_addr, len);
+                    MemoryChunkIterator::new(&memory_mapping, AccessType::Load, vm_addr, len)
+                        .unwrap();
                 let res = if rev {
                     expected.reverse();
                     to_chunk_vec(iter.rev())
@@ -599,6 +673,54 @@ mod tests {
                 assert_eq!(res, expected);
             }
         }
+    }
+
+    #[test]
+    fn test_iter_memory_pair_chunks_short() {
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+        let mem1 = vec![0x11; 8];
+        let mem2 = vec![0x22; 4];
+        let memory_mapping = MemoryMapping::new(
+            vec![
+                MemoryRegion::new_readonly(&mem1, MM_PROGRAM_START),
+                MemoryRegion::new_readonly(&mem2, MM_PROGRAM_START + 8),
+            ],
+            &config,
+        )
+        .unwrap();
+
+        // dst is shorter than src
+        assert!(matches!(
+            iter_memory_pair_chunks(
+                AccessType::Load,
+                MM_PROGRAM_START,
+                AccessType::Load,
+                MM_PROGRAM_START + 8,
+                8,
+                &memory_mapping,
+                false,
+                |_src, _dst, _len| Ok::<_, Error>(0),
+            ).unwrap_err().downcast_ref().unwrap(),
+            EbpfError::AccessViolation(0, AccessType::Load, addr, 8, "program") if *addr == MM_PROGRAM_START + 8
+        ));
+
+        // src is shorter than dst
+        assert!(matches!(
+            iter_memory_pair_chunks(
+                AccessType::Load,
+                MM_PROGRAM_START + 10,
+                AccessType::Load,
+                MM_PROGRAM_START + 2,
+                3,
+                &memory_mapping,
+                false,
+                |_src, _dst, _len| Ok::<_, Error>(0),
+            ).unwrap_err().downcast_ref().unwrap(),
+            EbpfError::AccessViolation(0, AccessType::Load, addr, 3, "program") if *addr == MM_PROGRAM_START + 10
+        ));
     }
 
     #[test]
