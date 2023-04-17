@@ -397,9 +397,13 @@ mod tests {
         ));
         let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
-        bank.install_scheduler(setup_mocked_scheduler(
+        let mocked_scheduler = setup_mocked_scheduler(
             [WaitSource::AcrossBlock].into_iter(),
-        ));
+        );
+        mocked_scheduler.expect_schedule_execution
+            .times(1);
+        
+        bank.install_scheduler(mocked_scheduler);
 
         assert_eq!(bank.transaction_count(), 0);
         bank.schedule_transaction_executions(&[tx0], [0].iter());
