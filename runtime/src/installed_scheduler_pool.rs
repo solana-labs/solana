@@ -346,6 +346,8 @@ mod tests {
 
     #[test]
     fn test_scheduling_context() {
+        solana_logger::setup();
+
         let bank = Arc::new(Bank::default_for_tests());
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
         assert_eq!(context.slot(), 0);
@@ -361,6 +363,8 @@ mod tests {
 
     #[test]
     fn test_scheduler_normal_termination() {
+        solana_logger::setup();
+
         let bank = Bank::default_for_tests();
         bank.install_scheduler(setup_mocked_scheduler(
             [WaitReason::TerminatedToFreeze].into_iter(),
@@ -370,6 +374,8 @@ mod tests {
 
     #[test]
     fn test_scheduler_termination_from_drop() {
+        solana_logger::setup();
+
         let bank = Bank::default_for_tests();
         bank.install_scheduler(setup_mocked_scheduler(
             [WaitReason::TerminatedFromBankDrop].into_iter(),
@@ -379,6 +385,8 @@ mod tests {
 
     #[test]
     fn test_scheduler_reinitialization() {
+        solana_logger::setup();
+
         let mut bank = crate::bank::tests::create_simple_test_bank(42);
         bank.install_scheduler(setup_mocked_scheduler(
             [
@@ -392,6 +400,8 @@ mod tests {
 
     #[test]
     fn test_schedule_executions() {
+        solana_logger::setup();
+
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
