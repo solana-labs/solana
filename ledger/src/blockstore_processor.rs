@@ -3468,7 +3468,7 @@ pub mod tests {
                 mock.expect_scheduler_pool()
                     .times(1)
                     .returning(move || {
-                        let pool = MockInstalledSchedulerPool::new();
+                        let mut pool = MockInstalledSchedulerPool::new();
                         pool.expect_return_to_pool()
                             .times(1)
                             .returning(|_| ());
