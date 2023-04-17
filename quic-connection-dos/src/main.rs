@@ -1,4 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
+#[macro_use]
+extern crate log;
 use {
     clap::{crate_description, crate_name, value_t, App, Arg},
     futures::future::join_all,
@@ -120,9 +122,13 @@ pub async fn check_multiple_writes(conn: &Connection) {
     let num_bytes = PACKET_DATA_SIZE;
     let mut s1 = conn.open_uni().await.unwrap();
     for _ in 0..num_bytes {
-        s1.write_all(&[0u8]).await.unwrap();
+        if let Err(err) = s1.write_all(&[0u8]).await {
+            warn!("Failed to send chunk: {:?}", err);
+        }
     }
-    s1.finish().await.unwrap();
+    if let Err(err) = s1.finish().await {
+        warn!("Failed to finish stream: {:?}", err);
+    }
 }
 
 async fn run_connection_dos(
@@ -143,13 +149,19 @@ async fn run_connection_dos(
 
     let mut connections = vec![];
     for _ in 0..num_connections {
-        connections.push(
-            endpoint
-                .connect(server_address, "connect")
-                .expect("Failed in connecting")
-                .await
-                .expect("Failed in waiting"),
-        );
+        let conn = match endpoint
+            .connect(server_address, "connect")
+            .expect("Failed in connecting")
+            .await
+        {
+            Ok(conn) => conn,
+            Err(err) => {
+                warn!("Failed to finish stream: {:?}", err);
+                continue;
+            }
+        };
+
+        connections.push(conn);
     }
 
     let futures: Vec<_> = connections
@@ -188,20 +200,30 @@ fn main() {
                 .value_name("NUM_STREAMS")
                 .help("Number of streams per connection"),
         )
+        .arg(
+            Arg::with_name("num_iter")
+                .long("num_iter")
+                .takes_value(true)
+                .value_name("NUM_ITER")
+                .help("Number of iterations to run"),
+        )
         .get_matches();
 
-    let num_connections = value_t!(matches, "num_connections", u64).unwrap_or(20);
-    let num_streams_per_conn = value_t!(matches, "num_streams_per_conn", u64).unwrap_or(20);
+    let num_connections = value_t!(matches, "num_connections", u64).unwrap_or(1);
+    let num_streams_per_conn = value_t!(matches, "num_streams_per_conn", u64).unwrap_or(256);
+    let num_iter = value_t!(matches, "num_iter", u64).unwrap_or(256);
     let target_address = value_t!(matches, "target_address", String)
         .unwrap_or("127.0.0.1:8009".to_string())
         .parse()
         .unwrap();
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    runtime.block_on(run_connection_dos(
-        target_address,
-        num_connections,
-        num_streams_per_conn,
-    ));
+    for _ in 0..num_iter {
+        runtime.block_on(run_connection_dos(
+            target_address,
+            num_connections,
+            num_streams_per_conn,
+        ));
+    }
 }
 
 #[cfg(test)]
