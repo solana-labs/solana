@@ -5167,7 +5167,7 @@ mod tests {
     #[test]
     fn test_get_highest_bank_snapshot() {
         solana_logger::setup();
- 
+
         let genesis_config = GenesisConfig::default();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 4, 0);
