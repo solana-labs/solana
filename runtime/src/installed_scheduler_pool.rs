@@ -409,7 +409,7 @@ mod tests {
             Some(|mocked: &mut MockInstalledScheduler| {
                 mocked.expect_schedule_execution()
                     .times(1)
-                    .returning(|_| ());
+                    .returning(|_, _| ());
             })
         );
         
