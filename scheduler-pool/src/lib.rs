@@ -362,7 +362,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_execution() {
+    fn test_scheduler_schedule_execution() {
         solana_logger::setup();
 
         let GenesisConfigInfo {
