@@ -193,7 +193,7 @@ fn main() {
     let num_connections = value_t!(matches, "num_connections", u64).unwrap_or(20);
     let num_streams_per_conn = value_t!(matches, "num_streams_per_conn", u64).unwrap_or(20);
     let target_address = value_t!(matches, "target_address", String)
-        .unwrap_or("127.0.0.1".to_string())
+        .unwrap_or("127.0.0.1:8009".to_string())
         .parse()
         .unwrap();
     let runtime = tokio::runtime::Runtime::new().unwrap();
