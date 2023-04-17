@@ -328,11 +328,10 @@ fn schedule_batches_for_execution(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
 ) -> Result<()> {
-    for batch in batches {
-        let TransactionBatchWithIndexes {
+    for TransactionBatchWithIndexes {
             batch,
             transaction_indexes,
-        } = batch;
+        } in batches {
         bank.schedule_transaction_executions(
             batch.sanitized_transactions(),
             transaction_indexes.iter(),
