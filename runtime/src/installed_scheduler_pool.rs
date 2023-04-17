@@ -226,7 +226,7 @@ impl Bank {
         );
 
         let scheduler_guard = self.scheduler.read().unwrap();
-        let scheduler = scheduler_guard.0.as_ref().unwrap();
+        let scheduler = scheduler_guard.0.as_ref().expect("active scheduler");
 
         for (sanitized_transaction, &index) in transactions.iter().zip(transaction_indexes) {
             scheduler.schedule_execution(sanitized_transaction, index);
