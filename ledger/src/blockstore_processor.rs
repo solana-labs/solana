@@ -3451,6 +3451,8 @@ pub mod tests {
 
         // Set up bank1
         let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let pool = MockInstalledSchedulerPool::new();
+        bank_forks.install_scheduler_pool(pool);
         let bank0 = bank_forks.get(0).unwrap();
         let opts = ProcessOptions {
             run_verification: true,
