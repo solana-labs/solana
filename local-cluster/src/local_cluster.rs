@@ -126,14 +126,13 @@ pub struct LocalCluster {
 }
 
 impl LocalCluster {
-    pub fn new_with_equal_stakes(
+    pub fn config_with_equal_stakes(
         num_nodes: usize,
         cluster_lamports: u64,
         lamports_per_node: u64,
-        socket_addr_space: SocketAddrSpace,
-    ) -> Self {
+    ) -> ClusterConfig {
         let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
-        let mut config = ClusterConfig {
+        ClusterConfig {
             node_stakes: stakes,
             cluster_lamports,
             validator_configs: make_identical_validator_configs(
@@ -142,7 +141,15 @@ impl LocalCluster {
             ),
             ..ClusterConfig::default()
         };
-        Self::new(&mut config, socket_addr_space)
+    }
+
+    pub fn new_with_equal_stakes(
+        num_nodes: usize,
+        cluster_lamports: u64,
+        lamports_per_node: u64,
+        socket_addr_space: SocketAddrSpace,
+    ) -> Self {
+        Self::new(&mut Self::config_with_equal_stakes(num_nodes, cluster_lamports, lamports_per_node), socket_addr_space)
     }
 
     fn sync_ledger_path_across_nested_config_fields(
