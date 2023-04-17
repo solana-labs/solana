@@ -182,6 +182,9 @@ impl BankForks {
     pub fn install_scheduler_pool(&mut self, pool: SchedulerPoolArc) {
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         assert!(self.scheduler_pool.replace(pool).is_none());
+        for (_slot, bank) in self.banks() {
+            self.install_scheduler_into_bank(&bank);
+        }
     }
 
     pub(crate) fn install_scheduler_into_bank(&self, bank: &Arc<Bank>) {
