@@ -3457,7 +3457,7 @@ pub mod tests {
         let mut mock = MockInstalledScheduler::new();
         pool.expect_take_from_pool()
             .times(1)
-            .returning(|_| Box::new(mock));
+            .returning(move |_| Box::new(mock));
         bank_forks.install_scheduler_pool(Arc::new(pool));
         let bank0 = bank_forks.get(0).unwrap();
         let opts = ProcessOptions {
