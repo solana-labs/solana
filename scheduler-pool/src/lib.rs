@@ -174,7 +174,10 @@ impl InstalledScheduler for Scheduler {
         if should_block_current_thread {
             // current simplest form of this trait impl doesn't block the current thread
             // materially with the following single mutex lock....
-            self.result_with_timings.lock().expect("not poisoned").take()
+            self.result_with_timings
+                .lock()
+                .expect("not poisoned")
+                .take()
         } else {
             None
         }
