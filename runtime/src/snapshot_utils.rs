@@ -2936,6 +2936,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
 pub fn purge_old_bank_snapshots(
     bank_snapshots_dir: impl AsRef<Path>,
     num_bank_snapshots_to_retain: usize,
+    filter_by_type: Option<BankSnapshotType>,
 ) {
     let do_purge = |mut bank_snapshots: Vec<BankSnapshotInfo>| {
         bank_snapshots.sort_unstable();
@@ -2954,8 +2955,12 @@ pub fn purge_old_bank_snapshots(
             })
     };
 
-    do_purge(get_bank_snapshots_pre(&bank_snapshots_dir));
-    do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
+    let bank_snapshots = match filter_by_type {
+        Some(BankSnapshotType::Pre) => get_bank_snapshots_pre(&bank_snapshots_dir),
+        Some(BankSnapshotType::Post) => get_bank_snapshots_post(&bank_snapshots_dir),
+        None => get_bank_snapshots(&bank_snapshots_dir),
+    };
+    do_purge(bank_snapshots);
 }
 
 /// Get the snapshot storages for this bank
@@ -5534,5 +5539,32 @@ mod tests {
             deserialized_bank, bank,
             "Ensure rebuilding bank from the highest snapshot dir results in the highest bank",
         );
+    }
+
+    #[test]
+    fn test_purge_old_bank_snapshots() {
+        solana_logger::setup();
+
+        let genesis_config = GenesisConfig::default();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+        let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 10, 5);
+        // Keep bank in this scope so that its account_paths tmp dirs are not released, and purge_old_bank_snapshots
+        // can clear the account hardlinks correctly.
+
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 10);
+
+        purge_old_bank_snapshots(&bank_snapshots_dir, 3, Some(BankSnapshotType::Pre));
+        assert_eq!(get_bank_snapshots_pre(&bank_snapshots_dir).len(), 3);
+
+        purge_old_bank_snapshots(&bank_snapshots_dir, 2, Some(BankSnapshotType::Post));
+        assert_eq!(get_bank_snapshots_post(&bank_snapshots_dir).len(), 2);
+
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 5);
+
+        purge_old_bank_snapshots(&bank_snapshots_dir, 2, None);
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 2);
+
+        purge_old_bank_snapshots(&bank_snapshots_dir, 0, None);
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 0);
     }
 }

@@ -473,7 +473,11 @@ fn test_concurrent_snapshot_packaging(
 
     // Purge all the outdated snapshots, including the ones needed to generate the package
     // currently sitting in the channel
-    snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir, MAX_BANK_SNAPSHOTS_TO_RETAIN);
+    snapshot_utils::purge_old_bank_snapshots(
+        bank_snapshots_dir,
+        MAX_BANK_SNAPSHOTS_TO_RETAIN,
+        None,
+    );
 
     let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(bank_snapshots_dir);
     bank_snapshots.sort_unstable();
