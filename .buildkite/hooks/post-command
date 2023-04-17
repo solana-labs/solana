@@ -2,6 +2,9 @@
 
 source ci/upload-ci-artifact.sh
 
+#shellcheck source=ci/common/shared-functions.sh
+source ci/common/shared-functions.sh
+
 #
 # Add job_stats data point
 #
@@ -32,16 +35,42 @@ else
   fi
 
   if [[ -n $BUILDKITE && -f "results.json" ]]; then
-    # extract lines which start with '{'
-    awk '/{.*/' results.json > sanitized-results.json
+    if need_to_upload_test_result; then
+      if [[ -f "results.json" ]]; then
+        # extract lines which start with '{'
+        awk '/{.*/' results.json >sanitized-results.json
 
-    echo "~~~ Uploading test results to Buildkite Analytics"
-    buildkite-test-collector < sanitized-results.json
+        echo "~~~ Uploading test results to Buildkite Analytics"
+        buildkite-test-collector <sanitized-results.json
 
-    echo "~~~ Uploading test results to Datadog"
-    cargo2junit > results.xml < sanitized-results.json || true
-    if [[ -f "results.xml" ]]; then
-      datadog-ci junit upload --service solana results.xml
+        echo "~~~ Uploading test results to Datadog"
+        cargo2junit >results.xml <sanitized-results.json || true
+        if [[ -f "results.xml" ]]; then
+          datadog-ci junit upload --service solana results.xml
+        fi
+      fi
+
+      if [[ -f "target/nextest/ci/junit.xml" ]]; then
+        echo "~~~ Uploading test results to Buildkite Analytics"
+        curl \
+          -X POST \
+          -H "Authorization: Token token=\"$BUILDKITE_ANALYTICS_TOKEN\"" \
+          -F "data=@target/nextest/ci/junit.xml" \
+          -F "format=junit" \
+          -F "run_env[CI]=buildkite" \
+          -F "run_env[key]=$BUILDKITE_BUILD_ID" \
+          -F "run_env[url]=$BUILDKITE_BUILD_URL" \
+          -F "run_env[branch]=$BUILDKITE_BRANCH" \
+          -F "run_env[commit_sha]=$BUILDKITE_COMMIT" \
+          -F "run_env[number]=$BUILDKITE_BUILD_NUMBER" \
+          -F "run_env[job_id]=$BUILDKITE_JOB_ID" \
+          -F "run_env[message]=$BUILDKITE_MESSAGE" \
+          https://analytics-api.buildkite.com/v1/uploads
+        echo # add a break line for previous command
+
+        echo "~~~ Uploading test results to Datadog"
+        datadog-ci junit upload --service solana target/nextest/ci/junit.xml
+      fi
     fi
   fi
 
