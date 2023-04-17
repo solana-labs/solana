@@ -140,13 +140,16 @@ fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_spend_and_verify_all_nodes_2");
     let num_nodes = 2;
-    let mut local = LocalCluster::new_with_equal_stakes(
+    let mut config = LocalCluster::config_with_equal_stakes(
         num_nodes,
         DEFAULT_CLUSTER_LAMPORTS,
         DEFAULT_NODE_STAKE,
+    );
+    config.validator_configs[1].block_verification_method = 3;
+    let local = LocalCluster::new_with_config(
+        config,
         SocketAddrSpace::Unspecified,
     );
-    local.validator_configs[1].block_verification_method = 3;
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
