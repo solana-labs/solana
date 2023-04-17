@@ -3467,7 +3467,7 @@ pub mod tests {
                     .returning(|_| None);
                 mock.expect_scheduler_pool()
                     .times(1)
-                    .returning(|_| pool);
+                    .returning(|| pool);
                 Box::new(mock)
         });
         bank_forks.install_scheduler_pool(Arc::new(pool));
