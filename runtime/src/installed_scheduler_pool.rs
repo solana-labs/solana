@@ -336,8 +336,8 @@ mod tests {
 
     #[test]
     fn test_scheduling_context() {
-        let bank = Bank::default_for_tests();
-        let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
+        let bank = Arc::new(Bank::default_for_tests());
+        let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
         assert_eq!(context.slot(), 3);
         assert_eq!(SchedulingContext::log_prefix(Some(context), 3), "3");
         assert_eq!(SchedulingContext::log_prefix(None, 3), "3");
