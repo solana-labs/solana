@@ -4447,6 +4447,7 @@ pub mod tests {
             transaction_indexes: (0..txs.len()).into_iter().collect()
         };
 
+        use solana_runtime::installed_scheduler_pool::MockInstalledScheduler;
         let mut mock = Arc::new(MockInstalledScheduler::new());
         bank.install_scheduler(mock);
 
