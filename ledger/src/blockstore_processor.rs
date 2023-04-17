@@ -4456,6 +4456,14 @@ pub mod tests {
         mock.expect_wait_for_termination()
             .times(1)
             .returning(|_| None);
+        mock.expect_scheduler_pool()
+            .returning(move || {
+                let mut pool = MockInstalledSchedulerPool::new();
+                pool.expect_return_to_pool()
+                    .times(1)
+                    .returning(|_| ());
+                Arc::new(pool)
+            });
         bank.install_scheduler(mock);
 
         assert!(schedule_batches_for_execution(
