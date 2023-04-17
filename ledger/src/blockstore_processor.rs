@@ -4451,7 +4451,7 @@ pub mod tests {
         use solana_runtime::installed_scheduler_pool::MockInstalledSchedulerPool;
         let mut mock = Box::new(MockInstalledScheduler::new());
         mock.expect_schedule_execution()
-            .times(3)
+            .times(txs.len())
             .returning(|_, _| ());
         mock.expect_wait_for_termination()
             .times(1)
