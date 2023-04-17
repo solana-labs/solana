@@ -60,6 +60,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
 
     fn wait_for_termination(&mut self, source: &WaitSource) -> Option<ResultWithTimings>;
 
+    #[allow(clippy::needless_lifetimes)]
     fn scheduling_context<'a>(&'a self) -> Option<&'a SchedulingContext>;
     fn replace_scheduler_context(&mut self, context: SchedulingContext);
 }
