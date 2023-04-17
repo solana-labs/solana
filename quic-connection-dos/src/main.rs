@@ -156,7 +156,7 @@ async fn run_connection_dos(
         {
             Ok(conn) => conn,
             Err(err) => {
-                warn!("Failed to finish stream: {:?}", err);
+                warn!("Failed to connect: {:?}", err);
                 continue;
             }
         };
