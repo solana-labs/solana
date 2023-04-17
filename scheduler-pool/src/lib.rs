@@ -131,7 +131,7 @@ impl InstalledScheduler for Scheduler {
         };
 
         let fail_fast = match context.mode() {
-            // this should be false, for (upcoming) BlockGeneration variant .
+            // this should be false, for (upcoming) BlockGeneration variant.
             SchedulingMode::BlockVerification => true,
         };
 

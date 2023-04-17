@@ -139,15 +139,14 @@ impl SchedulingContext {
         self.bank().slot()
     }
 
-    pub fn log_prefix(scheduler_id: u64, context: Option<&Self>) -> String {
+    pub fn log_prefix(scheduler_id: SchedulerId, context: Option<&Self>) -> String {
         const BITS_PER_HEX_DIGIT: usize = 4;
 
         format!(
             "id_{:width$x}{}",
             scheduler_id,
             context
-                .as_ref()
-                .map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode))
+                .map(|c| format!("/slot_{}/mode_{:?}:", c.slot(), c.mode()))
                 .unwrap_or_else(|| "".into()),
             width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
         )
