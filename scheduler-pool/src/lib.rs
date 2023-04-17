@@ -343,6 +343,6 @@ mod tests {
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
         let mut scheduler1 = pool.take_from_pool(context.clone());
-        scheduler1.schedule_execution(&tx1);
+        scheduler1.schedule_execution(&tx1, 0);
     }
 }
