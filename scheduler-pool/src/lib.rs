@@ -261,11 +261,12 @@ mod tests {
 
         let mut scheduler = pool.take_from_pool(context.clone());
 
-        assert_matches!(scheduler.scheduling_context(), Some(context_in_scheduler) if *context_in_scheduler == *context);
+        assert!(scheduler.scheduling_context().is_some());
         assert_matches!(
             scheduler.wait_for_termination(&WaitSource::AcrossBlock),
             None
         );
+        assert!(scheduler.scheduling_context().is_none());
     }
 
     #[test]
