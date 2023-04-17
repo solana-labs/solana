@@ -159,27 +159,26 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<ResultWithTimings> {
-        let should_block_current_thread = match wait_source {
+        let keep_result_with_timings = match wait_source {
             WaitSource::InsideBlock => {
                 // rustfmt...
-                false
+                true
             }
             WaitSource::AcrossBlock | WaitSource::FromBankDrop | WaitSource::FromSchedulerDrop => {
-                true
+                false
             }
         };
 
         self.schedule_termination();
 
-        if should_block_current_thread {
-            // current simplest form of this trait impl doesn't block the current thread
-            // materially with the following single mutex lock....
-            self.result_with_timings
-                .lock()
-                .expect("not poisoned")
-                .take()
-        } else {
+        // current simplest form of this trait impl doesn't block the current thread materially
+        // just with the following single mutex lock. Suppose more elaborated synchronization
+        // across worker threads here in the future...
+
+        if keep_result_with_timings {
             None
+        } else {
+            self.result_with_timings.lock().expect("not poisoned").take()
         }
     }
 
