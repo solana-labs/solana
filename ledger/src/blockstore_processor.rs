@@ -308,6 +308,7 @@ fn process_batches(
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
+    panic!();
     if !bank.with_scheduler() {
         rebatch_and_execute_batches(
             bank,
@@ -319,11 +320,11 @@ fn process_batches(
             prioritization_fee_cache,
         )
     } else {
-        send_batches_to_scheduler_for_execution(bank, batches)
+        schedule_batches_for_execution(bank, batches)
     }
 }
 
-fn send_batches_to_scheduler_for_execution(
+fn schedule_batches_for_execution(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
 ) -> Result<()> {
