@@ -4444,7 +4444,7 @@ pub mod tests {
         let batch = bank.prepare_sanitized_batch(&txs);
         let batch_with_indexes = TransactionBatchWithIndexes {
             batch,
-            transaction_indexes: (0..txs.len()).into_iter().to_vec()
+            transaction_indexes: (0..txs.len()).into_iter().collect()
         };
 
         assert!(schedule_batches_for_execution(
