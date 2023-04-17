@@ -341,7 +341,7 @@ mod tests {
     }
 
     fn setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitSource>) -> SchedulerBox {
-        do_setup_mocked_scheduler(wait_sources, None::<fn() -> ()>)
+        do_setup_mocked_scheduler(wait_sources, None::<fn(MockInstalledScheduler) -> ()>)
     }
 
     #[test]
