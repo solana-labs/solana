@@ -342,6 +342,7 @@ mod tests {
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
+        assert_eq!(bank.transaction_count(), 0);
         let scheduler = pool.take_from_pool(context.clone());
         scheduler.schedule_execution(&tx0, 0);
     }
