@@ -381,6 +381,8 @@ mod tests {
 
     #[test]
     fn test_schedule_executions() {
+        solana_logger::setup();
+
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
