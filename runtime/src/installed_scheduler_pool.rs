@@ -341,7 +341,10 @@ mod tests {
     }
 
     fn setup_mocked_scheduler(wait_reasons: impl Iterator<Item = WaitReason>) -> SchedulerBox {
-        setup_mocked_scheduler_with_extra(wait_reasons, None::<fn(&mut MockInstalledScheduler) -> ()>)
+        setup_mocked_scheduler_with_extra(
+            wait_reasons,
+            None::<fn(&mut MockInstalledScheduler) -> ()>,
+        )
     }
 
     #[test]

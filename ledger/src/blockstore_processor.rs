@@ -328,9 +328,10 @@ fn schedule_batches_for_execution(
     batches: &[TransactionBatchWithIndexes],
 ) -> Result<()> {
     for TransactionBatchWithIndexes {
-            batch,
-            transaction_indexes,
-        } in batches {
+        batch,
+        transaction_indexes,
+    } in batches
+    {
         bank.schedule_transaction_executions(
             batch.sanitized_transactions(),
             transaction_indexes.iter(),
@@ -4306,7 +4307,10 @@ pub mod tests {
         }
     }
 
-    fn create_test_transactions(mint_keypair: &Keypair, genesis_hash: &Hash) -> Vec<SanitizedTransaction> {
+    fn create_test_transactions(
+        mint_keypair: &Keypair,
+        genesis_hash: &Hash,
+    ) -> Vec<SanitizedTransaction> {
         let pubkey = solana_sdk::pubkey::new_rand();
         let keypair2 = Keypair::new();
         let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -4387,11 +4391,12 @@ pub mod tests {
         let batch = bank.prepare_sanitized_batch(&txs);
         let batch_with_indexes = TransactionBatchWithIndexes {
             batch,
-            transaction_indexes: (0..txs.len()).into_iter().collect()
+            transaction_indexes: (0..txs.len()).into_iter().collect(),
         };
 
-        use solana_runtime::installed_scheduler_pool::MockInstalledScheduler;
-        use solana_runtime::installed_scheduler_pool::MockInstalledSchedulerPool;
+        use solana_runtime::installed_scheduler_pool::{
+            MockInstalledScheduler, MockInstalledSchedulerPool,
+        };
         let mut mock = Box::new(MockInstalledScheduler::new());
         mock.expect_schedule_execution()
             .times(txs.len())
@@ -4399,20 +4404,14 @@ pub mod tests {
         mock.expect_wait_for_termination()
             .times(1)
             .returning(|_| None);
-        mock.expect_scheduler_pool()
-            .returning(move || {
-                let mut pool = MockInstalledSchedulerPool::new();
-                pool.expect_return_to_pool()
-                    .times(1)
-                    .returning(|_| ());
-                Arc::new(pool)
-            });
+        mock.expect_scheduler_pool().returning(move || {
+            let mut pool = MockInstalledSchedulerPool::new();
+            pool.expect_return_to_pool().times(1).returning(|_| ());
+            Arc::new(pool)
+        });
         bank.install_scheduler(mock);
 
-        assert!(schedule_batches_for_execution(
-            &bank,
-            &[batch_with_indexes],
-        ).is_ok());
+        assert!(schedule_batches_for_execution(&bank, &[batch_with_indexes],).is_ok());
     }
 
     #[test]
