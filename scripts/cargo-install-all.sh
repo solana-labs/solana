@@ -96,6 +96,7 @@ else
   BINS=(
     solana
     solana-bench-tps
+    solana-connection-dos
     solana-faucet
     solana-gossip
     solana-install

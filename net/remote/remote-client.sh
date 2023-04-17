@@ -9,7 +9,7 @@ clientToRun="$3"
 if [[ -n $4 ]]; then
   export RUST_LOG="$4"
 fi
-benchTpsExtraArgs="$5"
+clientExtraArgs="$5"
 clientIndex="$6"
 clientType="${7:-thin-client}"
 
@@ -85,8 +85,20 @@ solana-bench-tps)
       --duration 7500 \
       --sustained \
       --threads $threadCount \
-      $benchTpsExtraArgs \
+      $clientExtraArgs \
       --read-client-keys ./client-accounts.yml \
+      ${args[*]} \
+  "
+  ;;
+solana-quic-dos)
+  args=()
+
+  # Not sure about PORT
+  args+=(--target_address "$entrypointIp")
+
+  clientCommand="\
+    solana-connection-dos \
+      $clientExtraArgs \
       ${args[*]} \
   "
   ;;

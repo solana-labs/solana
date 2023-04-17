@@ -418,6 +418,7 @@ startClient() {
   declare ipAddress=$1
   declare clientToRun="$2"
   declare clientIndex="$3"
+  declare clientExtraArgs="$4"
 
   initLogDir
   declare logFile="$netLogDir/client-$clientToRun-$ipAddress.log"
@@ -429,7 +430,7 @@ startClient() {
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
-      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" $clientIndex $clientType"
+      $clientToRun \"$RUST_LOG\" \"$clientExtraArgs\" $clientIndex $clientType"
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -438,9 +439,13 @@ startClient() {
 }
 
 startClients() {
+  numNotIdleClients=$((numBenchTpsClients + numQuicDosClients))
+    
   for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
     if [[ $i -lt "$numBenchTpsClients" ]]; then
-      startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
+      startClient "${clientIpList[$i]}" "solana-bench-tps" "$i" "$benchTpsExtraArgs"
+    elif [[ $i -ge "$numBenchTpsClients" && $i -lt "$numNotIdleClients" ]]; then
+      startClient "${clientIpList[$i]}" "solana-connection-dos" "$i" "$quicDosExtraArgs"
     else
       startClient "${clientIpList[$i]}" "idle"
     fi
@@ -786,6 +791,8 @@ nodeAddress=
 numIdleClients=0
 numBenchTpsClients=0
 benchTpsExtraArgs=
+numQuicDosClients=0
+quicDosExtraArgs=
 failOnValidatorBootupFailure=true
 genesisOptions=
 numValidatorsRequested=
@@ -1032,6 +1039,10 @@ while getopts "h?T:t:o:f:rc:Fn:i:d" opt "${shortArgs[@]}"; do
           numBenchTpsClients=$numClients
           benchTpsExtraArgs=$extraArgs
         ;;
+        quic-dos)
+          numQuicDosClients=$numClients
+          quicDosExtraArgs=$extraArgs
+        ;;
         *)
           echo "Unknown client type: $clientType"
           exit 1
@@ -1064,7 +1075,7 @@ if [[ -n $numValidatorsRequested ]]; then
 fi
 
 numClients=${#clientIpList[@]}
-numClientsRequested=$((numBenchTpsClients + numIdleClients))
+numClientsRequested=$((numBenchTpsClients + numQuicDosClients + numIdleClients))
 if [[ "$numClientsRequested" -eq 0 ]]; then
   numBenchTpsClients=$numClients
   numClientsRequested=$numClients
