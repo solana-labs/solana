@@ -230,7 +230,7 @@ mod tests {
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
-        let scheduler = spool.take_from_pool(context);
+        let scheduler = pool.take_from_pool(context);
 
         let debug = format!("{scheduler:#?}");    
         assert!(!debug.is_empty());
