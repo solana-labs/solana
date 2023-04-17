@@ -2931,7 +2931,7 @@ impl Bank {
 
             self.store_stake_accounts(&stake_rewards, metrics);
 
-            let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
+            let vote_rewards = self.store_vote_accounts2(vote_account_rewards, metrics);
             self.update_reward_history(stake_rewards, vote_rewards);
         }
     }
@@ -3160,7 +3160,13 @@ impl Bank {
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
-    ) -> (VoteRewards, StakeRewards) {
+    ) -> (
+        Vec<(
+            Option<(Pubkey, RewardInfo)>,
+            Option<(Pubkey, AccountSharedData)>,
+        )>,
+        StakeRewards,
+    ) {
         let EpochRewardCalculateParamInfo {
             stake_history,
             stake_delegations,
@@ -3256,8 +3262,46 @@ impl Bank {
                 })
                 .collect()
         }));
+
+        let vote_rewards = thread_pool
+            .install(|| {
+                vote_account_rewards.into_iter().map(
+                    |(
+                        vote_pubkey,
+                        (mut vote_account, commission, vote_rewards, vote_needs_store),
+                    )| {
+                        if let Err(err) = vote_account.checked_add_lamports(vote_rewards) {
+                            debug!("reward redemption failed for {}: {:?}", vote_pubkey, err);
+                            return (None, None);
+                        }
+
+                        //if vote_needs_store {
+                        //    self.store_account(&vote_pubkey, &vote_account);
+                        //}
+
+                        return (
+                            Some((
+                                vote_pubkey,
+                                RewardInfo {
+                                    reward_type: RewardType::Voting,
+                                    lamports: vote_rewards as i64,
+                                    post_balance: vote_account.lamports(),
+                                    commission: Some(commission),
+                                },
+                            )),
+                            if vote_needs_store {
+                                Some((vote_pubkey, vote_account))
+                            } else {
+                                None
+                            },
+                        );
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+
         metrics.redeem_rewards2_us += measure.as_us();
-        (vote_account_rewards, stake_rewards)
+        (vote_rewards, stake_rewards)
     }
 
     /// Calculates epoch reward for stake/vote accounts using joined vote/stake account map
@@ -3402,6 +3446,32 @@ impl Bank {
                 },
             )
             .collect::<Vec<_>>());
+
+        metrics
+            .store_vote_accounts_us
+            .fetch_add(measure.as_us(), Relaxed);
+
+        vote_rewards
+    }
+
+    fn store_vote_accounts2(
+        &self,
+        vote_account_rewards: Vec<(
+            Option<(Pubkey, RewardInfo)>,
+            Option<(Pubkey, AccountSharedData)>,
+        )>,
+        metrics: &mut RewardsMetrics,
+    ) -> Vec<(Pubkey, RewardInfo)> {
+        let (vote_rewards, measure) = measure!({
+            let (vote_rewards, vote_accounts): (Vec<_>, Vec<_>) =
+                vote_account_rewards.into_iter().unzip();
+
+            let vote_rewards: Vec<_> = vote_rewards.into_iter().flatten().collect();
+            let vote_accounts: Vec<_> = vote_accounts.iter().flatten().collect();
+
+            self.store_accounts((self.slot(), &vote_accounts[..], self.include_slot_in_hash()));
+            vote_rewards
+        });
 
         metrics
             .store_vote_accounts_us
