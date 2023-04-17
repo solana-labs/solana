@@ -331,7 +331,7 @@ mod tests {
     fn test_schedule_execution() {
         let GenesisConfigInfo { genesis_config, mint_keypair, .. } = create_genesis_config(10_000);
     let key = solana_sdk::pubkey::new_rand();
-        let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+        let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &key,
             2,
@@ -342,7 +342,7 @@ mod tests {
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
-        let mut scheduler1 = pool.take_from_pool(context.clone());
-        scheduler1.schedule_execution(&tx1, 0);
+        let mut scheduler = pool.take_from_pool(context.clone());
+        scheduler.schedule_execution(&tx0, 0);
     }
 }
