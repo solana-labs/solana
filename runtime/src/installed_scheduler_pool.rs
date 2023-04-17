@@ -404,11 +404,13 @@ mod tests {
         ));
         let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
-        let mocked_scheduler = setup_mocked_scheduler(
+        let mocked_scheduler = do_setup_mocked_scheduler(
             [WaitSource::AcrossBlock].into_iter(),
+            Some(|mocked| {
+                mocked.expect_schedule_execution
+                    .times(1);
+            })
         );
-        mocked_scheduler.expect_schedule_execution
-            .times(1);
         
         bank.install_scheduler(mocked_scheduler);
 
