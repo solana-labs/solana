@@ -4449,7 +4449,7 @@ pub mod tests {
 
         assert!(schedule_batches_for_execution(
             &bank,
-            batch_with_indexes,
+            &[batch_with_indexes],
         ).is_ok());
     }
 
