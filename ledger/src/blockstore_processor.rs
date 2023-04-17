@@ -4449,6 +4449,7 @@ pub mod tests {
         };
 
         use solana_runtime::installed_scheduler_pool::MockInstalledScheduler;
+        use solana_runtime::installed_scheduler_pool::MockInstalledSchedulerPool;
         let mut mock = Box::new(MockInstalledScheduler::new());
         mock.expect_schedule_execution()
             .times(1)
