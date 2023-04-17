@@ -328,6 +328,7 @@ mod tests {
 
     #[test]
     fn test_schedule_execution() {
+        let GenesisConfigInfo { genesis_config, mint_keypair, .. } = create_genesis_config(10_000);
         let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &key,
