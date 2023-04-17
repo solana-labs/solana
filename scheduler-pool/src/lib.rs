@@ -263,7 +263,7 @@ mod tests {
 
         assert!(scheduler.scheduling_context().is_some());
         assert_matches!(
-            scheduler.wait_for_termination(&WaitSource::AcrossBlock),
+            scheduler.wait_for_termination(&WaitSource::InsideBlock),
             None
         );
         assert!(scheduler.scheduling_context().is_none());
