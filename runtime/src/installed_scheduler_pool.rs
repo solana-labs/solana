@@ -389,7 +389,7 @@ mod tests {
     fn test_scheduler_reinitialization() {
         let mut bank = crate::bank::tests::create_simple_test_bank(42);
         bank.install_scheduler(setup_mocked_scheduler(
-            [WaitReason::InsideBlock, WaitSource::FromBankDrop].into_iter(),
+            [WaitReason::InsideBlock, WaitReason::FromBankDrop].into_iter(),
         ));
         goto_end_of_slot(&mut bank);
     }
