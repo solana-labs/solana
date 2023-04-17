@@ -3455,7 +3455,7 @@ pub mod tests {
         use solana_runtime::installed_scheduler_pool::MockInstalledSchedulerPool;
         use solana_runtime::installed_scheduler_pool::MockInstalledScheduler;
         let mut pool = Arc::new(MockInstalledSchedulerPool::new());
-        pool.get_mut().unwrap().expect_take_from_pool()
+        Arc::get_mut(pool).unwrap().expect_take_from_pool()
             .times(1)
             .returning(|_| {
                 let mut mock = MockInstalledScheduler::new();
