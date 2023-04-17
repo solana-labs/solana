@@ -143,7 +143,7 @@ impl SchedulingContext {
         const BITS_PER_HEX_DIGIT: usize = 4;
 
         format!(
-            "id_{:width$x}{}",
+            "sch_{:0width$x}{}",
             scheduler_id,
             context
                 .map(|c| format!("/slot_{}/mode_{:?}:", c.slot(), c.mode()))
