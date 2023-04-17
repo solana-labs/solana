@@ -140,7 +140,7 @@ impl LocalCluster {
                 num_nodes,
             ),
             ..ClusterConfig::default()
-        };
+        }
     }
 
     pub fn new_with_equal_stakes(
