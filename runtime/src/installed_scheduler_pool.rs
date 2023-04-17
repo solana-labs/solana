@@ -34,7 +34,7 @@ use {
 };
 
 // Send + Sync is needed to be a field of BankForks
-#[cfg_attr(test, automock)]
+#[automock]
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox;
     fn return_to_pool(&self, scheduler: SchedulerBox);
