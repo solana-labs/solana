@@ -3028,11 +3028,14 @@ fn test_mixed_block_verification_methods() {
         DEFAULT_NODE_STAKE,
     );
     use rand::seq::IteratorRandom;
-    config.validator_configs.iter_mut().choose(&mut rand::thread_rng()).unwrap().block_verification_method = solana_core::validator::BlockVerificationMethod::UnifiedScheduler;
-    let local = LocalCluster::new(
-        &mut config,
-        SocketAddrSpace::Unspecified,
-    );
+    config
+        .validator_configs
+        .iter_mut()
+        .choose(&mut rand::thread_rng())
+        .unwrap()
+        .block_verification_method =
+        solana_core::validator::BlockVerificationMethod::UnifiedScheduler;
+    let local = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,

@@ -149,7 +149,10 @@ impl LocalCluster {
         lamports_per_node: u64,
         socket_addr_space: SocketAddrSpace,
     ) -> Self {
-        Self::new(&mut Self::config_with_equal_stakes(num_nodes, cluster_lamports, lamports_per_node), socket_addr_space)
+        Self::new(
+            &mut Self::config_with_equal_stakes(num_nodes, cluster_lamports, lamports_per_node),
+            socket_addr_space,
+        )
     }
 
     fn sync_ledger_path_across_nested_config_fields(
