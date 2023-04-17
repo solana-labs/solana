@@ -303,10 +303,15 @@ impl Bank {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::bank::test_utils::goto_end_of_slot, mockall::Sequence};
-    use crate::genesis_utils::create_genesis_config;
-    use crate::genesis_utils::GenesisConfigInfo;
-    use solana_sdk::system_transaction;
+    use {
+        super::*,
+        crate::{
+            bank::test_utils::goto_end_of_slot,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        },
+        mockall::Sequence,
+        solana_sdk::system_transaction,
+    };
 
     fn setup_mocked_scheduler_pool(seq: &mut Sequence) -> SchedulerPoolArc {
         let mut mock = MockInstalledSchedulerPool::new();
@@ -317,7 +322,10 @@ mod tests {
         Arc::new(mock)
     }
 
-    fn do_setup_mocked_scheduler(wait_sources: impl Iterator<Item = WaitSource>, f: Option<impl Fn(&mut MockInstalledScheduler) -> ()>) -> SchedulerBox {
+    fn do_setup_mocked_scheduler(
+        wait_sources: impl Iterator<Item = WaitSource>,
+        f: Option<impl Fn(&mut MockInstalledScheduler) -> ()>,
+    ) -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
 
@@ -407,12 +415,13 @@ mod tests {
         let mocked_scheduler = do_setup_mocked_scheduler(
             [WaitSource::FromBankDrop].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
-                mocked.expect_schedule_execution()
+                mocked
+                    .expect_schedule_execution()
                     .times(1)
                     .returning(|_, _| ());
-            })
+            }),
         );
-        
+
         bank.install_scheduler(mocked_scheduler);
         bank.schedule_transaction_executions(&[tx0], [0].iter());
     }
