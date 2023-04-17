@@ -4338,7 +4338,7 @@ pub mod tests {
         }
     }
 
-    fn create_test_transactions(mint_keypair: &Keypair) -> Vec<SanitizedTransaction> {
+    fn create_test_transactions(mint_keypair: &Keypair, genesis_hash: &Hash) -> Vec<SanitizedTransaction> {
         let pubkey = solana_sdk::pubkey::new_rand();
         let keypair2 = Keypair::new();
         let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -4350,19 +4350,19 @@ pub mod tests {
                 &mint_keypair,
                 &pubkey,
                 1,
-                genesis_config.hash(),
+                genesis_hash,
             )),
             SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &keypair2,
                 &pubkey2,
                 1,
-                genesis_config.hash(),
+                genesis_hash,
             )),
             SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &keypair3,
                 &pubkey3,
                 1,
-                genesis_config.hash(),
+                genesis_hash,
             )),
         ]
     }
@@ -4377,7 +4377,7 @@ pub mod tests {
         } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
-        let txs = create_test_transactions(&mint_keypair);
+        let txs = create_test_transactions(&mint_keypair, genesis_config.hash);
         let batch = bank.prepare_sanitized_batch(&txs);
         assert!(batch.needs_unlock());
         let transaction_indexes = vec![42, 43, 44];
