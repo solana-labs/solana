@@ -400,7 +400,7 @@ mod tests {
         ));
 
         assert_eq!(bank.transaction_count(), 0);
-        bank.schedule_transaction_executions(&[tx0], 0);
+        bank.schedule_transaction_executions(&[tx0], &[0]);
         assert_eq!(bank.transaction_count(), 1);
     }
 }
