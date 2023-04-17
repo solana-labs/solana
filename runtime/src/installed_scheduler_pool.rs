@@ -403,15 +403,13 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let key = solana_sdk::pubkey::new_rand();
         let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
-            &key,
+            &solana_sdk::pubkey::new_rand(),
             2,
             genesis_config.hash(),
         ));
         let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
-        let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
         let mocked_scheduler = do_setup_mocked_scheduler(
             [WaitSource::FromBankDrop].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
