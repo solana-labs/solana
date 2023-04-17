@@ -187,12 +187,12 @@ use {
 };
 
 /// params to `verify_accounts_hash`
-pub struct VerifyAccountsHashConfig {
-    pub test_hash_calculation: bool,
-    pub ignore_mismatch: bool,
-    pub require_rooted_bank: bool,
-    pub run_in_background: bool,
-    pub store_hash_raw_data_for_debug: bool,
+struct VerifyAccountsHashConfig {
+    test_hash_calculation: bool,
+    ignore_mismatch: bool,
+    require_rooted_bank: bool,
+    run_in_background: bool,
+    store_hash_raw_data_for_debug: bool,
 }
 
 mod address_lookup_table;
@@ -7013,12 +7013,27 @@ impl Bank {
         epoch_accounts_hash
     }
 
+    pub fn run_final_hash_calc(&self, on_halt_store_hash_raw_data_for_debug: bool) {
+        self.force_flush_accounts_cache();
+        // note that this slot may not be a root
+        _ = self.verify_accounts_hash(
+            None,
+            VerifyAccountsHashConfig {
+                test_hash_calculation: false,
+                ignore_mismatch: true,
+                require_rooted_bank: false,
+                run_in_background: false,
+                store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
+            },
+        );
+    }
+
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
     /// snapshot.
     /// return true if all is good
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_accounts_hash(
+    fn verify_accounts_hash(
         &self,
         base: Option<(Slot, /*capitalization*/ u64)>,
         config: VerifyAccountsHashConfig,
