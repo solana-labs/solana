@@ -3459,6 +3459,9 @@ pub mod tests {
             .times(1)
             .returning(|_| {
                 let mut mock = MockInstalledScheduler::new();
+                mock.expect_schedule_termination()
+                    .times(1)
+                    .returning(|_| ());
                 Box::new(mock)
         });
         bank_forks.install_scheduler_pool(Arc::new(pool));
