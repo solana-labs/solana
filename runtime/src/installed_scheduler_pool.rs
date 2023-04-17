@@ -79,9 +79,9 @@ pub type ResultWithTimings = (Result<()>, ExecuteTimings);
 pub enum WaitReason {
     // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
     // the result and timing in some way to higher-layer subsystems;
-    AcrossBlock,
+    TerminationForFreezing,
     // scheduler will be restarted without being returned to pool in order to reuse it immediately.
-    InsideBlock,
+    ReinitializationForRecentBlockhash,
     FromBankDrop,
     FromSchedulerDrop,
 }
@@ -253,7 +253,7 @@ impl Bank {
             let result_with_timings = scheduler
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(&source));
-            if !matches!(source, WaitReason::InsideBlock) {
+            if !matches!(source, WaitReason::ReinitializationForRecentBlockhash) {
                 let scheduler = scheduler.take().expect("scheduler after waiting");
                 scheduler.scheduler_pool().return_to_pool(scheduler);
             }
@@ -271,7 +271,7 @@ impl Bank {
     }
 
     pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
-        self.wait_for_scheduler(WaitReason::AcrossBlock)
+        self.wait_for_scheduler(WaitReason::TerminationForFreezing)
     }
 
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
@@ -285,7 +285,7 @@ impl Bank {
     }
 
     pub(crate) fn wait_for_reusable_scheduler(&self) {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::InsideBlock);
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::ReinitializationForRecentBlockhash);
         assert!(maybe_timings_and_result.is_none());
     }
 
@@ -371,7 +371,7 @@ mod tests {
     fn test_scheduler_normal_termination() {
         let bank = Bank::default_for_tests();
         bank.install_scheduler(setup_mocked_scheduler(
-            [WaitReason::AcrossBlock].into_iter(),
+            [WaitReason::TerminationForFreezing].into_iter(),
         ));
         bank.wait_for_completed_scheduler();
     }
@@ -389,7 +389,7 @@ mod tests {
     fn test_scheduler_reinitialization() {
         let mut bank = crate::bank::tests::create_simple_test_bank(42);
         bank.install_scheduler(setup_mocked_scheduler(
-            [WaitReason::InsideBlock, WaitReason::FromBankDrop].into_iter(),
+            [WaitReason::ReinitializationForRecentBlockhash, WaitReason::FromBankDrop].into_iter(),
         ));
         goto_end_of_slot(&mut bank);
     }

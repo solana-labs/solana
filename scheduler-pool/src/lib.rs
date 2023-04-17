@@ -160,11 +160,11 @@ impl InstalledScheduler for Scheduler {
 
     fn wait_for_termination(&mut self, wait_source: &WaitReason) -> Option<ResultWithTimings> {
         let keep_result_with_timings = match wait_source {
-            WaitReason::InsideBlock => {
+            WaitReason::ReinitializationForRecentBlockhash => {
                 // rustfmt...
                 true
             }
-            WaitReason::AcrossBlock | WaitReason::FromBankDrop | WaitReason::FromSchedulerDrop => {
+            WaitReason::TerminationForFreezing | WaitReason::FromBankDrop | WaitReason::FromSchedulerDrop => {
                 false
             }
         };
@@ -250,12 +250,12 @@ mod tests {
         assert_ne!(scheduler_id1, scheduler_id2);
 
         assert_matches!(
-            scheduler1.wait_for_termination(&WaitReason::AcrossBlock),
+            scheduler1.wait_for_termination(&WaitReason::TerminationForFreezing),
             None
         );
         pool.return_to_pool(scheduler1);
         assert_matches!(
-            scheduler2.wait_for_termination(&WaitReason::AcrossBlock),
+            scheduler2.wait_for_termination(&WaitReason::TerminationForFreezing),
             None
         );
         pool.return_to_pool(scheduler2);
@@ -277,7 +277,7 @@ mod tests {
 
         assert!(scheduler.scheduling_context().is_some());
         assert_matches!(
-            scheduler.wait_for_termination(&WaitReason::InsideBlock),
+            scheduler.wait_for_termination(&WaitReason::ReinitializationForRecentBlockhash),
             None
         );
         assert!(scheduler.scheduling_context().is_none());
@@ -299,7 +299,7 @@ mod tests {
         let mut scheduler = pool.take_from_pool(old_context.clone());
         let scheduler_id = scheduler.scheduler_id();
         assert_matches!(
-            scheduler.wait_for_termination(&WaitReason::AcrossBlock),
+            scheduler.wait_for_termination(&WaitReason::TerminationForFreezing),
             None
         );
         pool.return_to_pool(scheduler);
