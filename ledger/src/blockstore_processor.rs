@@ -3453,7 +3453,7 @@ pub mod tests {
         let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
         use solana_runtime::installed_scheduler_pool::MockInstalledSchedulerPool;
         let pool = MockInstalledSchedulerPool::new();
-        bank_forks.install_scheduler_pool(pool);
+        bank_forks.install_scheduler_pool(Arc::new(pool));
         let bank0 = bank_forks.get(0).unwrap();
         let opts = ProcessOptions {
             run_verification: true,
