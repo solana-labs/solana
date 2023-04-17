@@ -227,7 +227,7 @@ mod tests {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let bank = Arc::new(Bank::default_for_tests());
-        let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank);
+        let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
         let mut scheduler1 = pool.take_from_pool(context.clone());
         let scheduler_id1 = scheduler1.scheduler_id();
@@ -250,9 +250,6 @@ mod tests {
         assert_eq!(scheduler_id2, scheduler3.scheduler_id());
         let scheduler4 = pool.take_from_pool(context.clone());
         assert_eq!(scheduler_id1, scheduler4.scheduler_id());
-
-        // explicit drop just for consistent .clone()-ing above
-        drop(context);
     }
 
     /*
