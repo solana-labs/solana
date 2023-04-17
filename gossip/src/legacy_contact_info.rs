@@ -6,6 +6,7 @@ use {
         },
         crds_value::MAX_WALLCLOCK,
     },
+    solana_client::connection_cache::Protocol,
     solana_sdk::{
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
@@ -202,6 +203,10 @@ impl LegacyContactInfo {
         self.tpu().and_then(|addr| get_quic_socket(&addr))
     }
 
+    pub fn tpu_forwards_quic(&self) -> Result<SocketAddr, Error> {
+        self.tpu_forwards().and_then(|addr| get_quic_socket(&addr))
+    }
+
     fn is_valid_ip(addr: IpAddr) -> bool {
         !(addr.is_unspecified() || addr.is_multicast())
         // || (addr.is_loopback() && !cfg_test))
@@ -216,21 +221,22 @@ impl LegacyContactInfo {
         addr.port() != 0u16 && Self::is_valid_ip(addr.ip()) && socket_addr_space.check(addr)
     }
 
-    pub fn client_facing_addr(&self) -> (SocketAddr, SocketAddr) {
-        (self.rpc, self.tpu)
-    }
-
     pub(crate) fn valid_client_facing_addr(
         &self,
+        protocol: Protocol,
         socket_addr_space: &SocketAddrSpace,
     ) -> Option<(SocketAddr, SocketAddr)> {
-        if LegacyContactInfo::is_valid_address(&self.rpc, socket_addr_space)
-            && LegacyContactInfo::is_valid_address(&self.tpu, socket_addr_space)
-        {
-            Some((self.rpc, self.tpu))
-        } else {
-            None
+        let rpc = self
+            .rpc()
+            .ok()
+            .filter(|addr| socket_addr_space.check(addr))?;
+        let tpu = match protocol {
+            Protocol::QUIC => self.tpu_quic(),
+            Protocol::UDP => self.tpu(),
         }
+        .ok()
+        .filter(|addr| socket_addr_space.check(addr))?;
+        Some((rpc, tpu))
     }
 }
 
@@ -323,17 +329,17 @@ mod tests {
     fn test_valid_client_facing() {
         let mut ci = LegacyContactInfo::default();
         assert_eq!(
-            ci.valid_client_facing_addr(&SocketAddrSpace::Unspecified),
+            ci.valid_client_facing_addr(Protocol::QUIC, &SocketAddrSpace::Unspecified),
             None
         );
         ci.tpu = socketaddr!(Ipv4Addr::LOCALHOST, 123);
         assert_eq!(
-            ci.valid_client_facing_addr(&SocketAddrSpace::Unspecified),
+            ci.valid_client_facing_addr(Protocol::QUIC, &SocketAddrSpace::Unspecified),
             None
         );
         ci.rpc = socketaddr!(Ipv4Addr::LOCALHOST, 234);
         assert!(ci
-            .valid_client_facing_addr(&SocketAddrSpace::Unspecified)
+            .valid_client_facing_addr(Protocol::QUIC, &SocketAddrSpace::Unspecified)
             .is_some());
     }
 

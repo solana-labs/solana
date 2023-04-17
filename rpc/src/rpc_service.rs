@@ -20,7 +20,7 @@ use {
     },
     regex::Regex,
     solana_client::connection_cache::ConnectionCache,
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
         bigtable_upload::ConfirmedBlockUploadConfig,
         bigtable_upload_service::BigTableUploadService, blockstore::Blockstore,
@@ -378,10 +378,11 @@ impl JsonRpcService {
             LARGEST_ACCOUNTS_CACHE_DURATION,
         )));
 
-        let tpu_address = cluster_info
-            .my_contact_info()
-            .tpu()
-            .map_err(|err| format!("{err}"))?;
+        let tpu_address = match *connection_cache {
+            ConnectionCache::Quic(_) => ContactInfo::tpu_quic,
+            ConnectionCache::Udp(_) => ContactInfo::tpu,
+        }(&cluster_info.my_contact_info())
+        .map_err(|err| format!("{err}"))?;
 
         // sadly, some parts of our current rpc implemention block the jsonrpc's
         // _socket-listening_ event loop for too long, due to (blocking) long IO or intesive CPU,

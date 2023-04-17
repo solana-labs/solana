@@ -3,12 +3,12 @@ use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
-        next_leader::{next_leader_tpu_forwards, next_leader_tpu_vote},
+        next_leader::{next_leader, next_leader_tpu_vote},
         tracer_packet_stats::TracerPacketStats,
         unprocessed_transaction_storage::UnprocessedTransactionStorage,
     },
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::LegacyContactInfo as ContactInfo},
     solana_measure::measure_us,
     solana_perf::{data_budget::DataBudget, packet::Packet},
     solana_poh::poh_recorder::PohRecorder,
@@ -214,9 +214,14 @@ impl Forwarder {
     fn get_leader_and_addr(&self, forward_option: &ForwardOption) -> Option<(Pubkey, SocketAddr)> {
         match forward_option {
             ForwardOption::NotForward => None,
-            ForwardOption::ForwardTransaction => {
-                next_leader_tpu_forwards(&self.cluster_info, &self.poh_recorder)
-            }
+            ForwardOption::ForwardTransaction => next_leader(
+                &self.cluster_info,
+                &self.poh_recorder,
+                match *self.connection_cache {
+                    ConnectionCache::Quic(_) => ContactInfo::tpu_forwards_quic,
+                    ConnectionCache::Udp(_) => ContactInfo::tpu_forwards,
+                },
+            ),
 
             ForwardOption::ForwardTpuVote => {
                 next_leader_tpu_vote(&self.cluster_info, &self.poh_recorder)
@@ -252,8 +257,6 @@ impl Forwarder {
                 batch_send(&self.socket, &pkts).map_err(|err| err.into())
             }
             ForwardOption::ForwardTransaction => {
-                // All other transactions can be forwarded using QUIC, get_connection() will use
-                // system wide setting to pick the correct connection object.
                 let conn = self.connection_cache.get_connection(addr);
                 conn.send_data_batch_async(packet_vec)
             }

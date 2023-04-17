@@ -201,7 +201,9 @@ fn test_local_cluster_signature_subscribe() {
     let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
 
     let (rpc, tpu) = LegacyContactInfo::try_from(non_bootstrap_info)
-        .map(cluster_tests::get_client_facing_addr)
+        .map(|node| {
+            cluster_tests::get_client_facing_addr(cluster.connection_cache.protocol(), node)
+        })
         .unwrap();
     let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
@@ -433,7 +435,9 @@ fn test_mainnet_beta_cluster_type() {
     assert_eq!(cluster_nodes.len(), 1);
 
     let (rpc, tpu) = LegacyContactInfo::try_from(&cluster.entry_point_info)
-        .map(cluster_tests::get_client_facing_addr)
+        .map(|node| {
+            cluster_tests::get_client_facing_addr(cluster.connection_cache.protocol(), node)
+        })
         .unwrap();
     let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
@@ -2641,7 +2645,9 @@ fn test_oc_bad_signatures() {
 
     // 3) Start up a spy to listen for and push votes to leader TPU
     let (rpc, tpu) = LegacyContactInfo::try_from(&cluster.entry_point_info)
-        .map(cluster_tests::get_client_facing_addr)
+        .map(|node| {
+            cluster_tests::get_client_facing_addr(cluster.connection_cache.protocol(), node)
+        })
         .unwrap();
     let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
     let cluster_funding_keypair = cluster.funding_keypair.insecure_clone();
