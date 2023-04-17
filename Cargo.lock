@@ -6626,6 +6626,7 @@ dependencies = [
  "assert_matches",
  "rand 0.7.3",
  "solana-ledger",
+ "solana-logger 1.16.0",
  "solana-program-runtime",
  "solana-runtime",
  "solana-scheduler",

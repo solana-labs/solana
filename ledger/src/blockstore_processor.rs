@@ -4338,23 +4338,14 @@ pub mod tests {
         }
     }
 
-    #[test]
-    fn test_rebatch_transactions() {
-        let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-
+    fn create_test_transactions(mint_keypair: &Pubkey) {
         let pubkey = solana_sdk::pubkey::new_rand();
         let keypair2 = Keypair::new();
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let keypair3 = Keypair::new();
         let pubkey3 = solana_sdk::pubkey::new_rand();
 
-        let txs = vec![
+        vec![
             SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &mint_keypair,
                 &pubkey,
@@ -4374,7 +4365,19 @@ pub mod tests {
                 genesis_config.hash(),
             )),
         ];
+    }
 
+    #[test]
+    fn test_rebatch_transactions() {
+        let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let txs = create_test_transactions(mint_keypair);
         let batch = bank.prepare_sanitized_batch(&txs);
         assert!(batch.needs_unlock());
         let transaction_indexes = vec![42, 43, 44];
