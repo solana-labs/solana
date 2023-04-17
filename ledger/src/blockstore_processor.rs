@@ -309,7 +309,6 @@ fn process_batches(
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     if !bank.with_scheduler() {
-        panic!();
         rebatch_and_execute_batches(
             bank,
             batches,
@@ -2622,7 +2621,8 @@ pub mod tests {
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
-    fn do_test_process_ledger_simple(with_scheduler: bool) {
+    #[test]
+    fn test_process_ledger_simple() {
         solana_logger::setup();
         let leader_pubkey = solana_sdk::pubkey::new_rand();
         let mint = 100;
@@ -2702,16 +2702,6 @@ pub mod tests {
         );
         assert_eq!(bank.tick_height(), 2 * genesis_config.ticks_per_slot);
         assert_eq!(bank.last_blockhash(), last_blockhash);
-    }
-
-    #[test]
-    fn test_process_ledger_simple_with_scheduler() {
-        do_test_process_ledger_simple(true);
-    }
-
-    #[test]
-    fn test_process_ledger_simple_without_scheduler() {
-        do_test_process_ledger_simple(false);
     }
 
     #[test]
@@ -3414,7 +3404,6 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_from_root() {
-        solana_logger::setup();
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = create_genesis_config(123);
@@ -3451,27 +3440,6 @@ pub mod tests {
 
         // Set up bank1
         let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
-        use solana_runtime::installed_scheduler_pool::MockInstalledSchedulerPool;
-        use solana_runtime::installed_scheduler_pool::MockInstalledScheduler;
-        let mut pool = Arc::new(MockInstalledSchedulerPool::new());
-        Arc::get_mut(&mut pool).unwrap().expect_take_from_pool()
-            .returning(|_| {
-                let mut mock = MockInstalledScheduler::new();
-                mock.expect_schedule_termination()
-                    .returning(|| ());
-                mock.expect_wait_for_termination()
-                    .returning(|_| None);
-                mock.expect_scheduler_pool()
-                    .returning(move || {
-                        let mut pool = MockInstalledSchedulerPool::new();
-                        pool.expect_return_to_pool()
-                            .times(1)
-                            .returning(|_| ());
-                        Arc::new(pool)
-                    });
-                Box::new(mock)
-        });
-        bank_forks.install_scheduler_pool(pool.clone());
         let bank0 = bank_forks.get(0).unwrap();
         let opts = ProcessOptions {
             run_verification: true,
