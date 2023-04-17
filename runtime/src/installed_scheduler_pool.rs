@@ -58,6 +58,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     // prevent Bank::drop()'s last resort scheduling termination attempt indefinitely
     fn schedule_termination(&mut self);
 
+    #[must_use]
     fn wait_for_termination(&mut self, source: &WaitSource) -> Option<ResultWithTimings>;
 
     // suppress false clippy arising from mockall 
