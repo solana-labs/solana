@@ -4364,7 +4364,7 @@ pub mod tests {
                 1,
                 genesis_config.hash(),
             )),
-        ];
+        ]
     }
 
     #[test]
