@@ -203,7 +203,7 @@ impl Bank {
     }
 
     pub fn scheduler(&self) -> Option<&SchedulerBox> {
-        self.scheduler.read().expect("not poisoned").0
+        self.scheduler.read().expect("not poisoned").0.as_ref()
     }
 
     pub fn schedule_transaction_executions<'a>(
