@@ -183,7 +183,7 @@ impl InstalledScheduler for Scheduler {
     }
 
     fn scheduling_context<'a>(&self) -> Option<&'a SchedulingContext> {
-        self.context
+        self.context.as_ref()
     }
 
     fn replace_scheduler_context(&mut self, context: SchedulingContext) {
