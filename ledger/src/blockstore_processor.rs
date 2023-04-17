@@ -308,8 +308,8 @@ fn process_batches(
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
-    panic!();
     if !bank.with_scheduler() {
+        panic!();
         rebatch_and_execute_batches(
             bank,
             batches,
