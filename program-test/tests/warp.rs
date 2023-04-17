@@ -286,7 +286,7 @@ async fn stake_rewards_filter_bench_100() {
 
 #[tokio::test]
 async fn stake_rewards_bench_550_k() {
-    stake_rewards_filter_bench_core(55 * 1000, false).await;
+    stake_rewards_filter_bench_core(550_000, false).await;
 }
 
 async fn stake_rewards_filter_bench_core(num_stake_accounts: u64, filter: bool) {
@@ -316,7 +316,7 @@ async fn stake_rewards_filter_bench_core(num_stake_accounts: u64, filter: bool) 
             &vote_address,
             &vote_account,
             &Rent::default(),
-            TEST_FILTER_STAKE,
+            lamports,
         ));
         program_test.add_account(stake_pubkey, stake_account);
         if lamports == TEST_FILTER_STAKE {
