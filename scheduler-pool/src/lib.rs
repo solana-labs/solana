@@ -208,10 +208,9 @@ mod tests {
             installed_scheduler_pool::SchedulingContext,
             prioritization_fee_cache::PrioritizationFeeCache,
         },
-        solana_sdk::pubkey::Pubkey,
+        solana_sdk::{pubkey::Pubkey, system_transaction},
         std::sync::Arc,
     };
-    use solana_sdk::system_transaction;
 
     #[test]
     fn test_scheduler_pool_new() {
@@ -329,8 +328,12 @@ mod tests {
 
     #[test]
     fn test_schedule_execution() {
-        let GenesisConfigInfo { genesis_config, mint_keypair, .. } = create_genesis_config(10_000);
-    let key = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10_000);
+        let key = solana_sdk::pubkey::new_rand();
         let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &key,
