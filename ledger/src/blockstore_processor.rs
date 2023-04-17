@@ -3415,6 +3415,7 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_from_root() {
+        solana_logger::setup();
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = create_genesis_config(123);
