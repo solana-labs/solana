@@ -3460,13 +3460,10 @@ pub mod tests {
             .returning(|_| {
                 let mut mock = MockInstalledScheduler::new();
                 mock.expect_schedule_termination()
-                    .times(1)
                     .returning(|| ());
                 mock.expect_wait_for_termination()
-                    .times(2)
                     .returning(|_| None);
                 mock.expect_scheduler_pool()
-                    .times(1)
                     .returning(move || {
                         let mut pool = MockInstalledSchedulerPool::new();
                         pool.expect_return_to_pool()
