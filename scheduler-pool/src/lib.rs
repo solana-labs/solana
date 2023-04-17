@@ -182,8 +182,8 @@ impl InstalledScheduler for Scheduler {
         }
     }
 
-    fn scheduling_context(&self) -> Option<SchedulingContext> {
-        self.context.clone()
+    fn scheduling_context(&self) -> Option<&SchedulingContext> {
+        self.context
     }
 
     fn replace_scheduler_context(&mut self, context: SchedulingContext) {
