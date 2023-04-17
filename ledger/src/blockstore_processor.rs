@@ -4448,7 +4448,7 @@ pub mod tests {
         };
 
         use solana_runtime::installed_scheduler_pool::MockInstalledScheduler;
-        let mut mock = MockInstalledScheduler::new().into();
+        let mut mock = Box::new(MockInstalledScheduler::new());
         bank.install_scheduler(mock);
 
         assert!(schedule_batches_for_execution(
