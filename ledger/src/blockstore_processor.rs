@@ -4453,6 +4453,9 @@ pub mod tests {
         mock.expect_schedule_execution()
             .times(1)
             .returning(|_, _| ());
+        mock.expect_wait_for_termination()
+            .times(1)
+            .returning(|_| None);
         bank.install_scheduler(mock);
 
         assert!(schedule_batches_for_execution(
