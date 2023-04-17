@@ -79,11 +79,11 @@ pub type ResultWithTimings = (Result<()>, ExecuteTimings);
 pub enum WaitReason {
     // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
     // the result and timing in some way to higher-layer subsystems;
-    TerminationForFreezing,
-    TerminationFromBankDrop,
-    InternalTerminationByScheduler,
+    TerminatedToFreeze,
+    TerminatedFromBankDrop,
+    TerminatedInternallyByScheduler,
     // scheduler will be restarted without being returned to pool in order to reuse it immediately.
-    ReinitializationForRecentBlockhash,
+    ReinitializedForRecentBlockhash,
 }
 
 pub type SchedulerBox = Box<dyn InstalledScheduler>;
@@ -241,7 +241,7 @@ impl Bank {
             let result_with_timings = scheduler
                 .as_mut()
                 .and_then(|scheduler| scheduler.wait_for_termination(&source));
-            if !matches!(source, WaitReason::ReinitializationForRecentBlockhash) {
+            if !matches!(source, WaitReason::ReinitializedForRecentBlockhash) {
                 let scheduler = scheduler.take().expect("scheduler after waiting");
                 scheduler.scheduler_pool().return_to_pool(scheduler);
             }
@@ -259,23 +259,23 @@ impl Bank {
     }
 
     pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
-        self.wait_for_scheduler(WaitReason::TerminationForFreezing)
+        self.wait_for_scheduler(WaitReason::TerminatedToFreeze)
     }
 
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::TerminationFromBankDrop);
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::TerminatedFromBankDrop);
         maybe_timings_and_result.map(|(result, _timings)| result)
     }
 
     pub fn wait_for_completed_scheduler_from_scheduler_drop(self) {
         let maybe_timings_and_result =
-            self.wait_for_scheduler(WaitReason::InternalTerminationByScheduler);
+            self.wait_for_scheduler(WaitReason::TerminatedInternallyByScheduler);
         assert!(maybe_timings_and_result.is_some());
     }
 
     pub(crate) fn wait_for_reusable_scheduler(&self) {
         let maybe_timings_and_result =
-            self.wait_for_scheduler(WaitReason::ReinitializationForRecentBlockhash);
+            self.wait_for_scheduler(WaitReason::ReinitializedForRecentBlockhash);
         assert!(maybe_timings_and_result.is_none());
     }
 
@@ -361,7 +361,7 @@ mod tests {
     fn test_scheduler_normal_termination() {
         let bank = Bank::default_for_tests();
         bank.install_scheduler(setup_mocked_scheduler(
-            [WaitReason::TerminationForFreezing].into_iter(),
+            [WaitReason::TerminatedToFreeze].into_iter(),
         ));
         bank.wait_for_completed_scheduler();
     }
@@ -370,7 +370,7 @@ mod tests {
     fn test_scheduler_termination_from_drop() {
         let bank = Bank::default_for_tests();
         bank.install_scheduler(setup_mocked_scheduler(
-            [WaitReason::TerminationFromBankDrop].into_iter(),
+            [WaitReason::TerminatedFromBankDrop].into_iter(),
         ));
         drop(bank);
     }
@@ -380,8 +380,8 @@ mod tests {
         let mut bank = crate::bank::tests::create_simple_test_bank(42);
         bank.install_scheduler(setup_mocked_scheduler(
             [
-                WaitReason::ReinitializationForRecentBlockhash,
-                WaitReason::TerminationFromBankDrop,
+                WaitReason::ReinitializedForRecentBlockhash,
+                WaitReason::TerminatedFromBankDrop,
             ]
             .into_iter(),
         ));
@@ -403,7 +403,7 @@ mod tests {
         ));
         let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
         let mocked_scheduler = do_setup_mocked_scheduler(
-            [WaitReason::TerminationFromBankDrop].into_iter(),
+            [WaitReason::TerminatedFromBankDrop].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
                 mocked
                     .expect_schedule_execution()

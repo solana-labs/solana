@@ -160,13 +160,13 @@ impl InstalledScheduler for Scheduler {
 
     fn wait_for_termination(&mut self, wait_source: &WaitReason) -> Option<ResultWithTimings> {
         let keep_result_with_timings = match wait_source {
-            WaitReason::ReinitializationForRecentBlockhash => {
+            WaitReason::ReinitializedForRecentBlockhash => {
                 // rustfmt...
                 true
             }
-            WaitReason::TerminationForFreezing
-            | WaitReason::TerminationFromBankDrop
-            | WaitReason::InternalTerminationByScheduler => false,
+            WaitReason::TerminatedToFreeze
+            | WaitReason::TerminatedFromBankDrop
+            | WaitReason::TerminatedInternallyByScheduler => false,
         };
 
         self.schedule_termination();
@@ -250,12 +250,12 @@ mod tests {
         assert_ne!(scheduler_id1, scheduler_id2);
 
         assert_matches!(
-            scheduler1.wait_for_termination(&WaitReason::TerminationForFreezing),
+            scheduler1.wait_for_termination(&WaitReason::TerminatedToFreeze),
             None
         );
         pool.return_to_pool(scheduler1);
         assert_matches!(
-            scheduler2.wait_for_termination(&WaitReason::TerminationForFreezing),
+            scheduler2.wait_for_termination(&WaitReason::TerminatedToFreeze),
             None
         );
         pool.return_to_pool(scheduler2);
@@ -277,7 +277,7 @@ mod tests {
 
         assert!(scheduler.scheduling_context().is_some());
         assert_matches!(
-            scheduler.wait_for_termination(&WaitReason::ReinitializationForRecentBlockhash),
+            scheduler.wait_for_termination(&WaitReason::ReinitializedForRecentBlockhash),
             None
         );
         assert!(scheduler.scheduling_context().is_none());
@@ -299,7 +299,7 @@ mod tests {
         let mut scheduler = pool.take_from_pool(old_context.clone());
         let scheduler_id = scheduler.scheduler_id();
         assert_matches!(
-            scheduler.wait_for_termination(&WaitReason::TerminationForFreezing),
+            scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
             None
         );
         pool.return_to_pool(scheduler);
