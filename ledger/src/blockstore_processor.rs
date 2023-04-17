@@ -4350,19 +4350,19 @@ pub mod tests {
                 &mint_keypair,
                 &pubkey,
                 1,
-                genesis_hash,
+                *genesis_hash,
             )),
             SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &keypair2,
                 &pubkey2,
                 1,
-                genesis_hash,
+                *genesis_hash,
             )),
             SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &keypair3,
                 &pubkey3,
                 1,
-                genesis_hash,
+                *genesis_hash,
             )),
         ]
     }
