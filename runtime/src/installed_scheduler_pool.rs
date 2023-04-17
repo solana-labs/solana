@@ -324,7 +324,7 @@ mod tests {
 
     fn do_setup_mocked_scheduler(
         wait_sources: impl Iterator<Item = WaitSource>,
-        f: Option<impl Fn(&mut MockInstalledScheduler) -> ()>,
+        f: Option<impl Fn(&mut MockInstalledScheduler)>,
     ) -> SchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
