@@ -182,7 +182,7 @@ impl InstalledScheduler for Scheduler {
         }
     }
 
-    fn scheduling_context<'a>(&'a self) -> Option<&'a SchedulingContext> {
+    fn scheduling_context(&self) -> Option<&SchedulingContext> {
         self.context.as_ref()
     }
 
