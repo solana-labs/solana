@@ -4448,7 +4448,7 @@ pub mod tests {
         };
 
         use solana_runtime::installed_scheduler_pool::MockInstalledScheduler;
-        let mut mock = Arc::new(MockInstalledScheduler::new());
+        let mut mock = MockInstalledScheduler::new().into();
         bank.install_scheduler(mock);
 
         assert!(schedule_batches_for_execution(
