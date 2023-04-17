@@ -44,6 +44,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 use mockall::automock;
 
 #[cfg_attr(test, automock)]
+#[allow(unused_attributes)]
 // Send + Sync is needed to be a field of Bank
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
@@ -58,7 +59,6 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     // prevent Bank::drop()'s last resort scheduling termination attempt indefinitely
     fn schedule_termination(&mut self);
 
-    #[allow(unused_attributes)]
     #[must_use]
     fn wait_for_termination(&mut self, source: &WaitSource) -> Option<ResultWithTimings>;
 
