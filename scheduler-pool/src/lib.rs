@@ -234,7 +234,7 @@ mod tests {
 
         assert_matches!(scheduler1.wait_for_termination(&WaitSource::AcrossBlock), Some((Ok(()), _)));
         pool.return_to_pool(scheduler1);
-        scheduler2.wait_for_termination(&WaitSource::AcrossBlock);
+        assert_matches!(scheduler2.wait_for_termination(&WaitSource::AcrossBlock), Some((Ok(()), _)));
         pool.return_to_pool(scheduler2);
 
         let scheduler3 = pool.take_from_pool(context.clone());
@@ -261,7 +261,7 @@ mod tests {
 
         let mut scheduler = pool.take_from_pool(old_context.clone());
         let scheduler_id = scheduler.scheduler_id();
-        scheduler.wait_for_termination(&WaitSource::AcrossBlock);
+        assert_matches!(scheduler.wait_for_termination(&WaitSource::AcrossBlock), Some((Ok(()), _)));
         pool.return_to_pool(scheduler);
 
         let scheduler = pool.take_from_pool(new_context.clone());
