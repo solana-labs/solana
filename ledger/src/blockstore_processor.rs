@@ -3454,10 +3454,12 @@ pub mod tests {
         use solana_runtime::installed_scheduler_pool::MockInstalledSchedulerPool;
         use solana_runtime::installed_scheduler_pool::MockInstalledScheduler;
         let mut pool = MockInstalledSchedulerPool::new();
-        let mut mock = MockInstalledScheduler::new();
         pool.expect_take_from_pool()
             .times(1)
-            .returning(move |_| Box::new(mock));
+            .returning(|_| {
+                let mut mock = MockInstalledScheduler::new();
+                Box::new(mock)
+        });
         bank_forks.install_scheduler_pool(Arc::new(pool));
         let bank0 = bank_forks.get(0).unwrap();
         let opts = ProcessOptions {
