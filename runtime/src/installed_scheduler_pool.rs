@@ -146,8 +146,8 @@ impl SchedulingContext {
             "sch_{:0width$x}{}",
             scheduler_id,
             context
-                .map(|c| format!("/slot_{}/mode_{:?}:", c.slot(), c.mode()))
-                .unwrap_or_else(|| "".into()),
+                .map(|c| format!("(slot:{}/mode:{:?})", c.slot(), c.mode()))
+                .unwrap_or_else(|| "(?)".into()),
             width = SchedulerId::BITS as usize / BITS_PER_HEX_DIGIT,
         )
     }
