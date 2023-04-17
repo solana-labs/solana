@@ -3462,6 +3462,9 @@ pub mod tests {
                 mock.expect_schedule_termination()
                     .times(1)
                     .returning(|| ());
+                mock.expect_wait_for_termination()
+                    .times(1)
+                    .returning(|_| None);
                 Box::new(mock)
         });
         bank_forks.install_scheduler_pool(Arc::new(pool));
