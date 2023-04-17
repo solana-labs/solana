@@ -334,7 +334,7 @@ mod tests {
             .in_sequence(&mut seq)
             .returning(move || setup_mocked_scheduler_pool(&mut seq));
         if let Some(f) = f {
-            f();
+            f(mock);
         }
 
         Box::new(mock)
