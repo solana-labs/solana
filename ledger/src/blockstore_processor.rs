@@ -3468,7 +3468,11 @@ pub mod tests {
                 mock.expect_scheduler_pool()
                     .times(1)
                     .returning(move || {
-                        Arc::new(MockInstalledSchedulerPool::new())
+                        let pool = MockInstalledSchedulerPool::new();
+                        pool.expect_return_to_pool()
+                            .times(1)
+                            .returning(|_| ());
+                        Arc::new(pool)
                     });
                 Box::new(mock)
         });
