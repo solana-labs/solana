@@ -4405,6 +4405,51 @@ pub mod tests {
     }
 
     #[test]
+    fn test_schedule_batches_for_execution() {
+        let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let keypair2 = Keypair::new();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let keypair3 = Keypair::new();
+        let pubkey3 = solana_sdk::pubkey::new_rand();
+
+        let txs = vec![
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &mint_keypair,
+                &pubkey,
+                1,
+                genesis_config.hash(),
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair2,
+                &pubkey2,
+                1,
+                genesis_config.hash(),
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair3,
+                &pubkey3,
+                1,
+                genesis_config.hash(),
+            )),
+        ];
+
+        let batch = bank.prepare_sanitized_batch(&txs);
+
+        assert!(schedule_batches_for_execution(
+            &bank,
+            batch
+        ).is_ok());
+    }
+
+    #[test]
     fn test_confirm_slot_entries_with_fix() {
         const HASHES_PER_TICK: u64 = 10;
         const TICKS_PER_SLOT: u64 = 2;
