@@ -277,14 +277,14 @@ mod tests {
     fn test_scheduler_pool_context_replace() {
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
-        let old_bank = Arc::new(Bank::default_for_tests());
-        let new_bank = Arc::new(Bank::default_for_tests());
+        let old_bank = &Arc::new(Bank::default_for_tests());
+        let new_bank = &Arc::new(Bank::default_for_tests());
         assert!(!Arc::ptr_eq(&old_bank, &new_bank));
 
         let old_context =
-            SchedulingContext::new(SchedulingMode::BlockVerification, old_bank.clone());
+            &SchedulingContext::new(SchedulingMode::BlockVerification, old_bank.clone());
         let new_context =
-            SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
+            &SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
 
         let mut scheduler = pool.take_from_pool(old_context.clone());
         let scheduler_id = scheduler.scheduler_id();
@@ -300,9 +300,6 @@ mod tests {
             scheduler.scheduling_context().unwrap().bank(),
             &new_bank
         ));
-
-        // explicit drop just for consistent .clone()-ing above
-        drop((old_context, old_bank, new_context, new_bank));
     }
 
     #[test]
