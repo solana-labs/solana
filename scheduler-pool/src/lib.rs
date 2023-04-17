@@ -164,7 +164,7 @@ impl InstalledScheduler for Scheduler {
                 // rustfmt...
                 true
             }
-            WaitReason::AcrossBlock | WaitSource::FromBankDrop | WaitSource::FromSchedulerDrop => {
+            WaitReason::AcrossBlock | WaitReason::FromBankDrop | WaitReason::FromSchedulerDrop => {
                 false
             }
         };
