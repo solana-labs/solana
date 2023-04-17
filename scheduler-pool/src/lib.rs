@@ -356,6 +356,7 @@ mod tests {
         bank_forks.insert(child_bank);
         let child_bank = bank_forks.working_bank();
         assert!(child_bank.with_scheduler());
+        bank_forks.remove(child_bank.slot());
     }
 
     #[test]
