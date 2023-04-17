@@ -158,7 +158,6 @@ impl InstalledScheduler for Scheduler {
         drop::<Option<SchedulingContext>>(self.context.take());
     }
 
-    #[must_use]
     fn wait_for_termination(&mut self, wait_source: &WaitSource) -> Option<ResultWithTimings> {
         let keep_result_with_timings = match wait_source {
             WaitSource::InsideBlock => {
