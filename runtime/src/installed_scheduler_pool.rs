@@ -375,4 +375,29 @@ mod tests {
         ));
         goto_end_of_slot(&mut bank);
     }
+
+    #[test]
+    fn test_schedule_executions() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10_000);
+        let key = solana_sdk::pubkey::new_rand();
+        let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            &mint_keypair,
+            &key,
+            2,
+            genesis_config.hash(),
+        ));
+        let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
+        let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
+        bank.install_scheduler(setup_mocked_scheduler(
+            [WaitSource::AcrossBlock].into_iter(),
+        ));
+
+        assert_eq!(bank.transaction_count(), 0);
+        bank.schedule_executions(&tx0, 0);
+        assert_eq!(bank.transaction_count(), 1);
+    }
 }
