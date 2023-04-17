@@ -345,5 +345,6 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
         let scheduler = pool.take_from_pool(context.clone());
         scheduler.schedule_execution(&tx0, 0);
+        assert_eq!(bank.transaction_count(), 1);
     }
 }
