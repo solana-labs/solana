@@ -147,7 +147,7 @@ fn test_spend_and_verify_all_nodes_2() {
     );
     config.validator_configs[1].block_verification_method = 3;
     let local = LocalCluster::new(
-        config,
+        &mut config,
         SocketAddrSpace::Unspecified,
     );
     cluster_tests::spend_and_verify_all_nodes(
