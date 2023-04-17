@@ -5128,6 +5128,8 @@ mod tests {
         num_total: usize,
         num_posts: usize,
     ) -> Bank {
+        let mut bank = Arc::new(Bank::new_for_tests(genesis_config));
+
         let collecter_id = Pubkey::new_unique();
         let snapshot_version = SnapshotVersion::default();
 
@@ -5177,8 +5179,6 @@ mod tests {
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 4, 0);
 
-=======
->>>>>>> f9b76e846c (Let bank_snapshots_dir be TempDir)
         let snapshot = get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 4);
 
