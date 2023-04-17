@@ -3461,7 +3461,11 @@ pub mod rpc_full {
                         let (version, feature_set, commit) = if let Some(version) =
                             cluster_info.get_node_version(&contact_info.id)
                         {
-                            (Some(version.to_string()), Some(version.feature_set), version.commit)
+                            (
+                                Some(version.to_string()),
+                                Some(version.feature_set),
+                                version.commit,
+                            )
                         } else {
                             (None, None, None)
                         };
@@ -3474,7 +3478,7 @@ pub mod rpc_full {
                             version,
                             feature_set,
                             shred_version: Some(my_shred_version),
-                            commit: commit,
+                            commit,
                         })
                     } else {
                         None // Exclude spy nodes
