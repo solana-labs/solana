@@ -2623,8 +2623,7 @@ pub mod tests {
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
-    #[test]
-    fn test_process_ledger_simple() {
+    fn do_test_process_ledger_simple(with_scheduler: bool) {
         solana_logger::setup();
         let leader_pubkey = solana_sdk::pubkey::new_rand();
         let mint = 100;
@@ -2704,6 +2703,16 @@ pub mod tests {
         );
         assert_eq!(bank.tick_height(), 2 * genesis_config.ticks_per_slot);
         assert_eq!(bank.last_blockhash(), last_blockhash);
+    }
+
+    #[test]
+    fn test_process_ledger_simple_with_scheduler {
+        do_test_process_ledger_simple(true);
+    }
+
+    #[test]
+    fn test_process_ledger_simple_without_scheduler {
+        do_test_process_ledger_simple(false);
     }
 
     #[test]
