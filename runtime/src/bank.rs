@@ -2397,6 +2397,10 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) {
+        let update_rewards_from_cached_accounts = self
+            .feature_set
+            .is_active(&feature_set::update_rewards_from_cached_accounts::id());
+
         let capitalization = self.capitalization();
         let PrevEpochInflationRewards {
             validator_rewards,
@@ -2406,10 +2410,6 @@ impl Bank {
         } = self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
-        let update_rewards_from_cached_accounts = self
-            .feature_set
-            .is_active(&feature_set::update_rewards_from_cached_accounts::id());
-
         self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
@@ -2420,25 +2420,24 @@ impl Bank {
             update_rewards_from_cached_accounts,
         );
 
-        let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
-        let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
-        assert_eq!(
-            validator_rewards_paid,
-            u64::try_from(
-                self.rewards
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .map(|(_address, reward_info)| {
-                        match reward_info.reward_type {
-                            RewardType::Voting | RewardType::Staking => reward_info.lamports,
-                            _ => 0,
-                        }
-                    })
-                    .sum::<i64>()
-            )
-            .unwrap()
-        );
+        let validator_rewards_paid = u64::try_from(
+            self.rewards
+                .read()
+                .unwrap()
+                .par_iter()
+                .map(|(_address, reward_info)| match reward_info.reward_type {
+                    RewardType::Voting | RewardType::Staking => reward_info.lamports,
+                    _ => 0,
+                })
+                .sum::<i64>(),
+        )
+        .unwrap();
+
+        if update_rewards_from_cached_accounts {
+            let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
+            let rewards_from_cache = new_vote_balance_and_staked - old_vote_balance_and_staked;
+            assert_eq!(validator_rewards_paid, rewards_from_cache);
+        }
 
         // verify that we didn't pay any more than we expected to
         assert!(validator_rewards >= validator_rewards_paid);
@@ -2834,7 +2833,7 @@ impl Bank {
                 metrics,
             );
 
-            self.store_stake_accounts(&stake_rewards, metrics);
+            self.store_stake_accounts(&stake_rewards, metrics, update_rewards_from_cached_accounts);
             let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
             self.update_reward_history(stake_rewards, vote_rewards);
         }
@@ -3010,11 +3009,24 @@ impl Bank {
         (vote_account_rewards, stake_rewards)
     }
 
-    fn store_stake_accounts(&self, stake_rewards: &[StakeReward], metrics: &mut RewardsMetrics) {
+    fn store_stake_accounts(
+        &self,
+        stake_rewards: &[StakeReward],
+        metrics: &mut RewardsMetrics,
+        update_cache: bool,
+    ) {
         // store stake account even if stake_reward is 0
         // because credits observed has changed
         let (_, measure) = measure!({
-            self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()))
+            if update_cache {
+                self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()));
+            } else {
+                self.store_accounts_no_cache_update((
+                    self.slot(),
+                    stake_rewards,
+                    self.include_slot_in_hash(),
+                ));
+            }
         });
         metrics
             .store_stake_accounts_us
@@ -6481,6 +6493,22 @@ impl Bank {
             self.stakes_cache
                 .check_and_store(accounts.pubkey(i), accounts.account(i))
         });
+        self.rc.accounts.store_accounts_cached(accounts);
+        m.stop();
+        self.rc
+            .accounts
+            .accounts_db
+            .stats
+            .stakes_cache_check_and_store_us
+            .fetch_add(m.as_us(), Relaxed);
+    }
+
+    pub fn store_accounts_no_cache_update<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+        &self,
+        accounts: impl StorableAccounts<'a, T>,
+    ) {
+        assert!(!self.freeze_started());
+        let mut m = Measure::start("stakes_cache.check_and_store");
         self.rc.accounts.store_accounts_cached(accounts);
         m.stop();
         self.rc
