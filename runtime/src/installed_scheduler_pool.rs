@@ -268,6 +268,7 @@ impl Bank {
         result_with_timings
     }
 
+    #[must_use]
     pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
         self.wait_for_scheduler(WaitReason::TerminatedToFreeze)
     }
