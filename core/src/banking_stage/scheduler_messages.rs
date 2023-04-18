@@ -1,6 +1,6 @@
 use {
     crate::immutable_deserialized_packet::ImmutableDeserializedPacket,
-    solana_sdk::transaction::SanitizedTransaction, std::sync::Arc,
+    solana_poh::poh_recorder::Slot, solana_sdk::transaction::SanitizedTransaction, std::sync::Arc,
 };
 
 /// A unique identifier for a transaction batch.
@@ -29,6 +29,7 @@ pub struct ConsumeWork {
     pub batch_id: TransactionBatchId,
     pub transaction_ids: Vec<TransactionId>,
     pub transactions: Vec<SanitizedTransaction>,
+    pub max_age_slots: Vec<Slot>,
 }
 
 /// Message: [Scheduler -> Worker]
