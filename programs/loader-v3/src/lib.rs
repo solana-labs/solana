@@ -691,7 +691,7 @@ mod tests {
                 authority_address,
             })
             .unwrap();
-        program_account.data_mut()[loader_v3::LoaderV3State::program_data_offset()..]
+        program_account.data_as_mut_slice()[loader_v3::LoaderV3State::program_data_offset()..]
             .copy_from_slice(&elf_bytes);
         program_account
     }
