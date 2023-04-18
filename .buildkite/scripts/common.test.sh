@@ -3,26 +3,11 @@
 set -e
 here=$(dirname "$0")
 
+# shellcheck source=.buildkite/scripts/func-assert-eq.sh
+source "$here"/func-assert-eq.sh
+
 # shellcheck source=.buildkite/scripts/common.sh
 source "$here"/common.sh
-
-assert_eq() {
-  local test_name=$1
-  local want=$2
-  local got=$3
-
-  if [[ "$want" = "$got" ]]; then
-    echo "✅ $test_name"
-  else
-    cat <<EOF
-❌ $test_name
-want:
-$want
-got:
-$got
-EOF
-  fi
-}
 
 (
   want=$(
