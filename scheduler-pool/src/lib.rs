@@ -347,7 +347,8 @@ mod tests {
         let bank = Bank::default_for_tests();
         let mut bank_forks = BankForks::new(bank);
 
-        // existing banks shouldn't process transactions in general, so shouldn't be affected
+        // existing banks in bank_forks shouldn't process transactions anymore in general, so
+        // shouldn't be touched
         assert!(!bank_forks.working_bank().with_scheduler());
         bank_forks.install_scheduler_pool(pool);
         assert!(!bank_forks.working_bank().with_scheduler());
@@ -362,7 +363,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scheduler_schedule_execution() {
+    fn test_scheduler_schedule_execution_success() {
         solana_logger::setup();
 
         let GenesisConfigInfo {
@@ -387,5 +388,44 @@ mod tests {
         assert_eq!(bank.transaction_count(), 1);
         bank.install_scheduler(scheduler);
         assert_matches!(bank.wait_for_completed_scheduler(), Some((Ok(()), _)));
+    }
+
+    #[test]
+    fn test_scheduler_schedule_execution_failure() {
+        solana_logger::setup();
+
+        let GenesisConfigInfo {
+            genesis_config,
+            ..
+        } = create_genesis_config(10_000);
+        let unfunded_keypair = &solana_sdk::pubkey::new_rand();
+        let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            &unfunded_keypair,
+            &solana_sdk::pubkey::new_rand(),
+            2,
+            genesis_config.hash(),
+        ));
+        let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
+        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
+        let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
+
+        assert_eq!(bank.transaction_count(), 0);
+        let scheduler = pool.take_from_pool(context);
+        scheduler.schedule_execution(&tx0, 0);
+        assert_eq!(bank.transaction_count(), 1);
+
+        let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            &unfunded_keypair,
+            &solana_sdk::pubkey::new_rand(),
+            3,
+            genesis_config.hash(),
+        ));
+        scheduler.schedule_execution(&tx0, 0);
+        // transaction_count should be remained to be same as scheduler should be bailing out.
+        assert_eq!(bank.transaction_count(), 1);
+
+        bank.install_scheduler(scheduler);
+        assert_matches!(bank.wait_for_completed_scheduler(), Some((Err(usize), _)));
     }
 }
