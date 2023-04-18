@@ -4422,7 +4422,9 @@ pub mod tests {
         });
         bank.install_scheduler(Box::new(mocked_scheduler));
 
-        assert!(schedule_batches_for_execution(&bank, &[batch_with_indexes],).is_ok());
+        let mut confirmation_timing = ConfirmationTiming::default();
+        let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+        assert!(process_batches(&bank, &[batch_with_indexes], None, None, &mut confirmation_timing, None, _ignored_prioritization_fee_cache).is_ok());
     }
 
     #[test]
