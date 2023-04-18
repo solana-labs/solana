@@ -76,6 +76,7 @@ use {
         time::{Duration, Instant},
     },
 };
+use rand::seq::IteratorRandom;
 
 mod common;
 
@@ -3018,16 +3019,20 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
 
 #[test]
 #[serial]
-fn test_mixed_block_verification_methods() {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
-    error!("test_spend_and_verify_all_nodes_2");
+fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
+    solana_logger::setup_with_default(
+        "solana_metrics::metrics=warn,"
+        "solana_core=warn,"
+        "solana_runtime::installed_scheduler_pool=trace,"
+        "solana_ledger::blockstore_processor=debug,info"
+    );
+
     let num_nodes = 2;
     let mut config = LocalCluster::config_with_equal_stakes(
         num_nodes,
         DEFAULT_CLUSTER_LAMPORTS,
         DEFAULT_NODE_STAKE,
     );
-    use rand::seq::IteratorRandom;
     config
         .validator_configs
         .iter_mut()

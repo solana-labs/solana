@@ -1893,6 +1893,9 @@ pub mod tests {
         std::{collections::BTreeSet, sync::RwLock},
         trees::tr,
     };
+    use solana_runtime::installed_scheduler_pool::{
+        MockInstalledScheduler, MockInstalledSchedulerPool,
+    };
 
     // Convenience wrapper to optionally process blockstore with Secondary access.
     //
@@ -4402,9 +4405,6 @@ pub mod tests {
             transaction_indexes: (0..txs.len()).collect(),
         };
 
-        use solana_runtime::installed_scheduler_pool::{
-            MockInstalledScheduler, MockInstalledSchedulerPool,
-        };
         let mut mocked_scheduler = MockInstalledScheduler::new();
         mocked_scheduler.expect_schedule_execution()
             .times(txs.len())
