@@ -398,7 +398,7 @@ mod tests {
             genesis_config,
             ..
         } = create_genesis_config(10_000);
-        let unfunded_keypair = &solana_sdk::pubkey::new_rand();
+        let unfunded_keypair = Keypair::new();
         let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &unfunded_keypair,
             &solana_sdk::pubkey::new_rand(),
