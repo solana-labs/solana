@@ -42,6 +42,18 @@ step() {
     maybe_parallelism="parallelism: $parallelism"
   fi
 
+  local retry
+  retry="$(echo "$params" | jq -r '.retry')"
+  maybe_retry="EMPTY_LINE"
+  if [ "$retry" != "null" ]; then
+    maybe_retry=$(cat <<EOF | indent
+retry:
+  automatic:
+    - limit: $retry
+EOF
+    )
+  fi
+
   cat <<EOF | indent | sed '/EMPTY_LINE/d'
 - name: "$name"
   command: "$command"
@@ -49,5 +61,6 @@ step() {
   agents:
     queue: "$agent"
   $maybe_parallelism
+$maybe_retry
 EOF
 }

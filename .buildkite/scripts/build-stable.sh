@@ -10,5 +10,5 @@ agent="${1-solana}"
 
 # shellcheck disable=SC2016
 group "stable" \
-  '{ "name": "partitions", "parallelism": 3, "command": ". ci/rust-version.sh; ci/docker-run.sh $$rust_stable_docker_image ci/stable/run-partition.sh", "timeout_in_minutes": 30, "agent": "'"$agent"'" }' \
+  '{ "name": "partitions", "parallelism": 3, "command": ". ci/rust-version.sh; ci/docker-run.sh $$rust_stable_docker_image ci/stable/run-partition.sh", "timeout_in_minutes": 30, "agent": "'"$agent"'", "retry": 3 }' \
   '{ "name": "localnet", "command": ". ci/rust-version.sh; ci/docker-run.sh $$rust_stable_docker_image ci/stable/run-localnet.sh", "timeout_in_minutes": 30, "agent": "'"$agent"'" }'
