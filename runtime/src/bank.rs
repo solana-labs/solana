@@ -2859,6 +2859,9 @@ impl Bank {
                 metrics,
             );
 
+            drop(reward_calculate_param);
+            drop(stakes);
+
             self.store_stake_accounts(&stake_rewards, metrics);
             let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
             self.update_reward_history(stake_rewards, vote_rewards);
@@ -2903,9 +2906,6 @@ impl Bank {
                 reward_calc_tracer.as_ref(),
                 metrics,
             );
-
-            drop(reward_calculate_param);
-            drop(stakes);
 
             self.store_stake_accounts(&stake_rewards, metrics);
 
