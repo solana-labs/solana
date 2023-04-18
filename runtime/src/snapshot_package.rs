@@ -78,7 +78,6 @@ impl AccountsPackage {
             }
         }
 
-        // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
         let bank_snapshots_dir = bank_snapshot_info.snapshot_dir.parent().unwrap();
         let snapshot_links = tempfile::Builder::new()
             .prefix(&format!("{}{}-", TMP_BANK_SNAPSHOT_PREFIX, bank.slot()))
