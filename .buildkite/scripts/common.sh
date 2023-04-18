@@ -4,7 +4,7 @@ export INDENT_LEVEL=2
 
 indent() {
   local indent=${1:-"$INDENT_LEVEL"}
-  sed "s/^/$(printf ' %.0s' $(seq 1 $indent))/"
+  sed "s/^/$(printf ' %.0s' $(seq 1 "$indent"))/"
 }
 
 group() {

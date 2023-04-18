@@ -26,6 +26,7 @@ want=$(cat <<EOF
 EOF
 )
 
+# shellcheck source=.buildkite/scripts/build-stable.sh
 got=$(source "$here"/build-stable.sh)
 
 assert_eq "test build stable steps" "$want" "$got"
