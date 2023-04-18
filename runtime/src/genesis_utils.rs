@@ -122,7 +122,7 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
         &voting_keypairs[0].borrow().stake_keypair.pubkey(),
         stakes[0],
         VALIDATOR_LAMPORTS,
-        FeeRateGovernor::new(0, 0), // most tests can't handle transaction fees
+        FeeRateGovernor::default(),
         Rent::free(),               // most tests don't expect rent
         cluster_type,
         vec![],
@@ -180,7 +180,7 @@ pub fn create_genesis_config_with_leader(
         &solana_sdk::pubkey::new_rand(),
         validator_stake_lamports,
         VALIDATOR_LAMPORTS,
-        FeeRateGovernor::new(0, 0), // most tests can't handle transaction fees
+        FeeRateGovernor::default(),
         Rent::free(),               // most tests don't expect rent
         ClusterType::Development,
         vec![],
