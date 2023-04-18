@@ -302,7 +302,7 @@ impl Tower {
                 continue;
             }
             trace!("{} {} with stake {}", vote_account_pubkey, key, voted_stake);
-            let mut vote_state = match account.vote_state().as_ref() {
+            let mut vote_state = match account.vote_state().cloned() {
                 Err(_) => {
                     datapoint_warn!(
                         "tower_warn",
@@ -314,7 +314,7 @@ impl Tower {
                     );
                     continue;
                 }
-                Ok(vote_state) => vote_state.clone(),
+                Ok(vote_state) => vote_state,
             };
             for vote in &vote_state.votes {
                 lockout_intervals
@@ -1284,9 +1284,8 @@ impl Tower {
         if let Some(vote_account) = bank.get_vote_account(vote_account_pubkey) {
             self.vote_state = vote_account
                 .vote_state()
-                .as_ref()
-                .expect("vote_account isn't a VoteState?")
-                .clone();
+                .cloned()
+                .expect("vote_account isn't a VoteState?");
             self.initialize_root(root);
             self.initialize_lockouts(|v| v.slot() > root);
             trace!(

@@ -171,7 +171,7 @@ use {
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
-        ops::{AddAssign, Deref, RangeInclusive},
+        ops::{AddAssign, RangeInclusive},
         path::PathBuf,
         rc::Rc,
         sync::{
@@ -2740,8 +2740,8 @@ impl Bank {
                 invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::WrongOwner);
                 return None;
             }
-            let vote_state = match vote_account.vote_state().deref() {
-                Ok(vote_state) => vote_state.clone(),
+            let vote_state = match vote_account.vote_state().cloned() {
+                Ok(vote_state) => vote_state,
                 Err(_) => {
                     invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::BadState);
                     return None;
