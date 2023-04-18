@@ -778,7 +778,7 @@ mod test {
     use {
         super::*,
         crate::tpu_info::NullTpuInfo,
-        crossbeam_channel::unbounded,
+        crossbeam_channel::{bounded, unbounded},
         solana_sdk::{
             account::AccountSharedData,
             genesis_config::create_genesis_config,
@@ -818,7 +818,7 @@ mod test {
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let bank = Bank::default_for_tests();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let (_sender, receiver) = unbounded();
+        let (sender, receiver) = bounded(0);
 
         let exit = Arc::new(AtomicBool::new(false));
         let connection_cache = Arc::new(ConnectionCache::default());
@@ -832,6 +832,18 @@ mod test {
             1,
             exit.clone(),
         );
+
+        sender
+            .send(TransactionInfo {
+                signature: Signature::default(),
+                wire_transaction: vec![0; 128],
+                last_valid_block_height: 0,
+                durable_nonce_info: None,
+                max_retries: None,
+                retries: 0,
+                last_sent_time: None,
+            })
+            .unwrap();
 
         exit.store(true, Ordering::Relaxed);
     }
