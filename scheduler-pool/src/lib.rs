@@ -420,7 +420,7 @@ mod tests {
         ));
         scheduler.schedule_execution(&tx1, 0);
         // transaction_count should be remained to be same as scheduler should be bailing out.
-        assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.transaction_count(), 0);
 
         bank.install_scheduler(scheduler);
         assert_matches!(
