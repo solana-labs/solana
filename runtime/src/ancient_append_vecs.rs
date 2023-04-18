@@ -430,6 +430,17 @@ impl AccountsDb {
             .zip(packed_contents)
             .collect::<Vec<_>>();
 
+        // keep track of how many slots were shrunk away
+        self.shrink_ancient_stats
+            .ancient_append_vecs_shrunk
+            .fetch_add(
+                accounts_to_combine
+                    .target_slots_sorted
+                    .len()
+                    .saturating_sub(packer.len()) as u64,
+                Ordering::Relaxed,
+            );
+
         self.thread_pool_clean.install(|| {
             packer.par_iter().for_each(|(target_slot, pack)| {
                 let mut write_ancient_accounts_local = WriteAncientAccounts::default();
@@ -587,6 +598,7 @@ impl AccountsDb {
         // collect pk values here to avoid borrow checker
         let pks = Self::get_many_refs_pubkeys(shrink_collect);
         let mut index = 0;
+        let mut saved = 0;
         self.accounts_index.scan(
             pks.iter(),
             |_pubkey, slots_refs, _entry| {
@@ -596,15 +608,16 @@ impl AccountsDb {
                         // This entry has been unref'd during shrink ancient, so it can now move out of `many_refs` and into `one_ref`.
                         // This could happen if the same pubkey is in 2 append vecs that are BOTH being shrunk right now.
                         // Note that `shrink_collect()`, which was previously called to create `shrink_collect`, unrefs any dead accounts.
-                        let account = shrink_collect
-                            .alive_accounts
-                            .many_refs
-                            .accounts
-                            .remove(index - 1);
+                        let many_refs = &mut shrink_collect.alive_accounts.many_refs;
+                        let account = many_refs.accounts.remove(index - 1);
+                        if many_refs.accounts.is_empty() {
+                            // all accounts in `many_refs` now have only 1 ref, so this slot can now be combined into another.
+                            saved += 1;
+                        }
                         let bytes = account.stored_size();
                         shrink_collect.alive_accounts.one_ref.accounts.push(account);
                         saturating_add_assign!(shrink_collect.alive_accounts.one_ref.bytes, bytes);
-                        shrink_collect.alive_accounts.many_refs.bytes -= bytes;
+                        many_refs.bytes -= bytes;
                         // since we removed an entry from many_refs.accounts, we need to index one less
                         index -= 1;
                     }
@@ -614,6 +627,9 @@ impl AccountsDb {
             None,
             false,
         );
+        self.shrink_ancient_stats
+            .second_pass_one_ref
+            .fetch_add(saved, Ordering::Relaxed);
     }
 
     /// create packed storage and write contents of 'packed' to it.

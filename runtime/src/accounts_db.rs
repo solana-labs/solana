@@ -1945,6 +1945,7 @@ pub(crate) struct ShrinkAncientStats {
     pub(crate) random_shrink: AtomicU64,
     pub(crate) slots_considered: AtomicU64,
     pub(crate) ancient_scanned: AtomicU64,
+    pub(crate) second_pass_one_ref: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -2226,6 +2227,11 @@ impl ShrinkAncientStats {
                 (
                     "total_us",
                     self.total_us.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "second_pass_one_ref",
+                    self.second_pass_one_ref.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
