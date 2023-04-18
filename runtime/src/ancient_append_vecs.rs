@@ -2936,4 +2936,70 @@ pub mod tests {
             &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
         );
     }
+
+    #[test]
+    fn test_addref_accounts_failed_to_shrink_ancient() {
+        let db = AccountsDb::new_single_for_tests();
+        let empty_account = AccountSharedData::default();
+        for count in 0..3 {
+            let unrefed_pubkeys = (0..count)
+                .map(|_| solana_sdk::pubkey::new_rand())
+                .collect::<Vec<_>>();
+            // how many of `many_ref_accounts` should be found in the index with ref_count=1
+            let mut expected_ref_counts = HashMap::<Pubkey, u64>::default();
+
+            unrefed_pubkeys.iter().for_each(|k| {
+                for slot in 0..2 {
+                    // each upsert here (to a different slot) adds a refcount of 1 since entry is NOT cached
+                    db.accounts_index.upsert(
+                        slot,
+                        slot,
+                        k,
+                        &empty_account,
+                        &crate::accounts_index::AccountSecondaryIndexes::default(),
+                        AccountInfo::default(),
+                        &mut Vec::default(),
+                        UpsertReclaim::IgnoreReclaims,
+                    );
+                }
+                // set to 2 initially, made part of `unrefed_pubkeys`, expect it to be addref'd to 3
+                expected_ref_counts.insert(*k, 3);
+            });
+
+            let shrink_collect = ShrinkCollect::<ShrinkCollectAliveSeparatedByRefs> {
+                // the only interesting field
+                unrefed_pubkeys: unrefed_pubkeys.iter().collect(),
+
+                // irrelevant fields
+                slot: 0,
+                capacity: 0,
+                aligned_total_bytes: 0,
+                alive_accounts: ShrinkCollectAliveSeparatedByRefs {
+                    one_ref: AliveAccounts::default(),
+                    many_refs: AliveAccounts::default(),
+                },
+                alive_total_bytes: 0,
+                total_starting_accounts: 0,
+                all_are_zero_lamports: false,
+                _index_entries_being_shrunk: Vec::default(),
+            };
+            let accounts_to_combine = AccountsToCombine {
+                accounts_keep_slots: HashMap::default(),
+                accounts_to_combine: vec![shrink_collect],
+                target_slots_sorted: Vec::default(),
+            };
+            db.addref_accounts_failed_to_shrink_ancient(accounts_to_combine);
+            db.accounts_index.scan(
+                unrefed_pubkeys.iter(),
+                |k, slot_refs, _entry| {
+                    assert_eq!(expected_ref_counts.remove(k).unwrap(), slot_refs.unwrap().1);
+                    AccountsIndexScanResult::None
+                },
+                None,
+                false,
+            );
+            // should have removed all of them
+            assert!(expected_ref_counts.is_empty());
+        }
+    }
 }
