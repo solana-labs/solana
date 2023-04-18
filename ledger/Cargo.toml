@@ -73,7 +73,7 @@ bs58 = { workspace = true }
 matches = { workspace = true }
 solana-account-decoder = { workspace = true }
 solana-logger = { workspace = true }
-solana-runtime = { workspace = true, features = ["test-for-workspace"] }
+solana-runtime = { workspace = true, features = ["test-in-workspace"] }
 test-case = { workspace = true }
 
 [build-dependencies]

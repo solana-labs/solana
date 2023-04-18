@@ -68,6 +68,9 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 zstd = { workspace = true }
 
+[features]
+test-in-workspace = []
+
 [lib]
 crate-type = ["lib"]
 name = "solana_runtime"
