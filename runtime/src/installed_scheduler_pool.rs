@@ -33,6 +33,7 @@ use {
     std::{fmt::Debug, ops::Deref, sync::Arc},
 };
 
+#[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
 use mockall::automock;
 
 // Send + Sync is needed to be a field of BankForks
