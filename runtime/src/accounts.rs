@@ -18,7 +18,6 @@ use {
         rent_collector::RentCollector,
         rent_debits::RentDebits,
         storable_accounts::StorableAccounts,
-        system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_error_metrics::TransactionErrorMetrics,
     },
     dashmap::DashMap,
@@ -29,6 +28,7 @@ use {
         compute_budget::{self, ComputeBudget},
         loaded_programs::{LoadedProgram, LoadedProgramType},
     },
+    solana_system_program::{get_system_account_kind, SystemAccountKind},
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,

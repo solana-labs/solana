@@ -1,5 +1,5 @@
 use {
-    crate::nonce_keyed_account::{
+    crate::system_instruction::{
         advance_nonce_account, authorize_nonce_account, initialize_nonce_account,
         withdraw_nonce_account,
     },
@@ -9,8 +9,6 @@ use {
         sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        account::AccountSharedData,
-        account_utils::StateMut,
         feature_set,
         instruction::InstructionError,
         nonce,
@@ -557,31 +555,6 @@ declare_process_instruction!(process_instruction, 150, |invoke_context| {
     }
 });
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SystemAccountKind {
-    System,
-    Nonce,
-}
-
-pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAccountKind> {
-    use solana_sdk::account::ReadableAccount;
-    if system_program::check_id(account.owner()) {
-        if account.data().is_empty() {
-            Some(SystemAccountKind::System)
-        } else if account.data().len() == nonce::State::size() {
-            let nonce_versions: nonce::state::Versions = account.state().ok()?;
-            match nonce_versions.state() {
-                nonce::State::Uninitialized => None,
-                nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #[allow(deprecated)]
@@ -608,11 +581,12 @@ mod tests {
     };
     use {
         super::*,
-        crate::{bank::Bank, bank_client::BankClient},
+        crate::{get_system_account_kind, SystemAccountKind},
         bincode::serialize,
         solana_program_runtime::{
             invoke_context::mock_process_instruction, with_mock_invoke_context,
         },
+        solana_runtime::{bank::Bank, bank_client::BankClient},
         std::sync::Arc,
     };
 

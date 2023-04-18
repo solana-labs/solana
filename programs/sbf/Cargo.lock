@@ -5610,6 +5610,7 @@ dependencies = [
  "solana-rayon-threadlimit",
  "solana-sdk 1.16.0",
  "solana-stake-program",
+ "solana-system-program",
  "solana-vote-program",
  "solana-zk-token-proof-program",
  "solana-zk-token-sdk 1.16.0",
@@ -6254,6 +6255,18 @@ dependencies = [
  "sysctl",
  "unix_socket2",
  "users",
+]
+
+[[package]]
+name = "solana-system-program"
+version = "1.16.0"
+dependencies = [
+ "bincode",
+ "log",
+ "serde",
+ "serde_derive",
+ "solana-program-runtime",
+ "solana-sdk 1.16.0",
 ]
 
 [[package]]
