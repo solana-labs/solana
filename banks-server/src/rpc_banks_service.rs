@@ -39,6 +39,7 @@ async fn start_abortable_tcp_server(
         bank_forks.clone(),
         block_commitment_cache.clone(),
         connection_cache,
+        exit.clone(),
     )
     .fuse();
     let interval = IntervalStream::new(time::interval(Duration::from_millis(100))).fuse();
