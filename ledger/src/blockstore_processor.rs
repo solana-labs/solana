@@ -25,7 +25,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
             Bank, TransactionBalancesSet, TransactionExecutionDetails, TransactionExecutionResult,
-            TransactionResults, VerifyAccountsHashConfig,
+            TransactionResults,
         },
         bank_forks::BankForks,
         bank_utils,
@@ -1554,7 +1554,7 @@ fn load_frozen_forks(
                 .unwrap_or(false);
             if done_processing {
                 if opts.run_final_accounts_hash_calc {
-                    run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
+                    bank.run_final_hash_calc(on_halt_store_hash_raw_data_for_debug);
                 }
                 break;
             }
@@ -1569,28 +1569,14 @@ fn load_frozen_forks(
             )?;
         }
     } else if on_halt_store_hash_raw_data_for_debug {
-        run_final_hash_calc(
-            &bank_forks.read().unwrap().root_bank(),
-            on_halt_store_hash_raw_data_for_debug,
-        );
+        bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .run_final_hash_calc(on_halt_store_hash_raw_data_for_debug);
     }
 
     Ok(total_slots_elapsed)
-}
-
-fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
-    bank.force_flush_accounts_cache();
-    // note that this slot may not be a root
-    let _ = bank.verify_accounts_hash(
-        None,
-        VerifyAccountsHashConfig {
-            test_hash_calculation: false,
-            ignore_mismatch: true,
-            require_rooted_bank: false,
-            run_in_background: false,
-            store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
-        },
-    );
 }
 
 // `roots` is sorted largest to smallest by root slot
