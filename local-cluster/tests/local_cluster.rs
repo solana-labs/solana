@@ -3022,9 +3022,9 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
 fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
     solana_logger::setup_with_default(
         "solana_metrics::metrics=warn,\
-        "solana_core=warn,\
-        "solana_runtime::installed_scheduler_pool=trace,\
-        "solana_ledger::blockstore_processor=debug,info"
+         solana_core=warn,\
+         solana_runtime::installed_scheduler_pool=trace,\
+         solana_ledger::blockstore_processor=debug,info"
     );
 
     let num_nodes = 2;
