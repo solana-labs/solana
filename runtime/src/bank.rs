@@ -2994,32 +2994,24 @@ impl Bank {
         let (points, measure) = measure!(thread_pool.install(|| {
             stake_delegations
                 .par_iter()
-                .map(|(_stake_pubkey, stake_account)| {
+                .filter_map(|(_stake_pubkey, stake_account)| {
                     let delegation = stake_account.delegation();
                     let vote_pubkey = delegation.voter_pubkey;
 
-                    let vote_account = match get_vote_account(&vote_pubkey) {
-                        Some(vote_account) => vote_account,
-                        None => {
-                            return 0;
-                        }
-                    };
-                    if vote_account.owner() != &solana_vote_program {
-                        return 0;
-                    }
-                    let vote_state = match vote_account.vote_state().deref() {
-                        Ok(vote_state) => vote_state.clone(),
-                        Err(_) => {
-                            return 0;
-                        }
-                    };
-
-                    stake_state::calculate_points(
-                        stake_account.stake_state(),
-                        &vote_state,
-                        Some(stake_history),
-                    )
-                    .unwrap_or(0)
+                    get_vote_account(&vote_pubkey)
+                        .filter(|vote_account| {
+                            vote_account.owner() == &solana_vote_program
+                        })
+                        .and_then(|vote_account| {
+                            vote_account.vote_state().ok()
+                        })
+                        .and_then(|vote_state| {
+                            stake_state::calculate_points(
+                                stake_account.stake_state(),
+                                &vote_state,
+                                Some(stake_history),
+                            ).ok()
+                        })
                 })
                 .sum::<u128>()
         }));
