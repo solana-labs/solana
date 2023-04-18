@@ -55,7 +55,6 @@ impl AccountsPackage {
         package_type: AccountsPackageType,
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
-        bank_snapshots_dir: impl AsRef<Path>,
         full_snapshot_archives_dir: impl AsRef<Path>,
         incremental_snapshot_archives_dir: impl AsRef<Path>,
         snapshot_storages: Vec<Arc<AccountStorageEntry>>,
@@ -80,6 +79,7 @@ impl AccountsPackage {
         }
 
         // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
+        let bank_snapshots_dir = bank_snapshot_info.snapshot_dir.parent().unwrap();
         let snapshot_links = tempfile::Builder::new()
             .prefix(&format!("{}{}-", TMP_BANK_SNAPSHOT_PREFIX, bank.slot()))
             .tempdir_in(bank_snapshots_dir)?;
