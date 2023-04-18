@@ -5138,6 +5138,7 @@ pub mod tests {
             "pubsub": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT),
             "version": null,
             "featureSet": null,
+            "commit": null,
         }, {
             "pubkey": rpc.leader_pubkey().to_string(),
             "gossip": "127.0.0.1:1235",
@@ -5147,6 +5148,7 @@ pub mod tests {
             "pubsub": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT),
             "version": null,
             "featureSet": null,
+            "commit": null,
         }]);
         assert_eq!(result, expected);
     }
