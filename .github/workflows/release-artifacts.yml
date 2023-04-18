@@ -47,8 +47,7 @@ jobs:
         id: build
         shell: bash
         run: |
-          choco install openssl
-          export OPENSSL_DIR="C:\Program Files\OpenSSL-Win64"
+          export OPENSSL_DIR="C:\Program Files\OpenSSL"
           choco install protoc
           source /tmp/env.sh
           echo "::set-output name=tag::$CI_TAG"
