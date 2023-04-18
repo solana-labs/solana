@@ -413,7 +413,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
 
         let tx1 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-            &unfunded_keypair,
+            &mint_keypair,
             &solana_sdk::pubkey::new_rand(),
             3,
             genesis_config.hash(),
