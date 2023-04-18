@@ -182,6 +182,7 @@ impl SnapshotPackagerService {
 mod tests {
     use {
         super::*,
+        bincode::serialize_into,
         rand::seq::SliceRandom,
         solana_runtime::{
             snapshot_archive_info::SnapshotArchiveInfo,
@@ -259,6 +260,19 @@ mod tests {
         )
         .unwrap();
 
+        // before we compare, stick an empty status_cache in this dir so that the package comparison works
+        // This is needed since the status_cache is added by the packager and is not collected from
+        // the source dir for snapshots
+        let dummy_slot_deltas: Vec<BankSlotDelta> = vec![];
+        snapshot_utils::serialize_snapshot_data_file(
+            &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME),
+            |stream| {
+                serialize_into(stream, &dummy_slot_deltas)?;
+                Ok(())
+            },
+        )
+        .unwrap();
+
         // Check archive is correct
         snapshot_utils::verify_snapshot_archive(
             full_archive.path(),
@@ -285,7 +299,7 @@ mod tests {
                     archive_format: ArchiveFormat::Tar,
                 },
                 block_height: slot,
-                snapshot_links: PathBuf::default(),
+                snapshot_links: TempDir::new().unwrap(),
                 snapshot_storages: Vec::default(),
                 snapshot_version: SnapshotVersion::default(),
                 snapshot_type,
