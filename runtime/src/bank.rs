@@ -2955,6 +2955,26 @@ impl Bank {
         vote_with_stake_delegations_map
     }
 
+    /// Lookup vote account.
+    /// First, lookup in the *cached_vote_accounts. If not fund, look up directly in AccountsDB.
+    ///
+    /// * cached_vote_accounts: vote accounts cached in StakeCache
+    /// * vote_pubkey: vote account pubkey to lookup
+    ///
+    /// Returns vote account if found.
+    fn get_vote_account_with_cache(
+        &self,
+        cached_vote_accounts: &VoteAccounts,
+        vote_pubkey: &Pubkey,
+    ) -> Option<VoteAccount> {
+        let solana_vote_program: Pubkey = solana_vote_program::id();
+        cached_vote_accounts.get(vote_pubkey).cloned().or_else(|| {
+            self.get_account_with_fixed_root(vote_pubkey)
+                .and_then(|account| VoteAccount::try_from(account).ok())
+                .filter(|vote_account| vote_account.owner() == &solana_vote_program)
+        })
+    }
+
     /// Calculates epoch reward points from stake/vote accounts with reward calculate parameter struct.
     ///
     /// * reward_calculate_params: reward calculate parameter struct - stake history, delegation and vote accounts.
@@ -2976,41 +2996,24 @@ impl Bank {
             cached_vote_accounts,
         } = reward_calculate_params;
 
-        let solana_vote_program: Pubkey = solana_vote_program::id();
-
-        let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
-            cached_vote_accounts
-                .get(vote_pubkey)
-                .cloned()
-                .or_else(|| {
-                    self
-                        .get_account_with_fixed_root(vote_pubkey)
-                        .and_then(|account| {
-                            VoteAccount::try_from(account).ok()
-                        })
-                })
-        };
-
         let (points, measure) = measure!(thread_pool.install(|| {
             stake_delegations
                 .par_iter()
                 .filter_map(|(_stake_pubkey, stake_account)| {
-                    let delegation = stake_account.delegation();
-                    let vote_pubkey = delegation.voter_pubkey;
+                    let vote_pubkey = stake_account.delegation().voter_pubkey;
 
-                    get_vote_account(&vote_pubkey)
-                        .filter(|vote_account| {
-                            vote_account.owner() == &solana_vote_program
-                        })
-                        .and_then(|vote_account| {
-                            vote_account.vote_state().ok()
+                    self.get_vote_account_with_cache(cached_vote_accounts, &vote_pubkey)
+                        .and_then(|vote_account| match vote_account.vote_state().deref() {
+                            Ok(vote_state) => Some(vote_state.clone()),
+                            Err(_) => None,
                         })
                         .and_then(|vote_state| {
                             stake_state::calculate_points(
                                 stake_account.stake_state(),
                                 &vote_state,
                                 Some(stake_history),
-                            ).ok()
+                            )
+                            .ok()
                         })
                 })
                 .sum::<u128>()
@@ -3097,16 +3100,6 @@ impl Bank {
             cached_vote_accounts,
         } = reward_calculate_params;
 
-        let solana_vote_program: Pubkey = solana_vote_program::id();
-
-        let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
-            if let Some(vote_account) = cached_vote_accounts.get(vote_pubkey) {
-                return Some(vote_account.clone());
-            }
-            let account = self.get_account_with_fixed_root(vote_pubkey)?;
-            VoteAccount::try_from(account).ok()
-        };
-
         let vote_account_rewards: VoteRewards = DashMap::new();
         let (stake_rewards, measure) = measure!(thread_pool.install(|| {
             stake_delegations
@@ -3127,21 +3120,14 @@ impl Bank {
                     let (mut stake_account, stake_state) =
                         <(AccountSharedData, StakeState)>::from(stake_account);
                     let vote_pubkey = delegation.voter_pubkey;
-                    let vote_account = match get_vote_account(&vote_pubkey) {
-                        Some(vote_account) => vote_account,
-                        None => {
-                            return None;
-                        }
-                    };
-                    if vote_account.owner() != &solana_vote_program {
-                        return None;
-                    }
-                    let vote_state = match vote_account.vote_state().deref() {
-                        Ok(vote_state) => vote_state.clone(),
-                        Err(_) => {
-                            return None;
-                        }
-                    };
+
+                    let (vote_account, vote_state) = self
+                        .get_vote_account_with_cache(cached_vote_accounts, &vote_pubkey)
+                        .and_then(|vote_account| match vote_account.vote_state().deref() {
+                            Ok(vote_state) => Some((vote_account.clone(), vote_state.clone())),
+                            Err(_) => None,
+                        })?;
+
                     let redeemed = stake_state::redeem_rewards(
                         rewarded_epoch,
                         stake_state,
