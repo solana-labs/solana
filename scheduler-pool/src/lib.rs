@@ -427,6 +427,6 @@ mod tests {
         assert_eq!(bank.transaction_count(), 1);
 
         bank.install_scheduler(scheduler);
-        assert_matches!(bank.wait_for_completed_scheduler(), Some((Err(TransactionError::InvalidRentPayingAccount), _timings)));
+        assert_matches!(bank.wait_for_completed_scheduler(), Some((Err(solana_sdk::transaction::TransactionError::InvalidRentPayingAccount), _timings)));
     }
 }
