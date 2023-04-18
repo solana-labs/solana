@@ -4405,19 +4405,19 @@ pub mod tests {
         use solana_runtime::installed_scheduler_pool::{
             MockInstalledScheduler, MockInstalledSchedulerPool,
         };
-        let mut mock = Box::new(MockInstalledScheduler::new());
-        mock.expect_schedule_execution()
+        let mut mocked_scheduler = MockInstalledScheduler::new();
+        mocked_scheduler.expect_schedule_execution()
             .times(txs.len())
             .returning(|_, _| ());
-        mock.expect_wait_for_termination()
+        mocked_scheduler.expect_wait_for_termination()
             .times(1)
             .returning(|_| None);
-        mock.expect_scheduler_pool().returning(move || {
-            let mut pool = MockInstalledSchedulerPool::new();
-            pool.expect_return_to_pool().times(1).returning(|_| ());
-            Arc::new(pool)
+        mocked_scheduler.expect_scheduler_pool().returning(move || {
+            let mut mocked_pool = MockInstalledSchedulerPool::new();
+            mocked_pool.expect_return_to_pool().times(1).returning(|_| ());
+            Arc::new(mocked_pool)
         });
-        bank.install_scheduler(mock);
+        bank.install_scheduler(Box::new(mocked_scheduler));
 
         assert!(schedule_batches_for_execution(&bank, &[batch_with_indexes],).is_ok());
     }

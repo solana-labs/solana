@@ -379,11 +379,13 @@ mod tests {
         let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
-        let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
+        let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
 
         assert_eq!(bank.transaction_count(), 0);
-        let scheduler = pool.take_from_pool(context.clone());
+        let scheduler = pool.take_from_pool(context);
         scheduler.schedule_execution(&tx0, 0);
         assert_eq!(bank.transaction_count(), 1);
+        bank.install_scheduler(scheduler);
+        bank.wait_for_completed_scheduler();
     }
 }
