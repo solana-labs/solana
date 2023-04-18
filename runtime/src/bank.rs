@@ -2970,8 +2970,8 @@ impl Bank {
         let solana_vote_program: Pubkey = solana_vote_program::id();
         cached_vote_accounts.get(vote_pubkey).cloned().or_else(|| {
             self.get_account_with_fixed_root(vote_pubkey)
-                .and_then(|account| VoteAccount::try_from(account).ok())
                 .filter(|vote_account| vote_account.owner() == &solana_vote_program)
+                .and_then(|account| VoteAccount::try_from(account).ok())
         })
     }
 
