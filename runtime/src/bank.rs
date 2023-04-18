@@ -3003,10 +3003,7 @@ impl Bank {
                     let vote_pubkey = stake_account.delegation().voter_pubkey;
 
                     self.get_vote_account_with_cache(cached_vote_accounts, &vote_pubkey)
-                        .and_then(|vote_account| match vote_account.vote_state().deref() {
-                            Ok(vote_state) => Some(vote_state.clone()),
-                            Err(_) => None,
-                        })
+                        .and_then(|vote_account| vote_account.vote_state().cloned().ok())
                         .and_then(|vote_state| {
                             stake_state::calculate_points(
                                 stake_account.stake_state(),
@@ -3123,8 +3120,8 @@ impl Bank {
 
                     let (vote_account, vote_state) = self
                         .get_vote_account_with_cache(cached_vote_accounts, &vote_pubkey)
-                        .and_then(|vote_account| match vote_account.vote_state().deref() {
-                            Ok(vote_state) => Some((vote_account.clone(), vote_state.clone())),
+                        .and_then(|vote_account| match vote_account.vote_state().cloned() {
+                            Ok(vote_state) => Some((vote_account.clone(), vote_state)),
                             Err(_) => None,
                         })?;
 
