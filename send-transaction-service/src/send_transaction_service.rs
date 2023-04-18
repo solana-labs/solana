@@ -332,6 +332,7 @@ impl SendTransactionService {
         connection_cache: &Arc<ConnectionCache>,
         retry_rate_ms: u64,
         leader_forward_count: u64,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         let config = Config {
             retry_rate_ms,
@@ -345,6 +346,7 @@ impl SendTransactionService {
             receiver,
             connection_cache,
             config,
+            exit,
         )
     }
 
@@ -355,6 +357,7 @@ impl SendTransactionService {
         receiver: Receiver<TransactionInfo>,
         connection_cache: &Arc<ConnectionCache>,
         config: Config,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         let stats_report = Arc::new(SendTransactionServiceStatsReport::default());
 
@@ -362,7 +365,6 @@ impl SendTransactionService {
 
         let leader_info_provider = Arc::new(Mutex::new(CurrentLeaderInfo::new(leader_info)));
 
-        let exit = Arc::new(AtomicBool::new(false));
         let receive_txn_thread = Self::receive_txn_thread(
             tpu_address,
             receiver,
@@ -804,10 +806,34 @@ mod test {
             &connection_cache,
             1000,
             1,
+            Arc::new(AtomicBool::new(false)),
         );
 
         drop(sender);
         send_transaction_service.join().unwrap();
+    }
+
+    #[test]
+    fn validator_exit() {
+        let tpu_address = "127.0.0.1:0".parse().unwrap();
+        let bank = Bank::default_for_tests();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let (_sender, receiver) = unbounded();
+
+        let exit = Arc::new(AtomicBool::new(false));
+        let connection_cache = Arc::new(ConnectionCache::default());
+        let _send_transaction_service = SendTransactionService::new::<NullTpuInfo>(
+            tpu_address,
+            &bank_forks,
+            None,
+            receiver,
+            &connection_cache,
+            1000,
+            1,
+            exit.clone(),
+        );
+
+        exit.store(true, Ordering::Relaxed);
     }
 
     #[test]
