@@ -31,6 +31,7 @@ use {
         snapshot_utils::{
             self, ArchiveFormat,
             SnapshotVersion::{self, V1_2_0},
+            MAX_BANK_SNAPSHOTS_TO_RETAIN,
         },
         status_cache::MAX_CACHE_ENTRIES,
     },
