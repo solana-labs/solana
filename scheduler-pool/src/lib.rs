@@ -422,7 +422,7 @@ mod tests {
             3,
             genesis_config.hash(),
         ));
-        scheduler.schedule_execution(&tx0, 0);
+        scheduler.schedule_execution(&tx1, 0);
         // transaction_count should be remained to be same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 1);
 
