@@ -353,7 +353,7 @@ pub fn run_cluster_partition<C>(
     // Check epochs have correct number of slots
     info!("PARTITION_TEST sleeping until partition starting condition",);
     for node in &cluster_nodes {
-        let node_client = RpcClient::new_socket(node.rpc);
+        let node_client = RpcClient::new_socket(node.rpc().unwrap());
         let epoch_info = node_client.get_epoch_info().unwrap();
         assert_eq!(epoch_info.slots_in_epoch, slots_per_epoch);
     }

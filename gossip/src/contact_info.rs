@@ -441,41 +441,12 @@ impl Sanitize for ContactInfo {
     }
 }
 
-impl TryFrom<&ContactInfo> for LegacyContactInfo {
-    type Error = Error;
-
-    fn try_from(node: &ContactInfo) -> Result<Self, Self::Error> {
-        macro_rules! unwrap_socket {
-            ($name:ident) => {
-                node.$name().ok().unwrap_or_else(socket_addr_unspecified)
-            };
-        }
-        sanitize_quic_offset(&node.tpu().ok(), &node.tpu_quic().ok())?;
-        sanitize_quic_offset(&node.tpu_forwards().ok(), &node.tpu_forwards_quic().ok())?;
-        Ok(Self {
-            id: *node.pubkey(),
-            gossip: unwrap_socket!(gossip),
-            tvu: unwrap_socket!(tvu),
-            tvu_forwards: unwrap_socket!(tvu_forwards),
-            repair: unwrap_socket!(repair),
-            tpu: unwrap_socket!(tpu),
-            tpu_forwards: unwrap_socket!(tpu_forwards),
-            tpu_vote: unwrap_socket!(tpu_vote),
-            rpc: unwrap_socket!(rpc),
-            rpc_pubsub: unwrap_socket!(rpc_pubsub),
-            serve_repair: unwrap_socket!(serve_repair),
-            wallclock: node.wallclock(),
-            shred_version: node.shred_version(),
-        })
-    }
-}
-
 // Workaround until feature(const_socketaddr) is stable.
-fn socket_addr_unspecified() -> SocketAddr {
+pub(crate) fn socket_addr_unspecified() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16)
 }
 
-fn sanitize_socket(socket: &SocketAddr) -> Result<(), Error> {
+pub(crate) fn sanitize_socket(socket: &SocketAddr) -> Result<(), Error> {
     if socket.port() == 0u16 {
         return Err(Error::InvalidPort(socket.port()));
     }
@@ -540,7 +511,7 @@ fn sanitize_entries(addrs: &[IpAddr], sockets: &[SocketEntry]) -> Result<(), Err
 }
 
 // Verifies that the other socket is at QUIC_PORT_OFFSET from the first one.
-fn sanitize_quic_offset(
+pub(crate) fn sanitize_quic_offset(
     socket: &Option<SocketAddr>, // udp
     other: &Option<SocketAddr>,  // quic: udp + QUIC_PORT_OFFSET
 ) -> Result<(), Error> {
@@ -802,27 +773,30 @@ mod tests {
 
     fn cross_verify_with_legacy(node: &ContactInfo) {
         let old = LegacyContactInfo::try_from(node).unwrap();
-        assert_eq!(old.gossip, node.gossip().unwrap());
-        assert_eq!(old.repair, node.repair().unwrap());
-        assert_eq!(old.rpc, node.rpc().unwrap());
-        assert_eq!(old.rpc_pubsub, node.rpc_pubsub().unwrap());
-        assert_eq!(old.serve_repair, node.serve_repair().unwrap());
-        assert_eq!(old.tpu, node.tpu().unwrap());
-        assert_eq!(old.tpu_forwards, node.tpu_forwards().unwrap());
+        assert_eq!(old.gossip().unwrap(), node.gossip().unwrap());
+        assert_eq!(old.repair().unwrap(), node.repair().unwrap());
+        assert_eq!(old.rpc().unwrap(), node.rpc().unwrap());
+        assert_eq!(old.rpc_pubsub().unwrap(), node.rpc_pubsub().unwrap());
+        assert_eq!(old.serve_repair().unwrap(), node.serve_repair().unwrap());
+        assert_eq!(old.tpu().unwrap(), node.tpu().unwrap());
+        assert_eq!(old.tpu_forwards().unwrap(), node.tpu_forwards().unwrap());
         assert_eq!(
             node.tpu_forwards_quic().unwrap(),
             SocketAddr::new(
-                old.tpu_forwards.ip(),
-                old.tpu_forwards.port() + QUIC_PORT_OFFSET
+                old.tpu_forwards().unwrap().ip(),
+                old.tpu_forwards().unwrap().port() + QUIC_PORT_OFFSET
             )
         );
         assert_eq!(
             node.tpu_quic().unwrap(),
-            SocketAddr::new(old.tpu.ip(), old.tpu.port() + QUIC_PORT_OFFSET)
+            SocketAddr::new(
+                old.tpu().unwrap().ip(),
+                old.tpu().unwrap().port() + QUIC_PORT_OFFSET
+            )
         );
-        assert_eq!(old.tpu_vote, node.tpu_vote().unwrap());
-        assert_eq!(old.tvu, node.tvu().unwrap());
-        assert_eq!(old.tvu_forwards, node.tvu_forwards().unwrap());
+        assert_eq!(old.tpu_vote().unwrap(), node.tpu_vote().unwrap());
+        assert_eq!(old.tvu().unwrap(), node.tvu().unwrap());
+        assert_eq!(old.tvu_forwards().unwrap(), node.tvu_forwards().unwrap());
     }
 
     #[test]
