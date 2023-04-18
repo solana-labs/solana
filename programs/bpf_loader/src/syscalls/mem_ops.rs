@@ -267,7 +267,7 @@ enum MemcmpError {
 impl std::fmt::Display for MemcmpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MemcmpError::Diff(diff) => write!(f, "memcmp diff: {}", diff),
+            MemcmpError::Diff(diff) => write!(f, "memcmp diff: {diff}"),
         }
     }
 }
