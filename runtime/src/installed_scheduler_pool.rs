@@ -269,8 +269,7 @@ impl Bank {
     }
 
     pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
-        self.wait_for_scheduler(WaitReason::TerminatedToFreeze);
-        None
+        self.wait_for_scheduler(WaitReason::TerminatedToFreeze)
     }
 
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
