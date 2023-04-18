@@ -44,6 +44,9 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 }
 
 #[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
+// suppress false clippy complaints arising from mockall:
+//   warning: `#[must_use]` has no effect when applied to a struct field
+#[allow(unused_attributes)]
 // Send + Sync is needed to be a field of Bank
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
@@ -62,7 +65,6 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
 
     // suppress false clippy arising from mockall
-    #[allow(clippy::needless_lifetimes)]
     fn scheduling_context<'a>(&'a self) -> Option<&'a SchedulingContext>;
     fn replace_scheduler_context(&mut self, context: SchedulingContext);
 }
