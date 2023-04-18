@@ -9,7 +9,7 @@ use {
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
         snapshot_hash::SnapshotHash,
         snapshot_utils::{
-            self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion, SnapshotError,
+            self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotError, SnapshotVersion,
             SNAPSHOT_STATUS_CACHE_FILENAME, TMP_BANK_SNAPSHOT_PREFIX,
         },
     },
@@ -80,7 +80,8 @@ impl AccountsPackage {
 
         // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
         let bank_snapshot_dir = &bank_snapshot_info.snapshot_dir;
-        let bank_snapshots_dir = bank_snapshot_dir.parent()
+        let bank_snapshots_dir = bank_snapshot_dir
+            .parent()
             .ok_or_else(|| SnapshotError::InvalidSnapshotDirPath(bank_snapshot_dir.clone()))?;
         let snapshot_links = tempfile::Builder::new()
             .prefix(&format!("{}{}-", TMP_BANK_SNAPSHOT_PREFIX, bank.slot()))
