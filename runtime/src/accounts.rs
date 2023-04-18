@@ -594,10 +594,12 @@ impl Accounts {
             }
         };
 
-        if payer_account.lamports() < fee.checked_add(min_balance).ok_or_else(|| {
+        let required_lamports = fee.checked_add(min_balance).ok_or_else(|| {
             error_counters.insufficient_funds += 1;
             TransactionError::InsufficientFundsForFee
-        })? {
+        })?;
+
+        if payer_account.lamports() < required_lamports {
             error_counters.insufficient_funds += 1;
             return Err(TransactionError::InsufficientFundsForFee);
         }
