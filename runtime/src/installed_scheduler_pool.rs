@@ -237,6 +237,7 @@ impl Bank {
         }
     }
 
+    #[must_use]
     fn wait_for_scheduler(&self, reason: WaitReason) -> Option<ResultWithTimings> {
         debug!(
             "wait_for_scheduler(slot: {}, reason: {reason:?}): started...",
