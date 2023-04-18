@@ -28,7 +28,6 @@ use {
         compute_budget::{self, ComputeBudget},
         loaded_programs::{LoadedProgram, LoadedProgramType},
     },
-    solana_system_program::{get_system_account_kind, SystemAccountKind},
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -61,6 +60,7 @@ use {
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
+    solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{
         cmp::Reverse,
         collections::{hash_map, BinaryHeap, HashMap, HashSet},

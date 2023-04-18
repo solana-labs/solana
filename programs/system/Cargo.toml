@@ -20,7 +20,6 @@ solana-sdk = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 solana-logger = { workspace = true }
-solana-runtime = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
