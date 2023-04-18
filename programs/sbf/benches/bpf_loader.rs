@@ -69,7 +69,7 @@ macro_rules! with_mock_invoke_context {
             index_in_caller: 2,
             index_in_callee: 0,
             is_signer: false,
-            is_writable: false,
+            is_writable: true,
         }];
         solana_program_runtime::with_mock_invoke_context!(
             $invoke_context,
