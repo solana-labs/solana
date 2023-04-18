@@ -3024,7 +3024,8 @@ fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
         "solana_metrics::metrics=warn,\
          solana_core=warn,\
          solana_runtime::installed_scheduler_pool=trace,\
-         solana_ledger::blockstore_processor=debug,info",
+         solana_ledger::blockstore_processor=debug,\
+         info",
     );
 
     let num_nodes = 2;
