@@ -132,7 +132,7 @@ impl InstalledScheduler for Scheduler {
 
         let fail_fast = match context.mode() {
             // this should be false, for (upcoming) BlockGeneration variant.
-            SchedulingMode::BlockVerification => true,
+            SchedulingMode::BlockVerification => false,
         };
 
         let result_with_timings = &mut *self.result_with_timings.lock().expect("not poisoned");
