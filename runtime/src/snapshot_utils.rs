@@ -9,7 +9,7 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         append_vec::AppendVec,
-        bank::{Bank, BankFieldsToDeserialize, BankIncrementalSnapshotPersistence, BankSlotDelta},
+        bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
         builtins::Builtins,
         hardened_unpack::{
             streaming_unpack_snapshot, unpack_snapshot, ParallelSelector, UnpackError,
@@ -17,7 +17,8 @@ use {
         },
         runtime_config::RuntimeConfig,
         serde_snapshot::{
-            bank_from_streams, bank_to_stream, fields_from_streams, SerdeStyle, SnapshotStreams,
+            bank_from_streams, bank_to_stream, fields_from_streams,
+            BankIncrementalSnapshotPersistence, SerdeStyle, SnapshotStreams,
         },
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
         snapshot_archive_info::{

@@ -14,7 +14,7 @@ use {
             AccountsHash, AccountsHashEnum, CalcAccountsHashConfig, HashStats,
             IncrementalAccountsHash,
         },
-        bank::BankIncrementalSnapshotPersistence,
+        serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
             self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
