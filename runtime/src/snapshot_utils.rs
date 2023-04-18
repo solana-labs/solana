@@ -356,6 +356,9 @@ pub enum SnapshotError {
     #[error("bank_snapshot_info new_from_dir failed: {0}")]
     NewFromDir(#[from] SnapshotNewFromDirError),
 
+    #[error("invalid snapshot dir path: {}", .0.display())]
+    InvalidSnapshotDirPath(PathBuf),
+
     #[error("invalid AppendVec path: {}", .0.display())]
     InvalidAppendVecPath(PathBuf),
 
