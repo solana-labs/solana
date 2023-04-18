@@ -544,6 +544,10 @@ pub mod enable_request_heap_frame_ix {
     solana_sdk::declare_id!("Hr1nUA9b7NJ6eChS26o7Vi8gYYDDwWD3YeBfzJkTbU86");
 }
 
+pub mod clean_up_delegation_errors {
+    solana_sdk::declare_id!("Bj2jmUsM2iRhfdLLDSTkhM5UQRQvQHm57HSmPibPtEyu");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -674,6 +678,7 @@ lazy_static! {
         (keep_merkle_shreds::id(), "keep merkle shreds #29711"),
         (move_serialized_len_ptr_in_cpi::id(), "cpi ignore serialized_len_ptr #29592"),
         (enable_request_heap_frame_ix::id(), "Enable transaction to request heap frame using compute budget instruction #30076"),
+        (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
