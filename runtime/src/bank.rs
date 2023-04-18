@@ -60,6 +60,7 @@ use {
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_associated_token_account, inline_spl_token,
+        installed_scheduler_pool::InstalledSchedulerBox,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
         rent_debits::RentDebits,
@@ -200,7 +201,7 @@ mod builtin_programs;
 mod metrics;
 mod sysvar_cache;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 mod transaction_account_state_info;
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
@@ -830,6 +831,7 @@ impl PartialEq for Bank {
             fee_structure: _,
             incremental_snapshot_persistence: _,
             loaded_programs_cache: _,
+            scheduler: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -1099,6 +1101,7 @@ pub struct Bank {
 
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
+    pub(crate) scheduler: RwLock<InstalledSchedulerBox>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1320,6 +1323,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
+            scheduler: RwLock::<InstalledSchedulerBox>::default(),
         };
 
         bank.bank_created();
@@ -1618,6 +1622,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
+            scheduler: RwLock::<InstalledSchedulerBox>::default(),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1944,6 +1949,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
+            scheduler: RwLock::<InstalledSchedulerBox>::default(),
         };
         bank.bank_created();
 
@@ -3673,6 +3679,10 @@ impl Bank {
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
+        // This is needed until we activate fix_recent_blockhashes because intra-slot
+        // recent_blockhash updates necessitates synchronization for consistent tx check_age
+        // handling.
+        self.wait_for_reusable_scheduler();
         // Only acquire the write lock for the blockhash queue on block boundaries because
         // readers can starve this write lock acquisition and ticks would be slowed down too
         // much if the write lock is acquired for each tick.
@@ -3809,8 +3819,7 @@ impl Bank {
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
 
-    /// Prepare a transaction batch without locking accounts for transaction simulation.
-    pub(crate) fn prepare_simulation_batch(
+    pub fn prepare_sanitized_batch_without_locking(
         &self,
         transaction: SanitizedTransaction,
     ) -> TransactionBatch<'_, '_> {
@@ -3843,7 +3852,7 @@ impl Bank {
         let account_keys = transaction.message().account_keys();
         let number_of_accounts = account_keys.len();
         let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
-        let batch = self.prepare_simulation_batch(transaction);
+        let batch = self.prepare_sanitized_batch_without_locking(transaction);
         let mut timings = ExecuteTimings::default();
 
         let LoadAndExecuteTransactionsOutput {
@@ -8282,6 +8291,8 @@ impl TotalAccountsStats {
 
 impl Drop for Bank {
     fn drop(&mut self) {
+        self.drop_scheduler();
+
         self.bank_frozen_or_destroyed();
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);

@@ -1,0 +1,22 @@
+[package]
+name = "solana-scheduler-pool"
+description = "The solana scheduler pool"
+documentation = "https://docs.rs/solana-scheduler-pool"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+rand = { workspace = true }
+solana-ledger = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-runtime = { workspace = true }
+solana-scheduler = { workspace = true }
+solana-sdk = { workspace = true }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
+solana-logger = { workspace = true }

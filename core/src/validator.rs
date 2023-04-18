@@ -92,6 +92,7 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path},
     },
+    solana_scheduler_pool::SchedulerPool,
     solana_sdk::{
         clock::Slot,
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
@@ -129,6 +130,7 @@ const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 pub enum BlockVerificationMethod {
     #[default]
     BlockstoreProcessor,
+    UnifiedScheduler,
 }
 
 impl BlockVerificationMethod {
@@ -747,6 +749,30 @@ impl Validator {
             config.block_verification_method, config.block_production_method
         );
 
+        let (replay_vote_sender, replay_vote_receiver) = unbounded();
+
+        // block min prioritization fee cache should be readable by RPC, and writable by validator
+        // (by both replay stage and banking stage)
+        let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
+
+        match &config.block_verification_method {
+            BlockVerificationMethod::BlockstoreProcessor => {
+                info!("not installing scheduler pool...");
+            }
+            BlockVerificationMethod::UnifiedScheduler => {
+                let scheduler_pool = SchedulerPool::new_dyn(
+                    config.runtime_config.log_messages_bytes_limit,
+                    transaction_status_sender.clone(),
+                    Some(replay_vote_sender.clone()),
+                    prioritization_fee_cache.clone(),
+                );
+                bank_forks
+                    .write()
+                    .unwrap()
+                    .install_scheduler_pool(scheduler_pool);
+            }
+        }
+
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let mut process_blockstore = ProcessBlockStore::new(
             &id,
@@ -865,10 +891,6 @@ impl Validator {
             }
             false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
         };
-
-        // block min prioritization fee cache should be readable by RPC, and writable by validator
-        // (by both replay stage and banking stage)
-        let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
@@ -1068,7 +1090,6 @@ impl Validator {
             info!("Disabled banking tracer");
         }
 
-        let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,

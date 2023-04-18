@@ -67,7 +67,7 @@ use {
     thiserror::Error,
 };
 
-struct TransactionBatchWithIndexes<'a, 'b> {
+pub struct TransactionBatchWithIndexes<'a, 'b> {
     pub batch: TransactionBatch<'a, 'b>,
     pub transaction_indexes: Vec<usize>,
 }
@@ -127,7 +127,7 @@ fn get_first_error(
     first_err
 }
 
-fn execute_batch(
+pub fn execute_batch(
     batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -209,10 +209,23 @@ fn execute_batch(
 }
 
 #[derive(Default)]
-struct ExecuteBatchesInternalMetrics {
+pub struct ExecuteBatchesInternalMetrics {
     execution_timings_per_thread: HashMap<usize, ThreadExecuteTimings>,
     total_batches_len: u64,
     execute_batches_us: u64,
+}
+
+impl ExecuteBatchesInternalMetrics {
+    pub fn new_with_timings_from_all_threads(execute_timings: ExecuteTimings) -> Self {
+        let thread_timings = ThreadExecuteTimings {
+            execute_timings,
+            ..ThreadExecuteTimings::default()
+        };
+        let mut new = Self::default();
+        new.execution_timings_per_thread.insert(0, thread_timings);
+
+        new
+    }
 }
 
 fn execute_batches_internal(
@@ -288,6 +301,55 @@ fn execute_batches_internal(
     })
 }
 
+fn process_batches(
+    bank: &Arc<Bank>,
+    batches: &[TransactionBatchWithIndexes],
+    transaction_status_sender: Option<&TransactionStatusSender>,
+    replay_vote_sender: Option<&ReplayVoteSender>,
+    batch_execution_timing: &mut BatchExecutionTiming,
+    log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
+) -> Result<()> {
+    if !bank.with_scheduler() {
+        debug!(
+            "process_batches()/rebatch_and_execute_batches({} batches)",
+            batches.len()
+        );
+        rebatch_and_execute_batches(
+            bank,
+            batches,
+            transaction_status_sender,
+            replay_vote_sender,
+            batch_execution_timing,
+            log_messages_bytes_limit,
+            prioritization_fee_cache,
+        )
+    } else {
+        debug!(
+            "process_batches()/schedule_batches_for_execution({} batches)",
+            batches.len()
+        );
+        schedule_batches_for_execution(bank, batches)
+    }
+}
+
+fn schedule_batches_for_execution(
+    bank: &Arc<Bank>,
+    batches: &[TransactionBatchWithIndexes],
+) -> Result<()> {
+    for TransactionBatchWithIndexes {
+        batch,
+        transaction_indexes,
+    } in batches
+    {
+        bank.schedule_transaction_executions(
+            batch.sanitized_transactions(),
+            transaction_indexes.iter(),
+        );
+    }
+    Ok(())
+}
+
 fn rebatch_transactions<'a>(
     lock_results: &'a [Result<()>],
     bank: &'a Arc<Bank>,
@@ -308,7 +370,7 @@ fn rebatch_transactions<'a>(
     }
 }
 
-fn execute_batches(
+fn rebatch_and_execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -487,7 +549,7 @@ fn process_entries(
                 if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
                     // If it's a tick that will cause a new blockhash to be created,
                     // execute the group and register the tick
-                    execute_batches(
+                    process_batches(
                         bank,
                         &batches,
                         transaction_status_sender,
@@ -550,7 +612,7 @@ fn process_entries(
                     } else {
                         // else we have an entry that conflicts with a prior entry
                         // execute the current queue and try to process this entry again
-                        execute_batches(
+                        process_batches(
                             bank,
                             &batches,
                             transaction_status_sender,
@@ -565,7 +627,7 @@ fn process_entries(
             }
         }
     }
-    execute_batches(
+    process_batches(
         bank,
         &batches,
         transaction_status_sender,
@@ -1000,7 +1062,7 @@ pub struct BatchExecutionTiming {
 }
 
 impl BatchExecutionTiming {
-    fn accumulate(&mut self, new_batch: ExecuteBatchesInternalMetrics) {
+    pub fn accumulate(&mut self, new_batch: ExecuteBatchesInternalMetrics) {
         let Self {
             totals,
             wall_clock_us,
@@ -1297,6 +1359,9 @@ fn process_bank_0(
         &mut ExecuteTimings::default(),
     )
     .expect("Failed to process bank 0 from ledger. Did you forget to provide a snapshot?");
+    if let Some((result, _timings)) = bank0.wait_for_completed_scheduler() {
+        result.unwrap();
+    }
     bank0.freeze();
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank0.slot(), bank0.hash(), false);
@@ -1687,6 +1752,9 @@ fn process_single_slot(
         err
     })?;
 
+    if let Some((result, _timings)) = bank.wait_for_completed_scheduler() {
+        result?
+    }
     bank.freeze(); // all banks handled by this routine are created from complete slots
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
@@ -1712,7 +1780,7 @@ pub struct TransactionStatusBatch {
     pub transaction_indexes: Vec<usize>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TransactionStatusSender {
     pub sender: Sender<TransactionStatusMessage>,
 }
@@ -1827,6 +1895,7 @@ pub mod tests {
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
+            installed_scheduler_pool::{MockInstalledScheduler, MockInstalledSchedulerPool},
             vote_account::VoteAccount,
         },
         solana_sdk::{
@@ -4307,6 +4376,38 @@ pub mod tests {
         assert_eq!(slot_2_bank.get_hash_age(&slot_2_hash), Some(0));
     }
 
+    fn create_test_transactions(
+        mint_keypair: &Keypair,
+        genesis_hash: &Hash,
+    ) -> Vec<SanitizedTransaction> {
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let keypair2 = Keypair::new();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let keypair3 = Keypair::new();
+        let pubkey3 = solana_sdk::pubkey::new_rand();
+
+        vec![
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                mint_keypair,
+                &pubkey,
+                1,
+                *genesis_hash,
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair2,
+                &pubkey2,
+                1,
+                *genesis_hash,
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair3,
+                &pubkey3,
+                1,
+                *genesis_hash,
+            )),
+        ]
+    }
+
     #[test]
     fn test_confirm_slot_entries_progress_num_txs_indexes() {
         let GenesisConfigInfo {
@@ -4431,34 +4532,7 @@ pub mod tests {
             ..
         } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let keypair2 = Keypair::new();
-        let pubkey2 = solana_sdk::pubkey::new_rand();
-        let keypair3 = Keypair::new();
-        let pubkey3 = solana_sdk::pubkey::new_rand();
-
-        let txs = vec![
-            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-                &mint_keypair,
-                &pubkey,
-                1,
-                genesis_config.hash(),
-            )),
-            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-                &keypair2,
-                &pubkey2,
-                1,
-                genesis_config.hash(),
-            )),
-            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-                &keypair3,
-                &pubkey3,
-                1,
-                genesis_config.hash(),
-            )),
-        ];
-
+        let txs = create_test_transactions(&mint_keypair, &genesis_config.hash());
         let batch = bank.prepare_sanitized_batch(&txs);
         assert!(batch.needs_unlock());
         let transaction_indexes = vec![42, 43, 44];
@@ -4485,6 +4559,56 @@ pub mod tests {
         );
         assert!(!batch3.batch.needs_unlock());
         assert_eq!(batch3.transaction_indexes, vec![43, 44]);
+    }
+
+    #[test]
+    fn test_schedule_batches_for_execution() {
+        solana_logger::setup();
+        let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let txs = create_test_transactions(&mint_keypair, &genesis_config.hash());
+        let batch = bank.prepare_sanitized_batch(&txs);
+        let batch_with_indexes = TransactionBatchWithIndexes {
+            batch,
+            transaction_indexes: (0..txs.len()).collect(),
+        };
+
+        let mut mocked_scheduler = MockInstalledScheduler::new();
+        mocked_scheduler
+            .expect_schedule_execution()
+            .times(txs.len())
+            .returning(|_, _| ());
+        mocked_scheduler
+            .expect_wait_for_termination()
+            .times(1)
+            .returning(|_| None);
+        mocked_scheduler.expect_scheduler_pool().returning(move || {
+            let mut mocked_pool = MockInstalledSchedulerPool::new();
+            mocked_pool
+                .expect_return_to_pool()
+                .times(1)
+                .returning(|_| ());
+            Arc::new(mocked_pool)
+        });
+        bank.install_scheduler(Box::new(mocked_scheduler));
+
+        let mut batch_execution_timing = BatchExecutionTiming::default();
+        let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+        assert!(process_batches(
+            &bank,
+            &[batch_with_indexes],
+            None,
+            None,
+            &mut batch_execution_timing,
+            None,
+            &_ignored_prioritization_fee_cache
+        )
+        .is_ok());
     }
 
     #[test]

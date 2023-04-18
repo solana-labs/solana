@@ -5,6 +5,7 @@ use {
     crossbeam_channel::{unbounded, Receiver},
     gag::BufferRedirect,
     log::*,
+    rand::seq::IteratorRandom,
     serial_test::serial,
     solana_client::thin_client::ThinClient,
     solana_core::{
@@ -3019,4 +3020,39 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
     exit.store(true, Ordering::Relaxed);
     t_update.join().unwrap();
     t_scan.join().unwrap();
+}
+
+#[test]
+#[serial]
+fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
+    solana_logger::setup_with_default(
+        "solana_metrics::metrics=warn,\
+         solana_core=warn,\
+         solana_runtime::installed_scheduler_pool=trace,\
+         solana_ledger::blockstore_processor=debug,\
+         info",
+    );
+
+    let num_nodes = 2;
+    let mut config = LocalCluster::config_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+    );
+    config
+        .validator_configs
+        .iter_mut()
+        .choose(&mut rand::thread_rng())
+        .unwrap()
+        .block_verification_method =
+        solana_core::validator::BlockVerificationMethod::UnifiedScheduler;
+    let local = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+    cluster_tests::spend_and_verify_all_nodes(
+        &local.entry_point_info,
+        &local.funding_keypair,
+        num_nodes,
+        HashSet::new(),
+        SocketAddrSpace::Unspecified,
+        &local.connection_cache,
+    );
 }

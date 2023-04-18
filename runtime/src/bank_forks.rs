@@ -5,6 +5,7 @@ use {
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
         bank::{Bank, SquashTiming},
         epoch_accounts_hash,
+        installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerPoolArc},
         snapshot_config::SnapshotConfig,
     },
     log::*,
@@ -57,7 +58,7 @@ struct SetRootTimings {
 }
 
 pub struct BankForks {
-    banks: HashMap<Slot, Arc<Bank>>,
+    banks: HashMap<Slot, BankWithScheduler>,
     descendants: HashMap<Slot, HashSet<Slot>>,
     root: Arc<AtomicSlot>,
 
@@ -66,12 +67,13 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
+    pub(crate) scheduler_pool: InstalledSchedulerPoolArc,
 }
 
 impl Index<u64> for BankForks {
     type Output = Arc<Bank>;
     fn index(&self, bank_slot: Slot) -> &Self::Output {
-        &self.banks[&bank_slot]
+        self.banks[&bank_slot].bank()
     }
 }
 
@@ -82,7 +84,10 @@ impl BankForks {
     }
 
     pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
-        self.banks.clone()
+        self.banks
+            .iter()
+            .map(|(&k, b)| (k, b.bank_cloned()))
+            .collect()
     }
 
     pub fn get_vote_only_mode_signal(&self) -> Arc<AtomicBool> {
@@ -118,7 +123,7 @@ impl BankForks {
         self.banks
             .iter()
             .filter(|(_, b)| b.is_frozen())
-            .map(|(k, b)| (*k, b.clone()))
+            .map(|(&k, b)| (k, b.bank_cloned()))
             .collect()
     }
 
@@ -131,7 +136,7 @@ impl BankForks {
     }
 
     pub fn get(&self, bank_slot: Slot) -> Option<Arc<Bank>> {
-        self.banks.get(&bank_slot).cloned()
+        self.banks.get(&bank_slot).map(|b| b.bank_cloned())
     }
 
     pub fn get_with_checked_hash(
@@ -158,10 +163,13 @@ impl BankForks {
 
         // Iterate through the heads of all the different forks
         for bank in initial_forks {
-            banks.insert(bank.slot(), bank.clone());
+            banks.insert(bank.slot(), BankWithScheduler::new(bank.clone()));
             let parents = bank.parents();
             for parent in parents {
-                if banks.insert(parent.slot(), parent.clone()).is_some() {
+                if banks
+                    .insert(parent.slot(), BankWithScheduler::new(parent.clone()))
+                    .is_some()
+                {
                     // All ancestors have already been inserted by another fork
                     break;
                 }
@@ -182,18 +190,22 @@ impl BankForks {
             accounts_hash_interval_slots: std::u64::MAX,
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
+            scheduler_pool: InstalledSchedulerPoolArc::default(),
         }
     }
 
     pub fn insert(&mut self, bank: Bank) -> Arc<Bank> {
         let bank = Arc::new(bank);
-        let prev = self.banks.insert(bank.slot(), bank.clone());
+        let prev = self
+            .banks
+            .insert(bank.slot(), BankWithScheduler::new(bank.clone()));
         assert!(prev.is_none());
         let slot = bank.slot();
         self.descendants.entry(slot).or_default();
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
+        self.install_scheduler_into_bank(&bank);
         bank
     }
 
@@ -216,7 +228,7 @@ impl BankForks {
         if entry.get().is_empty() {
             entry.remove_entry();
         }
-        Some(bank)
+        Some(bank.into_bank())
     }
 
     pub fn highest_slot(&self) -> Slot {
@@ -242,7 +254,8 @@ impl BankForks {
         let root_bank = self
             .banks
             .get(&root)
-            .expect("root bank didn't exist in bank_forks");
+            .expect("root bank didn't exist in bank_forks")
+            .bank();
         let new_epoch = root_bank.epoch();
         if old_epoch != new_epoch {
             info!(

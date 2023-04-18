@@ -35,6 +35,7 @@ solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-rpc = { workspace = true }
 solana-runtime = { workspace = true }
+solana-scheduler-pool = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-storage-bigtable = { workspace = true }

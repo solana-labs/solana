@@ -40,7 +40,8 @@ use {
         block_error::BlockError,
         blockstore::Blockstore,
         blockstore_processor::{
-            self, BlockstoreProcessorError, ConfirmationProgress, TransactionStatusSender,
+            self, BlockstoreProcessorError, ConfirmationProgress, ExecuteBatchesInternalMetrics,
+            TransactionStatusSender,
         },
         leader_schedule_cache::LeaderScheduleCache,
         leader_schedule_utils::first_of_consecutive_leader_slots,
@@ -2609,7 +2610,6 @@ impl ReplayStage {
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
                     Err(err) => {
-                        // Error means the slot needs to be marked as dead
                         Self::mark_dead_slot(
                             blockstore,
                             bank,
@@ -2640,14 +2640,44 @@ impl ReplayStage {
                     .expect("Bank fork progress entry missing for completed bank");
 
                 let replay_stats = bank_progress.replay_stats.clone();
-                let r_replay_stats = replay_stats.read().unwrap();
+                let mut replay_stats = replay_stats.write().unwrap();
+
+                if let Some((result, complete_execute_timings)) =
+                    bank.wait_for_completed_scheduler()
+                {
+                    let metrics = ExecuteBatchesInternalMetrics::new_with_timings_from_all_threads(
+                        complete_execute_timings,
+                    );
+                    replay_stats.batch_execute.accumulate(metrics);
+
+                    if let Err(err) = result {
+                        Self::mark_dead_slot(
+                            blockstore,
+                            bank,
+                            bank_forks.read().unwrap().root(),
+                            &BlockstoreProcessorError::InvalidTransaction(err),
+                            rpc_subscriptions,
+                            duplicate_slots_tracker,
+                            gossip_duplicate_confirmed_slots,
+                            epoch_slots_frozen_slots,
+                            progress,
+                            heaviest_subtree_fork_choice,
+                            duplicate_slots_to_repair,
+                            ancestor_hashes_replay_update_sender,
+                            purge_repair_slot_counter,
+                        );
+                        // If the bank was corrupted, abort now to prevent further normal processing
+                        continue;
+                    }
+                }
+
                 let replay_progress = bank_progress.replay_progress.clone();
                 let r_replay_progress = replay_progress.read().unwrap();
                 debug!(
                     "bank {} has completed replay from blockstore, \
                      contribute to update cost with {:?}",
                     bank.slot(),
-                    r_replay_stats.batch_execute.totals
+                    replay_stats.batch_execute.totals
                 );
                 did_complete_bank = true;
                 let _ = cluster_slots_update_sender.send(vec![bank_slot]);
@@ -2735,14 +2765,14 @@ impl ReplayStage {
                 }
                 bank_complete_time.stop();
 
-                r_replay_stats.report_stats(
+                replay_stats.report_stats(
                     bank.slot(),
                     r_replay_progress.num_txs,
                     r_replay_progress.num_entries,
                     r_replay_progress.num_shreds,
                     bank_complete_time.as_us(),
                 );
-                execute_timings.accumulate(&r_replay_stats.batch_execute.totals);
+                execute_timings.accumulate(&replay_stats.batch_execute.totals);
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",

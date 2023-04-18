@@ -30,6 +30,7 @@ log = { workspace = true }
 lru = { workspace = true }
 lz4 = { workspace = true }
 memmap2 = { workspace = true }
+mockall = { workspace = true }
 modular-bitfield = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
@@ -54,6 +55,7 @@ solana-metrics = { workspace = true }
 solana-perf = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
+solana-scheduler = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-vote-program = { workspace = true }
@@ -66,6 +68,9 @@ tar = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 zstd = { workspace = true }
+
+[features]
+test-in-workspace = []
 
 [lib]
 crate-type = ["lib"]

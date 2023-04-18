@@ -45,6 +45,7 @@ pub mod in_mem_accounts_index;
 pub mod inline_spl_associated_token_account;
 pub mod inline_spl_token;
 pub mod inline_spl_token_2022;
+pub mod installed_scheduler_pool;
 pub mod loader_utils;
 pub mod message_processor;
 pub mod non_circulating_supply;

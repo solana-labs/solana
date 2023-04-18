@@ -1,0 +1,10 @@
+[package]
+name = "solana-scheduler"
+description = "The solana scheduler"
+documentation = "https://docs.rs/solana-scheduler"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
