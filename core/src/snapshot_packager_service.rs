@@ -182,11 +182,9 @@ impl SnapshotPackagerService {
 mod tests {
     use {
         super::*,
-        bincode::serialize_into,
         rand::seq::SliceRandom,
         solana_runtime::{
             accounts_db::AccountStorageEntry,
-            bank::BankSlotDelta,
             snapshot_archive_info::SnapshotArchiveInfo,
             snapshot_hash::SnapshotHash,
             snapshot_package::{SnapshotPackage, SnapshotType},
@@ -243,42 +241,56 @@ mod tests {
         fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap();
 
         fs::create_dir_all(&accounts_dir).unwrap();
+
+        let slot: Slot = 4;
+
         // Create some storage entries
         let storage_entries: Vec<_> = (0..5)
             .map(|i| Arc::new(AccountStorageEntry::new(&accounts_dir, 0, i, 10)))
             .collect();
 
-        // Create some fake snapshot
-        let snapshots_paths: Vec<_> = (0..5)
-            .map(|i| {
-                let snapshot_file_name = format!("{i}");
-                let snapshots_dir = snapshots_dir.join(&snapshot_file_name);
-                fs::create_dir_all(&snapshots_dir).unwrap();
-                let fake_snapshot_path = snapshots_dir.join(&snapshot_file_name);
-                let mut fake_snapshot_file = OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .create(true)
-                    .open(&fake_snapshot_path)
-                    .unwrap();
-
-                fake_snapshot_file.write_all(b"Hello, world!").unwrap();
-                fake_snapshot_path
-            })
-            .collect();
+        // Create one fake snapshot.
+        let snapshot_file_name = format!("{slot}");
+        let snapshot_dir = snapshots_dir.join(&snapshot_file_name);
+        fs::create_dir_all(&snapshot_dir).unwrap();
+        let fake_snapshot_path = snapshot_dir.join(&snapshot_file_name);
+        let mut fake_snapshot_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&fake_snapshot_path)
+            .unwrap();
+        fake_snapshot_file.write_all(b"Hello, world!").unwrap();
+        let fake_status_cache = snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+        let mut fake_status_cache_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(fake_status_cache)
+            .unwrap();
+        fake_status_cache_file
+            .write_all(b"Hello, status cache!")
+            .unwrap();
+        let snapshots_paths: Vec<_> = vec![fake_snapshot_path];
 
         // Create directory of hard links for snapshots
-        let link_snapshots_dir = tempfile::tempdir_in(temp_dir).unwrap();
+        let link_snapshots_dir_tmp = tempfile::tempdir_in(temp_dir).unwrap();
+        let link_snapshots_dir = link_snapshots_dir_tmp.path().to_path_buf();
         for snapshots_path in snapshots_paths {
             let snapshot_file_name = snapshots_path.file_name().unwrap();
-            let link_snapshots_dir = link_snapshots_dir.path().join(snapshot_file_name);
+            let link_snapshots_dir = link_snapshots_dir.join(snapshot_file_name);
             fs::create_dir_all(&link_snapshots_dir).unwrap();
             let link_path = link_snapshots_dir.join(snapshot_file_name);
             fs::hard_link(&snapshots_path, link_path).unwrap();
+            let status_cache_file_path = snapshots_path
+                .parent()
+                .unwrap()
+                .join(SNAPSHOT_STATUS_CACHE_FILENAME);
+            let link_status_cache_path = link_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+            fs::hard_link(&status_cache_file_path, link_status_cache_path).unwrap();
         }
 
         // Create a packageable snapshot
-        let slot = 42;
         let hash = SnapshotHash(Hash::default());
         let archive_format = ArchiveFormat::TarBzip2;
         let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
@@ -312,26 +324,13 @@ mod tests {
         )
         .unwrap();
 
-        // before we compare, stick an empty status_cache in this dir so that the package comparison works
-        // This is needed since the status_cache is added by the packager and is not collected from
-        // the source dir for snapshots
-        let dummy_slot_deltas: Vec<BankSlotDelta> = vec![];
-        snapshot_utils::serialize_snapshot_data_file(
-            &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME),
-            |stream| {
-                serialize_into(stream, &dummy_slot_deltas)?;
-                Ok(())
-            },
-        )
-        .unwrap();
-
         // Check archive is correct
         snapshot_utils::verify_snapshot_archive(
             output_tar_path,
             snapshots_dir,
             accounts_dir,
             archive_format,
-            snapshot_utils::VerifyBank::Deterministic,
+            snapshot_utils::VerifyBank::Deterministic(slot),
         );
     }
 
@@ -351,7 +350,7 @@ mod tests {
                     archive_format: ArchiveFormat::Tar,
                 },
                 block_height: slot,
-                snapshot_links: TempDir::new().unwrap(),
+                snapshot_links: PathBuf::default(),
                 snapshot_storages: Vec::default(),
                 snapshot_version: SnapshotVersion::default(),
                 snapshot_type,
