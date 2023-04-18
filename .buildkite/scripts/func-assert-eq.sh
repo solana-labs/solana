@@ -10,10 +10,7 @@ assert_eq() {
   else
     cat <<EOF
 ❌ $test_name
-want:
-$want
-got:
-$got
+$(diff -u <(echo "$got") <(echo "$want"))
 EOF
   fi
 }
