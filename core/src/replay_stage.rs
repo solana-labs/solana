@@ -2894,9 +2894,7 @@ impl ReplayStage {
                         Tower::is_direct_vote_state_update_enabled(bank),
                         bank.get_vote_account(my_vote_pubkey),
                     ) {
-                        if let Some(mut bank_vote_state) =
-                            vote_account.vote_state().as_ref().ok().cloned()
-                        {
+                        if let Ok(mut bank_vote_state) = vote_account.vote_state().cloned() {
                             if bank_vote_state.last_voted_slot()
                                 > tower.vote_state.last_voted_slot()
                             {
