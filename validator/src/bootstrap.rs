@@ -1776,6 +1776,7 @@ mod tests {
         let contact_info = default_contact_info_for_tests();
         let peer_snapshot_hashes = vec![
             // old
+            PeerSnapshotHash::new(contact_info.clone(), (100_000, Hash::default()), None),
             PeerSnapshotHash::new(
                 contact_info.clone(),
                 (100_000, Hash::default()),
@@ -1792,6 +1793,7 @@ mod tests {
                 Some((100_300, Hash::default())),
             ),
             // new
+            PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
             PeerSnapshotHash::new(
                 contact_info.clone(),
                 (200_000, Hash::default()),
@@ -1810,6 +1812,7 @@ mod tests {
         ];
 
         let expected = vec![
+            PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
             PeerSnapshotHash::new(
                 contact_info.clone(),
                 (200_000, Hash::default()),
@@ -1832,7 +1835,7 @@ mod tests {
     }
 
     #[test]
-    fn test_retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot() {
+    fn test_retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot_some() {
         let contact_info = default_contact_info_for_tests();
         let peer_snapshot_hashes = vec![
             PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
@@ -1876,5 +1879,40 @@ mod tests {
         let mut actual = peer_snapshot_hashes;
         retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(&mut actual);
         assert_eq!(expected, actual);
+    }
+
+    /// Ensure that retaining the highest incremental snapshot hashes works as expected even if
+    /// there are *zero* peers with incremental snapshots.
+    #[test]
+    fn test_retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot_none() {
+        let contact_info = default_contact_info_for_tests();
+        let peer_snapshot_hashes = vec![
+            PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::new_unique()), None),
+            PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::new_unique()), None),
+            PeerSnapshotHash::new(contact_info, (200_000, Hash::new_unique()), None),
+        ];
+
+        let expected = peer_snapshot_hashes.clone();
+        let mut actual = peer_snapshot_hashes;
+        retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(&mut actual);
+        assert_eq!(expected, actual);
+    }
+
+    /// Ensure that retaining the highest snapshot hashes works (i.e. doesn't crash) even if the
+    /// peer snapshot hashes input is empty.
+    #[test]
+    fn test_retain_peer_snapshot_hashes_with_highest_slot_empty() {
+        {
+            let mut actual = vec![];
+            let expected = actual.clone();
+            retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut actual);
+            assert_eq!(expected, actual);
+        }
+        {
+            let mut actual = vec![];
+            let expected = actual.clone();
+            retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(&mut actual);
+            assert_eq!(expected, actual);
+        }
     }
 }
