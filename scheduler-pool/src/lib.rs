@@ -386,6 +386,6 @@ mod tests {
         scheduler.schedule_execution(&tx0, 0);
         assert_eq!(bank.transaction_count(), 1);
         bank.install_scheduler(scheduler);
-        bank.wait_for_completed_scheduler();
+        assert_matches!(bank.wait_for_completed_scheduler(), Some((Ok(()), _)));
     }
 }
