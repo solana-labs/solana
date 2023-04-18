@@ -6923,7 +6923,6 @@ impl AccountsDb {
         // We'll also accumulate the lamports within each chunk and fewer chunks results in less contention to accumulate the sum.
         let chunks = crate::accounts_hash::MERKLE_FANOUT.pow(4);
         let total_lamports = Mutex::<u64>::new(0);
-        let stats = HashStats::default();
 
         let get_hashes = || {
             keys.par_chunks(chunks)
@@ -7014,16 +7013,6 @@ impl AccountsDb {
             ("hash", hash_time.as_us(), i64),
             ("hash_total", hash_total, i64),
             ("collect", collect.as_us(), i64),
-            (
-                "rehashed_rewrites",
-                stats.rehash_required.load(Ordering::Relaxed),
-                i64
-            ),
-            (
-                "rehashed_rewrites_unnecessary",
-                stats.rehash_unnecessary.load(Ordering::Relaxed),
-                i64
-            ),
         );
         self.assert_safe_squashing_accounts_hash(max_slot, config.epoch_schedule);
 
