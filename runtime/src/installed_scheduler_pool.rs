@@ -273,6 +273,7 @@ impl Bank {
         self.wait_for_scheduler(WaitReason::TerminatedToFreeze)
     }
 
+    #[must_use]
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
         let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::TerminatedFromBankDrop);
         maybe_timings_and_result.map(|(result, _timings)| result)
