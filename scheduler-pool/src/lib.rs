@@ -426,7 +426,7 @@ mod tests {
         assert_matches!(
             bank.wait_for_completed_scheduler(),
             Some((
-                Err(solana_sdk::transaction::TransactionError::InvalidRentPayingAccount),
+                Err(solana_sdk::transaction::TransactionError::AccountNotFound),
                 _timings
             ))
         );
