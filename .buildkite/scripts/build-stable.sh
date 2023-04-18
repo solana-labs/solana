@@ -8,7 +8,8 @@ source "$here"/common.sh
 
 agent="${1-solana}"
 
-partitions=$(cat <<EOF
+partitions=$(
+  cat <<EOF
 {
   "name": "partitions",
   "command": ". ci/rust-version.sh; ci/docker-run.sh \$rust_stable_docker_image ci/stable/run-partition.sh",
@@ -20,7 +21,8 @@ partitions=$(cat <<EOF
 EOF
 )
 
-localnet=$(cat <<EOF
+localnet=$(
+  cat <<EOF
 {
   "name": "localnet",
   "command": ". ci/rust-version.sh; ci/docker-run.sh \$rust_stable_docker_image ci/stable/run-localnet.sh",
