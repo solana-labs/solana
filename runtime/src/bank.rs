@@ -2979,11 +2979,16 @@ impl Bank {
         let solana_vote_program: Pubkey = solana_vote_program::id();
 
         let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
-            if let Some(vote_account) = cached_vote_accounts.get(vote_pubkey) {
-                return Some(vote_account.clone());
-            }
-            let account = self.get_account_with_fixed_root(vote_pubkey)?;
-            VoteAccount::try_from(account).ok()
+            cached_vote_accounts
+                .get(vote_pubkey)
+                .cloned()
+                .or_else(|| {
+                    self
+                        .get_account_with_fixed_root(vote_pubkey)
+                        .and_then(|account| {
+                            VoteAccount::try_from(account).ok()
+                        })
+                })
         };
 
         let (points, measure) = measure!(thread_pool.install(|| {
