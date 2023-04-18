@@ -33,14 +33,14 @@ use {
     std::{fmt::Debug, ops::Deref, sync::Arc},
 };
 
+use mockall::automock;
+
 // Send + Sync is needed to be a field of BankForks
 #[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox;
     fn return_to_pool(&self, scheduler: SchedulerBox);
 }
-
-use mockall::automock;
 
 #[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
 #[allow(unused_attributes)]
