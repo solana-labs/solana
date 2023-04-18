@@ -5,6 +5,7 @@ use {
     crossbeam_channel::{unbounded, Receiver},
     gag::BufferRedirect,
     log::*,
+    rand::seq::IteratorRandom,
     serial_test::serial,
     solana_client::thin_client::ThinClient,
     solana_core::{
@@ -76,7 +77,6 @@ use {
         time::{Duration, Instant},
     },
 };
-use rand::seq::IteratorRandom;
 
 mod common;
 
@@ -3024,7 +3024,7 @@ fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
         "solana_metrics::metrics=warn,\
          solana_core=warn,\
          solana_runtime::installed_scheduler_pool=trace,\
-         solana_ledger::blockstore_processor=debug,info"
+         solana_ledger::blockstore_processor=debug,info",
     );
 
     let num_nodes = 2;

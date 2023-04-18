@@ -1872,6 +1872,7 @@ pub mod tests {
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
+            installed_scheduler_pool::{MockInstalledScheduler, MockInstalledSchedulerPool},
             vote_account::VoteAccount,
         },
         solana_sdk::{
@@ -1892,9 +1893,6 @@ pub mod tests {
         },
         std::{collections::BTreeSet, sync::RwLock},
         trees::tr,
-    };
-    use solana_runtime::installed_scheduler_pool::{
-        MockInstalledScheduler, MockInstalledSchedulerPool,
     };
 
     // Convenience wrapper to optionally process blockstore with Secondary access.
@@ -4406,15 +4404,20 @@ pub mod tests {
         };
 
         let mut mocked_scheduler = MockInstalledScheduler::new();
-        mocked_scheduler.expect_schedule_execution()
+        mocked_scheduler
+            .expect_schedule_execution()
             .times(txs.len())
             .returning(|_, _| ());
-        mocked_scheduler.expect_wait_for_termination()
+        mocked_scheduler
+            .expect_wait_for_termination()
             .times(1)
             .returning(|_| None);
         mocked_scheduler.expect_scheduler_pool().returning(move || {
             let mut mocked_pool = MockInstalledSchedulerPool::new();
-            mocked_pool.expect_return_to_pool().times(1).returning(|_| ());
+            mocked_pool
+                .expect_return_to_pool()
+                .times(1)
+                .returning(|_| ());
             Arc::new(mocked_pool)
         });
         bank.install_scheduler(Box::new(mocked_scheduler));
