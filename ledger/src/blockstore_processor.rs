@@ -4424,7 +4424,7 @@ pub mod tests {
 
         let mut confirmation_timing = ConfirmationTiming::default();
         let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
-        assert!(process_batches(&bank, &[batch_with_indexes], None, None, &mut confirmation_timing, None, _ignored_prioritization_fee_cache).is_ok());
+        assert!(process_batches(&bank, &[batch_with_indexes], None, None, &mut confirmation_timing, None, &_ignored_prioritization_fee_cache).is_ok());
     }
 
     #[test]
