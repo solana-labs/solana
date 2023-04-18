@@ -381,7 +381,7 @@ mod tests {
         bank.install_scheduler(setup_mocked_scheduler(
             [WaitReason::TerminatedToFreeze].into_iter(),
         ));
-        bank.wait_for_completed_scheduler();
+        assert!(bank.wait_for_completed_scheduler().is_none());
     }
 
     #[test]
