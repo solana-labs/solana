@@ -4965,7 +4965,7 @@ dependencies = [
  "proc-macro2 1.0.53",
  "quote 1.0.26",
  "rustc_version 0.4.0",
- "syn 1.0.109",
+ "syn 2.0.5",
 ]
 
 [[package]]
@@ -6143,7 +6143,7 @@ dependencies = [
  "proc-macro2 1.0.53",
  "quote 1.0.26",
  "rustversion",
- "syn 1.0.109",
+ "syn 2.0.5",
 ]
 
 [[package]]
