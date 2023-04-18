@@ -245,7 +245,7 @@ before execting it in the virtual machine.",
     file.rewind().unwrap();
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
-    let mut verified_executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
+    let verified_executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
         let mut load_program_metrics = LoadProgramMetrics::default();
         let result = load_program_from_bytes(
             &invoke_context.feature_set,
@@ -284,6 +284,8 @@ before execting it in the virtual machine.",
     }
     .unwrap();
 
+    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+    let mut verified_executable = verified_executable;
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();
     let mut analysis = LazyAnalysis::new(verified_executable.get_executable());
