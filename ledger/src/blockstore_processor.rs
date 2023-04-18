@@ -4201,6 +4201,38 @@ pub mod tests {
         assert_eq!(slot_2_bank.get_hash_age(&slot_2_hash), Some(0));
     }
 
+    fn create_test_transactions(
+        mint_keypair: &Keypair,
+        genesis_hash: &Hash,
+    ) -> Vec<SanitizedTransaction> {
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let keypair2 = Keypair::new();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let keypair3 = Keypair::new();
+        let pubkey3 = solana_sdk::pubkey::new_rand();
+
+        vec![
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                mint_keypair,
+                &pubkey,
+                1,
+                *genesis_hash,
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair2,
+                &pubkey2,
+                1,
+                *genesis_hash,
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair3,
+                &pubkey3,
+                1,
+                *genesis_hash,
+            )),
+        ]
+    }
+
     #[test]
     fn test_confirm_slot_entries_progress_num_txs_indexes() {
         let GenesisConfigInfo {
@@ -4314,38 +4346,6 @@ pub mod tests {
         } else {
             panic!("batch should have been sent");
         }
-    }
-
-    fn create_test_transactions(
-        mint_keypair: &Keypair,
-        genesis_hash: &Hash,
-    ) -> Vec<SanitizedTransaction> {
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let keypair2 = Keypair::new();
-        let pubkey2 = solana_sdk::pubkey::new_rand();
-        let keypair3 = Keypair::new();
-        let pubkey3 = solana_sdk::pubkey::new_rand();
-
-        vec![
-            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-                mint_keypair,
-                &pubkey,
-                1,
-                *genesis_hash,
-            )),
-            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-                &keypair2,
-                &pubkey2,
-                1,
-                *genesis_hash,
-            )),
-            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-                &keypair3,
-                &pubkey3,
-                1,
-                *genesis_hash,
-            )),
-        ]
     }
 
     #[test]
