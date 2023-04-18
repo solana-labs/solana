@@ -21,6 +21,8 @@
 //! dependent crate (`solana-scheduler-pool`, which in turn depends on `solana-ledger`; another
 //! dependent crate of `solana-runtime`...), while cutting cyclic dependency.
 
+#[cfg(any(test, feature = "test-in-workspace"))]
+use mockall::automock;
 use {
     crate::{bank::Bank, bank_forks::BankForks},
     log::*,
@@ -32,9 +34,6 @@ use {
     },
     std::{fmt::Debug, ops::Deref, sync::Arc},
 };
-
-#[cfg(any(test, feature = "test-in-workspace"))]
-use mockall::automock;
 
 // Send + Sync is needed to be a field of BankForks
 #[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
