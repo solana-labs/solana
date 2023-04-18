@@ -123,7 +123,7 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
         stakes[0],
         VALIDATOR_LAMPORTS,
         FeeRateGovernor::default(),
-        Rent::free(),               // most tests don't expect rent
+        Rent::free(), // most tests don't expect rent
         cluster_type,
         vec![],
     );
@@ -181,7 +181,7 @@ pub fn create_genesis_config_with_leader(
         validator_stake_lamports,
         VALIDATOR_LAMPORTS,
         FeeRateGovernor::default(),
-        Rent::free(),               // most tests don't expect rent
+        Rent::free(), // most tests don't expect rent
         ClusterType::Development,
         vec![],
     );
