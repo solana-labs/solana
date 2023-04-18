@@ -396,7 +396,7 @@ mod tests {
 
         let GenesisConfigInfo { genesis_config, mint_keypair, .. } = create_genesis_config(10_000);
         let unfunded_keypair = Keypair::new();
-        let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+        let tx0 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &unfunded_keypair,
             &solana_sdk::pubkey::new_rand(),
             2,
@@ -409,17 +409,17 @@ mod tests {
 
         assert_eq!(bank.transaction_count(), 0);
         let scheduler = pool.take_from_pool(context);
-        scheduler.schedule_execution(&tx0, 0);
+        scheduler.schedule_execution(tx0, 0);
         assert_eq!(bank.transaction_count(), 0);
 
-        let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+        let tx1 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &solana_sdk::pubkey::new_rand(),
             3,
             genesis_config.hash(),
         ));
-        assert_matches!(bank.simulate_transaction(&tx1).result, Ok(_));
-        scheduler.schedule_execution(&tx1, 0);
+        assert_matches!(bank.simulate_transaction(tx1.clone()).result, Ok(_));
+        scheduler.schedule_execution(tx1.clone(), 0);
         // transaction_count should be remained to be same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
 
