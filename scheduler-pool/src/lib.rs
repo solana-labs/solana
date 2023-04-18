@@ -371,7 +371,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+        let tx0 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &solana_sdk::pubkey::new_rand(),
             2,
@@ -384,7 +384,7 @@ mod tests {
 
         assert_eq!(bank.transaction_count(), 0);
         let scheduler = pool.take_from_pool(context);
-        scheduler.schedule_execution(&tx0, 0);
+        scheduler.schedule_execution(tx0, 0);
         assert_eq!(bank.transaction_count(), 1);
         bank.install_scheduler(scheduler);
         assert_matches!(bank.wait_for_completed_scheduler(), Some((Ok(()), _)));
