@@ -87,46 +87,29 @@ fn create_endpoint(client_certificate: Arc<QuicClientCertificate>) -> Endpoint {
     endpoint
 }
 
-pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
-    let ipaddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
-    let (cert, key) = new_self_signed_tls_certificate(keypair, ipaddr)
-        .expect("Failed to generate client certificate");
-
-    let mut crypto = rustls::ClientConfig::builder()
-        .with_safe_defaults()
-        .with_custom_certificate_verifier(SkipServerVerification::new())
-        .with_single_cert(vec![cert], key)
-        .expect("Failed to use client certificate");
-
-    crypto.enable_early_data = true;
-    crypto.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
-
-    let mut config = ClientConfig::new(Arc::new(crypto));
-
-    let mut transport_config = TransportConfig::default();
-    let timeout = IdleTimeout::try_from(QUIC_MAX_TIMEOUT).unwrap();
-    transport_config.max_idle_timeout(Some(timeout));
-    transport_config.keep_alive_interval(Some(QUIC_KEEP_ALIVE));
-    config.transport_config(Arc::new(transport_config));
-
-    config
-}
-
 // Opens a slow stream and tries to send PACKET_DATA_SIZE bytes of junk
 // in as many chunks as possible. We don't allow the number of chunks
 // to be configurable as client-side writes don't correspond to
 // quic-level packets/writes (but by doing multiple writes we are generally able
 // to get multiple writes on the quic level despite the spec not guaranteeing this)
-pub async fn check_multiple_writes(conn: &Connection) {
+async fn send_slow_stream(conn: &Connection) {
     // Send a full size packet with single byte writes.
     let num_bytes = PACKET_DATA_SIZE;
-    let mut s1 = conn.open_uni().await.unwrap();
+
+    let mut stream = match conn.open_uni().await {
+        Ok(stream) => stream,
+        Err(err) => {
+            warn!("Failed to open stream: {:?}", err);
+            return;
+        }
+    };
+
     for _ in 0..num_bytes {
-        if let Err(err) = s1.write_all(&[0u8]).await {
+        if let Err(err) = stream.write_all(&[0u8]).await {
             warn!("Failed to send chunk: {:?}", err);
         }
     }
-    if let Err(err) = s1.finish().await {
+    if let Err(err) = stream.finish().await {
         warn!("Failed to finish stream: {:?}", err);
     }
 }
@@ -164,10 +147,11 @@ async fn run_connection_dos(
         connections.push(conn);
     }
 
+    info!("Successfully opened {:0} connections", connections.len());
+
     let futures: Vec<_> = connections
         .iter()
-        .map(|conn| (0..num_streams_per_conn).map(|_| check_multiple_writes(conn)))
-        .flatten()
+        .flat_map(|conn| (0..num_streams_per_conn).map(|_| send_slow_stream(conn)))
         .collect();
 
     join_all(futures).await;
@@ -300,8 +284,6 @@ pub mod test {
     async fn test_connection_dos() {
         solana_logger::setup();
         let (t, exit, receiver, server_address, _stats) = setup_quic_server(None, 1);
-
-        //let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
         const NUM_CONN: u64 = 1;
         const NUM_STREAMS_PER_CONN: u64 = 2;
