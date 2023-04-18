@@ -132,7 +132,7 @@ impl InstalledScheduler for Scheduler {
 
         let fail_fast = match context.mode() {
             // this should be false, for (upcoming) BlockGeneration variant.
-            SchedulingMode::BlockVerification => false,
+            SchedulingMode::BlockVerification => true,
         };
 
         let result_with_timings = &mut *self.result_with_timings.lock().expect("not poisoned");
@@ -418,6 +418,7 @@ mod tests {
             3,
             genesis_config.hash(),
         ));
+        assert_matches!(bank.simulate_transaction(&tx1).result, Ok(_));
         scheduler.schedule_execution(&tx1, 0);
         // transaction_count should be remained to be same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
