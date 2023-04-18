@@ -211,6 +211,7 @@ mod tests {
         solana_sdk::{pubkey::Pubkey, system_transaction},
         std::sync::Arc,
     };
+    use solana_sdk::signer::keypair::Keypair;
 
     #[test]
     fn test_scheduler_pool_new() {
