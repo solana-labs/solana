@@ -394,7 +394,11 @@ mod tests {
     fn test_scheduler_schedule_execution_failure() {
         solana_logger::setup();
 
-        let GenesisConfigInfo { genesis_config, mint_keypair, .. } = create_genesis_config(10_000);
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10_000);
         let unfunded_keypair = Keypair::new();
         let tx0 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &unfunded_keypair,
@@ -418,9 +422,12 @@ mod tests {
             3,
             genesis_config.hash(),
         ));
-        assert_matches!(bank.simulate_transaction_unchecked(tx1.clone()).result, Ok(_));
+        assert_matches!(
+            bank.simulate_transaction_unchecked(tx1.clone()).result,
+            Ok(_)
+        );
         scheduler.schedule_execution(tx1, 0);
-        // transaction_count should be remained to be same as scheduler should be bailing out.
+        // transaction_count should remain same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
 
         bank.install_scheduler(scheduler);
