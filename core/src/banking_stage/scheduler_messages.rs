@@ -31,7 +31,7 @@ pub struct ConsumeWork {
     pub transactions: Vec<SanitizedTransaction>,
 }
 
-/// Message: [Worker -> Scheduler]
+/// Message: [Scheduler -> Worker]
 /// Transactions to be forwarded to the next leader(s)
 pub struct ForwardWork {
     pub ids: Vec<TransactionId>,
