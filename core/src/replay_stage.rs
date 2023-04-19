@@ -484,6 +484,7 @@ impl ReplayStage {
                 &poh_recorder,
                 &leader_schedule_cache,
             );
+            drop(working_bank);
 
             loop {
                 // Stop getting entries if we get exit signal
