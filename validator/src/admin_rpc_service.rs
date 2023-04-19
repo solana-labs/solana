@@ -631,10 +631,11 @@ impl AdminRpc for AdminRpcImpl {
                     error!("Failed to set public TPU address to {public_tpu_addr}: {err}");
                     jsonrpc_core::error::Error::internal_error()
                 })?;
+            let my_contact_info = post_init.cluster_info.my_contact_info();
             warn!(
                 "Public TPU addresses set to {} (udp) and {} (quic)",
-                post_init.cluster_info.my_contact_info().tpu().unwrap(),
-                post_init.cluster_info.my_contact_info().tpu_quic().unwrap(),
+                my_contact_info.tpu().unwrap(),
+                my_contact_info.tpu_quic().unwrap(),
             );
             Ok(())
         })
@@ -668,18 +669,11 @@ impl AdminRpc for AdminRpcImpl {
                     error!("Failed to set public TPU address to {public_tpu_forwards_addr}: {err}");
                     jsonrpc_core::error::Error::internal_error()
                 })?;
+            let my_contact_info = post_init.cluster_info.my_contact_info();
             warn!(
                 "Public TPU Forwards addresses set to {} (udp) and {} (quic)",
-                post_init
-                    .cluster_info
-                    .my_contact_info()
-                    .tpu_forwards()
-                    .unwrap(),
-                post_init
-                    .cluster_info
-                    .my_contact_info()
-                    .tpu_forwards_quic()
-                    .unwrap(),
+                my_contact_info.tpu_forwards().unwrap(),
+                my_contact_info.tpu_forwards_quic().unwrap(),
             );
             Ok(())
         })
