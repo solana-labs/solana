@@ -856,7 +856,7 @@ pub fn main() {
                                 admin_client.await?.$set_public_address(public_addr).await
                             })
                             .unwrap_or_else(|err| {
-                                println!("{} request failed: {err}", $request);
+                                eprintln!("{} request failed: {err}", $request);
                                 exit(1);
                             });
                     }
