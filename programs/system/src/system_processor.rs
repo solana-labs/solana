@@ -1,5 +1,5 @@
 use {
-    crate::nonce_keyed_account::{
+    crate::system_instruction::{
         advance_nonce_account, authorize_nonce_account, initialize_nonce_account,
         withdraw_nonce_account,
     },
@@ -9,8 +9,6 @@ use {
         sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        account::AccountSharedData,
-        account_utils::StateMut,
         feature_set,
         instruction::InstructionError,
         nonce,
@@ -557,63 +555,30 @@ declare_process_instruction!(process_instruction, 150, |invoke_context| {
     }
 });
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SystemAccountKind {
-    System,
-    Nonce,
-}
-
-pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAccountKind> {
-    use solana_sdk::account::ReadableAccount;
-    if system_program::check_id(account.owner()) {
-        if account.data().is_empty() {
-            Some(SystemAccountKind::System)
-        } else if account.data().len() == nonce::State::size() {
-            let nonce_versions: nonce::state::Versions = account.state().ok()?;
-            match nonce_versions.state() {
-                nonce::State::Uninitialized => None,
-                nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #[allow(deprecated)]
     use solana_sdk::{
         account::{self, Account, AccountSharedData, ReadableAccount},
-        client::SyncClient,
         fee_calculator::FeeCalculator,
-        genesis_config::create_genesis_config,
         hash::{hash, Hash},
         instruction::{AccountMeta, Instruction, InstructionError},
-        message::Message,
-        native_token::sol_to_lamports,
         nonce::{
             self,
             state::{
                 Data as NonceData, DurableNonce, State as NonceState, Versions as NonceVersions,
             },
         },
-        nonce_account, recent_blockhashes_account,
-        signature::{Keypair, Signer},
-        system_instruction, system_program,
+        nonce_account, recent_blockhashes_account, system_instruction, system_program,
         sysvar::{self, recent_blockhashes::IterItem, rent::Rent},
-        transaction::TransactionError,
     };
     use {
         super::*,
-        crate::{bank::Bank, bank_client::BankClient},
+        crate::{get_system_account_kind, SystemAccountKind},
         bincode::serialize,
         solana_program_runtime::{
             invoke_context::mock_process_instruction, with_mock_invoke_context,
         },
-        std::sync::Arc,
     };
 
     impl From<Pubkey> for Address {
@@ -1505,204 +1470,6 @@ mod tests {
             ],
             Err(InstructionError::InvalidArgument),
         );
-    }
-
-    #[test]
-    fn test_allocate() {
-        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.0));
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank_client = BankClient::new(bank);
-        let data_len = 2;
-        let amount = genesis_config.rent.minimum_balance(data_len);
-
-        let alice_keypair = Keypair::new();
-        let alice_pubkey = alice_keypair.pubkey();
-        let seed = "seed";
-        let owner = Pubkey::new_unique();
-        let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &owner).unwrap();
-
-        bank_client
-            .transfer_and_confirm(amount, &mint_keypair, &alice_pubkey)
-            .unwrap();
-
-        let allocate_with_seed = Message::new(
-            &[system_instruction::allocate_with_seed(
-                &alice_with_seed,
-                &alice_pubkey,
-                seed,
-                data_len as u64,
-                &owner,
-            )],
-            Some(&alice_pubkey),
-        );
-
-        assert!(bank_client
-            .send_and_confirm_message(&[&alice_keypair], allocate_with_seed)
-            .is_ok());
-
-        let allocate = system_instruction::allocate(&alice_pubkey, data_len as u64);
-
-        assert!(bank_client
-            .send_and_confirm_instruction(&alice_keypair, allocate)
-            .is_ok());
-    }
-
-    fn with_create_zero_lamport<F>(callback: F)
-    where
-        F: Fn(&Bank),
-    {
-        solana_logger::setup();
-
-        let alice_keypair = Keypair::new();
-        let bob_keypair = Keypair::new();
-
-        let alice_pubkey = alice_keypair.pubkey();
-        let bob_pubkey = bob_keypair.pubkey();
-
-        let program = Pubkey::new_unique();
-        let collector = Pubkey::new_unique();
-
-        let mint_lamports = sol_to_lamports(1.0);
-        let len1 = 123;
-        let len2 = 456;
-
-        // create initial bank and fund the alice account
-        let (genesis_config, mint_keypair) = create_genesis_config(mint_lamports);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let bank_client = BankClient::new_shared(&bank);
-        bank_client
-            .transfer_and_confirm(mint_lamports, &mint_keypair, &alice_pubkey)
-            .unwrap();
-
-        // create zero-lamports account to be cleaned
-        let account = AccountSharedData::new(0, len1, &program);
-        let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
-        bank.store_account(&bob_pubkey, &account);
-
-        // transfer some to bogus pubkey just to make previous bank (=slot) really cleanable
-        let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
-        let bank_client = BankClient::new_shared(&bank);
-        bank_client
-            .transfer_and_confirm(
-                genesis_config.rent.minimum_balance(0),
-                &alice_keypair,
-                &Pubkey::new_unique(),
-            )
-            .unwrap();
-
-        // super fun time; callback chooses to .clean_accounts(None) or not
-        let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
-        callback(&bank);
-
-        // create a normal account at the same pubkey as the zero-lamports account
-        let lamports = genesis_config.rent.minimum_balance(len2);
-        let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
-        let bank_client = BankClient::new_shared(&bank);
-        let ix = system_instruction::create_account(
-            &alice_pubkey,
-            &bob_pubkey,
-            lamports,
-            len2 as u64,
-            &program,
-        );
-        let message = Message::new(&[ix], Some(&alice_pubkey));
-        let r = bank_client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], message);
-        assert!(r.is_ok());
-    }
-
-    #[test]
-    fn test_create_zero_lamport_with_clean() {
-        with_create_zero_lamport(|bank| {
-            bank.freeze();
-            bank.squash();
-            bank.force_flush_accounts_cache();
-            // do clean and assert that it actually did its job
-            assert_eq!(4, bank.get_snapshot_storages(None).len());
-            bank.clean_accounts(None);
-            assert_eq!(3, bank.get_snapshot_storages(None).len());
-        });
-    }
-
-    #[test]
-    fn test_create_zero_lamport_without_clean() {
-        with_create_zero_lamport(|_| {
-            // just do nothing; this should behave identically with test_create_zero_lamport_with_clean
-        });
-    }
-
-    #[test]
-    fn test_assign_with_seed() {
-        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.0));
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank_client = BankClient::new(bank);
-
-        let alice_keypair = Keypair::new();
-        let alice_pubkey = alice_keypair.pubkey();
-        let seed = "seed";
-        let owner = Pubkey::new_unique();
-        let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &owner).unwrap();
-
-        bank_client
-            .transfer_and_confirm(
-                genesis_config.rent.minimum_balance(0),
-                &mint_keypair,
-                &alice_pubkey,
-            )
-            .unwrap();
-
-        let assign_with_seed = Message::new(
-            &[system_instruction::assign_with_seed(
-                &alice_with_seed,
-                &alice_pubkey,
-                seed,
-                &owner,
-            )],
-            Some(&alice_pubkey),
-        );
-
-        assert!(bank_client
-            .send_and_confirm_message(&[&alice_keypair], assign_with_seed)
-            .is_ok());
-    }
-
-    #[test]
-    fn test_system_unsigned_transaction() {
-        let (genesis_config, alice_keypair) = create_genesis_config(sol_to_lamports(1.0));
-        let alice_pubkey = alice_keypair.pubkey();
-        let mallory_keypair = Keypair::new();
-        let mallory_pubkey = mallory_keypair.pubkey();
-        let amount = genesis_config.rent.minimum_balance(0);
-
-        // Fund to account to bypass AccountNotFound error
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank_client = BankClient::new(bank);
-        bank_client
-            .transfer_and_confirm(amount, &alice_keypair, &mallory_pubkey)
-            .unwrap();
-
-        // Erroneously sign transaction with recipient account key
-        // No signature case is tested by bank `test_zero_signatures()`
-        let account_metas = vec![
-            AccountMeta::new(alice_pubkey, false),
-            AccountMeta::new(mallory_pubkey, true),
-        ];
-        let malicious_instruction = Instruction::new_with_bincode(
-            system_program::id(),
-            &SystemInstruction::Transfer { lamports: amount },
-            account_metas,
-        );
-        assert_eq!(
-            bank_client
-                .send_and_confirm_instruction(&mallory_keypair, malicious_instruction)
-                .unwrap_err()
-                .unwrap(),
-            TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
-        );
-        assert_eq!(
-            bank_client.get_balance(&alice_pubkey).unwrap(),
-            sol_to_lamports(1.0) - amount
-        );
-        assert_eq!(bank_client.get_balance(&mallory_pubkey).unwrap(), amount);
     }
 
     fn process_nonce_instruction(

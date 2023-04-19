@@ -18,7 +18,6 @@ use {
         rent_collector::RentCollector,
         rent_debits::RentDebits,
         storable_accounts::StorableAccounts,
-        system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_error_metrics::TransactionErrorMetrics,
     },
     dashmap::DashMap,
@@ -61,6 +60,7 @@ use {
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
+    solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::{
         cmp::Reverse,
         collections::{hash_map, BinaryHeap, HashMap, HashSet},

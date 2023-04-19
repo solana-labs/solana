@@ -76,7 +76,6 @@ use {
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
         storable_accounts::StorableAccounts,
-        system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
         vote_account::{VoteAccount, VoteAccountsHashMap},
@@ -164,6 +163,7 @@ use {
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeState,
     },
+    solana_system_program::{get_system_account_kind, SystemAccountKind},
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
         borrow::Cow,
