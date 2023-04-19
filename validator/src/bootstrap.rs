@@ -1138,6 +1138,9 @@ fn retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(
         .map(|peer_snapshot_hash| peer_snapshot_hash.snapshot_hash.full)
         .max_by_key(|(slot, _hash)| *slot);
     let Some(highest_full_snapshot_hash) = highest_full_snapshot_hash else {
+        // `max_by_key` will only be `None` IFF the input `peer_snapshot_hashes` is empty.
+        // In that case there's nothing to do (additionally, without a valid 'max' value, there
+        // will be nothing to compare against within the `retain()` predicate).
         return;
     };
 
