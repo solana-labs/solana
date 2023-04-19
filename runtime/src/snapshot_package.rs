@@ -9,7 +9,7 @@ use {
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
         snapshot_hash::SnapshotHash,
         snapshot_utils::{
-            self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion,
+            self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotError, SnapshotVersion,
             SNAPSHOT_STATUS_CACHE_FILENAME, TMP_BANK_SNAPSHOT_PREFIX,
         },
     },
@@ -55,7 +55,6 @@ impl AccountsPackage {
         package_type: AccountsPackageType,
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
-        bank_snapshots_dir: impl AsRef<Path>,
         full_snapshot_archives_dir: impl AsRef<Path>,
         incremental_snapshot_archives_dir: impl AsRef<Path>,
         snapshot_storages: Vec<Arc<AccountStorageEntry>>,
@@ -80,6 +79,10 @@ impl AccountsPackage {
         }
 
         // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
+        let bank_snapshot_dir = &bank_snapshot_info.snapshot_dir;
+        let bank_snapshots_dir = bank_snapshot_dir
+            .parent()
+            .ok_or_else(|| SnapshotError::InvalidSnapshotDirPath(bank_snapshot_dir.clone()))?;
         let snapshot_links = tempfile::Builder::new()
             .prefix(&format!("{}{}-", TMP_BANK_SNAPSHOT_PREFIX, bank.slot()))
             .tempdir_in(bank_snapshots_dir)?;
@@ -91,9 +94,7 @@ impl AccountsPackage {
             let snapshot_path = bank_snapshot_info.snapshot_path();
             let file_name = snapshot_utils::path_to_file_name_str(&snapshot_path)?;
             fs::hard_link(&snapshot_path, snapshot_hardlink_dir.join(file_name))?;
-            let status_cache_path = bank_snapshot_info
-                .snapshot_dir
-                .join(SNAPSHOT_STATUS_CACHE_FILENAME);
+            let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
             let status_cache_file_name = snapshot_utils::path_to_file_name_str(&status_cache_path)?;
             fs::hard_link(
                 &status_cache_path,

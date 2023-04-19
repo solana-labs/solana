@@ -357,6 +357,9 @@ pub enum SnapshotError {
     #[error("bank_snapshot_info new_from_dir failed: {0}")]
     NewFromDir(#[from] SnapshotNewFromDirError),
 
+    #[error("invalid snapshot dir path: {}", .0.display())]
+    InvalidSnapshotDirPath(PathBuf),
+
     #[error("invalid AppendVec path: {}", .0.display())]
     InvalidAppendVecPath(PathBuf),
 
@@ -3020,7 +3023,6 @@ pub fn bank_to_full_snapshot_archive(
     package_and_archive_full_snapshot(
         bank,
         &bank_snapshot_info,
-        &temp_dir,
         full_snapshot_archives_dir,
         incremental_snapshot_archives_dir,
         snapshot_storages,
@@ -3081,7 +3083,6 @@ pub fn bank_to_incremental_snapshot_archive(
         bank,
         full_snapshot_slot,
         &bank_snapshot_info,
-        &temp_dir,
         full_snapshot_archives_dir,
         incremental_snapshot_archives_dir,
         snapshot_storages,
@@ -3097,7 +3098,6 @@ pub fn bank_to_incremental_snapshot_archive(
 pub fn package_and_archive_full_snapshot(
     bank: &Bank,
     bank_snapshot_info: &BankSnapshotInfo,
-    bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
     snapshot_storages: Vec<Arc<AccountStorageEntry>>,
@@ -3110,7 +3110,6 @@ pub fn package_and_archive_full_snapshot(
         AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         bank,
         bank_snapshot_info,
-        bank_snapshots_dir,
         &full_snapshot_archives_dir,
         &incremental_snapshot_archives_dir,
         snapshot_storages,
@@ -3149,7 +3148,6 @@ pub fn package_and_archive_incremental_snapshot(
     bank: &Bank,
     incremental_snapshot_base_slot: Slot,
     bank_snapshot_info: &BankSnapshotInfo,
-    bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
     snapshot_storages: Vec<Arc<AccountStorageEntry>>,
@@ -3164,7 +3162,6 @@ pub fn package_and_archive_incremental_snapshot(
         )),
         bank,
         bank_snapshot_info,
-        bank_snapshots_dir,
         &full_snapshot_archives_dir,
         &incremental_snapshot_archives_dir,
         snapshot_storages,
