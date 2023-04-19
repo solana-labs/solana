@@ -594,15 +594,14 @@ impl Accounts {
             }
         };
 
-        let required_lamports = fee.checked_add(min_balance).ok_or_else(|| {
-            error_counters.insufficient_funds += 1;
-            TransactionError::InsufficientFundsForFee
-        })?;
-
-        if payer_account.lamports() < required_lamports {
-            error_counters.insufficient_funds += 1;
-            return Err(TransactionError::InsufficientFundsForFee);
-        }
+        payer_account
+            .lamports()
+            .checked_sub(min_balance)
+            .and_then(|v| v.checked_sub(fee))
+            .ok_or_else(|| {
+                error_counters.insufficient_funds += 1;
+                TransactionError::InsufficientFundsForFee
+            })?;
         let payer_pre_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
         payer_account
             .checked_sub_lamports(fee)
