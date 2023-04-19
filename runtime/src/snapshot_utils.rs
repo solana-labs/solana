@@ -2848,27 +2848,26 @@ pub enum VerifyBank {
     Deterministic,
     /// the serialized bank was 'reserialized' into a non-deterministic format at the specified slot
     /// so, deserialize both files and compare deserialized results
-    NonDeterministic(Slot),
+    NonDeterministic,
 }
 
-pub fn verify_snapshot_archive<P, Q, R>(
+pub fn verify_snapshot_archive<P, Q>(
     snapshot_archive: P,
     snapshots_to_verify: Q,
-    storages_to_verify: R,
     archive_format: ArchiveFormat,
     verify_bank: VerifyBank,
+    slot: Slot,
 ) where
     P: AsRef<Path>,
     Q: AsRef<Path>,
-    R: AsRef<Path>,
 {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
-    let account_dir = create_accounts_run_and_snapshot_dirs(unpack_dir).unwrap().0;
+    let unpack_account_dir = create_accounts_run_and_snapshot_dirs(unpack_dir).unwrap().0;
     untar_snapshot_in(
         snapshot_archive,
         unpack_dir,
-        &[account_dir.clone()],
+        &[unpack_account_dir.clone()],
         archive_format,
         1,
     )
@@ -2876,52 +2875,64 @@ pub fn verify_snapshot_archive<P, Q, R>(
 
     // Check snapshots are the same
     let unpacked_snapshots = unpack_dir.join("snapshots");
-    if let VerifyBank::NonDeterministic(slot) = verify_bank {
+
+    // Since the unpack code collects all the appenedvecs into one directory unpack_account_dir, we need to
+    // collect all the appendvecs in account_paths/<slot>/snapshot/ into one directory for later comparison.
+    let storages_to_verify = unpack_dir.join("storages_to_verify");
+    // Create the directory if it doesn't exist
+    std::fs::create_dir_all(&storages_to_verify).unwrap();
+
+    let slot = slot.to_string();
+    let snapshot_slot_dir = snapshots_to_verify.as_ref().join(&slot);
+
+    if let VerifyBank::NonDeterministic = verify_bank {
         // file contents may be different, but deserialized structs should be equal
-        let slot = slot.to_string();
-        let snapshot_slot_dir = snapshots_to_verify.as_ref().join(&slot);
         let p1 = snapshots_to_verify.as_ref().join(&slot).join(&slot);
         let p2 = unpacked_snapshots.join(&slot).join(&slot);
         assert!(crate::serde_snapshot::compare_two_serialized_banks(&p1, &p2).unwrap());
         std::fs::remove_file(p1).unwrap();
         std::fs::remove_file(p2).unwrap();
+    }
 
-        // The new the status_cache file is inside the slot directory together with the snapshot file.
-        // When unpacking an archive, the status_cache file from the archive is one-level up outside of
-        //  the slot direcotry.
-        // The unpacked status_cache file need to be put back into the slot directory for the directory
-        // comparison to pass.
-        let existing_unpacked_status_cache_file =
-            unpacked_snapshots.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-        let new_unpacked_status_cache_file = unpacked_snapshots
-            .join(&slot)
-            .join(SNAPSHOT_STATUS_CACHE_FILENAME);
-        fs::rename(
-            existing_unpacked_status_cache_file,
-            new_unpacked_status_cache_file,
-        )
-        .unwrap();
+    // The new the status_cache file is inside the slot directory together with the snapshot file.
+    // When unpacking an archive, the status_cache file from the archive is one-level up outside of
+    //  the slot direcotry.
+    // The unpacked status_cache file need to be put back into the slot directory for the directory
+    // comparison to pass.
+    let existing_unpacked_status_cache_file =
+        unpacked_snapshots.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    let new_unpacked_status_cache_file = unpacked_snapshots
+        .join(&slot)
+        .join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    fs::rename(
+        existing_unpacked_status_cache_file,
+        new_unpacked_status_cache_file,
+    )
+    .unwrap();
 
-        let accounts_hardlinks_dir = snapshot_slot_dir.join("accounts_hardlinks");
-        if accounts_hardlinks_dir.is_dir() {
-            // This directory contain symlinks to all <account_path>/snapshot/<slot> directories.
-            // They should all be removed.
-            for entry in fs::read_dir(&accounts_hardlinks_dir).unwrap() {
-                let dst_path = fs::read_link(entry.unwrap().path()).unwrap();
-                fs::remove_dir_all(dst_path).unwrap();
+    let accounts_hardlinks_dir = snapshot_slot_dir.join("accounts_hardlinks");
+    if accounts_hardlinks_dir.is_dir() {
+        // This directory contain symlinks to all <account_path>/snapshot/<slot> directories.
+        for entry in fs::read_dir(&accounts_hardlinks_dir).unwrap() {
+            let link_dst_path = fs::read_link(entry.unwrap().path()).unwrap();
+            // Copy all the files in dst_path into the storages_to_verify directory.
+            for entry in fs::read_dir(&link_dst_path).unwrap() {
+                let src_path = entry.unwrap().path();
+                let dst_path = storages_to_verify.join(src_path.file_name().unwrap());
+                fs::copy(src_path, dst_path).unwrap();
             }
-            std::fs::remove_dir_all(accounts_hardlinks_dir).unwrap();
         }
+        std::fs::remove_dir_all(accounts_hardlinks_dir).unwrap();
+    }
 
-        let version_path = snapshot_slot_dir.join(SNAPSHOT_VERSION_FILENAME);
-        if version_path.is_file() {
-            std::fs::remove_file(version_path).unwrap();
-        }
+    let version_path = snapshot_slot_dir.join(SNAPSHOT_VERSION_FILENAME);
+    if version_path.is_file() {
+        std::fs::remove_file(version_path).unwrap();
+    }
 
-        let state_complete_path = snapshot_slot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
-        if state_complete_path.is_file() {
-            std::fs::remove_file(state_complete_path).unwrap();
-        }
+    let state_complete_path = snapshot_slot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+    if state_complete_path.is_file() {
+        std::fs::remove_file(state_complete_path).unwrap();
     }
 
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
@@ -2931,9 +2942,9 @@ pub fn verify_snapshot_archive<P, Q, R>(
     // Remove the empty "accounts" directory for the directory comparison below.
     // In some test cases the directory to compare do not come from unarchiving.
     // Ignore the error when this directory does not exist.
-    _ = std::fs::remove_dir(account_dir.join("accounts"));
+    _ = std::fs::remove_dir(unpack_account_dir.join("accounts"));
     // Check the account entries are the same
-    assert!(!dir_diff::is_different(&storages_to_verify, account_dir).unwrap());
+    assert!(!dir_diff::is_different(&storages_to_verify, unpack_account_dir).unwrap());
 }
 
 /// Remove outdated bank snapshots
@@ -3268,6 +3279,9 @@ pub fn create_snapshot_dirs_for_tests(
         bank.fill_bank_with_ticks_for_tests();
         bank.squash();
         bank.force_flush_accounts_cache();
+        bank.clean_accounts(Some(bank.slot()));
+        bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
+        bank.rehash(); // Bank accounts may have been manually modified by the caller
 
         let snapshot_storages = bank.get_snapshot_storages(None);
         let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();

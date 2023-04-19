@@ -187,7 +187,7 @@ mod tests {
             snapshot_archive_info::SnapshotArchiveInfo,
             snapshot_hash::SnapshotHash,
             snapshot_package::{SnapshotPackage, SnapshotType},
-            snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+            snapshot_utils::{self, purge_old_bank_snapshots, ArchiveFormat, SnapshotVersion},
         },
         solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash},
         std::{
@@ -224,7 +224,8 @@ mod tests {
     }
 
     fn create_and_verify_snapshot(temp_dir: &Path) {
-        let snapshots_dir = temp_dir.join("snapshots");
+        let bank_snapshots_dir = temp_dir.join("snapshots");
+        fs::create_dir_all(&bank_snapshots_dir).unwrap();
         let full_snapshot_archives_dir = temp_dir.join("full_snapshot_archives");
         let incremental_snapshot_archives_dir = temp_dir.join("incremental_snapshot_archives");
         fs::create_dir_all(&full_snapshot_archives_dir).unwrap();
@@ -233,7 +234,6 @@ mod tests {
         let slot = 4;
 
         let genesis_config = GenesisConfig::default();
-        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let bank = snapshot_utils::create_snapshot_dirs_for_tests(
             &genesis_config,
             &bank_snapshots_dir,
@@ -241,15 +241,19 @@ mod tests {
             slot,
         );
 
+        let account_paths = &bank.rc.accounts.accounts_db.paths;
+
         let bank_snapshot_info =
             snapshot_utils::get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         let snapshot_storages = bank.get_snapshot_storages(None);
         let archive_format = ArchiveFormat::TarBzip2;
 
+        purge_old_bank_snapshots(&bank_snapshots_dir, 1, None);
+
         let full_archive = snapshot_utils::package_and_archive_full_snapshot(
             &bank,
             &bank_snapshot_info,
-            bank_snapshots_dir,
+            &bank_snapshots_dir,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             snapshot_storages,
@@ -260,15 +264,13 @@ mod tests {
         )
         .unwrap();
 
-        let accounts_dir = &bank.rc.accounts.accounts_db.paths[0];
-
         // Check archive is correct
         snapshot_utils::verify_snapshot_archive(
             full_archive.path(),
-            snapshots_dir,
-            accounts_dir,
+            bank_snapshots_dir,
             archive_format,
             snapshot_utils::VerifyBank::Deterministic,
+            slot as Slot,
         );
     }
 
