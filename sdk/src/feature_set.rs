@@ -816,7 +816,7 @@ lazy_static! {
         (simplify_writable_program_account_check::id(), "Simplify checks performed for writable upgradeable program accounts #30559"),
         (stop_truncating_strings_in_syscalls::id(), "Stop truncating strings in syscalls #31029"),
         (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
-        (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state"),
+        (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state #31264"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
