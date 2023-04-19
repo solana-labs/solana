@@ -8091,7 +8091,7 @@ impl AccountsDb {
     where
         I: Iterator<Item = &'a (Slot, AccountInfo)>,
     {
-        self.storage.assert_no_shrink_in_progress();
+        assert!(self.storage.no_shrink_in_progress());
 
         let mut dead_slots = HashSet::new();
         let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
