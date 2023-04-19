@@ -1140,16 +1140,16 @@ fn retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
 fn retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(
     peer_snapshot_hashes: &mut Vec<PeerSnapshotHash>,
 ) {
-    // retain the hashes with the highest full snapshot slot
-    // do a two-pass algorithm
-    // 1. find the full snapshot hash with the highest full snapshot slot
-    // 2. retain elems with that full snapshot hash
-    let mut highest_full_snapshot_hash = (Slot::MIN, Hash::default());
-    peer_snapshot_hashes.iter().for_each(|peer_snapshot_hash| {
-        if peer_snapshot_hash.snapshot_hash.full.0 > highest_full_snapshot_hash.0 {
-            highest_full_snapshot_hash = peer_snapshot_hash.snapshot_hash.full;
-        }
-    });
+    let highest_full_snapshot_hash = peer_snapshot_hashes
+        .iter()
+        .map(|peer_snapshot_hash| peer_snapshot_hash.snapshot_hash.full)
+        .max_by_key(|(slot, _hash)| *slot);
+    let Some(highest_full_snapshot_hash) = highest_full_snapshot_hash else {
+        // `max_by_key` will only be `None` IFF the input `peer_snapshot_hashes` is empty.
+        // In that case there's nothing to do (additionally, without a valid 'max' value, there
+        // will be nothing to compare against within the `retain()` predicate).
+        return;
+    };
 
     peer_snapshot_hashes.retain(|peer_snapshot_hash| {
         peer_snapshot_hash.snapshot_hash.full == highest_full_snapshot_hash
@@ -1162,16 +1162,10 @@ fn retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(
 fn retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
     peer_snapshot_hashes: &mut Vec<PeerSnapshotHash>,
 ) {
-    let mut highest_incremental_snapshot_hash: Option<(Slot, Hash)> = None;
-    peer_snapshot_hashes.iter().for_each(|peer_snapshot_hash| {
-        if let Some(incremental_snapshot_hash) = peer_snapshot_hash.snapshot_hash.incr.as_ref() {
-            if highest_incremental_snapshot_hash.is_none()
-                || incremental_snapshot_hash.0 > highest_incremental_snapshot_hash.unwrap().0
-            {
-                highest_incremental_snapshot_hash = Some(*incremental_snapshot_hash);
-            }
-        };
-    });
+    let highest_incremental_snapshot_hash = peer_snapshot_hashes
+        .iter()
+        .flat_map(|peer_snapshot_hash| peer_snapshot_hash.snapshot_hash.incr)
+        .max_by_key(|(slot, _hash)| *slot);
 
     peer_snapshot_hashes.retain(|peer_snapshot_hash| {
         peer_snapshot_hash.snapshot_hash.incr == highest_incremental_snapshot_hash
