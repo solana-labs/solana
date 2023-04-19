@@ -1,6 +1,7 @@
 use {
     crate::immutable_deserialized_packet::ImmutableDeserializedPacket,
-    solana_poh::poh_recorder::Slot, solana_sdk::transaction::SanitizedTransaction, std::sync::Arc,
+    solana_sdk::{clock::Slot, transaction::SanitizedTransaction},
+    std::sync::Arc,
 };
 
 /// A unique identifier for a transaction batch.
