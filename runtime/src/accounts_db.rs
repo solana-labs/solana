@@ -1404,7 +1404,7 @@ pub struct AccountsDb {
     pub(crate) write_version: AtomicU64,
 
     /// Set of storage paths to pick from
-    pub(crate) paths: Vec<PathBuf>,
+    pub paths: Vec<PathBuf>,
 
     full_accounts_hash_cache_path: PathBuf,
     incremental_accounts_hash_cache_path: PathBuf,
