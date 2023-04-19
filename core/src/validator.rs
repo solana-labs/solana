@@ -734,7 +734,7 @@ impl Validator {
         let last_full_snapshot_slot = starting_snapshot_hashes.map(|x| x.full.0 .0);
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks.clone(),
-            &exit,
+            exit.clone(),
             AbsRequestHandlers {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
