@@ -307,7 +307,7 @@ pub struct RpcContactInfo {
     /// Shred version
     pub shred_version: Option<u16>,
     /// First 4 bytes of the sha1 commit hash
-    pub commit: Option<u32>,
+    pub commit: Option<String>,
 }
 
 /// Map of leader base58 identity pubkeys to the slot indices relative to the first epoch slot
@@ -336,7 +336,7 @@ pub struct RpcVersionInfo {
     /// first 4 bytes of the FeatureSet identifier
     pub feature_set: Option<u32>,
     // first 4 bytes of the sha1 commit hash
-    pub commit: Option<u32>,
+    pub commit: Option<String>,
 }
 impl fmt::Debug for RpcVersionInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

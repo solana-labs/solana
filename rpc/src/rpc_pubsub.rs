@@ -595,7 +595,7 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
         Ok(RpcVersionInfo {
             solana_core: version.to_string(),
             feature_set: Some(version.feature_set),
-            commit: Some(version.commit),
+            commit: Some(format!("{:x}", version.commit)),
         })
     }
 }
