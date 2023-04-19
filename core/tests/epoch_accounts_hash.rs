@@ -217,7 +217,7 @@ impl BackgroundServices {
         };
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks,
-            &exit,
+            exit.clone(),
             AbsRequestHandlers {
                 snapshot_request_handler,
                 pruned_banks_request_handler,

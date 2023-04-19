@@ -529,12 +529,11 @@ pub struct AccountsBackgroundService {
 impl AccountsBackgroundService {
     pub fn new(
         bank_forks: Arc<RwLock<BankForks>>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         request_handlers: AbsRequestHandlers,
         test_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
-        let exit = exit.clone();
         let mut last_cleaned_block_height = 0;
         let mut removed_slots_count = 0;
         let mut total_remove_slots_time = 0;

@@ -1282,7 +1282,7 @@ fn load_bank_forks(
     let exit = Arc::new(AtomicBool::new(false));
     let accounts_background_service = AccountsBackgroundService::new(
         bank_forks.clone(),
-        &exit,
+        exit.clone(),
         abs_request_handler,
         process_options.accounts_db_test_hash_calculation,
         None,
