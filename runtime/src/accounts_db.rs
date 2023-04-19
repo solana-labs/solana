@@ -5551,7 +5551,10 @@ impl AccountsDb {
                 min = std::cmp::min(store.accounts.capacity(), min);
                 avail += 1;
 
-                if store.accounts.capacity() >= min_size && store.accounts.capacity() < max_size {
+                if store.accounts.is_recyclable()
+                    && store.accounts.capacity() >= min_size
+                    && store.accounts.capacity() < max_size
+                {
                     let ret = recycle_stores.remove_entry(i);
                     drop(recycle_stores);
                     let old_id = ret.append_vec_id();
