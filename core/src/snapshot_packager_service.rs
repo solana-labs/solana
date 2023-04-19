@@ -241,8 +241,6 @@ mod tests {
             slot,
         );
 
-        let account_paths = &bank.rc.accounts.accounts_db.paths;
-
         let bank_snapshot_info =
             snapshot_utils::get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         let snapshot_storages = bank.get_snapshot_storages(None);
