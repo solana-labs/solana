@@ -130,22 +130,25 @@ async fn run_connection_dos(
 
     let endpoint = create_endpoint(cert);
 
-    let mut connections = vec![];
-    for _ in 0..num_connections {
-        let conn = match endpoint
-            .connect(server_address, "connect")
-            .expect("Failed in connecting")
-            .await
-        {
-            Ok(conn) => conn,
+    let futures: Vec<_> = (0..num_connections)
+        .map(|_| {
+            endpoint
+                .connect(server_address, "connect")
+                .expect("Failed in connecting")
+        })
+        .collect();
+
+    let connections: Vec<_> = join_all(futures)
+        .await
+        .into_iter()
+        .filter_map(|res| match res {
+            Ok(conn) => Some(conn),
             Err(err) => {
                 warn!("Failed to connect: {:?}", err);
-                continue;
+                None
             }
-        };
-
-        connections.push(conn);
-    }
+        })
+        .collect();
 
     info!("Successfully opened {:0} connections", connections.len());
 
