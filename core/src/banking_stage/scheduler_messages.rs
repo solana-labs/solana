@@ -27,7 +27,7 @@ impl TransactionId {
 /// Transactions to be consumed (i.e. executed, recorded, committed)
 pub struct ConsumeWork {
     pub batch_id: TransactionBatchId,
-    pub transaction_ids: Vec<TransactionId>,
+    pub ids: Vec<TransactionId>,
     pub transactions: Vec<SanitizedTransaction>,
     pub max_age_slots: Vec<Slot>,
 }
