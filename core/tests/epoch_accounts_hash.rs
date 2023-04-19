@@ -184,8 +184,8 @@ impl BackgroundServices {
             snapshot_package_sender.clone(),
             snapshot_package_receiver,
             None,
-            &exit,
-            &cluster_info,
+            exit.clone(),
+            cluster_info.clone(),
             snapshot_config.clone(),
             false,
         );

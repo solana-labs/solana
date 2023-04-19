@@ -693,8 +693,8 @@ impl Validator {
                     snapshot_package_sender.clone(),
                     snapshot_package_receiver,
                     starting_snapshot_hashes,
-                    &exit,
-                    &cluster_info,
+                    exit.clone(),
+                    cluster_info.clone(),
                     config.snapshot_config.clone(),
                     enable_gossip_push,
                 );
