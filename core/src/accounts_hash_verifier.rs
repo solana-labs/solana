@@ -49,8 +49,8 @@ impl AccountsHashVerifier {
         accounts_package_sender: Sender<AccountsPackage>,
         accounts_package_receiver: Receiver<AccountsPackage>,
         snapshot_package_sender: Option<Sender<SnapshotPackage>>,
-        exit: &Arc<AtomicBool>,
-        cluster_info: &Arc<ClusterInfo>,
+        exit: Arc<AtomicBool>,
+        cluster_info: Arc<ClusterInfo>,
         known_validators: Option<HashSet<Pubkey>>,
         halt_on_known_validators_accounts_hash_mismatch: bool,
         accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
@@ -58,8 +58,6 @@ impl AccountsHashVerifier {
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
         const LOOP_LIMITER: Duration = Duration::from_millis(DEFAULT_MS_PER_SLOT);
-        let exit = exit.clone();
-        let cluster_info = cluster_info.clone();
         let t_accounts_hash_verifier = Builder::new()
             .name("solAcctHashVer".to_string())
             .spawn(move || {
@@ -217,7 +215,7 @@ impl AccountsHashVerifier {
         halt_on_known_validator_accounts_hash_mismatch: bool,
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         hashes: &mut Vec<(Slot, Hash)>,
-        exit: &Arc<AtomicBool>,
+        exit: &AtomicBool,
         snapshot_config: &SnapshotConfig,
         accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
@@ -483,7 +481,7 @@ impl AccountsHashVerifier {
         known_validators: Option<&HashSet<Pubkey>>,
         halt_on_known_validator_accounts_hash_mismatch: bool,
         hashes: &mut Vec<(Slot, Hash)>,
-        exit: &Arc<AtomicBool>,
+        exit: &AtomicBool,
         accounts_hash: AccountsHashEnum,
         accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
