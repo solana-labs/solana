@@ -633,9 +633,9 @@ impl AdminRpc for AdminRpcImpl {
                 })?;
             let my_contact_info = post_init.cluster_info.my_contact_info();
             warn!(
-                "Public TPU addresses set to {} (udp) and {} (quic)",
-                my_contact_info.tpu().unwrap(),
-                my_contact_info.tpu_quic().unwrap(),
+                "Public TPU addresses set to {:?} (udp) and {:?} (quic)",
+                my_contact_info.tpu(),
+                my_contact_info.tpu_quic(),
             );
             Ok(())
         })
@@ -671,9 +671,9 @@ impl AdminRpc for AdminRpcImpl {
                 })?;
             let my_contact_info = post_init.cluster_info.my_contact_info();
             warn!(
-                "Public TPU Forwards addresses set to {} (udp) and {} (quic)",
-                my_contact_info.tpu_forwards().unwrap(),
-                my_contact_info.tpu_forwards_quic().unwrap(),
+                "Public TPU Forwards addresses set to {:?} (udp) and {:?} (quic)",
+                my_contact_info.tpu_forwards(),
+                my_contact_info.tpu_forwards_quic(),
             );
             Ok(())
         })
