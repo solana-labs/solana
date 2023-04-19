@@ -509,8 +509,8 @@ fn test_concurrent_snapshot_packaging(
         snapshot_package_sender.clone(),
         snapshot_package_receiver,
         None,
-        &exit,
-        &cluster_info,
+        exit.clone(),
+        cluster_info,
         snapshot_config.clone(),
         true,
     );
@@ -991,8 +991,8 @@ fn test_snapshots_with_background_services(
         snapshot_package_sender.clone(),
         snapshot_package_receiver,
         None,
-        &exit,
-        &cluster_info,
+        exit.clone(),
+        cluster_info.clone(),
         snapshot_test_config.snapshot_config.clone(),
         false,
     );

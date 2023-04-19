@@ -34,13 +34,11 @@ impl SnapshotPackagerService {
         snapshot_package_sender: Sender<SnapshotPackage>,
         snapshot_package_receiver: Receiver<SnapshotPackage>,
         starting_snapshot_hashes: Option<StartingSnapshotHashes>,
-        exit: &Arc<AtomicBool>,
-        cluster_info: &Arc<ClusterInfo>,
+        exit: Arc<AtomicBool>,
+        cluster_info: Arc<ClusterInfo>,
         snapshot_config: SnapshotConfig,
         enable_gossip_push: bool,
     ) -> Self {
-        let exit = exit.clone();
-        let cluster_info = cluster_info.clone();
         let max_full_snapshot_hashes = std::cmp::min(
             MAX_LEGACY_SNAPSHOT_HASHES,
             snapshot_config
