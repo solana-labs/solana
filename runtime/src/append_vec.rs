@@ -176,10 +176,10 @@ impl<'a> ReadableAccount for AppendVecStoredAccountMeta<'a> {
     fn lamports(&self) -> u64 {
         self.account_meta.lamports
     }
-    fn data(&self) -> &[u8] {
+    fn data(&self) -> &'a [u8] {
         self.data()
     }
-    fn owner(&self) -> &Pubkey {
+    fn owner(&self) -> &'a Pubkey {
         &self.account_meta.owner
     }
     fn executable(&self) -> bool {
