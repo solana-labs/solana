@@ -25,7 +25,7 @@ impl TransactionId {
 }
 
 /// Message: [Scheduler -> Worker]
-/// Transactions to be consumed (i.e. executed, recorded, committed)
+/// Transactions to be consumed (i.e. executed, recorded, and committed)
 pub struct ConsumeWork {
     pub batch_id: TransactionBatchId,
     pub ids: Vec<TransactionId>,
