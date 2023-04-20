@@ -171,6 +171,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::redundant_clone)]
     fn test_clone() {
         let clock = Clock {
             slot: 1,

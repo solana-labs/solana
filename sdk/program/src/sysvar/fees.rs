@@ -58,6 +58,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::redundant_clone)]
     fn test_clone() {
         let fees = Fees {
             fee_calculator: FeeCalculator {
