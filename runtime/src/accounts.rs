@@ -594,6 +594,8 @@ impl Accounts {
             }
         };
 
+        // allow collapsible-else-if to help removing gate safer.
+        #[allow(clippy::collapsible_else_if)]
         if feature_set.is_active(&feature_set::checked_arithmetic_in_fee_validation::id()) {
             payer_account
                 .lamports()
@@ -603,9 +605,11 @@ impl Accounts {
                     error_counters.insufficient_funds += 1;
                     TransactionError::InsufficientFundsForFee
                 })?;
-        } else if payer_account.lamports() < fee + min_balance {
-            error_counters.insufficient_funds += 1;
-            return Err(TransactionError::InsufficientFundsForFee);
+        } else {
+            if payer_account.lamports() < fee + min_balance {
+                error_counters.insufficient_funds += 1;
+                return Err(TransactionError::InsufficientFundsForFee);
+            }
         }
 
         let payer_pre_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
@@ -4339,7 +4343,10 @@ mod tests {
         feature_checked_arithmmetic_enable: bool,
     }
 
-    fn validate_fee_payer_account(test_parameter: TestParameter, rent_collector: &RentCollector) {
+    fn validate_fee_payer_account(
+        test_parameter: ValidateFeePayerTestParameter,
+        rent_collector: &RentCollector,
+    ) {
         let payer_account_keys = Keypair::new();
         let mut account = if test_parameter.is_nonce {
             AccountSharedData::new_data(
@@ -4389,7 +4396,7 @@ mod tests {
             for feature_checked_arithmmetic_enable in [true, false] {
                 for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {
                     validate_fee_payer_account(
-                        TestParameter {
+                        ValidateFeePayerTestParameter {
                             is_nonce,
                             payer_init_balance: min_balance + fee,
                             fee,
@@ -4409,7 +4416,7 @@ mod tests {
             for feature_checked_arithmmetic_enable in [true, false] {
                 for is_nonce in [true, false] {
                     validate_fee_payer_account(
-                        TestParameter {
+                        ValidateFeePayerTestParameter {
                             is_nonce,
                             payer_init_balance: 0,
                             fee,
@@ -4429,7 +4436,7 @@ mod tests {
             for feature_checked_arithmmetic_enable in [true, false] {
                 for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {
                     validate_fee_payer_account(
-                        TestParameter {
+                        ValidateFeePayerTestParameter {
                             is_nonce,
                             payer_init_balance: min_balance + fee - 1,
                             fee,
@@ -4448,7 +4455,7 @@ mod tests {
         {
             for feature_checked_arithmmetic_enable in [true, false] {
                 validate_fee_payer_account(
-                    TestParameter {
+                    ValidateFeePayerTestParameter {
                         is_nonce: false,
                         payer_init_balance: u64::MAX,
                         fee: u64::MAX,
@@ -4478,7 +4485,7 @@ mod tests {
         // requires additional min_balance, expect InsufficientFundsForFee error if feature gate is
         // enabled
         validate_fee_payer_account(
-            TestParameter {
+            ValidateFeePayerTestParameter {
                 is_nonce: true,
                 payer_init_balance: u64::MAX,
                 fee: u64::MAX,
@@ -4510,7 +4517,7 @@ mod tests {
         // in `release` mode, the addition will wrap, so the expected result would be
         // `Ok(())` with post payer balance `0`, therefore fails test with a panic.
         validate_fee_payer_account(
-            TestParameter {
+            ValidateFeePayerTestParameter {
                 is_nonce: true,
                 payer_init_balance: u64::MAX,
                 fee: u64::MAX,
