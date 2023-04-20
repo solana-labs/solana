@@ -97,7 +97,6 @@ pub fn load_bank_forks(
             "Initializing bank snapshot path: {}",
             snapshot_config.bank_snapshots_dir.display()
         );
-        let _ = fs::remove_dir_all(&snapshot_config.bank_snapshots_dir);
         fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
             .expect("Couldn't create snapshot directory");
 
