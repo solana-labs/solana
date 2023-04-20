@@ -325,7 +325,7 @@ impl LoadedPrograms {
     /// Before rerooting the blockstore this removes all programs of orphan forks
     pub fn prune<F: ForkGraph>(&mut self, fork_graph: &F, new_root: Slot) {
         self.entries.retain(|_key, second_level| {
-            let mut first_ancestor = true;
+            let mut first_ancestor_found = false;
             *second_level = second_level
                 .iter()
                 .rev()
@@ -333,9 +333,9 @@ impl LoadedPrograms {
                     let relation = fork_graph.relationship(entry.deployment_slot, new_root);
                     if entry.deployment_slot >= new_root {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
-                    } else if first_ancestor {
-                        first_ancestor = false;
-                        matches!(relation, BlockRelation::Ancestor)
+                    } else if !first_ancestor_found && matches!(relation, BlockRelation::Ancestor) {
+                        first_ancestor_found = true;
+                        first_ancestor_found
                     } else {
                         false
                     }
@@ -1428,5 +1428,42 @@ mod tests {
         // New root 15 should evict the expired entry for program1
         cache.prune(&fork_graph, 15);
         assert!(cache.entries.get(&program1).is_none());
+    }
+
+    #[test]
+    fn test_fork_prune_find_first_ancestor() {
+        let mut cache = LoadedPrograms::default();
+
+        // Fork graph created for the test
+        //                   0
+        //                 /   \
+        //                10    5
+        //                |
+        //                20
+
+        // Deploy program on slot 0, and slot 5.
+        // Prune the fork that has slot 5. The cache should still have the program
+        // deployed at slot 0.
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 10, 20]);
+        fork_graph.insert_fork(&[0, 5]);
+
+        let program1 = Pubkey::new_unique();
+        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(5, 6)).0);
+
+        cache.prune(&fork_graph, 10);
+
+        let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
+        let (found, _missing) = cache.extract(&working_slot, vec![program1].into_iter());
+
+        // The cache should have the program deployed at slot 0
+        assert_eq!(
+            found
+                .get(&program1)
+                .expect("Did not find the program")
+                .deployment_slot,
+            0
+        );
     }
 }
