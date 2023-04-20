@@ -594,7 +594,7 @@ impl Accounts {
             }
         };
 
-        // allow collapsible-else-if to help removing gate safer.
+        // allow collapsible-else-if to make removing the feature gate safer once activated
         #[allow(clippy::collapsible_else_if)]
         if feature_set.is_active(&feature_set::checked_arithmetic_in_fee_validation::id()) {
             payer_account
