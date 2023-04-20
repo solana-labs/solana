@@ -166,28 +166,28 @@ fn main() {
         .version(solana_version::version!())
         .arg(
             Arg::with_name("target_address")
-                .long("target_address")
+                .long("target-address")
                 .takes_value(true)
                 .value_name("TARGET_ADDR")
                 .help("Target address"),
         )
         .arg(
             Arg::with_name("num_connections")
-                .long("num_connections")
+                .long("num-connections")
                 .takes_value(true)
                 .value_name("NUM_CONN")
                 .help("Number of connections"),
         )
         .arg(
             Arg::with_name("num_streams_per_conn")
-                .long("num_streams_per_conn")
+                .long("num-streams-per-conn")
                 .takes_value(true)
                 .value_name("NUM_STREAMS")
                 .help("Number of streams per connection"),
         )
         .arg(
             Arg::with_name("num_iter")
-                .long("num_iter")
+                .long("num-iter")
                 .takes_value(true)
                 .value_name("NUM_ITER")
                 .help("Number of iterations to run"),
@@ -299,14 +299,14 @@ pub mod test {
         let mut total_packets = 0;
         let num_expected_packets = (NUM_CONN * NUM_STREAMS_PER_CONN) as usize;
         let num_bytes = PACKET_DATA_SIZE;
-        while now.elapsed().as_secs() < 60 {
+        while now.elapsed().as_secs() < 2 {
             // We're running in an async environment, we (almost) never
             // want to block
             if let Ok(packets) = receiver.try_recv() {
                 total_packets += packets.len();
                 all_packets.push(packets)
             } else {
-                sleep(Duration::from_secs(1)).await;
+                sleep(Duration::from_millis(250)).await;
             }
             if total_packets >= num_expected_packets {
                 break;
