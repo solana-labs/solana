@@ -35,7 +35,30 @@ impl OptimisticallyConfirmedBank {
 pub enum BankNotification {
     OptimisticallyConfirmed(Slot),
     Frozen(Arc<Bank>),
-    Root(Arc<Bank>),
+    Root((Arc<Bank>, Option<Vec<(Slot, Slot)>>)),
+}
+
+#[derive(Clone, Debug)]
+pub enum SlotNotification {
+    OptimisticallyConfirmed(Slot),
+    Frozen((Slot, Slot)),
+    Root((Slot, Slot)),
+}
+
+impl From<BankNotification> for SlotNotification {
+    fn from(notification: BankNotification) -> Self {
+        match notification {
+            BankNotification::OptimisticallyConfirmed(slot) => {
+                SlotNotification::OptimisticallyConfirmed(slot)
+            }
+            BankNotification::Frozen(bank) => {
+                SlotNotification::Frozen((bank.slot(), bank.parent_slot()))
+            }
+            BankNotification::Root(bank) => {
+                SlotNotification::Root((bank.0.slot(), bank.0.parent_slot()))
+            }
+        }
+    }
 }
 
 impl std::fmt::Debug for BankNotification {
@@ -45,13 +68,16 @@ impl std::fmt::Debug for BankNotification {
                 write!(f, "OptimisticallyConfirmed({slot:?})")
             }
             BankNotification::Frozen(bank) => write!(f, "Frozen({})", bank.slot()),
-            BankNotification::Root(bank) => write!(f, "Root({})", bank.slot()),
+            BankNotification::Root(bank) => write!(f, "Root({})", bank.0.slot()),
         }
     }
 }
 
 pub type BankNotificationReceiver = Receiver<BankNotification>;
 pub type BankNotificationSender = Sender<BankNotification>;
+
+pub type SlotNotificationReceiver = Receiver<SlotNotification>;
+pub type SlotNotificationSender = Sender<SlotNotification>;
 
 pub struct OptimisticallyConfirmedBankTracker {
     thread_hdl: JoinHandle<()>,
@@ -64,7 +90,7 @@ impl OptimisticallyConfirmedBankTracker {
         bank_forks: Arc<RwLock<BankForks>>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
         subscriptions: Arc<RpcSubscriptions>,
-        bank_notification_subscribers: Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
+        slot_notification_subscribers: Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
     ) -> Self {
         let exit_ = exit.clone();
         let mut pending_optimistically_confirmed_banks = HashSet::new();
@@ -87,7 +113,7 @@ impl OptimisticallyConfirmedBankTracker {
                     &mut last_notified_confirmed_slot,
                     &mut highest_confirmed_slot,
                     &mut highest_root_slot,
-                    &bank_notification_subscribers,
+                    &slot_notification_subscribers,
                 ) {
                     break;
                 }
@@ -105,7 +131,7 @@ impl OptimisticallyConfirmedBankTracker {
         last_notified_confirmed_slot: &mut Slot,
         highest_confirmed_slot: &mut Slot,
         highest_root_slot: &mut Slot,
-        bank_notification_subscribers: &Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
+        bank_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
     ) -> Result<(), RecvTimeoutError> {
         let notification = receiver.recv_timeout(Duration::from_secs(1))?;
         Self::process_notification(
@@ -123,8 +149,8 @@ impl OptimisticallyConfirmedBankTracker {
     }
 
     fn notify_slot_status(
-        bank_notification_subscribers: &Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
-        notification: BankNotification,
+        bank_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
+        notification: SlotNotification,
     ) {
         if let Some(bank_notification_subscribers) = bank_notification_subscribers {
             for sender in bank_notification_subscribers.read().unwrap().iter() {
@@ -147,7 +173,7 @@ impl OptimisticallyConfirmedBankTracker {
         bank: &Arc<Bank>,
         last_notified_confirmed_slot: &mut Slot,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
-        bank_notification_subscribers: &Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
+        bank_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
     ) {
         if bank.is_frozen() {
             if bank.slot() > *last_notified_confirmed_slot {
@@ -159,7 +185,7 @@ impl OptimisticallyConfirmedBankTracker {
                 *last_notified_confirmed_slot = bank.slot();
                 Self::notify_slot_status(
                     bank_notification_subscribers,
-                    BankNotification::OptimisticallyConfirmed(bank.slot()),
+                    SlotNotification::OptimisticallyConfirmed(bank.slot()),
                 );
             }
         } else if bank.slot() > bank_forks.read().unwrap().root_bank().slot() {
@@ -175,7 +201,7 @@ impl OptimisticallyConfirmedBankTracker {
         slot_threshold: Slot,
         last_notified_confirmed_slot: &mut Slot,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
-        bank_notification_subscribers: &Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
+        bank_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
     ) {
         for confirmed_bank in bank.clone().parents_inclusive().iter().rev() {
             if confirmed_bank.slot() > slot_threshold {
@@ -196,23 +222,21 @@ impl OptimisticallyConfirmedBankTracker {
     }
 
     fn notify_root_banks(
-        bank: &Arc<Bank>,
+        roots: &mut Vec<(Slot, Slot)>,
         slot_threshold: Slot,
-        bank_notification_subscribers: &Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
+        bank_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
     ) {
         if bank_notification_subscribers.is_none() {
             return;
         }
-        for root_bank in bank.clone().parents_inclusive().iter().rev() {
-            if root_bank.slot() > slot_threshold {
-                debug!(
-                    "Doing BankNotification::Root for root_bank {:?}",
-                    root_bank.slot()
-                );
+        roots.sort_unstable();
+        for root in roots {
+            if root.0 > slot_threshold {
+                debug!("Doing BankNotification::Root for root_bank {:?}", root);
 
                 Self::notify_slot_status(
                     bank_notification_subscribers,
-                    BankNotification::Root(root_bank.clone()),
+                    SlotNotification::Root(root.clone()),
                 );
             }
         }
@@ -227,7 +251,7 @@ impl OptimisticallyConfirmedBankTracker {
         last_notified_confirmed_slot: &mut Slot,
         highest_confirmed_slot: &mut Slot,
         highest_root_slot: &mut Slot,
-        bank_notification_subscribers: &Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
+        bank_notification_subscribers: &Option<Arc<RwLock<Vec<SlotNotificationSender>>>>,
     ) {
         debug!("received bank notification: {:?}", notification);
         match notification {
@@ -287,7 +311,7 @@ impl OptimisticallyConfirmedBankTracker {
 
                     Self::notify_slot_status(
                         bank_notification_subscribers,
-                        BankNotification::Frozen(bank.clone()),
+                        SlotNotification::Frozen((bank.slot(), bank.parent_slot())),
                     );
                 }
 
@@ -315,13 +339,19 @@ impl OptimisticallyConfirmedBankTracker {
                     drop(w_optimistically_confirmed_bank);
                 }
             }
-            BankNotification::Root(bank) => {
-                Self::notify_root_banks(&bank, *highest_root_slot, bank_notification_subscribers);
-                let root_slot = bank.slot();
+            BankNotification::Root(mut root) => {
+                if let Some(roots) = &mut root.1 {
+                    Self::notify_root_banks(
+                        roots,
+                        *highest_root_slot,
+                        bank_notification_subscribers,
+                    );
+                }
+                let root_slot = root.0.slot();
                 let mut w_optimistically_confirmed_bank =
                     optimistically_confirmed_bank.write().unwrap();
                 if root_slot > w_optimistically_confirmed_bank.bank.slot() {
-                    w_optimistically_confirmed_bank.bank = bank;
+                    w_optimistically_confirmed_bank.bank = root.0;
                 }
                 drop(w_optimistically_confirmed_bank);
 
@@ -489,8 +519,14 @@ mod tests {
         bank_notification_senders.push(sender);
 
         let subscribers = Some(Arc::new(RwLock::new(bank_notification_senders)));
+        let parent_roots = bank5
+            .clone()
+            .parents_inclusive()
+            .iter()
+            .map(|bank| (bank.slot(), bank.parent_slot()))
+            .collect::<Vec<_>>();
         OptimisticallyConfirmedBankTracker::process_notification(
-            BankNotification::Root(bank5),
+            BankNotification::Root((bank5, Some(parent_roots))),
             &bank_forks,
             &optimistically_confirmed_bank,
             &subscriptions,
@@ -541,8 +577,15 @@ mod tests {
 
         let bank7 = bank_forks.read().unwrap().get(7).unwrap();
 
+        let parent_roots = bank7
+            .clone()
+            .parents_inclusive()
+            .iter()
+            .map(|bank| (bank.slot(), bank.parent_slot()))
+            .collect::<Vec<_>>();
+
         OptimisticallyConfirmedBankTracker::process_notification(
-            BankNotification::Root(bank7),
+            BankNotification::Root((bank7, Some(parent_roots))),
             &bank_forks,
             &optimistically_confirmed_bank,
             &subscriptions,
@@ -565,7 +608,7 @@ mod tests {
 
     // Receive the Root notifications from the channel, if no item received within 100 ms, break and return all
     // of the received.
-    fn get_root_notifications(receiver: &Receiver<BankNotification>) -> Vec<BankNotification> {
+    fn get_root_notifications(receiver: &Receiver<SlotNotification>) -> Vec<SlotNotification> {
         let mut notifications = Vec::new();
         while let Ok(notification) = receiver.recv_timeout(Duration::from_millis(100)) {
             notifications.push(notification);

@@ -126,7 +126,10 @@ impl Tvu {
         verified_vote_receiver: VerifiedVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
         completed_data_sets_sender: CompletedDataSetsSender,
-        bank_notification_sender: Option<BankNotificationSender>,
+        bank_notification_sender: Option<(
+            BankNotificationSender,
+            bool, /* if to send parent roots for root notifications */
+        )>,
         gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
