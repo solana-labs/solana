@@ -1140,9 +1140,28 @@ fn show_votes_and_credits(
     Ok(())
 }
 
+macro_rules! choose_format {
+    ($target:expr, $fmt1:expr, $fmt2:expr, $use_fmt1:expr, $($arg:tt)*) => {
+        if $use_fmt1 {
+            writeln!(
+                $target,
+                $fmt1,
+                $($arg)*
+            )
+        } else {
+            writeln!(
+                $target,
+                $fmt2,
+                $($arg)*
+            )
+        }
+    };
+}
+
 fn show_epoch_rewards(
     f: &mut fmt::Formatter,
     epoch_rewards: &Option<Vec<CliEpochReward>>,
+    csv: bool,
 ) -> fmt::Result {
     if let Some(epoch_rewards) = epoch_rewards {
         if epoch_rewards.is_empty() {
@@ -1150,9 +1169,11 @@ fn show_epoch_rewards(
         }
 
         writeln!(f, "Epoch Rewards:")?;
-        writeln!(
+        choose_format!(
             f,
+            "{},{},{},{},{},{},{},{}",
             "  {:<6}  {:<11}  {:<26}  {:<18}  {:<18}  {:>14}  {:>14}  {:>10}",
+            csv,
             "Epoch",
             "Reward Slot",
             "Time",
@@ -1160,12 +1181,14 @@ fn show_epoch_rewards(
             "New Balance",
             "Percent Change",
             "APR",
-            "Commission"
+            "Commission",
         )?;
         for reward in epoch_rewards {
-            writeln!(
+            choose_format!(
                 f,
-                "  {:<6}  {:<11}  {:<26}  ◎{:<17.9}  ◎{:<17.9}  {:>13.6}%  {:>14}  {:>10}",
+                "{},{},{},{},{},{}%,{},{}",
+                "  {:<6}  {:<11}  {:<26}  ◎{:<17.9}  ◎{:<17.9}  {:>13.3}%  {:>14}  {:>10}",
+                csv,
                 reward.epoch,
                 reward.effective_slot,
                 Local.timestamp_opt(reward.block_time, 0).unwrap(),
@@ -1373,7 +1396,7 @@ impl fmt::Display for CliStakeState {
                 }
                 show_authorized(f, self.authorized.as_ref().unwrap())?;
                 show_lockup(f, self.lockup.as_ref())?;
-                show_epoch_rewards(f, &self.epoch_rewards)?
+                show_epoch_rewards(f, &self.epoch_rewards, false)?
             }
         }
         Ok(())
@@ -1562,6 +1585,8 @@ pub struct CliVoteAccount {
     pub epoch_voting_history: Vec<CliEpochVotingHistory>,
     #[serde(skip_serializing)]
     pub use_lamports_unit: bool,
+    #[serde(skip_serializing)]
+    pub use_csv: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub epoch_rewards: Option<Vec<CliEpochReward>>,
 }
@@ -1596,7 +1621,7 @@ impl fmt::Display for CliVoteAccount {
             self.recent_timestamp.slot
         )?;
         show_votes_and_credits(f, &self.votes, &self.epoch_voting_history)?;
-        show_epoch_rewards(f, &self.epoch_rewards)?;
+        show_epoch_rewards(f, &self.epoch_rewards, self.use_csv)?;
         Ok(())
     }
 }
@@ -3243,12 +3268,17 @@ mod tests {
             },
         ];
 
-        let c = CliVoteAccount {
+        let mut c = CliVoteAccount {
             account_balance: 10000,
             validator_identity: Pubkey::default().to_string(),
             epoch_rewards: Some(epoch_rewards),
             ..CliVoteAccount::default()
         };
+        let s = format!("{c}");
+        assert!(!s.is_empty());
+        println!("{s}");
+
+        c.use_csv = true;
         let s = format!("{c}");
         assert!(!s.is_empty());
         println!("{s}");
