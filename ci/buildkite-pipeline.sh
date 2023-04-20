@@ -302,6 +302,22 @@ EOF
 }
 
 pull_or_push_steps() {
+  # Coverage...
+  if affects \
+             .rs$ \
+             Cargo.lock$ \
+             Cargo.toml$ \
+             ^ci/rust-version.sh \
+             ^ci/test-coverage.sh \
+             ^scripts/coverage.sh \
+      ; then
+    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 80
+  else
+    annotate --style info --context test-coverage \
+      "Coverage skipped as no .rs files were modified"
+  fi
+  wait_step
+
   command_step sanity "ci/test-sanity.sh" 5 check
   wait_step
 
