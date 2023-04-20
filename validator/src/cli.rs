@@ -1272,12 +1272,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             .requires("accounts_filler_count")
             .help("Size per filler account in bytes."))
         .arg(
-            Arg::with_name("accounts_db_test_hash_calculation")
-                .long("accounts-db-test-hash-calculation")
-                .help("Enables testing of hash calculation using stores in \
-                      AccountsHashVerifier. This has a computational cost."),
-        )
-        .arg(
             Arg::with_name("accounts_shrink_optimize_total_space")
                 .long("accounts-shrink-optimize-total-space")
                 .takes_value(true)
