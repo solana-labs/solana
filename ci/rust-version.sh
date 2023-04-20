@@ -29,7 +29,7 @@ fi
 if [[ -n $RUST_NIGHTLY_VERSION ]]; then
   nightly_version="$RUST_NIGHTLY_VERSION"
 else
-  nightly_version=2023-01-22
+  nightly_version=2023-04-19
 fi
 
 
@@ -46,6 +46,7 @@ export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
     if ! cargo +"$toolchain" -V > /dev/null; then
       echo "$0: Missing toolchain? Installing...: $toolchain" >&2
       rustup install "$toolchain"
+      rustup +"$toolchain" component add clippy rustfmt
       cargo +"$toolchain" -V
     fi
   }
