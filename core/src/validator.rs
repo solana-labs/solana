@@ -945,7 +945,7 @@ impl Validator {
                     rpc_subscriptions.clone(),
                     confirmed_bank_subscribers,
                 )),
-                Some(bank_notification_sender),
+                Some((bank_notification_sender, geyser_plugin_service.is_some())),
             )
         } else {
             (None, None, None, None)
@@ -1145,7 +1145,7 @@ impl Validator {
             gossip_verified_vote_hash_sender,
             replay_vote_receiver,
             replay_vote_sender,
-            bank_notification_sender,
+            bank_notification_sender.map(|sender| sender.0),
             config.tpu_coalesce,
             cluster_confirmed_slot_sender,
             &connection_cache,
