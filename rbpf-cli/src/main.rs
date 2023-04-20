@@ -245,6 +245,8 @@ before execting it in the virtual machine.",
     file.rewind().unwrap();
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
+    // Allowing mut here, since it is needed for jit compile, which is under a config flag
+    #[allow(unused_mut)]
     let mut verified_executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
         let mut load_program_metrics = LoadProgramMetrics::default();
         let result = load_program_from_bytes(
