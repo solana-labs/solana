@@ -153,7 +153,7 @@ bytemuck = "1.11.0"
 byteorder = "1.4.3"
 bytes = "1.2"
 bzip2 = "0.4.4"
-caps = "0.5.4"
+caps = "0.5.5"
 cargo_metadata = "0.15.0"
 cc = "1.0.79"
 chrono = { version = "0.4.24", default-features = false }
