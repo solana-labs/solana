@@ -223,7 +223,6 @@ pub struct ValidatorConfig {
     pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_config: Option<AccountsDbConfig>,
     pub warp_slot: Option<Slot>,
-    pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_skip_shrink: bool,
     pub tpu_coalesce: Duration,
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
@@ -288,7 +287,6 @@ impl Default for ValidatorConfig {
             process_ledger_before_services: false,
             account_indexes: AccountSecondaryIndexes::default(),
             warp_slot: None,
-            accounts_db_test_hash_calculation: false,
             accounts_db_skip_shrink: false,
             tpu_coalesce: DEFAULT_TPU_COALESCE,
             staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
@@ -1551,7 +1549,6 @@ fn load_blockstore(
         account_indexes: config.account_indexes.clone(),
         accounts_db_config: config.accounts_db_config.clone(),
         shrink_ratio: config.accounts_shrink_ratio,
-        accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
         runtime_config: config.runtime_config.clone(),
         ..blockstore_processor::ProcessOptions::default()
