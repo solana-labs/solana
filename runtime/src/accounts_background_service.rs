@@ -5,8 +5,6 @@
 mod stats;
 use {
     crate::{
-        accounts_db::CalcAccountsHashDataSource,
-        accounts_hash::CalcAccountsHashConfig,
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
         snapshot_config::SnapshotConfig,
@@ -147,7 +145,6 @@ impl SnapshotRequestHandler {
     #[allow(clippy::type_complexity)]
     pub fn handle_snapshot_requests(
         &self,
-        test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {
@@ -178,7 +175,6 @@ impl SnapshotRequestHandler {
         );
 
         Some(self.handle_snapshot_request(
-            test_hash_calculation,
             non_snapshot_time_us,
             last_full_snapshot_slot,
             snapshot_request,
@@ -262,7 +258,6 @@ impl SnapshotRequestHandler {
 
     fn handle_snapshot_request(
         &self,
-        test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
         snapshot_request: SnapshotRequest,
@@ -287,16 +282,6 @@ impl SnapshotRequestHandler {
             *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
         }
 
-        let previous_accounts_hash = test_hash_calculation.then(|| {
-            // We have to use the index version here.
-            // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality.
-            snapshot_root_bank.update_accounts_hash(
-                CalcAccountsHashDataSource::IndexForTests,
-                false,
-                false,
-            )
-        });
-
         let mut flush_accounts_cache_time = Measure::start("flush_accounts_cache_time");
         // Forced cache flushing MUST flush all roots <= snapshot_root_bank.slot().
         // That's because `snapshot_root_bank.slot()` must be root at this point,
@@ -316,30 +301,6 @@ impl SnapshotRequestHandler {
                     .fetch_max_flush_root()
         );
         flush_accounts_cache_time.stop();
-
-        let accounts_hash_for_testing = previous_accounts_hash.map(|previous_accounts_hash| {
-            let check_hash = false;
-
-            let (this_accounts_hash, capitalization) = snapshot_root_bank
-                .accounts()
-                .accounts_db
-                .calculate_accounts_hash(
-                    CalcAccountsHashDataSource::Storages,
-                    snapshot_root_bank.slot(),
-                    &CalcAccountsHashConfig {
-                        use_bg_thread_pool: true,
-                        check_hash,
-                        ancestors: None,
-                        epoch_schedule: snapshot_root_bank.epoch_schedule(),
-                        rent_collector: snapshot_root_bank.rent_collector(),
-                        store_detailed_debug_info_on_failure: false,
-                    },
-                )
-                .unwrap();
-            assert_eq!(previous_accounts_hash, this_accounts_hash);
-            assert_eq!(capitalization, snapshot_root_bank.capitalization());
-            this_accounts_hash
-        });
 
         let mut clean_time = Measure::start("clean_time");
         snapshot_root_bank.clean_accounts(*last_full_snapshot_slot);
@@ -371,7 +332,7 @@ impl SnapshotRequestHandler {
                     snapshot_storages,
                     self.snapshot_config.archive_format,
                     self.snapshot_config.snapshot_version,
-                    accounts_hash_for_testing,
+                    None,
                 )
                 .expect("new accounts package for snapshot")
             }
@@ -381,7 +342,7 @@ impl SnapshotRequestHandler {
                     accounts_package_type,
                     &snapshot_root_bank,
                     snapshot_storages,
-                    accounts_hash_for_testing,
+                    None,
                 )
             }
         };
@@ -509,15 +470,11 @@ impl AbsRequestHandlers {
     #[allow(clippy::type_complexity)]
     pub fn handle_snapshot_requests(
         &self,
-        test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {
-        self.snapshot_request_handler.handle_snapshot_requests(
-            test_hash_calculation,
-            non_snapshot_time_us,
-            last_full_snapshot_slot,
-        )
+        self.snapshot_request_handler
+            .handle_snapshot_requests(non_snapshot_time_us, last_full_snapshot_slot)
     }
 }
 
@@ -530,7 +487,7 @@ impl AccountsBackgroundService {
         bank_forks: Arc<RwLock<BankForks>>,
         exit: Arc<AtomicBool>,
         request_handlers: AbsRequestHandlers,
-        test_hash_calculation: bool,
+        _test_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
         let mut last_cleaned_block_height = 0;
@@ -596,7 +553,6 @@ impl AccountsBackgroundService {
                         .is_startup_verification_complete()
                         .then(|| {
                             request_handlers.handle_snapshot_requests(
-                                test_hash_calculation,
                                 non_snapshot_time,
                                 &mut last_full_snapshot_slot,
                             )
