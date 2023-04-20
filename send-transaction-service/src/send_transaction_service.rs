@@ -820,6 +820,16 @@ mod test {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let (sender, receiver) = bounded(0);
 
+        let dummy_tx_info = || TransactionInfo {
+            signature: Signature::default(),
+            wire_transaction: vec![0; 128],
+            last_valid_block_height: 0,
+            durable_nonce_info: None,
+            max_retries: None,
+            retries: 0,
+            last_sent_time: None,
+        };
+
         let exit = Arc::new(AtomicBool::new(false));
         let connection_cache = Arc::new(ConnectionCache::default());
         let _send_transaction_service = SendTransactionService::new::<NullTpuInfo>(
@@ -833,19 +843,16 @@ mod test {
             exit.clone(),
         );
 
-        sender
-            .send(TransactionInfo {
-                signature: Signature::default(),
-                wire_transaction: vec![0; 128],
-                last_valid_block_height: 0,
-                durable_nonce_info: None,
-                max_retries: None,
-                retries: 0,
-                last_sent_time: None,
-            })
-            .unwrap();
+        sender.send(dummy_tx_info()).unwrap();
 
-        exit.store(true, Ordering::Relaxed);
+        thread::spawn(move || {
+            exit.store(true, Ordering::Relaxed);
+        });
+
+        let mut option = Ok(());
+        while option.is_ok() {
+            option = sender.send(dummy_tx_info());
+        }
     }
 
     #[test]
