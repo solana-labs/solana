@@ -1,4 +1,4 @@
-///! Instructions provided by the ZkToken Proof program
+//! Instructions provided by the ZkToken Proof program
 pub use crate::instruction::*;
 use {
     bytemuck::bytes_of,
