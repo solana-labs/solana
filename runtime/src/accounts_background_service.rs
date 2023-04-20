@@ -332,7 +332,6 @@ impl SnapshotRequestHandler {
                     snapshot_storages,
                     self.snapshot_config.archive_format,
                     self.snapshot_config.snapshot_version,
-                    None,
                 )
                 .expect("new accounts package for snapshot")
             }
@@ -342,7 +341,6 @@ impl SnapshotRequestHandler {
                     accounts_package_type,
                     &snapshot_root_bank,
                     snapshot_storages,
-                    None,
                 )
             }
         };

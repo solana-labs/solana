@@ -387,9 +387,6 @@ impl AccountsHashVerifier {
             accounts_package.expected_capitalization, lamports,
             "accounts hash capitalization mismatch"
         );
-        if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
-            assert_eq!(expected_hash, accounts_hash);
-        };
 
         accounts_package
             .accounts

@@ -2,7 +2,7 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::AccountStorageEntry,
-        accounts_hash::{AccountsHash, AccountsHashEnum},
+        accounts_hash::AccountsHashEnum,
         bank::Bank,
         epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
@@ -34,7 +34,6 @@ pub struct AccountsPackage {
     pub block_height: Slot,
     pub snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     pub expected_capitalization: u64,
-    pub accounts_hash_for_testing: Option<AccountsHash>,
     pub accounts: Arc<Accounts>,
     pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
@@ -60,7 +59,6 @@ impl AccountsPackage {
         snapshot_storages: Vec<Arc<AccountStorageEntry>>,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
-        accounts_hash_for_testing: Option<AccountsHash>,
     ) -> Result<Self> {
         if let AccountsPackageType::Snapshot(snapshot_type) = package_type {
             info!(
@@ -116,7 +114,6 @@ impl AccountsPackage {
             package_type,
             bank,
             snapshot_storages,
-            accounts_hash_for_testing,
             Some(snapshot_info),
         ))
     }
@@ -127,23 +124,15 @@ impl AccountsPackage {
         package_type: AccountsPackageType,
         bank: &Bank,
         snapshot_storages: Vec<Arc<AccountStorageEntry>>,
-        accounts_hash_for_testing: Option<AccountsHash>,
     ) -> Self {
         assert_eq!(package_type, AccountsPackageType::EpochAccountsHash);
-        Self::_new(
-            package_type,
-            bank,
-            snapshot_storages,
-            accounts_hash_for_testing,
-            None,
-        )
+        Self::_new(package_type, bank, snapshot_storages, None)
     }
 
     fn _new(
         package_type: AccountsPackageType,
         bank: &Bank,
         snapshot_storages: Vec<Arc<AccountStorageEntry>>,
-        accounts_hash_for_testing: Option<AccountsHash>,
         snapshot_info: Option<SupplementalSnapshotInfo>,
     ) -> Self {
         let is_incremental_accounts_hash_feature_enabled = bank
@@ -155,7 +144,6 @@ impl AccountsPackage {
             block_height: bank.block_height(),
             snapshot_storages,
             expected_capitalization: bank.capitalization(),
-            accounts_hash_for_testing,
             accounts: bank.accounts(),
             epoch_schedule: *bank.epoch_schedule(),
             rent_collector: bank.rent_collector().clone(),
@@ -174,7 +162,6 @@ impl AccountsPackage {
             block_height: Slot::default(),
             snapshot_storages: Vec::default(),
             expected_capitalization: u64::default(),
-            accounts_hash_for_testing: Option::default(),
             accounts: Arc::new(Accounts::default_for_tests()),
             epoch_schedule: EpochSchedule::default(),
             rent_collector: RentCollector::default(),

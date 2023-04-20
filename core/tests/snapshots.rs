@@ -251,7 +251,6 @@ fn run_bank_forks_snapshot_n<F>(
         last_bank.get_snapshot_storages(None),
         ArchiveFormat::TarBzip2,
         snapshot_version,
-        None,
     )
     .unwrap();
     last_bank.force_flush_accounts_cache();
@@ -413,7 +412,6 @@ fn test_concurrent_snapshot_packaging(
             snapshot_storages,
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
-            None,
         )
         .unwrap();
         accounts_package_sender.send(accounts_package).unwrap();
