@@ -202,7 +202,7 @@ fn bank_forks_from_snapshot(
     // Given that we are going to boot from an archive, the accountvecs held in the snapshot dirs for fast-boot should
     // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
     // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
-    // the archives.  So, purge the snapshot dirs upfront before loading the archives.
+    // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
     snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
 
     let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
