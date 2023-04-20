@@ -38,7 +38,7 @@ step() {
 
   local parallelism
   parallelism="$(echo "$params" | jq -r '.parallelism')"
-  maybe_parallelism="EMPTY_LINE"
+  maybe_parallelism="DELETE_THIS_LINE"
   if [ "$parallelism" != "null" ]; then
     maybe_parallelism=$(
       cat <<EOF | indent 2
@@ -49,7 +49,7 @@ EOF
 
   local retry
   retry="$(echo "$params" | jq -r '.retry')"
-  maybe_retry="EMPTY_LINE"
+  maybe_retry="DELETE_THIS_LINE"
   if [ "$retry" != "null" ]; then
     maybe_retry=$(
       cat <<EOF | indent 2
@@ -60,7 +60,7 @@ EOF
     )
   fi
 
-  cat <<EOF | indent | sed '/EMPTY_LINE/d'
+  cat <<EOF | indent | sed '/DELETE_THIS_LINE/d'
 - name: "$name"
   command: "$command"
   timeout_in_minutes: $timeout_in_minutes
