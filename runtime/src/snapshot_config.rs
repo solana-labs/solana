@@ -38,9 +38,6 @@ pub struct SnapshotConfig {
     /// NOTE: Incremental snapshots will only be kept for the latest full snapshot
     pub maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
 
-    /// This is the `debug_verify` parameter to use when calling `update_accounts_hash()`
-    pub accounts_hash_debug_verify: bool,
-
     // Thread niceness adjustment for snapshot packager service
     pub packager_thread_niceness_adj: i8,
 }
@@ -62,7 +59,6 @@ impl Default for SnapshotConfig {
                 snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             maximum_incremental_snapshot_archives_to_retain:
                 snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            accounts_hash_debug_verify: false,
             packager_thread_niceness_adj: 0,
         }
     }
