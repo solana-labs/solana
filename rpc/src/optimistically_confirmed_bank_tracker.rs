@@ -236,7 +236,7 @@ impl OptimisticallyConfirmedBankTracker {
 
                 Self::notify_slot_status(
                     bank_notification_subscribers,
-                    SlotNotification::Root(root.clone()),
+                    SlotNotification::Root(*root),
                 );
             }
         }
