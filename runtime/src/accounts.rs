@@ -4330,7 +4330,7 @@ mod tests {
         );
     }
 
-    struct TestParameter {
+    struct ValidateFeePayerTestParameter {
         is_nonce: bool,
         payer_init_balance: u64,
         fee: u64,
