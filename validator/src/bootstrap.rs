@@ -1,3 +1,7 @@
+use std::net::TcpStream;
+
+use itertools::Itertools;
+
 use {
     log::*,
     rand::{seq::SliceRandom, thread_rng, Rng},
@@ -451,6 +455,15 @@ pub fn attempt_download_genesis_and_snapshot(
     Ok(())
 }
 
+/// simple ping helper function which returns the time to connect
+fn ping(addr: &SocketAddr) -> Option<std::time::Duration> {
+    let start = Instant::now();
+    match TcpStream::connect_timeout(addr, std::time::Duration::from_secs(2)) {
+        Ok(_) => Some(start.elapsed()),
+        Err(_) => None,
+    }
+}
+
 // Populates `vetted_rpc_nodes` with a list of RPC nodes that are ready to be
 // used for downloading latest snapshots and/or the genesis block. Guaranteed to
 // find at least one viable node or terminate the process.
@@ -484,6 +497,17 @@ fn get_vetted_rpc_nodes(
         let newly_blacklisted_rpc_nodes = RwLock::new(HashSet::new());
         vetted_rpc_nodes.extend(
             rpc_node_details
+                .into_iter()
+                .map(|node| {
+                    let addr = &node.rpc_contact_info.gossip;
+                    let time = ping(addr); 
+                    // large default ping
+                    let time = time.unwrap_or(Duration::from_secs(100)); 
+                    (node, time)
+                })
+                .sorted_by_key(|(_, time)| *time)
+                .map(|(node, _)| node)
+                .collect::<Vec<_>>()
                 .into_par_iter()
                 .map(|rpc_node_details| {
                     let GetRpcNodeResult {
