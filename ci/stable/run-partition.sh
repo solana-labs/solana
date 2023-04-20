@@ -14,16 +14,11 @@ source "$here"/common.sh
 
 # check partition info
 INDEX=${1:-"$BUILDKITE_PARALLEL_JOB"} # BUILDKITE_PARALLEL_JOB from 0 to (BUILDKITE_PARALLEL_JOB_COUNT - 1)
-if [ -z "$INDEX" ]; then
-  echo "N is not set"
-  exit 1
-fi
+: "${INDEX:?}"
 
 LIMIT=${2:-"$BUILDKITE_PARALLEL_JOB_COUNT"}
-if [ -z "$LIMIT" ]; then
-  echo "LIMIT is not set"
-  exit 1
-fi
+: "${LIMIT:?}"
+
 if [ "$LIMIT" -lt 2 ]; then
   echo "LIMIT should >= 2"
   exit 1
