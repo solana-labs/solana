@@ -19,7 +19,10 @@ use {
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
-    solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
+    solana_ledger::{
+        blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
+        entry_notifier_service::EntryNotifierSender,
+    },
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::BankNotificationSender,
@@ -80,6 +83,7 @@ impl Tpu {
         sockets: TpuSockets,
         subscriptions: &Arc<RpcSubscriptions>,
         transaction_status_sender: Option<TransactionStatusSender>,
+        _entry_notification_sender: Option<EntryNotifierSender>,
         blockstore: &Arc<Blockstore>,
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,

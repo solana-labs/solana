@@ -1156,6 +1156,7 @@ impl Validator {
             },
             &rpc_subscriptions,
             transaction_status_sender,
+            entry_notification_sender.clone(),
             &blockstore,
             &config.broadcast_stage_type,
             &exit,
