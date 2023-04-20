@@ -60,7 +60,7 @@ use {
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_associated_token_account, inline_spl_token,
-        installed_scheduler_pool::InstalledSchedulerBox,
+        installed_scheduler_pool::InstalledSchedulerBoxInBank,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
         rent_debits::RentDebits,
@@ -1101,7 +1101,7 @@ pub struct Bank {
 
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
-    pub(crate) scheduler: RwLock<InstalledSchedulerBox>,
+    pub(crate) scheduler: RwLock<InstalledSchedulerBoxInBank>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1323,7 +1323,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
-            scheduler: RwLock::<InstalledSchedulerBox>::default(),
+            scheduler: RwLock::<InstalledSchedulerBoxInBank>::default(),
         };
 
         bank.bank_created();
@@ -1622,7 +1622,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
-            scheduler: RwLock::<InstalledSchedulerBox>::default(),
+            scheduler: RwLock::<InstalledSchedulerBoxInBank>::default(),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1949,7 +1949,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
-            scheduler: RwLock::<InstalledSchedulerBox>::default(),
+            scheduler: RwLock::<InstalledSchedulerBoxInBank>::default(),
         };
         bank.bank_created();
 

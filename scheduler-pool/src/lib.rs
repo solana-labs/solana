@@ -16,8 +16,9 @@ use {
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         installed_scheduler_pool::{
-            InstalledScheduler, InstalledSchedulerPool, ResultWithTimings, SchedulerBox,
-            SchedulerId, SchedulerPoolArc, SchedulingContext, WaitReason,
+            InstalledScheduler, InstalledSchedulerBox, InstalledSchedulerPool,
+            InstalledSchedulerPoolArc, ResultWithTimings, SchedulerId, SchedulingContext,
+            WaitReason,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
@@ -31,7 +32,7 @@ use {
 // types aren't available there...
 #[derive(Debug)]
 pub struct SchedulerPool {
-    schedulers: Mutex<Vec<SchedulerBox>>,
+    schedulers: Mutex<Vec<InstalledSchedulerBox>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<ReplayVoteSender>,
@@ -45,9 +46,9 @@ impl SchedulerPool {
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: Option<ReplayVoteSender>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
-    ) -> SchedulerPoolArc {
+    ) -> InstalledSchedulerPoolArc {
         Arc::new_cyclic(|weak_self| Self {
-            schedulers: Mutex::<Vec<SchedulerBox>>::default(),
+            schedulers: Mutex::<Vec<InstalledSchedulerBox>>::default(),
             log_messages_bytes_limit,
             transaction_status_sender,
             replay_vote_sender,
@@ -64,7 +65,7 @@ impl SchedulerPool {
 }
 
 impl InstalledSchedulerPool for SchedulerPool {
-    fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox {
+    fn take_from_pool(&self, context: SchedulingContext) -> InstalledSchedulerBox {
         assert!(!context.bank().with_scheduler());
 
         let mut schedulers = self.schedulers.lock().expect("not poisoned");
@@ -75,11 +76,11 @@ impl InstalledSchedulerPool for SchedulerPool {
             scheduler.replace_scheduler_context(context);
             scheduler
         } else {
-            Box::new(Scheduler::spawn(self.self_arc(), context))
+            Box::new(PooledScheduler::spawn(self.self_arc(), context))
         }
     }
 
-    fn return_to_pool(&self, scheduler: SchedulerBox) {
+    fn return_to_pool(&self, scheduler: InstalledSchedulerBox) {
         assert!(scheduler.scheduling_context().is_none());
 
         self.schedulers
@@ -93,14 +94,14 @@ impl InstalledSchedulerPool for SchedulerPool {
 // this will be replaced with more proper implementation...
 // not usable at all, especially for mainnet-beta
 #[derive(Debug)]
-struct Scheduler {
+struct PooledScheduler {
     id: SchedulerId,
     pool: Arc<SchedulerPool>,
     context: Option<SchedulingContext>,
     result_with_timings: Mutex<Option<ResultWithTimings>>,
 }
 
-impl Scheduler {
+impl PooledScheduler {
     fn spawn(pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
         Self {
             id: thread_rng().gen::<SchedulerId>(),
@@ -110,12 +111,12 @@ impl Scheduler {
         }
     }
 }
-impl InstalledScheduler for Scheduler {
+impl InstalledScheduler for PooledScheduler {
     fn scheduler_id(&self) -> SchedulerId {
         self.id
     }
 
-    fn scheduler_pool(&self) -> SchedulerPoolArc {
+    fn scheduler_pool(&self) -> InstalledSchedulerPoolArc {
         self.pool.clone()
     }
 

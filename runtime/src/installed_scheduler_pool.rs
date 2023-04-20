@@ -38,8 +38,8 @@ use {
 // Send + Sync is needed to be a field of BankForks
 #[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
-    fn take_from_pool(&self, context: SchedulingContext) -> SchedulerBox;
-    fn return_to_pool(&self, scheduler: SchedulerBox);
+    fn take_from_pool(&self, context: SchedulingContext) -> InstalledSchedulerBox;
+    fn return_to_pool(&self, scheduler: InstalledSchedulerBox);
 }
 
 #[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
@@ -49,7 +49,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 // Send + Sync is needed to be a field of Bank
 pub trait InstalledScheduler: Send + Sync + Debug {
     fn scheduler_id(&self) -> SchedulerId;
-    fn scheduler_pool(&self) -> SchedulerPoolArc;
+    fn scheduler_pool(&self) -> InstalledSchedulerPoolArc;
 
     // Calling this is illegal as soon as schedule_termiantion is called on &self.
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
@@ -70,8 +70,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     fn replace_scheduler_context(&mut self, context: SchedulingContext);
 }
 
-pub type SchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;
-pub(crate) type InstalledSchedulerPoolArc = Option<SchedulerPoolArc>;
+pub type InstalledSchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;
 
 pub type SchedulerId = u64;
 
@@ -88,16 +87,16 @@ pub enum WaitReason {
     ReinitializedForRecentBlockhash,
 }
 
-pub type SchedulerBox = Box<dyn InstalledScheduler>;
+pub type InstalledSchedulerBox = Box<dyn InstalledScheduler>;
 // somewhat arbitrary new type just to pacify Bank's frozen_abi...
 #[derive(Debug, Default)]
-pub(crate) struct InstalledSchedulerBox(Option<SchedulerBox>);
+pub(crate) struct InstalledSchedulerBoxInBank(Option<InstalledSchedulerBox>);
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for InstalledSchedulerBox {
+impl AbiExample for InstalledSchedulerBoxInBank {
     fn example() -> Self {
         Self(None)
     }
@@ -182,7 +181,7 @@ impl Deref for BankWithScheduler {
 }
 
 impl BankForks {
-    pub fn install_scheduler_pool(&mut self, pool: SchedulerPoolArc) {
+    pub fn install_scheduler_pool(&mut self, pool: InstalledSchedulerPoolArc) {
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         assert!(self.scheduler_pool.replace(pool).is_none());
     }
@@ -196,7 +195,7 @@ impl BankForks {
 }
 
 impl Bank {
-    pub fn install_scheduler(&self, scheduler: SchedulerBox) {
+    pub fn install_scheduler(&self, scheduler: InstalledSchedulerBox) {
         let mut scheduler_guard = self.scheduler.write().expect("not poisoned");
         assert!(scheduler_guard.0.replace(scheduler).is_none());
     }
@@ -318,7 +317,7 @@ mod tests {
         solana_sdk::system_transaction,
     };
 
-    fn setup_mocked_scheduler_pool(seq: &mut Sequence) -> SchedulerPoolArc {
+    fn setup_mocked_scheduler_pool(seq: &mut Sequence) -> InstalledSchedulerPoolArc {
         let mut mock = MockInstalledSchedulerPool::new();
         mock.expect_return_to_pool()
             .times(1)
@@ -330,7 +329,7 @@ mod tests {
     fn setup_mocked_scheduler_with_extra(
         wait_reasons: impl Iterator<Item = WaitReason>,
         f: Option<impl Fn(&mut MockInstalledScheduler)>,
-    ) -> SchedulerBox {
+    ) -> InstalledSchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
 
@@ -353,7 +352,9 @@ mod tests {
         Box::new(mock)
     }
 
-    fn setup_mocked_scheduler(wait_reasons: impl Iterator<Item = WaitReason>) -> SchedulerBox {
+    fn setup_mocked_scheduler(
+        wait_reasons: impl Iterator<Item = WaitReason>,
+    ) -> InstalledSchedulerBox {
         setup_mocked_scheduler_with_extra(
             wait_reasons,
             None::<fn(&mut MockInstalledScheduler) -> ()>,
