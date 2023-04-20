@@ -2357,6 +2357,7 @@ pub fn make_cli_reward(
             percent_change: rate_change * 100.0,
             apr: Some(apr * 100.0),
             commission: reward.commission,
+            block_time: epoch_end_time,
         })
     } else {
         None
