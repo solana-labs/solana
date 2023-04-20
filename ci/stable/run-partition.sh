@@ -20,12 +20,12 @@ LIMIT=${2:-"$BUILDKITE_PARALLEL_JOB_COUNT"}
 : "${LIMIT:?}"
 
 if [ "$LIMIT" -lt 2 ]; then
-  echo "LIMIT should >= 2"
+  echo "LIMIT(\$2) should >= 2"
   exit 1
 fi
 
 if [ ! "$LIMIT" -gt "$INDEX" ]; then
-  echo "LIMIT should greater then INDEX"
+  echo "LIMIT(\$2) should greater than INDEX(\$1)"
   exit 1
 fi
 
