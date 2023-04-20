@@ -16,6 +16,7 @@ source "$here"/common.sh
 INDEX=${1:-"$BUILDKITE_PARALLEL_JOB"} # BUILDKITE_PARALLEL_JOB from 0 to (BUILDKITE_PARALLEL_JOB_COUNT - 1)
 : "${INDEX:?}"
 
+# if LIMIT = 3, the valid INDEX is 0~2
 LIMIT=${2:-"$BUILDKITE_PARALLEL_JOB_COUNT"}
 : "${LIMIT:?}"
 
