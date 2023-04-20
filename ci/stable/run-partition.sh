@@ -19,18 +19,18 @@ if [ -z "$INDEX" ]; then
   exit 1
 fi
 
-M=${2:-"$BUILDKITE_PARALLEL_JOB_COUNT"}
-if [ -z "$M" ]; then
-  echo "M is not set"
+LIMIT=${2:-"$BUILDKITE_PARALLEL_JOB_COUNT"}
+if [ -z "$LIMIT" ]; then
+  echo "LIMIT is not set"
   exit 1
 fi
-if [ "$M" -lt 2 ]; then
-  echo "M should >= 2"
+if [ "$LIMIT" -lt 2 ]; then
+  echo "LIMIT should >= 2"
   exit 1
 fi
 
-if [ ! "$M" -gt "$INDEX" ]; then
-  echo "M should greater then INDEX"
+if [ ! "$LIMIT" -gt "$INDEX" ]; then
+  echo "LIMIT should greater then INDEX"
   exit 1
 fi
 
@@ -40,7 +40,7 @@ DONT_USE_NEXTEST_PACKAGES=(
   solana-core
 )
 
-if [ "$INDEX" -eq "$((M - 1))" ]; then
+if [ "$INDEX" -eq "$((LIMIT - 1))" ]; then
   ARGS=(
     --jobs "$JOBS"
     --tests
@@ -63,7 +63,7 @@ else
     --workspace
     --tests
     --jobs "$JOBS"
-    --partition hash:"$((INDEX + 1))/$((M - 1))"
+    --partition hash:"$((INDEX + 1))/$((LIMIT - 1))"
     --verbose
     --exclude solana-local-cluster
   )
