@@ -2,7 +2,7 @@
 #[macro_use]
 extern crate log;
 use {
-    clap::{crate_description, crate_name, value_t, App, Arg},
+    clap::{crate_description, crate_name, Arg, ArgMatches, Command},
     futures::future::join_all,
     quinn::{
         ClientConfig, Connection, Endpoint, EndpointConfig, IdleTimeout, TokioRuntime,
@@ -161,32 +161,32 @@ async fn run_connection_dos(
 fn main() {
     solana_logger::setup();
 
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("target_address")
+            Arg::new("target_address")
                 .long("target-address")
                 .takes_value(true)
                 .value_name("TARGET_ADDR")
                 .help("Target address"),
         )
         .arg(
-            Arg::with_name("num_connections")
+            Arg::new("num_connections")
                 .long("num-connections")
                 .takes_value(true)
                 .value_name("NUM_CONN")
                 .help("Number of connections"),
         )
         .arg(
-            Arg::with_name("num_streams_per_conn")
+            Arg::new("num_streams_per_conn")
                 .long("num-streams-per-conn")
                 .takes_value(true)
                 .value_name("NUM_STREAMS")
                 .help("Number of streams per connection"),
         )
         .arg(
-            Arg::with_name("num_iter")
+            Arg::new("num_iter")
                 .long("num-iter")
                 .takes_value(true)
                 .value_name("NUM_ITER")
@@ -194,10 +194,11 @@ fn main() {
         )
         .get_matches();
 
-    let num_connections = value_t!(matches, "num_connections", u64).unwrap_or(1);
-    let num_streams_per_conn = value_t!(matches, "num_streams_per_conn", u64).unwrap_or(256);
-    let num_iter = value_t!(matches, "num_iter", u64).unwrap_or(256);
-    let target_address = value_t!(matches, "target_address", String)
+    let num_connections: u64 = ArgMatches::value_of_t(&matches, "num_connections").unwrap_or(1);
+    let num_streams_per_conn: u64 =
+        ArgMatches::value_of_t(&matches, "num_streams_per_conn").unwrap_or(256);
+    let num_iter: u64 = ArgMatches::value_of_t(&matches, "num_iter").unwrap_or(256);
+    let target_address = ArgMatches::value_of_t(&matches, "target_address")
         .unwrap_or("127.0.0.1:8009".to_string())
         .parse()
         .unwrap();
