@@ -202,6 +202,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::redundant_clone)]
     fn test_recycler() {
         let recycler = Recycler::default();
         let mut y: u64 = recycler.allocate("test_recycler1");
