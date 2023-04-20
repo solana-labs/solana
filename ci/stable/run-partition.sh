@@ -13,8 +13,8 @@ source "$here"/../common/limit-threads.sh
 source "$here"/common.sh
 
 # check partition info
-N=${1:-"$BUILDKITE_PARALLEL_JOB"} # BUILDKITE_PARALLEL_JOB from 0 to (BUILDKITE_PARALLEL_JOB_COUNT - 1)
-if [ -z "$N" ]; then
+INDEX=${1:-"$BUILDKITE_PARALLEL_JOB"} # BUILDKITE_PARALLEL_JOB from 0 to (BUILDKITE_PARALLEL_JOB_COUNT - 1)
+if [ -z "$INDEX" ]; then
   echo "N is not set"
   exit 1
 fi
@@ -29,8 +29,8 @@ if [ "$M" -lt 2 ]; then
   exit 1
 fi
 
-if [ ! "$M" -gt "$N" ]; then
-  echo "M should greater then N"
+if [ ! "$M" -gt "$INDEX" ]; then
+  echo "M should greater then INDEX"
   exit 1
 fi
 
@@ -40,7 +40,7 @@ DONT_USE_NEXTEST_PACKAGES=(
   solana-core
 )
 
-if [ "$N" -eq "$((M - 1))" ]; then
+if [ "$INDEX" -eq "$((M - 1))" ]; then
   ARGS=(
     --jobs "$JOBS"
     --tests
@@ -63,7 +63,7 @@ else
     --workspace
     --tests
     --jobs "$JOBS"
-    --partition hash:"$((N + 1))/$((M - 1))"
+    --partition hash:"$((INDEX + 1))/$((M - 1))"
     --verbose
     --exclude solana-local-cluster
   )
