@@ -1,7 +1,3 @@
-use std::net::TcpStream;
-
-use itertools::Itertools;
-
 use {
     log::*,
     rand::{seq::SliceRandom, thread_rng, Rng},
@@ -31,7 +27,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::{hash_map::RandomState, HashMap, HashSet},
-        net::{SocketAddr, TcpListener, UdpSocket},
+        net::{SocketAddr, TcpListener, UdpSocket, TcpStream},
         path::Path,
         process::exit,
         sync::{
@@ -40,6 +36,7 @@ use {
         },
         time::{Duration, Instant},
     },
+    itertools::Itertools,
     thiserror::Error,
 };
 
