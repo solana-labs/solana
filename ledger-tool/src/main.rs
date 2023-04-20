@@ -1280,13 +1280,8 @@ fn load_bank_forks(
         pruned_banks_request_handler,
     };
     let exit = Arc::new(AtomicBool::new(false));
-    let accounts_background_service = AccountsBackgroundService::new(
-        bank_forks.clone(),
-        exit.clone(),
-        abs_request_handler,
-        process_options.accounts_db_test_hash_calculation,
-        None,
-    );
+    let accounts_background_service =
+        AccountsBackgroundService::new(bank_forks.clone(), exit.clone(), abs_request_handler, None);
 
     let (transaction_status_sender, transaction_status_service) = if transaction_notifier.is_some()
     {

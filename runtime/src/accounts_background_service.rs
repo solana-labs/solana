@@ -485,7 +485,6 @@ impl AccountsBackgroundService {
         bank_forks: Arc<RwLock<BankForks>>,
         exit: Arc<AtomicBool>,
         request_handlers: AbsRequestHandlers,
-        _test_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
         let mut last_cleaned_block_height = 0;
