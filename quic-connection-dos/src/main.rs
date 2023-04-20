@@ -10,8 +10,6 @@ use {
     },
     solana_client::nonblocking::quic_client::QuicClientCertificate,
     solana_net_utils::{bind_in_range, VALIDATOR_PORT_RANGE},
-    //rayon::prelude::*,
-    //solana_measure::measure::Measure,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
         quic::{QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT},
@@ -228,7 +226,6 @@ pub mod test {
             validator_configs::make_identical_validator_configs,
         },
         solana_perf::packet::PacketBatch,
-        //solana_client::thin_client::ThinClient,
         solana_rpc::rpc::JsonRpcConfig,
         solana_sdk::net::DEFAULT_TPU_COALESCE,
         solana_streamer::{
@@ -301,7 +298,6 @@ pub mod test {
         let now = Instant::now();
         let mut total_packets = 0;
         let num_expected_packets = (NUM_CONN * NUM_STREAMS_PER_CONN) as usize;
-        // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
         while now.elapsed().as_secs() < 60 {
             // We're running in an async environment, we (almost) never
@@ -340,21 +336,16 @@ pub mod test {
                 validator_configs: make_identical_validator_configs(
                     &ValidatorConfig {
                         rpc_config: JsonRpcConfig {
-                            //faucet_addr: Some(faucet_addr),
                             ..JsonRpcConfig::default_for_test()
                         },
                         ..ValidatorConfig::default_for_test()
                     },
                     NUM_NODES,
                 ),
-                //native_instruction_processors,
-                //additional_accounts,
                 ..ClusterConfig::default()
             },
             SocketAddrSpace::Unspecified,
         );
-
-        //cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
 
         let nodes = cluster.get_node_pubkeys();
         warn!("{:?}", nodes);
@@ -368,7 +359,6 @@ pub mod test {
         let (_rpc, tpu) = LegacyContactInfo::try_from(non_bootstrap_info)
             .map(cluster_tests::get_client_facing_addr)
             .unwrap();
-        //let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
         let runtime = tokio::runtime::Runtime::new().unwrap();
         runtime.block_on(run_connection_dos(tpu, 1, 1));
