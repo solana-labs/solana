@@ -4477,23 +4477,21 @@ mod tests {
         // nonce payer account has balance of u64::MAX, so does fee; due to nonce account
         // requires additional min_balance, expect InsufficientFundsForFee error if feature gate is
         // enabled
-        {
-            validate_fee_payer_account(
-                TestParameter {
-                    is_nonce: true,
-                    payer_init_balance: u64::MAX,
-                    fee: u64::MAX,
-                    expected_result: Err(TransactionError::InsufficientFundsForFee),
-                    payer_post_balance: u64::MAX,
-                    feature_checked_arithmmetic_enable: true,
-                },
-                &rent_collector,
-            );
-        }
+        validate_fee_payer_account(
+            TestParameter {
+                is_nonce: true,
+                payer_init_balance: u64::MAX,
+                fee: u64::MAX,
+                expected_result: Err(TransactionError::InsufficientFundsForFee),
+                payer_post_balance: u64::MAX,
+                feature_checked_arithmmetic_enable: true,
+            },
+            &rent_collector,
+        );
     }
 
     #[test]
-    #[should_panic(expected = "attempt to add with overflow")]
+    #[should_panic]
     fn test_validate_nonce_fee_payer_without_checked_arithmetic() {
         let rent_collector = RentCollector::new(
             0,
@@ -4504,18 +4502,23 @@ mod tests {
                 ..Rent::default()
             },
         );
-        {
-            validate_fee_payer_account(
-                TestParameter {
-                    is_nonce: true,
-                    payer_init_balance: u64::MAX,
-                    fee: u64::MAX,
-                    expected_result: Ok(()),
-                    payer_post_balance: u64::MAX,
-                    feature_checked_arithmmetic_enable: false,
-                },
-                &rent_collector,
-            );
-        }
+
+        // same test setup as `test_validate_nonce_fee_payer_with_checked_arithmetic`:
+        // nonce payer account has balance of u64::MAX, so does fee; and nonce account
+        // requires additional min_balance, if feature gate is not enabled, in `debug`
+        // mode, `u64::MAX + min_balance` would panic on "attempt to add with overflow";
+        // in `release` mode, the addition will wrap, so the expected result would be
+        // `Ok(())` with post payer balance `0`, therefore fails test with a panic.
+        validate_fee_payer_account(
+            TestParameter {
+                is_nonce: true,
+                payer_init_balance: u64::MAX,
+                fee: u64::MAX,
+                expected_result: Err(TransactionError::InsufficientFundsForFee),
+                payer_post_balance: u64::MAX,
+                feature_checked_arithmmetic_enable: false,
+            },
+            &rent_collector,
+        );
     }
 }
