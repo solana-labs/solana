@@ -27,7 +27,6 @@ use {
 
 const MAX_LOADED_ENTRY_COUNT: usize = 256;
 const MAX_UNLOADED_ENTRY_COUNT: usize = 1024;
-const MAX_TOMBSTONE_COUNT: usize = 1024;
 
 /// Relationship between two fork IDs
 #[derive(Copy, Clone, PartialEq)]
@@ -395,12 +394,10 @@ impl LoadedPrograms {
     pub fn sort_and_evict(&mut self, shrink_to: PercentageInteger) {
         let mut num_loaded: usize = 0;
         let mut num_unloaded: usize = 0;
-        let mut num_tombstones: usize = 0;
         // Find eviction candidates and sort by their type and usage counters.
         // Sorted result will have the following order:
         //   Loaded entries with ascending order of their usage count
         //   Unloaded entries with ascending order of their usage count
-        //   Tombstones with ascending order of their usage count
         let (ordering, sorted_candidates): (Vec<u32>, Vec<(Pubkey, Arc<LoadedProgram>)>) = self
             .entries
             .iter()
@@ -415,8 +412,8 @@ impl LoadedPrograms {
                         LoadedProgramType::Unloaded => Some((1, (*id, program.clone()))),
                         LoadedProgramType::FailedVerification
                         | LoadedProgramType::Closed
-                        | LoadedProgramType::DelayVisibility => Some((2, (*id, program.clone()))),
-                        LoadedProgramType::BuiltIn(_) => None,
+                        | LoadedProgramType::DelayVisibility
+                        | LoadedProgramType::BuiltIn(_) => None,
                     })
             })
             .sorted_by_cached_key(|(order, (_id, program))| {
@@ -428,7 +425,6 @@ impl LoadedPrograms {
             match order {
                 0 => num_loaded = num_loaded.saturating_add(1),
                 1 => num_unloaded = num_unloaded.saturating_add(1),
-                2 => num_tombstones = num_tombstones.saturating_add(1),
                 _ => unreachable!(),
             }
         }
@@ -450,11 +446,6 @@ impl LoadedPrograms {
                 .iter()
                 .take(num_newly_unloaded_to_evict),
         );
-
-        let num_tombstones_to_evict =
-            num_tombstones.saturating_sub(shrink_to.apply_to(MAX_TOMBSTONE_COUNT));
-        let (_, sorted_candidates) = sorted_candidates.split_at(num_unloaded);
-        self.remove_program_entries(sorted_candidates.iter().take(num_tombstones_to_evict));
 
         self.remove_programs_with_no_entries();
     }
@@ -539,14 +530,13 @@ mod tests {
         })
     }
 
-    fn set_tombstone(cache: &mut LoadedPrograms, key: Pubkey, slot: Slot) -> Arc<LoadedProgram> {
-        cache.assign_program(
-            key,
-            Arc::new(LoadedProgram::new_tombstone(
-                slot,
-                LoadedProgramType::FailedVerification,
-            )),
-        )
+    fn set_tombstone(
+        cache: &mut LoadedPrograms,
+        key: Pubkey,
+        slot: Slot,
+        reason: LoadedProgramType,
+    ) -> Arc<LoadedProgram> {
+        cache.assign_program(key, Arc::new(LoadedProgram::new_tombstone(slot, reason)))
     }
 
     fn insert_unloaded_program(
@@ -603,7 +593,12 @@ mod tests {
             });
 
         for slot in 21..31 {
-            set_tombstone(&mut cache, program1, slot);
+            set_tombstone(
+                &mut cache,
+                program1,
+                slot,
+                LoadedProgramType::FailedVerification,
+            );
         }
 
         for slot in 31..41 {
@@ -631,7 +626,12 @@ mod tests {
             });
 
         for slot in 21..31 {
-            set_tombstone(&mut cache, program2, slot);
+            set_tombstone(
+                &mut cache,
+                program2,
+                slot,
+                LoadedProgramType::DelayVisibility,
+            );
         }
 
         for slot in 31..41 {
@@ -659,7 +659,7 @@ mod tests {
             });
 
         for slot in 21..31 {
-            set_tombstone(&mut cache, program3, slot);
+            set_tombstone(&mut cache, program3, slot, LoadedProgramType::Closed);
         }
 
         for slot in 31..41 {
@@ -690,7 +690,7 @@ mod tests {
         // Evicting to 2% should update cache with
         // * 5 active entries
         // * 20 unloaded entries
-        // * 20 tombstones
+        // * 30 tombstones (tombstones are not evicted)
         cache.sort_and_evict(Percentage::from(2));
         // Check that every program is still in the cache.
         programs.iter().for_each(|entry| {
@@ -730,7 +730,7 @@ mod tests {
 
         assert_eq!(num_loaded, 5);
         assert_eq!(num_unloaded, 20);
-        assert_eq!(num_tombstones, 20);
+        assert_eq!(num_tombstones, 30);
     }
 
     #[test]
@@ -877,7 +877,12 @@ mod tests {
 
         let mut cache = LoadedPrograms::default();
         let program1 = Pubkey::new_unique();
-        let tombstone = set_tombstone(&mut cache, program1, 10);
+        let tombstone = set_tombstone(
+            &mut cache,
+            program1,
+            10,
+            LoadedProgramType::FailedVerification,
+        );
         let second_level = &cache
             .entries
             .get(&program1)
@@ -901,7 +906,12 @@ mod tests {
         assert_eq!(second_level.len(), 1);
         assert!(!second_level.get(0).unwrap().is_tombstone());
 
-        let tombstone = set_tombstone(&mut cache, program2, 60);
+        let tombstone = set_tombstone(
+            &mut cache,
+            program2,
+            60,
+            LoadedProgramType::FailedVerification,
+        );
         let second_level = &cache
             .entries
             .get(&program2)
