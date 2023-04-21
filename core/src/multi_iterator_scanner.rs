@@ -14,6 +14,7 @@
 //!
 
 /// Output from the element checker used in `MultiIteratorScanner::iterate`.
+#[derive(Debug)]
 pub enum ProcessingDecision {
     /// Should be processed by the scanner.
     Now,
