@@ -44,7 +44,7 @@ pub struct LegacyContactInfo {
     /// latest wallclock picked
     wallclock: u64,
     /// node shred version
-    pub shred_version: u16,
+    shred_version: u16,
 }
 
 impl Sanitize for LegacyContactInfo {
@@ -161,8 +161,18 @@ impl LegacyContactInfo {
         self.wallclock
     }
 
+    #[inline]
+    pub fn shred_version(&self) -> u16 {
+        self.shred_version
+    }
+
     pub fn set_wallclock(&mut self, wallclock: u64) {
         self.wallclock = wallclock;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_shred_version(&mut self, shred_version: u16) {
+        self.shred_version = shred_version
     }
 
     get_socket!(gossip);

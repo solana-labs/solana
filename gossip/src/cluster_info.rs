@@ -751,7 +751,7 @@ impl ClusterInfo {
                     .filter(|addr| self.socket_addr_space.check(addr))?;
                 let node_version = self.get_node_version(&node.id);
                 if my_shred_version != 0
-                    && (node.shred_version != 0 && node.shred_version != my_shred_version)
+                    && (node.shred_version() != 0 && node.shred_version() != my_shred_version)
                 {
                     return None;
                 }
@@ -769,7 +769,7 @@ impl ClusterInfo {
                     },
                     self.addr_to_string(&Some(rpc_addr), &node.rpc().ok()),
                     self.addr_to_string(&Some(rpc_addr), &node.rpc_pubsub().ok()),
-                    node.shred_version,
+                    node.shred_version(),
                 ))
             })
             .collect();
@@ -803,7 +803,7 @@ impl ClusterInfo {
                 }
 
                 let node_version = self.get_node_version(&node.id);
-                if my_shred_version != 0 && (node.shred_version != 0 && node.shred_version != my_shred_version) {
+                if my_shred_version != 0 && (node.shred_version() != 0 && node.shred_version() != my_shred_version) {
                     different_shred_nodes = different_shred_nodes.saturating_add(1);
                     None
                 } else {
@@ -837,7 +837,7 @@ impl ClusterInfo {
                         self.addr_to_string(&ip_addr, &node.tvu_forwards().ok()),
                         self.addr_to_string(&ip_addr, &node.repair().ok()),
                         self.addr_to_string(&ip_addr, &node.serve_repair().ok()),
-                        node.shred_version,
+                        node.shred_version(),
                     ))
                 }
             })
@@ -1310,7 +1310,7 @@ impl ClusterInfo {
             .get_nodes_contact_info()
             .filter(|node| {
                 node.id != self_pubkey
-                    && node.shred_version == self_shred_version
+                    && node.shred_version() == self_shred_version
                     && self.check_socket_addr_space(&node.tvu())
             })
             .cloned()
@@ -1327,7 +1327,7 @@ impl ClusterInfo {
             .get_nodes_contact_info()
             .filter(|node| {
                 node.id != self_pubkey
-                    && node.shred_version == self_shred_version
+                    && node.shred_version() == self_shred_version
                     && self.check_socket_addr_space(&node.tvu())
                     && self.check_socket_addr_space(&node.serve_repair())
                     && match gossip_crds.get::<&LowestSlot>(node.id) {
@@ -1666,16 +1666,17 @@ impl ClusterInfo {
         if self.my_shred_version() == 0 {
             if let Some(entrypoint) = entrypoints
                 .iter()
-                .find(|entrypoint| entrypoint.shred_version != 0)
+                .find(|entrypoint| entrypoint.shred_version() != 0)
             {
                 info!(
                     "Setting shred version to {:?} from entrypoint {:?}",
-                    entrypoint.shred_version, entrypoint.id
+                    entrypoint.shred_version(),
+                    entrypoint.id
                 );
                 self.my_contact_info
                     .write()
                     .unwrap()
-                    .set_shred_version(entrypoint.shred_version);
+                    .set_shred_version(entrypoint.shred_version());
             }
         }
         self.my_shred_version() != 0
@@ -3146,7 +3147,7 @@ fn filter_on_shred_version(
         Protocol::PullRequest(_, caller) => match &caller.data {
             // Allow spy nodes with shred-verion == 0 to pull from other nodes.
             CrdsData::LegacyContactInfo(node)
-                if node.shred_version == 0 || node.shred_version == self_shred_version =>
+                if node.shred_version() == 0 || node.shred_version() == self_shred_version =>
             {
                 Some(msg)
             }
@@ -4059,7 +4060,7 @@ RPC Enabled Nodes: 1"#;
         let mut rng = rand::thread_rng();
         let node_pubkey = Pubkey::new_unique();
         let mut node = LegacyContactInfo::new_rand(&mut rng, Some(node_pubkey));
-        node.shred_version = 42;
+        node.set_shred_version(42);
         let epoch_slots = EpochSlots::new_rand(&mut rng, Some(node_pubkey));
         let entries = vec![
             CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(node)),
@@ -4490,12 +4491,12 @@ RPC Enabled Nodes: 1"#;
         let entrypoint1_gossip_addr = socketaddr!("127.0.0.2:1234");
         let mut entrypoint1 = LegacyContactInfo::new_localhost(&Pubkey::default(), timestamp());
         entrypoint1.set_gossip(entrypoint1_gossip_addr).unwrap();
-        assert_eq!(entrypoint1.shred_version, 0);
+        assert_eq!(entrypoint1.shred_version(), 0);
 
         let entrypoint2_gossip_addr = socketaddr!("127.0.0.2:5678");
         let mut entrypoint2 = LegacyContactInfo::new_localhost(&Pubkey::default(), timestamp());
         entrypoint2.set_gossip(entrypoint2_gossip_addr).unwrap();
-        assert_eq!(entrypoint2.shred_version, 0);
+        assert_eq!(entrypoint2.shred_version(), 0);
         cluster_info.set_entrypoints(vec![entrypoint1, entrypoint2]);
 
         // Simulate getting entrypoint ContactInfo from gossip with an entrypoint1 shred version of
@@ -4582,7 +4583,7 @@ RPC Enabled Nodes: 1"#;
         let entrypoint_gossip_addr = socketaddr!("127.0.0.2:1234");
         let mut entrypoint = LegacyContactInfo::new_localhost(&Pubkey::default(), timestamp());
         entrypoint.set_gossip(entrypoint_gossip_addr).unwrap();
-        assert_eq!(entrypoint.shred_version, 0);
+        assert_eq!(entrypoint.shred_version(), 0);
         cluster_info.set_entrypoint(entrypoint);
 
         // Simulate getting entrypoint ContactInfo from gossip
@@ -4765,7 +4766,7 @@ RPC Enabled Nodes: 1"#;
             let keypair = Keypair::new();
             peers.push(keypair.pubkey());
             let mut rand_ci = LegacyContactInfo::new_rand(&mut rng, Some(keypair.pubkey()));
-            rand_ci.shred_version = shred_version;
+            rand_ci.set_shred_version(shred_version);
             rand_ci.set_wallclock(timestamp());
             CrdsValue::new_signed(CrdsData::LegacyContactInfo(rand_ci), &keypair)
         })

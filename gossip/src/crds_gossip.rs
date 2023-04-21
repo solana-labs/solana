@@ -357,7 +357,7 @@ pub(crate) fn get_gossip_nodes<R: Rng>(
         })
         .filter(|node| {
             &node.id != pubkey
-                && verify_shred_version(node.shred_version)
+                && verify_shred_version(node.shred_version())
                 && node
                     .gossip()
                     .map(|addr| socket_addr_space.check(&addr))
