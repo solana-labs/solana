@@ -515,7 +515,11 @@ fn get_vetted_rpc_nodes(
                         Duration::from_secs(5),
                     );
 
-                    let ping_time = ping(&rpc_contact_info.gossip().unwrap()); 
+                    let ping_time = if let Ok(addr) = rpc_contact_info.rpc() { 
+                        ping(&addr); 
+                    } else { 
+                        None
+                    };
 
                     Some((rpc_contact_info, snapshot_hash, rpc_client, ping_time))
                 })
