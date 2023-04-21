@@ -594,10 +594,24 @@ impl Accounts {
             }
         };
 
-        if payer_account.lamports() < fee + min_balance {
-            error_counters.insufficient_funds += 1;
-            return Err(TransactionError::InsufficientFundsForFee);
+        // allow collapsible-else-if to make removing the feature gate safer once activated
+        #[allow(clippy::collapsible_else_if)]
+        if feature_set.is_active(&feature_set::checked_arithmetic_in_fee_validation::id()) {
+            payer_account
+                .lamports()
+                .checked_sub(min_balance)
+                .and_then(|v| v.checked_sub(fee))
+                .ok_or_else(|| {
+                    error_counters.insufficient_funds += 1;
+                    TransactionError::InsufficientFundsForFee
+                })?;
+        } else {
+            if payer_account.lamports() < fee + min_balance {
+                error_counters.insufficient_funds += 1;
+                return Err(TransactionError::InsufficientFundsForFee);
+            }
         }
+
         let payer_pre_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
         payer_account
             .checked_sub_lamports(fee)
@@ -4317,6 +4331,201 @@ mod tests {
         assert_eq!(
             loaded_accounts[0].clone(),
             (Err(TransactionError::InsufficientFundsForFee), None),
+        );
+    }
+
+    struct ValidateFeePayerTestParameter {
+        is_nonce: bool,
+        payer_init_balance: u64,
+        fee: u64,
+        expected_result: Result<()>,
+        payer_post_balance: u64,
+        feature_checked_arithmmetic_enable: bool,
+    }
+
+    fn validate_fee_payer_account(
+        test_parameter: ValidateFeePayerTestParameter,
+        rent_collector: &RentCollector,
+    ) {
+        let payer_account_keys = Keypair::new();
+        let mut account = if test_parameter.is_nonce {
+            AccountSharedData::new_data(
+                test_parameter.payer_init_balance,
+                &NonceVersions::new(NonceState::Initialized(nonce::state::Data::default())),
+                &system_program::id(),
+            )
+            .unwrap()
+        } else {
+            AccountSharedData::new(test_parameter.payer_init_balance, 0, &system_program::id())
+        };
+        let mut feature_set = FeatureSet::default();
+        if test_parameter.feature_checked_arithmmetic_enable {
+            feature_set.activate(&feature_set::checked_arithmetic_in_fee_validation::id(), 0);
+        };
+        let result = Accounts::validate_fee_payer(
+            &payer_account_keys.pubkey(),
+            &mut account,
+            0,
+            &mut TransactionErrorMetrics::default(),
+            rent_collector,
+            &feature_set,
+            test_parameter.fee,
+        );
+
+        assert_eq!(result, test_parameter.expected_result);
+        assert_eq!(account.lamports(), test_parameter.payer_post_balance);
+    }
+
+    #[test]
+    fn test_validate_fee_payer() {
+        let rent_collector = RentCollector::new(
+            0,
+            EpochSchedule::default(),
+            500_000.0,
+            Rent {
+                lamports_per_byte_year: 1,
+                ..Rent::default()
+            },
+        );
+        let min_balance = rent_collector.rent.minimum_balance(NonceState::size());
+        let fee = 5_000;
+
+        // If payer account has sufficient balance, expect successful fee deduction,
+        // regardless feature gate status, or if payer is nonce account.
+        {
+            for feature_checked_arithmmetic_enable in [true, false] {
+                for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {
+                    validate_fee_payer_account(
+                        ValidateFeePayerTestParameter {
+                            is_nonce,
+                            payer_init_balance: min_balance + fee,
+                            fee,
+                            expected_result: Ok(()),
+                            payer_post_balance: min_balance,
+                            feature_checked_arithmmetic_enable,
+                        },
+                        &rent_collector,
+                    );
+                }
+            }
+        }
+
+        // If payer account has no balance, expected AccountNotFound Error
+        // regardless feature gate status, or if payer is nonce account.
+        {
+            for feature_checked_arithmmetic_enable in [true, false] {
+                for is_nonce in [true, false] {
+                    validate_fee_payer_account(
+                        ValidateFeePayerTestParameter {
+                            is_nonce,
+                            payer_init_balance: 0,
+                            fee,
+                            expected_result: Err(TransactionError::AccountNotFound),
+                            payer_post_balance: 0,
+                            feature_checked_arithmmetic_enable,
+                        },
+                        &rent_collector,
+                    );
+                }
+            }
+        }
+
+        // If payer account has insufficent balance, expect InsufficientFundsForFee error
+        // regardless feature gate status, or if payer is nonce account.
+        {
+            for feature_checked_arithmmetic_enable in [true, false] {
+                for (is_nonce, min_balance) in [(true, min_balance), (false, 0)] {
+                    validate_fee_payer_account(
+                        ValidateFeePayerTestParameter {
+                            is_nonce,
+                            payer_init_balance: min_balance + fee - 1,
+                            fee,
+                            expected_result: Err(TransactionError::InsufficientFundsForFee),
+                            payer_post_balance: min_balance + fee - 1,
+                            feature_checked_arithmmetic_enable,
+                        },
+                        &rent_collector,
+                    );
+                }
+            }
+        }
+
+        // normal payer account has balance of u64::MAX, so does fee; since it does not  require
+        // min_balance, expect successful fee deduction, regardless of feature gate status
+        {
+            for feature_checked_arithmmetic_enable in [true, false] {
+                validate_fee_payer_account(
+                    ValidateFeePayerTestParameter {
+                        is_nonce: false,
+                        payer_init_balance: u64::MAX,
+                        fee: u64::MAX,
+                        expected_result: Ok(()),
+                        payer_post_balance: 0,
+                        feature_checked_arithmmetic_enable,
+                    },
+                    &rent_collector,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_validate_nonce_fee_payer_with_checked_arithmetic() {
+        let rent_collector = RentCollector::new(
+            0,
+            EpochSchedule::default(),
+            500_000.0,
+            Rent {
+                lamports_per_byte_year: 1,
+                ..Rent::default()
+            },
+        );
+
+        // nonce payer account has balance of u64::MAX, so does fee; due to nonce account
+        // requires additional min_balance, expect InsufficientFundsForFee error if feature gate is
+        // enabled
+        validate_fee_payer_account(
+            ValidateFeePayerTestParameter {
+                is_nonce: true,
+                payer_init_balance: u64::MAX,
+                fee: u64::MAX,
+                expected_result: Err(TransactionError::InsufficientFundsForFee),
+                payer_post_balance: u64::MAX,
+                feature_checked_arithmmetic_enable: true,
+            },
+            &rent_collector,
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_validate_nonce_fee_payer_without_checked_arithmetic() {
+        let rent_collector = RentCollector::new(
+            0,
+            EpochSchedule::default(),
+            500_000.0,
+            Rent {
+                lamports_per_byte_year: 1,
+                ..Rent::default()
+            },
+        );
+
+        // same test setup as `test_validate_nonce_fee_payer_with_checked_arithmetic`:
+        // nonce payer account has balance of u64::MAX, so does fee; and nonce account
+        // requires additional min_balance, if feature gate is not enabled, in `debug`
+        // mode, `u64::MAX + min_balance` would panic on "attempt to add with overflow";
+        // in `release` mode, the addition will wrap, so the expected result would be
+        // `Ok(())` with post payer balance `0`, therefore fails test with a panic.
+        validate_fee_payer_account(
+            ValidateFeePayerTestParameter {
+                is_nonce: true,
+                payer_init_balance: u64::MAX,
+                fee: u64::MAX,
+                expected_result: Err(TransactionError::InsufficientFundsForFee),
+                payer_post_balance: u64::MAX,
+                feature_checked_arithmmetic_enable: false,
+            },
+            &rent_collector,
         );
     }
 }
