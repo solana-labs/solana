@@ -2100,7 +2100,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
         .all_tvu_peers()
         .into_iter()
         .filter(|node| {
-            let age = now.saturating_sub(node.wallclock);
+            let age = now.saturating_sub(node.wallclock());
             // Contact infos are refreshed twice during this period.
             age < CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS
         })

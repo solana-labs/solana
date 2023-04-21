@@ -582,7 +582,7 @@ impl CrdsValue {
     /// This is used to time out push messages.
     pub fn wallclock(&self) -> u64 {
         match &self.data {
-            CrdsData::LegacyContactInfo(contact_info) => contact_info.wallclock,
+            CrdsData::LegacyContactInfo(contact_info) => contact_info.wallclock(),
             CrdsData::Vote(_, vote) => vote.wallclock,
             CrdsData::LowestSlot(_, obj) => obj.wallclock,
             CrdsData::LegacySnapshotHashes(hash) => hash.wallclock,

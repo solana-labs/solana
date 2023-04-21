@@ -1284,7 +1284,7 @@ mod tests {
         assert_eq!(crds.get_shred_version(&pubkey), None);
         // Initial insertion of a node with shred version:
         let mut node = ContactInfo::new_rand(&mut rng, Some(pubkey));
-        let wallclock = node.wallclock;
+        let wallclock = node.wallclock();
         node.shred_version = 42;
         let node = CrdsData::LegacyContactInfo(node);
         let node = CrdsValue::new_unsigned(node);
@@ -1295,7 +1295,7 @@ mod tests {
         assert_eq!(crds.get_shred_version(&pubkey), Some(42));
         // An outdated  value should not update shred-version:
         let mut node = ContactInfo::new_rand(&mut rng, Some(pubkey));
-        node.wallclock = wallclock - 1; // outdated.
+        node.set_wallclock(wallclock - 1); // outdated.
         node.shred_version = 8;
         let node = CrdsData::LegacyContactInfo(node);
         let node = CrdsValue::new_unsigned(node);
@@ -1306,7 +1306,7 @@ mod tests {
         assert_eq!(crds.get_shred_version(&pubkey), Some(42));
         // Update shred version:
         let mut node = ContactInfo::new_rand(&mut rng, Some(pubkey));
-        node.wallclock = wallclock + 1; // so that it overrides the prev one.
+        node.set_wallclock(wallclock + 1); // so that it overrides the prev one.
         node.shred_version = 8;
         let node = CrdsData::LegacyContactInfo(node);
         let node = CrdsValue::new_unsigned(node);
