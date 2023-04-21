@@ -470,6 +470,7 @@ impl JsonRpcService {
             prioritization_fee_cache,
         );
 
+        let exit = Arc::new(AtomicBool::new(false));
         let leader_info =
             poh_recorder.map(|recorder| ClusterTpuInfo::new(cluster_info.clone(), recorder));
         let _send_transaction_service = Arc::new(SendTransactionService::new_with_config(
@@ -479,6 +480,7 @@ impl JsonRpcService {
             receiver,
             &connection_cache,
             send_transaction_service_config,
+            exit.clone(),
         ));
 
         #[cfg(test)]
@@ -548,8 +550,16 @@ impl JsonRpcService {
         validator_exit
             .write()
             .unwrap()
+<<<<<<< HEAD
             .register_exit(Box::new(move || close_handle_.close()));
         Self {
+=======
+            .register_exit(Box::new(move || {
+                close_handle_.close();
+                exit.store(true, Ordering::Relaxed);
+            }));
+        Ok(Self {
+>>>>>>> 03c1744e1 (Register SendTransactionService exit (#31261))
             thread_hdl,
             #[cfg(test)]
             request_processor: test_request_processor,
