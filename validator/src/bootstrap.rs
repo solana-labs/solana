@@ -523,6 +523,12 @@ fn get_vetted_rpc_nodes(
                                 info!("RPC node version: {} Ping: {:?}", rpc_version.solana_core, ping_time.unwrap());
                                 true
                             } else { 
+                                fail_rpc_node(
+                                    "Failed to ping RPC".to_string(),
+                                    &validator_config.known_validators,
+                                    &rpc_contact_info.id,
+                                    &mut newly_blacklisted_rpc_nodes.write().unwrap(),
+                                );
                                 false
                             }
                         }
