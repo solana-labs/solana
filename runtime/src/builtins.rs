@@ -1,5 +1,7 @@
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-use solana_frozen_abi::abi_example::AbiExample;
+use {
+    solana_frozen_abi::abi_example::AbiExample, solana_program_runtime::declare_process_instruction,
+};
 use {
     solana_program_runtime::invoke_context::ProcessInstructionWithContext,
     solana_sdk::{feature_set, pubkey::Pubkey, stake},
@@ -36,10 +38,15 @@ impl fmt::Debug for Builtin {
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for Builtin {
     fn example() -> Self {
+        declare_process_instruction!(process_instruction, 1, |_invoke_context| {
+            // Do nothing
+            Ok(())
+        });
+
         Self {
             name: String::default(),
             id: Pubkey::default(),
-            process_instruction_with_context: |_invoke_context| Ok(()),
+            process_instruction_with_context: process_instruction,
         }
     }
 }

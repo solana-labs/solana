@@ -484,7 +484,7 @@ fn network_run_pull(
             if node.keypair.pubkey() != other.keypair.pubkey() {
                 ping_cache.mock_pong(
                     other.keypair.pubkey(),
-                    other.contact_info.gossip,
+                    other.contact_info.gossip().unwrap(),
                     Instant::now(),
                 );
             }

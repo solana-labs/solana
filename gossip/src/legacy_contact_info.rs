@@ -1,5 +1,10 @@
 use {
-    crate::crds_value::MAX_WALLCLOCK,
+    crate::{
+        contact_info::{
+            sanitize_quic_offset, sanitize_socket, socket_addr_unspecified, ContactInfo, Error,
+        },
+        crds_value::MAX_WALLCLOCK,
+    },
     solana_sdk::{
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
@@ -16,25 +21,25 @@ use {
 pub struct LegacyContactInfo {
     pub id: Pubkey,
     /// gossip address
-    pub gossip: SocketAddr,
+    gossip: SocketAddr,
     /// address to connect to for replication
-    pub tvu: SocketAddr,
+    tvu: SocketAddr,
     /// address to forward shreds to
-    pub tvu_forwards: SocketAddr,
+    tvu_forwards: SocketAddr,
     /// address to send repair responses to
-    pub repair: SocketAddr,
+    repair: SocketAddr,
     /// transactions address
-    pub tpu: SocketAddr,
+    tpu: SocketAddr,
     /// address to forward unprocessed transactions to
-    pub tpu_forwards: SocketAddr,
+    tpu_forwards: SocketAddr,
     /// address to which to send bank state requests
-    pub tpu_vote: SocketAddr,
+    tpu_vote: SocketAddr,
     /// address to which to send JSON-RPC requests
-    pub rpc: SocketAddr,
+    rpc: SocketAddr,
     /// websocket for JSON-RPC push notifications
-    pub rpc_pubsub: SocketAddr,
+    rpc_pubsub: SocketAddr,
     /// address to send repair requests to
-    pub serve_repair: SocketAddr,
+    serve_repair: SocketAddr,
     /// latest wallclock picked
     pub wallclock: u64,
     /// node shred version
@@ -48,6 +53,30 @@ impl Sanitize for LegacyContactInfo {
         }
         Ok(())
     }
+}
+
+macro_rules! get_socket {
+    ($name:ident) => {
+        pub fn $name(&self) -> Result<SocketAddr, Error> {
+            let socket = &self.$name;
+            sanitize_socket(socket)?;
+            Ok(socket).copied()
+        }
+    };
+}
+
+macro_rules! set_socket {
+    ($name:ident, $key:ident) => {
+        pub fn $name<T>(&mut self, socket: T) -> Result<(), Error>
+        where
+            SocketAddr: From<T>,
+        {
+            let socket = SocketAddr::from(socket);
+            sanitize_socket(&socket)?;
+            self.$key = socket;
+            Ok(())
+        }
+    };
 }
 
 #[macro_export]
@@ -126,6 +155,20 @@ impl LegacyContactInfo {
         }
     }
 
+    get_socket!(gossip);
+    get_socket!(tvu);
+    get_socket!(tvu_forwards);
+    get_socket!(repair);
+    get_socket!(tpu);
+    get_socket!(tpu_forwards);
+    get_socket!(tpu_vote);
+    get_socket!(rpc);
+    get_socket!(rpc_pubsub);
+    get_socket!(serve_repair);
+
+    set_socket!(set_gossip, gossip);
+    set_socket!(set_rpc, rpc);
+
     fn is_valid_ip(addr: IpAddr) -> bool {
         !(addr.is_unspecified() || addr.is_multicast())
         // || (addr.is_loopback() && !cfg_test))
@@ -155,6 +198,35 @@ impl LegacyContactInfo {
         } else {
             None
         }
+    }
+}
+
+impl TryFrom<&ContactInfo> for LegacyContactInfo {
+    type Error = Error;
+
+    fn try_from(node: &ContactInfo) -> Result<Self, Self::Error> {
+        macro_rules! unwrap_socket {
+            ($name:ident) => {
+                node.$name().ok().unwrap_or_else(socket_addr_unspecified)
+            };
+        }
+        sanitize_quic_offset(&node.tpu().ok(), &node.tpu_quic().ok())?;
+        sanitize_quic_offset(&node.tpu_forwards().ok(), &node.tpu_forwards_quic().ok())?;
+        Ok(Self {
+            id: *node.pubkey(),
+            gossip: unwrap_socket!(gossip),
+            tvu: unwrap_socket!(tvu),
+            tvu_forwards: unwrap_socket!(tvu_forwards),
+            repair: unwrap_socket!(repair),
+            tpu: unwrap_socket!(tpu),
+            tpu_forwards: unwrap_socket!(tpu_forwards),
+            tpu_vote: unwrap_socket!(tpu_vote),
+            rpc: unwrap_socket!(rpc),
+            rpc_pubsub: unwrap_socket!(rpc_pubsub),
+            serve_repair: unwrap_socket!(serve_repair),
+            wallclock: node.wallclock(),
+            shred_version: node.shred_version(),
+        })
     }
 }
 

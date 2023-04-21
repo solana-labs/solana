@@ -971,6 +971,7 @@ pub struct CliEpochReward {
     pub percent_change: f64,
     pub apr: Option<f64>,
     pub commission: Option<u8>,
+    pub block_time: UnixTimestamp,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1151,15 +1152,23 @@ fn show_epoch_rewards(
         writeln!(f, "Epoch Rewards:")?;
         writeln!(
             f,
-            "  {:<6}  {:<11}  {:<18}  {:<18}  {:>14}  {:>14}  {:>10}",
-            "Epoch", "Reward Slot", "Amount", "New Balance", "Percent Change", "APR", "Commission"
+            "  {:<6}  {:<11}  {:<26}  {:<18}  {:<18}  {:>14}  {:>14}  {:>10}",
+            "Epoch",
+            "Reward Slot",
+            "Time",
+            "Amount",
+            "New Balance",
+            "Percent Change",
+            "APR",
+            "Commission"
         )?;
         for reward in epoch_rewards {
             writeln!(
                 f,
-                "  {:<6}  {:<11}  ◎{:<17.9}  ◎{:<17.9}  {:>13.9}%  {:>14}  {:>10}",
+                "  {:<6}  {:<11}  {:<26}  ◎{:<17.9}  ◎{:<17.9}  {:>13.6}%  {:>14}  {:>10}",
                 reward.epoch,
                 reward.effective_slot,
+                Local.timestamp_opt(reward.block_time, 0).unwrap(),
                 lamports_to_sol(reward.amount),
                 lamports_to_sol(reward.post_balance),
                 reward.percent_change,
@@ -1537,7 +1546,7 @@ impl fmt::Display for CliValidatorInfo {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliVoteAccount {
     pub account_balance: u64,
@@ -1592,7 +1601,7 @@ impl fmt::Display for CliVoteAccount {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliAuthorizedVoters {
     authorized_voters: BTreeMap<Epoch, String>,
@@ -3214,5 +3223,41 @@ mod tests {
             OutputFormat::from_matches(&matches, "output_format", true),
             OutputFormat::DisplayVerbose
         );
+    }
+
+    #[test]
+    fn test_format_vote_account() {
+        let epoch_rewards = vec![
+            CliEpochReward {
+                percent_change: 11.0,
+                post_balance: 100,
+                commission: Some(1),
+                effective_slot: 100,
+                epoch: 1,
+                amount: 10,
+                block_time: UnixTimestamp::default(),
+                apr: Some(10.0),
+            },
+            CliEpochReward {
+                percent_change: 11.0,
+                post_balance: 100,
+                commission: Some(1),
+                effective_slot: 200,
+                epoch: 2,
+                amount: 12,
+                block_time: UnixTimestamp::default(),
+                apr: Some(13.0),
+            },
+        ];
+
+        let c = CliVoteAccount {
+            account_balance: 10000,
+            validator_identity: Pubkey::default().to_string(),
+            epoch_rewards: Some(epoch_rewards),
+            ..CliVoteAccount::default()
+        };
+        let s = format!("{c}");
+        assert!(!s.is_empty());
+        println!("{s}");
     }
 }

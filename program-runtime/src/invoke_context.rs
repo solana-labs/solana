@@ -11,7 +11,11 @@ use {
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_measure::measure::Measure,
-    solana_rbpf::{ebpf::MM_HEAP_START, vm::ContextObject},
+    solana_rbpf::{
+        ebpf::MM_HEAP_START,
+        memory_region::MemoryMapping,
+        vm::{BuiltInFunction, Config, ContextObject, ProgramResult},
+    },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_deprecated,
@@ -45,26 +49,40 @@ macro_rules! declare_process_instruction {
     ($process_instruction:ident, $cu_to_consume:expr, |$invoke_context:ident| $inner:tt) => {
         pub fn $process_instruction(
             invoke_context: &mut $crate::invoke_context::InvokeContext,
-        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+            _arg0: u64,
+            _arg1: u64,
+            _arg2: u64,
+            _arg3: u64,
+            _arg4: u64,
+            _memory_mapping: &mut $crate::solana_rbpf::memory_region::MemoryMapping,
+            result: &mut $crate::solana_rbpf::vm::ProgramResult,
+        ) {
             fn process_instruction_inner(
                 $invoke_context: &mut $crate::invoke_context::InvokeContext,
             ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
                 $inner
             }
-            if invoke_context
-                .feature_set
-                .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
+            let consumption_result = if $cu_to_consume > 0
+                && invoke_context
+                    .feature_set
+                    .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
             {
-                invoke_context.consume_checked($cu_to_consume)?;
-            }
-            process_instruction_inner(invoke_context)
-                .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+                invoke_context.consume_checked($cu_to_consume)
+            } else {
+                Ok(())
+            };
+            *result = consumption_result
+                .and_then(|_| {
+                    process_instruction_inner(invoke_context)
+                        .map(|_| 0)
+                        .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+                })
+                .into();
         }
     };
 }
 
-pub type ProcessInstructionWithContext =
-    fn(&mut InvokeContext) -> Result<(), Box<dyn std::error::Error>>;
+pub type ProcessInstructionWithContext = BuiltInFunction<InvokeContext<'static>>;
 
 #[derive(Clone)]
 pub struct BuiltinProgram {
@@ -74,15 +92,11 @@ pub struct BuiltinProgram {
 
 impl std::fmt::Debug for BuiltinProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        // These are just type aliases for work around of Debug-ing above pointers
-        type ErasedProcessInstructionWithContext =
-            fn(&'static mut InvokeContext<'static>) -> Result<(), Box<dyn std::error::Error>>;
-
-        // rustc doesn't compile due to bug without this work around
-        // https://github.com/rust-lang/rust/issues/50280
-        // https://users.rust-lang.org/t/display-function-pointer/17073/2
-        let erased_instruction: ErasedProcessInstructionWithContext = self.process_instruction;
-        write!(f, "{}: {:p}", self.program_id, erased_instruction)
+        write!(
+            f,
+            "{}: {:p}",
+            self.program_id, self.process_instruction as *const ProcessInstructionWithContext,
+        )
     }
 }
 
@@ -724,21 +738,37 @@ impl<'a> InvokeContext<'a> {
                 self.transaction_context
                     .set_return_data(program_id, Vec::new())?;
 
-                let pre_remaining_units = self.get_remaining();
                 let logger = self.get_log_collector();
                 stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
-                let result = (entry.process_instruction)(self)
-                    .map(|()| {
+                let pre_remaining_units = self.get_remaining();
+                let mock_config = Config::default();
+                let mut mock_memory_mapping = MemoryMapping::new(Vec::new(), &mock_config).unwrap();
+                let mut result = ProgramResult::Ok(0);
+                (entry.process_instruction)(
+                    // Removes lifetime tracking
+                    unsafe { std::mem::transmute::<&mut InvokeContext, &mut InvokeContext>(self) },
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    &mut mock_memory_mapping,
+                    &mut result,
+                );
+                let result = match result {
+                    ProgramResult::Ok(_) => {
                         stable_log::program_success(&logger, &program_id);
-                    })
-                    .map_err(|err| {
+                        Ok(())
+                    }
+                    ProgramResult::Err(err) => {
                         stable_log::program_failure(&logger, &program_id, err.as_ref());
                         if let Some(err) = err.downcast_ref::<InstructionError>() {
-                            err.clone()
+                            Err(err.clone())
                         } else {
-                            InstructionError::ProgramFailedToComplete
+                            Err(InstructionError::ProgramFailedToComplete)
                         }
-                    });
+                    }
+                };
                 let post_remaining_units = self.get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
 
@@ -995,31 +1025,6 @@ mod tests {
         Resize {
             new_len: u64,
         },
-    }
-
-    #[test]
-    fn test_program_entry_debug() {
-        fn mock_process_instruction(
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), Box<dyn std::error::Error>> {
-            Ok(())
-        }
-        fn mock_ix_processor(
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), Box<dyn std::error::Error>> {
-            Ok(())
-        }
-        let builtin_programs = &[
-            BuiltinProgram {
-                program_id: solana_sdk::pubkey::new_rand(),
-                process_instruction: mock_process_instruction,
-            },
-            BuiltinProgram {
-                program_id: solana_sdk::pubkey::new_rand(),
-                process_instruction: mock_ix_processor,
-            },
-        ];
-        assert!(!format!("{builtin_programs:?}").is_empty());
     }
 
     const MOCK_BUILTIN_COMPUTE_UNIT_COST: u64 = 1;

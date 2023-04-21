@@ -5,7 +5,7 @@ extern crate test;
 
 use {
     log::*,
-    solana_program_runtime::invoke_context::InvokeContext,
+    solana_program_runtime::declare_process_instruction,
     solana_runtime::{
         bank::{test_utils::goto_end_of_slot, *},
         bank_client::BankClient,
@@ -33,12 +33,6 @@ const NOOP_PROGRAM_ID: [u8; 32] = [
     98, 117, 105, 108, 116, 105, 110, 95, 112, 114, 111, 103, 114, 97, 109, 95, 105, 100, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
 ];
-
-fn process_instruction(
-    _invoke_context: &mut InvokeContext,
-) -> Result<(), Box<dyn std::error::Error>> {
-    Ok(())
-}
 
 pub fn create_builtin_transactions(
     bank_client: &BankClient,
@@ -130,6 +124,11 @@ fn do_bench_transactions(
     let bank = Bank::new_for_benches(&genesis_config);
     // freeze bank so that slot hashes is populated
     bank.freeze();
+
+    declare_process_instruction!(process_instruction, 1, |_invoke_context| {
+        // Do nothing
+        Ok(())
+    });
 
     let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), 1);
     bank.add_builtin(
