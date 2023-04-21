@@ -510,16 +510,14 @@ fn get_vetted_rpc_nodes(
                         rpc_contact_info.id,
                         rpc_contact_info.rpc()
                     );
+
+                    let rpc_addr = rpc_contact_info.rpc().ok()?;
+                    let ping_time = ping(&rpc_addr); 
+
                     let rpc_client = RpcClient::new_socket_with_timeout(
-                        rpc_contact_info.rpc().ok()?,
+                        rpc_addr,
                         Duration::from_secs(5),
                     );
-
-                    let ping_time = if let Ok(addr) = rpc_contact_info.rpc() { 
-                        ping(&addr); 
-                    } else { 
-                        None
-                    };
 
                     Some((rpc_contact_info, snapshot_hash, rpc_client, ping_time))
                 })
