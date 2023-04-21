@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -e
 
 CI_BUILD_START=$(date +%s)
 export CI_BUILD_START
