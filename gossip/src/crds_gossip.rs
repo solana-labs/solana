@@ -358,7 +358,10 @@ pub(crate) fn get_gossip_nodes<R: Rng>(
         .filter(|node| {
             &node.id != pubkey
                 && verify_shred_version(node.shred_version)
-                && ContactInfo::is_valid_address(&node.gossip, socket_addr_space)
+                && node
+                    .gossip()
+                    .map(|addr| socket_addr_space.check(&addr))
+                    .unwrap_or_default()
                 && match gossip_validators {
                     Some(nodes) => nodes.contains(&node.id),
                     None => true,
@@ -375,7 +378,8 @@ pub(crate) fn dedup_gossip_addresses(
 ) -> HashMap</*gossip:*/ SocketAddr, (/*stake:*/ u64, ContactInfo)> {
     nodes
         .into_iter()
-        .into_grouping_map_by(|node| node.gossip)
+        .filter_map(|node| Some((node.gossip().ok()?, node)))
+        .into_grouping_map()
         .aggregate(|acc, _node_gossip, node| {
             let stake = stakes.get(&node.id).copied().unwrap_or_default();
             match acc {
@@ -401,12 +405,16 @@ pub(crate) fn maybe_ping_gossip_addresses<R: Rng + CryptoRng>(
     nodes
         .into_iter()
         .filter(|node| {
+            let node_gossip = match node.gossip() {
+                Err(_) => return false,
+                Ok(addr) => addr,
+            };
             let (check, ping) = {
-                let node = (node.id, node.gossip);
+                let node = (node.id, node_gossip);
                 ping_cache.check(now, node, &mut pingf)
             };
             if let Some(ping) = ping {
-                pings.push((node.gossip, ping));
+                pings.push((node_gossip, ping));
             }
             check
         })

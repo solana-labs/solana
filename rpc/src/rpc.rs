@@ -3447,16 +3447,16 @@ pub mod rpc_full {
             debug!("get_cluster_nodes rpc request received");
             let cluster_info = &meta.cluster_info;
             let socket_addr_space = cluster_info.socket_addr_space();
-            let valid_address_or_none = |addr: &SocketAddr| -> Option<SocketAddr> {
-                ContactInfo::is_valid_address(addr, socket_addr_space).then_some(*addr)
-            };
             let my_shred_version = cluster_info.my_shred_version();
             Ok(cluster_info
                 .all_peers()
                 .iter()
                 .filter_map(|(contact_info, _)| {
                     if my_shred_version == contact_info.shred_version
-                        && ContactInfo::is_valid_address(&contact_info.gossip, socket_addr_space)
+                        && contact_info
+                            .gossip()
+                            .map(|addr| socket_addr_space.check(&addr))
+                            .unwrap_or_default()
                     {
                         let (version, feature_set) = if let Some(version) =
                             cluster_info.get_node_version(&contact_info.id)
@@ -3467,10 +3467,19 @@ pub mod rpc_full {
                         };
                         Some(RpcContactInfo {
                             pubkey: contact_info.id.to_string(),
-                            gossip: Some(contact_info.gossip),
-                            tpu: valid_address_or_none(&contact_info.tpu),
-                            rpc: valid_address_or_none(&contact_info.rpc),
-                            pubsub: valid_address_or_none(&contact_info.rpc_pubsub),
+                            gossip: contact_info.gossip().ok(),
+                            tpu: contact_info
+                                .tpu()
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            rpc: contact_info
+                                .rpc()
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            pubsub: contact_info
+                                .rpc_pubsub()
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
                             version,
                             feature_set,
                             shred_version: Some(my_shred_version),

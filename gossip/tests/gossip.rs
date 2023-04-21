@@ -130,13 +130,13 @@ fn retransmit_to(
     let dests: Vec<_> = if forwarded {
         peers
             .iter()
-            .map(|peer| peer.tvu_forwards)
-            .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
+            .filter_map(|peer| peer.tvu_forwards().ok())
+            .filter(|addr| socket_addr_space.check(addr))
             .collect()
     } else {
         peers
             .iter()
-            .map(|peer| peer.tvu)
+            .filter_map(|peer| peer.tvu().ok())
             .filter(|addr| socket_addr_space.check(addr))
             .collect()
     };

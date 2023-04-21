@@ -292,14 +292,15 @@ fn process_rpc_url(
 
     let rpc_addrs: Vec<_> = validators
         .iter()
-        .filter_map(|contact_info| {
-            if (any || all || Some(contact_info.gossip) == entrypoint_addr)
-                && ContactInfo::is_valid_address(&contact_info.rpc, &socket_addr_space)
-            {
-                return Some(contact_info.rpc);
-            }
-            None
+        .filter(|node| {
+            any || all
+                || node
+                    .gossip()
+                    .map(|addr| Some(addr) == entrypoint_addr)
+                    .unwrap_or_default()
         })
+        .filter_map(|node| node.rpc().ok())
+        .filter(|addr| socket_addr_space.check(addr))
         .collect();
 
     if rpc_addrs.is_empty() {

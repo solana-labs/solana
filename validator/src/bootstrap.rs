@@ -124,7 +124,7 @@ fn verify_reachable_ports(
     }
 
     solana_net_utils::verify_reachable_ports(
-        &cluster_entrypoint.gossip,
+        &cluster_entrypoint.gossip().unwrap(),
         tcp_listeners,
         &udp_sockets,
     )
@@ -186,8 +186,10 @@ fn get_rpc_peers(
         .unwrap_or_else(|| cluster_info.my_shred_version());
     if shred_version == 0 {
         let all_zero_shred_versions = cluster_entrypoints.iter().all(|cluster_entrypoint| {
-            cluster_info
-                .lookup_contact_info_by_gossip_addr(&cluster_entrypoint.gossip)
+            cluster_entrypoint
+                .gossip()
+                .ok()
+                .and_then(|addr| cluster_info.lookup_contact_info_by_gossip_addr(&addr))
                 .map_or(false, |entrypoint| entrypoint.shred_version == 0)
         });
 
@@ -391,7 +393,7 @@ pub fn attempt_download_genesis_and_snapshot(
     authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
 ) -> Result<(), String> {
     download_then_check_genesis_hash(
-        &rpc_contact_info.rpc,
+        &rpc_contact_info.rpc().map_err(|err| format!("{err:?}"))?,
         ledger_path,
         &mut validator_config.expected_genesis_hash,
         bootstrap_config.max_genesis_archive_unpacked_size,
@@ -485,7 +487,7 @@ fn get_vetted_rpc_nodes(
         vetted_rpc_nodes.extend(
             rpc_node_details
                 .into_par_iter()
-                .map(|rpc_node_details| {
+                .filter_map(|rpc_node_details| {
                     let GetRpcNodeResult {
                         rpc_contact_info,
                         snapshot_hash,
@@ -493,14 +495,15 @@ fn get_vetted_rpc_nodes(
 
                     info!(
                         "Using RPC service from node {}: {:?}",
-                        rpc_contact_info.id, rpc_contact_info.rpc
+                        rpc_contact_info.id,
+                        rpc_contact_info.rpc()
                     );
                     let rpc_client = RpcClient::new_socket_with_timeout(
-                        rpc_contact_info.rpc,
+                        rpc_contact_info.rpc().ok()?,
                         Duration::from_secs(5),
                     );
 
-                    (rpc_contact_info, snapshot_hash, rpc_client)
+                    Some((rpc_contact_info, snapshot_hash, rpc_client))
                 })
                 .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
                     match rpc_client.get_version() {
@@ -1194,14 +1197,14 @@ fn download_snapshot(
 
     *start_progress.write().unwrap() = ValidatorStartProgress::DownloadingSnapshot {
         slot: desired_snapshot_hash.0,
-        rpc_addr: rpc_contact_info.rpc,
+        rpc_addr: rpc_contact_info.rpc().map_err(|err| format!("{err:?}"))?,
     };
     let desired_snapshot_hash = (
         desired_snapshot_hash.0,
         solana_runtime::snapshot_hash::SnapshotHash(desired_snapshot_hash.1),
     );
     download_snapshot_archive(
-        &rpc_contact_info.rpc,
+        &rpc_contact_info.rpc().map_err(|err| format!("{err:?}"))?,
         full_snapshot_archives_dir,
         incremental_snapshot_archives_dir,
         desired_snapshot_hash,
@@ -1326,22 +1329,7 @@ mod tests {
     }
 
     fn default_contact_info_for_tests() -> ContactInfo {
-        let sock_addr = SocketAddr::from(([1, 1, 1, 1], 11_111));
-        ContactInfo {
-            id: Pubkey::default(),
-            gossip: sock_addr,
-            tvu: sock_addr,
-            tvu_forwards: sock_addr,
-            repair: sock_addr,
-            tpu: sock_addr,
-            tpu_forwards: sock_addr,
-            tpu_vote: sock_addr,
-            rpc: sock_addr,
-            rpc_pubsub: sock_addr,
-            serve_repair: sock_addr,
-            wallclock: 123456789,
-            shred_version: 1,
-        }
+        ContactInfo::new_localhost(&Pubkey::default(), /*now:*/ 1_681_834_947_321)
     }
 
     #[test]

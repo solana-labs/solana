@@ -719,10 +719,7 @@ impl CrdsStats {
 mod tests {
     use {
         super::*,
-        crate::{
-            crds_value::{new_rand_timestamp, LegacySnapshotHashes, NodeInstance},
-            socketaddr,
-        },
+        crate::crds_value::{new_rand_timestamp, LegacySnapshotHashes, NodeInstance},
         rand::{thread_rng, Rng, SeedableRng},
         rand_chacha::ChaChaRng,
         rayon::ThreadPoolBuilder,
@@ -1447,7 +1444,7 @@ mod tests {
         let v2 = VersionedCrdsValue::new(
             {
                 let mut contact_info = ContactInfo::new_localhost(&Pubkey::default(), 0);
-                contact_info.rpc = socketaddr!(Ipv4Addr::UNSPECIFIED, 0);
+                contact_info.set_rpc((Ipv4Addr::LOCALHOST, 1244)).unwrap();
                 CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(contact_info))
             },
             Cursor::default(),

@@ -427,16 +427,16 @@ fn get_target(
         info!("ADDR = {}", entrypoint_addr);
 
         for node in nodes {
-            if node.gossip == entrypoint_addr {
-                info!("{}", node.gossip);
+            if node.gossip().ok() == Some(entrypoint_addr) {
+                info!("{:?}", node.gossip());
                 target = match mode {
-                    Mode::Gossip => Some((node.id, node.gossip)),
-                    Mode::Tvu => Some((node.id, node.tvu)),
-                    Mode::TvuForwards => Some((node.id, node.tvu_forwards)),
-                    Mode::Tpu => Some((node.id, node.tpu)),
-                    Mode::TpuForwards => Some((node.id, node.tpu_forwards)),
-                    Mode::Repair => Some((node.id, node.repair)),
-                    Mode::ServeRepair => Some((node.id, node.serve_repair)),
+                    Mode::Gossip => Some((node.id, node.gossip().unwrap())),
+                    Mode::Tvu => Some((node.id, node.tvu().unwrap())),
+                    Mode::TvuForwards => Some((node.id, node.tvu_forwards().unwrap())),
+                    Mode::Tpu => Some((node.id, node.tpu().unwrap())),
+                    Mode::TpuForwards => Some((node.id, node.tpu_forwards().unwrap())),
+                    Mode::Repair => Some((node.id, node.repair().unwrap())),
+                    Mode::ServeRepair => Some((node.id, node.serve_repair().unwrap())),
                     Mode::Rpc => None,
                 };
                 break;
@@ -457,9 +457,9 @@ fn get_rpc_client(
 
     // find target node
     for node in nodes {
-        if node.gossip == entrypoint_addr {
-            info!("{}", node.gossip);
-            return Ok(RpcClient::new_socket(node.rpc));
+        if node.gossip().ok() == Some(entrypoint_addr) {
+            info!("{:?}", node.gossip());
+            return Ok(RpcClient::new_socket(node.rpc().unwrap()));
         }
     }
     Err("Node with entrypoint_addr was not found")
@@ -813,7 +813,7 @@ pub mod test {
             &solana_sdk::pubkey::new_rand(),
             timestamp(),
         )];
-        let entrypoint_addr = nodes[0].gossip;
+        let entrypoint_addr = nodes[0].gossip().unwrap();
 
         run_dos_no_client(
             &nodes,
