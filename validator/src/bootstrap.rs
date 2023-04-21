@@ -524,8 +524,8 @@ fn get_vetted_rpc_nodes(
                 .filter(|(rpc_contact_info, _snapshot_hash, rpc_client, ping_time)| {
                     match rpc_client.get_version() {
                         Ok(rpc_version) => {
-                            if ping_time.is_some() {
-                                info!("RPC node version: {} Ping: {:?}", rpc_version.solana_core, ping_time.unwrap());
+                            if let Some(ping_time) = ping_time {
+                                info!("RPC node version: {} Ping: {}ms", rpc_version.solana_core, ping_time.as_millis());
                                 true
                             } else { 
                                 fail_rpc_node(
