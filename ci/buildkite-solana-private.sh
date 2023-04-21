@@ -138,7 +138,7 @@ all_test_steps() {
   wait_step
 
   # Full test suite
-  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 70
+  .buildkite/scripts/build-stable.sh >> "$output_file"
 
   # Docs tests
   if affects \
