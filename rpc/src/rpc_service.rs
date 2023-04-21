@@ -550,16 +550,11 @@ impl JsonRpcService {
         validator_exit
             .write()
             .unwrap()
-<<<<<<< HEAD
-            .register_exit(Box::new(move || close_handle_.close()));
-        Self {
-=======
             .register_exit(Box::new(move || {
                 close_handle_.close();
                 exit.store(true, Ordering::Relaxed);
             }));
-        Ok(Self {
->>>>>>> 03c1744e1 (Register SendTransactionService exit (#31261))
+        Self {
             thread_hdl,
             #[cfg(test)]
             request_processor: test_request_processor,
