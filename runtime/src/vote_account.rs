@@ -65,12 +65,13 @@ impl VoteAccount {
         self.0.account.owner()
     }
 
-    pub fn vote_state(&self) -> &Result<VoteState, Error> {
+    pub fn vote_state(&self) -> Result<&VoteState, &Error> {
         // VoteState::deserialize deserializes a VoteStateVersions and then
         // calls VoteStateVersions::convert_to_current.
         self.0
             .vote_state
             .get_or_init(|| VoteState::deserialize(self.0.account.data()).map_err(Error::from))
+            .as_ref()
     }
 
     pub(crate) fn is_deserialized(&self) -> bool {
@@ -79,7 +80,7 @@ impl VoteAccount {
 
     /// VoteState.node_pubkey of this vote-account.
     pub fn node_pubkey(&self) -> Option<Pubkey> {
-        Some(self.vote_state().as_ref().ok()?.node_pubkey)
+        Some(self.vote_state().ok()?.node_pubkey)
     }
 }
 
@@ -395,9 +396,9 @@ mod tests {
         let lamports = account.lamports();
         let vote_account = VoteAccount::try_from(account).unwrap();
         assert_eq!(lamports, vote_account.lamports());
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
         // 2nd call to .vote_state() should return the cached value.
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
     }
 
     #[test]
@@ -405,7 +406,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let vote_account = VoteAccount::try_from(account.clone()).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
         // Assert than VoteAccount has the same wire format as Account.
         assert_eq!(
             bincode::serialize(&account).unwrap(),
@@ -419,13 +420,10 @@ mod tests {
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let data = bincode::serialize(&account).unwrap();
         let vote_account = VoteAccount::try_from(account).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
         let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
         assert_eq!(vote_account, other_vote_account);
-        assert_eq!(
-            vote_state,
-            *other_vote_account.vote_state().as_ref().unwrap()
-        );
+        assert_eq!(vote_state, *other_vote_account.vote_state().unwrap());
     }
 
     #[test]
@@ -433,15 +431,12 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let vote_account = VoteAccount::try_from(account).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
         let data = bincode::serialize(&vote_account).unwrap();
         let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
         // Assert that serialize->deserialized returns the same VoteAccount.
         assert_eq!(vote_account, other_vote_account);
-        assert_eq!(
-            vote_state,
-            *other_vote_account.vote_state().as_ref().unwrap()
-        );
+        assert_eq!(vote_state, *other_vote_account.vote_state().unwrap());
     }
 
     #[test]

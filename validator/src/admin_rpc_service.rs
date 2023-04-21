@@ -226,6 +226,13 @@ pub trait AdminRpc {
         secondary_index: RpcAccountIndex,
         max_entries: usize,
     ) -> Result<Vec<(String, usize)>>;
+
+    #[rpc(meta, name = "setPublicTpuAddress")]
+    fn set_public_tpu_address(
+        &self,
+        meta: Self::Metadata,
+        public_tpu_addr: SocketAddr,
+    ) -> Result<()>;
 }
 
 pub struct AdminRpcImpl;
@@ -586,6 +593,30 @@ impl AdminRpc for AdminRpcImpl {
                 .map(|&(x, y)| (y.to_string(), x))
                 .collect::<Vec<_>>();
             Ok(largest_keys)
+        })
+    }
+
+    fn set_public_tpu_address(
+        &self,
+        meta: Self::Metadata,
+        public_tpu_addr: SocketAddr,
+    ) -> Result<()> {
+        debug!("set_public_tpu_address rpc request received: {public_tpu_addr}");
+
+        meta.with_post_init(|post_init| {
+            post_init
+                .cluster_info
+                .set_tpu(public_tpu_addr)
+                .map_err(|err| {
+                    error!("Failed to set public TPU address to {public_tpu_addr}: {err}");
+                    jsonrpc_core::error::Error::internal_error()
+                })?;
+            warn!(
+                "Public TPU addresses set to {} (udp) and {} (quic)",
+                post_init.cluster_info.my_contact_info().tpu().unwrap(),
+                post_init.cluster_info.my_contact_info().tpu_quic().unwrap(),
+            );
+            Ok(())
         })
     }
 }

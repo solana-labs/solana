@@ -1,9 +1,8 @@
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 use {
-    crate::system_instruction_processor,
     solana_program_runtime::invoke_context::ProcessInstructionWithContext,
-    solana_sdk::{feature_set, pubkey::Pubkey, stake, system_program},
+    solana_sdk::{feature_set, pubkey::Pubkey, stake},
     std::fmt,
 };
 
@@ -118,8 +117,8 @@ fn genesis_builtins() -> Vec<Builtin> {
     vec![
         Builtin::new(
             "system_program",
-            system_program::id(),
-            system_instruction_processor::process_instruction,
+            solana_system_program::id(),
+            solana_system_program::system_processor::process_instruction,
         ),
         Builtin::new(
             "vote_program",

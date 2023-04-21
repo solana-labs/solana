@@ -11,12 +11,13 @@ use {
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_measure::measure::Measure,
-    solana_rbpf::vm::ContextObject,
+    solana_rbpf::{ebpf::MM_HEAP_START, vm::ContextObject},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
+        bpf_loader_deprecated,
         feature_set::{
-            enable_early_verification_of_account_modifications, native_programs_consume_cu,
-            FeatureSet,
+            check_slice_translation_size, enable_early_verification_of_account_modifications,
+            native_programs_consume_cu, FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
@@ -41,13 +42,18 @@ use {
 /// Adapter so we can unify the interfaces of built-in programs and syscalls
 #[macro_export]
 macro_rules! declare_process_instruction {
-    ($cu_to_consume:expr) => {
-        pub fn process_instruction(
-            invoke_context: &mut InvokeContext,
-        ) -> Result<(), Box<dyn std::error::Error>> {
+    ($process_instruction:ident, $cu_to_consume:expr, |$invoke_context:ident| $inner:tt) => {
+        pub fn $process_instruction(
+            invoke_context: &mut $crate::invoke_context::InvokeContext,
+        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+            fn process_instruction_inner(
+                $invoke_context: &mut $crate::invoke_context::InvokeContext,
+            ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
+                $inner
+            }
             if invoke_context
                 .feature_set
-                .is_active(&feature_set::native_programs_consume_cu::id())
+                .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
             {
                 invoke_context.consume_checked($cu_to_consume)?;
             }
@@ -82,15 +88,16 @@ impl std::fmt::Debug for BuiltinProgram {
 
 impl<'a> ContextObject for InvokeContext<'a> {
     fn trace(&mut self, state: [u64; 12]) {
-        self.trace_log_stack
+        self.syscall_context
             .last_mut()
-            .expect("Inconsistent trace log stack")
+            .unwrap()
+            .as_mut()
+            .unwrap()
             .trace_log
             .push(state);
     }
 
     fn consume(&mut self, amount: u64) {
-        self.log_consumed_bpf_units(amount);
         // 1 to 1 instruction to compute unit mapping
         // ignore overflow, Ebpf will bail if exceeded
         let mut compute_meter = self.compute_meter.borrow_mut();
@@ -102,32 +109,46 @@ impl<'a> ContextObject for InvokeContext<'a> {
     }
 }
 
-/// Based loosely on the unstable std::alloc::Alloc trait
-pub trait Alloc {
-    fn alloc(&mut self, layout: Layout) -> Result<u64, AllocErr>;
-    fn dealloc(&mut self, addr: u64, layout: Layout);
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AllocErr;
-
 impl fmt::Display for AllocErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("Error: Memory allocation failed")
     }
 }
 
-struct SyscallContext {
-    check_aligned: bool,
-    check_size: bool,
-    orig_account_lengths: Vec<usize>,
-    allocator: Rc<RefCell<dyn Alloc>>,
+pub struct BpfAllocator {
+    len: u64,
+    pos: u64,
 }
 
-#[derive(Default)]
-pub struct TraceLogStackFrame {
+impl BpfAllocator {
+    pub fn new(len: u64) -> Self {
+        Self { len, pos: 0 }
+    }
+
+    pub fn alloc(&mut self, layout: Layout) -> Result<u64, AllocErr> {
+        let bytes_to_align = (self.pos as *const u8).align_offset(layout.align()) as u64;
+        if self
+            .pos
+            .saturating_add(bytes_to_align)
+            .saturating_add(layout.size() as u64)
+            <= self.len
+        {
+            self.pos = self.pos.saturating_add(bytes_to_align);
+            let addr = MM_HEAP_START.saturating_add(self.pos);
+            self.pos = self.pos.saturating_add(layout.size() as u64);
+            Ok(addr)
+        } else {
+            Err(AllocErr)
+        }
+    }
+}
+
+pub struct SyscallContext {
+    pub allocator: BpfAllocator,
+    pub orig_account_lengths: Vec<usize>,
     pub trace_log: Vec<[u64; 12]>,
-    pub consumed_bpf_units: RefCell<Vec<(usize, u64)>>,
 }
 
 pub struct InvokeContext<'a> {
@@ -136,7 +157,6 @@ pub struct InvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
     sysvar_cache: &'a SysvarCache,
-    pub trace_log_stack: Vec<TraceLogStackFrame>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
@@ -147,8 +167,7 @@ pub struct InvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
-    syscall_context: Vec<Option<SyscallContext>>,
-    pub enable_instruction_tracing: bool,
+    pub syscall_context: Vec<Option<SyscallContext>>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -172,7 +191,6 @@ impl<'a> InvokeContext<'a> {
             pre_accounts: Vec::new(),
             builtin_programs,
             sysvar_cache,
-            trace_log_stack: vec![TraceLogStackFrame::default()],
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
@@ -184,7 +202,6 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
-            enable_instruction_tracing: false,
         }
     }
 
@@ -268,14 +285,12 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
-        self.trace_log_stack.push(TraceLogStackFrame::default());
         self.syscall_context.push(None);
         self.transaction_context.push()
     }
 
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
-        self.trace_log_stack.pop();
         self.syscall_context.pop();
         self.transaction_context.pop()
     }
@@ -759,7 +774,6 @@ impl<'a> InvokeContext<'a> {
 
     /// Consume compute units
     pub fn consume_checked(&self, amount: u64) -> Result<(), Box<dyn std::error::Error>> {
-        self.log_consumed_bpf_units(amount);
         let mut compute_meter = self.compute_meter.borrow_mut();
         let exceeded = *compute_meter < amount;
         *compute_meter = compute_meter.saturating_sub(amount);
@@ -791,74 +805,52 @@ impl<'a> InvokeContext<'a> {
         self.sysvar_cache
     }
 
-    // Set this instruction syscall context
-    pub fn set_syscall_context(
-        &mut self,
-        check_aligned: bool,
-        check_size: bool,
-        orig_account_lengths: Vec<usize>,
-        allocator: Rc<RefCell<dyn Alloc>>,
-    ) -> Result<(), InstructionError> {
-        *self
-            .syscall_context
-            .last_mut()
-            .ok_or(InstructionError::CallDepth)? = Some(SyscallContext {
-            check_aligned,
-            check_size,
-            orig_account_lengths,
-            allocator,
-        });
-        Ok(())
-    }
-
     // Should alignment be enforced during user pointer translation
     pub fn get_check_aligned(&self) -> bool {
-        self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.check_aligned)
+        self.transaction_context
+            .get_current_instruction_context()
+            .and_then(|instruction_context| {
+                let program_account =
+                    instruction_context.try_borrow_last_program_account(self.transaction_context);
+                debug_assert!(program_account.is_ok());
+                program_account
+            })
+            .map(|program_account| *program_account.get_owner() != bpf_loader_deprecated::id())
             .unwrap_or(true)
     }
 
     // Set should type size be checked during user pointer translation
     pub fn get_check_size(&self) -> bool {
-        self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.check_size)
-            .unwrap_or(true)
+        self.feature_set
+            .is_active(&check_slice_translation_size::id())
     }
 
-    /// Get the original account lengths
-    pub fn get_orig_account_lengths(&self) -> Result<&[usize], InstructionError> {
+    // Set this instruction syscall context
+    pub fn set_syscall_context(
+        &mut self,
+        syscall_context: SyscallContext,
+    ) -> Result<(), InstructionError> {
+        *self
+            .syscall_context
+            .last_mut()
+            .ok_or(InstructionError::CallDepth)? = Some(syscall_context);
+        Ok(())
+    }
+
+    // Get this instruction's SyscallContext
+    pub fn get_syscall_context(&self) -> Result<&SyscallContext, InstructionError> {
         self.syscall_context
             .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.orig_account_lengths.as_slice())
+            .and_then(|syscall_context| syscall_context.as_ref())
             .ok_or(InstructionError::CallDepth)
     }
 
-    // Get this instruction's memory allocator
-    pub fn get_allocator(&self) -> Result<Rc<RefCell<dyn Alloc>>, InstructionError> {
+    // Get this instruction's SyscallContext
+    pub fn get_syscall_context_mut(&mut self) -> Result<&mut SyscallContext, InstructionError> {
         self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.allocator.clone())
+            .last_mut()
+            .and_then(|syscall_context| syscall_context.as_mut())
             .ok_or(InstructionError::CallDepth)
-    }
-
-    fn log_consumed_bpf_units(&self, amount: u64) {
-        if self.enable_instruction_tracing && amount != 0 {
-            let trace_log_stack_frame = self
-                .trace_log_stack
-                .last()
-                .expect("Inconsistent trace log stack");
-
-            trace_log_stack_frame.consumed_bpf_units.borrow_mut().push((
-                trace_log_stack_frame.trace_log.len().saturating_sub(1),
-                amount,
-            ));
-        }
     }
 }
 
@@ -919,7 +911,7 @@ macro_rules! with_mock_invoke_context {
     };
 }
 
-pub fn mock_process_instruction<F: FnMut(&mut InvokeContext)>(
+pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut InvokeContext)>(
     loader_id: &Pubkey,
     mut program_indices: Vec<IndexOfAccount>,
     instruction_data: &[u8],
@@ -928,6 +920,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext)>(
     expected_result: Result<(), InstructionError>,
     process_instruction: ProcessInstructionWithContext,
     mut pre_adjustments: F,
+    mut post_adjustments: G,
 ) -> Vec<AccountSharedData> {
     let mut instruction_accounts: Vec<InstructionAccount> =
         Vec::with_capacity(instruction_account_metas.len());
@@ -971,6 +964,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext)>(
         &mut ExecuteTimings::default(),
     );
     assert_eq!(result, expected_result);
+    post_adjustments(&mut invoke_context);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
     transaction_accounts.pop();
     transaction_accounts
@@ -1030,105 +1024,105 @@ mod tests {
 
     const MOCK_BUILTIN_COMPUTE_UNIT_COST: u64 = 1;
 
-    #[allow(clippy::integer_arithmetic)]
-    fn mock_process_instruction(
-        invoke_context: &mut InvokeContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let transaction_context = &invoke_context.transaction_context;
-        let instruction_context = transaction_context.get_current_instruction_context()?;
-        let instruction_data = instruction_context.get_instruction_data();
-        let program_id = instruction_context.get_last_program_key(transaction_context)?;
-        // mock builtin must consume units
-        invoke_context.consume_checked(MOCK_BUILTIN_COMPUTE_UNIT_COST)?;
-        let instruction_accounts = (0..4)
-            .map(|instruction_account_index| InstructionAccount {
-                index_in_transaction: instruction_account_index,
-                index_in_caller: instruction_account_index,
-                index_in_callee: instruction_account_index,
-                is_signer: false,
-                is_writable: false,
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(
-            program_id,
-            instruction_context
-                .try_borrow_instruction_account(transaction_context, 0)?
-                .get_owner()
-        );
-        assert_ne!(
-            instruction_context
-                .try_borrow_instruction_account(transaction_context, 1)?
-                .get_owner(),
-            instruction_context
-                .try_borrow_instruction_account(transaction_context, 0)?
-                .get_key()
-        );
-
-        if let Ok(instruction) = bincode::deserialize(instruction_data) {
-            match instruction {
-                MockInstruction::NoopSuccess => (),
-                MockInstruction::NoopFail => return Err(Box::new(InstructionError::GenericError)),
-                MockInstruction::ModifyOwned => instruction_context
+    declare_process_instruction!(
+        process_instruction,
+        MOCK_BUILTIN_COMPUTE_UNIT_COST,
+        |invoke_context| {
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let instruction_data = instruction_context.get_instruction_data();
+            let program_id = instruction_context.get_last_program_key(transaction_context)?;
+            let instruction_accounts = (0..4)
+                .map(|instruction_account_index| InstructionAccount {
+                    index_in_transaction: instruction_account_index,
+                    index_in_caller: instruction_account_index,
+                    index_in_callee: instruction_account_index,
+                    is_signer: false,
+                    is_writable: false,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                program_id,
+                instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data_from_slice(&[1])?,
-                MockInstruction::ModifyNotOwned => instruction_context
+                    .get_owner()
+            );
+            assert_ne!(
+                instruction_context
                     .try_borrow_instruction_account(transaction_context, 1)?
-                    .set_data_from_slice(&[1])?,
-                MockInstruction::ModifyReadonly => instruction_context
-                    .try_borrow_instruction_account(transaction_context, 2)?
-                    .set_data_from_slice(&[1])?,
-                MockInstruction::UnbalancedPush => {
-                    instruction_context
+                    .get_owner(),
+                instruction_context
+                    .try_borrow_instruction_account(transaction_context, 0)?
+                    .get_key()
+            );
+
+            if let Ok(instruction) = bincode::deserialize(instruction_data) {
+                match instruction {
+                    MockInstruction::NoopSuccess => (),
+                    MockInstruction::NoopFail => return Err(InstructionError::GenericError),
+                    MockInstruction::ModifyOwned => instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
-                        .checked_add_lamports(1)?;
-                    let program_id = *transaction_context.get_key_of_account_at_index(3)?;
-                    let metas = vec![
-                        AccountMeta::new_readonly(
-                            *transaction_context.get_key_of_account_at_index(0)?,
-                            false,
-                        ),
-                        AccountMeta::new_readonly(
-                            *transaction_context.get_key_of_account_at_index(1)?,
-                            false,
-                        ),
-                    ];
-                    let inner_instruction = Instruction::new_with_bincode(
-                        program_id,
-                        &MockInstruction::NoopSuccess,
-                        metas,
-                    );
-                    invoke_context
-                        .transaction_context
-                        .get_next_instruction_context()
-                        .unwrap()
-                        .configure(&[3], &instruction_accounts, &[]);
-                    let result = invoke_context.push();
-                    assert_eq!(result, Err(InstructionError::UnbalancedInstruction));
-                    result?;
-                    invoke_context
-                        .native_invoke(inner_instruction.into(), &[])
-                        .and(invoke_context.pop())?;
+                        .set_data_from_slice(&[1])?,
+                    MockInstruction::ModifyNotOwned => instruction_context
+                        .try_borrow_instruction_account(transaction_context, 1)?
+                        .set_data_from_slice(&[1])?,
+                    MockInstruction::ModifyReadonly => instruction_context
+                        .try_borrow_instruction_account(transaction_context, 2)?
+                        .set_data_from_slice(&[1])?,
+                    MockInstruction::UnbalancedPush => {
+                        instruction_context
+                            .try_borrow_instruction_account(transaction_context, 0)?
+                            .checked_add_lamports(1)?;
+                        let program_id = *transaction_context.get_key_of_account_at_index(3)?;
+                        let metas = vec![
+                            AccountMeta::new_readonly(
+                                *transaction_context.get_key_of_account_at_index(0)?,
+                                false,
+                            ),
+                            AccountMeta::new_readonly(
+                                *transaction_context.get_key_of_account_at_index(1)?,
+                                false,
+                            ),
+                        ];
+                        let inner_instruction = Instruction::new_with_bincode(
+                            program_id,
+                            &MockInstruction::NoopSuccess,
+                            metas,
+                        );
+                        invoke_context
+                            .transaction_context
+                            .get_next_instruction_context()
+                            .unwrap()
+                            .configure(&[3], &instruction_accounts, &[]);
+                        let result = invoke_context.push();
+                        assert_eq!(result, Err(InstructionError::UnbalancedInstruction));
+                        result?;
+                        invoke_context
+                            .native_invoke(inner_instruction.into(), &[])
+                            .and(invoke_context.pop())?;
+                    }
+                    MockInstruction::UnbalancedPop => instruction_context
+                        .try_borrow_instruction_account(transaction_context, 0)?
+                        .checked_add_lamports(1)?,
+                    MockInstruction::ConsumeComputeUnits {
+                        compute_units_to_consume,
+                        desired_result,
+                    } => {
+                        invoke_context
+                            .consume_checked(compute_units_to_consume)
+                            .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+                        return desired_result;
+                    }
+                    MockInstruction::Resize { new_len } => instruction_context
+                        .try_borrow_instruction_account(transaction_context, 0)?
+                        .set_data(vec![0; new_len as usize])?,
                 }
-                MockInstruction::UnbalancedPop => instruction_context
-                    .try_borrow_instruction_account(transaction_context, 0)?
-                    .checked_add_lamports(1)?,
-                MockInstruction::ConsumeComputeUnits {
-                    compute_units_to_consume,
-                    desired_result,
-                } => {
-                    invoke_context.consume_checked(compute_units_to_consume)?;
-                    return desired_result
-                        .map_err(|err| Box::new(err) as Box<dyn std::error::Error>);
-                }
-                MockInstruction::Resize { new_len } => instruction_context
-                    .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(vec![0; new_len as usize])?,
+            } else {
+                return Err(InstructionError::InvalidInstructionData);
             }
-        } else {
-            return Err(Box::new(InstructionError::InvalidInstructionData));
+            Ok(())
         }
-        Ok(())
-    }
+    );
 
     #[test]
     fn test_instruction_stack_height() {
@@ -1236,7 +1230,7 @@ mod tests {
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let builtin_programs = &[BuiltinProgram {
             program_id: callee_program_id,
-            process_instruction: mock_process_instruction,
+            process_instruction,
         }];
         invoke_context.builtin_programs = builtin_programs;
 
@@ -1381,7 +1375,7 @@ mod tests {
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let builtin_programs = &[BuiltinProgram {
             program_id: program_key,
-            process_instruction: mock_process_instruction,
+            process_instruction,
         }];
         invoke_context.builtin_programs = builtin_programs;
 

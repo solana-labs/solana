@@ -242,7 +242,8 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
         )
         .arg(
             Arg::with_name("tx_count")
-                .long("tx_count")
+                .long("tx-count")
+                .alias("tx_count")
                 .value_name("NUM")
                 .takes_value(true)
                 .help("Number of transactions to send per batch")

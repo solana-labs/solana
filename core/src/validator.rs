@@ -3,7 +3,7 @@
 pub use solana_perf::report_target_features;
 use {
     crate::{
-        accounts_hash_verifier::AccountsHashVerifier,
+        accounts_hash_verifier::{AccountsHashFaultInjector, AccountsHashVerifier},
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         banking_trace::{self, BankingTracer},
         broadcast_stage::BroadcastStageType,
@@ -199,7 +199,7 @@ pub struct ValidatorConfig {
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>, // Empty = repair with all
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub halt_on_known_validators_accounts_hash_mismatch: bool,
-    pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
+    pub accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
@@ -267,7 +267,7 @@ impl Default for ValidatorConfig {
             repair_whitelist: Arc::new(RwLock::new(HashSet::default())),
             gossip_validators: None,
             halt_on_known_validators_accounts_hash_mismatch: false,
-            accounts_hash_fault_injection_slots: 0,
+            accounts_hash_fault_injector: None,
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
@@ -693,8 +693,8 @@ impl Validator {
                     snapshot_package_sender.clone(),
                     snapshot_package_receiver,
                     starting_snapshot_hashes,
-                    &exit,
-                    &cluster_info,
+                    exit.clone(),
+                    cluster_info.clone(),
                     config.snapshot_config.clone(),
                     enable_gossip_push,
                 );
@@ -711,11 +711,11 @@ impl Validator {
             accounts_package_sender.clone(),
             accounts_package_receiver,
             snapshot_package_sender,
-            &exit,
-            &cluster_info,
+            exit.clone(),
+            cluster_info.clone(),
             config.known_validators.clone(),
             config.halt_on_known_validators_accounts_hash_mismatch,
-            config.accounts_hash_fault_injection_slots,
+            config.accounts_hash_fault_injector,
             config.snapshot_config.clone(),
         );
 
@@ -731,10 +731,10 @@ impl Validator {
         let pruned_banks_request_handler = PrunedBanksRequestHandler {
             pruned_banks_receiver,
         };
-        let last_full_snapshot_slot = starting_snapshot_hashes.map(|x| x.full.hash.0);
+        let last_full_snapshot_slot = starting_snapshot_hashes.map(|x| x.full.0 .0);
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks.clone(),
-            &exit,
+            exit.clone(),
             AbsRequestHandlers {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
@@ -835,7 +835,7 @@ impl Validator {
                 None,
                 bank.ticks_per_slot(),
                 &id,
-                &blockstore,
+                blockstore.clone(),
                 blockstore.get_new_shred_signal(0),
                 &leader_schedule_cache,
                 &genesis_config.poh_config,

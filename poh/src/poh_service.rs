@@ -431,7 +431,7 @@ mod tests {
                 Some((4, 4)),
                 ticks_per_slot,
                 &Pubkey::default(),
-                &blockstore,
+                blockstore,
                 &leader_schedule_cache,
                 &poh_config,
                 exit.clone(),

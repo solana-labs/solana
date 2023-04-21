@@ -63,13 +63,12 @@ impl TransactionExecutorCache {
             if delay_visibility_of_program_deployment {
                 // Place a tombstone in the cache so that
                 // we don't load the new version from the database as it should remain invisible
-                self.visible.insert(
-                    key,
-                    Arc::new(LoadedProgram::new_tombstone(
-                        current_slot,
-                        LoadedProgramType::DelayVisibility,
-                    )),
-                );
+                let tombstone =
+                    LoadedProgram::new_tombstone(current_slot, LoadedProgramType::DelayVisibility);
+                tombstone
+                    .usage_counter
+                    .store(executor.usage_counter.load(Relaxed), Relaxed);
+                self.visible.insert(key, Arc::new(tombstone));
             } else {
                 self.visible.insert(key, executor.clone());
             }

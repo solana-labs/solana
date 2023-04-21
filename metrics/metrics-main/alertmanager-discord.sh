@@ -34,6 +34,7 @@ sudo chmod 0444 certs/*
 
 # (Re) start the Alertmanager container
 sudo docker run -it -d \
+  --memory=10g \
   --publish 9094:9094 \
   --name=alertmanager-discord \
   --env DISCORD_WEBHOOK="$DISCORD_WEBHOOK_ALERTMANAGER" \

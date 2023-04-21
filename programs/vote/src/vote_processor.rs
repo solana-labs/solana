@@ -56,12 +56,9 @@ fn process_authorize_with_seed_instruction(
     )
 }
 
-// Citing `runtime/src/block_cost_limit.rs`, vote has statically defined 2_100
+// Citing `runtime/src/block_cost_limit.rs`, vote has statically defined 2100
 // units; can consume based on instructions in the future like `bpf_loader` does.
-declare_process_instruction!(2_100);
-pub fn process_instruction_inner(
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+declare_process_instruction!(process_instruction, 2100, |invoke_context| {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
@@ -82,7 +79,13 @@ pub fn process_instruction_inner(
             }
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-            vote_state::initialize_account(&mut me, &vote_init, &signers, &clock)
+            vote_state::initialize_account(
+                &mut me,
+                &vote_init,
+                &signers,
+                &clock,
+                &invoke_context.feature_set,
+            )
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
             let clock =
@@ -133,7 +136,12 @@ pub fn process_instruction_inner(
             let node_pubkey = transaction_context.get_key_of_account_at_index(
                 instruction_context.get_index_of_instruction_account_in_transaction(1)?,
             )?;
-            vote_state::update_validator_identity(&mut me, node_pubkey, &signers)
+            vote_state::update_validator_identity(
+                &mut me,
+                node_pubkey,
+                &signers,
+                &invoke_context.feature_set,
+            )
         }
         VoteInstruction::UpdateCommission(commission) => {
             if invoke_context.feature_set.is_active(
@@ -146,7 +154,12 @@ pub fn process_instruction_inner(
                     return Err(VoteError::CommissionUpdateTooLate.into());
                 }
             }
-            vote_state::update_commission(&mut me, commission, &signers)
+            vote_state::update_commission(
+                &mut me,
+                commission,
+                &signers,
+                &invoke_context.feature_set,
+            )
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             let slot_hashes =
@@ -231,6 +244,7 @@ pub fn process_instruction_inner(
                 &signers,
                 &rent_sysvar,
                 clock_if_feature_active.as_deref(),
+                &invoke_context.feature_set,
             )
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
@@ -260,7 +274,7 @@ pub fn process_instruction_inner(
             }
         }
     }
-}
+});
 
 #[cfg(test)]
 mod tests {
@@ -325,6 +339,7 @@ mod tests {
             expected_result,
             super::process_instruction,
             |_invoke_context| {},
+            |_invoke_context| {},
         )
     }
 
@@ -345,6 +360,7 @@ mod tests {
             |invoke_context| {
                 invoke_context.feature_set = std::sync::Arc::new(FeatureSet::default());
             },
+            |_invoke_context| {},
         )
     }
 
@@ -799,7 +815,9 @@ mod tests {
             .convert_to_current();
         assert_eq!(
             vote_state.votes,
-            vec![Lockout::new(*vote.slots.last().unwrap())]
+            vec![vote_state::LandedVote::from(Lockout::new(
+                *vote.slots.last().unwrap()
+            ))]
         );
         assert_eq!(vote_state.credits(), 0);
 

@@ -10,6 +10,14 @@ export PS4="++"
 # Restore target/ from the previous CI build on this machine
 #
 eval "$(ci/channel-info.sh)"
+export EDGE_CHANNEL
+export BETA_CHANNEL
+export BETA_CHANNEL_LATEST_TAG
+export STABLE_CHANNEL
+export STABLE_CHANNEL_LATEST_TAG
+export CHANNEL
+export CHANNEL_LATEST_TAG
+
 eval "$(ci/platform-tools-info.sh)"
 source "ci/rust-version.sh"
 HOST_RUST_VERSION="$rust_stable"

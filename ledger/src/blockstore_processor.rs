@@ -24,8 +24,8 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
-            Bank, RentDebits, TransactionBalancesSet, TransactionExecutionDetails,
-            TransactionExecutionResult, TransactionResults, VerifyAccountsHashConfig,
+            Bank, TransactionBalancesSet, TransactionExecutionDetails, TransactionExecutionResult,
+            TransactionResults,
         },
         bank_forks::BankForks,
         bank_utils,
@@ -33,6 +33,7 @@ use {
         cost_model::CostModel,
         epoch_accounts_hash::EpochAccountsHash,
         prioritization_fee_cache::PrioritizationFeeCache,
+        rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
         vote_account::VoteAccountsHashMap,
@@ -743,12 +744,14 @@ pub fn process_blockstore_from_root(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_background_request_sender: &AbsRequestSender,
 ) -> result::Result<(), BlockstoreProcessorError> {
-    // Starting slot must be a root, and thus has no parents
-    assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
-    let bank = bank_forks.read().unwrap().root_bank();
-    assert!(bank.parent().is_none());
+    let (start_slot, start_slot_hash) = {
+        // Starting slot must be a root, and thus has no parents
+        assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
+        let bank = bank_forks.read().unwrap().root_bank();
+        assert!(bank.parent().is_none());
+        (bank.slot(), bank.hash())
+    };
 
-    let start_slot = bank.slot();
     info!("Processing ledger from slot {}...", start_slot);
     let now = Instant::now();
 
@@ -757,16 +760,16 @@ pub fn process_blockstore_from_root(
     if blockstore.is_primary_access() {
         blockstore
             .mark_slots_as_if_rooted_normally_at_startup(
-                vec![(bank.slot(), Some(bank.hash()))],
+                vec![(start_slot, Some(start_slot_hash))],
                 true,
             )
-            .expect("Couldn't mark start_slot as root on startup");
+            .expect("Couldn't mark start_slot as root in startup");
         blockstore
-            .set_and_chain_connected_on_root_and_next_slots(bank.slot())
+            .set_and_chain_connected_on_root_and_next_slots(start_slot)
             .expect("Couldn't mark start_slot as connected during startup")
     } else {
         info!(
-            "Starting slot {} isn't root and won't be updated due to being secondary blockstore access",
+            "Start slot {} isn't a root, and won't be updated due to secondary blockstore access",
             start_slot
         );
     }
@@ -1551,7 +1554,7 @@ fn load_frozen_forks(
                 .unwrap_or(false);
             if done_processing {
                 if opts.run_final_accounts_hash_calc {
-                    run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
+                    bank.run_final_hash_calc(on_halt_store_hash_raw_data_for_debug);
                 }
                 break;
             }
@@ -1566,28 +1569,14 @@ fn load_frozen_forks(
             )?;
         }
     } else if on_halt_store_hash_raw_data_for_debug {
-        run_final_hash_calc(
-            &bank_forks.read().unwrap().root_bank(),
-            on_halt_store_hash_raw_data_for_debug,
-        );
+        bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .run_final_hash_calc(on_halt_store_hash_raw_data_for_debug);
     }
 
     Ok(total_slots_elapsed)
-}
-
-fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
-    bank.force_flush_accounts_cache();
-    // note that this slot may not be a root
-    let _ = bank.verify_accounts_hash(
-        None,
-        VerifyAccountsHashConfig {
-            test_hash_calculation: false,
-            ignore_mismatch: true,
-            require_rooted_bank: false,
-            run_in_background: false,
-            store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
-        },
-    );
 }
 
 // `roots` is sorted largest to smallest by root slot

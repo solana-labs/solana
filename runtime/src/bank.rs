@@ -62,11 +62,13 @@ use {
         inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
+        rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
-        serde_snapshot::{SerdeAccountsHash, SerdeIncrementalAccountsHash},
+        serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_hash::SnapshotHash,
         sorted_storages::SortedStorages,
         stake_account::{self, StakeAccount},
+        stake_history::StakeHistory,
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW_V2,
@@ -74,7 +76,6 @@ use {
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
         storable_accounts::StorableAccounts,
-        system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
         vote_account::{VoteAccount, VoteAccountsHashMap},
@@ -83,6 +84,7 @@ use {
     dashmap::{DashMap, DashSet},
     itertools::Itertools,
     log::*,
+    percentage::Percentage,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
@@ -161,6 +163,7 @@ use {
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeState,
     },
+    solana_system_program::{get_system_account_kind, SystemAccountKind},
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
         borrow::Cow,
@@ -168,7 +171,7 @@ use {
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
-        ops::{AddAssign, Deref, RangeInclusive},
+        ops::{AddAssign, RangeInclusive},
         path::PathBuf,
         rc::Rc,
         sync::{
@@ -184,12 +187,12 @@ use {
 };
 
 /// params to `verify_accounts_hash`
-pub struct VerifyAccountsHashConfig {
-    pub test_hash_calculation: bool,
-    pub ignore_mismatch: bool,
-    pub require_rooted_bank: bool,
-    pub run_in_background: bool,
-    pub store_hash_raw_data_for_debug: bool,
+struct VerifyAccountsHashConfig {
+    test_hash_calculation: bool,
+    ignore_mismatch: bool,
+    require_rooted_bank: bool,
+    run_in_background: bool,
+    store_hash_raw_data_for_debug: bool,
 }
 
 mod address_lookup_table;
@@ -212,74 +215,6 @@ struct RentMetrics {
     hash_us: AtomicU64,
     store_us: AtomicU64,
     count: AtomicUsize,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RentDebit {
-    rent_collected: u64,
-    post_balance: u64,
-}
-
-impl RentDebit {
-    fn try_into_reward_info(self) -> Option<RewardInfo> {
-        let rent_debit = i64::try_from(self.rent_collected)
-            .ok()
-            .and_then(|r| r.checked_neg());
-        rent_debit.map(|rent_debit| RewardInfo {
-            reward_type: RewardType::Rent,
-            lamports: rent_debit,
-            post_balance: self.post_balance,
-            commission: None, // Not applicable
-        })
-    }
-}
-
-/// Incremental snapshots only calculate their accounts hash based on the account changes WITHIN the incremental slot range.
-/// So, we need to keep track of the full snapshot expected accounts hash results.
-/// We also need to keep track of the hash and capitalization specific to the incremental snapshot slot range.
-/// The capitalization we calculate for the incremental slot will NOT be consistent with the bank's capitalization.
-/// It is not feasible to calculate a capitalization delta that is correct given just incremental slots account data and the full snapshot's capitalization.
-#[derive(Serialize, Deserialize, AbiExample, Clone, Debug, Default, PartialEq, Eq)]
-pub struct BankIncrementalSnapshotPersistence {
-    /// slot of full snapshot
-    pub full_slot: Slot,
-    /// accounts hash from the full snapshot
-    pub full_hash: SerdeAccountsHash,
-    /// capitalization from the full snapshot
-    pub full_capitalization: u64,
-    /// hash of the accounts in the incremental snapshot slot range, including zero-lamport accounts
-    pub incremental_hash: SerdeIncrementalAccountsHash,
-    /// capitalization of the accounts in the incremental snapshot slot range
-    pub incremental_capitalization: u64,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct RentDebits(HashMap<Pubkey, RentDebit>);
-impl RentDebits {
-    fn get_account_rent_debit(&self, address: &Pubkey) -> u64 {
-        self.0
-            .get(address)
-            .map(|r| r.rent_collected)
-            .unwrap_or_default()
-    }
-
-    pub fn insert(&mut self, address: &Pubkey, rent_collected: u64, post_balance: u64) {
-        if rent_collected != 0 {
-            self.0.insert(
-                *address,
-                RentDebit {
-                    rent_collected,
-                    post_balance,
-                },
-            );
-        }
-    }
-
-    pub fn into_unordered_rewards_iter(self) -> impl Iterator<Item = (Pubkey, RewardInfo)> {
-        self.0
-            .into_iter()
-            .filter_map(|(address, rent_debit)| Some((address, rent_debit.try_into_reward_info()?)))
-    }
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
@@ -918,7 +853,14 @@ pub enum RewardCalculationEvent<'a, 'b> {
     Staking(&'a Pubkey, &'b InflationPointCalculationEvent),
 }
 
-fn null_tracer() -> Option<impl Fn(&RewardCalculationEvent) + Send + Sync> {
+/// type alias is not supported for trait in rust yet. As a workaround, we define the
+/// `RewardCalcTracer` trait explicitly and implement it on any type that implement
+/// `Fn(&RewardCalculationEvent) + Send + Sync`.
+pub trait RewardCalcTracer: Fn(&RewardCalculationEvent) + Send + Sync {}
+
+impl<T: Fn(&RewardCalculationEvent) + Send + Sync> RewardCalcTracer for T {}
+
+fn null_tracer() -> Option<impl RewardCalcTracer> {
     None::<fn(&RewardCalculationEvent)>
 }
 
@@ -1147,15 +1089,22 @@ struct VoteWithStakeDelegations {
     delegations: Vec<(Pubkey, StakeAccount<()>)>,
 }
 
+type VoteWithStakeDelegationsMap = DashMap<Pubkey, VoteWithStakeDelegations>;
+
+type InvalidCacheKeyMap = DashMap<Pubkey, InvalidCacheEntryReason>;
+
 struct LoadVoteAndStakeAccountsResult {
-    vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
-    invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
-    invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
+    vote_with_stake_delegations_map: VoteWithStakeDelegationsMap,
+    invalid_stake_keys: InvalidCacheKeyMap,
+    invalid_vote_keys: InvalidCacheKeyMap,
     invalid_cached_vote_accounts: usize,
     invalid_cached_stake_accounts: usize,
     invalid_cached_stake_accounts_rent_epoch: usize,
     vote_accounts_cache_miss_count: usize,
 }
+
+type VoteRewards = DashMap<Pubkey, (AccountSharedData, u8, u64, bool)>;
+type StakeRewards = Vec<StakeReward>;
 
 #[derive(Debug, Default)]
 pub struct NewBankOptions {
@@ -1478,7 +1427,7 @@ impl Bank {
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        reward_calc_tracer: impl Fn(&RewardCalculationEvent) + Send + Sync,
+        reward_calc_tracer: impl RewardCalcTracer,
     ) -> Self {
         Self::_new_from_parent(
             parent,
@@ -1497,7 +1446,7 @@ impl Bank {
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
         new_bank_options: NewBankOptions,
     ) -> Self {
         let mut time = Measure::start("bank::new_from_parent");
@@ -1665,62 +1614,7 @@ impl Bank {
         let parent_epoch = parent.epoch();
         let (_, update_epoch_time_us) = measure_us!({
             if parent_epoch < new.epoch() {
-                let (thread_pool, thread_pool_time) = measure!(
-                    ThreadPoolBuilder::new().build().unwrap(),
-                    "thread_pool_creation",
-                );
-
-                let (_, apply_feature_activations_time) = measure!(
-                    new.apply_feature_activations(
-                        ApplyFeatureActivationsCaller::NewFromParent,
-                        false
-                    ),
-                    "apply_feature_activation",
-                );
-
-                // Add new entry to stakes.stake_history, set appropriate epoch and
-                // update vote accounts with warmed up stakes before saving a
-                // snapshot of stakes in epoch stakes
-                let (_, activate_epoch_time) = measure!(
-                    new.stakes_cache.activate_epoch(epoch, &thread_pool),
-                    "activate_epoch",
-                );
-
-                // Save a snapshot of stakes for use in consensus and stake weighted networking
-                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                let (_, update_epoch_stakes_time) = measure!(
-                    new.update_epoch_stakes(leader_schedule_epoch),
-                    "update_epoch_stakes",
-                );
-
-                let mut rewards_metrics = RewardsMetrics::default();
-                // After saving a snapshot of stakes, apply stake rewards and commission
-                let (_, update_rewards_with_thread_pool_time) = measure!(
-                    {
-                        new.update_rewards_with_thread_pool(
-                            parent_epoch,
-                            reward_calc_tracer,
-                            &thread_pool,
-                            &mut rewards_metrics,
-                        )
-                    },
-                    "update_rewards_with_thread_pool",
-                );
-
-                report_new_epoch_metrics(
-                    new.epoch(),
-                    slot,
-                    parent.slot(),
-                    NewEpochTimings {
-                        thread_pool_time_us: thread_pool_time.as_us(),
-                        apply_feature_activations_time_us: apply_feature_activations_time.as_us(),
-                        activate_epoch_time_us: activate_epoch_time.as_us(),
-                        update_epoch_stakes_time_us: update_epoch_stakes_time.as_us(),
-                        update_rewards_with_thread_pool_time_us:
-                            update_rewards_with_thread_pool_time.as_us(),
-                    },
-                    rewards_metrics,
-                );
+                new.process_new_epoch(parent_epoch, parent.slot(), reward_calc_tracer);
             } else {
                 // Save a snapshot of stakes for use in consensus and stake weighted networking
                 let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
@@ -1772,6 +1666,70 @@ impl Bank {
             .submit(parent.slot());
 
         new
+    }
+
+    /// process for the start of a new epoch
+    fn process_new_epoch(
+        &mut self,
+        parent_epoch: Epoch,
+        parent_slot: Slot,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
+    ) {
+        let epoch = self.epoch();
+        let slot = self.slot();
+        let (thread_pool, thread_pool_time) = measure!(
+            ThreadPoolBuilder::new().build().unwrap(),
+            "thread_pool_creation",
+        );
+
+        let (_, apply_feature_activations_time) = measure!(
+            self.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false),
+            "apply_feature_activation",
+        );
+
+        // Add new entry to stakes.stake_history, set appropriate epoch and
+        // update vote accounts with warmed up stakes before saving a
+        // snapshot of stakes in epoch stakes
+        let (_, activate_epoch_time) = measure!(
+            self.stakes_cache.activate_epoch(epoch, &thread_pool),
+            "activate_epoch",
+        );
+
+        // Save a snapshot of stakes for use in consensus and stake weighted networking
+        let leader_schedule_epoch = self.epoch_schedule.get_leader_schedule_epoch(slot);
+        let (_, update_epoch_stakes_time) = measure!(
+            self.update_epoch_stakes(leader_schedule_epoch),
+            "update_epoch_stakes",
+        );
+
+        let mut rewards_metrics = RewardsMetrics::default();
+        // After saving a snapshot of stakes, apply stake rewards and commission
+        let (_, update_rewards_with_thread_pool_time) = measure!(
+            {
+                self.update_rewards_with_thread_pool(
+                    parent_epoch,
+                    reward_calc_tracer,
+                    &thread_pool,
+                    &mut rewards_metrics,
+                )
+            },
+            "update_rewards_with_thread_pool",
+        );
+
+        report_new_epoch_metrics(
+            epoch,
+            slot,
+            parent_slot,
+            NewEpochTimings {
+                thread_pool_time_us: thread_pool_time.as_us(),
+                apply_feature_activations_time_us: apply_feature_activations_time.as_us(),
+                activate_epoch_time_us: activate_epoch_time.as_us(),
+                update_epoch_stakes_time_us: update_epoch_stakes_time.as_us(),
+                update_rewards_with_thread_pool_time_us: update_rewards_with_thread_pool_time
+                    .as_us(),
+            },
+            rewards_metrics,
+        );
     }
 
     pub fn byte_limit_for_scans(&self) -> Option<usize> {
@@ -2528,10 +2486,10 @@ impl Bank {
     ///   ( Vec<(staker info)> (voter account) ) keyed by voter pubkey
     ///
     /// Filters out invalid pairs
-    fn load_vote_and_stake_accounts_with_thread_pool(
+    fn _load_vote_and_stake_accounts_with_thread_pool(
         &self,
         thread_pool: &ThreadPool,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
     ) -> LoadVoteAndStakeAccountsResult {
         let stakes = self.stakes_cache.stakes();
         let cached_vote_accounts = stakes.vote_accounts();
@@ -2720,14 +2678,11 @@ impl Bank {
         }
     }
 
-    fn load_vote_and_stake_accounts<F>(
+    fn _load_vote_and_stake_accounts(
         &self,
         thread_pool: &ThreadPool,
-        reward_calc_tracer: Option<F>,
-    ) -> LoadVoteAndStakeAccountsResult
-    where
-        F: Fn(&RewardCalculationEvent) + Send + Sync,
-    {
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
+    ) -> LoadVoteAndStakeAccountsResult {
         let stakes = self.stakes_cache.stakes();
         let stake_delegations = self.filter_stake_delegations(&stakes);
 
@@ -2785,8 +2740,8 @@ impl Bank {
                 invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::WrongOwner);
                 return None;
             }
-            let vote_state = match vote_account.vote_state().deref() {
-                Ok(vote_state) => vote_state.clone(),
+            let vote_state = match vote_account.vote_state().cloned() {
+                Ok(vote_state) => vote_state,
                 Err(_) => {
                     invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::BadState);
                     return None;
@@ -2840,22 +2795,60 @@ impl Bank {
         }
     }
 
-    /// iterate over all stakes, redeem vote credits for each stake we can
-    /// successfully load and parse, return the lamport value of one point
+    /// Load, calculate and payout epoch rewards for stake and vote accounts
     fn pay_validator_rewards_with_thread_pool(
         &mut self,
         rewarded_epoch: Epoch,
         rewards: u64,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
         credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
         update_rewards_from_cached_accounts: bool,
     ) {
         let stake_history = self.stakes_cache.stakes().history().clone();
-        let vote_with_stake_delegations_map = {
-            let mut m = Measure::start("load_vote_and_stake_accounts_us");
-            let LoadVoteAndStakeAccountsResult {
+        let vote_with_stake_delegations_map = self.load_vote_and_stake_accounts(
+            thread_pool,
+            reward_calc_tracer.as_ref(),
+            metrics,
+            update_rewards_from_cached_accounts,
+        );
+
+        let point_value = self.calculate_reward_points(
+            &vote_with_stake_delegations_map,
+            rewards,
+            &stake_history,
+            thread_pool,
+            metrics,
+        );
+
+        if let Some(point_value) = point_value {
+            let (vote_account_rewards, stake_rewards) = self.redeem_rewards(
+                vote_with_stake_delegations_map,
+                rewarded_epoch,
+                point_value,
+                credits_auto_rewind,
+                &stake_history,
+                thread_pool,
+                reward_calc_tracer.as_ref(),
+                metrics,
+            );
+
+            self.store_stake_accounts(&stake_rewards, metrics);
+            let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
+            self.update_reward_history(stake_rewards, vote_rewards);
+        }
+    }
+
+    fn load_vote_and_stake_accounts(
+        &mut self,
+        thread_pool: &ThreadPool,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
+        metrics: &mut RewardsMetrics,
+        update_rewards_from_cached_accounts: bool,
+    ) -> VoteWithStakeDelegationsMap {
+        let (
+            LoadVoteAndStakeAccountsResult {
                 vote_with_stake_delegations_map,
                 invalid_stake_keys,
                 invalid_vote_keys,
@@ -2863,33 +2856,40 @@ impl Bank {
                 invalid_cached_stake_accounts,
                 invalid_cached_stake_accounts_rent_epoch,
                 vote_accounts_cache_miss_count,
-            } = if update_rewards_from_cached_accounts {
-                self.load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref())
+            },
+            measure,
+        ) = measure!({
+            if update_rewards_from_cached_accounts {
+                self._load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref())
             } else {
-                self.load_vote_and_stake_accounts_with_thread_pool(
+                self._load_vote_and_stake_accounts_with_thread_pool(
                     thread_pool,
                     reward_calc_tracer.as_ref(),
                 )
-            };
-            m.stop();
-            metrics
-                .load_vote_and_stake_accounts_us
-                .fetch_add(m.as_us(), Relaxed);
-            metrics.invalid_cached_vote_accounts += invalid_cached_vote_accounts;
-            metrics.invalid_cached_stake_accounts += invalid_cached_stake_accounts;
-            metrics.invalid_cached_stake_accounts_rent_epoch +=
-                invalid_cached_stake_accounts_rent_epoch;
-            metrics.vote_accounts_cache_miss_count += vote_accounts_cache_miss_count;
-            self.stakes_cache.handle_invalid_keys(
-                invalid_stake_keys,
-                invalid_vote_keys,
-                self.slot(),
-            );
-            vote_with_stake_delegations_map
-        };
+            }
+        });
+        metrics
+            .load_vote_and_stake_accounts_us
+            .fetch_add(measure.as_us(), Relaxed);
+        metrics.invalid_cached_vote_accounts += invalid_cached_vote_accounts;
+        metrics.invalid_cached_stake_accounts += invalid_cached_stake_accounts;
+        metrics.invalid_cached_stake_accounts_rent_epoch +=
+            invalid_cached_stake_accounts_rent_epoch;
+        metrics.vote_accounts_cache_miss_count += vote_accounts_cache_miss_count;
+        self.stakes_cache
+            .handle_invalid_keys(invalid_stake_keys, invalid_vote_keys, self.slot());
+        vote_with_stake_delegations_map
+    }
 
-        let mut m = Measure::start("calculate_points");
-        let points: u128 = thread_pool.install(|| {
+    fn calculate_reward_points(
+        &self,
+        vote_with_stake_delegations_map: &VoteWithStakeDelegationsMap,
+        rewards: u64,
+        stake_history: &StakeHistory,
+        thread_pool: &ThreadPool,
+        metrics: &mut RewardsMetrics,
+    ) -> Option<PointValue> {
+        let (points, measure) = measure!(thread_pool.install(|| {
             vote_with_stake_delegations_map
                 .par_iter()
                 .map(|entry| {
@@ -2905,24 +2905,33 @@ impl Bank {
                             stake_state::calculate_points(
                                 stake_account.stake_state(),
                                 vote_state,
-                                Some(&stake_history),
+                                Some(stake_history),
                             )
                             .unwrap_or(0)
                         })
                         .sum::<u128>()
                 })
                 .sum()
-        });
-        m.stop();
-        metrics.calculate_points_us.fetch_add(m.as_us(), Relaxed);
+        }));
+        metrics
+            .calculate_points_us
+            .fetch_add(measure.as_us(), Relaxed);
 
-        if points == 0 {
-            return;
-        }
+        (points > 0).then_some(PointValue { rewards, points })
+    }
 
-        // pay according to point value
-        let point_value = PointValue { rewards, points };
-        let vote_account_rewards: DashMap<Pubkey, (AccountSharedData, u8, u64, bool)> =
+    fn redeem_rewards(
+        &self,
+        vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
+        rewarded_epoch: Epoch,
+        point_value: PointValue,
+        credits_auto_rewind: bool,
+        stake_history: &StakeHistory,
+        thread_pool: &ThreadPool,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
+        metrics: &mut RewardsMetrics,
+    ) -> (VoteRewards, StakeRewards) {
+        let vote_account_rewards: VoteRewards =
             DashMap::with_capacity(vote_with_stake_delegations_map.len());
         let stake_delegation_iterator = vote_with_stake_delegations_map.into_par_iter().flat_map(
             |(
@@ -2941,8 +2950,7 @@ impl Bank {
             },
         );
 
-        let mut m = Measure::start("redeem_rewards");
-        let stake_rewards: Vec<StakeReward> = thread_pool.install(|| {
+        let (stake_rewards, measure) = measure!(thread_pool.install(|| {
             stake_delegation_iterator
                 .filter_map(|(vote_pubkey, vote_state, (stake_pubkey, stake_account))| {
                     // curry closure to add the contextual stake_pubkey
@@ -2960,7 +2968,7 @@ impl Bank {
                         &mut stake_account,
                         &vote_state,
                         &point_value,
-                        Some(&stake_history),
+                        Some(stake_history),
                         reward_calc_tracer.as_ref(),
                         credits_auto_rewind,
                     );
@@ -2997,33 +3005,28 @@ impl Bank {
                     None
                 })
                 .collect()
-        });
-        m.stop();
-        metrics.redeem_rewards_us += m.as_us();
-
-        self.store_stake_accounts(&stake_rewards, metrics);
-        let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
-        self.update_reward_history(stake_rewards, vote_rewards);
+        }));
+        metrics.redeem_rewards_us += measure.as_us();
+        (vote_account_rewards, stake_rewards)
     }
 
     fn store_stake_accounts(&self, stake_rewards: &[StakeReward], metrics: &mut RewardsMetrics) {
-        // store stake account even if stakers_reward is 0
+        // store stake account even if stake_reward is 0
         // because credits observed has changed
-        let mut m = Measure::start("store_stake_account");
-        self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()));
-        m.stop();
+        let (_, measure) = measure!({
+            self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()))
+        });
         metrics
             .store_stake_accounts_us
-            .fetch_add(m.as_us(), Relaxed);
+            .fetch_add(measure.as_us(), Relaxed);
     }
 
     fn store_vote_accounts(
         &self,
-        vote_account_rewards: DashMap<Pubkey, (AccountSharedData, u8, u64, bool)>,
+        vote_account_rewards: VoteRewards,
         metrics: &mut RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
-        let mut m = Measure::start("store_vote_accounts");
-        let vote_rewards = vote_account_rewards
+        let (vote_rewards, measure) = measure!(vote_account_rewards
             .into_iter()
             .filter_map(
                 |(vote_pubkey, (mut vote_account, commission, vote_rewards, vote_needs_store))| {
@@ -3047,16 +3050,17 @@ impl Bank {
                     ))
                 },
             )
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>());
 
-        m.stop();
-        metrics.store_vote_accounts_us.fetch_add(m.as_us(), Relaxed);
+        metrics
+            .store_vote_accounts_us
+            .fetch_add(measure.as_us(), Relaxed);
         vote_rewards
     }
 
     fn update_reward_history(
         &self,
-        stake_rewards: Vec<StakeReward>,
+        stake_rewards: StakeRewards,
         mut vote_rewards: Vec<(Pubkey, RewardInfo)>,
     ) {
         let additional_reserve = stake_rewards.len() + vote_rewards.len();
@@ -3936,22 +3940,37 @@ impl Bank {
 
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
-                Ok(()) => {
-                    let recent_blockhash = tx.message().recent_blockhash();
-                    if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
-                        (Ok(()), None)
-                    } else if let Some((address, account)) =
-                        self.check_transaction_for_nonce(tx, &next_durable_nonce)
-                    {
-                        (Ok(()), Some(NoncePartial::new(address, account)))
-                    } else {
-                        error_counters.blockhash_not_found += 1;
-                        (Err(TransactionError::BlockhashNotFound), None)
-                    }
-                }
+                Ok(()) => self.check_transaction_age(
+                    tx,
+                    max_age,
+                    &next_durable_nonce,
+                    &hash_queue,
+                    error_counters,
+                ),
                 Err(e) => (Err(e.clone()), None),
             })
             .collect()
+    }
+
+    fn check_transaction_age(
+        &self,
+        tx: &SanitizedTransaction,
+        max_age: usize,
+        next_durable_nonce: &DurableNonce,
+        hash_queue: &BlockhashQueue,
+        error_counters: &mut TransactionErrorMetrics,
+    ) -> TransactionCheckResult {
+        let recent_blockhash = tx.message().recent_blockhash();
+        if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
+            (Ok(()), None)
+        } else if let Some((address, account)) =
+            self.check_transaction_for_nonce(tx, next_durable_nonce)
+        {
+            (Ok(()), Some(NoncePartial::new(address, account)))
+        } else {
+            error_counters.blockhash_not_found += 1;
+            (Err(TransactionError::BlockhashNotFound), None)
+        }
     }
 
     fn is_transaction_already_processed(
@@ -4185,6 +4204,7 @@ impl Bank {
             &program,
             programdata.as_ref().unwrap_or(&program),
             self.runtime_config.bpf_jit,
+            false, /* debugging_features */
         )
         .map(|(loaded_program, _create_executor_metrics)| loaded_program)
         .map_err(|err| TransactionError::InstructionError(0, err))
@@ -4641,10 +4661,11 @@ impl Bank {
 
         execution_time.stop();
 
+        const EVICT_CACHE_TO_PERCENTAGE: u8 = 90;
         self.loaded_programs_cache
             .write()
             .unwrap()
-            .sort_and_evict(None);
+            .sort_and_evict(Percentage::from(EVICT_CACHE_TO_PERCENTAGE));
 
         debug!(
             "check: {}us load: {}us execute: {}us txs_len={}",
@@ -6973,12 +6994,27 @@ impl Bank {
         epoch_accounts_hash
     }
 
+    pub fn run_final_hash_calc(&self, on_halt_store_hash_raw_data_for_debug: bool) {
+        self.force_flush_accounts_cache();
+        // note that this slot may not be a root
+        _ = self.verify_accounts_hash(
+            None,
+            VerifyAccountsHashConfig {
+                test_hash_calculation: false,
+                ignore_mismatch: true,
+                require_rooted_bank: false,
+                run_in_background: false,
+                store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
+            },
+        );
+    }
+
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
     /// snapshot.
     /// return true if all is good
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_accounts_hash(
+    fn verify_accounts_hash(
         &self,
         base: Option<(Slot, /*capitalization*/ u64)>,
         config: VerifyAccountsHashConfig,

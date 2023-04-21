@@ -6,7 +6,7 @@
 
 use {
     crossbeam_channel::{Receiver, Sender},
-    solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
+    solana_gossip::cluster_info::{ClusterInfo, MAX_ACCOUNTS_HASHES},
     solana_measure::measure_us,
     solana_runtime::{
         accounts_db::CalcAccountsHashFlavor,
@@ -14,7 +14,7 @@ use {
             AccountsHash, AccountsHashEnum, CalcAccountsHashConfig, HashStats,
             IncrementalAccountsHash,
         },
-        bank::BankIncrementalSnapshotPersistence,
+        serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
             self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
@@ -38,6 +38,8 @@ use {
     },
 };
 
+pub type AccountsHashFaultInjector = fn(&Hash, Slot) -> Option<Hash>;
+
 pub struct AccountsHashVerifier {
     t_accounts_hash_verifier: JoinHandle<()>,
 }
@@ -47,22 +49,24 @@ impl AccountsHashVerifier {
         accounts_package_sender: Sender<AccountsPackage>,
         accounts_package_receiver: Receiver<AccountsPackage>,
         snapshot_package_sender: Option<Sender<SnapshotPackage>>,
-        exit: &Arc<AtomicBool>,
-        cluster_info: &Arc<ClusterInfo>,
+        exit: Arc<AtomicBool>,
+        cluster_info: Arc<ClusterInfo>,
         known_validators: Option<HashSet<Pubkey>>,
         halt_on_known_validators_accounts_hash_mismatch: bool,
-        fault_injection_rate_slots: u64,
+        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
         snapshot_config: SnapshotConfig,
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
         const LOOP_LIMITER: Duration = Duration::from_millis(DEFAULT_MS_PER_SLOT);
-        let exit = exit.clone();
-        let cluster_info = cluster_info.clone();
         let t_accounts_hash_verifier = Builder::new()
             .name("solAcctHashVer".to_string())
             .spawn(move || {
                 info!("AccountsHashVerifier has started");
                 let mut hashes = vec![];
+                // To support fastboot, we must ensure the storages used in the latest POST snapshot are
+                // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
+                // expiring.
+                let mut last_snapshot_storages = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -82,6 +86,8 @@ impl AccountsHashVerifier {
                     info!("handling accounts package: {accounts_package:?}");
                     let enqueued_time = accounts_package.enqueued.elapsed();
 
+                    let snapshot_storages = accounts_package.snapshot_storages.clone();
+
                     let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
                         &cluster_info,
@@ -90,9 +96,23 @@ impl AccountsHashVerifier {
                         snapshot_package_sender.as_ref(),
                         &mut hashes,
                         &exit,
-                        fault_injection_rate_slots,
                         &snapshot_config,
+                        accounts_hash_fault_injector,
                     ));
+
+                    // Done processing the current snapshot, so the current snapshot dir
+                    // has been converted to POST state.  It is the time to update
+                    // last_snapshot_storages to release the reference counts for the
+                    // previous POST snapshot dir, and save the new ones for the new
+                    // POST snapshot dir.
+                    last_snapshot_storages = Some(snapshot_storages);
+                    debug!(
+                        "Number of snapshot storages kept alive for fastboot: {}",
+                        last_snapshot_storages
+                            .as_ref()
+                            .map(|storages| storages.len())
+                            .unwrap_or(0)
+                    );
 
                     datapoint_info!(
                         "accounts_hash_verifier",
@@ -110,6 +130,13 @@ impl AccountsHashVerifier {
                         ("handling-time-us", handling_time_us, i64),
                     );
                 }
+                debug!(
+                    "Number of snapshot storages kept alive for fastboot: {}",
+                    last_snapshot_storages
+                        .as_ref()
+                        .map(|storages| storages.len())
+                        .unwrap_or(0)
+                );
                 info!("AccountsHashVerifier has stopped");
             })
             .unwrap();
@@ -188,9 +215,9 @@ impl AccountsHashVerifier {
         halt_on_known_validator_accounts_hash_mismatch: bool,
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         hashes: &mut Vec<(Slot, Hash)>,
-        exit: &Arc<AtomicBool>,
-        fault_injection_rate_slots: u64,
+        exit: &AtomicBool,
         snapshot_config: &SnapshotConfig,
+        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
         let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
@@ -203,8 +230,8 @@ impl AccountsHashVerifier {
             halt_on_known_validator_accounts_hash_mismatch,
             hashes,
             exit,
-            fault_injection_rate_slots,
             accounts_hash,
+            accounts_hash_fault_injector,
         );
 
         Self::submit_for_packaging(
@@ -448,38 +475,22 @@ impl AccountsHashVerifier {
         }
     }
 
-    fn generate_fault_hash(original_hash: &Hash) -> Hash {
-        use {
-            rand::{thread_rng, Rng},
-            solana_sdk::hash::extend_and_hash,
-        };
-
-        let rand = thread_rng().gen_range(0, 10);
-        extend_and_hash(original_hash, &[rand])
-    }
-
     fn push_accounts_hashes_to_cluster(
         accounts_package: &AccountsPackage,
         cluster_info: &ClusterInfo,
         known_validators: Option<&HashSet<Pubkey>>,
         halt_on_known_validator_accounts_hash_mismatch: bool,
         hashes: &mut Vec<(Slot, Hash)>,
-        exit: &Arc<AtomicBool>,
-        fault_injection_rate_slots: u64,
+        exit: &AtomicBool,
         accounts_hash: AccountsHashEnum,
+        accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
-        if fault_injection_rate_slots != 0
-            && accounts_package.slot % fault_injection_rate_slots == 0
-        {
-            // For testing, publish an invalid hash to gossip.
-            let fault_hash = Self::generate_fault_hash(accounts_hash.as_hash());
-            warn!("inserting fault at slot: {}", accounts_package.slot);
-            hashes.push((accounts_package.slot, fault_hash));
-        } else {
-            hashes.push((accounts_package.slot, *accounts_hash.as_hash()));
-        }
+        let hash = accounts_hash_fault_injector
+            .and_then(|f| f(accounts_hash.as_hash(), accounts_package.slot))
+            .or(Some(*accounts_hash.as_hash()));
+        hashes.push((accounts_package.slot, hash.unwrap()));
 
-        retain_max_n_elements(hashes, MAX_SNAPSHOT_HASHES);
+        retain_max_n_elements(hashes, MAX_ACCOUNTS_HASHES);
 
         if halt_on_known_validator_accounts_hash_mismatch {
             let mut slot_to_hash = HashMap::new();
@@ -637,7 +648,7 @@ mod tests {
             ..SnapshotConfig::default()
         };
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
-        for i in 0..MAX_SNAPSHOT_HASHES + 1 {
+        for i in 0..MAX_ACCOUNTS_HASHES + 1 {
             let slot = full_snapshot_archive_interval_slots + i as u64;
             let accounts_package = AccountsPackage {
                 slot,
@@ -653,8 +664,8 @@ mod tests {
                 None,
                 &mut hashes,
                 &exit,
-                0,
                 &snapshot_config,
+                None,
             );
 
             // sleep for 1ms to create a newer timestamp for gossip entry
@@ -666,16 +677,16 @@ mod tests {
             .get_accounts_hash_for_node(&cluster_info.id(), |c| c.clone())
             .unwrap();
         info!("{:?}", cluster_hashes);
-        assert_eq!(hashes.len(), MAX_SNAPSHOT_HASHES);
-        assert_eq!(cluster_hashes.len(), MAX_SNAPSHOT_HASHES);
+        assert_eq!(hashes.len(), MAX_ACCOUNTS_HASHES);
+        assert_eq!(cluster_hashes.len(), MAX_ACCOUNTS_HASHES);
         assert_eq!(
             cluster_hashes[0],
             (full_snapshot_archive_interval_slots + 1, expected_hash)
         );
         assert_eq!(
-            cluster_hashes[MAX_SNAPSHOT_HASHES - 1],
+            cluster_hashes[MAX_ACCOUNTS_HASHES - 1],
             (
-                full_snapshot_archive_interval_slots + MAX_SNAPSHOT_HASHES as u64,
+                full_snapshot_archive_interval_slots + MAX_ACCOUNTS_HASHES as u64,
                 expected_hash
             )
         );

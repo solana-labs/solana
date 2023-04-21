@@ -455,7 +455,7 @@ pub fn process_instruction_deploy(
         invoke_context.get_log_collector(),
         buffer,
         use_jit,
-        false,
+        false, /* debugging_features */
     )?;
     load_program_metrics.submit_datapoint(&mut invoke_context.timings);
     if let Some(mut source_program) = source_program {
@@ -588,7 +588,7 @@ pub fn process_instruction(
             invoke_context.get_log_collector(),
             &program,
             use_jit,
-            false,
+            false, /* debugging_features */
         )?;
         load_program_metrics.submit_datapoint(&mut invoke_context.timings);
         get_or_create_executor_time.stop();
@@ -654,6 +654,7 @@ mod tests {
             instruction_accounts,
             expected_result,
             super::process_instruction,
+            |_invoke_context| {},
             |_invoke_context| {},
         )
     }

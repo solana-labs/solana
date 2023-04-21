@@ -35,7 +35,7 @@ use {
         thread,
     },
     thiserror::Error,
-    tokio::{sync::RwLock, time::timeout},
+    tokio::{sync::OnceCell, time::timeout},
 };
 
 struct SkipServerVerification;
@@ -67,7 +67,7 @@ pub struct QuicClientCertificate {
 
 /// A lazy-initialized Quic Endpoint
 pub struct QuicLazyInitializedEndpoint {
-    endpoint: RwLock<Option<Arc<Endpoint>>>,
+    endpoint: OnceCell<Arc<Endpoint>>,
     client_certificate: Arc<QuicClientCertificate>,
     client_endpoint: Option<Endpoint>,
 }
@@ -94,7 +94,7 @@ impl QuicLazyInitializedEndpoint {
         client_endpoint: Option<Endpoint>,
     ) -> Self {
         Self {
-            endpoint: RwLock::new(None),
+            endpoint: OnceCell::<Arc<Endpoint>>::new(),
             client_certificate,
             client_endpoint,
         }
@@ -139,26 +139,10 @@ impl QuicLazyInitializedEndpoint {
     }
 
     async fn get_endpoint(&self) -> Arc<Endpoint> {
-        let lock = self.endpoint.read().await;
-        let endpoint = lock.as_ref();
-
-        match endpoint {
-            Some(endpoint) => endpoint.clone(),
-            None => {
-                drop(lock);
-                let mut lock = self.endpoint.write().await;
-                let endpoint = lock.as_ref();
-
-                match endpoint {
-                    Some(endpoint) => endpoint.clone(),
-                    None => {
-                        let connection = Arc::new(self.create_endpoint());
-                        *lock = Some(connection.clone());
-                        connection
-                    }
-                }
-            }
-        }
+        self.endpoint
+            .get_or_init(|| async { Arc::new(self.create_endpoint()) })
+            .await
+            .clone()
     }
 }
 

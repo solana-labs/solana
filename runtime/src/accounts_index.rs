@@ -2491,8 +2491,8 @@ pub mod tests {
         assert_eq!(num, 1);
 
         // not zero lamports
-        let index = AccountsIndex::<AccountInfoTest, AccountInfoTest>::default_for_tests();
-        let account_info: AccountInfoTest = 0 as AccountInfoTest;
+        let index = AccountsIndex::<bool, bool>::default_for_tests();
+        let account_info = false;
         let items = vec![(*pubkey, account_info)];
         index.set_startup(Startup::Startup);
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
@@ -2516,7 +2516,7 @@ pub mod tests {
         assert!(index
             .get_for_tests(pubkey, Some(&ancestors), None)
             .is_some());
-        assert_eq!(index.ref_count_from_storage(pubkey), 0); // cached, so 0
+        assert_eq!(index.ref_count_from_storage(pubkey), 1);
         index.unchecked_scan_accounts(
             "",
             &ancestors,

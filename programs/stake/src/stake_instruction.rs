@@ -8,8 +8,7 @@ use {
     },
     log::*,
     solana_program_runtime::{
-        declare_process_instruction, invoke_context::InvokeContext,
-        sysvar_cache::get_sysvar_with_account_check,
+        declare_process_instruction, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
         clock::Clock,
@@ -52,10 +51,7 @@ fn get_optional_pubkey<'a>(
     )
 }
 
-declare_process_instruction!(750);
-pub fn process_instruction_inner(
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+declare_process_instruction!(process_instruction, 750, |invoke_context| {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
@@ -479,7 +475,7 @@ pub fn process_instruction_inner(
             Err(err)
         }
     }
-}
+});
 
 #[cfg(test)]
 mod tests {
@@ -595,6 +591,7 @@ mod tests {
             |invoke_context| {
                 invoke_context.feature_set = Arc::clone(&feature_set);
             },
+            |_invoke_context| {},
         )
     }
 
@@ -4233,7 +4230,7 @@ mod tests {
     /// When a destination account already has funds, ensure the minimum split amount reduces
     /// accordingly.
     #[test_case(feature_set_old_behavior(), &[Ok(()), Ok(())]; "old_behavior")]
-    #[test_case(feature_set_new_behavior(), &[ Err(InstructionError::InsufficientFunds), Err(InstructionError::InsufficientFunds) ] ; "new_behavior")]
+    #[test_case(feature_set_new_behavior(), &[ Err(StakeError::InsufficientDelegation.into()), Err(StakeError::InsufficientDelegation.into()) ] ; "new_behavior")]
     fn test_staked_split_destination_minimum_balance(
         feature_set: Arc<FeatureSet>,
         expected_results: &[Result<(), InstructionError>],
@@ -4865,7 +4862,7 @@ mod tests {
             &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
             transaction_accounts,
             instruction_accounts,
-            Err(StakeError::InsufficientStake.into()),
+            Err(StakeError::InsufficientDelegation.into()),
         );
     }
 
@@ -6344,17 +6341,16 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             Ok(()),
+            super::process_instruction,
             |invoke_context| {
-                super::process_instruction(invoke_context)?;
+                invoke_context.feature_set = Arc::clone(&feature_set);
+            },
+            |invoke_context| {
                 let expected_minimum_delegation =
                     crate::get_minimum_delegation(&invoke_context.feature_set).to_le_bytes();
                 let actual_minimum_delegation =
                     invoke_context.transaction_context.get_return_data().1;
                 assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
-                Ok(())
-            },
-            |invoke_context| {
-                invoke_context.feature_set = Arc::clone(&feature_set);
             },
         );
     }

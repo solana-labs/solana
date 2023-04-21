@@ -374,10 +374,7 @@ pub struct ExecuteAccessoryTimings {
 
 impl ExecuteAccessoryTimings {
     pub fn accumulate(&mut self, other: &ExecuteAccessoryTimings) {
-        saturating_add_assign!(
-            self.compute_budget_process_transaction_us,
-            other.feature_set_clone_us
-        );
+        saturating_add_assign!(self.feature_set_clone_us, other.feature_set_clone_us);
         saturating_add_assign!(
             self.compute_budget_process_transaction_us,
             other.compute_budget_process_transaction_us

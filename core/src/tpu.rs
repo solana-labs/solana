@@ -132,7 +132,6 @@ impl Tpu {
 
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(
             exit.clone(),
-            cluster_info.clone(),
             bank_forks.clone(),
             staked_nodes.clone(),
             shared_staked_nodes_overrides,

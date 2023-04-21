@@ -35,6 +35,7 @@ sudo chmod 0444 certs/*
 
 # (Re) start the container
 sudo docker run \
+  --memory=10g \
   --detach \
   --name=grafana \
   --net=influxdb \

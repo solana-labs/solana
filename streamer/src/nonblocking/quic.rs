@@ -101,11 +101,8 @@ pub fn spawn_server(
     info!("Start quic server on {:?}", sock);
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
-    let endpoint = {
-        Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
-            .map_err(|_e| QuicServerError::EndpointFailed)?
-    };
-
+    let endpoint = Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
+        .map_err(QuicServerError::EndpointFailed)?;
     let handle = tokio::spawn(run_server(
         endpoint.clone(),
         packet_sender,
@@ -181,7 +178,7 @@ pub async fn run_server(
 }
 
 fn prune_unstaked_connection_table(
-    unstaked_connection_table: &mut MutexGuard<ConnectionTable>,
+    unstaked_connection_table: &mut ConnectionTable,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
 ) {
@@ -211,10 +208,10 @@ fn get_connection_stake(
     let staked_nodes = staked_nodes.read().unwrap();
     Some((
         pubkey,
-        staked_nodes.pubkey_stake_map.get(&pubkey).copied()?,
-        staked_nodes.total_stake,
-        staked_nodes.max_stake,
-        staked_nodes.min_stake,
+        staked_nodes.get_node_stake(&pubkey)?,
+        staked_nodes.total_stake(),
+        staked_nodes.max_stake(),
+        staked_nodes.min_stake(),
     ))
 }
 
@@ -377,7 +374,6 @@ fn handle_and_cache_new_connection(
 
 fn prune_unstaked_connections_and_add_new_connection(
     connection: Connection,
-    mut connection_table_l: MutexGuard<ConnectionTable>,
     connection_table: Arc<Mutex<ConnectionTable>>,
     max_connections: usize,
     params: &NewConnectionHandlerParams,
@@ -385,11 +381,13 @@ fn prune_unstaked_connections_and_add_new_connection(
 ) -> Result<(), ConnectionHandlerError> {
     let stats = params.stats.clone();
     if max_connections > 0 {
-        prune_unstaked_connection_table(&mut connection_table_l, max_connections, stats);
+        let connection_table_clone = connection_table.clone();
+        let mut connection_table = connection_table.lock().unwrap();
+        prune_unstaked_connection_table(&mut connection_table, max_connections, stats);
         handle_and_cache_new_connection(
             connection,
-            connection_table_l,
             connection_table,
+            connection_table_clone,
             params,
             wait_for_chunk_timeout,
         )
@@ -512,7 +510,6 @@ async fn setup_connection(
                         // connection from the unstaked connection table.
                         if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
                             new_connection,
-                            unstaked_connection_table.lock().unwrap(),
                             unstaked_connection_table.clone(),
                             max_unstaked_connections,
                             &params,
@@ -532,7 +529,6 @@ async fn setup_connection(
                     }
                 } else if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
                     new_connection,
-                    unstaked_connection_table.lock().unwrap(),
                     unstaked_connection_table.clone(),
                     max_unstaked_connections,
                     &params,
@@ -1102,7 +1098,7 @@ pub mod test {
             signature::Keypair,
             signer::Signer,
         },
-        std::net::Ipv4Addr,
+        std::{collections::HashMap, net::Ipv4Addr},
         tokio::time::sleep,
     };
 
@@ -1518,12 +1514,11 @@ pub mod test {
         solana_logger::setup();
 
         let client_keypair = Keypair::new();
-        let mut staked_nodes = StakedNodes::default();
-        staked_nodes
-            .pubkey_stake_map
-            .insert(client_keypair.pubkey(), 100000);
-        staked_nodes.total_stake = 100000;
-
+        let stakes = HashMap::from([(client_keypair.pubkey(), 100_000)]);
+        let staked_nodes = StakedNodes::new(
+            Arc::new(stakes),
+            HashMap::<Pubkey, u64>::default(), // overrides
+        );
         let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes), 1);
         check_multiple_writes(receiver, server_address, Some(&client_keypair)).await;
         exit.store(true, Ordering::Relaxed);
@@ -1545,12 +1540,11 @@ pub mod test {
         solana_logger::setup();
 
         let client_keypair = Keypair::new();
-        let mut staked_nodes = StakedNodes::default();
-        staked_nodes
-            .pubkey_stake_map
-            .insert(client_keypair.pubkey(), 0);
-        staked_nodes.total_stake = 0;
-
+        let stakes = HashMap::from([(client_keypair.pubkey(), 0)]);
+        let staked_nodes = StakedNodes::new(
+            Arc::new(stakes),
+            HashMap::<Pubkey, u64>::default(), // overrides
+        );
         let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes), 1);
         check_multiple_writes(receiver, server_address, Some(&client_keypair)).await;
         exit.store(true, Ordering::Relaxed);

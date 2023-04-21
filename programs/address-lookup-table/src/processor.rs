@@ -18,10 +18,7 @@ use {
     std::convert::TryFrom,
 };
 
-declare_process_instruction!(750);
-pub fn process_instruction_inner(
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+declare_process_instruction!(process_instruction, 750, |invoke_context| {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -39,7 +36,7 @@ pub fn process_instruction_inner(
         }
         ProgramInstruction::CloseLookupTable => Processor::close_lookup_table(invoke_context),
     }
-}
+});
 
 fn checked_add(a: usize, b: usize) -> Result<usize, InstructionError> {
     a.checked_add(b).ok_or(InstructionError::ArithmeticOverflow)
