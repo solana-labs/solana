@@ -231,22 +231,21 @@ mod tests {
         fs::create_dir_all(&full_snapshot_archives_dir).unwrap();
         fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap();
 
-        let slot = 4;
+        let num_snapshots = 4;
 
         let genesis_config = GenesisConfig::default();
         let bank = snapshot_utils::create_snapshot_dirs_for_tests(
             &genesis_config,
             &bank_snapshots_dir,
-            slot,
-            slot,
+            num_snapshots,
+            num_snapshots,
         );
+        purge_old_bank_snapshots(&bank_snapshots_dir, 1, None);
 
         let bank_snapshot_info =
             snapshot_utils::get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
         let snapshot_storages = bank.get_snapshot_storages(None);
         let archive_format = ArchiveFormat::TarBzip2;
-
-        purge_old_bank_snapshots(&bank_snapshots_dir, 1, None);
 
         let full_archive = snapshot_utils::package_and_archive_full_snapshot(
             &bank,
@@ -268,7 +267,7 @@ mod tests {
             bank_snapshots_dir,
             archive_format,
             snapshot_utils::VerifyBank::Deterministic,
-            slot as Slot,
+            bank_snapshot_info.slot,
         );
     }
 
