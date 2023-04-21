@@ -439,20 +439,34 @@ fn create_memory_mapping<'a, 'b, C: ContextObject>(
 
 pub fn process_instruction(
     invoke_context: &mut InvokeContext,
-) -> Result<(), Box<dyn std::error::Error>> {
-    process_instruction_inner(invoke_context, false)
+    _arg0: u64,
+    _arg1: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _memory_mapping: &mut MemoryMapping,
+    result: &mut ProgramResult,
+) {
+    *result = process_instruction_inner(invoke_context, false).into();
 }
 
 pub fn process_instruction_jit(
     invoke_context: &mut InvokeContext,
-) -> Result<(), Box<dyn std::error::Error>> {
-    process_instruction_inner(invoke_context, true)
+    _arg0: u64,
+    _arg1: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _memory_mapping: &mut MemoryMapping,
+    result: &mut ProgramResult,
+) {
+    *result = process_instruction_inner(invoke_context, true).into();
 }
 
 fn process_instruction_inner(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<u64, Box<dyn std::error::Error>> {
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -564,6 +578,7 @@ fn process_instruction_inner(
             ic_logger_msg!(log_collector, "Invalid BPF loader id");
             Err(InstructionError::IncorrectProgramId)
         }
+        .map(|_| 0)
         .map_err(|error| Box::new(error) as Box<dyn std::error::Error>);
     }
 
@@ -612,11 +627,14 @@ fn process_instruction_inner(
     match &executor.program {
         LoadedProgramType::FailedVerification
         | LoadedProgramType::Closed
-        | LoadedProgramType::DelayVisibility => Err(Box::new(InstructionError::InvalidAccountData)),
+        | LoadedProgramType::DelayVisibility => {
+            Err(Box::new(InstructionError::InvalidAccountData) as Box<dyn std::error::Error>)
+        }
         LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
         LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
-        _ => Err(Box::new(InstructionError::IncorrectProgramId)),
+        _ => Err(Box::new(InstructionError::IncorrectProgramId) as Box<dyn std::error::Error>),
     }
+    .map(|_| 0)
 }
 
 fn process_loader_upgradeable_instruction(

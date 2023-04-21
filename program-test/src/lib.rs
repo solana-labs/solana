@@ -180,9 +180,13 @@ pub fn builtin_process_instruction(
 #[macro_export]
 macro_rules! processor {
     ($process_instruction:expr) => {
-        Some(|invoke_context: &mut solana_program_test::InvokeContext| {
-            $crate::builtin_process_instruction($process_instruction, invoke_context)
-        })
+        Some(
+            |invoke_context, _arg0, _arg1, _arg2, _arg3, _arg4, _memory_mapping, result| {
+                *result = $crate::builtin_process_instruction($process_instruction, invoke_context)
+                    .map(|_| 0)
+                    .into();
+            },
+        )
     };
 }
 

@@ -1808,7 +1808,7 @@ pub mod tests {
         matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::declare_process_instruction,
         solana_runtime::{
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
@@ -2962,12 +2962,10 @@ pub mod tests {
             ]
         }
 
-        fn mock_processor_ok(
-            invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-            invoke_context.consume_checked(1)?;
+        declare_process_instruction!(mock_processor_ok, 1, |_invoke_context| {
+            // Always succeeds
             Ok(())
-        }
+        });
 
         let mock_program_id = solana_sdk::pubkey::new_rand();
 
@@ -2993,12 +2991,9 @@ pub mod tests {
         let bankhash_ok = bank.hash();
         assert!(result.is_ok());
 
-        fn mock_processor_err(
-            invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        declare_process_instruction!(mock_processor_err, 1, |invoke_context| {
             let instruction_errors = get_instruction_errors();
 
-            invoke_context.consume_checked(1)?;
             let err = invoke_context
                 .transaction_context
                 .get_current_instruction_context()
@@ -3006,13 +3001,11 @@ pub mod tests {
                 .get_instruction_data()
                 .first()
                 .expect("Failed to get instruction data");
-            Err(Box::new(
-                instruction_errors
-                    .get(*err as usize)
-                    .expect("Invalid error index")
-                    .clone(),
-            ))
-        }
+            Err(instruction_errors
+                .get(*err as usize)
+                .expect("Invalid error index")
+                .clone())
+        });
 
         let mut bankhash_err = None;
 
