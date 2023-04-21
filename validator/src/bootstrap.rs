@@ -55,6 +55,8 @@ const GET_RPC_PEERS_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
 
+pub const PING_TIMEOUT: Duration = Duration::from_secs(2);
+
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
     pub no_genesis_fetch: bool,
@@ -453,9 +455,9 @@ pub fn attempt_download_genesis_and_snapshot(
 }
 
 /// simple ping helper function which returns the time to connect
-fn ping(addr: &SocketAddr) -> Option<std::time::Duration> {
+fn ping(addr: &SocketAddr) -> Option<Duration> {
     let start = Instant::now();
-    match TcpStream::connect_timeout(addr, std::time::Duration::from_secs(2)) {
+    match TcpStream::connect_timeout(addr, PING_TIMEOUT) {
         Ok(_) => Some(start.elapsed()),
         Err(_) => None,
     }
@@ -494,17 +496,6 @@ fn get_vetted_rpc_nodes(
         let newly_blacklisted_rpc_nodes = RwLock::new(HashSet::new());
         vetted_rpc_nodes.extend(
             rpc_node_details
-                .into_iter()
-                .map(|node| {
-                    let addr = &node.rpc_contact_info.gossip;
-                    let time = ping(addr); 
-                    // large default ping
-                    let time = time.unwrap_or(Duration::from_secs(100)); 
-                    (node, time)
-                })
-                .sorted_by_key(|(_, time)| *time)
-                .map(|(node, _)| node)
-                .collect::<Vec<_>>()
                 .into_par_iter()
                 .map(|rpc_node_details| {
                     let GetRpcNodeResult {
@@ -521,13 +512,19 @@ fn get_vetted_rpc_nodes(
                         Duration::from_secs(5),
                     );
 
-                    (rpc_contact_info, snapshot_hash, rpc_client)
+                    let ping_time = ping(&rpc_contact_info.gossip); 
+
+                    (rpc_contact_info, snapshot_hash, rpc_client, ping_time)
                 })
-                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
+                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client, ping_time)| {
                     match rpc_client.get_version() {
                         Ok(rpc_version) => {
-                            info!("RPC node version: {}", rpc_version.solana_core);
-                            true
+                            if ping_time.is_some() {
+                                info!("RPC node version: {} Ping: {:?}", rpc_version.solana_core, ping_time.unwrap());
+                                true
+                            } else { 
+                                false
+                            }
                         }
                         Err(err) => {
                             fail_rpc_node(
@@ -540,7 +537,11 @@ fn get_vetted_rpc_nodes(
                         }
                     }
                 })
-                .collect::<Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)>>(),
+                .collect::<Vec<(ContactInfo, Option<SnapshotHash>, RpcClient, Option<Duration>)>>()
+                .into_iter()
+                .sorted_by_key(|(_, _, _, ping_time)| ping_time.unwrap())
+                .map(|(rpc_contact_info, snapshot_hash, rpc_client, _)| (rpc_contact_info, snapshot_hash, rpc_client))
+                .collect::<Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)>>()
         );
         blacklisted_rpc_nodes.extend(newly_blacklisted_rpc_nodes.into_inner().unwrap());
     }
