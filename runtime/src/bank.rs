@@ -2428,7 +2428,7 @@ impl Bank {
                 self.rewards
                     .read()
                     .unwrap()
-                    .iter()
+                    .par_iter()
                     .map(|(_address, reward_info)| {
                         match reward_info.reward_type {
                             RewardType::Voting | RewardType::Staking => reward_info.lamports,
