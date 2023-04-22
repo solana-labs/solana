@@ -2416,9 +2416,10 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        if self
-            .feature_set
-            .is_active(&feature_set::update_rewards_no_join::id())
+        if update_rewards_from_cached_accounts
+            && self
+                .feature_set
+                .is_active(&feature_set::update_rewards_no_join::id())
         {
             self.pay_validator_rewards_with_thread_pool_no_join(
                 prev_epoch,
