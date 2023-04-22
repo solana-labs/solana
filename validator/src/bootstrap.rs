@@ -512,7 +512,7 @@ fn get_vetted_rpc_nodes(
                     );
 
                     let rpc_addr = rpc_contact_info.rpc().ok()?;
-                    let ping_time = ping(&rpc_addr); 
+                    let ping_time = ping(&rpc_addr);
 
                     let rpc_client = RpcClient::new_socket_with_timeout(
                         rpc_addr,
@@ -527,7 +527,7 @@ fn get_vetted_rpc_nodes(
                             if let Some(ping_time) = ping_time {
                                 info!("RPC node version: {} Ping: {}ms", rpc_version.solana_core, ping_time.as_millis());
                                 true
-                            } else { 
+                            } else {
                                 fail_rpc_node(
                                     "Failed to ping RPC".to_string(),
                                     &validator_config.known_validators,
