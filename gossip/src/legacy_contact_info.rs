@@ -1,7 +1,8 @@
 use {
     crate::{
         contact_info::{
-            sanitize_quic_offset, sanitize_socket, socket_addr_unspecified, ContactInfo, Error,
+            get_quic_socket, sanitize_quic_offset, sanitize_socket, socket_addr_unspecified,
+            ContactInfo, Error,
         },
         crds_value::MAX_WALLCLOCK,
     },
@@ -177,6 +178,10 @@ impl LegacyContactInfo {
 
     set_socket!(set_gossip, gossip);
     set_socket!(set_rpc, rpc);
+
+    pub fn tpu_quic(&self) -> Result<SocketAddr, Error> {
+        self.tpu().and_then(|addr| get_quic_socket(&addr))
+    }
 
     fn is_valid_ip(addr: IpAddr) -> bool {
         !(addr.is_unspecified() || addr.is_multicast())
