@@ -2639,7 +2639,6 @@ impl ReplayStage {
                     .expect("Bank fork progress entry missing for completed bank");
 
                 let replay_stats = bank_progress.replay_stats.clone();
-                let mut replay_stats = replay_stats.write().unwrap();
 
                 if let Some((result, complete_execute_timings)) =
                     bank.wait_for_completed_scheduler()
@@ -2647,7 +2646,11 @@ impl ReplayStage {
                     let metrics = ExecuteBatchesInternalMetrics::new_with_timings_from_all_threads(
                         complete_execute_timings,
                     );
-                    replay_stats.batch_execute.accumulate(metrics);
+                    replay_stats
+                        .write()
+                        .unwrap()
+                        .batch_execute
+                        .accumulate(metrics);
 
                     if let Err(err) = result {
                         Self::mark_dead_slot(
@@ -2670,13 +2673,14 @@ impl ReplayStage {
                     }
                 }
 
+                let r_replay_stats = replay_stats.read().unwrap();
                 let replay_progress = bank_progress.replay_progress.clone();
                 let r_replay_progress = replay_progress.read().unwrap();
                 debug!(
                     "bank {} has completed replay from blockstore, \
                      contribute to update cost with {:?}",
                     bank.slot(),
-                    replay_stats.batch_execute.totals
+                    r_replay_stats.batch_execute.totals
                 );
                 did_complete_bank = true;
                 let _ = cluster_slots_update_sender.send(vec![bank_slot]);
@@ -2764,14 +2768,14 @@ impl ReplayStage {
                 }
                 bank_complete_time.stop();
 
-                replay_stats.report_stats(
+                r_replay_stats.report_stats(
                     bank.slot(),
                     r_replay_progress.num_txs,
                     r_replay_progress.num_entries,
                     r_replay_progress.num_shreds,
                     bank_complete_time.as_us(),
                 );
-                execute_timings.accumulate(&replay_stats.batch_execute.totals);
+                execute_timings.accumulate(&r_replay_stats.batch_execute.totals);
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
