@@ -2625,8 +2625,7 @@ impl ReplayStage {
                             ancestor_hashes_replay_update_sender,
                             purge_repair_slot_counter,
                         );
-                        // If the bank was corrupted, don't try to run the below logic to check if the
-                        // bank is completed
+                        // don't try to run the below logic to check if the bank is completed
                         continue;
                     }
                 }
@@ -2666,7 +2665,7 @@ impl ReplayStage {
                             ancestor_hashes_replay_update_sender,
                             purge_repair_slot_counter,
                         );
-                        // If the bank was corrupted, abort now to prevent further normal processing
+                        // don't try to run the remaining normal processing for the completed bank
                         continue;
                     }
                 }
