@@ -41,7 +41,7 @@ pub struct LegacyContactInfo {
     /// address to send repair requests to
     serve_repair: SocketAddr,
     /// latest wallclock picked
-    pub wallclock: u64,
+    wallclock: u64,
     /// node shred version
     pub shred_version: u16,
 }
@@ -153,6 +153,15 @@ impl LegacyContactInfo {
             wallclock: timestamp(),
             ..LegacyContactInfo::default()
         }
+    }
+
+    #[inline]
+    pub fn wallclock(&self) -> u64 {
+        self.wallclock
+    }
+
+    pub fn set_wallclock(&mut self, wallclock: u64) {
+        self.wallclock = wallclock;
     }
 
     get_socket!(gossip);

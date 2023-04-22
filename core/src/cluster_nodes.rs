@@ -119,12 +119,12 @@ impl<T> ClusterNodes<T> {
             if node.stake != 0u64 {
                 num_nodes_staked += 1;
             }
-            match node.contact_info() {
+            match node.contact_info().map(ContactInfo::wallclock) {
                 None => {
                     num_nodes_dead += 1;
                     stake_dead += node.stake;
                 }
-                Some(&ContactInfo { wallclock, .. }) => {
+                Some(wallclock) => {
                     let age = now.saturating_sub(wallclock);
                     if age > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
                         num_nodes_stale += 1;

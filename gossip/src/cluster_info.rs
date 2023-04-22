@@ -1393,10 +1393,10 @@ impl ClusterInfo {
             };
             if !pulls.is_empty() {
                 let now = timestamp();
-                if now <= entrypoint.wallclock.saturating_add(THROTTLE_DELAY) {
+                if now <= entrypoint.wallclock().saturating_add(THROTTLE_DELAY) {
                     return;
                 }
-                entrypoint.wallclock = now;
+                entrypoint.set_wallclock(now);
                 if let Ok(entrypoint_gossip) = entrypoint.gossip() {
                     if self
                         .time_gossip_read_lock("entrypoint", &self.stats.entrypoint)
@@ -4329,7 +4329,7 @@ RPC Enabled Nodes: 1"#;
 
         // Pull request 2: pretend it's been a while since we've pulled from `entrypoint`.  There should
         // now be two pull requests
-        cluster_info.entrypoints.write().unwrap()[0].wallclock = 0;
+        cluster_info.entrypoints.write().unwrap()[0].set_wallclock(0);
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
         assert!(pings.is_empty());
         assert_eq!(pulls.len(), 2 * MIN_NUM_BLOOM_FILTERS);
@@ -4766,7 +4766,7 @@ RPC Enabled Nodes: 1"#;
             peers.push(keypair.pubkey());
             let mut rand_ci = LegacyContactInfo::new_rand(&mut rng, Some(keypair.pubkey()));
             rand_ci.shred_version = shred_version;
-            rand_ci.wallclock = timestamp();
+            rand_ci.set_wallclock(timestamp());
             CrdsValue::new_signed(CrdsData::LegacyContactInfo(rand_ci), &keypair)
         })
         .take(NO_ENTRIES)

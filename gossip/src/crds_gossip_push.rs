@@ -330,7 +330,7 @@ mod tests {
         let crds = RwLock::<Crds>::default();
         let push = CrdsGossipPush::default();
         let mut ci = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
-        ci.wallclock = 1;
+        ci.set_wallclock(1);
         let value = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci.clone()));
 
         // push a new message
@@ -340,7 +340,7 @@ mod tests {
         );
 
         // push an old version
-        ci.wallclock = 0;
+        ci.set_wallclock(0);
         let value = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci));
         assert!(push
             .process_push_message(&crds, vec![(Pubkey::default(), vec![value])], 0)
@@ -354,14 +354,14 @@ mod tests {
         let mut ci = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
 
         // push a version to far in the future
-        ci.wallclock = timeout + 1;
+        ci.set_wallclock(timeout + 1);
         let value = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci.clone()));
         assert!(push
             .process_push_message(&crds, vec![(Pubkey::default(), vec![value])], 0)
             .is_empty());
 
         // push a version to far in the past
-        ci.wallclock = 0;
+        ci.set_wallclock(0);
         let value = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci));
         assert!(push
             .process_push_message(&crds, vec![(Pubkey::default(), vec![value])], timeout + 1)
@@ -373,7 +373,7 @@ mod tests {
         let push = CrdsGossipPush::default();
         let mut ci = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
         let origin = ci.id;
-        ci.wallclock = 0;
+        ci.set_wallclock(0);
         let value_old = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci.clone()));
 
         // push a new message
@@ -383,7 +383,7 @@ mod tests {
         );
 
         // push an old version
-        ci.wallclock = 1;
+        ci.set_wallclock(1);
         let value = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci));
         assert_eq!(
             push.process_push_message(&crds, vec![(Pubkey::default(), vec![value])], 0),
@@ -449,7 +449,7 @@ mod tests {
             .into_iter()
             .map(|wallclock| {
                 let mut peer = ContactInfo::new_rand(&mut rng, /*pubkey=*/ None);
-                peer.wallclock = wallclock;
+                peer.set_wallclock(wallclock);
                 ping_cache.mock_pong(peer.id, peer.gossip().unwrap(), Instant::now());
                 CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(peer))
             })
@@ -575,7 +575,7 @@ mod tests {
         );
 
         let mut ci = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
-        ci.wallclock = 1;
+        ci.set_wallclock(1);
         let new_msg = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci));
         let expected = HashMap::new();
         let origin = new_msg.pubkey();
@@ -600,7 +600,7 @@ mod tests {
         let crds = RwLock::<Crds>::default();
         let push = CrdsGossipPush::default();
         let mut ci = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
-        ci.wallclock = 0;
+        ci.set_wallclock(0);
         let value = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci));
         let label = value.label();
         // push a new message

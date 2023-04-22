@@ -288,7 +288,7 @@ fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_conver
                 let node_crds = node.gossip.crds.read().unwrap();
                 node_crds.get::<&ContactInfo>(node_pubkey).cloned().unwrap()
             };
-            m.wallclock = now;
+            m.set_wallclock(now);
             node.gossip.process_push_message(
                 vec![(
                     Pubkey::default(),
