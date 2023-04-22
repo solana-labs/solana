@@ -367,6 +367,7 @@ impl JsonRpcRequestProcessor {
             &connection_cache,
             1000,
             1,
+            exit.clone(),
         );
 
         Self {
@@ -6398,6 +6399,7 @@ pub mod tests {
             &connection_cache,
             1000,
             1,
+            exit,
         );
 
         let mut bad_transaction = system_transaction::transfer(
@@ -6670,6 +6672,7 @@ pub mod tests {
             &connection_cache,
             1000,
             1,
+            exit,
         );
         assert_eq!(
             request_processor.get_block_commitment(0),
