@@ -76,6 +76,7 @@ nightly_clippy_allows=()
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
  _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
    --deny=warnings \
+   --deny=clippy::default_trait_access \
    --deny=clippy::integer_arithmetic \
    "${nightly_clippy_allows[@]}"
 
