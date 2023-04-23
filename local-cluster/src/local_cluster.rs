@@ -92,6 +92,25 @@ pub struct ClusterConfig {
     pub tpu_connection_pool_size: usize,
 }
 
+impl ClusterConfig {
+    pub fn new_with_equal_stakes(
+        num_nodes: usize,
+        cluster_lamports: u64,
+        lamports_per_node: u64,
+    ) -> Self {
+        let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
+        Self {
+            node_stakes: stakes,
+            cluster_lamports,
+            validator_configs: make_identical_validator_configs(
+                &ValidatorConfig::default_for_test(),
+                num_nodes,
+            ),
+            ..Self::default()
+        }
+    }
+}
+
 impl Default for ClusterConfig {
     fn default() -> Self {
         ClusterConfig {
@@ -126,23 +145,6 @@ pub struct LocalCluster {
 }
 
 impl LocalCluster {
-    pub fn config_with_equal_stakes(
-        num_nodes: usize,
-        cluster_lamports: u64,
-        lamports_per_node: u64,
-    ) -> ClusterConfig {
-        let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
-        ClusterConfig {
-            node_stakes: stakes,
-            cluster_lamports,
-            validator_configs: make_identical_validator_configs(
-                &ValidatorConfig::default_for_test(),
-                num_nodes,
-            ),
-            ..ClusterConfig::default()
-        }
-    }
-
     pub fn new_with_equal_stakes(
         num_nodes: usize,
         cluster_lamports: u64,
@@ -150,7 +152,11 @@ impl LocalCluster {
         socket_addr_space: SocketAddrSpace,
     ) -> Self {
         Self::new(
-            &mut Self::config_with_equal_stakes(num_nodes, cluster_lamports, lamports_per_node),
+            &mut ClusterConfig::new_with_equal_stakes(
+                num_nodes,
+                cluster_lamports,
+                lamports_per_node,
+            ),
             socket_addr_space,
         )
     }

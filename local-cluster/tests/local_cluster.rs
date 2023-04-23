@@ -3035,7 +3035,7 @@ fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
     );
 
     let num_nodes = 2;
-    let mut config = LocalCluster::config_with_equal_stakes(
+    let mut config = ClusterConfig::new_with_equal_stakes(
         num_nodes,
         DEFAULT_CLUSTER_LAMPORTS,
         DEFAULT_NODE_STAKE,
