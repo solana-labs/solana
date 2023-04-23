@@ -8292,7 +8292,6 @@ impl TotalAccountsStats {
 impl Drop for Bank {
     fn drop(&mut self) {
         self.drop_scheduler();
-
         self.bank_frozen_or_destroyed();
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
