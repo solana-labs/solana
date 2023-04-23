@@ -28,8 +28,5 @@ tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 url = { workspace = true }
 
-[dev-dependencies]
-anyhow = { workspace = true }
-
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

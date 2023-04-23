@@ -62,34 +62,9 @@ impl Config {
         })
     }
 
-    fn try_migrate_08(config_file: &str) -> Result<Self, io::Error> {
-        eprintln!("attempting to upgrade legacy config file");
-        let bak_filename = config_file.to_string() + ".bak";
-        std::fs::copy(config_file, &bak_filename)?;
-        let result = File::open(config_file).and_then(|file| {
-            serde_yaml_08::from_reader(file)
-                .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{err:?}")))
-                .and_then(|config_08: Self| {
-                    let save = config_08._save(config_file).map(|_| config_08);
-                    if save.is_ok() {
-                        let _ = std::fs::remove_file(&bak_filename);
-                    }
-                    save
-                })
-        });
-        if result.is_err() {
-            eprintln!("config upgrade failed! restoring orignal");
-            let restored = std::fs::copy(&bak_filename, config_file)
-                .and_then(|_| std::fs::remove_file(&bak_filename));
-            if restored.is_err() {
-                eprintln!("restoration failed! original: `{bak_filename}`");
-            } else {
-                eprintln!("restoration succeeded!");
-            }
-        } else {
-            eprintln!("config upgrade succeeded!");
-        }
-        result
+    fn try_migrate_08(_config_file: &str) -> Result<Self, io::Error> {
+        let p = || panic!();
+        p()
     }
 
     pub fn load(config_file: &str) -> Result<Self, String> {

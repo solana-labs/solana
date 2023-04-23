@@ -5218,11 +5218,8 @@ dependencies = [
 name = "solana-cargo-build-bpf"
 version = "1.16.0"
 dependencies = [
- "cargo_metadata",
- "clap 3.2.23",
  "log",
  "solana-logger 1.16.0",
- "solana-sdk 1.16.0",
 ]
 
 [[package]]
@@ -5248,10 +5245,6 @@ dependencies = [
 [[package]]
 name = "solana-cargo-test-bpf"
 version = "1.16.0"
-dependencies = [
- "cargo_metadata",
- "clap 3.2.23",
-]
 
 [[package]]
 name = "solana-cargo-test-sbf"
@@ -5704,13 +5697,9 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "1.16.0"
 dependencies = [
- "ahash 0.8.3",
- "blake3",
  "block-buffer 0.9.0",
  "bs58",
  "bv",
- "byteorder",
- "cc",
  "either",
  "generic-array 0.14.7",
  "getrandom 0.1.16",
@@ -5724,7 +5713,6 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
- "serde_json",
  "sha2 0.10.6",
  "solana-frozen-abi-macro 1.16.0",
  "solana-logger 1.16.0",
@@ -5891,7 +5879,6 @@ dependencies = [
  "scopeguard",
  "semver 1.0.16",
  "serde",
- "serde_yaml 0.8.26",
  "serde_yaml 0.9.21",
  "solana-clap-utils",
  "solana-config-program",
@@ -6323,7 +6310,6 @@ dependencies = [
 name = "solana-program"
 version = "1.16.0"
 dependencies = [
- "anyhow",
  "ark-bn254 0.4.0",
  "ark-ec 0.4.2",
  "ark-ff 0.4.2",
@@ -6339,7 +6325,6 @@ dependencies = [
  "bs58",
  "bv",
  "bytemuck",
- "cc",
  "console_error_panic_hook",
  "console_log",
  "curve25519-dalek",
@@ -6371,7 +6356,6 @@ dependencies = [
  "solana-sdk-macro 1.16.0",
  "static_assertions",
  "thiserror",
- "tiny-bip39",
  "wasm-bindgen",
  "zeroize",
 ]
@@ -6433,7 +6417,6 @@ dependencies = [
 name = "solana-pubsub-client"
 version = "1.16.0"
 dependencies = [
- "anyhow",
  "crossbeam-channel",
  "futures-util",
  "log",
@@ -6788,7 +6771,6 @@ name = "solana-sdk"
 version = "1.16.0"
 dependencies = [
  "anyhow",
- "assert_matches",
  "base64 0.13.1",
  "bincode",
  "bitflags",
@@ -6803,7 +6785,6 @@ dependencies = [
  "ed25519-dalek",
  "ed25519-dalek-bip32",
  "generic-array 0.14.7",
- "hex",
  "hmac 0.12.1",
  "itertools",
  "js-sys",
@@ -6904,7 +6885,6 @@ dependencies = [
  "proptest",
  "rustc_version 0.4.0",
  "solana-config-program",
- "solana-logger 1.16.0",
  "solana-program-runtime",
  "solana-sdk 1.16.0",
  "solana-vote-program",
@@ -7027,7 +7007,6 @@ dependencies = [
  "log",
  "serde",
  "serde_derive",
- "solana-logger 1.16.0",
  "solana-program-runtime",
  "solana-sdk 1.16.0",
 ]

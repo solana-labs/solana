@@ -41,10 +41,6 @@ zstd = { workspace = true }
 # statically...
 [target."cfg(not(windows))".dependencies]
 openssl = { workspace = true, features = ["vendored"] }
-# ...except on Windows to avoid having to deal with getting CI past a build-time
-# Perl dependency
-[target."cfg(windows)".dependencies]
-openssl = { workspace = true, features = [] }
 
 [lib]
 crate-type = ["lib"]
