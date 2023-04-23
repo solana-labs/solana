@@ -4918,12 +4918,10 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "1.16.0"
 dependencies = [
- "block-buffer 0.9.0",
  "bs58",
  "bv",
  "either",
  "generic-array 0.14.7",
- "getrandom 0.1.14",
  "im",
  "lazy_static",
  "log",
