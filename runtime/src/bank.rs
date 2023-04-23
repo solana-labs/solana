@@ -1475,6 +1475,10 @@ impl Bank {
         let mut time = Measure::start("bank::new_from_parent");
         let NewBankOptions { vote_only_bank } = new_bank_options;
 
+        // there should be no active scheduler at this point, which
+        // might be actively mutating bank state...
+        assert!(!parent.with_scheduler());
+
         parent.freeze();
         assert_ne!(slot, parent.slot());
 
