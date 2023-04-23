@@ -4918,13 +4918,9 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "1.16.0"
 dependencies = [
- "ahash 0.8.3",
- "blake3",
  "block-buffer 0.9.0",
  "bs58",
  "bv",
- "byteorder 1.4.3",
- "cc",
  "either",
  "generic-array 0.14.7",
  "getrandom 0.1.14",
@@ -4938,7 +4934,6 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
- "serde_json",
  "sha2 0.10.6",
  "solana-frozen-abi-macro 1.16.0",
  "subtle",
@@ -5299,7 +5294,6 @@ dependencies = [
  "bs58",
  "bv",
  "bytemuck",
- "cc",
  "console_error_panic_hook",
  "console_log",
  "curve25519-dalek",
@@ -5329,7 +5323,6 @@ dependencies = [
  "solana-frozen-abi-macro 1.16.0",
  "solana-sdk-macro 1.16.0",
  "thiserror",
- "tiny-bip39",
  "wasm-bindgen",
  "zeroize",
 ]
@@ -6074,7 +6067,6 @@ dependencies = [
 name = "solana-sdk"
 version = "1.16.0"
 dependencies = [
- "assert_matches",
  "base64 0.13.1",
  "bincode",
  "bitflags",
