@@ -341,10 +341,11 @@ impl VoteState {
         3762 // see test_vote_state_size_of.
     }
 
-    pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
+    #[allow(clippy::used_underscore_binding)]
+    pub fn deserialize(_input: &[u8]) -> Result<Self, InstructionError> {
         #[cfg(not(target_os = "solana"))]
         {
-            deserialize::<VoteStateVersions>(input)
+            deserialize::<VoteStateVersions>(_input)
                 .map(|versioned| versioned.convert_to_current())
                 .map_err(|_| InstructionError::InvalidAccountData)
         }
