@@ -30,5 +30,3 @@ export SBF_TOOLS_VERSION
 
 SCCACHE_S3_KEY_PREFIX="${rust_stable}_${rust_nightly}_${SBF_TOOLS_VERSION}"
 export SCCACHE_S3_KEY_PREFIX
-
-echo $rust_stable
