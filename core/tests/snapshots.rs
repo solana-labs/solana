@@ -71,7 +71,6 @@ struct SnapshotTestConfig {
     full_snapshot_archives_dir: TempDir,
     bank_snapshots_dir: TempDir,
     accounts_dir: PathBuf,
-    _accounts_tmp_dir: TempDir,
 }
 
 impl SnapshotTestConfig {
@@ -128,7 +127,6 @@ impl SnapshotTestConfig {
             full_snapshot_archives_dir,
             bank_snapshots_dir,
             accounts_dir,
-            _accounts_tmp_dir,
         }
     }
 }
