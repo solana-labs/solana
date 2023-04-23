@@ -338,6 +338,8 @@ impl Stakes<StakeAccount> {
             .map(StakeAccount::delegation)
             .filter(|delegation| &delegation.voter_pubkey == voter_pubkey)
             .map(|delegation| delegation.stake(epoch, Some(stake_history)))
+            .collect::<Vec<u64>>()
+            .par_iter()
             .sum()
     }
 
@@ -346,8 +348,13 @@ impl Stakes<StakeAccount> {
         let get_stake = |stake_account: &StakeAccount| stake_account.delegation().stake;
         let get_lamports = |(_, vote_account): (_, &VoteAccount)| vote_account.lamports();
 
-        self.stake_delegations.values().map(get_stake).sum::<u64>()
-            + self.vote_accounts.iter().map(get_lamports).sum::<u64>()
+        self.stake_delegations
+            .values()
+            .map(get_stake)
+            .chain(self.vote_accounts.iter().map(get_lamports))
+            .collect::<Vec<u64>>()
+            .par_iter()
+            .sum::<u64>()
     }
 
     fn remove_vote_account(&mut self, vote_pubkey: &Pubkey) {
