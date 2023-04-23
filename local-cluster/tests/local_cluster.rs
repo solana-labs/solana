@@ -14,7 +14,7 @@ use {
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
         tower_storage::FileTowerStorage,
-        validator::ValidatorConfig,
+        validator::{BlockVerificationMethod, ValidatorConfig},
     },
     solana_download_utils::download_snapshot_archive,
     solana_gossip::{contact_info::LegacyContactInfo, gossip_service::discover_cluster},
@@ -3025,6 +3025,7 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
 #[test]
 #[serial]
 fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
+    // tailored logging just to see two block verification methods are working correctly
     solana_logger::setup_with_default(
         "solana_metrics::metrics=warn,\
          solana_core=warn,\
@@ -3039,13 +3040,15 @@ fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
         DEFAULT_CLUSTER_LAMPORTS,
         DEFAULT_NODE_STAKE,
     );
+
+    // Randomly switch to use unified scheduler
     config
         .validator_configs
         .iter_mut()
         .choose(&mut rand::thread_rng())
         .unwrap()
-        .block_verification_method =
-        solana_core::validator::BlockVerificationMethod::UnifiedScheduler;
+        .block_verification_method = BlockVerificationMethod::UnifiedScheduler;
+
     let local = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
