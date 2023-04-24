@@ -94,7 +94,7 @@ use {
     solana_perf::perf_libs,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
-        builtin_program::{BuiltinProgram, ProcessInstructionWithContext},
+        builtin_program::{BuiltinProgram, BuiltinPrograms, ProcessInstructionWithContext},
         compute_budget::{self, ComputeBudget},
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
         loaded_programs::{LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot},
@@ -884,18 +884,6 @@ pub struct OptionalDropCallback(Option<Box<dyn DropCallback + Send + Sync>>);
 impl AbiExample for OptionalDropCallback {
     fn example() -> Self {
         Self(None)
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct BuiltinPrograms {
-    pub vec: Vec<BuiltinProgram>,
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for BuiltinPrograms {
-    fn example() -> Self {
-        Self::default()
     }
 }
 
@@ -4282,7 +4270,7 @@ impl Bank {
 
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
-            &self.builtin_programs.vec,
+            &self.builtin_programs,
             tx.message(),
             &loaded_transaction.program_indices,
             &mut transaction_context,

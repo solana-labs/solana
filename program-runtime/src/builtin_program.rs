@@ -35,3 +35,30 @@ impl AbiExample for BuiltinProgram {
         }
     }
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct BuiltinPrograms {
+    pub vec: Vec<BuiltinProgram>,
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for BuiltinPrograms {
+    fn example() -> Self {
+        Self::default()
+    }
+}
+
+impl BuiltinPrograms {
+    pub fn new_mock(
+        program_id: Pubkey,
+        process_instruction: ProcessInstructionWithContext,
+    ) -> Self {
+        Self {
+            vec: vec![BuiltinProgram {
+                name: "mock instruction processor".to_string(),
+                program_id,
+                process_instruction,
+            }],
+        }
+    }
+}
