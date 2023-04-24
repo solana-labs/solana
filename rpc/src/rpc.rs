@@ -3452,7 +3452,7 @@ pub mod rpc_full {
                 .all_peers()
                 .iter()
                 .filter_map(|(contact_info, _)| {
-                    if my_shred_version == contact_info.shred_version
+                    if my_shred_version == contact_info.shred_version()
                         && contact_info
                             .gossip()
                             .map(|addr| socket_addr_space.check(&addr))

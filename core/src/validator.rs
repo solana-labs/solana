@@ -2119,7 +2119,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
         let vote_state_node_pubkey = vote_account.node_pubkey().unwrap_or_default();
 
         if let Some(peer) = peers.get(&vote_state_node_pubkey) {
-            if peer.shred_version == my_shred_version {
+            if peer.shred_version() == my_shred_version {
                 trace!(
                     "observed {} in gossip, (activated_stake={})",
                     vote_state_node_pubkey,

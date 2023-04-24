@@ -193,7 +193,7 @@ fn get_rpc_peers(
                 .gossip()
                 .ok()
                 .and_then(|addr| cluster_info.lookup_contact_info_by_gossip_addr(&addr))
-                .map_or(false, |entrypoint| entrypoint.shred_version == 0)
+                .map_or(false, |entrypoint| entrypoint.shred_version() == 0)
         });
 
         if all_zero_shred_versions {
@@ -215,7 +215,7 @@ fn get_rpc_peers(
     let mut rpc_peers = cluster_info
         .all_rpc_peers()
         .into_iter()
-        .filter(|contact_info| contact_info.shred_version == shred_version)
+        .filter(|contact_info| contact_info.shred_version() == shred_version)
         .collect::<Vec<_>>();
 
     if bootstrap_config.only_known_rpc {
