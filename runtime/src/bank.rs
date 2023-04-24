@@ -3029,7 +3029,6 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
-        println!("haha: vote store");
         let (vote_rewards, measure) = measure!(
             {
                 let vote_rewards = thread_pool
@@ -3074,11 +3073,8 @@ impl Bank {
                 let vote_rewards: Vec<_> = vote_rewards.into_iter().flatten().collect();
                 let vote_accounts: Vec<_> = vote_accounts.iter().flatten().collect();
 
-                println!("haha: before vote store");
                 let to_storable = (self.slot(), &vote_accounts[..], self.include_slot_in_hash());
                 self.store_accounts_batch_stake_cache_update(to_storable, true);
-                println!("haha: after vote store");
-                //self.store_accounts(to_storable);
                 vote_rewards
             },
             "store_vote_accounts_us"
