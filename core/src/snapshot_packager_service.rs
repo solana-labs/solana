@@ -187,7 +187,7 @@ mod tests {
             snapshot_archive_info::SnapshotArchiveInfo,
             snapshot_hash::SnapshotHash,
             snapshot_package::{SnapshotPackage, SnapshotType},
-            snapshot_utils::{self, purge_old_bank_snapshots, ArchiveFormat, SnapshotVersion},
+            snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
         },
         solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash},
         std::{
