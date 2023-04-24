@@ -136,6 +136,7 @@ use {
         inflation::Inflation,
         instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},
         lamports::LamportsError,
+        loader_v3,
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
@@ -274,7 +275,6 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
-use solana_sdk::loader_v3;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -4442,7 +4442,14 @@ impl Bank {
         let programs_and_slots: Vec<(Pubkey, Slot)> = if self.check_program_modification_slot {
             program_accounts_map
                 .keys()
-                .map(|pubkey| (*pubkey, self.program_modification_slot(pubkey).unwrap_or(0)))
+                .map(|pubkey| {
+                    (
+                        *pubkey,
+                        // If the program_modification_slot() returns error, use maximum slot
+                        // number. It'll prevent cache from returning an old/obsolete program.
+                        self.program_modification_slot(pubkey).unwrap_or(u64::MAX),
+                    )
+                })
                 .collect()
         } else {
             program_accounts_map
