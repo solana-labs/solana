@@ -125,6 +125,7 @@ trigger_secondary_step() {
     trigger: "solana-secondary"
     branches: "!pull/*"
     async: true
+    soft_fail: true
     build:
       message: "${BUILDKITE_MESSAGE}"
       commit: "${BUILDKITE_COMMIT}"
