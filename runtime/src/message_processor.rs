@@ -2,9 +2,10 @@ use {
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_program_runtime::{
+        builtin_program::BuiltinPrograms,
         compute_budget::ComputeBudget,
         executor_cache::TransactionExecutorCache,
-        invoke_context::{BuiltinProgram, InvokeContext},
+        invoke_context::InvokeContext,
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
@@ -51,7 +52,7 @@ impl MessageProcessor {
     /// The accounts are committed back to the bank only if every instruction succeeds.
     #[allow(clippy::too_many_arguments)]
     pub fn process_message(
-        builtin_programs: &[BuiltinProgram],
+        builtin_programs: &BuiltinPrograms,
         message: &SanitizedMessage,
         program_indices: &[Vec<IndexOfAccount>],
         transaction_context: &mut TransactionContext,
@@ -251,10 +252,8 @@ mod tests {
         let mock_system_program_id = Pubkey::new_unique();
 
         let rent_collector = RentCollector::default();
-        let builtin_programs = &[BuiltinProgram {
-            program_id: mock_system_program_id,
-            process_instruction,
-        }];
+        let builtin_programs =
+            BuiltinPrograms::new_mock(mock_system_program_id, process_instruction);
 
         let accounts = vec![
             (
@@ -303,7 +302,7 @@ mod tests {
             )));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -353,7 +352,7 @@ mod tests {
                 ]),
             )));
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -393,7 +392,7 @@ mod tests {
                 ]),
             )));
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -478,10 +477,7 @@ mod tests {
 
         let mock_program_id = Pubkey::from([2u8; 32]);
         let rent_collector = RentCollector::default();
-        let builtin_programs = &[BuiltinProgram {
-            program_id: mock_program_id,
-            process_instruction,
-        }];
+        let builtin_programs = BuiltinPrograms::new_mock(mock_program_id, process_instruction);
 
         let accounts = vec![
             (
@@ -527,7 +523,7 @@ mod tests {
         )));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -561,7 +557,7 @@ mod tests {
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         )));
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -592,7 +588,7 @@ mod tests {
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         )));
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -641,10 +637,7 @@ mod tests {
         declare_process_instruction!(process_instruction, 1, |_invoke_context| {
             Err(InstructionError::Custom(0xbabb1e))
         });
-        let builtin_programs = &[BuiltinProgram {
-            program_id: mock_program_id,
-            process_instruction,
-        }];
+        let builtin_programs = BuiltinPrograms::new_mock(mock_program_id, process_instruction);
 
         let mut secp256k1_account = AccountSharedData::new(1, 0, &native_loader::id());
         secp256k1_account.set_executable(true);
@@ -669,7 +662,7 @@ mod tests {
         )));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &[vec![0], vec![1]],
             &mut transaction_context,

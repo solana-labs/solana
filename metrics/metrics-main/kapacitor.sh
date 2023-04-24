@@ -26,6 +26,7 @@ container=kapacitor
 
 #running influx kapacitor service
 sudo docker run \
+  --memory=10g \
   --detach \
   --name=kapacitor \
   --env KAPACITOR_USERNAME="$KAPACITOR_USERNAME" \

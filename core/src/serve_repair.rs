@@ -338,17 +338,21 @@ pub(crate) struct RepairPeers {
 
 impl RepairPeers {
     fn new(asof: Instant, peers: &[ContactInfo], weights: &[u64]) -> Result<Self> {
-        if peers.is_empty() {
-            return Err(Error::from(ClusterInfoError::NoPeers));
-        }
         if peers.len() != weights.len() {
             return Err(Error::from(WeightedError::InvalidWeight));
         }
-        let weighted_index = WeightedIndex::new(weights)?;
-        let peers = peers
+        let (peers, weights): (Vec<_>, Vec<u64>) = peers
             .iter()
-            .map(|peer| (peer.id, peer.serve_repair))
-            .collect();
+            .zip(weights)
+            .filter_map(|(peer, &weight)| {
+                let addr = peer.serve_repair().ok()?;
+                Some(((peer.id, addr), weight))
+            })
+            .unzip();
+        if peers.is_empty() {
+            return Err(Error::from(ClusterInfoError::NoPeers));
+        }
+        let weighted_index = WeightedIndex::new(weights)?;
         Ok(Self {
             asof,
             peers,
@@ -1070,9 +1074,12 @@ impl ServeRepair {
             .unzip();
         let peers = WeightedShuffle::new("repair_request_ancestor_hashes", &weights)
             .shuffle(&mut rand::thread_rng())
-            .take(ANCESTOR_HASH_REPAIR_SAMPLE_SIZE)
             .map(|i| index[i])
-            .map(|i| (repair_peers[i].id, repair_peers[i].serve_repair))
+            .filter_map(|i| {
+                let addr = repair_peers[i].serve_repair().ok()?;
+                Some((repair_peers[i].id, addr))
+            })
+            .take(ANCESTOR_HASH_REPAIR_SAMPLE_SIZE)
             .collect();
         Ok(peers)
     }
@@ -1093,7 +1100,7 @@ impl ServeRepair {
             .unzip();
         let k = WeightedIndex::new(weights)?.sample(&mut rand::thread_rng());
         let n = index[k];
-        Ok((repair_peers[n].id, repair_peers[n].serve_repair))
+        Ok((repair_peers[n].id, repair_peers[n].serve_repair()?))
     }
 
     pub(crate) fn map_repair_request(

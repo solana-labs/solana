@@ -24,8 +24,8 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
-            Bank, RentDebits, TransactionBalancesSet, TransactionExecutionDetails,
-            TransactionExecutionResult, TransactionResults, VerifyAccountsHashConfig,
+            Bank, TransactionBalancesSet, TransactionExecutionDetails, TransactionExecutionResult,
+            TransactionResults,
         },
         bank_forks::BankForks,
         bank_utils,
@@ -33,6 +33,7 @@ use {
         cost_model::CostModel,
         epoch_accounts_hash::EpochAccountsHash,
         prioritization_fee_cache::PrioritizationFeeCache,
+        rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
         vote_account::VoteAccountsHashMap,
@@ -1553,7 +1554,7 @@ fn load_frozen_forks(
                 .unwrap_or(false);
             if done_processing {
                 if opts.run_final_accounts_hash_calc {
-                    run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
+                    bank.run_final_hash_calc(on_halt_store_hash_raw_data_for_debug);
                 }
                 break;
             }
@@ -1568,28 +1569,14 @@ fn load_frozen_forks(
             )?;
         }
     } else if on_halt_store_hash_raw_data_for_debug {
-        run_final_hash_calc(
-            &bank_forks.read().unwrap().root_bank(),
-            on_halt_store_hash_raw_data_for_debug,
-        );
+        bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .run_final_hash_calc(on_halt_store_hash_raw_data_for_debug);
     }
 
     Ok(total_slots_elapsed)
-}
-
-fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
-    bank.force_flush_accounts_cache();
-    // note that this slot may not be a root
-    let _ = bank.verify_accounts_hash(
-        None,
-        VerifyAccountsHashConfig {
-            test_hash_calculation: false,
-            ignore_mismatch: true,
-            require_rooted_bank: false,
-            run_in_background: false,
-            store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
-        },
-    );
 }
 
 // `roots` is sorted largest to smallest by root slot
@@ -1821,7 +1808,7 @@ pub mod tests {
         matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::declare_process_instruction,
         solana_runtime::{
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
@@ -2975,12 +2962,10 @@ pub mod tests {
             ]
         }
 
-        fn mock_processor_ok(
-            invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-            invoke_context.consume_checked(1)?;
+        declare_process_instruction!(mock_processor_ok, 1, |_invoke_context| {
+            // Always succeeds
             Ok(())
-        }
+        });
 
         let mock_program_id = solana_sdk::pubkey::new_rand();
 
@@ -3006,12 +2991,9 @@ pub mod tests {
         let bankhash_ok = bank.hash();
         assert!(result.is_ok());
 
-        fn mock_processor_err(
-            invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        declare_process_instruction!(mock_processor_err, 1, |invoke_context| {
             let instruction_errors = get_instruction_errors();
 
-            invoke_context.consume_checked(1)?;
             let err = invoke_context
                 .transaction_context
                 .get_current_instruction_context()
@@ -3019,13 +3001,11 @@ pub mod tests {
                 .get_instruction_data()
                 .first()
                 .expect("Failed to get instruction data");
-            Err(Box::new(
-                instruction_errors
-                    .get(*err as usize)
-                    .expect("Invalid error index")
-                    .clone(),
-            ))
-        }
+            Err(instruction_errors
+                .get(*err as usize)
+                .expect("Invalid error index")
+                .clone())
+        });
 
         let mut bankhash_err = None;
 

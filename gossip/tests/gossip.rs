@@ -130,13 +130,13 @@ fn retransmit_to(
     let dests: Vec<_> = if forwarded {
         peers
             .iter()
-            .map(|peer| peer.tvu_forwards)
-            .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
+            .filter_map(|peer| peer.tvu_forwards().ok())
+            .filter(|addr| socket_addr_space.check(addr))
             .collect()
     } else {
         peers
             .iter()
-            .map(|peer| peer.tvu)
+            .filter_map(|peer| peer.tvu().ok())
             .filter(|addr| socket_addr_space.check(addr))
             .collect()
     };
@@ -162,7 +162,7 @@ fn gossip_ring() {
             let x = (n + 1) % listen.len();
             let yv = &listen[y].0;
             let mut d = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
-            d.wallclock = timestamp();
+            d.set_wallclock(timestamp());
             listen[x].0.insert_legacy_info(d);
         }
     });
@@ -180,7 +180,7 @@ fn gossip_ring_large() {
             let x = (n + 1) % listen.len();
             let yv = &listen[y].0;
             let mut d = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
-            d.wallclock = timestamp();
+            d.set_wallclock(timestamp());
             listen[x].0.insert_legacy_info(d);
         }
     });
@@ -196,7 +196,7 @@ fn gossip_star() {
             let y = (n + 1) % listen.len();
             let yv = &listen[y].0;
             let mut yd = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
-            yd.wallclock = timestamp();
+            yd.set_wallclock(timestamp());
             let xv = &listen[x].0;
             xv.insert_legacy_info(yd);
             trace!("star leader {}", &xv.id());

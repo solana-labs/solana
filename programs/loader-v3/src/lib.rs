@@ -455,7 +455,7 @@ pub fn process_instruction_deploy(
         invoke_context.get_log_collector(),
         buffer,
         use_jit,
-        false,
+        false, /* debugging_features */
     )?;
     load_program_metrics.submit_datapoint(&mut invoke_context.timings);
     if let Some(mut source_program) = source_program {
@@ -538,7 +538,20 @@ pub fn process_instruction_transfer_authority(
 
 pub fn process_instruction(
     invoke_context: &mut InvokeContext,
-) -> Result<(), Box<dyn std::error::Error>> {
+    _arg0: u64,
+    _arg1: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _memory_mapping: &mut MemoryMapping,
+    result: &mut ProgramResult,
+) {
+    *result = process_instruction_inner(invoke_context).into();
+}
+
+pub fn process_instruction_inner(
+    invoke_context: &mut InvokeContext,
+) -> Result<u64, Box<dyn std::error::Error>> {
     let use_jit = true;
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
@@ -588,7 +601,7 @@ pub fn process_instruction(
             invoke_context.get_log_collector(),
             &program,
             use_jit,
-            false,
+            false, /* debugging_features */
         )?;
         load_program_metrics.submit_datapoint(&mut invoke_context.timings);
         get_or_create_executor_time.stop();
@@ -602,12 +615,13 @@ pub fn process_instruction(
             LoadedProgramType::FailedVerification
             | LoadedProgramType::Closed
             | LoadedProgramType::DelayVisibility => {
-                Err(Box::new(InstructionError::InvalidAccountData))
+                Err(Box::new(InstructionError::InvalidAccountData) as Box<dyn std::error::Error>)
             }
             LoadedProgramType::Typed(executable) => execute(invoke_context, executable),
-            _ => Err(Box::new(InstructionError::IncorrectProgramId)),
+            _ => Err(Box::new(InstructionError::IncorrectProgramId) as Box<dyn std::error::Error>),
         }
     }
+    .map(|_| 0)
 }
 
 #[cfg(test)]

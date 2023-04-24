@@ -4230,7 +4230,7 @@ mod tests {
     /// When a destination account already has funds, ensure the minimum split amount reduces
     /// accordingly.
     #[test_case(feature_set_old_behavior(), &[Ok(()), Ok(())]; "old_behavior")]
-    #[test_case(feature_set_new_behavior(), &[ Err(InstructionError::InsufficientFunds), Err(InstructionError::InsufficientFunds) ] ; "new_behavior")]
+    #[test_case(feature_set_new_behavior(), &[ Err(StakeError::InsufficientDelegation.into()), Err(StakeError::InsufficientDelegation.into()) ] ; "new_behavior")]
     fn test_staked_split_destination_minimum_balance(
         feature_set: Arc<FeatureSet>,
         expected_results: &[Result<(), InstructionError>],
@@ -4862,7 +4862,7 @@ mod tests {
             &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
             transaction_accounts,
             instruction_accounts,
-            Err(StakeError::InsufficientStake.into()),
+            Err(StakeError::InsufficientDelegation.into()),
         );
     }
 

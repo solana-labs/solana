@@ -246,7 +246,6 @@ fn run_bank_forks_snapshot_n<F>(
         AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
-        bank_snapshots_dir,
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
         last_bank.get_snapshot_storages(None),
@@ -409,7 +408,6 @@ fn test_concurrent_snapshot_packaging(
             AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
             &bank,
             &bank_snapshot_info,
-            bank_snapshots_dir,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             snapshot_storages,
@@ -473,7 +471,11 @@ fn test_concurrent_snapshot_packaging(
 
     // Purge all the outdated snapshots, including the ones needed to generate the package
     // currently sitting in the channel
-    snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir, MAX_BANK_SNAPSHOTS_TO_RETAIN);
+    snapshot_utils::purge_old_bank_snapshots(
+        bank_snapshots_dir,
+        MAX_BANK_SNAPSHOTS_TO_RETAIN,
+        None,
+    );
 
     let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(bank_snapshots_dir);
     bank_snapshots.sort_unstable();
@@ -505,8 +507,8 @@ fn test_concurrent_snapshot_packaging(
         snapshot_package_sender.clone(),
         snapshot_package_receiver,
         None,
-        &exit,
-        &cluster_info,
+        exit.clone(),
+        cluster_info,
         snapshot_config.clone(),
         true,
     );
@@ -811,7 +813,6 @@ fn make_full_snapshot_archive(
     snapshot_utils::package_and_archive_full_snapshot(
         bank,
         &bank_snapshot_info,
-        &snapshot_config.bank_snapshots_dir,
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
         bank.get_snapshot_storages(None),
@@ -851,7 +852,6 @@ fn make_incremental_snapshot_archive(
         bank,
         incremental_snapshot_base_slot,
         &bank_snapshot_info,
-        &snapshot_config.bank_snapshots_dir,
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
         storages,
@@ -987,8 +987,8 @@ fn test_snapshots_with_background_services(
         snapshot_package_sender.clone(),
         snapshot_package_receiver,
         None,
-        &exit,
-        &cluster_info,
+        exit.clone(),
+        cluster_info.clone(),
         snapshot_test_config.snapshot_config.clone(),
         false,
     );
@@ -997,16 +997,21 @@ fn test_snapshots_with_background_services(
         accounts_package_sender,
         accounts_package_receiver,
         Some(snapshot_package_sender),
-        &exit,
-        &cluster_info,
+        exit.clone(),
+        cluster_info,
         None,
         false,
         None,
         snapshot_test_config.snapshot_config.clone(),
     );
 
-    let accounts_background_service =
-        AccountsBackgroundService::new(bank_forks.clone(), &exit, abs_request_handler, false, None);
+    let accounts_background_service = AccountsBackgroundService::new(
+        bank_forks.clone(),
+        exit.clone(),
+        abs_request_handler,
+        false,
+        None,
+    );
 
     let mut last_full_snapshot_slot = None;
     let mut last_incremental_snapshot_slot = None;
