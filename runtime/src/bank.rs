@@ -3014,8 +3014,10 @@ impl Bank {
         // store stake account even if stake_reward is 0
         // because credits observed has changed
         let (_, measure) = measure!({
-            self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()))
+            let to_storable = (self.slot(), stake_rewards, self.include_slot_in_hash());
+            self.store_accounts_batch_stake_cache_update(to_storable, false);
         });
+
         metrics
             .store_stake_accounts_us
             .fetch_add(measure.as_us(), Relaxed);
@@ -6489,6 +6491,33 @@ impl Bank {
             .stats
             .stakes_cache_check_and_store_us
             .fetch_add(m.as_us(), Relaxed);
+    }
+
+    /// Optimized large number of stake/vote accounts stores by batch stake cache updates and accounts-db store
+    fn store_accounts_batch_stake_cache_update<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+        &self,
+        accounts: impl StorableAccounts<'a, T>,
+        is_vote: bool,
+    ) {
+        assert!(!self.freeze_started());
+
+        let mut m = Measure::start("stakes_cache.check_and_store");
+        if is_vote {
+            self.stakes_cache
+                .store_vote_accounts_batch_no_check(&accounts);
+        } else {
+            self.stakes_cache
+                .store_stake_accounts_batch_no_check(&accounts);
+        }
+        m.stop();
+        self.rc
+            .accounts
+            .accounts_db
+            .stats
+            .stakes_cache_check_and_store_us
+            .fetch_add(m.as_us(), Relaxed);
+
+        self.rc.accounts.store_accounts_cached(accounts);
     }
 
     pub fn force_flush_accounts_cache(&self) {
