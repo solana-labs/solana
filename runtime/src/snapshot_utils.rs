@@ -3277,7 +3277,6 @@ pub fn create_snapshot_dirs_for_tests(
         bank.fill_bank_with_ticks_for_tests();
         bank.squash();
         bank.force_flush_accounts_cache();
-        bank.clean_accounts(Some(bank.slot()));
         bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
 
         let snapshot_storages = bank.get_snapshot_storages(None);
