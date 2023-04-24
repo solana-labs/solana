@@ -35,13 +35,17 @@ impl OptimisticallyConfirmedBank {
 pub enum BankNotification {
     OptimisticallyConfirmed(Slot),
     Frozen(Arc<Bank>),
+    /// Send the Bank currently rooted and optionally the parent slots in (Slot, Parent Slot) pairs
+    /// The parent slots contains the slot of the bank.
     Root((Arc<Bank>, Option<Vec<(Slot, Slot)>>)),
 }
 
 #[derive(Clone, Debug)]
 pub enum SlotNotification {
     OptimisticallyConfirmed(Slot),
+    /// The (Slot, Parent Slot) pair for the slot frozen
     Frozen((Slot, Slot)),
+    /// The (Slot, Parent Slot) pair for the root slot
     Root((Slot, Slot)),
 }
 
@@ -75,6 +79,12 @@ impl std::fmt::Debug for BankNotification {
 
 pub type BankNotificationReceiver = Receiver<BankNotification>;
 pub type BankNotificationSender = Sender<BankNotification>;
+
+#[derive(Clone)]
+pub struct BankNotificationSenderOption {
+    pub sender: BankNotificationSender,
+    pub send_parents: bool,
+}
 
 pub type SlotNotificationReceiver = Receiver<SlotNotification>;
 pub type SlotNotificationSender = Sender<SlotNotification>;
@@ -232,7 +242,7 @@ impl OptimisticallyConfirmedBankTracker {
         roots.sort_unstable();
         for root in roots {
             if root.0 > slot_threshold {
-                debug!("Doing BankNotification::Root for root_bank {:?}", root);
+                debug!("Doing SlotNotification::Root for root_bank {:?}", root);
 
                 Self::notify_slot_status(
                     bank_notification_subscribers,
