@@ -37,7 +37,7 @@ use {
     },
     solana_vote_program::{
         vote_error::VoteError,
-        vote_instruction::{self, withdraw},
+        vote_instruction::{self, withdraw, CreateVoteAccountConfig},
         vote_state::{VoteAuthorize, VoteInit, VoteState},
     },
     std::sync::Arc,
@@ -807,28 +807,24 @@ pub fn process_create_vote_account(
             authorized_withdrawer,
             commission,
         };
-
-        let ixs = if let Some(seed) = seed {
-            vote_instruction::create_account_with_seed(
-                &config.signers[0].pubkey(), // from
-                &vote_account_address,       // to
-                &vote_account_pubkey,        // base
-                seed,                        // seed
-                &vote_init,
-                lamports,
-            )
-            .with_memo(memo)
-            .with_compute_unit_price(compute_unit_price)
+        let mut create_vote_account_config = CreateVoteAccountConfig::default();
+        let to = if let Some(seed) = seed {
+            create_vote_account_config.with_seed = Some((&vote_account_pubkey, seed));
+            &vote_account_address
         } else {
-            vote_instruction::create_account(
-                &config.signers[0].pubkey(),
-                &vote_account_pubkey,
-                &vote_init,
-                lamports,
-            )
-            .with_memo(memo)
-            .with_compute_unit_price(compute_unit_price)
+            &vote_account_pubkey
         };
+
+        let ixs = vote_instruction::create_account_with_config(
+            &config.signers[0].pubkey(),
+            to,
+            &vote_init,
+            lamports,
+            create_vote_account_config,
+        )
+        .with_memo(memo)
+        .with_compute_unit_price(compute_unit_price);
+
         if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(
                 ixs,
