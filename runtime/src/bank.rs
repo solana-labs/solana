@@ -3074,7 +3074,8 @@ impl Bank {
                 let vote_accounts: Vec<_> = vote_accounts.iter().flatten().collect();
 
                 let to_storable = (self.slot(), &vote_accounts[..], self.include_slot_in_hash());
-                self.store_accounts_batch_stake_cache_update(to_storable, true);
+                //self.store_accounts_batch_stake_cache_update(to_storable, true);
+                self.store_accounts(to_storable);
                 vote_rewards
             },
             "store_vote_accounts_us"
