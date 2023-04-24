@@ -253,6 +253,7 @@ mod tests {
 
         let rent_collector = RentCollector::default();
         let builtin_programs = &[BuiltinProgram {
+            name: "mock instruction processor".to_string(),
             program_id: mock_system_program_id,
             process_instruction,
         }];
@@ -480,6 +481,7 @@ mod tests {
         let mock_program_id = Pubkey::from([2u8; 32]);
         let rent_collector = RentCollector::default();
         let builtin_programs = &[BuiltinProgram {
+            name: "mock instruction processor".to_string(),
             program_id: mock_program_id,
             process_instruction,
         }];
@@ -643,6 +645,7 @@ mod tests {
             Err(InstructionError::Custom(0xbabb1e))
         });
         let builtin_programs = &[BuiltinProgram {
+            name: "mock instruction processor".to_string(),
             program_id: mock_program_id,
             process_instruction,
         }];

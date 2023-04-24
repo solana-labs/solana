@@ -6631,8 +6631,8 @@ impl Bank {
             for builtin in builtins.genesis_builtins {
                 self.add_builtin(
                     &builtin.name,
-                    &builtin.id,
-                    builtin.process_instruction_with_context,
+                    &builtin.program_id,
+                    builtin.process_instruction,
                 );
             }
             for precompile in get_precompiles() {
@@ -7674,6 +7674,7 @@ impl Bank {
             entry.process_instruction = process_instruction;
         } else {
             self.builtin_programs.vec.push(BuiltinProgram {
+                name: name.to_string(),
                 program_id: *program_id,
                 process_instruction,
             });
@@ -7944,8 +7945,8 @@ impl Bank {
                 match builtin_action {
                     BuiltinAction::Add(builtin) => self.add_builtin(
                         &builtin.name,
-                        &builtin.id,
-                        builtin.process_instruction_with_context,
+                        &builtin.program_id,
+                        builtin.process_instruction,
                     ),
                     BuiltinAction::Remove(program_id) => self.remove_builtin(&program_id),
                 }

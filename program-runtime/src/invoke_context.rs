@@ -964,6 +964,7 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
     transaction_accounts.push((*loader_id, processor_account));
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
     let builtin_programs = &[BuiltinProgram {
+        name: "mock instruction processor".to_string(),
         program_id: *loader_id,
         process_instruction,
     }];
@@ -1217,6 +1218,7 @@ mod tests {
             .collect::<Vec<_>>();
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let builtin_programs = &[BuiltinProgram {
+            name: "mock instruction processor".to_string(),
             program_id: callee_program_id,
             process_instruction,
         }];
@@ -1362,6 +1364,7 @@ mod tests {
         ];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
         let builtin_programs = &[BuiltinProgram {
+            name: "mock instruction processor".to_string(),
             program_id: program_key,
             process_instruction,
         }];
