@@ -30,7 +30,6 @@ EOF
 )
 
 _ cargo "+${rust_nightly}" install cargo-udeps --locked
-_ cargo "+${rust_nightly}" udeps --workspace --all-targets --features dummy-for-ci-check
 
 echo --- build environment
 (
@@ -59,6 +58,8 @@ echo --- build environment
 
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings -A incomplete_features"
+
+_ cargo "+${rust_nightly}" udeps --workspace --all-targets --features dummy-for-ci-check
 
 # run cargo check for all rust files in this monorepo for faster turnaround in
 # case of any compilation/build error for nightly
