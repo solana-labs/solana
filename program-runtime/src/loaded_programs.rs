@@ -157,7 +157,6 @@ impl LoadedProgram {
         maybe_expiration_slot: Option<Slot>,
         elf_bytes: &[u8],
         account_size: usize,
-        _use_jit: bool,
         metrics: &mut LoadProgramMetrics,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut load_elf_time = Measure::start("load_elf_time");

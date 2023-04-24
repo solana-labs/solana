@@ -1215,10 +1215,7 @@ impl Bank {
     ) -> Self {
         Self::new_with_paths_for_tests(
             genesis_config,
-            Arc::new(RuntimeConfig {
-                bpf_jit: true,
-                ..RuntimeConfig::default()
-            }),
+            Arc::new(RuntimeConfig::default()),
             Vec::new(),
             account_indexes,
             shrink_ratio,
@@ -4191,7 +4188,6 @@ impl Bank {
             None,
             &program,
             programdata.as_ref().unwrap_or(&program),
-            self.runtime_config.bpf_jit,
             false, /* debugging_features */
         )
         .map(|(loaded_program, _create_executor_metrics)| loaded_program)
