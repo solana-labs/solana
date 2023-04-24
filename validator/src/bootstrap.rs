@@ -1,4 +1,5 @@
 use {
+    itertools::Itertools,
     log::*,
     rand::{seq::SliceRandom, thread_rng, Rng},
     rayon::prelude::*,
@@ -27,7 +28,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::{hash_map::RandomState, HashMap, HashSet},
-        net::{SocketAddr, TcpListener, UdpSocket},
+        net::{SocketAddr, TcpListener, TcpStream, UdpSocket},
         path::Path,
         process::exit,
         sync::{
@@ -53,6 +54,8 @@ const NEWER_SNAPSHOT_THRESHOLD: Duration = Duration::from_secs(180);
 const GET_RPC_PEERS_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
+
+pub const PING_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
@@ -453,6 +456,15 @@ pub fn attempt_download_genesis_and_snapshot(
     Ok(())
 }
 
+/// simple ping helper function which returns the time to connect
+fn ping(addr: &SocketAddr) -> Option<Duration> {
+    let start = Instant::now();
+    match TcpStream::connect_timeout(addr, PING_TIMEOUT) {
+        Ok(_) => Some(start.elapsed()),
+        Err(_) => None,
+    }
+}
+
 // Populates `vetted_rpc_nodes` with a list of RPC nodes that are ready to be
 // used for downloading latest snapshots and/or the genesis block. Guaranteed to
 // find at least one viable node or terminate the process.
@@ -498,18 +510,36 @@ fn get_vetted_rpc_nodes(
                         rpc_contact_info.id,
                         rpc_contact_info.rpc()
                     );
-                    let rpc_client = RpcClient::new_socket_with_timeout(
-                        rpc_contact_info.rpc().ok()?,
-                        Duration::from_secs(5),
-                    );
 
-                    Some((rpc_contact_info, snapshot_hash, rpc_client))
+                    let rpc_addr = rpc_contact_info.rpc().ok()?;
+                    let ping_time = ping(&rpc_addr);
+
+                    let rpc_client =
+                        RpcClient::new_socket_with_timeout(rpc_addr, Duration::from_secs(5));
+
+                    Some((rpc_contact_info, snapshot_hash, rpc_client, ping_time))
                 })
-                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
-                    match rpc_client.get_version() {
+                .filter(
+                    |(rpc_contact_info, _snapshot_hash, rpc_client, ping_time)| match rpc_client
+                        .get_version()
+                    {
                         Ok(rpc_version) => {
-                            info!("RPC node version: {}", rpc_version.solana_core);
-                            true
+                            if let Some(ping_time) = ping_time {
+                                info!(
+                                    "RPC node version: {} Ping: {}ms",
+                                    rpc_version.solana_core,
+                                    ping_time.as_millis()
+                                );
+                                true
+                            } else {
+                                fail_rpc_node(
+                                    "Failed to ping RPC".to_string(),
+                                    &validator_config.known_validators,
+                                    &rpc_contact_info.id,
+                                    &mut newly_blacklisted_rpc_nodes.write().unwrap(),
+                                );
+                                false
+                            }
                         }
                         Err(err) => {
                             fail_rpc_node(
@@ -520,7 +550,18 @@ fn get_vetted_rpc_nodes(
                             );
                             false
                         }
-                    }
+                    },
+                )
+                .collect::<Vec<(
+                    ContactInfo,
+                    Option<SnapshotHash>,
+                    RpcClient,
+                    Option<Duration>,
+                )>>()
+                .into_iter()
+                .sorted_by_key(|(_, _, _, ping_time)| ping_time.unwrap())
+                .map(|(rpc_contact_info, snapshot_hash, rpc_client, _)| {
+                    (rpc_contact_info, snapshot_hash, rpc_client)
                 })
                 .collect::<Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)>>(),
         );
