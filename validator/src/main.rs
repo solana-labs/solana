@@ -835,30 +835,39 @@ pub fn main() {
                 _ => unreachable!(),
             }
         }
-        ("set-public-tpu-address", Some(subcommand_matches)) => {
-            let public_tpu_addr: SocketAddr = subcommand_matches
-                .value_of("public_tpu_addr")
-                .map(|public_tpu_addr| {
-                    solana_net_utils::parse_host_port(public_tpu_addr).unwrap_or_else(|err| {
-                        eprintln!("Failed to parse --set-public-tpu-address HOST:PORT {err}");
-                        exit(1);
+        ("set-public-address", Some(subcommand_matches)) => {
+            let parse_arg_addr = |arg_name: &str, arg_long: &str| -> Option<SocketAddr> {
+                subcommand_matches.value_of(arg_name).map(|host_port| {
+                        solana_net_utils::parse_host_port(host_port).unwrap_or_else(|err| {
+                            eprintln!("Failed to parse --{arg_long} address. It must be in the HOST:PORT format. {err}");
+                            exit(1);
+                        })
                     })
-                })
-                .unwrap();
+            };
+            let tpu_addr = parse_arg_addr("tpu_addr", "tpu");
+            let tpu_forwards_addr = parse_arg_addr("tpu_forwards_addr", "tpu-forwards");
 
-            let admin_client = admin_rpc_service::connect(&ledger_path);
-            admin_rpc_service::runtime()
-                .block_on(async move {
-                    admin_client
-                        .await?
-                        .set_public_tpu_address(public_tpu_addr)
-                        .await
-                })
-                .unwrap_or_else(|err| {
-                    println!("setPublicTpuAddress request failed: {err}");
-                    exit(1);
-                });
-
+            macro_rules! set_public_address {
+                ($public_addr:expr, $set_public_address:ident, $request:literal) => {
+                    if let Some(public_addr) = $public_addr {
+                        let admin_client = admin_rpc_service::connect(&ledger_path);
+                        admin_rpc_service::runtime()
+                            .block_on(async move {
+                                admin_client.await?.$set_public_address(public_addr).await
+                            })
+                            .unwrap_or_else(|err| {
+                                eprintln!("{} request failed: {err}", $request);
+                                exit(1);
+                            });
+                    }
+                };
+            }
+            set_public_address!(tpu_addr, set_public_tpu_address, "setPublicTpuAddress");
+            set_public_address!(
+                tpu_forwards_addr,
+                set_public_tpu_forwards_address,
+                "setPublicTpuForwardsAddress"
+            );
             return;
         }
         _ => unreachable!(),
@@ -1709,6 +1718,16 @@ pub fn main() {
         })
     });
 
+    let public_tpu_forwards_addr =
+        matches
+            .value_of("public_tpu_forwards_addr")
+            .map(|public_tpu_forwards_addr| {
+                solana_net_utils::parse_host_port(public_tpu_forwards_addr).unwrap_or_else(|err| {
+                    eprintln!("Failed to parse --public-tpu-forwards-address: {err}");
+                    exit(1);
+                })
+            });
+
     let cluster_entrypoints = entrypoint_addrs
         .iter()
         .map(ContactInfo::new_gossip_entry_point)
@@ -1720,6 +1739,7 @@ pub fn main() {
         dynamic_port_range,
         bind_address,
         public_tpu_addr,
+        public_tpu_forwards_addr,
     );
 
     if restricted_repair_only_mode {

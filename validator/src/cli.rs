@@ -1,5 +1,7 @@
 use {
-    clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{
+        crate_description, crate_name, App, AppSettings, Arg, ArgGroup, ArgMatches, SubCommand,
+    },
     log::warn,
     solana_clap_utils::{
         hidden_unless_forced,
@@ -379,6 +381,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .validator(solana_net_utils::is_host_port)
                 .help("Specify TPU address to advertise in gossip [default: ask --entrypoint or localhost\
+                    when --entrypoint is not provided]"),
+        )
+        .arg(
+            Arg::with_name("public_tpu_forwards_addr")
+                .long("public-tpu-forwards-address")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host_port)
+                .help("Specify TPU Forwards address to advertise in gossip [default: ask --entrypoint or localhost\
                     when --entrypoint is not provided]"),
         )
         .arg(
@@ -1617,17 +1628,31 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                          then this not a good time for a restart")
         ).
         subcommand(
-            SubCommand::with_name("set-public-tpu-address")
-                .about("Specify TPU address to advertise in gossip")
+            SubCommand::with_name("set-public-address")
+                .about("Specify addresses to advertise in gossip")
                 .arg(
-                    Arg::with_name("public_tpu_addr")
-                        .index(1)
+                    Arg::with_name("tpu_addr")
+                        .long("tpu")
                         .value_name("HOST:PORT")
                         .takes_value(true)
-                        .required(true)
                         .validator(solana_net_utils::is_host_port)
                         .help("TPU address to advertise in gossip")
-                ),
+                )
+                .arg(
+                    Arg::with_name("tpu_forwards_addr")
+                        .long("tpu-forwards")
+                        .value_name("HOST:PORT")
+                        .takes_value(true)
+                        .validator(solana_net_utils::is_host_port)
+                        .help("TPU Forwards address to advertise in gossip")
+                )
+                .group(
+                    ArgGroup::with_name("set_public_address_details")
+                        .args(&["tpu_addr", "tpu_forwards_addr"])
+                        .required(true)
+                        .multiple(true)
+                )
+                .after_help("Note: At least one arg must be used. Using multiple is ok"),
         );
 }
 
