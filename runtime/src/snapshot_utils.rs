@@ -3016,9 +3016,7 @@ pub fn bank_to_full_snapshot_archive(
     assert!(bank.is_complete());
     bank.squash(); // Bank may not be a root
     bank.force_flush_accounts_cache();
-    bank.clean_accounts(Some(bank.slot()));
     bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
-    bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
     let snapshot_storages = bank.get_snapshot_storages(None);
