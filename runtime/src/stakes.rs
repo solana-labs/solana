@@ -66,7 +66,7 @@ impl StakesCache {
         self.0.read().unwrap()
     }
 
-    /// Optimized stake accounts store without checking
+    /// Optimized batch stake accounts updates without checking
     pub(crate) fn store_stake_accounts_batch_no_check<
         'a,
         T: ReadableAccount + Sync + ZeroLamport + 'a,
@@ -84,7 +84,7 @@ impl StakesCache {
         });
     }
 
-    /// Optimized vote accounts store without checking
+    /// Optimized batch vote accounts updates without checking
     pub(crate) fn store_vote_accounts_batch_no_check<
         'a,
         T: ReadableAccount + Sync + ZeroLamport + 'a,
@@ -97,9 +97,17 @@ impl StakesCache {
         (0..accounts.len()).for_each(|i| {
             let pubkey = accounts.pubkey(i);
             let account = accounts.account(i).to_account_shared_data();
-            let vote_account = VoteAccount::try_from(account).unwrap();
-
-            stakes.upsert_vote_account(pubkey, vote_account);
+            // let vote_account = VoteAccount::try_from(account).unwrap();
+            match VoteAccount::try_from(account.to_account_shared_data()) {
+                Ok(vote_account) => {
+                    {
+                        // Called to eagerly deserialize vote state
+                        let _res = vote_account.vote_state();
+                    }
+                    stakes.upsert_vote_account(pubkey, vote_account);
+                }
+                Err(_) => stakes.remove_vote_account(pubkey),
+            }
         });
     }
 
