@@ -20,6 +20,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_deprecated,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
             check_slice_translation_size, enable_early_verification_of_account_modifications,
             native_programs_consume_cu, FeatureSet,
@@ -617,11 +618,66 @@ impl<'a> InvokeContext<'a> {
             ic_msg!(self, "Account {} is not executable", callee_program_id);
             return Err(InstructionError::AccountNotExecutable);
         }
-
-        Ok((
-            instruction_accounts,
-            vec![borrowed_program_account.get_index_in_transaction()],
-        ))
+        // Program accounts for programs loaded with Upgradeable
+        // loaders are executable pointers to non-executable program
+        // data accounts, which contain the loadable program modules
+        // as their data.  Here we extract the address of the program
+        // data account and set up the program indices so that both
+        // program and program data accounts are available to
+        // bpf_loader::load_program_from_account.
+        if bpf_loader_upgradeable::check_id(borrowed_program_account.get_owner()) {
+            if let UpgradeableLoaderState::Program {
+                programdata_address: programdata_account,
+            } = borrowed_program_account.get_state()?
+            {
+                if let Some(programdata_account_index) = instruction_context
+                    .find_index_of_instruction_account(
+                        self.transaction_context,
+                        &programdata_account,
+                    )
+                {
+                    let borrowed_programdata_account = instruction_context
+                        .try_borrow_instruction_account(
+                            self.transaction_context,
+                            programdata_account_index,
+                        )?;
+                    Ok((
+                        instruction_accounts,
+                        vec![
+                            borrowed_programdata_account.get_index_in_transaction(),
+                            borrowed_program_account.get_index_in_transaction(),
+                        ],
+                    ))
+                } else {
+                    // The program data may be taken from the
+                    // transaction executor cache. In this case,
+                    // it's not necessary to have the program data
+                    // account in the program accounts of an
+                    // instruction. A log message may be useful for
+                    // debugging.
+                    ic_msg!(
+                        self,
+                        "Program data account {} is not found in transaction accounts",
+                        programdata_account
+                    );
+                    Ok((
+                        instruction_accounts,
+                        vec![borrowed_program_account.get_index_in_transaction()],
+                    ))
+                }
+            } else {
+                ic_msg!(
+                    self,
+                    "Program account doesn't contain program data account address",
+                );
+                Err(InstructionError::InvalidAccountData)
+            }
+        } else {
+            Ok((
+                instruction_accounts,
+                vec![borrowed_program_account.get_index_in_transaction()],
+            ))
+        }
     }
 
     /// Processes an instruction and returns how many compute units were used
@@ -1181,6 +1237,69 @@ mod tests {
             transaction_context.push(),
             Err(InstructionError::MaxInstructionTraceLengthExceeded)
         );
+    }
+
+    #[test]
+    fn test_prepare_instruction() {
+        let callee_program_id = solana_sdk::pubkey::new_rand();
+        let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
+        let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
+        let readonly_account = AccountSharedData::new(168, 1, &solana_sdk::pubkey::new_rand());
+        let loader_account = AccountSharedData::new(0, 0, &native_loader::id());
+        let programdata_key = solana_sdk::pubkey::new_rand();
+        let programdata_account = AccountSharedData::new(20, 100, &bpf_loader_upgradeable::id());
+        let mut program_account = AccountSharedData::new_data(
+            40,
+            &UpgradeableLoaderState::Program {
+                programdata_address: programdata_key,
+            },
+            &bpf_loader_upgradeable::id(),
+        )
+        .unwrap();
+        program_account.set_executable(true);
+        program_account.set_rent_epoch(1);
+        let transaction_accounts = vec![
+            (solana_sdk::pubkey::new_rand(), owned_account),
+            (solana_sdk::pubkey::new_rand(), not_owned_account),
+            (solana_sdk::pubkey::new_rand(), readonly_account),
+            (programdata_key, programdata_account),
+            (callee_program_id, program_account),
+            (bpf_loader_upgradeable::id(), loader_account),
+        ];
+        let metas = vec![
+            AccountMeta::new(transaction_accounts.get(0).unwrap().0, false),
+            AccountMeta::new(transaction_accounts.get(1).unwrap().0, false),
+            AccountMeta::new_readonly(transaction_accounts.get(2).unwrap().0, false),
+        ];
+        let instruction_accounts = (0..5)
+            .map(|instruction_account_index| InstructionAccount {
+                index_in_transaction: instruction_account_index,
+                index_in_caller: instruction_account_index,
+                index_in_callee: instruction_account_index,
+                is_signer: false,
+                is_writable: instruction_account_index < 2,
+            })
+            .collect::<Vec<_>>();
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+        let builtin_programs = BuiltinPrograms::new_mock(callee_program_id, process_instruction);
+        invoke_context.builtin_programs = &builtin_programs;
+
+        // Test a program owned by upgradeable loader
+        let expected_result = Ok((instruction_accounts.get(0..3).unwrap().to_vec(), vec![3, 4]));
+        invoke_context
+            .transaction_context
+            .get_next_instruction_context()
+            .unwrap()
+            .configure(&[4], &instruction_accounts, &[]);
+        invoke_context.push().unwrap();
+        let inner_instruction =
+            Instruction::new_with_bincode(callee_program_id, &MockInstruction::NoopSuccess, metas);
+        let inner_instruction = StableInstruction::from(inner_instruction);
+        let result = invoke_context.prepare_instruction(&inner_instruction, &[]);
+
+        assert_eq!(result, expected_result);
+
+        invoke_context.pop().unwrap();
     }
 
     #[test]
