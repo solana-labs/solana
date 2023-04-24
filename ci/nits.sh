@@ -43,7 +43,7 @@ fi
 
 # Ref: https://github.com/solana-labs/solana/pull/30843#issuecomment-1480399497
 if _ git --no-pager grep -F '.hidden(true)' -- '*.rs'; then
-    echo 'use `.hidden(hidden_unless_forced())` instead'
+    echo 'use ".hidden(hidden_unless_forced())" instead'
     exit 1
 fi
 
