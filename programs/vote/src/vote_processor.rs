@@ -1893,12 +1893,15 @@ mod tests {
     #[test]
     fn test_vote_process_instruction() {
         solana_logger::setup();
-        let instructions = create_account(
+        let instructions = create_account_with_config(
             &Pubkey::new_unique(),
             &Pubkey::new_unique(),
             &VoteInit::default(),
             101,
+            CreateVoteAccountConfig::default(),
         );
+        // this case fails regardless of CreateVoteAccountConfig::space, because
+        // process_instruction_as_one_arg passes a default (empty) account
         process_instruction_as_one_arg(&instructions[1], Err(InstructionError::InvalidAccountData));
         process_instruction_as_one_arg(
             &vote(
