@@ -31,14 +31,14 @@ use {
     solana_rpc_client_api::config::RpcGetVoteAccountsConfig,
     solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
-        account::Account, commitment_config::CommitmentConfig, message::Message,
+        account::Account, commitment_config::CommitmentConfig, feature, message::Message,
         native_token::lamports_to_sol, pubkey::Pubkey, system_instruction::SystemError,
         transaction::Transaction,
     },
     solana_vote_program::{
         vote_error::VoteError,
         vote_instruction::{self, withdraw, CreateVoteAccountConfig},
-        vote_state::{VoteAuthorize, VoteInit, VoteState},
+        vote_state::{VoteAuthorize, VoteInit, VoteState, VoteStateVersions},
     },
     std::sync::Arc,
 };
@@ -800,6 +800,21 @@ pub fn process_create_vote_account(
     let fee_payer = config.signers[fee_payer];
     let nonce_authority = config.signers[nonce_authority];
 
+    let is_feature_active = if !sign_only {
+        let feature_address = solana_sdk::feature_set::vote_state_add_vote_latency::id();
+        rpc_client
+            .get_account(&feature_address)
+            .map(|account| {
+                feature::from_account(&account)
+                    .map(|feature| feature.activated_at.is_some())
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false)
+    } else {
+        false
+    };
+    let space = VoteStateVersions::vote_state_size_of(is_feature_active) as u64;
+
     let build_message = |lamports| {
         let vote_init = VoteInit {
             node_pubkey: identity_pubkey,
@@ -807,7 +822,10 @@ pub fn process_create_vote_account(
             authorized_withdrawer,
             commission,
         };
-        let mut create_vote_account_config = CreateVoteAccountConfig::default();
+        let mut create_vote_account_config = CreateVoteAccountConfig {
+            space,
+            ..CreateVoteAccountConfig::default()
+        };
         let to = if let Some(seed) = seed {
             create_vote_account_config.with_seed = Some((&vote_account_pubkey, seed));
             &vote_account_address
