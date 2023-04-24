@@ -216,6 +216,10 @@ impl<'a> Default for CreateVoteAccountConfig<'a> {
     }
 }
 
+#[deprecated(
+    since = "1.16.0",
+    note = "Please use `create_account_with_config()` instead."
+)]
 pub fn create_account(
     from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
@@ -231,6 +235,10 @@ pub fn create_account(
     )
 }
 
+#[deprecated(
+    since = "1.16.0",
+    note = "Please use `create_account_with_config()` instead."
+)]
 pub fn create_account_with_seed(
     from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
