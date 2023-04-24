@@ -2835,7 +2835,7 @@ impl Bank {
             );
 
             self.store_stake_accounts(&stake_rewards, metrics);
-            let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
+            let vote_rewards = self.store_vote_accounts(vote_account_rewards, thread_pool, metrics);
             self.update_reward_history(stake_rewards, vote_rewards);
         }
     }
@@ -3026,33 +3026,59 @@ impl Bank {
     fn store_vote_accounts(
         &self,
         vote_account_rewards: VoteRewards,
+        thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
-        let (vote_rewards, measure) = measure!(vote_account_rewards
-            .into_iter()
-            .filter_map(
-                |(vote_pubkey, (mut vote_account, commission, vote_rewards, vote_needs_store))| {
-                    if let Err(err) = vote_account.checked_add_lamports(vote_rewards) {
-                        debug!("reward redemption failed for {}: {:?}", vote_pubkey, err);
-                        return None;
-                    }
+        let (vote_rewards, measure) = measure!(
+            {
+                let vote_rewards = thread_pool
+                    .install(|| {
+                        vote_account_rewards.into_iter().map(
+                            |(
+                                vote_pubkey,
+                                (mut vote_account, commission, vote_rewards, vote_needs_store),
+                            )| {
+                                if let Err(err) = vote_account.checked_add_lamports(vote_rewards) {
+                                    debug!(
+                                        "reward redemption failed for {}: {:?}",
+                                        vote_pubkey, err
+                                    );
+                                    return (None, None);
+                                }
 
-                    if vote_needs_store {
-                        self.store_account(&vote_pubkey, &vote_account);
-                    }
+                                (
+                                    Some((
+                                        vote_pubkey,
+                                        RewardInfo {
+                                            reward_type: RewardType::Voting,
+                                            lamports: vote_rewards as i64,
+                                            post_balance: vote_account.lamports(),
+                                            commission: Some(commission),
+                                        },
+                                    )),
+                                    if vote_needs_store {
+                                        Some((vote_pubkey, vote_account))
+                                    } else {
+                                        None
+                                    },
+                                )
+                            },
+                        )
+                    })
+                    .collect::<Vec<_>>();
 
-                    Some((
-                        vote_pubkey,
-                        RewardInfo {
-                            reward_type: RewardType::Voting,
-                            lamports: vote_rewards as i64,
-                            post_balance: vote_account.lamports(),
-                            commission: Some(commission),
-                        },
-                    ))
-                },
-            )
-            .collect::<Vec<_>>());
+                let (vote_rewards, vote_accounts): (Vec<_>, Vec<_>) =
+                    vote_rewards.into_iter().unzip();
+
+                let vote_rewards: Vec<_> = vote_rewards.into_iter().flatten().collect();
+                let vote_accounts: Vec<_> = vote_accounts.iter().flatten().collect();
+
+                let to_storable = (self.slot(), &vote_accounts[..], self.include_slot_in_hash());
+                self.store_accounts_batch_stake_cache_update(to_storable, true);
+                vote_rewards
+            },
+            "store_vote_accounts_us"
+        );
 
         metrics
             .store_vote_accounts_us
