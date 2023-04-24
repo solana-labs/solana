@@ -2876,7 +2876,7 @@ pub fn verify_snapshot_archive<P, Q>(
     // Check snapshots are the same
     let unpacked_snapshots = unpack_dir.join("snapshots");
 
-    // Since the unpack code collects all the appenedvecs into one directory unpack_account_dir, we need to
+    // Since the unpack code collects all the appendvecs into one directory unpack_account_dir, we need to
     // collect all the appendvecs in account_paths/<slot>/snapshot/ into one directory for later comparison.
     let storages_to_verify = unpack_dir.join("storages_to_verify");
     // Create the directory if it doesn't exist
