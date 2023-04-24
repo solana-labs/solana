@@ -11,14 +11,15 @@ use {
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
     solana_program_runtime::{
-        compute_budget::ComputeBudget, ic_msg, invoke_context::ProcessInstructionWithContext,
-        stable_log, timings::ExecuteTimings,
+        builtin_program::{BuiltinProgram, BuiltinPrograms, ProcessInstructionWithContext},
+        compute_budget::ComputeBudget,
+        ic_msg, stable_log,
+        timings::ExecuteTimings,
     },
     solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestType},
         bank::Bank,
         bank_forks::BankForks,
-        builtins::Builtin,
         commitment::BlockCommitmentCache,
         epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
@@ -436,7 +437,7 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
 
 pub struct ProgramTest {
     accounts: Vec<(Pubkey, AccountSharedData)>,
-    builtins: Vec<Builtin>,
+    builtin_programs: BuiltinPrograms,
     compute_max_units: Option<u64>,
     prefer_bpf: bool,
     use_bpf_jit: bool,
@@ -474,7 +475,7 @@ impl Default for ProgramTest {
 
         Self {
             accounts: vec![],
-            builtins: vec![],
+            builtin_programs: BuiltinPrograms::default(),
             compute_max_units: None,
             prefer_bpf,
             use_bpf_jit: false,
@@ -628,12 +629,6 @@ impl ProgramTest {
             );
         };
 
-        let add_native = |this: &mut ProgramTest, process_fn: ProcessInstructionWithContext| {
-            info!("\"{}\" program loaded as native code", program_name);
-            this.builtins
-                .push(Builtin::new(program_name, program_id, process_fn));
-        };
-
         let warn_invalid_program_name = || {
             let valid_program_names = default_shared_object_dirs()
                 .iter()
@@ -679,7 +674,9 @@ impl ProgramTest {
             // processor function as is.
             //
             // TODO: figure out why tests hang if a processor panics when running native code.
-            (false, _, Some(process)) => add_native(self, process),
+            (false, _, Some(process)) => {
+                self.add_builtin_program(program_name, program_id, process)
+            }
 
             // Invalid: `test-sbf` invocation with no matching SBF shared object.
             (true, None, _) => {
@@ -704,8 +701,11 @@ impl ProgramTest {
         process_instruction: ProcessInstructionWithContext,
     ) {
         info!("\"{}\" builtin program", program_name);
-        self.builtins
-            .push(Builtin::new(program_name, program_id, process_instruction));
+        self.builtin_programs.vec.push(BuiltinProgram {
+            name: program_name.to_string(),
+            program_id,
+            process_instruction,
+        });
     }
 
     /// Deactivate a runtime feature.
@@ -816,11 +816,11 @@ impl ProgramTest {
         }
 
         // User-supplied additional builtins
-        for builtin in self.builtins.iter() {
+        for builtin in self.builtin_programs.vec.iter() {
             bank.add_builtin(
                 &builtin.name,
-                &builtin.id,
-                builtin.process_instruction_with_context,
+                &builtin.program_id,
+                builtin.process_instruction,
             );
         }
 

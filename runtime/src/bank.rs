@@ -94,9 +94,9 @@ use {
     solana_perf::perf_libs,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
+        builtin_program::{BuiltinProgram, BuiltinPrograms, ProcessInstructionWithContext},
         compute_budget::{self, ComputeBudget},
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
-        invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
         loaded_programs::{LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
@@ -884,18 +884,6 @@ pub struct OptionalDropCallback(Option<Box<dyn DropCallback + Send + Sync>>);
 impl AbiExample for OptionalDropCallback {
     fn example() -> Self {
         Self(None)
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct BuiltinPrograms {
-    pub vec: Vec<BuiltinProgram>,
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for BuiltinPrograms {
-    fn example() -> Self {
-        Self::default()
     }
 }
 
@@ -4282,7 +4270,7 @@ impl Bank {
 
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
-            &self.builtin_programs.vec,
+            &self.builtin_programs,
             tx.message(),
             &loaded_transaction.program_indices,
             &mut transaction_context,
@@ -6631,8 +6619,8 @@ impl Bank {
             for builtin in builtins.genesis_builtins {
                 self.add_builtin(
                     &builtin.name,
-                    &builtin.id,
-                    builtin.process_instruction_with_context,
+                    &builtin.program_id,
+                    builtin.process_instruction,
                 );
             }
             for precompile in get_precompiles() {
@@ -7674,6 +7662,7 @@ impl Bank {
             entry.process_instruction = process_instruction;
         } else {
             self.builtin_programs.vec.push(BuiltinProgram {
+                name: name.to_string(),
                 program_id: *program_id,
                 process_instruction,
             });
@@ -7944,8 +7933,8 @@ impl Bank {
                 match builtin_action {
                     BuiltinAction::Add(builtin) => self.add_builtin(
                         &builtin.name,
-                        &builtin.id,
-                        builtin.process_instruction_with_context,
+                        &builtin.program_id,
+                        builtin.process_instruction,
                     ),
                     BuiltinAction::Remove(program_id) => self.remove_builtin(&program_id),
                 }

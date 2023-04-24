@@ -1,13 +1,20 @@
-use solana_runtime::builtins::{Builtin, BuiltinFeatureTransition, Builtins};
+use {
+    solana_program_runtime::builtin_program::BuiltinProgram,
+    solana_runtime::builtins::{BuiltinFeatureTransition, Builtins},
+};
 
 macro_rules! to_builtin {
     ($b:expr) => {
-        Builtin::new(&$b.0, $b.1, $b.2)
+        BuiltinProgram {
+            name: $b.0.to_string(),
+            program_id: $b.1,
+            process_instruction: $b.2,
+        }
     };
 }
 
 /// Builtin programs that are always available
-fn genesis_builtins(bpf_jit: bool) -> Vec<Builtin> {
+fn genesis_builtins(bpf_jit: bool) -> Vec<BuiltinProgram> {
     // Currently JIT is not supported on the SBF VM:
     // !x86_64: https://github.com/qmonnet/rbpf/issues/48
     // Windows: https://github.com/solana-labs/rbpf/issues/217

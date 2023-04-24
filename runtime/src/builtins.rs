@@ -1,60 +1,12 @@
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
 use {
-    solana_frozen_abi::abi_example::AbiExample, solana_program_runtime::declare_process_instruction,
-};
-use {
-    solana_program_runtime::invoke_context::ProcessInstructionWithContext,
+    solana_program_runtime::builtin_program::BuiltinProgram,
     solana_sdk::{feature_set, pubkey::Pubkey, stake},
-    std::fmt,
 };
-
-#[derive(Clone)]
-pub struct Builtin {
-    pub name: String,
-    pub id: Pubkey,
-    pub process_instruction_with_context: ProcessInstructionWithContext,
-}
-
-impl Builtin {
-    pub fn new(
-        name: &str,
-        id: Pubkey,
-        process_instruction_with_context: ProcessInstructionWithContext,
-    ) -> Self {
-        Self {
-            name: name.to_string(),
-            id,
-            process_instruction_with_context,
-        }
-    }
-}
-
-impl fmt::Debug for Builtin {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Builtin [name={}, id={}]", self.name, self.id)
-    }
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for Builtin {
-    fn example() -> Self {
-        declare_process_instruction!(process_instruction, 1, |_invoke_context| {
-            // Do nothing
-            Ok(())
-        });
-
-        Self {
-            name: String::default(),
-            id: Pubkey::default(),
-            process_instruction_with_context: process_instruction,
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct Builtins {
     /// Builtin programs that are always available
-    pub genesis_builtins: Vec<Builtin>,
+    pub genesis_builtins: Vec<BuiltinProgram>,
 
     /// Dynamic feature transitions for builtin programs
     pub feature_transitions: Vec<BuiltinFeatureTransition>,
@@ -63,7 +15,7 @@ pub struct Builtins {
 /// Actions taken by a bank when managing the list of active builtin programs.
 #[derive(Debug, Clone)]
 pub enum BuiltinAction {
-    Add(Builtin),
+    Add(BuiltinProgram),
     Remove(Pubkey),
 }
 
@@ -73,13 +25,13 @@ pub enum BuiltinAction {
 pub enum BuiltinFeatureTransition {
     /// Add a builtin program if a feature is activated.
     Add {
-        builtin: Builtin,
+        builtin: BuiltinProgram,
         feature_id: Pubkey,
     },
     /// Remove a builtin program if a feature is activated or
     /// retain a previously added builtin.
     RemoveOrRetain {
-        previously_added_builtin: Builtin,
+        previously_added_builtin: BuiltinProgram,
         addition_feature_id: Pubkey,
         removal_feature_id: Pubkey,
     },
@@ -107,7 +59,7 @@ impl BuiltinFeatureTransition {
                 removal_feature_id,
             } => {
                 if should_apply_action_for_feature(removal_feature_id) {
-                    Some(BuiltinAction::Remove(previously_added_builtin.id))
+                    Some(BuiltinAction::Remove(previously_added_builtin.program_id))
                 } else if should_apply_action_for_feature(addition_feature_id) {
                     // Retaining is no different from adding a new builtin.
                     Some(BuiltinAction::Add(previously_added_builtin.clone()))
@@ -119,29 +71,29 @@ impl BuiltinFeatureTransition {
     }
 }
 
-/// Builtin programs that are always available
-fn genesis_builtins() -> Vec<Builtin> {
+/// Built-in programs that are always available
+fn genesis_builtins() -> Vec<BuiltinProgram> {
     vec![
-        Builtin::new(
-            "system_program",
-            solana_system_program::id(),
-            solana_system_program::system_processor::process_instruction,
-        ),
-        Builtin::new(
-            "vote_program",
-            solana_vote_program::id(),
-            solana_vote_program::vote_processor::process_instruction,
-        ),
-        Builtin::new(
-            "stake_program",
-            stake::program::id(),
-            solana_stake_program::stake_instruction::process_instruction,
-        ),
-        Builtin::new(
-            "config_program",
-            solana_config_program::id(),
-            solana_config_program::config_processor::process_instruction,
-        ),
+        BuiltinProgram {
+            name: "system_program".to_string(),
+            program_id: solana_system_program::id(),
+            process_instruction: solana_system_program::system_processor::process_instruction,
+        },
+        BuiltinProgram {
+            name: "vote_program".to_string(),
+            program_id: solana_vote_program::id(),
+            process_instruction: solana_vote_program::vote_processor::process_instruction,
+        },
+        BuiltinProgram {
+            name: "stake_program".to_string(),
+            program_id: stake::program::id(),
+            process_instruction: solana_stake_program::stake_instruction::process_instruction,
+        },
+        BuiltinProgram {
+            name: "config_program".to_string(),
+            program_id: solana_config_program::id(),
+            process_instruction: solana_config_program::config_processor::process_instruction,
+        },
     ]
 }
 
@@ -149,27 +101,28 @@ fn genesis_builtins() -> Vec<Builtin> {
 fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
     vec![
         BuiltinFeatureTransition::Add {
-            builtin: Builtin::new(
-                "compute_budget_program",
-                solana_sdk::compute_budget::id(),
-                solana_compute_budget_program::process_instruction,
-            ),
+            builtin: BuiltinProgram {
+                name: "compute_budget_program".to_string(),
+                program_id: solana_sdk::compute_budget::id(),
+                process_instruction: solana_compute_budget_program::process_instruction,
+            },
             feature_id: feature_set::add_compute_budget_program::id(),
         },
         BuiltinFeatureTransition::Add {
-            builtin: Builtin::new(
-                "address_lookup_table_program",
-                solana_address_lookup_table_program::id(),
-                solana_address_lookup_table_program::processor::process_instruction,
-            ),
+            builtin: BuiltinProgram {
+                name: "address_lookup_table_program".to_string(),
+                program_id: solana_address_lookup_table_program::id(),
+                process_instruction:
+                    solana_address_lookup_table_program::processor::process_instruction,
+            },
             feature_id: feature_set::versioned_tx_message_enabled::id(),
         },
         BuiltinFeatureTransition::Add {
-            builtin: Builtin::new(
-                "zk_token_proof_program",
-                solana_zk_token_sdk::zk_token_proof_program::id(),
-                solana_zk_token_proof_program::process_instruction,
-            ),
+            builtin: BuiltinProgram {
+                name: "zk_token_proof_program".to_string(),
+                program_id: solana_zk_token_sdk::zk_token_proof_program::id(),
+                process_instruction: solana_zk_token_proof_program::process_instruction,
+            },
             feature_id: feature_set::zk_token_sdk_enabled::id(),
         },
     ]
@@ -187,9 +140,9 @@ pub fn get_pubkeys() -> Vec<Pubkey> {
     let builtins = get();
 
     let mut pubkeys = Vec::new();
-    pubkeys.extend(builtins.genesis_builtins.iter().map(|b| b.id));
+    pubkeys.extend(builtins.genesis_builtins.iter().map(|b| b.program_id));
     pubkeys.extend(builtins.feature_transitions.iter().filter_map(|f| match f {
-        BuiltinFeatureTransition::Add { builtin, .. } => Some(builtin.id),
+        BuiltinFeatureTransition::Add { builtin, .. } => Some(builtin.program_id),
         BuiltinFeatureTransition::RemoveOrRetain { .. } => None,
     }));
     pubkeys

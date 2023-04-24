@@ -1,6 +1,7 @@
 use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
+        builtin_program::{BuiltinPrograms, ProcessInstructionWithContext},
         compute_budget::ComputeBudget,
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
@@ -14,7 +15,7 @@ use {
     solana_rbpf::{
         ebpf::MM_HEAP_START,
         memory_region::MemoryMapping,
-        vm::{BuiltInFunction, Config, ContextObject, ProgramResult},
+        vm::{Config, ContextObject, ProgramResult},
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -80,24 +81,6 @@ macro_rules! declare_process_instruction {
                 .into();
         }
     };
-}
-
-pub type ProcessInstructionWithContext = BuiltInFunction<InvokeContext<'static>>;
-
-#[derive(Clone)]
-pub struct BuiltinProgram {
-    pub program_id: Pubkey,
-    pub process_instruction: ProcessInstructionWithContext,
-}
-
-impl std::fmt::Debug for BuiltinProgram {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}: {:p}",
-            self.program_id, self.process_instruction as *const ProcessInstructionWithContext,
-        )
-    }
 }
 
 impl<'a> ContextObject for InvokeContext<'a> {
@@ -169,7 +152,7 @@ pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    builtin_programs: &'a [BuiltinProgram],
+    builtin_programs: &'a BuiltinPrograms,
     sysvar_cache: &'a SysvarCache,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
@@ -189,7 +172,7 @@ impl<'a> InvokeContext<'a> {
     pub fn new(
         transaction_context: &'a mut TransactionContext,
         rent: Rent,
-        builtin_programs: &'a [BuiltinProgram],
+        builtin_programs: &'a BuiltinPrograms,
         sysvar_cache: &'a SysvarCache,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
@@ -731,7 +714,7 @@ impl<'a> InvokeContext<'a> {
             }
         };
 
-        for entry in self.builtin_programs {
+        for entry in self.builtin_programs.vec.iter() {
             if entry.program_id == builtin_id {
                 let program_id =
                     *instruction_context.get_last_program_key(self.transaction_context)?;
@@ -894,9 +877,9 @@ macro_rules! with_mock_invoke_context {
             },
             std::{cell::RefCell, rc::Rc, sync::Arc},
             $crate::{
-                compute_budget::ComputeBudget, executor_cache::TransactionExecutorCache,
-                invoke_context::InvokeContext, log_collector::LogCollector,
-                sysvar_cache::SysvarCache,
+                builtin_program::BuiltinPrograms, compute_budget::ComputeBudget,
+                executor_cache::TransactionExecutorCache, invoke_context::InvokeContext,
+                log_collector::LogCollector, sysvar_cache::SysvarCache,
             },
         };
         let compute_budget = ComputeBudget::default();
@@ -907,6 +890,7 @@ macro_rules! with_mock_invoke_context {
             compute_budget.max_instruction_trace_length,
         );
         $transaction_context.enable_cap_accounts_data_allocations_per_transaction();
+        let builtin_programs = BuiltinPrograms::default();
         let mut sysvar_cache = SysvarCache::default();
         sysvar_cache.fill_missing_entries(|pubkey, callback| {
             for index in 0..$transaction_context.get_number_of_accounts() {
@@ -928,7 +912,7 @@ macro_rules! with_mock_invoke_context {
         let mut $invoke_context = InvokeContext::new(
             &mut $transaction_context,
             Rent::default(),
-            &[],
+            &builtin_programs,
             &sysvar_cache,
             Some(LogCollector::new_ref()),
             compute_budget,
@@ -980,11 +964,8 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
     let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
     transaction_accounts.push((*loader_id, processor_account));
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-    let builtin_programs = &[BuiltinProgram {
-        program_id: *loader_id,
-        process_instruction,
-    }];
-    invoke_context.builtin_programs = builtin_programs;
+    let builtin_programs = BuiltinPrograms::new_mock(*loader_id, process_instruction);
+    invoke_context.builtin_programs = &builtin_programs;
     pre_adjustments(&mut invoke_context);
     let result = invoke_context.process_instruction(
         instruction_data,
@@ -1233,11 +1214,8 @@ mod tests {
             })
             .collect::<Vec<_>>();
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-        let builtin_programs = &[BuiltinProgram {
-            program_id: callee_program_id,
-            process_instruction,
-        }];
-        invoke_context.builtin_programs = builtin_programs;
+        let builtin_programs = BuiltinPrograms::new_mock(callee_program_id, process_instruction);
+        invoke_context.builtin_programs = &builtin_programs;
 
         // Account modification tests
         let cases = vec![
@@ -1378,11 +1356,8 @@ mod tests {
             },
         ];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-        let builtin_programs = &[BuiltinProgram {
-            program_id: program_key,
-            process_instruction,
-        }];
-        invoke_context.builtin_programs = builtin_programs;
+        let builtin_programs = BuiltinPrograms::new_mock(program_key, process_instruction);
+        invoke_context.builtin_programs = &builtin_programs;
 
         // Test: Resize the account to *the same size*, so not consuming any additional size; this must succeed
         {
