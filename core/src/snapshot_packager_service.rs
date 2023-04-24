@@ -249,7 +249,6 @@ mod tests {
         let full_archive = snapshot_utils::package_and_archive_full_snapshot(
             &bank,
             &bank_snapshot_info,
-            &bank_snapshots_dir,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             snapshot_storages,
