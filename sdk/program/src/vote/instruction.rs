@@ -12,7 +12,7 @@ use {
             state::{
                 serde_compact_vote_state_update, Vote, VoteAuthorize,
                 VoteAuthorizeCheckedWithSeedArgs, VoteAuthorizeWithSeedArgs, VoteInit, VoteState,
-                VoteStateUpdate,
+                VoteStateUpdate, VoteStateVersions,
             },
         },
     },
@@ -200,6 +200,20 @@ fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction
         &VoteInstruction::InitializeAccount(*vote_init),
         account_metas,
     )
+}
+
+pub struct CreateVoteAccountConfig<'a> {
+    pub space: u64,
+    pub with_seed: Option<(&'a Pubkey, &'a str)>,
+}
+
+impl<'a> Default for CreateVoteAccountConfig<'a> {
+    fn default() -> Self {
+        Self {
+            space: VoteStateVersions::vote_state_size_of(false) as u64,
+            with_seed: None,
+        }
+    }
 }
 
 pub fn create_account(
