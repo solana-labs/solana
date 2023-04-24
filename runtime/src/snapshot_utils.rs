@@ -3279,7 +3279,6 @@ pub fn create_snapshot_dirs_for_tests(
         bank.force_flush_accounts_cache();
         bank.clean_accounts(Some(bank.slot()));
         bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
-        bank.rehash(); // Bank accounts may have been manually modified by the caller
 
         let snapshot_storages = bank.get_snapshot_storages(None);
         let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
