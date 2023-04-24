@@ -3302,7 +3302,7 @@ pub fn create_snapshot_dirs_for_tests(
             crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
                 &bank_snapshots_dir,
                 bank.slot(),
-                &AccountsHash(Hash::new_unique()),
+                &bank.get_accounts_hash().unwrap(),
                 None
             )
         );
