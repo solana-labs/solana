@@ -71,7 +71,9 @@ struct SnapshotTestConfig {
     full_snapshot_archives_dir: TempDir,
     bank_snapshots_dir: TempDir,
     accounts_dir: PathBuf,
-    _accounts_tmp_dir: TempDir,
+    // keep TempDir::drop from running to retain that dir for the duration of test
+    #[allow(dead_code)]
+    accounts_tmp_dir: TempDir,
 }
 
 impl SnapshotTestConfig {
@@ -82,7 +84,7 @@ impl SnapshotTestConfig {
         full_snapshot_archive_interval_slots: Slot,
         incremental_snapshot_archive_interval_slots: Slot,
     ) -> SnapshotTestConfig {
-        let (_accounts_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
+        let (accounts_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = TempDir::new().unwrap();
         let full_snapshot_archives_dir = TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = TempDir::new().unwrap();
@@ -120,7 +122,6 @@ impl SnapshotTestConfig {
             ..SnapshotConfig::default()
         };
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
-        #[allow(clippy::used_underscore_binding)]
         SnapshotTestConfig {
             bank_forks,
             genesis_config_info,
@@ -129,7 +130,7 @@ impl SnapshotTestConfig {
             full_snapshot_archives_dir,
             bank_snapshots_dir,
             accounts_dir,
-            _accounts_tmp_dir,
+            accounts_tmp_dir,
         }
     }
 }
