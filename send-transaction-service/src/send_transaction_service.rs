@@ -533,10 +533,7 @@ impl SendTransactionService {
                         .store(transactions.len() as u64, Ordering::Relaxed);
                     let (root_bank, working_bank) = {
                         let bank_forks = bank_forks.read().unwrap();
-                        (
-                            bank_forks.root_bank().clone(),
-                            bank_forks.working_bank().clone(),
-                        )
+                        (bank_forks.root_bank(), bank_forks.working_bank())
                     };
 
                     let _result = Self::process_transactions(
