@@ -2,9 +2,10 @@ use {
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_program_runtime::{
+        builtin_program::BuiltinProgram,
         compute_budget::ComputeBudget,
         executor_cache::TransactionExecutorCache,
-        invoke_context::{BuiltinProgram, InvokeContext},
+        invoke_context::InvokeContext,
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},

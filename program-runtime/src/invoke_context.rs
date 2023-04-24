@@ -1,6 +1,7 @@
 use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
+        builtin_program::{BuiltinProgram, ProcessInstructionWithContext},
         compute_budget::ComputeBudget,
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
@@ -14,7 +15,7 @@ use {
     solana_rbpf::{
         ebpf::MM_HEAP_START,
         memory_region::MemoryMapping,
-        vm::{BuiltInFunction, Config, ContextObject, ProgramResult},
+        vm::{Config, ContextObject, ProgramResult},
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -80,24 +81,6 @@ macro_rules! declare_process_instruction {
                 .into();
         }
     };
-}
-
-pub type ProcessInstructionWithContext = BuiltInFunction<InvokeContext<'static>>;
-
-#[derive(Clone)]
-pub struct BuiltinProgram {
-    pub program_id: Pubkey,
-    pub process_instruction: ProcessInstructionWithContext,
-}
-
-impl std::fmt::Debug for BuiltinProgram {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}: {:p}",
-            self.program_id, self.process_instruction as *const ProcessInstructionWithContext,
-        )
-    }
 }
 
 impl<'a> ContextObject for InvokeContext<'a> {

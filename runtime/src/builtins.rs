@@ -3,7 +3,7 @@ use {
     solana_frozen_abi::abi_example::AbiExample, solana_program_runtime::declare_process_instruction,
 };
 use {
-    solana_program_runtime::invoke_context::ProcessInstructionWithContext,
+    solana_program_runtime::builtin_program::ProcessInstructionWithContext,
     solana_sdk::{feature_set, pubkey::Pubkey, stake},
     std::fmt,
 };
