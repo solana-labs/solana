@@ -11,7 +11,7 @@ use {
             program::id,
             state::{
                 serde_compact_vote_state_update, Vote, VoteAuthorize,
-                VoteAuthorizeCheckedWithSeedArgs, VoteAuthorizeWithSeedArgs, VoteInit, VoteState,
+                VoteAuthorizeCheckedWithSeedArgs, VoteAuthorizeWithSeedArgs, VoteInit,
                 VoteStateUpdate, VoteStateVersions,
             },
         },
@@ -222,11 +222,13 @@ pub fn create_account(
     vote_init: &VoteInit,
     lamports: u64,
 ) -> Vec<Instruction> {
-    let space = VoteState::size_of() as u64;
-    let create_ix =
-        system_instruction::create_account(from_pubkey, vote_pubkey, lamports, space, &id());
-    let init_ix = initialize_account(vote_pubkey, vote_init);
-    vec![create_ix, init_ix]
+    create_account_with_config(
+        from_pubkey,
+        vote_pubkey,
+        vote_init,
+        lamports,
+        CreateVoteAccountConfig::default(),
+    )
 }
 
 pub fn create_account_with_seed(
@@ -237,16 +239,27 @@ pub fn create_account_with_seed(
     vote_init: &VoteInit,
     lamports: u64,
 ) -> Vec<Instruction> {
-    let space = VoteState::size_of() as u64;
-    let create_ix = system_instruction::create_account_with_seed(
+    create_account_with_config(
         from_pubkey,
         vote_pubkey,
-        base,
-        seed,
+        vote_init,
         lamports,
-        space,
-        &id(),
-    );
+        CreateVoteAccountConfig {
+            with_seed: Some((base, seed)),
+            ..CreateVoteAccountConfig::default()
+        },
+    )
+}
+
+pub fn create_account_with_config(
+    from_pubkey: &Pubkey,
+    vote_pubkey: &Pubkey,
+    vote_init: &VoteInit,
+    lamports: u64,
+    config: CreateVoteAccountConfig,
+) -> Vec<Instruction> {
+    let create_ix =
+        system_instruction::create_account(from_pubkey, vote_pubkey, lamports, config.space, &id());
     let init_ix = initialize_account(vote_pubkey, vote_init);
     vec![create_ix, init_ix]
 }
