@@ -86,6 +86,7 @@ js-sys = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 curve25519-dalek = { workspace = true }
+hex = { workspace = true }
 static_assertions = { workspace = true }
 tiny-bip39 = { workspace = true }
 
@@ -97,3 +98,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[package.metadata.cargo-udeps.ignore]
+development = ["hex"]

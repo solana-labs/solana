@@ -556,6 +556,7 @@ impl<O: AbiEnumVisitor, E: AbiEnumVisitor> AbiEnumVisitor for Result<O, E> {
     }
 }
 
+#[cfg(not(target_os = "solana"))]
 impl<T: AbiExample> AbiExample for once_cell::sync::OnceCell<T> {
     fn example() -> Self {
         Self::with_value(T::example())

@@ -66,6 +66,7 @@ getrandom = { version = "0.2", features = ["js", "wasm-bindgen"] }
 parking_lot = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 assert_matches = { workspace = true }
 serde_json = { workspace = true }
 static_assertions = { workspace = true }
@@ -81,3 +82,6 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
+
+[package.metadata.cargo-udeps.ignore]
+development = ["anyhow"]

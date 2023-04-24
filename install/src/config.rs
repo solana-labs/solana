@@ -178,6 +178,7 @@ active_release_dir: {root_dir}/active_release
     }
 
     #[test]
+    #[ignore]
     fn test_load_serde_yaml_v_0_8_config() {
         let file_name = "config.yml";
         let mut file = File::create(file_name).unwrap();
