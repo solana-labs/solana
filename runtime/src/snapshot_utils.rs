@@ -2846,7 +2846,7 @@ fn get_io_error(error: &str) -> SnapshotError {
 pub enum VerifyBank {
     /// the bank's serialized format is expected to be identical to what we are comparing against
     Deterministic,
-    /// the serialized bank was 'reserialized' into a non-deterministic format at the specified slot
+    /// the serialized bank was 'reserialized' into a non-deterministic format
     /// so, deserialize both files and compare deserialized results
     NonDeterministic,
 }
