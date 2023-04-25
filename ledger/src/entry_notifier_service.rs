@@ -13,8 +13,14 @@ use {
     },
 };
 
-pub type EntryNotifierSender = Sender<(Slot, usize, EntrySummary)>;
-pub type EntryNotifierReceiver = Receiver<(Slot, usize, EntrySummary)>;
+pub struct EntryNotification {
+    pub slot: Slot,
+    pub index: usize,
+    pub entry: EntrySummary,
+}
+
+pub type EntryNotifierSender = Sender<EntryNotification>;
+pub type EntryNotifierReceiver = Receiver<EntryNotification>;
 
 pub struct EntryNotifierService {
     thread_hdl: JoinHandle<()>,
@@ -48,7 +54,7 @@ impl EntryNotifierService {
         entry_notification_receiver: &EntryNotifierReceiver,
         entry_notifier: EntryNotifierLock,
     ) -> Result<(), RecvTimeoutError> {
-        let (slot, index, entry) =
+        let EntryNotification { slot, index, entry } =
             entry_notification_receiver.recv_timeout(Duration::from_secs(1))?;
         entry_notifier
             .write()
