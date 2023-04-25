@@ -48,6 +48,8 @@ echo --- build environment
   grcov --version
 
   sccache --version
+
+  wasm-pack --version
 )
 
 export RUST_BACKTRACE=1
