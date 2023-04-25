@@ -45,6 +45,7 @@ use {
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
+        saturating_add_assign,
         signature::{Keypair, Signature},
         timing,
         transaction::{
