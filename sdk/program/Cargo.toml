@@ -60,7 +60,7 @@ solana-logger = { workspace = true }
 console_error_panic_hook = { workspace = true }
 console_log = { workspace = true }
 js-sys = { workspace = true }
-getrandom = { version = "0.2", features = ["js", "wasm-bindgen"] }
+getrandom = { version = "0.2", features = ["dummy", "js", "wasm-bindgen"] }
 
 [target.'cfg(not(target_pointer_width = "64"))'.dependencies]
 parking_lot = { workspace = true }
