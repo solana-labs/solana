@@ -8,7 +8,9 @@ use {
         rent_collector::RentCollector,
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
         snapshot_hash::SnapshotHash,
-        snapshot_utils::{self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion},
+        snapshot_utils::{
+            self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotError, SnapshotVersion,
+        },
     },
     log::*,
     solana_sdk::{clock::Slot, feature_set, sysvar::epoch_schedule::EpochSchedule},
@@ -73,10 +75,10 @@ impl AccountsPackage {
             }
         }
 
-        let snapshot_links = bank_snapshot_info
-            .snapshot_dir
+        let bank_snapshot_dir = &bank_snapshot_info.snapshot_dir;
+        let snapshot_links = bank_snapshot_dir
             .parent()
-            .unwrap()
+            .ok_or_else(|| SnapshotError::InvalidSnapshotDirPath(bank_snapshot_dir.to_path_buf()))?
             .to_path_buf();
 
         let snapshot_info = SupplementalSnapshotInfo {
