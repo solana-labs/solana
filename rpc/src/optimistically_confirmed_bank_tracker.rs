@@ -1,6 +1,12 @@
 //! The `optimistically_confirmed_bank_tracker` module implements a threaded service to track the
 //! most recent optimistically confirmed bank for use in rpc services, and triggers gossip
-//! subscription notifications
+//! subscription notifications.
+//! This module also supports notifying of slot status for subscribers using the SlotNotificationSender.
+//! It receives the BankNotification events, transforms them into SlotNotification and sends them via
+//! SlotNotificationSender in the following way:
+//! BankNotification::OptimisticallyConfirmed --> SlotNotification::OptimisticallyConfirmed
+//! BankNotification::Frozen --> SlotNotification::Frozen
+//! BankNotification::NewRootedChain --> SlotNotification::Root for the roots in the chain.
 
 use {
     crate::rpc_subscriptions::RpcSubscriptions,
@@ -225,7 +231,7 @@ impl OptimisticallyConfirmedBankTracker {
             return;
         }
         roots.sort_unstable();
-        // The chain are sorted already and must contain at least the parent of a newly rooted slot
+        // The chain are sorted already and must contain at least the parent of a newly rooted slot as the first element
         assert!(roots.len() >= 2);
         for i in 1..roots.len() {
             let root = roots[i];
