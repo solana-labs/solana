@@ -28,41 +28,54 @@ pub fn derive_abi_enum_visitor(_item: TokenStream) -> TokenStream {
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree::Group};
+use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-use quote::quote;
+use quote::{quote, ToTokens};
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use syn::{
-    parse_macro_input, Attribute, AttributeArgs, Error, Fields, Ident, Item, ItemEnum, ItemStruct,
-    ItemType, Lit, Meta, NestedMeta, Variant,
+    parse_macro_input, Attribute, Error, Fields, Ident, Item, ItemEnum, ItemStruct, ItemType,
+    LitStr, Variant,
 };
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 fn filter_serde_attrs(attrs: &[Attribute]) -> bool {
-    let mut skip = false;
-
-    for attr in attrs {
-        let ss = &attr.path.segments.first().unwrap().ident.to_string();
-        if ss.starts_with("serde") {
-            for token in attr.tokens.clone() {
-                if let Group(token) = token {
-                    for ident in token.stream() {
-                        if ident.to_string() == "skip" {
-                            skip = true;
-                        }
+    fn contains_skip(tokens: TokenStream2) -> bool {
+        for token in tokens.into_iter() {
+            match token {
+                TokenTree::Group(group) => {
+                    if contains_skip(group.stream()) {
+                        return true;
                     }
                 }
+                TokenTree::Ident(ident) => {
+                    if ident == "skip" {
+                        return true;
+                    }
+                }
+                TokenTree::Punct(_) | TokenTree::Literal(_) => (),
             }
+        }
+
+        false
+    }
+
+    for attr in attrs {
+        if !attr.path().is_ident("serde") {
+            continue;
+        }
+
+        if contains_skip(attr.to_token_stream()) {
+            return true;
         }
     }
 
-    skip
+    false
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 fn filter_allow_attrs(attrs: &mut Vec<Attribute>) {
     attrs.retain(|attr| {
-        let ss = &attr.path.segments.first().unwrap().ident.to_string();
+        let ss = &attr.path().segments.first().unwrap().ident.to_string();
         ss.starts_with("allow")
     });
 }
@@ -395,19 +408,25 @@ fn frozen_abi_enum_type(input: ItemEnum, expected_digest: &str) -> TokenStream {
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 #[proc_macro_attribute]
 pub fn frozen_abi(attrs: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attrs as AttributeArgs);
     let mut expected_digest: Option<String> = None;
-    for arg in args {
-        match arg {
-            NestedMeta::Meta(Meta::NameValue(nv)) if nv.path.is_ident("digest") => {
-                if let Lit::Str(lit) = nv.lit {
-                    expected_digest = Some(lit.value());
-                }
-            }
-            _ => {}
+    let attrs_parser = syn::meta::parser(|meta| {
+        if meta.path.is_ident("digest") {
+            expected_digest = Some(meta.value()?.parse::<LitStr>()?.value());
+            Ok(())
+        } else {
+            Err(meta.error("unsupported \"frozen_abi\" property"))
         }
-    }
-    let expected_digest = expected_digest.expect("the required \"digest\" = ... is missing.");
+    });
+    parse_macro_input!(attrs with attrs_parser);
+
+    let Some(expected_digest) = expected_digest else {
+        return Error::new_spanned(
+            TokenStream2::from(item),
+            "the required \"digest\" = ... attribute is missing.",
+        )
+        .to_compile_error()
+        .into()
+    };
 
     let item = parse_macro_input!(item as Item);
     match item {
