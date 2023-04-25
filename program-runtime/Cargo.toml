@@ -31,7 +31,6 @@ solana_rbpf = { workspace = true }
 thiserror = { workspace = true }
 
 [features]
-default = ["metrics"]
 metrics = ["dep:solana-metrics"]
 
 [dev-dependencies]

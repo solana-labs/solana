@@ -13,7 +13,7 @@ edition = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }
 solana-measure = { workspace = true }
-solana-program-runtime = { workspace = true }
+solana-program-runtime = { workspace = true, features = ["metrics"] }
 solana-sdk = { workspace = true }
 solana_rbpf = { workspace = true }
 
