@@ -72,9 +72,6 @@ pub use {
 
 pub mod programs;
 
-#[macro_use]
-extern crate solana_bpf_loader_program;
-
 /// Errors from the program test environment
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProgramTestError {
@@ -786,16 +783,6 @@ impl ProgramTest {
                 ..RuntimeConfig::default()
             }),
         );
-
-        // Add loaders
-        macro_rules! add_builtin {
-            ($b:expr) => {
-                bank.add_builtin(&$b.0, &$b.1, $b.2)
-            };
-        }
-        add_builtin!(solana_bpf_loader_deprecated_program!());
-        add_builtin!(solana_bpf_loader_program!());
-        add_builtin!(solana_bpf_loader_upgradeable_program!());
 
         // Add commonly-used SPL programs as a convenience to the user
         for (program_id, account) in programs::spl_programs(&Rent::default()).iter() {

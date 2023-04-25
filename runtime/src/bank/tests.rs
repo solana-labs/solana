@@ -30,7 +30,6 @@ use {
     rand::Rng,
     rayon::ThreadPoolBuilder,
     serde::{Deserialize, Serialize},
-    solana_bpf_loader_program::solana_bpf_loader_program,
     solana_logger,
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget, MAX_COMPUTE_UNIT_LIMIT},
@@ -7828,11 +7827,6 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000);
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.feature_set = Arc::new(FeatureSet::all_enabled());
-    bank.add_builtin(
-        "solana_bpf_loader_upgradeable_program",
-        &bpf_loader_upgradeable::id(),
-        solana_bpf_loader_program::process_instruction,
-    );
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -12752,8 +12746,6 @@ fn test_runtime_feature_enable_with_executor_cache() {
         .accounts
         .remove(&feature_set::reject_callx_r10::id());
     let mut root_bank = Bank::new_for_tests(&genesis_config);
-    let (name, id, entrypoint) = solana_bpf_loader_program!();
-    root_bank.add_builtin(&name, &id, entrypoint);
 
     // Test a basic transfer
     let amount = genesis_config.rent.minimum_balance(0);
