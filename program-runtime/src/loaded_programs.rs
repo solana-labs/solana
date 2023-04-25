@@ -525,10 +525,10 @@ impl LoadedPrograms {
 
 #[cfg(test)]
 mod tests {
-    use crate::loaded_programs::LoadedProgramMatchCriteria;
     use {
         crate::loaded_programs::{
-            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot,
+            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
+            LoadedPrograms, WorkingSlot,
         },
         percentage::Percentage,
         solana_rbpf::vm::BuiltInProgram,
