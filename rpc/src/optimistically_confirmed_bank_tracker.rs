@@ -57,7 +57,7 @@ impl std::fmt::Debug for BankNotification {
             }
             BankNotification::Frozen(bank) => write!(f, "Frozen({})", bank.slot()),
             BankNotification::NewRootBank(bank) => write!(f, "Root({})", bank.slot()),
-            BankNotification::NewRootedChain(chain) => write!(f, "RootedChain({:?})", chain),
+            BankNotification::NewRootedChain(chain) => write!(f, "RootedChain({chain:?})"),
         }
     }
 }
