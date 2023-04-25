@@ -57,7 +57,7 @@ if [[ -n $CI ]]; then
       echo "--- $0 ... (with sccache enabled)"
       # sccache
       ARGS+=(
-        --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
+        --env "RUSTC_WRAPPER=/usr/local/cargo/bin/sccache"
         --env AWS_ACCESS_KEY_ID
         --env AWS_SECRET_ACCESS_KEY
         --env SCCACHE_BUCKET
