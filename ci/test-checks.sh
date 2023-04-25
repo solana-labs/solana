@@ -47,7 +47,7 @@ echo --- build environment
 
   grcov --version
 
-  /home/.cargo/bin/sccache --version
+  sccache --version
 )
 
 export RUST_BACKTRACE=1
