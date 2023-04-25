@@ -15,7 +15,7 @@ libsecp256k1 = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }
 solana-measure = { workspace = true }
-solana-program-runtime = { workspace = true }
+solana-program-runtime = { workspace = true, features = ["metrics"] }
 solana-sdk = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
 solana_rbpf = { workspace = true }

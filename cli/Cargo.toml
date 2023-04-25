@@ -38,7 +38,7 @@ solana-client = { workspace = true }
 solana-config-program = { workspace = true }
 solana-faucet = { workspace = true }
 solana-logger = { workspace = true }
-solana-program-runtime = { workspace = true }
+solana-program-runtime = { workspace = true, features = ["metrics"] }
 solana-pubsub-client = { workspace = true }
 solana-remote-wallet = { workspace = true, features = ["default"] }
 solana-rpc-client = { workspace = true, features = ["default"] }
