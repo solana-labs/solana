@@ -85,12 +85,21 @@ impl AccountsPackage {
             .ok_or_else(|| SnapshotError::InvalidSnapshotDirPath(bank_snapshot_dir.clone()))?;
         let snapshot_links = tempfile::Builder::new()
             .prefix(&format!("{}{}-", TMP_BANK_SNAPSHOT_PREFIX, bank.slot()))
-            .tempdir_in(bank_snapshots_dir)?;
+            .tempdir_in(bank_snapshots_dir)
+            .map_err(|e| {
+                SnapshotError::IoWithSourceAndFile(e, "create tempdir_in", bank_snapshos_dir)
+            })?;
         {
             let snapshot_hardlink_dir = snapshot_links
                 .path()
                 .join(bank_snapshot_info.slot.to_string());
-            fs::create_dir_all(&snapshot_hardlink_dir)?;
+            fs::create_dir_all(&snapshot_hardlink_dir).map_err(|e| {
+                SnapshotError::IoWithSourceAndFile(
+                    e,
+                    "create snapshot_hardlink_dir",
+                    snapshot_hardlink_dir.as_ref().to_pathbuf(),
+                )
+            })?;
             let snapshot_path = bank_snapshot_info.snapshot_path();
             let file_name = snapshot_utils::path_to_file_name_str(&snapshot_path)?;
             fs::hard_link(&snapshot_path, snapshot_hardlink_dir.join(file_name))?;

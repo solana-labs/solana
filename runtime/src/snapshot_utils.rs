@@ -309,9 +309,6 @@ pub(crate) struct StorageAndNextAppendVecId {
 #[derive(Error, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum SnapshotError {
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
-
     #[error("serialization error: {0}")]
     Serialize(#[from] bincode::Error),
 
@@ -527,8 +524,18 @@ pub fn clean_orphaned_account_snapshot_dirs(
     for snapshot in snapshots {
         let account_hardlinks_dir = snapshot.snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
         // loop through entries in the snapshot_hardlink_dir, read the symlinks, add the target to the HashSet
-        for entry in fs::read_dir(&account_hardlinks_dir)? {
-            let path = entry?.path();
+        for entry in fs::read_dir(&account_hardlinks_dir).map_err(|e| {
+            SnapshotError::IoWithSourceAndFile(e, "read_dir", account_hardlinks_dir.clone())
+        })? {
+            let path = entry
+                .map_err(|e| {
+                    SnapshotError::IoWithSourceAndFile(
+                        e,
+                        "entry_unwrap",
+                        account_hardlinks_dir.clone(),
+                    )
+                })?
+                .path();
             let target = fs::read_link(&path)?;
             account_snapshot_dirs_referenced.insert(target);
         }
@@ -665,16 +672,24 @@ pub fn archive_snapshot_package(
     ));
 
     {
-        let mut archive_file = fs::File::create(&archive_path)?;
+        let mut archive_file = fs::File::create(&archive_path).map_err(|e| {
+            SnapshotError::IoWithSourceAndFile(e, "create archive_path", archive_path.clone())
+        })?;
 
         let do_archive_files = |encoder: &mut dyn Write| -> Result<()> {
             let mut archive = tar::Builder::new(encoder);
             // Serialize the version and snapshots files before accounts so we can quickly determine the version
             // and other bank fields. This is necessary if we want to interleave unpacking with reconstruction
-            archive.append_path_with_name(
-                staging_dir.as_ref().join(SNAPSHOT_VERSION_FILENAME),
-                SNAPSHOT_VERSION_FILENAME,
-            )?;
+            let path_appended = staging_dir.as_ref().join(SNAPSHOT_VERSION_FILENAME);
+            archive
+                .append_path_with_name(&path_appended, SNAPSHOT_VERSION_FILENAME)
+                .map_err(|e| {
+                    SnapshotError::IoWithSourceAndFile(
+                        e,
+                        "append_path_with name",
+                        path_appended.clone(),
+                    )
+                })?;
             for dir in ["snapshots", "accounts"] {
                 archive.append_dir_all(dir, staging_dir.as_ref().join(dir))?;
             }
@@ -686,8 +701,11 @@ pub fn archive_snapshot_package(
             ArchiveFormat::TarBzip2 => {
                 let mut encoder =
                     bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
-                do_archive_files(&mut encoder)?;
-                encoder.finish()?;
+                do_archive_files(&mut encoder)
+                    .map_err(|e| SnapshotError::IoWithSource(e, "TarBzip2 do_archive_files"))?;
+                encoder
+                    .finish()
+                    .map_err(|e| SnapshotError::IoWithSource(e, "TarBzip2 encoder finish"))?;
             }
             ArchiveFormat::TarGzip => {
                 let mut encoder =
@@ -3068,7 +3086,13 @@ pub fn bank_to_incremental_snapshot_archive(
     }
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
-    let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
+    let temp_dir = tempfile::tempdir_in(bank_snapshots_dir).map_err(|e| {
+        SnapshotError::IoWithSourceAndFile(
+            e,
+            "create tempdir_in",
+            bank_snapshots_dir.as_ref().to_path_buf(),
+        )
+    })?;
     let snapshot_storages = bank.get_snapshot_storages(Some(full_snapshot_slot));
     let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let bank_snapshot_info = add_bank_snapshot(
