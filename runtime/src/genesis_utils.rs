@@ -26,7 +26,7 @@ pub fn bootstrap_validator_stake_lamports() -> u64 {
 
 // Number of lamports automatically used for genesis accounts
 pub const fn genesis_sysvar_and_builtin_program_lamports() -> u64 {
-    const NUM_BUILTIN_PROGRAMS: u64 = 4;
+    const NUM_BUILTIN_PROGRAMS: u64 = 7;
     const NUM_PRECOMPILES: u64 = 2;
     const FEES_SYSVAR_MIN_BALANCE: u64 = 946_560;
     const STAKE_HISTORY_MIN_BALANCE: u64 = 114_979_200;
