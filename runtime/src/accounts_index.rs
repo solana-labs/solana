@@ -1,6 +1,7 @@
 use {
     crate::{
         accounts_index_storage::{AccountsIndexStorage, Startup},
+        accounts_partition::RentPayingAccountsByPartition,
         ancestors::Ancestors,
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
@@ -8,7 +9,6 @@ use {
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
-        rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
         rolling_bit_field::RollingBitField,
         secondary_index::*,
     },
