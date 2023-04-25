@@ -5,8 +5,6 @@ pub mod deprecated;
 pub mod serialization;
 pub mod syscalls;
 pub mod upgradeable;
-pub mod upgradeable_with_jit;
-pub mod with_jit;
 
 use {
     solana_measure::measure::Measure,
@@ -431,19 +429,6 @@ fn create_memory_mapping<'a, 'b, C: ContextObject>(
 }
 
 pub fn process_instruction(
-    invoke_context: &mut InvokeContext,
-    _arg0: u64,
-    _arg1: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _memory_mapping: &mut MemoryMapping,
-    result: &mut ProgramResult,
-) {
-    *result = process_instruction_inner(invoke_context).into();
-}
-
-pub fn process_instruction_jit(
     invoke_context: &mut InvokeContext,
     _arg0: u64,
     _arg1: u64,
