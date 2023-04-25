@@ -222,17 +222,6 @@ impl RepairRequestHeader {
             nonce,
         }
     }
-
-    #[cfg(test)]
-    pub fn default_for_tests() -> Self {
-        Self {
-            signature: Signature::default(),
-            sender: Pubkey::default(),
-            recipient: Pubkey::default(),
-            timestamp: timestamp(),
-            nonce: Nonce::default(),
-        }
-    }
 }
 
 pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
@@ -676,15 +665,16 @@ impl ServeRepair {
         for mut more in requests_receiver.try_iter() {
             total_requests += more.len();
             if well_formed_requests > max_buffered_packets {
+                // Already exceeded max. Don't waste time discarding
                 dropped_requests += more.len();
+                continue;
+            }
+            let retained = discard_malformed_repair_requests(&mut more, stats);
+            well_formed_requests += retained;
+            if retained > 0 && well_formed_requests <= max_buffered_packets {
+                reqs_v.push(more);
             } else {
-                let retained = discard_malformed_repair_requests(&mut more, stats);
-                well_formed_requests += retained;
-                if retained > 0 && well_formed_requests <= max_buffered_packets {
-                    reqs_v.push(more);
-                } else {
-                    dropped_requests += more.len();
-                }
+                dropped_requests += more.len();
             }
         }
 
@@ -1444,6 +1434,16 @@ mod tests {
         }
     }
 
+    fn repair_request_header_for_tests() -> RepairRequestHeader {
+        RepairRequestHeader {
+            signature: Signature::default(),
+            sender: Pubkey::default(),
+            recipient: Pubkey::default(),
+            timestamp: timestamp(),
+            nonce: Nonce::default(),
+        }
+    }
+
     #[test]
     fn test_check_well_formed_repair_request() {
         let mut rng = rand::thread_rng();
@@ -1464,7 +1464,7 @@ mod tests {
         assert_eq!(stats.err_malformed, 1);
 
         let request = RepairProtocol::WindowIndex {
-            header: RepairRequestHeader::default_for_tests(),
+            header: repair_request_header_for_tests(),
             slot: 123,
             shred_index: 456,
         };
@@ -1481,7 +1481,7 @@ mod tests {
         assert_eq!(stats.err_malformed, 1);
 
         let request = RepairProtocol::AncestorHashes {
-            header: RepairRequestHeader::default_for_tests(),
+            header: repair_request_header_for_tests(),
             slot: 123,
         };
         let mut pkt = Packet::from_data(None, &request).unwrap();
