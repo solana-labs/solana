@@ -14,10 +14,10 @@ use {
 // Eager rent collection repeats in cyclic manner.
 // Each cycle is composed of <partition_count> number of tiny pubkey subranges
 // to scan, which is always multiple of the number of slots in epoch.
-pub(crate) type PartitionIndex = u64;
-pub type PartitionsPerCycle = u64;
+type PartitionIndex = u64;
+type PartitionsPerCycle = u64;
 pub(crate) type Partition = (PartitionIndex, PartitionIndex, PartitionsPerCycle);
-pub(super) type RentCollectionCycleParams = (
+pub(crate) type RentCollectionCycleParams = (
     Epoch,
     SlotCount,
     bool,
