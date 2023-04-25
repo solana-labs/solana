@@ -85,4 +85,5 @@ crate-type = ["cdylib", "rlib"]
 default = []
 
 [package.metadata.cargo-udeps.ignore]
-development = ["anyhow", "tiny-bip39"]
+normal = ["tiny-bip39"]
+development = ["anyhow"]
