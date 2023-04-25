@@ -76,13 +76,13 @@ impl AccountsPackage {
         }
 
         let bank_snapshot_dir = &bank_snapshot_info.snapshot_dir;
-        let snapshot_links = bank_snapshot_dir
+        let bank_snapshots_dir = bank_snapshot_dir
             .parent()
             .ok_or_else(|| SnapshotError::InvalidSnapshotDirPath(bank_snapshot_dir.to_path_buf()))?
             .to_path_buf();
 
         let snapshot_info = SupplementalSnapshotInfo {
-            snapshot_links,
+            snapshot_links: bank_snapshots_dir,
             archive_format,
             snapshot_version,
             full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
