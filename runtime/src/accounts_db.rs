@@ -5912,7 +5912,10 @@ impl AccountsDb {
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
     ) {
         // Slot purged from cache should not exist in the backing store
-        assert!(self.storage.get_slot_storage_entry(purged_slot).is_none());
+        assert!(self
+            .storage
+            .get_slot_storage_entry_shrinking_in_progress_ok(purged_slot)
+            .is_none());
         let num_purged_keys = pubkey_to_slot_set.len();
         let (reclaims, _) = self.purge_keys_exact(pubkey_to_slot_set.iter());
         assert_eq!(reclaims.len(), num_purged_keys);
