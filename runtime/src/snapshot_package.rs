@@ -170,9 +170,7 @@ impl AccountsPackage {
 
     /// Returns the path to the snapshot links directory
     ///
-    /// NOTE 1: This path is within the TempDir created for the AccountsPackage, *not* the bank
-    ///         snapshots dir passed into `new_for_snapshot()` when creating the AccountsPackage.
-    /// NOTE 2: This fn will panic if the AccountsPackage is of type EpochAccountsHash.
+    /// NOTE: This fn will panic if the AccountsPackage is of type EpochAccountsHash.
     pub fn snapshot_links_dir(&self) -> &Path {
         match self.package_type {
             AccountsPackageType::AccountsHashVerifier | AccountsPackageType::Snapshot(..) => self
