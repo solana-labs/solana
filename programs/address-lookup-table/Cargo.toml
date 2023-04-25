@@ -22,7 +22,7 @@ solana-program = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
-solana-program-runtime = { workspace = true }
+solana-program-runtime = { workspace = true, no-default-features = true }
 solana-sdk = { workspace = true }
 
 [build-dependencies]
