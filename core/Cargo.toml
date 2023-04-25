@@ -22,7 +22,6 @@ crossbeam-channel = { workspace = true }
 dashmap = { workspace = true, features = ["rayon", "raw-api"] }
 eager = { workspace = true }
 etcd-client = { workspace = true, features = ["tls"] }
-fs_extra = { workspace = true }
 histogram = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
@@ -71,6 +70,7 @@ tokio = { workspace = true, features = ["full"] }
 trees = { workspace = true }
 
 [dev-dependencies]
+fs_extra = { workspace = true }
 matches = { workspace = true }
 raptorq = { workspace = true }
 serde_json = { workspace = true }
