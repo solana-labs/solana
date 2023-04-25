@@ -5,8 +5,6 @@ pub mod deprecated;
 pub mod serialization;
 pub mod syscalls;
 pub mod upgradeable;
-pub mod upgradeable_with_jit;
-pub mod with_jit;
 
 use {
     solana_measure::measure::Measure,
@@ -79,7 +77,6 @@ pub fn load_program_from_bytes(
     loader_key: &Pubkey,
     account_size: usize,
     deployment_slot: Slot,
-    use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
     debugging_features: bool,
 ) -> Result<LoadedProgram, InstructionError> {
@@ -99,13 +96,11 @@ pub fn load_program_from_bytes(
     })?;
     register_syscalls_time.stop();
     load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
-
     let effective_slot = if feature_set.is_active(&delay_visibility_of_program_deployment::id()) {
         deployment_slot.saturating_add(1)
     } else {
         deployment_slot
     };
-
     let loaded_program = LoadedProgram::new(
         loader_key,
         loader,
@@ -114,7 +109,6 @@ pub fn load_program_from_bytes(
         None,
         programdata,
         account_size,
-        use_jit,
         load_program_metrics,
     )
     .map_err(|err| {
@@ -160,7 +154,6 @@ pub fn load_program_from_account(
     tx_executor_cache: Option<RefMut<TransactionExecutorCache>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
-    use_jit: bool,
     debugging_features: bool,
 ) -> Result<(Arc<LoadedProgram>, Option<LoadProgramMetrics>), InstructionError> {
     if !check_loader_id(program.get_owner()) {
@@ -208,7 +201,6 @@ pub fn load_program_from_account(
         program.get_owner(),
         program.get_data().len().saturating_add(programdata_size),
         deployment_slot,
-        use_jit,
         false, /* reject_deployment_of_broken_elfs */
         debugging_features,
     )?);
@@ -226,7 +218,7 @@ pub fn load_program_from_account(
 }
 
 macro_rules! deploy_program {
-    ($invoke_context:expr, $use_jit:expr, $program_id:expr, $loader_key:expr,
+    ($invoke_context:expr, $program_id:expr, $loader_key:expr,
      $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
         let delay_visibility_of_program_deployment = $invoke_context
             .feature_set
@@ -241,7 +233,6 @@ macro_rules! deploy_program {
             $loader_key,
             $account_size,
             $slot,
-            $use_jit,
             true, /* reject_deployment_of_broken_elfs */
             false, /* debugging_features */
         )?;
@@ -447,25 +438,11 @@ pub fn process_instruction(
     _memory_mapping: &mut MemoryMapping,
     result: &mut ProgramResult,
 ) {
-    *result = process_instruction_inner(invoke_context, false).into();
-}
-
-pub fn process_instruction_jit(
-    invoke_context: &mut InvokeContext,
-    _arg0: u64,
-    _arg1: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _memory_mapping: &mut MemoryMapping,
-    result: &mut ProgramResult,
-) {
-    *result = process_instruction_inner(invoke_context, true).into();
+    *result = process_instruction_inner(invoke_context).into();
 }
 
 fn process_instruction_inner(
     invoke_context: &mut InvokeContext,
-    use_jit: bool,
 ) -> Result<u64, Box<dyn std::error::Error>> {
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
@@ -562,12 +539,12 @@ fn process_instruction_inner(
             if native_programs_consume_cu {
                 invoke_context.consume_checked(2_370)?;
             }
-            process_loader_upgradeable_instruction(invoke_context, use_jit)
+            process_loader_upgradeable_instruction(invoke_context)
         } else if bpf_loader::check_id(program_id) {
             if native_programs_consume_cu {
                 invoke_context.consume_checked(570)?;
             }
-            process_loader_instruction(invoke_context, use_jit)
+            process_loader_instruction(invoke_context)
         } else if bpf_loader_deprecated::check_id(program_id) {
             if native_programs_consume_cu {
                 invoke_context.consume_checked(1_140)?;
@@ -609,7 +586,6 @@ fn process_instruction_inner(
         Some(invoke_context.tx_executor_cache.borrow_mut()),
         &program_account,
         programdata_account.as_ref().unwrap_or(&program_account),
-        use_jit,
         false, /* debugging_features */
     )?;
     drop(program_account);
@@ -639,7 +615,6 @@ fn process_instruction_inner(
 
 fn process_loader_upgradeable_instruction(
     invoke_context: &mut InvokeContext,
-    use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
@@ -823,7 +798,6 @@ fn process_loader_upgradeable_instruction(
                 instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
             deploy_program!(
                 invoke_context,
-                use_jit,
                 new_program_id,
                 &owner_id,
                 UpgradeableLoaderState::size_of_program().saturating_add(programdata_len),
@@ -1012,7 +986,6 @@ fn process_loader_upgradeable_instruction(
                 instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
             deploy_program!(
                 invoke_context,
-                use_jit,
                 new_program_id,
                 program_id,
                 UpgradeableLoaderState::size_of_program().saturating_add(programdata_len),
@@ -1502,10 +1475,7 @@ fn common_close_account(
     Ok(())
 }
 
-fn process_loader_instruction(
-    invoke_context: &mut InvokeContext,
-    use_jit: bool,
-) -> Result<(), InstructionError> {
+fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -1535,7 +1505,6 @@ fn process_loader_instruction(
             }
             deploy_program!(
                 invoke_context,
-                use_jit,
                 *program.get_key(),
                 program.get_owner(),
                 program.get_data().len(),
@@ -4044,7 +4013,6 @@ mod tests {
         file.read_to_end(&mut elf).unwrap();
         deploy_program!(
             invoke_context,
-            false,
             program_id,
             &bpf_loader_upgradeable::id(),
             elf.len(),

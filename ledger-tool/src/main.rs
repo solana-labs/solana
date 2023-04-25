@@ -1462,10 +1462,6 @@ fn main() {
         .long("no-snapshot")
         .takes_value(false)
         .help("Do not start from a local snapshot if present");
-    let no_bpf_jit_arg = Arg::with_name("no_bpf_jit")
-        .long("no-bpf-jit")
-        .takes_value(false)
-        .help("Disable the just-in-time compiler and instead use the interpreter for BP");
     let accounts_index_bins = Arg::with_name("accounts_index_bins")
         .long("accounts-index-bins")
         .value_name("BINS")
@@ -1960,7 +1956,6 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
             .arg(&no_os_memory_stats_reporting_arg)
-            .arg(&no_bpf_jit_arg)
             .arg(&allow_dead_slots_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&debug_key_arg)
@@ -2948,10 +2943,7 @@ fn main() {
                     accounts_db_test_hash_calculation: arg_matches
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
-                    runtime_config: RuntimeConfig {
-                        bpf_jit: !arg_matches.is_present("no_bpf_jit"),
-                        ..RuntimeConfig::default()
-                    },
+                    runtime_config: RuntimeConfig::default(),
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");

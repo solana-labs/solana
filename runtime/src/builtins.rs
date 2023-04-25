@@ -1,6 +1,6 @@
 use {
     solana_program_runtime::builtin_program::BuiltinProgram,
-    solana_sdk::{feature_set, pubkey::Pubkey, stake},
+    solana_sdk::{feature_set, pubkey::Pubkey},
 };
 
 #[derive(Clone, Debug)]
@@ -86,7 +86,7 @@ fn genesis_builtins() -> Vec<BuiltinProgram> {
         },
         BuiltinProgram {
             name: "stake_program".to_string(),
-            program_id: stake::program::id(),
+            program_id: solana_stake_program::id(),
             process_instruction: solana_stake_program::stake_instruction::process_instruction,
         },
         BuiltinProgram {

@@ -157,7 +157,6 @@ impl LoadedProgram {
         maybe_expiration_slot: Option<Slot>,
         elf_bytes: &[u8],
         account_size: usize,
-        use_jit: bool,
         metrics: &mut LoadProgramMetrics,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut load_elf_time = Measure::start("load_elf_time");
@@ -181,19 +180,17 @@ impl LoadedProgram {
         verify_code_time.stop();
         metrics.verify_code_us = verify_code_time.as_us();
 
-        if use_jit {
-            #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-            {
-                let mut jit_compile_time = Measure::start("jit_compile_time");
-                match &mut program {
-                    LoadedProgramType::LegacyV0(executable) => executable.jit_compile(),
-                    LoadedProgramType::LegacyV1(executable) => executable.jit_compile(),
-                    LoadedProgramType::Typed(executable) => executable.jit_compile(),
-                    _ => Err(EbpfError::JitNotCompiled),
-                }?;
-                jit_compile_time.stop();
-                metrics.jit_compile_us = jit_compile_time.as_us();
-            }
+        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+        {
+            let mut jit_compile_time = Measure::start("jit_compile_time");
+            match &mut program {
+                LoadedProgramType::LegacyV0(executable) => executable.jit_compile(),
+                LoadedProgramType::LegacyV1(executable) => executable.jit_compile(),
+                LoadedProgramType::Typed(executable) => executable.jit_compile(),
+                _ => Err(EbpfError::JitNotCompiled),
+            }?;
+            jit_compile_time.stop();
+            metrics.jit_compile_us = jit_compile_time.as_us();
         }
 
         Ok(Self {

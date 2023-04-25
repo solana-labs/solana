@@ -1135,12 +1135,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 ),
         )
         .arg(
-            Arg::with_name("no_bpf_jit")
-                .long("no-bpf-jit")
-                .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for SBF"),
-        )
-        .arg(
             Arg::with_name("poh_pinned_cpu_core")
                 .hidden(hidden_unless_forced())
                 .long("experimental-poh-pinned-cpu-core")
@@ -1716,10 +1710,6 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .help("Enables faster starting of validators by skipping startup clean and shrink."),
         usage_warning: "Enabled by default",
     );
-    add_arg!(Arg::with_name("bpf_jit")
-        .long("bpf-jit")
-        .takes_value(false)
-        .conflicts_with("no_bpf_jit"));
     add_arg!(
         Arg::with_name("disable_quic_servers")
             .long("disable-quic-servers")
@@ -2222,12 +2212,6 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                         (see also the `--account` flag). \
                         If the ledger already exists then this parameter is silently ignored",
                 ),
-        )
-        .arg(
-            Arg::with_name("no_bpf_jit")
-                .long("no-bpf-jit")
-                .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for SBF. Windows always disables JIT."),
         )
         .arg(
             Arg::with_name("ticks_per_slot")
