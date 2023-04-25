@@ -6,6 +6,7 @@
 #[macro_use]
 extern crate eager;
 
+#[cfg(feature = "metrics")]
 #[macro_use]
 extern crate solana_metrics;
 

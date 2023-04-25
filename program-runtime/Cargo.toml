@@ -25,10 +25,14 @@ serde = { version = "1.0.159", features = ["derive", "rc"] }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-measure = { workspace = true }
-solana-metrics = { workspace = true }
+solana-metrics = { workspace = true, optional = true }
 solana-sdk = { workspace = true }
 solana_rbpf = { workspace = true }
 thiserror = { workspace = true }
+
+[features]
+default = ["metrics"]
+metrics = ["dep:solana-metrics"]
 
 [dev-dependencies]
 solana-logger = { workspace = true }

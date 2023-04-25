@@ -1,6 +1,7 @@
+#[cfg(feature = "metrics")]
+use log::*;
 use {
     crate::loaded_programs::{LoadedProgram, LoadedProgramType},
-    log::*,
     rand::Rng,
     solana_sdk::{pubkey::Pubkey, saturating_add_assign, slot_history::Slot, stake_history::Epoch},
     std::{
@@ -318,6 +319,7 @@ pub struct Stats {
 
 impl Stats {
     /// Logs the measurement values
+    #[cfg(feature = "metrics")]
     pub fn submit(&self, slot: Slot) {
         let hits = self.hits.load(Relaxed);
         let misses = self.misses.load(Relaxed);

@@ -1,7 +1,9 @@
+#[cfg(feature = "metrics")]
+use solana_sdk::clock::Slot;
 use {
     core::fmt,
     enum_iterator::Sequence,
-    solana_sdk::{clock::Slot, pubkey::Pubkey, saturating_add_assign},
+    solana_sdk::{pubkey::Pubkey, saturating_add_assign},
     std::{
         collections::HashMap,
         ops::{Index, IndexMut},
@@ -285,6 +287,7 @@ pub struct ThreadExecuteTimings {
 }
 
 impl ThreadExecuteTimings {
+    #[cfg(feature = "metrics")]
     pub fn report_stats(&self, slot: Slot) {
         lazy! {
             datapoint_info!(
