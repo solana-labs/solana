@@ -679,10 +679,12 @@ impl ServeRepair {
                 dropped_requests += more.len();
             } else {
                 let retained = discard_malformed_repair_requests(&mut more, stats);
-                if retained > 0 {
-                    reqs_v.push(more);
-                }
                 well_formed_requests += retained;
+                if retained > 0 && well_formed_requests <= max_buffered_packets {
+                    reqs_v.push(more);
+                } else {
+                    dropped_requests += more.len();
+                }
             }
         }
 
