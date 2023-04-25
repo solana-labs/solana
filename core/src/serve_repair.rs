@@ -1,7 +1,7 @@
 use {
     crate::{
         cluster_slots::ClusterSlots,
-        duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
+        duplicate_repair_status::get_ancestor_hash_repair_sample_size,
         repair_response,
         repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
         request_response::RequestResponse,
@@ -1113,7 +1113,7 @@ impl ServeRepair {
                 let addr = repair_peers[i].serve_repair().ok()?;
                 Some((*repair_peers[i].pubkey(), addr))
             })
-            .take(ANCESTOR_HASH_REPAIR_SAMPLE_SIZE)
+            .take(get_ancestor_hash_repair_sample_size())
             .collect();
         Ok(peers)
     }

@@ -401,6 +401,10 @@ impl RepairService {
                     }
                 });
                 if !popular_pruned_forks.is_empty() {
+                    warn!(
+                        "Notifying repair of popular pruned forks {:?}",
+                        popular_pruned_forks
+                    );
                     popular_pruned_forks_sender
                         .send(popular_pruned_forks)
                         .unwrap_or_else(|err| error!("failed to send popular pruned forks {err}"));
