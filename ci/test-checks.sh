@@ -46,6 +46,8 @@ echo --- build environment
   cargo audit --version
 
   grcov --version
+
+  sccache --version
 )
 
 export RUST_BACKTRACE=1

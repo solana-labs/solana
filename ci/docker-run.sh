@@ -54,7 +54,7 @@ if [[ -n $CI ]]; then
       # sccache-related bugs
       echo "--- $0 ... (with sccache being DISABLED due to many (${BUILDKITE_RETRY_COUNT}) retries)"
     else
-      echo "--- $0 ... (with sccache enabled)"
+      echo "--- $0 ... (with sccache enabled with prefix: $SCCACHE_S3_KEY_PREFIX)"
       # sccache
       ARGS+=(
         --env "RUSTC_WRAPPER=/usr/local/cargo/bin/sccache"
