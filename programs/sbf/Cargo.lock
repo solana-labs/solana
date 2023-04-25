@@ -4922,6 +4922,7 @@ dependencies = [
  "bv",
  "either",
  "generic-array 0.14.7",
+ "getrandom 0.1.14",
  "im",
  "lazy_static",
  "log",

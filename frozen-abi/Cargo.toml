@@ -24,6 +24,7 @@ thiserror = { workspace = true }
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 either = { workspace = true, features = ["use_std"] }
 generic-array = { workspace = true, features = ["serde", "more_lengths"] }
+getrandom = { workspace = true, features = ["dummy"] }
 im = { workspace = true, features = ["rayon", "serde"] }
 memmap2 = { workspace = true }
 once_cell = { workspace = true, features = ["alloc", "race"] }
@@ -35,3 +36,6 @@ solana-logger = { workspace = true }
 
 [build-dependencies]
 rustc_version = { workspace = true }
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["getrandom"]
