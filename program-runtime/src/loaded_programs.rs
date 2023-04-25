@@ -1,7 +1,5 @@
 #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
 use solana_rbpf::error::EbpfError;
-#[cfg(feature = "metrics")]
-use {crate::timings::ExecuteDetailsTimings, solana_sdk::saturating_add_assign};
 use {
     crate::invoke_context::InvokeContext,
     itertools::Itertools,
@@ -26,6 +24,8 @@ use {
         },
     },
 };
+#[cfg(feature = "metrics")]
+use {crate::timings::ExecuteDetailsTimings, solana_sdk::saturating_add_assign};
 
 const MAX_LOADED_ENTRY_COUNT: usize = 256;
 const MAX_UNLOADED_ENTRY_COUNT: usize = 1024;
