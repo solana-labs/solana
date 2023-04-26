@@ -1342,10 +1342,6 @@ fn main() {
         .long("no-snapshot")
         .takes_value(false)
         .help("Do not start from a local snapshot if present");
-    let no_bpf_jit_arg = Arg::with_name("no_bpf_jit")
-        .long("no-bpf-jit")
-        .takes_value(false)
-        .help("Disable the just-in-time compiler and instead use the interpreter for BP");
     let accounts_index_bins = Arg::with_name("accounts_index_bins")
         .long("accounts-index-bins")
         .value_name("BINS")
