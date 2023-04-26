@@ -4155,13 +4155,14 @@ impl Bank {
                     return Ok(slot);
                 }
             }
-            return Err(TransactionError::ProgramAccountNotFound);
+            Err(TransactionError::ProgramAccountNotFound)
         } else if loader_v3::check_id(program.owner()) {
             let state = solana_loader_v3_program::get_state(program.data())
                 .map_err(|_| TransactionError::ProgramAccountNotFound)?;
-            return Ok(state.slot);
+            Ok(state.slot)
+        } else {
+            Ok(0)
         }
-        Ok(0)
     }
 
     #[allow(dead_code)] // Preparation for BankExecutorCache rework
