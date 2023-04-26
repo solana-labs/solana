@@ -17,7 +17,7 @@ use {
 pub(crate) type PartitionIndex = u64;
 type PartitionsPerCycle = u64;
 pub(crate) type Partition = (PartitionIndex, PartitionIndex, PartitionsPerCycle);
-pub(crate) type RentCollectionCycleParams = (
+type RentCollectionCycleParams = (
     Epoch,
     SlotCount,
     bool,
@@ -160,6 +160,23 @@ pub(crate) fn rent_single_epoch_collection_cycle_params(
         0,
         1,
         slot_count_per_epoch,
+    )
+}
+
+pub(crate) fn rent_multi_epoch_collection_cycle_params(
+    epoch: Epoch,
+    slot_count_per_epoch: SlotCount,
+    first_normal_epoch: Epoch,
+    epoch_count_in_cycle: Epoch,
+) -> RentCollectionCycleParams {
+    let partition_count = slot_count_per_epoch * epoch_count_in_cycle;
+    (
+        epoch,
+        slot_count_per_epoch,
+        true,
+        first_normal_epoch,
+        epoch_count_in_cycle,
+        partition_count,
     )
 }
 
