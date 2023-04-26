@@ -28,11 +28,13 @@ use {
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
+        accounts_hash_verifier::AccountsHashVerifier,
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
         validator::BlockVerificationMethod,
     },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
@@ -92,13 +94,17 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         shred_version::compute_shred_version,
+        signature::Signer,
+        signer::keypair::Keypair,
         stake::{self, state::StakeState},
         system_program,
+        timing::timestamp,
         transaction::{
             MessageHash, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
         },
     },
     solana_stake_program::stake_state::{self, PointValue},
+    solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::{
         self,
         vote_state::{self, VoteState},
@@ -1261,8 +1267,26 @@ fn load_bank_forks(
         block_verification_method,
     );
 
+    let exit = Arc::new(AtomicBool::new(false));
+    let node_id = Arc::new(Keypair::new());
+    let cluster_info = Arc::new(ClusterInfo::new(
+        ContactInfo::new_localhost(&node_id.pubkey(), timestamp()),
+        Arc::clone(&node_id),
+        SocketAddrSpace::Unspecified,
+    ));
+    let (accounts_package_sender, accounts_package_receiver) = crossbeam_channel::unbounded();
+    let accounts_hash_verifier = AccountsHashVerifier::new(
+        accounts_package_sender.clone(),
+        accounts_package_receiver,
+        None,
+        exit.clone(),
+        cluster_info,
+        None,
+        false,
+        None,
+        SnapshotConfig::new_load_only(),
+    );
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
-    let (accounts_package_sender, _accounts_package_receiver) = crossbeam_channel::unbounded();
     let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender.clone());
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: SnapshotConfig::new_load_only(),
@@ -1279,7 +1303,6 @@ fn load_bank_forks(
         snapshot_request_handler,
         pruned_banks_request_handler,
     };
-    let exit = Arc::new(AtomicBool::new(false));
     let accounts_background_service = AccountsBackgroundService::new(
         bank_forks.clone(),
         exit.clone(),
@@ -1323,6 +1346,7 @@ fn load_bank_forks(
 
     exit.store(true, Ordering::Relaxed);
     accounts_background_service.join().unwrap();
+    accounts_hash_verifier.join().unwrap();
     if let Some(service) = transaction_status_service {
         service.join().unwrap();
     }
