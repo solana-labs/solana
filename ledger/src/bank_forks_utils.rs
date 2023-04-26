@@ -15,7 +15,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::{FullSnapshotHash, IncrementalSnapshotHash, StartingSnapshotHashes},
-        snapshot_utils::{self, SnapshotFrom},
+        snapshot_utils::{self, BankSnapshotType, SnapshotFrom},
     },
     solana_sdk::genesis_config::GenesisConfig,
     std::{
@@ -217,12 +217,12 @@ fn bank_forks_from_snapshot(
         snapshot_utils::purge_old_bank_snapshots(
             &snapshot_config.bank_snapshots_dir,
             0,
-            BankSnapshotType: Pre,
+            Some(BankSnapshotType::Pre),
         );
         snapshot_utils::purge_old_bank_snapshots(
             &snapshot_config.bank_snapshots_dir,
             1,
-            BankSnapshotType: Post,
+            Some(BankSnapshotType::Post),
         );
 
         match snapshot_utils::bank_from_latest_snapshot_dir(
@@ -231,9 +231,7 @@ fn bank_forks_from_snapshot(
             &process_options.runtime_config,
             &account_paths,
             process_options.debug_keys.clone(),
-            Some(&crate::builtins::get(
-                process_options.runtime_config.bpf_jit,
-            )),
+            None,
             process_options.account_indexes.clone(),
             process_options.limit_load_slot_count_from_snapshot,
             process_options.shrink_ratio,
@@ -243,8 +241,8 @@ fn bank_forks_from_snapshot(
             exit,
         ) {
             Ok(bank) => {
-                if let Some(shrink_paths) = shrink_paths {
-                    bank.set_shrink_paths(shrink_paths);
+                if let Some(ref shrink_paths) = shrink_paths {
+                    bank.set_shrink_paths(shrink_paths.to_vec());
                 }
 
                 if let Some(full_snapshot_archive_info) =
@@ -252,25 +250,20 @@ fn bank_forks_from_snapshot(
                         &snapshot_config.full_snapshot_archives_dir,
                     )
                 {
-                    let full_snapshot_hash = FullSnapshotHash {
-                        hash: (
-                            full_snapshot_archive_info.slot(),
-                            *full_snapshot_archive_info.hash(),
-                        ),
-                    };
+                    let full_snapshot_hash = FullSnapshotHash((
+                        full_snapshot_archive_info.slot(),
+                        *full_snapshot_archive_info.hash(),
+                    ));
                     let incremental_snapshot_hash =
                         snapshot_utils::get_highest_incremental_snapshot_archive_info(
                             &snapshot_config.incremental_snapshot_archives_dir,
                             full_snapshot_archive_info.slot(),
                         )
                         .map(|incremental_snapshot_archive_info| {
-                            IncrementalSnapshotHash {
-                                base: full_snapshot_hash.hash,
-                                hash: (
-                                    incremental_snapshot_archive_info.slot(),
-                                    *incremental_snapshot_archive_info.hash(),
-                                ),
-                            }
+                            IncrementalSnapshotHash((
+                                full_snapshot_archive_info.slot(),
+                                *incremental_snapshot_archive_info.hash(),
+                            ))
                         });
                     let starting_snapshot_hashes = StartingSnapshotHashes {
                         full: full_snapshot_hash,
