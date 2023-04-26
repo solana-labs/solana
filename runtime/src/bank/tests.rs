@@ -30,7 +30,6 @@ use {
     rand::Rng,
     rayon::ThreadPoolBuilder,
     serde::{Deserialize, Serialize},
-    solana_bpf_loader_program::solana_bpf_loader_program,
     solana_logger,
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget, MAX_COMPUTE_UNIT_LIMIT},
@@ -6922,25 +6921,25 @@ fn test_bank_hash_consistency() {
         if bank.slot == 0 {
             assert_eq!(
                 bank.hash().to_string(),
-                "5gY6TCgB9NymbbxgFgAjvYLpXjyXiVyyruS1aEwbWKLK"
+                "FVZwMQ5YJiivwGctYDvPcoQrTECbUaNcmTnJeFDdb1a3"
             );
         }
         if bank.slot == 32 {
             assert_eq!(
                 bank.hash().to_string(),
-                "6uJ5C4QDXWCN39EjJ5Frcz73nnS2jMJ55KgkQff12Fqp"
+                "5AMuFif3LzgsBV8JXGVwdJpHbpZpYKRtcvyrfZjhMGvx"
             );
         }
         if bank.slot == 64 {
             assert_eq!(
                 bank.hash().to_string(),
-                "Ddk6ouAvSSA1U3Cw6BoKdM5v5LdRc9ShruGDzci9fKbY"
+                "GDmYzhnPdXoFLvbr88vPoVF5EYyUbCZJLMWBG9JJv8DQ"
             );
         }
         if bank.slot == 128 {
             assert_eq!(
                 bank.hash().to_string(),
-                "ANodC5vnedLWqeAyhcoErzR3ptNansb5YX6UTQ9cfP7S"
+                "J6Q2ng27mQMyDF2g7CbKSQDwZAeeaNnkUUZifax3FR9Y"
             );
             break;
         }
@@ -7164,7 +7163,7 @@ fn test_shrink_candidate_slots_cached() {
     // No more slots should be shrunk
     assert_eq!(bank2.shrink_candidate_slots(), 0);
     // alive_counts represents the count of alive accounts in the three slots 0,1,2
-    assert_eq!(alive_counts, vec![11, 1, 7]);
+    assert_eq!(alive_counts, vec![14, 1, 7]);
 }
 
 #[test]
@@ -7828,11 +7827,6 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000);
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.feature_set = Arc::new(FeatureSet::all_enabled());
-    bank.add_builtin(
-        "solana_bpf_loader_upgradeable_program",
-        &bpf_loader_upgradeable::id(),
-        solana_bpf_loader_program::process_instruction,
-    );
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -12752,8 +12746,6 @@ fn test_runtime_feature_enable_with_executor_cache() {
         .accounts
         .remove(&feature_set::reject_callx_r10::id());
     let mut root_bank = Bank::new_for_tests(&genesis_config);
-    let (name, id, entrypoint) = solana_bpf_loader_program!();
-    root_bank.add_builtin(&name, &id, entrypoint);
 
     // Test a basic transfer
     let amount = genesis_config.rent.minimum_balance(0);

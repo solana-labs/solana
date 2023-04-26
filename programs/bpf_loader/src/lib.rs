@@ -1,10 +1,8 @@
 #![deny(clippy::integer_arithmetic)]
 #![deny(clippy::indexing_slicing)]
 
-pub mod deprecated;
 pub mod serialization;
 pub mod syscalls;
-pub mod upgradeable;
 
 use {
     solana_measure::measure::Measure,
@@ -60,12 +58,6 @@ use {
         sync::{atomic::Ordering, Arc},
     },
 };
-
-solana_sdk::declare_builtin!(
-    solana_sdk::bpf_loader::ID,
-    solana_bpf_loader_program,
-    solana_bpf_loader_program::process_instruction
-);
 
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(

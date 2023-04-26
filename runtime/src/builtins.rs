@@ -1,6 +1,8 @@
 use {
     solana_program_runtime::builtin_program::BuiltinProgram,
-    solana_sdk::{feature_set, pubkey::Pubkey},
+    solana_sdk::{
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, feature_set, pubkey::Pubkey,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -93,6 +95,21 @@ fn genesis_builtins() -> Vec<BuiltinProgram> {
             name: "config_program".to_string(),
             program_id: solana_config_program::id(),
             process_instruction: solana_config_program::config_processor::process_instruction,
+        },
+        BuiltinProgram {
+            name: "solana_bpf_loader_deprecated_program".to_string(),
+            program_id: bpf_loader_deprecated::id(),
+            process_instruction: solana_bpf_loader_program::process_instruction,
+        },
+        BuiltinProgram {
+            name: "solana_bpf_loader_program".to_string(),
+            program_id: bpf_loader::id(),
+            process_instruction: solana_bpf_loader_program::process_instruction,
+        },
+        BuiltinProgram {
+            name: "solana_bpf_loader_upgradeable_program".to_string(),
+            program_id: bpf_loader_upgradeable::id(),
+            process_instruction: solana_bpf_loader_program::process_instruction,
         },
     ]
 }
