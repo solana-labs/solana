@@ -442,7 +442,6 @@ fn main() {
             enable_vote_subscription,
             ..PubSubConfig::default()
         })
-        .bpf_jit(!matches.is_present("no_bpf_jit"))
         .rpc_port(rpc_port)
         .add_upgradeable_programs_with_path(&upgradeable_programs_to_load)
         .add_accounts_from_json_files(&accounts_to_load)

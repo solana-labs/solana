@@ -440,7 +440,6 @@ pub struct ProgramTest {
     builtin_programs: BuiltinPrograms,
     compute_max_units: Option<u64>,
     prefer_bpf: bool,
-    use_bpf_jit: bool,
     deactivate_feature_set: HashSet<Pubkey>,
     transaction_account_lock_limit: Option<usize>,
 }
@@ -478,7 +477,6 @@ impl Default for ProgramTest {
             builtin_programs: BuiltinPrograms::default(),
             compute_max_units: None,
             prefer_bpf,
-            use_bpf_jit: false,
             deactivate_feature_set,
             transaction_account_lock_limit: None,
         }
@@ -523,11 +521,6 @@ impl ProgramTest {
     #[deprecated(since = "1.8.0", note = "please use `set_compute_max_units` instead")]
     pub fn set_bpf_compute_max_units(&mut self, bpf_compute_max_units: u64) {
         self.compute_max_units = Some(bpf_compute_max_units);
-    }
-
-    /// Execute the SBF program with JIT if true, interpreted if false
-    pub fn use_bpf_jit(&mut self, use_bpf_jit: bool) {
-        self.use_bpf_jit = use_bpf_jit;
     }
 
     /// Add an account to the test environment
@@ -785,7 +778,6 @@ impl ProgramTest {
         let mut bank = Bank::new_with_runtime_config_for_tests(
             &genesis_config,
             Arc::new(RuntimeConfig {
-                bpf_jit: self.use_bpf_jit,
                 compute_budget: self.compute_max_units.map(|max_units| ComputeBudget {
                     compute_unit_limit: max_units,
                     ..ComputeBudget::default()
@@ -802,13 +794,8 @@ impl ProgramTest {
             };
         }
         add_builtin!(solana_bpf_loader_deprecated_program!());
-        if self.use_bpf_jit {
-            add_builtin!(solana_bpf_loader_program_with_jit!());
-            add_builtin!(solana_bpf_loader_upgradeable_program_with_jit!());
-        } else {
-            add_builtin!(solana_bpf_loader_program!());
-            add_builtin!(solana_bpf_loader_upgradeable_program!());
-        }
+        add_builtin!(solana_bpf_loader_program!());
+        add_builtin!(solana_bpf_loader_upgradeable_program!());
 
         // Add commonly-used SPL programs as a convenience to the user
         for (program_id, account) in programs::spl_programs(&Rent::default()).iter() {

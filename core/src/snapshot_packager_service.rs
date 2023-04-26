@@ -182,23 +182,16 @@ impl SnapshotPackagerService {
 mod tests {
     use {
         super::*,
-        bincode::serialize_into,
         rand::seq::SliceRandom,
         solana_runtime::{
-            accounts_db::AccountStorageEntry,
-            bank::BankSlotDelta,
             snapshot_archive_info::SnapshotArchiveInfo,
             snapshot_hash::SnapshotHash,
             snapshot_package::{SnapshotPackage, SnapshotType},
-            snapshot_utils::{
-                self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
-                SNAPSHOT_STATUS_CACHE_FILENAME,
-            },
+            snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
         },
-        solana_sdk::{clock::Slot, hash::Hash},
+        solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash},
         std::{
-            fs::{self, remove_dir_all, OpenOptions},
-            io::Write,
+            fs::{self, remove_dir_all},
             path::{Path, PathBuf},
             time::Instant,
         },
@@ -231,107 +224,48 @@ mod tests {
     }
 
     fn create_and_verify_snapshot(temp_dir: &Path) {
-        let accounts_dir = temp_dir.join("accounts");
-        let accounts_dir = create_accounts_run_and_snapshot_dirs(accounts_dir)
-            .unwrap()
-            .0;
-
-        let snapshots_dir = temp_dir.join("snapshots");
+        let bank_snapshots_dir = temp_dir.join("snapshots");
+        fs::create_dir_all(&bank_snapshots_dir).unwrap();
         let full_snapshot_archives_dir = temp_dir.join("full_snapshot_archives");
         let incremental_snapshot_archives_dir = temp_dir.join("incremental_snapshot_archives");
         fs::create_dir_all(&full_snapshot_archives_dir).unwrap();
         fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap();
 
-        fs::create_dir_all(&accounts_dir).unwrap();
-        // Create some storage entries
-        let storage_entries: Vec<_> = (0..5)
-            .map(|i| Arc::new(AccountStorageEntry::new(&accounts_dir, 0, i, 10)))
-            .collect();
+        let num_snapshots = 1;
 
-        // Create some fake snapshot
-        let snapshots_paths: Vec<_> = (0..5)
-            .map(|i| {
-                let snapshot_file_name = format!("{i}");
-                let snapshots_dir = snapshots_dir.join(&snapshot_file_name);
-                fs::create_dir_all(&snapshots_dir).unwrap();
-                let fake_snapshot_path = snapshots_dir.join(&snapshot_file_name);
-                let mut fake_snapshot_file = OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .create(true)
-                    .open(&fake_snapshot_path)
-                    .unwrap();
-
-                fake_snapshot_file.write_all(b"Hello, world!").unwrap();
-                fake_snapshot_path
-            })
-            .collect();
-
-        // Create directory of hard links for snapshots
-        let link_snapshots_dir = tempfile::tempdir_in(temp_dir).unwrap();
-        for snapshots_path in snapshots_paths {
-            let snapshot_file_name = snapshots_path.file_name().unwrap();
-            let link_snapshots_dir = link_snapshots_dir.path().join(snapshot_file_name);
-            fs::create_dir_all(&link_snapshots_dir).unwrap();
-            let link_path = link_snapshots_dir.join(snapshot_file_name);
-            fs::hard_link(&snapshots_path, link_path).unwrap();
-        }
-
-        // Create a packageable snapshot
-        let slot = 42;
-        let hash = SnapshotHash(Hash::default());
-        let archive_format = ArchiveFormat::TarBzip2;
-        let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
-            &full_snapshot_archives_dir,
-            slot,
-            &hash,
-            archive_format,
+        let genesis_config = GenesisConfig::default();
+        let bank = snapshot_utils::create_snapshot_dirs_for_tests(
+            &genesis_config,
+            &bank_snapshots_dir,
+            num_snapshots,
+            num_snapshots,
         );
-        let snapshot_package = SnapshotPackage {
-            snapshot_archive_info: SnapshotArchiveInfo {
-                path: output_tar_path.clone(),
-                slot,
-                hash,
-                archive_format,
-            },
-            block_height: slot,
-            snapshot_links: link_snapshots_dir,
-            snapshot_storages: storage_entries,
-            snapshot_version: SnapshotVersion::default(),
-            snapshot_type: SnapshotType::FullSnapshot,
-            enqueued: Instant::now(),
-        };
 
-        // Make tarball from packageable snapshot
-        snapshot_utils::archive_snapshot_package(
-            &snapshot_package,
+        let bank_snapshot_info =
+            snapshot_utils::get_highest_bank_snapshot(&bank_snapshots_dir).unwrap();
+        let snapshot_storages = bank.get_snapshot_storages(None);
+        let archive_format = ArchiveFormat::TarBzip2;
+
+        let full_archive = snapshot_utils::package_and_archive_full_snapshot(
+            &bank,
+            &bank_snapshot_info,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
+            snapshot_storages,
+            archive_format,
+            SnapshotVersion::default(),
             snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
-        // before we compare, stick an empty status_cache in this dir so that the package comparison works
-        // This is needed since the status_cache is added by the packager and is not collected from
-        // the source dir for snapshots
-        let dummy_slot_deltas: Vec<BankSlotDelta> = vec![];
-        snapshot_utils::serialize_snapshot_data_file(
-            &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME),
-            |stream| {
-                serialize_into(stream, &dummy_slot_deltas)?;
-                Ok(())
-            },
-        )
-        .unwrap();
-
         // Check archive is correct
         snapshot_utils::verify_snapshot_archive(
-            output_tar_path,
-            snapshots_dir,
-            accounts_dir,
+            full_archive.path(),
+            bank_snapshots_dir,
             archive_format,
             snapshot_utils::VerifyBank::Deterministic,
+            bank_snapshot_info.slot,
         );
     }
 

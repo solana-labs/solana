@@ -258,9 +258,8 @@ before execting it in the virtual machine.",
             &bpf_loader::id(),
             contents.len(),
             Slot::default(),
-            false, /* use_jit */
-            true,  /* reject_deployment_of_broken_elfs */
-            true,  /* debugging_features */
+            true, /* reject_deployment_of_broken_elfs */
+            true, /* debugging_features */
         );
         match result {
             Ok(loaded_program) => match loaded_program.program {

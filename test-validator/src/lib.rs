@@ -121,7 +121,6 @@ pub struct TestValidatorGenesis {
     pubsub_config: PubSubConfig,
     rpc_ports: Option<(u16, u16)>, // (JsonRpc, JsonRpcPubSub), None == random ports
     warp_slot: Option<Slot>,
-    no_bpf_jit: bool,
     accounts: HashMap<Pubkey, AccountSharedData>,
     #[allow(deprecated)]
     programs: Vec<ProgramInfo>,
@@ -156,7 +155,6 @@ impl Default for TestValidatorGenesis {
             pubsub_config: PubSubConfig::default(),
             rpc_ports: Option::<(u16, u16)>::default(),
             warp_slot: Option::<Slot>::default(),
-            no_bpf_jit: bool::default(),
             accounts: HashMap::<Pubkey, AccountSharedData>::default(),
             #[allow(deprecated)]
             programs: Vec::<ProgramInfo>::default(),
@@ -253,11 +251,6 @@ impl TestValidatorGenesis {
 
     pub fn warp_slot(&mut self, warp_slot: Slot) -> &mut Self {
         self.warp_slot = Some(warp_slot);
-        self
-    }
-
-    pub fn bpf_jit(&mut self, bpf_jit: bool) -> &mut Self {
-        self.no_bpf_jit = !bpf_jit;
         self
     }
 
@@ -910,7 +903,6 @@ impl TestValidator {
         });
 
         let runtime_config = RuntimeConfig {
-            bpf_jit: !config.no_bpf_jit,
             compute_budget: config
                 .compute_unit_limit
                 .map(|compute_unit_limit| ComputeBudget {

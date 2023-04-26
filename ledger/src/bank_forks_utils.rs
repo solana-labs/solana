@@ -213,9 +213,7 @@ fn bank_forks_from_snapshot(
             genesis_config,
             &process_options.runtime_config,
             process_options.debug_keys.clone(),
-            Some(&crate::builtins::get(
-                process_options.runtime_config.bpf_jit,
-            )),
+            Some(&crate::builtins::get()),
             process_options.account_indexes.clone(),
             process_options.limit_load_slot_count_from_snapshot,
             process_options.shrink_ratio,

@@ -562,9 +562,9 @@ fn test_concurrent_snapshot_packaging(
     snapshot_utils::verify_snapshot_archive(
         saved_archive_path.unwrap(),
         saved_snapshots_dir.path(),
-        saved_accounts_dir.path(),
         ArchiveFormat::TarBzip2,
-        snapshot_utils::VerifyBank::NonDeterministic(saved_slot),
+        snapshot_utils::VerifyBank::NonDeterministic,
+        saved_slot,
     );
 }
 

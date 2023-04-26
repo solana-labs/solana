@@ -36,8 +36,8 @@ pub enum DigestError {
 }
 
 impl SerdeError for DigestError {
-    fn custom<T: std::fmt::Display>(_msg: T) -> DigestError {
-        unreachable!("This error should never be used");
+    fn custom<T: std::fmt::Display>(msg: T) -> DigestError {
+        panic!("Unexpected SerdeError: {msg}");
     }
 }
 
