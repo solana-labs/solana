@@ -1796,6 +1796,80 @@ mod tests {
     }
 
     #[test]
+    fn test_create_account_vote_state_1_14_11() {
+        let node_pubkey = Pubkey::new_unique();
+        let vote_pubkey = Pubkey::new_unique();
+        let instructions = create_account(
+            &node_pubkey,
+            &vote_pubkey,
+            &VoteInit {
+                node_pubkey,
+                authorized_voter: vote_pubkey,
+                authorized_withdrawer: vote_pubkey,
+                commission: 0,
+            },
+            101,
+        );
+        // grab the `space` value from SystemInstruction::CreateAccount by directly indexing, for
+        // expediency
+        let space = usize::from_le_bytes(instructions[0].data[12..20].try_into().unwrap());
+        assert_ne!(space, vote_state::VoteState1_14_11::size_of());
+        let empty_vote_account = AccountSharedData::new(101, space, &id());
+
+        let transaction_accounts = vec![
+            (vote_pubkey, empty_vote_account),
+            (node_pubkey, AccountSharedData::default()),
+            (sysvar::clock::id(), create_default_clock_account()),
+            (sysvar::rent::id(), create_default_rent_account()),
+        ];
+
+        // should fail, if vote_state_add_vote_latency is disabled
+        process_instruction_disabled_features(
+            &instructions[1].data,
+            transaction_accounts,
+            instructions[1].accounts.clone(),
+            Ok(()),
+        );
+    }
+
+    #[test]
+    fn test_create_account_vote_state_current() {
+        let node_pubkey = Pubkey::new_unique();
+        let vote_pubkey = Pubkey::new_unique();
+        let instructions = create_account(
+            &node_pubkey,
+            &vote_pubkey,
+            &VoteInit {
+                node_pubkey,
+                authorized_voter: vote_pubkey,
+                authorized_withdrawer: vote_pubkey,
+                commission: 0,
+            },
+            101,
+        );
+        // grab the `space` value from SystemInstruction::CreateAccount by directly indexing, for
+        // expediency
+        let space = usize::from_le_bytes(instructions[0].data[12..20].try_into().unwrap());
+        assert_eq!(space, vote_state::VoteState::size_of());
+        let empty_vote_account = AccountSharedData::new(101, space, &id());
+
+        let transaction_accounts = vec![
+            (vote_pubkey, empty_vote_account),
+            (node_pubkey, AccountSharedData::default()),
+            (sysvar::clock::id(), create_default_clock_account()),
+            (sysvar::rent::id(), create_default_rent_account()),
+        ];
+
+        // succeeds, since vote_state_add_vote_latency is enabled
+        process_instruction(
+            &instructions[1].data,
+            transaction_accounts,
+            instructions[1].accounts.clone(),
+            Ok(()),
+        );
+    }
+
+    #[test]
     fn test_vote_process_instruction() {
         solana_logger::setup();
         let instructions = create_account(
