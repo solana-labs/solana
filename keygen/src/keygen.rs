@@ -52,9 +52,6 @@ mod smallest_length_44_public_key {
     }
 }
 
-const NO_PASSPHRASE: &str = "";
-const DEFAULT_DERIVATION_PATH: &str = "m/44'/501'/0'/0'";
-
 struct GrindMatch {
     starts: String,
     ends: String,
