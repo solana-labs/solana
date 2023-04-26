@@ -6,7 +6,6 @@ use {
     fs_extra::dir::CopyOptions,
     itertools::Itertools,
     log::{info, trace},
-    snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN,
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier,
         snapshot_packager_service::SnapshotPackagerService,
@@ -32,6 +31,7 @@ use {
         snapshot_utils::{
             self, ArchiveFormat,
             SnapshotVersion::{self, V1_2_0},
+            MAX_BANK_SNAPSHOTS_TO_RETAIN,
         },
         status_cache::MAX_CACHE_ENTRIES,
     },
