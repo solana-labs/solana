@@ -3157,7 +3157,7 @@ pub fn package_and_archive_full_snapshot(
         .get_accounts_hash()
         .expect("accounts hash is required for snapshot");
     crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        accounts_package.snapshot_dir(),
+        accounts_package.bank_snapshot_dir(),
         accounts_package.slot,
         &accounts_hash,
         None,
@@ -3242,7 +3242,7 @@ pub fn package_and_archive_incremental_snapshot(
         };
 
     crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        accounts_package.snapshot_dir(),
+        accounts_package.bank_snapshot_dir(),
         accounts_package.slot,
         &accounts_hash_for_reserialize,
         bank_incremental_snapshot_persistence.as_ref(),

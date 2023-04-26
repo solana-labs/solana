@@ -167,7 +167,7 @@ impl AccountsPackage {
     /// Returns the path to the snapshot dir
     ///
     /// NOTE: This fn will panic if the AccountsPackage is of type EpochAccountsHash.
-    pub fn snapshot_dir(&self) -> &Path {
+    pub fn bank_snapshot_dir(&self) -> &Path {
         match self.package_type {
             AccountsPackageType::AccountsHashVerifier | AccountsPackageType::Snapshot(..) => self
                 .snapshot_info
