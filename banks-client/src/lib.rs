@@ -507,6 +507,32 @@ impl BanksClient {
             .get_fee_for_message_with_commitment_and_context(ctx, commitment, message)
             .map_err(Into::into)
     }
+
+    /// Return the reward interval from the most recently rooted bank
+    pub fn get_reward_interval(
+        &mut self,
+    ) -> impl Future<Output = Result<u64, BanksClientError>> + '_ {
+        self.get_reward_interval_with_commitment(CommitmentLevel::default())
+    }
+
+    /// Return the reward interval from most recent bank given the commit level
+    pub fn get_reward_interval_with_commitment(
+        &mut self,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<u64, BanksClientError>> + '_ {
+        self.get_reward_interval_with_commitment_and_context(context::current(), commitment)
+    }
+
+    /// Return the reward interval from most recent bank given the commit level and context
+    pub fn get_reward_interval_with_commitment_and_context(
+        &mut self,
+        ctx: Context,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<u64, BanksClientError>> + '_ {
+        self.inner
+            .get_reward_interval_with_commitment_and_context(ctx, commitment)
+            .map_err(Into::into)
+    }
 }
 
 pub async fn start_client<C>(transport: C) -> Result<BanksClient, BanksClientError>

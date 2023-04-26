@@ -368,8 +368,8 @@ pub mod fix_recent_blockhashes {
 pub mod update_rewards_from_cached_accounts {
     solana_sdk::declare_id!("28s7i3htzhahXQKqmS2ExzbEoUypg9krwvtK2M9UWXh9");
 }
-pub mod update_rewards_no_join {
-    solana_sdk::declare_id!("DhaAhXU9kGosmZQhSm3jWYR7x9p4scgN69P5dwHavSj8");
+pub mod enable_partitioned_epoch_reward {
+    solana_sdk::declare_id!("HCnE3xQoZtDz9dSVm3jKwJXioTb6zMRbgwCmGg3PHHk8");
 }
 
 pub mod spl_token_v3_4_0 {
@@ -739,7 +739,7 @@ lazy_static! {
         (executables_incur_cpi_data_cost::id(), "Executables incur CPI data costs"),
         (fix_recent_blockhashes::id(), "stop adding hashes for skipped slots to recent blockhashes"),
         (update_rewards_from_cached_accounts::id(), "update rewards from cached accounts"),
-        (update_rewards_no_join::id(), "update rewards avoid joining vote accounts and stake accounts"),
+        (enable_partitioned_epoch_reward::id(), "enable partitioned rewards at epoch bondary"),
         (spl_token_v3_4_0::id(), "SPL Token Program version 3.4.0 release #24740"),
         (spl_associated_token_account_v1_1_0::id(), "SPL Associated Token Account Program version 1.1.0 release #24741"),
         (default_units_per_instruction::id(), "Default max tx-wide compute units calculated per instruction"),

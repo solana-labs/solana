@@ -3483,6 +3483,68 @@ impl RpcClient {
             .await
     }
 
+    /// Returns information about the reward interval.
+    ///
+    /// This method uses the configured default [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`getRewardInterval`] RPC method.
+    ///
+    /// [`getRewardInterval`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrewardinterval
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_rpc_client_api::client_error::Error;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+    /// # futures::executor::block_on(async {
+    /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// let reward_interval = rpc_client.get_reward_interval().await?;
+    /// #     Ok::<(), Error>(())
+    /// # })?;
+    /// # Ok::<(), Error>(())
+    /// ```
+    pub async fn get_reward_interval(&self) -> ClientResult<u64> {
+        self.get_reward_interval_with_commitment(self.commitment())
+            .await
+    }
+
+    /// Returns information about the reward interval.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`getRewardInterval`] RPC method.
+    ///
+    /// [`getRewardInterval`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrewardinterval
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_rpc_client_api::client_error::Error;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_sdk::commitment_config::CommitmentConfig;
+    /// # futures::executor::block_on(async {
+    /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// let commitment_config = CommitmentConfig::processed();
+    /// let reward_interval = rpc_client.get_reward_interval_with_commitment(commitment_config).await?;
+    /// #     Ok::<(), Error>(())
+    /// # })?;
+    /// # Ok::<(), Error>(())
+    /// ```
+    pub async fn get_reward_interval_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> ClientResult<u64> {
+        self.send(
+            RpcRequest::GetRewardInterval,
+            json!([self.maybe_map_commitment(commitment_config).await?]),
+        )
+        .await
+    }
+
     /// Returns epoch schedule information from this cluster's genesis config.
     ///
     /// # RPC Reference

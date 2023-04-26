@@ -122,6 +122,36 @@ use {
     test_case::test_case,
 };
 
+impl StakeReward {
+    #[cfg(test)]
+    pub fn random() -> Self {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        Self {
+            stake_pubkey: Pubkey::new_unique(),
+            stake_reward_info: RewardInfo {
+                reward_type: RewardType::Staking,
+                lamports: rng.gen_range(1, 200),
+                post_balance: rng.gen_range(1, 2000),
+                commission: Some(rng.gen_range(1, 10)),
+            },
+
+            stake_account: AccountSharedData::new(
+                rng.gen_range(1, 255),
+                0,
+                &solana_vote_program::id(),
+            ),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn credit(&mut self, amount: u64) {
+        self.stake_reward_info.lamports = amount as i64;
+        self.stake_reward_info.post_balance += amount;
+        self.stake_account.checked_add_lamports(amount).unwrap();
+    }
+}
+
 #[test]
 fn test_race_register_tick_freeze() {
     solana_logger::setup();
@@ -11697,6 +11727,7 @@ fn test_rent_state_list_len() {
         &bank.feature_set,
         &FeeStructure::default(),
         None,
+        false,
         &HashMap::new(),
         &HashMap::new(),
     );
@@ -12970,4 +13001,104 @@ fn test_squash_timing_add_assign() {
     t0 += t1;
 
     assert!(t0 == expected);
+}
+
+/// Test partitioned_reward_enable feature
+#[test]
+fn test_partitioned_reward_enable() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    bank.set_partitioned_rewards_enable(true);
+    assert!(bank.partitioned_rewards_enabled());
+
+    bank.set_partitioned_rewards_enable(false);
+    assert!(!bank.partitioned_rewards_enabled());
+}
+
+/// Test that parition begin/end covers the whole index range
+#[test]
+fn test_get_epoch_reward_partition_begin_end() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let n: u64 = 65312;
+    let (begin, _) = bank.get_partition_begin_end(0, n);
+    assert_eq!(begin, 0);
+
+    let (_, end) = bank.get_partition_begin_end(bank.get_reward_credit_interval() - 1, n);
+    assert_eq!(end, n as usize);
+}
+
+/// Test partitioned stores of epoch rewards
+#[test]
+fn test_epoch_credit_rewards() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    // setup stake/vote accounts
+    let expected_num = 1234;
+
+    let mut stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::random())
+        .collect::<Vec<_>>();
+
+    bank.store_accounts((bank.slot(), &stake_rewards[..], bank.include_slot_in_hash()));
+
+    // Simulate rewards
+    let mut expected_rewards = 0;
+    for stake_reward in &mut stake_rewards {
+        stake_reward.credit(1);
+        expected_rewards += 1;
+    }
+
+    // Test partitioned stores
+    let mut total_num = 0;
+    let mut total_rewards = 0;
+
+    for partition_index in 0..bank.get_reward_credit_interval() {
+        let (num_accounts, reward) =
+            bank.store_stake_accounts_in_partition(&stake_rewards, partition_index);
+
+        let num_in_history =
+            bank.update_reward_history_in_partition(&stake_rewards, partition_index);
+        assert_eq!(num_accounts, num_in_history);
+        total_num += num_accounts;
+        total_rewards += reward;
+    }
+
+    assert_eq!(total_num, expected_num);
+    assert_eq!(total_rewards, expected_rewards);
+}
+
+/// Test get_reward_interval during normal epoch
+#[test]
+fn test_reward_interval_normal() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+    assert_eq!(bank.get_reward_calculation_interval(), 100);
+    assert_eq!(bank.get_reward_credit_interval(), 50);
+}
+
+/// Test get_reward_interval during small epoch
+#[test]
+fn test_reward_interval_cap() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+    assert_eq!(bank.get_reward_calculation_interval(), 3);
+    assert_eq!(bank.get_reward_credit_interval(), 1);
+}
+
+/// Test get_reward_interval during warm up epoch
+#[test]
+fn test_reward_interval_warmup() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+    assert_eq!(bank.get_reward_calculation_interval(), 1);
+    assert_eq!(bank.get_reward_credit_interval(), 1);
 }

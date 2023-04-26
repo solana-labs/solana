@@ -256,7 +256,7 @@ mod tests {
             bank_forks::BankForks,
             genesis_utils::{create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
         },
-        solana_sdk::{account::Account, pubkey::Pubkey, signature::Signer},
+        solana_sdk::{account::Account, pubkey::Pubkey, signature::Signer, system_transaction},
         solana_stake_program::stake_state,
         solana_vote_program::{
             vote_state::{self, process_slot_vote_unchecked, VoteStateVersions},
@@ -484,6 +484,60 @@ mod tests {
         }
         assert_eq!(rooted_stake.len(), 2);
         assert_eq!(get_highest_confirmed_root(rooted_stake, 100), 1)
+    }
+
+    #[test]
+    fn test_reward_accounts_lock() {
+        use solana_sdk::transaction::TransactionError::LockedRewardAccountsDuringRewardInterval;
+
+        let validator_vote_keypairs = ValidatorVoteKeypairs::new_rand();
+        let validator_keypairs = vec![&validator_vote_keypairs];
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
+            1_000_000_000,
+            &validator_keypairs,
+            vec![100; 1],
+        );
+
+        let node_key = &validator_vote_keypairs.node_keypair;
+        let stake_key = &validator_vote_keypairs.stake_keypair;
+
+        let bank0 = Bank::new_for_tests(&genesis_config);
+        let mut bank_forks = BankForks::new(bank0);
+
+        // Fill bank_forks with banks with votes landing in the next slot
+        // Create enough banks such that vote account will root slots 0 and 1
+        let mut reward_account_lock_hit = false;
+        for x in 0..33 {
+            let previous_bank = bank_forks.get(x).unwrap();
+            let bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), x + 1);
+            let vote = vote_transaction::new_vote_transaction(
+                vec![x],
+                previous_bank.hash(),
+                previous_bank.last_blockhash(),
+                &validator_vote_keypairs.node_keypair,
+                &validator_vote_keypairs.vote_keypair,
+                &validator_vote_keypairs.vote_keypair,
+                None,
+            );
+            bank.process_transaction(&vote).unwrap();
+
+            // Insert a transfer transaction to stake account to violate the
+            // LockedRewardAccountsDuringRewardInterval at the beginning of epoch 1.
+            if x == 32 {
+                let tx = system_transaction::transfer(
+                    node_key,
+                    &stake_key.pubkey(),
+                    1,
+                    bank.last_blockhash(),
+                );
+                // This should result in an error for `LockedRewardAccountsDuringRewardInterval`
+                let r = bank.process_transaction(&tx);
+                assert!(r == Err(LockedRewardAccountsDuringRewardInterval));
+                reward_account_lock_hit = true;
+            }
+            bank_forks.insert(bank);
+        }
+        assert!(reward_account_lock_hit);
     }
 
     #[test]

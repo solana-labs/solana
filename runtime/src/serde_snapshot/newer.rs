@@ -7,6 +7,7 @@ use {
     crate::{
         accounts_hash::AccountsHash,
         ancestors::AncestorsForSerialization,
+        bank::StakeReward,
         stakes::{serde_stakes_enum_compat, StakesEnum},
     },
     solana_measure::measure::Measure,
@@ -99,6 +100,8 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             is_delta: dvb.is_delta,
             incremental_snapshot_persistence: None,
             epoch_accounts_hash: None,
+            epoch_reward_calculator: None,
+            epoch_reward_calc_start: None,
         }
     }
 }
@@ -217,6 +220,14 @@ impl<'a> TypeContext<'a> for Context {
                 .bank
                 .get_epoch_accounts_hash_to_serialize()
                 .map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()),
+            serializable_bank
+                .bank
+                .get_epoch_reward_calculator_to_serialize()
+                .map(|epoch_reward_calculator| epoch_reward_calculator.clone()),
+            serializable_bank
+                .bank
+                .get_epoch_reward_calc_start_to_serialize()
+                .map(|epoch_reward_calc_start| epoch_reward_calc_start),
         )
             .serialize(serializer)
     }
@@ -341,8 +352,14 @@ impl<'a> TypeContext<'a> for Context {
         let incremental_snapshot_persistence = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.incremental_snapshot_persistence = incremental_snapshot_persistence;
 
-        let epoch_accounts_hash = ignore_eof_error(deserialize_from(stream))?;
+        let epoch_accounts_hash = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.epoch_accounts_hash = epoch_accounts_hash;
+
+        let epoch_reward_calculator = ignore_eof_error(deserialize_from(&mut stream))?;
+        bank_fields.epoch_reward_calculator = epoch_reward_calculator;
+
+        let epoch_reward_calc_start = ignore_eof_error(deserialize_from(stream))?;
+        bank_fields.epoch_reward_calc_start = epoch_reward_calc_start;
 
         Ok((bank_fields, accounts_db_fields))
     }
@@ -377,6 +394,8 @@ impl<'a> TypeContext<'a> for Context {
         let hard_forks = RwLock::new(std::mem::take(&mut rhs.hard_forks));
         let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
         let epoch_accounts_hash = rhs.epoch_accounts_hash.as_ref();
+        let epoch_reward_calculator = rhs.epoch_reward_calculator.as_ref();
+        let epoch_reward_calc_start = rhs.epoch_reward_calc_start.as_ref();
 
         let bank = SerializableVersionedBank {
             blockhash_queue: &blockhash_queue,
@@ -421,6 +440,8 @@ impl<'a> TypeContext<'a> for Context {
                 lamports_per_signature,
                 incremental_snapshot_persistence,
                 epoch_accounts_hash,
+                epoch_reward_calculator,
+                epoch_reward_calc_start,
             ),
         )
     }

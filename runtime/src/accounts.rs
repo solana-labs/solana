@@ -338,6 +338,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
+        in_reward_interval: bool,
         program_accounts: &HashMap<Pubkey, &Pubkey>,
         loaded_programs: &HashMap<Pubkey, Arc<LoadedProgram>>,
     ) -> Result<LoadedTransaction> {
@@ -473,6 +474,11 @@ impl Accounts {
                     } else if account.executable() && message.is_writable(i) {
                         error_counters.invalid_writable_account += 1;
                         return Err(TransactionError::InvalidWritableAccount);
+                    } else if message.is_writable(i)
+                        && solana_stake_program::check_id(account.owner())
+                    {
+                        error_counters.locked_reward_account += 1;
+                        return Err(TransactionError::LockedRewardAccountsDuringRewardInterval);
                     }
 
                     tx_rent += rent;
@@ -679,6 +685,7 @@ impl Accounts {
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
+        in_reward_interval: bool,
         program_accounts: &HashMap<Pubkey, &Pubkey>,
         loaded_programs: &HashMap<Pubkey, Arc<LoadedProgram>>,
     ) -> Vec<TransactionLoadResult> {
@@ -716,6 +723,7 @@ impl Accounts {
                         rent_collector,
                         feature_set,
                         account_overrides,
+                        in_reward_interval,
                         program_accounts,
                         loaded_programs,
                     ) {
@@ -1547,6 +1555,7 @@ mod tests {
             feature_set,
             fee_structure,
             None,
+            false,
             &HashMap::new(),
             &HashMap::new(),
         )
@@ -3351,6 +3360,7 @@ mod tests {
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
             account_overrides,
+            false,
             &HashMap::new(),
             &HashMap::new(),
         )

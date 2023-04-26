@@ -114,6 +114,7 @@ pub enum RpcRequest {
     SendTransaction,
     SimulateTransaction,
     SignVote,
+    GetRewardInterval,
 }
 
 #[allow(deprecated)]
@@ -190,6 +191,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::SendTransaction => "sendTransaction",
             RpcRequest::SimulateTransaction => "simulateTransaction",
             RpcRequest::SignVote => "signVote",
+            RpcRequest::GetRewardInterval => "getRewardInterval",
         };
 
         write!(f, "{method}")
@@ -334,6 +336,10 @@ mod tests {
         let test_request = RpcRequest::GetTokenLargestAccounts;
         let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getTokenLargestAccounts");
+
+        let test_request = RpcRequest::GetRewardInterval;
+        let request = test_request.build_request_json(1, Value::Null);
+        assert_eq!(request["method"], "getRewardInterval");
     }
 
     #[test]
