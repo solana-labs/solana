@@ -1,6 +1,4 @@
 #![cfg(test)]
-#[allow(deprecated)]
-use {itertools::Itertools, solana_sdk::sysvar::fees::Fees};
 use {
     super::{
         test_utils::{goto_end_of_slot, update_vote_account_timestamp},
@@ -123,6 +121,8 @@ use {
     },
     test_case::test_case,
 };
+#[allow(deprecated)]
+use {itertools::Itertools, solana_sdk::sysvar::fees::Fees};
 
 #[test]
 fn test_race_register_tick_freeze() {
