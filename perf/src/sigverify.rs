@@ -529,8 +529,8 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
             .collect::<Vec<&mut Packet>>()
             .par_chunks_mut(VERIFY_PACKET_CHUNK_SIZE)
             .for_each(|packets| {
-                packets.into_iter().for_each(|packet| {
-                    if !packet.meta().discard() && !verify_packet(*packet, reject_non_vote) {
+                packets.iter_mut().for_each(|packet| {
+                    if !packet.meta().discard() && !verify_packet(packet, reject_non_vote) {
                         packet.meta_mut().set_discard(true);
                     }
                 })
