@@ -71,9 +71,9 @@ struct SnapshotTestConfig {
     full_snapshot_archives_dir: TempDir,
     bank_snapshots_dir: TempDir,
     accounts_dir: PathBuf,
-    // keep TempDir::drop from running to retain that dir for the duration of test
-    #[allow(dead_code)]
-    accounts_tmp_dir: TempDir,
+    // as the underscore prefix indicates, this isn't explictly used; but it's needed to keep
+    // TempDir::drop from running to retain that dir for the duration of test
+    _accounts_tmp_dir: TempDir,
 }
 
 impl SnapshotTestConfig {
@@ -130,7 +130,7 @@ impl SnapshotTestConfig {
             full_snapshot_archives_dir,
             bank_snapshots_dir,
             accounts_dir,
-            accounts_tmp_dir,
+            _accounts_tmp_dir: accounts_tmp_dir,
         }
     }
 }
