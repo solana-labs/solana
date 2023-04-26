@@ -51,7 +51,7 @@ use {
         },
         accounts_hash::{AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash},
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
-        accounts_partition::{self, Partition, RentCollectionCycleParams},
+        accounts_partition::{self, Partition, PartitionIndex, RentCollectionCycleParams},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         bank::metrics::*,
@@ -5510,7 +5510,7 @@ impl Bank {
         &self,
         mut accounts: Vec<(Pubkey, AccountSharedData, Slot)>,
         rent_paying_pubkeys: Option<&HashSet<Pubkey>>,
-        partition_index: u64,
+        partition_index: PartitionIndex,
     ) -> CollectRentFromAccountsInfo {
         let mut rent_debits = RentDebits::default();
         let mut total_rent_collected_info = CollectedInfo::default();

@@ -1,4 +1,6 @@
 #![cfg(test)]
+#[allow(deprecated)]
+use solana_sdk::sysvar::fees::Fees;
 use {
     super::{
         test_utils::{goto_end_of_slot, update_vote_account_timestamp},
@@ -11,10 +13,7 @@ use {
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ITER_BATCH_SIZE,
         },
-        accounts_partition::{
-            partition_from_pubkey, variable_cycle_partition_from_previous_slot,
-            RentPayingAccountsByPartition,
-        },
+        accounts_partition::{self, PartitionIndex, RentPayingAccountsByPartition},
         ancestors::Ancestors,
         bank_client::BankClient,
         genesis_utils::{
@@ -28,6 +27,7 @@ use {
         transaction_error_metrics::TransactionErrorMetrics,
     },
     crossbeam_channel::{bounded, unbounded},
+    itertools::Itertools,
     rand::Rng,
     rayon::ThreadPoolBuilder,
     serde::{Deserialize, Serialize},
@@ -121,8 +121,6 @@ use {
     },
     test_case::test_case,
 };
-#[allow(deprecated)]
-use {itertools::Itertools, solana_sdk::sysvar::fees::Fees};
 
 #[test]
 fn test_race_register_tick_freeze() {
@@ -1547,8 +1545,10 @@ fn test_rent_collection_partitions(bank: &Bank) -> Vec<Partition> {
     let partitions = bank.rent_collection_partitions();
     let slot = bank.slot();
     if slot.saturating_sub(1) == bank.parent_slot() {
-        let partition =
-            variable_cycle_partition_from_previous_slot(bank.epoch_schedule(), bank.slot());
+        let partition = accounts_partition::variable_cycle_partition_from_previous_slot(
+            bank.epoch_schedule(),
+            bank.slot(),
+        );
         assert_eq!(
             partitions.last().unwrap(),
             &partition,
@@ -2053,7 +2053,7 @@ fn test_collect_rent_from_accounts() {
         let _result = later_bank.collect_rent_from_accounts(
             vec![(zero_lamport_pubkey, account, later_slot - 1)],
             None,
-            u64::default(),
+            PartitionIndex::default(),
         );
 
         let deltas = later_bank
@@ -12009,8 +12009,8 @@ fn test_get_rent_paying_pubkeys() {
 
     let pk1 = Pubkey::from([2; 32]);
     let pk2 = Pubkey::from([3; 32]);
-    let index1 = partition_from_pubkey(&pk1, n);
-    let index2 = partition_from_pubkey(&pk2, n);
+    let index1 = accounts_partition::partition_from_pubkey(&pk1, n);
+    let index2 = accounts_partition::partition_from_pubkey(&pk2, n);
     assert!(index1 > 0, "{}", index1);
     assert!(index2 > index1, "{index2}, {index1}");
 
