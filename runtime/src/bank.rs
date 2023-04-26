@@ -1159,6 +1159,13 @@ pub struct Bank {
 
     /// The start point for epoch reward calculation (parent_slot and parent_block height before the
     /// epoch boundary)
+    /// jwash: I'd probably prefer an enum here
+    /// type SlotBlockHeight {
+    /// slot: Slot,
+    /// block_height: u64};
+    /// enum:
+    /// Active(SlotBlockHeight)
+    /// Inactive
     epoch_reward_calc_start: Option<(Slot, u64)>,
 }
 
@@ -1560,13 +1567,14 @@ impl Bank {
 
     /// Return the interval for reward calculation.
     /// For synchronous reward calculation, return 1.
+    /// jwash: so we always spend just the first slot calculating and storage starts on the next slot?
     pub const fn get_reward_calculation_interval(&self) -> u64 {
         1
     }
 
     /// Calculate the reward credit interval.
     pub fn get_reward_credit_interval(&self) -> u64 {
-        const CHUNK_SIZE: usize = 4098;
+        const CHUNK_SIZE: usize = 4098; //jwash: 4096. comment why this is chosen
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
         } else {
@@ -1575,6 +1583,7 @@ impl Bank {
 
                 (n + CHUNK_SIZE - 1) / CHUNK_SIZE
             } else {
+                // jwash: why 0 when we will clamp to 1
                 0
             };
 
@@ -1883,6 +1892,7 @@ impl Bank {
 
         let mut rewards_metrics = RewardsMetrics::default();
 
+        /// jwash: refactor to put the measure around all of this
         let update_rewards_with_thread_pool_time = if self.partitioned_rewards_enabled() {
             info!("set epoch calc start: {} {}", parent_slot, parent_height);
             self.epoch_reward_calc_start = Some((parent_slot, parent_height));
@@ -3181,6 +3191,7 @@ impl Bank {
             metrics,
         );
 
+        // jwash: does `redeem_rewards` need to be factored out here?
         if let Some(point_value) = point_value {
             let (vote_account_rewards, stake_rewards) = self.redeem_rewards(
                 vote_with_stake_delegations_map,
@@ -8823,6 +8834,7 @@ impl Bank {
     }
 
     pub fn get_epoch_reward_calc_start_to_serialize(&self) -> Option<(Slot, u64)> {
+        // jwash: do we still need to do this?
         unimplemented!();
     }
 

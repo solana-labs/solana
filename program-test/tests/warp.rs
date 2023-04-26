@@ -289,6 +289,7 @@ async fn stake_rewards_bench_550_k() {
     stake_rewards_filter_bench_core(550_000, false).await;
 }
 
+// jwash: why filter here?
 async fn stake_rewards_filter_bench_core(num_stake_accounts: u64, filter: bool) {
     // Initialize and start the test network
     let mut program_test = ProgramTest::default();

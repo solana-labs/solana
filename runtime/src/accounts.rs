@@ -338,6 +338,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
+        // jwash: why is this here?
         in_reward_interval: bool,
         program_accounts: &HashMap<Pubkey, &Pubkey>,
         loaded_programs: &HashMap<Pubkey, Arc<LoadedProgram>>,

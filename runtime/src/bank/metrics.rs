@@ -15,6 +15,7 @@ pub(crate) struct NewEpochTimings {
 pub(crate) struct RewardsMetrics {
     pub(crate) load_vote_and_stake_accounts_us: AtomicU64,
     pub(crate) calculate_points_us: AtomicU64,
+    // jwash: not sure - should we duplicate this or reuse them?
     pub(crate) calculate_points2_us: AtomicU64,
     pub(crate) redeem_rewards_us: u64,
     pub(crate) redeem_rewards2_us: u64,
