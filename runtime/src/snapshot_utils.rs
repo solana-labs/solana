@@ -644,6 +644,10 @@ pub fn archive_snapshot_package(
     })?;
 
     let src_snapshot_dir = snapshot_package.snapshot_links.join(&slot_str);
+    // To be a source for symlinking and archiving, the path need to be an aboslute path
+    let src_snapshot_dir = src_snapshot_dir
+        .canonicalize()
+        .map_err(|_e| SnapshotError::InvalidSnapshotDirPath(src_snapshot_dir.clone()))?;
     let staging_snapshot_file = staging_snapshot_dir.join(&slot_str);
     let src_snapshot_file = src_snapshot_dir.join(slot_str);
     symlink::symlink_file(src_snapshot_file, staging_snapshot_file)
