@@ -646,15 +646,15 @@ pub fn archive_snapshot_package(
     let src_snapshot_dir = snapshot_package.snapshot_links.join(&slot_str);
     let staging_snapshot_file = staging_snapshot_dir.join(&slot_str);
     let src_snapshot_file = src_snapshot_dir.join(slot_str);
-    fs::hard_link(src_snapshot_file, staging_snapshot_file)
-        .map_err(|e| SnapshotError::IoWithSource(e, "create snapshot hardlink"))?;
+    symlink::symlink_file(src_snapshot_file, staging_snapshot_file)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create snapshot symlink"))?;
 
     // Following the existing archive format, the status cache is under snapshots/, not under <slot>/
     // like in the snapshot dir.
     let staging_status_cache = staging_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
     let src_status_cache = src_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-    fs::hard_link(src_status_cache, staging_status_cache)
-        .map_err(|e| SnapshotError::IoWithSource(e, "create status cache hardlink"))?;
+    symlink::symlink_file(src_status_cache, staging_status_cache)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create status cache symlink"))?;
 
     // Add the AppendVecs into the compressible list
     for storage in snapshot_package.snapshot_storages.iter() {
