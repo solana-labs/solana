@@ -149,7 +149,7 @@ pub(crate) fn get_partition_end_indexes(partition: &Partition) -> Vec<PartitionI
     }
 }
 
-pub(super) fn rent_single_epoch_collection_cycle_params(
+pub(crate) fn rent_single_epoch_collection_cycle_params(
     epoch: Epoch,
     slot_count_per_epoch: SlotCount,
 ) -> RentCollectionCycleParams {
@@ -163,7 +163,7 @@ pub(super) fn rent_single_epoch_collection_cycle_params(
     )
 }
 
-pub(super) fn get_partitions(
+pub(crate) fn get_partitions(
     slot: Slot,
     parent_slot: Slot,
     slot_count_in_two_day: SlotCount,
@@ -358,7 +358,7 @@ pub(crate) fn partition_from_pubkey(
 }
 
 lazy_static! {
-    pub static ref EMPTY_HASHSET: HashSet<Pubkey> = HashSet::default();
+    static ref EMPTY_HASHSET: HashSet<Pubkey> = HashSet::default();
 }
 
 /// populated at startup with the accounts that were found that are rent paying.
