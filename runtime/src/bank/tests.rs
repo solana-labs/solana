@@ -13,6 +13,7 @@ use {
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ITER_BATCH_SIZE,
         },
+        accounts_partition::{self, PartitionIndex, RentPayingAccountsByPartition},
         ancestors::Ancestors,
         bank_client::BankClient,
         genesis_utils::{
@@ -22,11 +23,11 @@ use {
         },
         inline_spl_token,
         rent_collector::RENT_EXEMPT_RENT_EPOCH,
-        rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
         status_cache::MAX_CACHE_ENTRIES,
         transaction_error_metrics::TransactionErrorMetrics,
     },
     crossbeam_channel::{bounded, unbounded},
+    itertools::Itertools,
     rand::Rng,
     rayon::ThreadPoolBuilder,
     serde::{Deserialize, Serialize},
@@ -1544,8 +1545,10 @@ fn test_rent_collection_partitions(bank: &Bank) -> Vec<Partition> {
     let partitions = bank.rent_collection_partitions();
     let slot = bank.slot();
     if slot.saturating_sub(1) == bank.parent_slot() {
-        let partition =
-            Bank::variable_cycle_partition_from_previous_slot(bank.epoch_schedule(), bank.slot());
+        let partition = accounts_partition::variable_cycle_partition_from_previous_slot(
+            bank.epoch_schedule(),
+            bank.slot(),
+        );
         assert_eq!(
             partitions.last().unwrap(),
             &partition,
@@ -1891,284 +1894,6 @@ fn test_rent_eager_under_fixed_cycle_for_development() {
             (0, 39, 432_000)
         ]
     );
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_minimal() {
-    let range = Bank::pubkey_range_from_partition((0, 0, 1));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([0x00; 32])..=Pubkey::new_from_array([0xff; 32])
-    );
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_maximum() {
-    let max = !0;
-
-    let range = Bank::pubkey_range_from_partition((0, 0, max));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([0x00; 32])
-            ..=Pubkey::new_from_array([
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let range = Bank::pubkey_range_from_partition((0, 1, max));
-    const ONE: u8 = 0x01;
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, ONE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
-        ])
-            ..=Pubkey::new_from_array([
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let range = Bank::pubkey_range_from_partition((max - 3, max - 2, max));
-    const FD: u8 = 0xfd;
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
-        ])
-            ..=Pubkey::new_from_array([
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, FD, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let range = Bank::pubkey_range_from_partition((max - 2, max - 1, max));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
-        ])..=pubkey_max_value()
-    );
-
-    fn should_cause_overflow(partition_count: u64) -> bool {
-        // Check `partition_width = (u64::max_value() + 1) / partition_count` is exact and
-        // does not have a remainder.
-        // This way, `partition_width * partition_count == (u64::max_value() + 1)`,
-        // so the test actually tests for overflow
-        (u64::max_value() - partition_count + 1) % partition_count == 0
-    }
-
-    let max_exact = 64;
-    // Make sure `max_exact` divides evenly when calculating `calculate_partition_width`
-    assert!(should_cause_overflow(max_exact));
-    // Make sure `max_inexact` doesn't divide evenly when calculating `calculate_partition_width`
-    let max_inexact = 10;
-    assert!(!should_cause_overflow(max_inexact));
-
-    for max in &[max_exact, max_inexact] {
-        let range = Bank::pubkey_range_from_partition((max - 1, max - 1, *max));
-        assert_eq!(range, pubkey_max_value()..=pubkey_max_value());
-    }
-}
-
-fn map_to_test_bad_range() -> std::collections::BTreeMap<Pubkey, i8> {
-    let mut map = std::collections::BTreeMap::new();
-    // when empty, std::collections::BTreeMap doesn't sanitize given range...
-    map.insert(solana_sdk::pubkey::new_rand(), 1);
-    map
-}
-
-#[test]
-#[should_panic(expected = "range start is greater than range end in BTreeMap")]
-fn test_rent_eager_bad_range() {
-    let test_map = map_to_test_bad_range();
-    let _ = test_map.range(
-        Pubkey::new_from_array([
-            0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x01,
-        ])
-            ..=Pubkey::new_from_array([
-                0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00,
-            ]),
-    );
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_noop_range() {
-    let test_map = map_to_test_bad_range();
-
-    let range = Bank::pubkey_range_from_partition((0, 0, 3));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([0x00; 32])
-            ..=Pubkey::new_from_array([
-                0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x54, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-
-    let range = Bank::pubkey_range_from_partition((1, 1, 3));
-    let same = Pubkey::new_from_array([
-        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00,
-    ]);
-    assert_eq!(range, same..=same);
-    let _ = test_map.range(range);
-
-    let range = Bank::pubkey_range_from_partition((2, 2, 3));
-    assert_eq!(range, pubkey_max_value()..=pubkey_max_value());
-    let _ = test_map.range(range);
-}
-
-fn pubkey_max_value() -> Pubkey {
-    let highest = Pubkey::from_str("JEKNVnkbo3jma5nREBBJCDoXFVeKkD56V3xKrvRmWxFG").unwrap();
-    let arr = Pubkey::new_from_array([0xff; 32]);
-    assert_eq!(highest, arr);
-    arr
-}
-
-#[test]
-fn test_rent_pubkey_range_max() {
-    // start==end && start != 0 is curious behavior. Verifying it here.
-    solana_logger::setup();
-    let range = Bank::pubkey_range_from_partition((1, 1, 3));
-    let p = Bank::partition_from_pubkey(range.start(), 3);
-    assert_eq!(p, 2);
-    let range = Bank::pubkey_range_from_partition((1, 2, 3));
-    let p = Bank::partition_from_pubkey(range.start(), 3);
-    assert_eq!(p, 2);
-    let range = Bank::pubkey_range_from_partition((2, 2, 3));
-    let p = Bank::partition_from_pubkey(range.start(), 3);
-    assert_eq!(p, 2);
-    let range = Bank::pubkey_range_from_partition((1, 1, 16));
-    let p = Bank::partition_from_pubkey(range.start(), 16);
-    assert_eq!(p, 2);
-    let range = Bank::pubkey_range_from_partition((1, 2, 16));
-    let p = Bank::partition_from_pubkey(range.start(), 16);
-    assert_eq!(p, 2);
-    let range = Bank::pubkey_range_from_partition((2, 2, 16));
-    let p = Bank::partition_from_pubkey(range.start(), 16);
-    assert_eq!(p, 3);
-    let range = Bank::pubkey_range_from_partition((15, 15, 16));
-    let p = Bank::partition_from_pubkey(range.start(), 16);
-    assert_eq!(p, 15);
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_dividable() {
-    let test_map = map_to_test_bad_range();
-    let range = Bank::pubkey_range_from_partition((0, 0, 2));
-
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([0x00; 32])
-            ..=Pubkey::new_from_array([
-                0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-
-    let range = Bank::pubkey_range_from_partition((0, 1, 2));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00
-        ])
-            ..=Pubkey::new_from_array([
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_not_dividable() {
-    solana_logger::setup();
-
-    let test_map = map_to_test_bad_range();
-    let range = Bank::pubkey_range_from_partition((0, 0, 3));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([0x00; 32])
-            ..=Pubkey::new_from_array([
-                0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x54, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-
-    let range = Bank::pubkey_range_from_partition((0, 1, 3));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00
-        ])
-            ..=Pubkey::new_from_array([
-                0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xa9, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-
-    let range = Bank::pubkey_range_from_partition((1, 2, 3));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00
-        ])
-            ..=Pubkey::new_from_array([
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_gap() {
-    solana_logger::setup();
-
-    let test_map = map_to_test_bad_range();
-    let range = Bank::pubkey_range_from_partition((120, 1023, 12345));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0x02, 0x82, 0x5a, 0x89, 0xd1, 0xac, 0x58, 0x9c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00
-        ])
-            ..=Pubkey::new_from_array([
-                0x15, 0x3c, 0x1d, 0xf1, 0xc6, 0x39, 0xef, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
 }
 
 impl Bank {
@@ -12273,17 +11998,6 @@ fn test_accounts_data_size_and_resize_transactions() {
 }
 
 #[test]
-fn test_get_partition_end_indexes() {
-    for n in 5..7 {
-        assert_eq!(vec![0], Bank::get_partition_end_indexes(&(0, 0, n)));
-        assert!(Bank::get_partition_end_indexes(&(1, 1, n)).is_empty());
-        assert_eq!(vec![1], Bank::get_partition_end_indexes(&(0, 1, n)));
-        assert_eq!(vec![1, 2], Bank::get_partition_end_indexes(&(0, 2, n)));
-        assert_eq!(vec![3, 4], Bank::get_partition_end_indexes(&(2, 4, n)));
-    }
-}
-
-#[test]
 fn test_get_rent_paying_pubkeys() {
     let lamports = 1;
     let bank = create_simple_test_bank(lamports);
@@ -12295,8 +12009,8 @@ fn test_get_rent_paying_pubkeys() {
 
     let pk1 = Pubkey::from([2; 32]);
     let pk2 = Pubkey::from([3; 32]);
-    let index1 = Bank::partition_from_pubkey(&pk1, n);
-    let index2 = Bank::partition_from_pubkey(&pk2, n);
+    let index1 = accounts_partition::partition_from_pubkey(&pk1, n);
+    let index2 = accounts_partition::partition_from_pubkey(&pk2, n);
     assert!(index1 > 0, "{}", index1);
     assert!(index2 > index1, "{index2}, {index1}");
 
