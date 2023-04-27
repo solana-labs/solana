@@ -3215,11 +3215,6 @@ impl Bank {
             metrics,
         );
 
-        // jwash: does `redeem_rewards` need to be factored out here?
-        // This is the old code path that use cache + join, not executed in the new partitioned reward code.
-        // jwash: I don't understand. is this called or not? based on the diff it looks like it is called by the old code path? I could be wrong.
-        // partitioned code calls a different version redeem_rewards2(...) line: 3401 because we
-        // don't do the join. so not using the vote_with_stake_delegations_map dashmap.
         if let Some(point_value) = point_value {
             let (vote_account_rewards, stake_rewards) = self.redeem_rewards(
                 vote_with_stake_delegations_map,
