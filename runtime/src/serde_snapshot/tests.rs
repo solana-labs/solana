@@ -330,7 +330,7 @@ fn test_bank_serialize_style(
         }
 
         assert!(reserialize_bank_with_new_accounts_hash(
-            temp_dir.path(),
+            temp_dir.path().join(slot.to_string()),
             slot,
             &accounts_hash,
             incremental.as_ref(),
