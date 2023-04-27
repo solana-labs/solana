@@ -5095,7 +5095,6 @@ dependencies = [
  "tarpc",
  "tokio",
  "tokio-serde",
- "tokio-stream",
 ]
 
 [[package]]
