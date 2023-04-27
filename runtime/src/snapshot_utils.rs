@@ -1229,7 +1229,7 @@ pub fn add_bank_snapshot(
                 .join(&slot_str);
             if account_snapshot_path.is_dir() {
                 // remove the account snapshot directory
-                fs::remove_dir_all(&account_snapshot_path)?;
+                move_and_async_delete_path(&account_snapshot_path);
             }
         }
     }
@@ -1354,7 +1354,7 @@ where
         // They should all be removed.
         for entry in fs::read_dir(accounts_hardlinks_dir)? {
             let dst_path = fs::read_link(entry?.path())?;
-            fs::remove_dir_all(dst_path)?;
+            move_and_async_delete_path(&dst_path);
         }
     }
     fs::remove_dir_all(bank_snapshot_dir)?;
