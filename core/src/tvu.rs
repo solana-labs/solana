@@ -426,7 +426,7 @@ pub mod tests {
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let max_complete_rewards_slot = Arc::new(AtomicU64::default());
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -476,7 +476,7 @@ pub mod tests {
             AbsRequestSender::default(),
             None,
             &Arc::new(ConnectionCache::default()),
-            &_ignored_prioritization_fee_cache,
+            &ignored_prioritization_fee_cache,
             BankingTracer::new_disabled(),
         )
         .expect("assume success");

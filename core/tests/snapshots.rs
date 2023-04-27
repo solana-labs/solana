@@ -71,6 +71,8 @@ struct SnapshotTestConfig {
     full_snapshot_archives_dir: TempDir,
     bank_snapshots_dir: TempDir,
     accounts_dir: PathBuf,
+    // as the underscore prefix indicates, this isn't explictly used; but it's needed to keep
+    // TempDir::drop from running to retain that dir for the duration of test
     _accounts_tmp_dir: TempDir,
 }
 
@@ -82,7 +84,7 @@ impl SnapshotTestConfig {
         full_snapshot_archive_interval_slots: Slot,
         incremental_snapshot_archive_interval_slots: Slot,
     ) -> SnapshotTestConfig {
-        let (_accounts_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
+        let (accounts_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = TempDir::new().unwrap();
         let full_snapshot_archives_dir = TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = TempDir::new().unwrap();
@@ -128,7 +130,7 @@ impl SnapshotTestConfig {
             full_snapshot_archives_dir,
             bank_snapshots_dir,
             accounts_dir,
-            _accounts_tmp_dir,
+            _accounts_tmp_dir: accounts_tmp_dir,
         }
     }
 }

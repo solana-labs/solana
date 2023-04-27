@@ -444,7 +444,7 @@ pub fn process_entries_for_tests(
             })
             .collect();
 
-    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+    let ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
     let result = process_entries(
         bank,
         &mut replay_entries,
@@ -453,7 +453,7 @@ pub fn process_entries_for_tests(
         replay_vote_sender,
         &mut batch_timing,
         None,
-        &_ignored_prioritization_fee_cache,
+        &ignored_prioritization_fee_cache,
     );
 
     debug!("process_entries: {:?}", batch_timing);
@@ -904,7 +904,7 @@ fn confirm_full_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.run_verification;
-    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+    let ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
 
     confirm_slot(
         blockstore,
@@ -917,7 +917,7 @@ fn confirm_full_slot(
         recyclers,
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
-        &_ignored_prioritization_fee_cache,
+        &ignored_prioritization_fee_cache,
     )?;
 
     timing.accumulate(&confirmation_timing.batch_execute.totals);

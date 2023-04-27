@@ -3404,10 +3404,10 @@ pub mod tests {
         index.unchecked_scan_accounts(
             "",
             &Ancestors::default(),
-            |pubkey, _index| {
+            |pubkey, index| {
                 if pubkey == &key {
                     found_key = true;
-                    assert_eq!(_index, (&true, 3));
+                    assert_eq!(index, (&true, 3));
                 };
                 num += 1
             },

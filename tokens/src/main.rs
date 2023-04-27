@@ -31,10 +31,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let client = RpcClient::new(json_rpc_url);
 
     let exit = Arc::new(AtomicBool::default());
-    let _exit = exit.clone();
     // Initialize CTRL-C handler to ensure db changes are written before exit.
-    ctrlc::set_handler(move || {
-        _exit.store(true, Ordering::SeqCst);
+    ctrlc::set_handler({
+        let exit = exit.clone();
+        move || {
+            exit.store(true, Ordering::SeqCst);
+        }
     })
     .expect("Error setting Ctrl-C handler");
 
