@@ -1806,25 +1806,7 @@ impl Bank {
                 assert!(new.epoch_schedule.slots_per_epoch > new.get_reward_interval());
 
                 if new.partitioned_rewards_enabled() {
-                    if let EpochRewardStatus::Active(slot_block_height) = new.epoch_reward_status {
-                        let SlotBlockHeight {
-                            slot: _start_slot,
-                            block_height: start_height,
-                        } = slot_block_height;
-
-                        let height = new.block_height();
-                        let credit_start = start_height + Self::REWARD_CALCULATION_INTERVAL + 1;
-                        let credit_end = credit_start + new.get_reward_credit_interval();
-
-                        if height >= credit_start && height < credit_end {
-                            let partition_index = height - credit_start;
-                            new.credit_epoch_rewards_in_partition(partition_index);
-                        }
-
-                        if height >= credit_end && new.epoch_reward_status.is_active() {
-                            new.epoch_reward_status = EpochRewardStatus::Inactive;
-                        }
-                    }
+                    new.distribute_epoch_rewards();
                 }
             }
         });
@@ -1953,6 +1935,28 @@ impl Bank {
             },
             rewards_metrics,
         );
+    }
+
+    fn distribute_epoch_rewards(&mut self) {
+        if let EpochRewardStatus::Active(slot_block_height) = self.epoch_reward_status {
+            let SlotBlockHeight {
+                slot: _start_slot,
+                block_height: start_height,
+            } = slot_block_height;
+
+            let height = self.block_height();
+            let credit_start = start_height + Self::REWARD_CALCULATION_INTERVAL + 1;
+            let credit_end = credit_start + self.get_reward_credit_interval();
+
+            if height >= credit_start && height < credit_end {
+                let partition_index = height - credit_start;
+                self.credit_epoch_rewards_in_partition(partition_index);
+            }
+
+            if height >= credit_end && self.epoch_reward_status.is_active() {
+                self.epoch_reward_status = EpochRewardStatus::Inactive;
+            }
+        }
     }
 
     pub fn byte_limit_for_scans(&self) -> Option<usize> {
@@ -2654,7 +2658,7 @@ impl Bank {
                 self.rewards
                     .read()
                     .unwrap()
-                    .iter()
+                    .par_iter()
                     .map(|(_address, reward_info)| {
                         match reward_info.reward_type {
                             RewardType::Voting | RewardType::Staking => reward_info.lamports,
