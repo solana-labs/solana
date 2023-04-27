@@ -2,8 +2,10 @@
 //! node stakes
 use {
     crate::{
+        accounts_index::ZeroLamport,
         stake_account,
         stake_history::StakeHistory,
+        storable_accounts::StorableAccounts,
         vote_account::{VoteAccount, VoteAccounts},
     },
     dashmap::DashMap,
@@ -62,6 +64,51 @@ impl StakesCache {
 
     pub(crate) fn stakes(&self) -> RwLockReadGuard<Stakes<StakeAccount>> {
         self.0.read().unwrap()
+    }
+
+    /// Optimized batch stake accounts updates without checking
+    pub(crate) fn store_stake_accounts_batch_no_check<
+        'a,
+        T: ReadableAccount + Sync + ZeroLamport + 'a,
+    >(
+        &self,
+        accounts: &impl StorableAccounts<'a, T>,
+    ) {
+        let mut stakes = self.0.write().unwrap();
+
+        (0..accounts.len()).for_each(|i| {
+            let pubkey = accounts.pubkey(i);
+            let account = accounts.account(i).to_account_shared_data();
+            let stake_account = StakeAccount::try_from(account).unwrap();
+            stakes.upsert_stake_delegation(*pubkey, stake_account);
+        });
+    }
+
+    /// Optimized batch vote accounts updates without checking
+    pub(crate) fn store_vote_accounts_batch_no_check<
+        'a,
+        T: ReadableAccount + Sync + ZeroLamport + 'a,
+    >(
+        &self,
+        accounts: &impl StorableAccounts<'a, T>,
+    ) {
+        let mut stakes = self.0.write().unwrap();
+
+        (0..accounts.len()).for_each(|i| {
+            let pubkey = accounts.pubkey(i);
+            let account = accounts.account(i).to_account_shared_data();
+            // let vote_account = VoteAccount::try_from(account).unwrap();
+            match VoteAccount::try_from(account.to_account_shared_data()) {
+                Ok(vote_account) => {
+                    {
+                        // Called to eagerly deserialize vote state
+                        let _res = vote_account.vote_state();
+                    }
+                    stakes.upsert_vote_account(pubkey, vote_account);
+                }
+                Err(_) => stakes.remove_vote_account(pubkey),
+            }
+        });
     }
 
     pub(crate) fn check_and_store(&self, pubkey: &Pubkey, account: &impl ReadableAccount) {
