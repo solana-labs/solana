@@ -651,23 +651,19 @@ impl Accounts {
                     })
                     .is_some()
                 {
-                    tx.message()
-                        .account_keys()
-                        .iter()
-                        .enumerate()
-                        .for_each(|(i, key)| {
-                            if !tx.message().is_writable(i) && !result.contains_key(key) {
-                                if let Ok(index) = self.accounts_db.account_matches_owners(
-                                    ancestors,
-                                    key,
-                                    program_owners,
-                                ) {
-                                    program_owners
-                                        .get(index)
-                                        .and_then(|owner| result.insert(*key, *owner));
-                                }
+                    tx.message().account_keys().iter().for_each(|key| {
+                        if !result.contains_key(key) {
+                            if let Ok(index) = self.accounts_db.account_matches_owners(
+                                ancestors,
+                                key,
+                                program_owners,
+                            ) {
+                                program_owners
+                                    .get(index)
+                                    .and_then(|owner| result.insert(*key, *owner));
                             }
-                        });
+                        }
+                    });
                 } else {
                     // If the transaction's nonce account was not valid, and blockhash is not found,
                     // the transaction will fail to process. Let's not load any programs from the
