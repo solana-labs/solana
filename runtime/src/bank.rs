@@ -7827,6 +7827,11 @@ impl Bank {
             &mut error_counters,
         )
     }
+
+    /// Return reference to builtin_progams
+    pub fn get_builtin_programs(&self) -> &BuiltinPrograms {
+        &self.builtin_programs
+    }
 }
 
 /// Compute how much an account has changed size.  This function is useful when the data size delta
