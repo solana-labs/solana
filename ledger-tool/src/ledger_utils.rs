@@ -28,8 +28,6 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{AccountsDb, AccountsDbConfig, FillerAccountsConfig},
-        accounts_index::{AccountsIndexConfig, IndexLimitMb},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
         hardened_unpack::open_genesis_config,
@@ -41,7 +39,7 @@ use {
         },
     },
     solana_sdk::{
-        clock::Slot, genesis_config::GenesisConfig, signature::Signer, signer::keypair::Keypair,
+        genesis_config::GenesisConfig, signature::Signer, signer::keypair::Keypair,
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -55,55 +53,6 @@ use {
     },
 };
 
-// Build an `AccountsDbConfig` from subcommand arguments. All of the arguments
-// matched by this functional are either optional or have a default value.
-// Thus, a subcommand need not support all of the arguments that are matched
-// by this function.
-pub fn get_accounts_db_config(
-    ledger_path: &Path,
-    arg_matches: &ArgMatches<'_>,
-) -> AccountsDbConfig {
-    let accounts_index_bins = value_t!(arg_matches, "accounts_index_bins", usize).ok();
-    let accounts_index_index_limit_mb =
-        if let Some(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok() {
-            IndexLimitMb::Limit(limit)
-        } else if arg_matches.is_present("disable_accounts_disk_index") {
-            IndexLimitMb::InMemOnly
-        } else {
-            IndexLimitMb::Unspecified
-        };
-    let accounts_index_drives: Vec<PathBuf> = if arg_matches.is_present("accounts_index_path") {
-        values_t_or_exit!(arg_matches, "accounts_index_path", String)
-            .into_iter()
-            .map(PathBuf::from)
-            .collect()
-    } else {
-        vec![ledger_path.join("accounts_index.ledger-tool")]
-    };
-    let accounts_index_config = AccountsIndexConfig {
-        bins: accounts_index_bins,
-        index_limit_mb: accounts_index_index_limit_mb,
-        drives: Some(accounts_index_drives),
-        ..AccountsIndexConfig::default()
-    };
-
-    let filler_accounts_config = FillerAccountsConfig {
-        count: value_t!(arg_matches, "accounts_filler_count", usize).unwrap_or(0),
-        size: value_t!(arg_matches, "accounts_filler_size", usize).unwrap_or(0),
-    };
-
-    AccountsDbConfig {
-        index: Some(accounts_index_config),
-        accounts_hash_cache_path: Some(ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR)),
-        filler_accounts_config,
-        ancient_append_vec_offset: value_t!(arg_matches, "accounts_db_ancient_append_vecs", i64)
-            .ok(),
-        exhaustively_verify_refcounts: arg_matches.is_present("accounts_db_verify_refcounts"),
-        skip_initial_hash_calc: arg_matches.is_present("accounts_db_skip_initial_hash_calculation"),
-        ..AccountsDbConfig::default()
-    }
-}
-
 pub fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorageType {
     // TODO: the following shred_storage_type inference must be updated once
     // the rocksdb options can be constructed via load_options_file() as the
@@ -115,15 +64,6 @@ pub fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorage
             info!("{}", message);
             ShredStorageType::RocksLevel
         }
-    }
-}
-
-// This function is duplicated in validator/src/main.rs...
-pub fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
-    if matches.is_present(name) {
-        Some(values_t_or_exit!(matches, name, Slot))
-    } else {
-        None
     }
 }
 
