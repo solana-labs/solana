@@ -4439,7 +4439,7 @@ fn test_bank_vote_accounts() {
                                         // to have a vote account
 
     let vote_keypair = Keypair::new();
-    let instructions = vote_instruction::create_account(
+    let instructions = vote_instruction::create_account_with_config(
         &mint_keypair.pubkey(),
         &vote_keypair.pubkey(),
         &VoteInit {
@@ -4449,6 +4449,10 @@ fn test_bank_vote_accounts() {
             commission: 0,
         },
         10,
+        vote_instruction::CreateVoteAccountConfig {
+            space: VoteStateVersions::vote_state_size_of(true) as u64,
+            ..vote_instruction::CreateVoteAccountConfig::default()
+        },
     );
 
     let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
@@ -4503,7 +4507,7 @@ fn test_bank_cloned_stake_delegations() {
     };
 
     let vote_keypair = Keypair::new();
-    let mut instructions = vote_instruction::create_account(
+    let mut instructions = vote_instruction::create_account_with_config(
         &mint_keypair.pubkey(),
         &vote_keypair.pubkey(),
         &VoteInit {
@@ -4513,6 +4517,10 @@ fn test_bank_cloned_stake_delegations() {
             commission: 0,
         },
         vote_balance,
+        vote_instruction::CreateVoteAccountConfig {
+            space: VoteStateVersions::vote_state_size_of(true) as u64,
+            ..vote_instruction::CreateVoteAccountConfig::default()
+        },
     );
 
     let stake_keypair = Keypair::new();
@@ -4817,7 +4825,7 @@ fn test_add_builtin() {
 
     let mock_account = Keypair::new();
     let mock_validator_identity = Keypair::new();
-    let mut instructions = vote_instruction::create_account(
+    let mut instructions = vote_instruction::create_account_with_config(
         &mint_keypair.pubkey(),
         &mock_account.pubkey(),
         &VoteInit {
@@ -4825,6 +4833,10 @@ fn test_add_builtin() {
             ..VoteInit::default()
         },
         1,
+        vote_instruction::CreateVoteAccountConfig {
+            space: VoteStateVersions::vote_state_size_of(true) as u64,
+            ..vote_instruction::CreateVoteAccountConfig::default()
+        },
     );
     instructions[1].program_id = mock_vote_program_id();
 
@@ -4859,7 +4871,7 @@ fn test_add_duplicate_static_program() {
 
     let mock_account = Keypair::new();
     let mock_validator_identity = Keypair::new();
-    let instructions = vote_instruction::create_account(
+    let instructions = vote_instruction::create_account_with_config(
         &mint_keypair.pubkey(),
         &mock_account.pubkey(),
         &VoteInit {
@@ -4867,6 +4879,10 @@ fn test_add_duplicate_static_program() {
             ..VoteInit::default()
         },
         1,
+        vote_instruction::CreateVoteAccountConfig {
+            space: VoteStateVersions::vote_state_size_of(true) as u64,
+            ..vote_instruction::CreateVoteAccountConfig::default()
+        },
     );
 
     let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
@@ -9504,7 +9520,7 @@ fn test_vote_epoch_panic() {
 
     let mut setup_ixs = Vec::new();
     setup_ixs.extend(
-        vote_instruction::create_account(
+        vote_instruction::create_account_with_config(
             &mint_keypair.pubkey(),
             &vote_keypair.pubkey(),
             &VoteInit {
@@ -9514,6 +9530,10 @@ fn test_vote_epoch_panic() {
                 commission: 0,
             },
             1_000_000_000,
+            vote_instruction::CreateVoteAccountConfig {
+                space: VoteStateVersions::vote_state_size_of(true) as u64,
+                ..vote_instruction::CreateVoteAccountConfig::default()
+            },
         )
         .into_iter(),
     );
