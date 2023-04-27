@@ -125,8 +125,30 @@ use {
 impl StakeReward {
     #[cfg(test)]
     pub fn random() -> Self {
-        use rand::Rng;
         let mut rng = rand::thread_rng();
+
+        let rent = Rent::free();
+
+        let validator_pubkey = solana_sdk::pubkey::new_rand();
+        let validator_stake_lamports = 20;
+        let validator_staking_keypair = Keypair::new();
+        let validator_voting_keypair = Keypair::new();
+
+        let validator_vote_account = vote_state::create_account(
+            &validator_voting_keypair.pubkey(),
+            &validator_pubkey,
+            10,
+            validator_stake_lamports,
+        );
+
+        let validator_stake_account = stake_state::create_account(
+            &validator_staking_keypair.pubkey(),
+            &validator_voting_keypair.pubkey(),
+            &validator_vote_account,
+            &rent,
+            validator_stake_lamports,
+        );
+
         Self {
             stake_pubkey: Pubkey::new_unique(),
             stake_reward_info: RewardInfo {
@@ -136,11 +158,7 @@ impl StakeReward {
                 commission: Some(rng.gen_range(1, 10)),
             },
 
-            stake_account: AccountSharedData::new(
-                rng.gen_range(1, 255),
-                0,
-                &solana_vote_program::id(),
-            ),
+            stake_account: validator_stake_account,
         }
     }
 
@@ -13089,6 +13107,7 @@ fn test_reward_interval_cap() {
 
     let bank = Bank::new_for_tests(&genesis_config);
     assert_eq!(bank.get_reward_credit_interval(), 1);
+    assert_eq!(bank.get_reward_interval(), 2);
 }
 
 /// Test get_reward_interval during warm up epoch
@@ -13098,6 +13117,7 @@ fn test_reward_interval_warmup() {
 
     let bank = Bank::new_for_tests(&genesis_config);
     assert_eq!(bank.get_reward_credit_interval(), 1);
+    assert_eq!(bank.get_reward_interval(), 2);
 }
 
 /// Test reward calculation

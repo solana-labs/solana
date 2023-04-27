@@ -882,7 +882,7 @@ impl PartialEq for Bank {
             fee_structure: _,
             incremental_snapshot_persistence: _,
             loaded_programs_cache: _,
-            epoch_reward_calculator: _,
+            calculated_epoch_stake_rewards: _,
             epoch_reward_status: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
@@ -1177,8 +1177,8 @@ pub struct Bank {
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
 
-    /// Epoch reward calculator - holds the epoch reward results
-    epoch_reward_calculator: Arc<Option<StakeRewards>>,
+    /// Epoch stake rewards calculated at the beginning block of current epoch
+    calculated_epoch_stake_rewards: Arc<Option<StakeRewards>>,
 
     /// jwash: I'd probably prefer an enum here
     /// type SlotBlockHeight {
@@ -1434,7 +1434,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
-            epoch_reward_calculator: Arc::new(None),
+            calculated_epoch_stake_rewards: Arc::new(None),
             epoch_reward_status: EpochRewardStatus::Inactive,
         };
 
@@ -1603,18 +1603,19 @@ impl Bank {
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
         } else {
-            let num_chunks = if let Some(stake_rewards) = self.epoch_reward_calculator.as_ref() {
-                let n = stake_rewards.len();
+            let num_chunks =
+                if let Some(stake_rewards) = self.calculated_epoch_stake_rewards.as_ref() {
+                    let n = stake_rewards.len();
 
-                (n + CHUNK_SIZE - 1) / CHUNK_SIZE
-            } else {
-                // jwash: why 0 when we will clamp to 1
-                // To be consistent to the meaning of `num_chunks`. When stake_rewards is none. num_chunks = 0
-                // yeah. clamp to 1. Make sure that there is at lease one block for reward credit.
-                // when we have sysvar account, we will need to do something after all rewards are distributed.
-                // Maybe we don't need to do anything. If that's the case, we can change to clamp to 0.
-                0
-            };
+                    (n + CHUNK_SIZE - 1) / CHUNK_SIZE
+                } else {
+                    // jwash: why 0 when we will clamp to 1
+                    // To be consistent to the meaning of `num_chunks`. When stake_rewards is none. num_chunks = 0
+                    // yeah. clamp to 1. Make sure that there is at lease one block for reward credit.
+                    // when we have sysvar account, we will need to do something after all rewards are distributed.
+                    // Maybe we don't need to do anything. If that's the case, we can change to clamp to 0.
+                    0
+                };
 
             (num_chunks as u64).clamp(1, self.epoch_schedule.slots_per_epoch / 20)
         }
@@ -1786,7 +1787,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
-            epoch_reward_calculator: parent.epoch_reward_calculator.clone(),
+            calculated_epoch_stake_rewards: parent.calculated_epoch_stake_rewards.clone(),
             epoch_reward_status: parent.epoch_reward_status.clone(),
         };
 
@@ -2169,7 +2170,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
-            epoch_reward_calculator: Arc::new(None),
+            calculated_epoch_stake_rewards: Arc::new(None),
             epoch_reward_status: EpochRewardStatus::Inactive,
         };
         bank.bank_created();
@@ -2653,16 +2654,16 @@ impl Bank {
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
 
-        self.epoch_reward_calculator = Arc::new(
-            self.do_calculate_validator_rewards_with_thread_pool_no_join(
-                prev_epoch,
-                validator_rewards,
-                reward_calc_tracer,
-                self.credits_auto_rewind(),
-                thread_pool,
-                metrics,
-            ),
+        let (stake_rewards, total) = self.do_calculate_validator_rewards_with_thread_pool_no_join(
+            prev_epoch,
+            validator_rewards,
+            reward_calc_tracer,
+            self.credits_auto_rewind(),
+            thread_pool,
+            metrics,
         );
+
+        self.calculated_epoch_stake_rewards = Arc::new(stake_rewards);
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
 
@@ -2688,11 +2689,11 @@ impl Bank {
         );
 
         // verify that we didn't pay any more than we expected to
-        assert!(validator_rewards >= validator_rewards_paid);
+        assert!(validator_rewards >= validator_rewards_paid + total);
 
         info!(
-            "distributed vote rewards: {} out of {}",
-            validator_rewards_paid, validator_rewards
+            "distributed vote rewards: {} out of {}, remaining {}",
+            validator_rewards_paid, validator_rewards, total
         );
         let (num_stake_accounts, num_vote_accounts) = {
             let stakes = self.stakes_cache.stakes();
@@ -3160,7 +3161,7 @@ impl Bank {
         credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
-    ) -> Option<StakeRewards> {
+    ) -> (Option<StakeRewards>, u64) {
         let stakes = self.stakes_cache.stakes();
         let reward_calculate_param = self.get_epoch_reward_calculate_param_info(&stakes);
 
@@ -3192,11 +3193,16 @@ impl Bank {
             let mut rng = ChaChaRng::seed_from_u64(seed);
             stake_rewards.shuffle(&mut rng);
 
+            let total = stake_rewards
+                .par_iter()
+                .map(|stake_reward| stake_reward.stake_reward_info.lamports)
+                .sum::<i64>();
+
             self.update_reward_history(vec![], vote_rewards);
 
-            Some(stake_rewards)
+            (Some(stake_rewards), u64::try_from(total).unwrap())
         } else {
-            None
+            (None, 0)
         }
     }
 
@@ -3823,7 +3829,6 @@ impl Bank {
         let n = stake_rewards.len() as u64;
         let (begin, end) = self.get_partition_begin_end(partition_index, n);
         let mut num_stake_rewards: usize = 0;
-        let mut num_vote_rewards: usize = 0;
         for x in &stake_rewards[begin..end] {
             if x.get_stake_reward() > 0 {
                 rewards.push((x.stake_pubkey, x.stake_reward_info));
@@ -3835,7 +3840,7 @@ impl Bank {
     }
 
     fn credit_epoch_rewards_in_partition(&mut self, partition_index: u64) {
-        if let Some(stake_rewards) = self.epoch_reward_calculator.as_ref() {
+        if let Some(stake_rewards) = self.calculated_epoch_stake_rewards.as_ref() {
             let mut metrics = RewardsStoreMetrics::default();
 
             metrics.pre_capitalization = self.capitalization();
