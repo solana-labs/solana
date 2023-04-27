@@ -20,6 +20,8 @@
 //! Dynamic dispatch was inevitable, due to the need of delegating those implementations to the
 //! dependent crate (`solana-scheduler-pool`, which in turn depends on `solana-ledger`; another
 //! dependent crate of `solana-runtime`...), while cutting cyclic dependency.
+//!
+//! See [InstalledScheduler] for visualized interaction.
 
 #[cfg(any(test, feature = "test-in-workspace"))]
 use mockall::automock;
@@ -42,6 +44,58 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn return_to_pool(&self, scheduler: InstalledSchedulerBox);
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// Schedules, executes, and commits transactions under encapsulated implementation
+///
+/// The following chart illustrates the ownership/reference interaction between inter-dependent objects across crates:
+///
+///  ```mermaid
+///  graph TD
+///      Bank["Arc&lt;Bank&gt;"]
+///  
+///      subgraph solana-runtime
+///          BankForks;
+///          subgraph cyclic-ref
+///              Bank;
+///              SchedulingContext;
+///              InstalledScheduler{{InstalledScheduler}};
+///          end
+///          InstalledSchedulerPool{{InstalledSchedulerPool}};
+///      end
+///  
+///      subgraph solana-ledger
+///          ExecuteBatch(["execute_batch()"]);
+///      end
+///  
+///      subgraph solana-scheduler-pool
+///          SchedulerPool;
+///          SchedulerPoolScheduler[Scheduler];
+///      end
+///  
+///      subgraph solana-scheduler
+///          WithSchedulingMode{{WithSchedulingMode}};
+///      end
+///  
+///      SchedulingContext -- refs --> Bank;
+///      BankForks -- owns --> Bank;
+///      BankForks -- owns --> InstalledSchedulerPool;
+///      Bank -- refs --> InstalledScheduler;
+///  
+///      SchedulerPool -. impls .-> InstalledSchedulerPool;
+///      SchedulerPoolScheduler -. impls .-> InstalledScheduler;
+///      InstalledScheduler -- refs --> SchedulingContext;
+///      SchedulingContext -. impls .-> WithSchedulingMode;
+///  
+///      SchedulerPoolScheduler -- refs --> SchedulerPool;
+///      SchedulerPool -- owns --> SchedulerPoolScheduler;
+///      SchedulerPoolScheduler -. calls .-> ExecuteBatch;
+///  
+///      solana-scheduler-pool -- deps --> solana-scheduler;
+///      solana-scheduler-pool -- deps --> solana-ledger;
+///      solana-scheduler-pool -- deps --> solana-runtime;
+///      solana-ledger -- deps --> solana-runtime;
+///      solana-runtime -- deps --> solana-scheduler;
+///  ```
 #[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
 // suppress false clippy complaints arising from mockall-derive:
 //   warning: `#[must_use]` has no effect when applied to a struct field

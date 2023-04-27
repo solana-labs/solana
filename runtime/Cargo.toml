@@ -29,6 +29,7 @@ lazy_static = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
 lz4 = { workspace = true }
+aquamarine = "0.3.1"
 memmap2 = { workspace = true }
 mockall = { workspace = true }
 modular-bitfield = { workspace = true }
