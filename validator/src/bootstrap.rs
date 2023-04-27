@@ -220,7 +220,7 @@ fn get_rpc_peers(
 
     if bootstrap_config.only_known_rpc {
         rpc_peers.retain(|rpc_peer| {
-            is_known_validator(&rpc_peer.id, &validator_config.known_validators)
+            is_known_validator(rpc_peer.pubkey(), &validator_config.known_validators)
         });
     }
 
@@ -229,12 +229,14 @@ fn get_rpc_peers(
     // Filter out blacklisted nodes
     let rpc_peers: Vec<_> = rpc_peers
         .into_iter()
-        .filter(|rpc_peer| !blacklisted_rpc_nodes.contains(&rpc_peer.id))
+        .filter(|rpc_peer| !blacklisted_rpc_nodes.contains(rpc_peer.pubkey()))
         .collect();
     let rpc_peers_blacklisted = rpc_peers_total - rpc_peers.len();
     let rpc_known_peers = rpc_peers
         .iter()
-        .filter(|rpc_peer| is_known_validator(&rpc_peer.id, &validator_config.known_validators))
+        .filter(|rpc_peer| {
+            is_known_validator(rpc_peer.pubkey(), &validator_config.known_validators)
+        })
         .count();
 
     info!("Total {rpc_peers_total} RPC nodes found. {rpc_known_peers} known, {rpc_peers_blacklisted} blacklisted");
@@ -507,7 +509,7 @@ fn get_vetted_rpc_nodes(
 
                     info!(
                         "Using RPC service from node {}: {:?}",
-                        rpc_contact_info.id,
+                        rpc_contact_info.pubkey(),
                         rpc_contact_info.rpc()
                     );
 
@@ -535,7 +537,7 @@ fn get_vetted_rpc_nodes(
                                 fail_rpc_node(
                                     "Failed to ping RPC".to_string(),
                                     &validator_config.known_validators,
-                                    &rpc_contact_info.id,
+                                    rpc_contact_info.pubkey(),
                                     &mut newly_blacklisted_rpc_nodes.write().unwrap(),
                                 );
                                 false
@@ -545,7 +547,7 @@ fn get_vetted_rpc_nodes(
                             fail_rpc_node(
                                 format!("Failed to get RPC node version: {err}"),
                                 &validator_config.known_validators,
-                                &rpc_contact_info.id,
+                                rpc_contact_info.pubkey(),
                                 &mut newly_blacklisted_rpc_nodes.write().unwrap(),
                             );
                             false
@@ -676,7 +678,7 @@ pub fn rpc_bootstrap(
                 fail_rpc_node(
                     err,
                     &validator_config.known_validators,
-                    &rpc_contact_info.id,
+                    rpc_contact_info.pubkey(),
                     &mut blacklisted_rpc_nodes,
                 );
             }
@@ -781,7 +783,7 @@ fn get_rpc_nodes(
         } else {
             let rpc_peers = peer_snapshot_hashes
                 .iter()
-                .map(|peer_snapshot_hash| peer_snapshot_hash.rpc_contact_info.id)
+                .map(|peer_snapshot_hash| peer_snapshot_hash.rpc_contact_info.pubkey())
                 .collect::<Vec<_>>();
             let final_snapshot_hash = peer_snapshot_hashes[0].snapshot_hash;
             info!(
@@ -1034,7 +1036,7 @@ fn get_eligible_peer_snapshot_hashes(
     let peer_snapshot_hashes = rpc_peers
         .iter()
         .flat_map(|rpc_peer| {
-            get_snapshot_hashes_for_node(cluster_info, &rpc_peer.id).map(|snapshot_hash| {
+            get_snapshot_hashes_for_node(cluster_info, rpc_peer.pubkey()).map(|snapshot_hash| {
                 PeerSnapshotHash {
                     rpc_contact_info: rpc_peer.clone(),
                     snapshot_hash,
@@ -1262,7 +1264,7 @@ fn download_snapshot(
                 && *download_abort_count < maximum_snapshot_download_abort
             {
                 if let Some(ref known_validators) = validator_config.known_validators {
-                    if known_validators.contains(&rpc_contact_info.id)
+                    if known_validators.contains(rpc_contact_info.pubkey())
                         && known_validators.len() == 1
                         && bootstrap_config.only_known_rpc
                     {

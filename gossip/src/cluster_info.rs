@@ -563,7 +563,7 @@ impl ClusterInfo {
                     //    there's not much point in saving entrypoint ContactInfo since by
                     //    definition that information is already available
                     let contact_info = v.value.contact_info().unwrap();
-                    if contact_info.id != self_pubkey
+                    if contact_info.pubkey() != &self_pubkey
                         && contact_info
                             .gossip()
                             .map(|addr| !entrypoint_gossip_addrs.contains(&addr))
@@ -759,7 +759,7 @@ impl ClusterInfo {
                     .rpc()
                     .ok()
                     .filter(|addr| self.socket_addr_space.check(addr))?;
-                let node_version = self.get_node_version(&node.id);
+                let node_version = self.get_node_version(node.pubkey());
                 if my_shred_version != 0
                     && (node.shred_version() != 0 && node.shred_version() != my_shred_version)
                 {
@@ -769,9 +769,13 @@ impl ClusterInfo {
                 Some(format!(
                     "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}| {:5}| {}\n",
                     rpc_addr.to_string(),
-                    if node.id == my_pubkey { "me" } else { "" },
+                    if node.pubkey() == &my_pubkey {
+                        "me"
+                    } else {
+                        ""
+                    },
                     now.saturating_sub(last_updated),
-                    node.id,
+                    node.pubkey(),
                     if let Some(node_version) = node_version {
                         node_version.to_string()
                     } else {
@@ -812,7 +816,7 @@ impl ClusterInfo {
                     total_spy_nodes = total_spy_nodes.saturating_add(1);
                 }
 
-                let node_version = self.get_node_version(&node.id);
+                let node_version = self.get_node_version(node.pubkey());
                 if my_shred_version != 0 && (node.shred_version() != 0 && node.shred_version() != my_shred_version) {
                     different_shred_nodes = different_shred_nodes.saturating_add(1);
                     None
@@ -831,9 +835,9 @@ impl ClusterInfo {
                             .as_ref()
                             .map(IpAddr::to_string)
                             .unwrap_or_else(|| String::from("none")),
-                        if node.id == my_pubkey { "me" } else { "" },
+                        if node.pubkey() == &my_pubkey { "me" } else { "" },
                         now.saturating_sub(last_updated),
-                        node.id,
+                        node.pubkey(),
                         if let Some(node_version) = node_version {
                             node_version.to_string()
                         } else {
@@ -1277,7 +1281,9 @@ impl ClusterInfo {
         let gossip_crds = self.gossip.crds.read().unwrap();
         gossip_crds
             .get_nodes_contact_info()
-            .filter(|node| node.id != self_pubkey && self.check_socket_addr_space(&node.rpc()))
+            .filter(|node| {
+                node.pubkey() != &self_pubkey && self.check_socket_addr_space(&node.rpc())
+            })
             .cloned()
             .collect()
     }
@@ -1297,7 +1303,7 @@ impl ClusterInfo {
         gossip_crds
             .get_nodes_contact_info()
             // shred_version not considered for gossip peers (ie, spy nodes do not set shred_version)
-            .filter(|node| node.id != me && self.check_socket_addr_space(&node.gossip()))
+            .filter(|node| node.pubkey() != &me && self.check_socket_addr_space(&node.gossip()))
             .cloned()
             .collect()
     }
@@ -1307,7 +1313,9 @@ impl ClusterInfo {
         let self_pubkey = self.id();
         self.time_gossip_read_lock("all_tvu_peers", &self.stats.all_tvu_peers)
             .get_nodes_contact_info()
-            .filter(|node| node.id != self_pubkey && self.check_socket_addr_space(&node.tvu()))
+            .filter(|node| {
+                node.pubkey() != &self_pubkey && self.check_socket_addr_space(&node.tvu())
+            })
             .cloned()
             .collect()
     }
@@ -1319,7 +1327,7 @@ impl ClusterInfo {
         self.time_gossip_read_lock("tvu_peers", &self.stats.tvu_peers)
             .get_nodes_contact_info()
             .filter(|node| {
-                node.id != self_pubkey
+                node.pubkey() != &self_pubkey
                     && node.shred_version() == self_shred_version
                     && self.check_socket_addr_space(&node.tvu())
             })
@@ -1336,11 +1344,11 @@ impl ClusterInfo {
         gossip_crds
             .get_nodes_contact_info()
             .filter(|node| {
-                node.id != self_pubkey
+                node.pubkey() != &self_pubkey
                     && node.shred_version() == self_shred_version
                     && self.check_socket_addr_space(&node.tvu())
                     && self.check_socket_addr_space(&node.serve_repair())
-                    && match gossip_crds.get::<&LowestSlot>(node.id) {
+                    && match gossip_crds.get::<&LowestSlot>(*node.pubkey()) {
                         None => true, // fallback to legacy behavior
                         Some(lowest_slot) => lowest_slot.lowest <= slot,
                     }
@@ -1364,7 +1372,9 @@ impl ClusterInfo {
         let gossip_crds = self.gossip.crds.read().unwrap();
         gossip_crds
             .get_nodes_contact_info()
-            .filter(|node| node.id != self_pubkey && self.check_socket_addr_space(&node.tpu()))
+            .filter(|node| {
+                node.pubkey() != &self_pubkey && self.check_socket_addr_space(&node.tpu())
+            })
             .cloned()
             .collect()
     }
@@ -1660,7 +1670,7 @@ impl ClusterInfo {
             return true;
         }
         for entrypoint in entrypoints.iter_mut() {
-            if entrypoint.id == Pubkey::default() {
+            if entrypoint.pubkey() == &Pubkey::default() {
                 // If a pull from the entrypoint was successful it should exist in the CRDS table
                 if let Some(entrypoint_from_gossip) = entrypoint
                     .gossip()
@@ -1681,7 +1691,7 @@ impl ClusterInfo {
                 info!(
                     "Setting shred version to {:?} from entrypoint {:?}",
                     entrypoint.shred_version(),
-                    entrypoint.id
+                    entrypoint.pubkey()
                 );
                 self.my_contact_info
                     .write()
@@ -1692,7 +1702,7 @@ impl ClusterInfo {
         self.my_shred_version() != 0
             && entrypoints
                 .iter()
-                .all(|entrypoint| entrypoint.id != Pubkey::default())
+                .all(|entrypoint| entrypoint.pubkey() != &Pubkey::default())
     }
 
     fn handle_purge(
@@ -1725,7 +1735,8 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .iter()
-            .map(|k| k.id)
+            .map(LegacyContactInfo::pubkey)
+            .copied()
             .chain(std::iter::once(self.id()))
             .collect();
         self.stats.trim_crds_table.add_relaxed(1);
@@ -1913,7 +1924,7 @@ impl ClusterInfo {
                 .with_min_len(1024)
                 .filter(|(_, _, caller)| match caller.contact_info() {
                     None => false,
-                    Some(caller) if caller.id == self_pubkey => {
+                    Some(caller) if caller.pubkey() == &self_pubkey => {
                         warn!("PullRequest ignored, I'm talking to myself");
                         self.stats.window_request_loopback.add_relaxed(1);
                         false
@@ -3146,7 +3157,7 @@ fn filter_on_shred_version(
             values.retain(|value| match &value.data {
                 // Allow node to update its own contact info in case their
                 // shred-version changes
-                CrdsData::LegacyContactInfo(node) => node.id == *from,
+                CrdsData::LegacyContactInfo(node) => node.pubkey() == from,
                 CrdsData::NodeInstance(_) => true,
                 _ => false,
             })

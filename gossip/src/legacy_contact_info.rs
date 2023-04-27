@@ -20,7 +20,7 @@ use {
     Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, AbiExample, Deserialize, Serialize,
 )]
 pub struct LegacyContactInfo {
-    pub id: Pubkey,
+    id: Pubkey,
     /// gossip address
     gossip: SocketAddr,
     /// address to connect to for replication
@@ -157,6 +157,11 @@ impl LegacyContactInfo {
     }
 
     #[inline]
+    pub fn pubkey(&self) -> &Pubkey {
+        &self.id
+    }
+
+    #[inline]
     pub fn wallclock(&self) -> u64 {
         self.wallclock
     }
@@ -164,6 +169,10 @@ impl LegacyContactInfo {
     #[inline]
     pub fn shred_version(&self) -> u16 {
         self.shred_version
+    }
+
+    pub fn set_pubkey(&mut self, pubkey: Pubkey) {
+        self.id = pubkey
     }
 
     pub fn set_wallclock(&mut self, wallclock: u64) {

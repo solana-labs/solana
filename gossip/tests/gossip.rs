@@ -214,12 +214,12 @@ fn gossip_rstar() {
             let xv = &listen[0].0;
             xv.lookup_contact_info(&xv.id(), |ci| ci.clone()).unwrap()
         };
-        trace!("rstar leader {}", xd.id);
+        trace!("rstar leader {}", xd.pubkey());
         for n in 0..(num - 1) {
             let y = (n + 1) % listen.len();
             let yv = &listen[y].0;
             yv.insert_legacy_info(xd.clone());
-            trace!("rstar insert {} into {}", xd.id, yv.id());
+            trace!("rstar insert {} into {}", xd.pubkey(), yv.id());
         }
     });
 }

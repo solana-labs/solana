@@ -430,13 +430,13 @@ fn get_target(
             if node.gossip().ok() == Some(entrypoint_addr) {
                 info!("{:?}", node.gossip());
                 target = match mode {
-                    Mode::Gossip => Some((node.id, node.gossip().unwrap())),
-                    Mode::Tvu => Some((node.id, node.tvu().unwrap())),
-                    Mode::TvuForwards => Some((node.id, node.tvu_forwards().unwrap())),
-                    Mode::Tpu => Some((node.id, node.tpu().unwrap())),
-                    Mode::TpuForwards => Some((node.id, node.tpu_forwards().unwrap())),
-                    Mode::Repair => Some((node.id, node.repair().unwrap())),
-                    Mode::ServeRepair => Some((node.id, node.serve_repair().unwrap())),
+                    Mode::Gossip => Some((*node.pubkey(), node.gossip().unwrap())),
+                    Mode::Tvu => Some((*node.pubkey(), node.tvu().unwrap())),
+                    Mode::TvuForwards => Some((*node.pubkey(), node.tvu_forwards().unwrap())),
+                    Mode::Tpu => Some((*node.pubkey(), node.tpu().unwrap())),
+                    Mode::TpuForwards => Some((*node.pubkey(), node.tpu_forwards().unwrap())),
+                    Mode::Repair => Some((*node.pubkey(), node.repair().unwrap())),
+                    Mode::ServeRepair => Some((*node.pubkey(), node.serve_repair().unwrap())),
                     Mode::Rpc => None,
                 };
                 break;

@@ -33,7 +33,7 @@ impl TpuInfo for ClusterTpuInfo {
             .cluster_info
             .tpu_peers()
             .into_iter()
-            .filter_map(|node| Some((node.id, node.tpu().ok()?)))
+            .filter_map(|node| Some((*node.pubkey(), node.tpu().ok()?)))
             .collect();
     }
 

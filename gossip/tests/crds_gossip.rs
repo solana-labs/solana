@@ -518,7 +518,7 @@ fn network_run_pull(
                     let self_info = gossip_crds.get::<&CrdsValue>(&label).unwrap().clone();
                     requests
                         .into_iter()
-                        .map(move |(peer, filters)| (peer.id, filters, self_info.clone()))
+                        .map(move |(peer, filters)| (*peer.pubkey(), filters, self_info.clone()))
                 })
                 .collect()
         };
@@ -764,7 +764,7 @@ fn test_prune_errors() {
     //incorrect dest
     let mut res = crds_gossip.process_prune_msg(
         &id,                                      // self_pubkey
-        &ci.id,                                   // peer
+        ci.pubkey(),                              // peer
         &Pubkey::from(hash(&[1; 32]).to_bytes()), // destination
         &[prune_pubkey],                          // origins
         now,
@@ -775,7 +775,7 @@ fn test_prune_errors() {
     //correct dest
     res = crds_gossip.process_prune_msg(
         &id,             // self_pubkey
-        &ci.id,          // peer
+        ci.pubkey(),     // peer
         &id,             // destination
         &[prune_pubkey], // origins
         now,
@@ -787,7 +787,7 @@ fn test_prune_errors() {
     let timeout = now + crds_gossip.push.prune_timeout * 2;
     res = crds_gossip.process_prune_msg(
         &id,             // self_pubkey
-        &ci.id,          // peer
+        ci.pubkey(),     // peer
         &id,             // destination
         &[prune_pubkey], // origins
         now,

@@ -156,7 +156,7 @@ fn create_client(
                     info!("Searching for target_node: {:?}", target_node);
                     let mut target_client = None;
                     for node in nodes {
-                        if node.id == target_node {
+                        if node.pubkey() == &target_node {
                             target_client = Some(get_client(
                                 &[node],
                                 &SocketAddrSpace::Unspecified,
