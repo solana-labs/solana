@@ -67,7 +67,7 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     //   warning: the following explicit lifetimes could be elided: 'a
     #[allow(clippy::needless_lifetimes)]
     fn scheduling_context<'a>(&'a self) -> Option<&'a SchedulingContext>;
-    fn replace_scheduler_context(&mut self, context: SchedulingContext);
+    fn replace_scheduling_context(&mut self, context: SchedulingContext);
 }
 
 pub type InstalledSchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;

@@ -73,7 +73,7 @@ impl InstalledSchedulerPool for SchedulerPool {
         // returned recently
         let maybe_scheduler = schedulers.pop();
         if let Some(mut scheduler) = maybe_scheduler {
-            scheduler.replace_scheduler_context(context);
+            scheduler.replace_scheduling_context(context);
             scheduler
         } else {
             Box::new(PooledScheduler::spawn(self.self_arc(), context))
@@ -190,7 +190,7 @@ impl InstalledScheduler for PooledScheduler {
         self.context.as_ref()
     }
 
-    fn replace_scheduler_context(&mut self, context: SchedulingContext) {
+    fn replace_scheduling_context(&mut self, context: SchedulingContext) {
         self.context = Some(context);
         *self.result_with_timings.lock().expect("not poisoned") = None;
     }
