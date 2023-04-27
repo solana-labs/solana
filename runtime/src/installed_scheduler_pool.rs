@@ -52,7 +52,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 ///  ```mermaid
 ///  graph TD
 ///      Bank["Arc&lt;Bank&gt;"]
-///  
+///
 ///      subgraph solana-runtime
 ///          BankForks;
 ///          subgraph cyclic-ref
@@ -62,34 +62,34 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 ///          end
 ///          InstalledSchedulerPool{{InstalledSchedulerPool}};
 ///      end
-///  
+///
 ///      subgraph solana-ledger
 ///          ExecuteBatch(["execute_batch()"]);
 ///      end
-///  
+///
 ///      subgraph solana-scheduler-pool
 ///          SchedulerPool;
 ///          PooledScheduler;
 ///      end
-///  
+///
 ///      subgraph solana-scheduler
 ///          WithSchedulingMode{{WithSchedulingMode}};
 ///      end
-///  
+///
 ///      SchedulingContext -- refs --> Bank;
 ///      BankForks -- owns --> Bank;
 ///      BankForks -- owns --> InstalledSchedulerPool;
 ///      Bank -- refs --> InstalledScheduler;
-///  
+///
 ///      SchedulerPool -. impls .-> InstalledSchedulerPool;
 ///      PooledScheduler -. impls .-> InstalledScheduler;
 ///      InstalledScheduler -- refs --> SchedulingContext;
 ///      SchedulingContext -. impls .-> WithSchedulingMode;
-///  
+///
 ///      PooledScheduler -- refs --> SchedulerPool;
 ///      SchedulerPool -- owns --> PooledScheduler;
 ///      PooledScheduler -. calls .-> ExecuteBatch;
-///  
+///
 ///      solana-scheduler-pool -- deps --> solana-scheduler;
 ///      solana-scheduler-pool -- deps --> solana-ledger;
 ///      solana-scheduler-pool -- deps --> solana-runtime;

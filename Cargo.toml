@@ -123,6 +123,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [workspace.dependencies]
+aquamarine = "0.3.1"
 aes-gcm-siv = "0.10.3"
 ahash = "0.8.3"
 anyhow = "1.0.70"
