@@ -654,9 +654,8 @@ impl Accounts {
                     tx.message()
                         .account_keys()
                         .iter()
-                        .enumerate()
-                        .for_each(|(i, key)| {
-                            if !tx.message().is_writable(i) && !result.contains_key(key) {
+                        .for_each(|key| {
+                            if !result.contains_key(key) {
                                 if let Ok(index) = self.accounts_db.account_matches_owners(
                                     ancestors,
                                     key,
