@@ -50,6 +50,7 @@ mod forwarder;
 mod packet_receiver;
 #[allow(dead_code)]
 mod scheduler_messages;
+mod transaction_scheduler;
 
 #[allow(dead_code)]
 mod thread_aware_account_locks;
