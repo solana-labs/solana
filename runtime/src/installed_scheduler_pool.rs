@@ -69,7 +69,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 ///  
 ///      subgraph solana-scheduler-pool
 ///          SchedulerPool;
-///          SchedulerPoolScheduler[Scheduler];
+///          PooledScheduler;
 ///      end
 ///  
 ///      subgraph solana-scheduler
@@ -82,13 +82,13 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 ///      Bank -- refs --> InstalledScheduler;
 ///  
 ///      SchedulerPool -. impls .-> InstalledSchedulerPool;
-///      SchedulerPoolScheduler -. impls .-> InstalledScheduler;
+///      PooledScheduler -. impls .-> InstalledScheduler;
 ///      InstalledScheduler -- refs --> SchedulingContext;
 ///      SchedulingContext -. impls .-> WithSchedulingMode;
 ///  
-///      SchedulerPoolScheduler -- refs --> SchedulerPool;
-///      SchedulerPool -- owns --> SchedulerPoolScheduler;
-///      SchedulerPoolScheduler -. calls .-> ExecuteBatch;
+///      PooledScheduler -- refs --> SchedulerPool;
+///      SchedulerPool -- owns --> PooledScheduler;
+///      PooledScheduler -. calls .-> ExecuteBatch;
 ///  
 ///      solana-scheduler-pool -- deps --> solana-scheduler;
 ///      solana-scheduler-pool -- deps --> solana-ledger;
