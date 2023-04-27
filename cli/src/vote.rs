@@ -800,19 +800,11 @@ pub fn process_create_vote_account(
     let fee_payer = config.signers[fee_payer];
     let nonce_authority = config.signers[nonce_authority];
 
-    let is_feature_active = if !sign_only {
-        let feature_address = solana_sdk::feature_set::vote_state_add_vote_latency::id();
-        rpc_client
-            .get_account(&feature_address)
-            .map(|account| {
-                feature::from_account(&account)
-                    .map(|feature| feature.activated_at.is_some())
-                    .unwrap_or(false)
-            })
-            .unwrap_or(false)
-    } else {
-        false
-    };
+    let is_feature_active = (!sign_only)
+        .then(solana_sdk::feature_set::vote_state_add_vote_latency::id)
+        .and_then(|feature_address| rpc_client.get_account(&feature_address).ok())
+        .and_then(|account| feature::from_account(&account))
+        .map_or(false, |feature| feature.activated_at.is_some());
     let space = VoteStateVersions::vote_state_size_of(is_feature_active) as u64;
 
     let build_message = |lamports| {
