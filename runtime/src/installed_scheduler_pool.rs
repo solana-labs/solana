@@ -51,7 +51,7 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 ///
 ///  ```mermaid
 ///  graph TD
-///      Bank["Arc&lt;Bank&gt;"]
+///      Bank["Arc#lt;Bank#gt;"]
 ///
 ///      subgraph solana-runtime
 ///          BankForks;
