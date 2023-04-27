@@ -1180,14 +1180,6 @@ pub struct Bank {
     /// Epoch stake rewards calculated at the beginning block of current epoch
     calculated_epoch_stake_rewards: Arc<Option<StakeRewards>>,
 
-    /// jwash: I'd probably prefer an enum here
-    /// type SlotBlockHeight {
-    /// slot: Slot,
-    /// block_height: u64};
-    /// enum:
-    /// Active(SlotBlockHeight)
-    /// Inactive
-    /// yes. I like it. Updated.
     /// Epoch reward status
     epoch_reward_status: EpochRewardStatus,
 }
@@ -1591,14 +1583,11 @@ impl Bank {
         }
     }
 
-    /// jwash: so we always spend just the first slot calculating and storage starts on the next slot?
-    /// Yeah. moved to a constant.
-
     /// Calculate the reward credit interval.
     pub fn get_reward_credit_interval(&self) -> u64 {
         /// Target to store 64 rewards per entry/tick in a block. A block has a minimal of 64
         /// entries/ticks. This gives 4096 total rewards to store in one block.
-        const CHUNK_SIZE: usize = 4096; //jwash: 4096. comment why this is chosen (yeah. updated.)
+        const CHUNK_SIZE: usize = 4096;
 
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
@@ -1609,7 +1598,6 @@ impl Bank {
 
                     (n + CHUNK_SIZE - 1) / CHUNK_SIZE
                 } else {
-                    // jwash: why 0 when we will clamp to 1
                     // To be consistent to the meaning of `num_chunks`. When stake_rewards is none. num_chunks = 0
                     // yeah. clamp to 1. Make sure that there is at lease one block for reward credit.
                     // when we have sysvar account, we will need to do something after all rewards are distributed.
@@ -1924,11 +1912,9 @@ impl Bank {
 
         let mut rewards_metrics = RewardsMetrics::default();
 
-        /// jwash: refactor to put the measure around all of this
-        /// yeah.
-        let update_rewards_with_thread_pool_time = if self.partitioned_rewards_enabled() {
-            let (_, update_rewards_with_thread_pool_time) = measure!(
-                {
+        let (_, update_rewards_with_thread_pool_time) = measure!(
+            {
+                if self.partitioned_rewards_enabled() {
                     info!("set epoch reward status: {} {}", parent_slot, parent_height);
                     self.epoch_reward_status = EpochRewardStatus::Active(SlotBlockHeight {
                         slot: parent_slot,
@@ -1940,26 +1926,18 @@ impl Bank {
                         &thread_pool,
                         &mut rewards_metrics,
                     )
-                },
-                "update_rewards_with_thread_pool",
-            );
-            update_rewards_with_thread_pool_time
-        } else {
-            // After saving a snapshot of stakes, apply stake rewards and commission
-            let (_, update_rewards_with_thread_pool_time) = measure!(
-                {
+                } else {
+                    // After saving a snapshot of stakes, apply stake rewards and commission
                     self.update_rewards_with_thread_pool(
                         parent_epoch,
                         reward_calc_tracer,
                         &thread_pool,
                         &mut rewards_metrics,
                     )
-                },
-                "update_rewards_with_thread_pool",
-            );
-
-            update_rewards_with_thread_pool_time
-        };
+                }
+            },
+            "update_rewards_with_thread_pool",
+        );
 
         report_new_epoch_metrics(
             epoch,
@@ -3235,6 +3213,7 @@ impl Bank {
 
         // jwash: does `redeem_rewards` need to be factored out here?
         // This is the old code path that use cache + join, not executed in the new partitioned reward code.
+        // jwash: I don't understand. is this called or not? based on the diff it looks like it is called by the old code path? I could be wrong.
         if let Some(point_value) = point_value {
             let (vote_account_rewards, stake_rewards) = self.redeem_rewards(
                 vote_with_stake_delegations_map,
@@ -8907,13 +8886,11 @@ impl Bank {
     }
 
     pub fn get_epoch_reward_calc_start_to_serialize(&self) -> Option<(Slot, u64)> {
-        // jwash: do we still need to do this?
-        // haven't acutally got to it. but it is used to store this in snapshot. same for the other function below.
-        unimplemented!();
+        todo!("store this in snapshot");
     }
 
     pub fn get_epoch_reward_calculator_to_serialize(&self) -> Option<StakeRewards> {
-        unimplemented!();
+        todo!();
     }
 
     /// Convenience fn to get the Epoch Accounts Hash

@@ -15,8 +15,6 @@ pub(crate) struct NewEpochTimings {
 pub(crate) struct RewardsMetrics {
     pub(crate) load_vote_and_stake_accounts_us: AtomicU64,
     pub(crate) calculate_points_us: AtomicU64,
-    // jwash: not sure - should we duplicate this or reuse them?
-    // yes. we can reuse. it was introduced to do a side by side comparison for the no-join optimization.
     pub(crate) redeem_rewards_us: u64,
     pub(crate) store_stake_accounts_us: AtomicU64,
     pub(crate) store_vote_accounts_us: AtomicU64,

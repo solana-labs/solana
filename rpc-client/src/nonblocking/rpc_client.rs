@@ -3511,9 +3511,7 @@ impl RpcClient {
         self.get_reward_interval_with_commitment(self.commitment())
             .await
     }
-    // jwash: I ignored most/all rpc code.
-    // ok. we can do this later. let's focus on the runtime in the first pass.
-    //
+
     /// Returns information about the reward interval.
     ///
     /// # RPC Reference

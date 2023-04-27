@@ -7,7 +7,6 @@ use {
     crate::{
         accounts_hash::AccountsHash,
         ancestors::AncestorsForSerialization,
-        bank::StakeReward,
         stakes::{serde_stakes_enum_compat, StakesEnum},
     },
     solana_measure::measure::Measure,
@@ -220,8 +219,6 @@ impl<'a> TypeContext<'a> for Context {
                 .bank
                 .get_epoch_accounts_hash_to_serialize()
                 .map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()),
-            // jwash: did we do the deserialize, too?
-            // yes. see newr.rs:356
             serializable_bank
                 .bank
                 .get_epoch_reward_calculator_to_serialize()

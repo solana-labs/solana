@@ -338,8 +338,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
-        // jwash: why is this here?
-        // Ah. Fixed. it should be used in line 478 to check that we should not write to stake account during reward interval.
         in_reward_interval: bool,
         program_accounts: &HashMap<Pubkey, &Pubkey>,
         loaded_programs: &HashMap<Pubkey, Arc<LoadedProgram>>,
