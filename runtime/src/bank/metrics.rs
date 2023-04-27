@@ -16,9 +16,8 @@ pub(crate) struct RewardsMetrics {
     pub(crate) load_vote_and_stake_accounts_us: AtomicU64,
     pub(crate) calculate_points_us: AtomicU64,
     // jwash: not sure - should we duplicate this or reuse them?
-    pub(crate) calculate_points2_us: AtomicU64,
+    // yes. we can reuse. it was introduced to do a side by side comparison for the no-join optimization.
     pub(crate) redeem_rewards_us: u64,
-    pub(crate) redeem_rewards2_us: u64,
     pub(crate) store_stake_accounts_us: AtomicU64,
     pub(crate) store_vote_accounts_us: AtomicU64,
     pub(crate) invalid_cached_vote_accounts: usize,
@@ -86,18 +85,7 @@ pub(crate) fn report_new_epoch_metrics(
             metrics.calculate_points_us.load(Relaxed),
             i64
         ),
-        (
-            "calculate_points2_us",
-            metrics.calculate_points2_us.load(Relaxed),
-            i64
-        ),
         ("redeem_rewards_us", metrics.redeem_rewards_us, i64),
-        ("redeem_rewards2_us", metrics.redeem_rewards2_us, i64),
-        (
-            "store_stake_accounts_us",
-            metrics.store_stake_accounts_us.load(Relaxed),
-            i64
-        ),
         (
             "store_vote_accounts_us",
             metrics.store_vote_accounts_us.load(Relaxed),

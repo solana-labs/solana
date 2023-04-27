@@ -883,7 +883,7 @@ impl PartialEq for Bank {
             incremental_snapshot_persistence: _,
             loaded_programs_cache: _,
             epoch_reward_calculator: _,
-            epoch_reward_calc_start: _,
+            epoch_reward_status: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -969,6 +969,29 @@ pub struct BuiltinPrograms {
 impl AbiExample for BuiltinPrograms {
     fn example() -> Self {
         Self::default()
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct SlotBlockHeight {
+    slot: Slot,
+    block_height: u64,
+}
+
+/// An Enum for epoch reward status.
+/// - Active variant indicates that the block is in the rewarding phases. It contains the start
+/// point for epoch reward calculation, i.e. parent_slot and parent_block height for the starting
+/// block of the current epoch.
+/// - Inactive variant indicates that the block is outside of the rewarding phases.
+#[derive(Debug, Clone)]
+enum EpochRewardStatus {
+    Active(SlotBlockHeight),
+    Inactive,
+}
+
+impl EpochRewardStatus {
+    pub fn is_active(&self) -> bool {
+        matches!(self, EpochRewardStatus::Active(_))
     }
 }
 
@@ -1157,8 +1180,6 @@ pub struct Bank {
     /// Epoch reward calculator - holds the epoch reward results
     epoch_reward_calculator: Arc<Option<StakeRewards>>,
 
-    /// The start point for epoch reward calculation (parent_slot and parent_block height before the
-    /// epoch boundary)
     /// jwash: I'd probably prefer an enum here
     /// type SlotBlockHeight {
     /// slot: Slot,
@@ -1166,7 +1187,9 @@ pub struct Bank {
     /// enum:
     /// Active(SlotBlockHeight)
     /// Inactive
-    epoch_reward_calc_start: Option<(Slot, u64)>,
+    /// yes. I like it. Updated.
+    /// Epoch reward status
+    epoch_reward_status: EpochRewardStatus,
 }
 
 struct VoteWithStakeDelegations {
@@ -1284,6 +1307,9 @@ impl WorkingSlot for Bank {
 }
 
 impl Bank {
+    /// The reward calculation happens synchronously at the first block of the epoch boundary.
+    const REWARD_CALCULATION_INTERVAL: u64 = 1;
+
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
     }
@@ -1409,7 +1435,7 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
             epoch_reward_calculator: Arc::new(None),
-            epoch_reward_calc_start: None,
+            epoch_reward_status: EpochRewardStatus::Inactive,
         };
 
         bank.bank_created();
@@ -1565,16 +1591,15 @@ impl Bank {
         }
     }
 
-    /// Return the interval for reward calculation.
-    /// For synchronous reward calculation, return 1.
     /// jwash: so we always spend just the first slot calculating and storage starts on the next slot?
-    pub const fn get_reward_calculation_interval(&self) -> u64 {
-        1
-    }
+    /// Yeah. moved to a constant.
 
     /// Calculate the reward credit interval.
     pub fn get_reward_credit_interval(&self) -> u64 {
-        const CHUNK_SIZE: usize = 4098; //jwash: 4096. comment why this is chosen
+        /// Target to store 64 rewards per entry/tick in a block. A block has a minimal of 64
+        /// entries/ticks. This gives 4096 total rewards to store in one block.
+        const CHUNK_SIZE: usize = 4096; //jwash: 4096. comment why this is chosen (yeah. updated.)
+
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
         } else {
@@ -1584,6 +1609,10 @@ impl Bank {
                 (n + CHUNK_SIZE - 1) / CHUNK_SIZE
             } else {
                 // jwash: why 0 when we will clamp to 1
+                // To be consistent to the meaning of `num_chunks`. When stake_rewards is none. num_chunks = 0
+                // yeah. clamp to 1. Make sure that there is at lease one block for reward credit.
+                // when we have sysvar account, we will need to do something after all rewards are distributed.
+                // Maybe we don't need to do anything. If that's the case, we can change to clamp to 0.
                 0
             };
 
@@ -1593,14 +1622,11 @@ impl Bank {
 
     /// Return the overall reward interval (including both calculation and crediting).
     pub fn get_reward_interval(&self) -> u64 {
-        self.get_reward_calculation_interval() + self.get_reward_credit_interval()
+        Self::REWARD_CALCULATION_INTERVAL + self.get_reward_credit_interval()
     }
 
     pub fn in_reward_interval(&self) -> bool {
-        matches!(
-            self.epoch_reward_calc_start,
-            Some((_start_slot, _start_height))
-        )
+        self.epoch_reward_status.is_active()
     }
 
     fn _new_from_parent(
@@ -1761,7 +1787,7 @@ impl Bank {
             fee_structure: parent.fee_structure.clone(),
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
             epoch_reward_calculator: parent.epoch_reward_calculator.clone(),
-            epoch_reward_calc_start: parent.epoch_reward_calc_start,
+            epoch_reward_status: parent.epoch_reward_status.clone(),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1791,9 +1817,14 @@ impl Bank {
                 assert!(new.epoch_schedule.slots_per_epoch > new.get_reward_interval());
 
                 if new.partitioned_rewards_enabled() {
-                    if let Some((_start_slot, start_height)) = new.epoch_reward_calc_start {
+                    if let EpochRewardStatus::Active(slot_block_height) = new.epoch_reward_status {
+                        let SlotBlockHeight {
+                            slot: _start_slot,
+                            block_height: start_height,
+                        } = slot_block_height;
+
                         let height = new.block_height();
-                        let credit_start = start_height + new.get_reward_calculation_interval() + 1;
+                        let credit_start = start_height + Self::REWARD_CALCULATION_INTERVAL + 1;
                         let credit_end = credit_start + new.get_reward_credit_interval();
 
                         if height >= credit_start && height < credit_end {
@@ -1801,8 +1832,8 @@ impl Bank {
                             new.credit_epoch_rewards_in_partition(partition_index);
                         }
 
-                        if height >= credit_end && new.epoch_reward_calc_start.is_some() {
-                            new.epoch_reward_calc_start = None;
+                        if height >= credit_end && new.epoch_reward_status.is_active() {
+                            new.epoch_reward_status = EpochRewardStatus::Inactive;
                         }
                     }
                 }
@@ -1893,17 +1924,22 @@ impl Bank {
         let mut rewards_metrics = RewardsMetrics::default();
 
         /// jwash: refactor to put the measure around all of this
+        /// yeah.
         let update_rewards_with_thread_pool_time = if self.partitioned_rewards_enabled() {
-            info!("set epoch calc start: {} {}", parent_slot, parent_height);
-            self.epoch_reward_calc_start = Some((parent_slot, parent_height));
-
             let (_, update_rewards_with_thread_pool_time) = measure!(
-                self.calculate_rewards_with_thread_pool(
-                    parent_epoch,
-                    reward_calc_tracer,
-                    &thread_pool,
-                    &mut rewards_metrics,
-                ),
+                {
+                    info!("set epoch reward status: {} {}", parent_slot, parent_height);
+                    self.epoch_reward_status = EpochRewardStatus::Active(SlotBlockHeight {
+                        slot: parent_slot,
+                        block_height: parent_height,
+                    });
+                    self.calculate_rewards_with_thread_pool(
+                        parent_epoch,
+                        reward_calc_tracer,
+                        &thread_pool,
+                        &mut rewards_metrics,
+                    )
+                },
                 "update_rewards_with_thread_pool",
             );
             update_rewards_with_thread_pool_time
@@ -2134,7 +2170,7 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
             epoch_reward_calculator: Arc::new(None),
-            epoch_reward_calc_start: None,
+            epoch_reward_status: EpochRewardStatus::Inactive,
         };
         bank.bank_created();
 
@@ -3192,6 +3228,7 @@ impl Bank {
         );
 
         // jwash: does `redeem_rewards` need to be factored out here?
+        // This is the old code path that use cache + join, not executed in the new partitioned reward code.
         if let Some(point_value) = point_value {
             let (vote_account_rewards, stake_rewards) = self.redeem_rewards(
                 vote_with_stake_delegations_map,
@@ -3315,7 +3352,7 @@ impl Bank {
                 .sum::<u128>()
         }));
         metrics
-            .calculate_points2_us
+            .calculate_points_us
             .fetch_add(measure.as_us(), Relaxed);
 
         (points > 0).then_some(PointValue { rewards, points })
@@ -3519,7 +3556,7 @@ impl Bank {
             })
             .collect::<Vec<_>>();
 
-        metrics.redeem_rewards2_us += measure.as_us();
+        metrics.redeem_rewards_us += measure.as_us();
         (vote_rewards, stake_rewards)
     }
 
@@ -8866,6 +8903,7 @@ impl Bank {
 
     pub fn get_epoch_reward_calc_start_to_serialize(&self) -> Option<(Slot, u64)> {
         // jwash: do we still need to do this?
+        // haven't acutally got to it. but it is used to store this in snapshot. same for the other function below.
         unimplemented!();
     }
 

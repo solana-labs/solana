@@ -290,6 +290,8 @@ async fn stake_rewards_bench_550_k() {
 }
 
 // jwash: why filter here?
+// filter = true, to test that we exclude accounts with less than 1sol in reward
+// filter = false, so that we can benchmakr large number of stake accounts
 async fn stake_rewards_filter_bench_core(num_stake_accounts: u64, filter: bool) {
     // Initialize and start the test network
     let mut program_test = ProgramTest::default();

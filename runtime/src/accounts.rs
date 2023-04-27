@@ -339,6 +339,7 @@ impl Accounts {
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
         // jwash: why is this here?
+        // Ah. Fixed. it should be used in line 478 to check that we should not write to stake account during reward interval.
         in_reward_interval: bool,
         program_accounts: &HashMap<Pubkey, &Pubkey>,
         loaded_programs: &HashMap<Pubkey, Arc<LoadedProgram>>,
@@ -475,7 +476,8 @@ impl Accounts {
                     } else if account.executable() && message.is_writable(i) {
                         error_counters.invalid_writable_account += 1;
                         return Err(TransactionError::InvalidWritableAccount);
-                    } else if message.is_writable(i)
+                    } else if in_reward_interval
+                        && message.is_writable(i)
                         && solana_stake_program::check_id(account.owner())
                     {
                         error_counters.locked_reward_account += 1;

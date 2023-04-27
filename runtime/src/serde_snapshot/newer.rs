@@ -220,7 +220,8 @@ impl<'a> TypeContext<'a> for Context {
                 .bank
                 .get_epoch_accounts_hash_to_serialize()
                 .map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()),
-                // jwash: did we do the deserialize, too?
+            // jwash: did we do the deserialize, too?
+            // yes. see newr.rs:356
             serializable_bank
                 .bank
                 .get_epoch_reward_calculator_to_serialize()
