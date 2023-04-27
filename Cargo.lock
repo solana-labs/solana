@@ -5987,6 +5987,7 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "solana-account-decoder",
+ "solana-bpf-loader-program",
  "solana-clap-utils",
  "solana-cli-output",
  "solana-core",
@@ -5996,6 +5997,7 @@ dependencies = [
  "solana-ledger",
  "solana-logger 1.16.0",
  "solana-measure",
+ "solana-program-runtime",
  "solana-rpc",
  "solana-runtime",
  "solana-sdk 1.16.0",
@@ -6005,6 +6007,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
+ "solana_rbpf",
  "tikv-jemallocator",
  "tokio",
 ]
