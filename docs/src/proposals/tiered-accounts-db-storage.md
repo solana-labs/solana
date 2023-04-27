@@ -33,13 +33,17 @@ data / meta.  Lookups are in general random, with some accounts that are
 accessed more frequently than the others in a short period of time.
 
 * Scans for recent slots for hash calculation: periodic hash calculation scans
-all accounts from the recent slots.  Currently, hash calculation happens for
-every 100 blocks, and we plan to reduce the frequency to once per 25k blocks
-in near future with incremental accounts hashes and incremental snapshots.
+all accounts from the recent slots.  There're two types of hash calcaultions:
+full accounts hash calculation and incremental accounts hash calculation.
+For full accounts hash, it is calculated for every 25k slots by default, while
+incremental accounts hash is calculated for every 100 slots by default.
 
 * Not-found queries for account creation: each account creation checks
 whether the given address already exists in the accounts DB.  This requires
 an efficient way to support "not-found" queries.
+
+* RPC calls that query for a single or multiple accounts.  Some accounts might
+appear in RPC calls more often than the others.
 
 * Hot accounts: we observed that some accounts are updated more frequently than
 others, and each update to one account's data usually only changes a small
@@ -80,6 +84,9 @@ while.
      |      | |      |           |      |  |      |
      +------+ +------+           +------+  +------+
 
+Note that for the cold storage, it does not require files to be
+slot-range-partitioned.  It can support pubkey-range-partitioned as well.
+
 ## Estimated Storage Saving
 For hot accounts, the storage saving comes from the improved on-disk
 account meta representation, optional fields design, account owner
@@ -91,7 +98,7 @@ For cold accounts, in addition to the ~70 bytes per account storage
 savings from the account meta.  All account data is stored in compressed
 format.
 
-The size of account data varies a lot.  It ranges from two-digit bytes up to 10MB.
+The size of account data varies a lot.  It ranges from 0 bytes up to 10MB.
 If we use today's average account data size 270 bytes and 60% compression
 rate based on experiments from today's account data, then each cold account
 in the new format will save us 230 bytes in average.
@@ -133,13 +140,9 @@ in uncompressed and aligned format in order to make it memory-mapped
 possible.
 
     +------------------------------------------------------------------------------+
-    | Account Data Blocks      | Account data in compressed blocks.                |
-    | (compressed)             | Optional fields such as rent_epoch are also       |
-    |                          | stored here.                                      |
-    +------------------------------------------------------------------------------+
-    | Account Metas Block      | Fixed-size entries for storing accounts metadata. |
-    | (can be compressed)      | Metadata also includes information about how to   |
-    |                          | access its owner and account data.                |
+    | Accounts Blocks          | Blocks for storing account metadata, data, and    |
+    | (Meta + Data)            | optional fields such as rent_epoch.  The blocks   |
+    | (can be compressed)      | can be compressed here.                           |
     +------------------------------------------------------------------------------+
     | Owners Block             | 32 byte (Pubkey) per entry                        |
     | (uncompressed)           | Each account meta entry has an index pointing     |
@@ -228,7 +231,7 @@ each section.
     | account_index_format (8 bytes)        | Describe the format of the account index   |
     |                                       | block.                                     |
     |                                       |                                            |
-    | file_hash (32 bytes)                  | The accounts hash of the entire file.      |
+    | file_hash (32 bytes)                  | The hash of the entire file.               |
     |                                       |                                            |
     | optional_field_version  (8 bytes)     | The version of the account optional fields.|
     +------------------------------------------------------------------------------------+
@@ -247,16 +250,17 @@ to allow binary search.  It has two sections: `account_addrsses` and `meta_indic
 `account_addresses` section stores every pubkeys in sorted order.  Each account
 address entry has a correspinding entry in the `meta_indices` section.
 
-    +------------------------------------+---------------------------------------------+
-    | Account Index Block (Binary Search Format) -- 40 bytes per account               |
-    +------------------------------------+---------------------------------------------+
-    | addresses (32-byte each)           | Each entry is 32-byte (Pubkey).             |
-    |                                    | Entries are sorted in alphabetical order.   |
-    +------------------------------------+---------------------------------------------+
-    | meta_indices (4-byte each)         | Indices to access the account meta.         |
-    |                                    | The Nth entry in addresses corresponds      |
-    |                                    | Nth entry in meta_offsets.                  |
-    +------------------------------------+---------------------------------------------+
+    +------------------------------------+------------------------------------------------+
+    | Account Index Block (Binary Search Format) -- 40 bytes per account                  |
+    +------------------------------------+------------------------------------------------+
+    | addresses (32-byte each)           | Each entry is 32-byte (Pubkey).                |
+    |                                    | Entries are either sorted or hashed, depending |
+    |                                    | on the index format specified in the footer.   |
+    +------------------------------------+------------------------------------------------+
+    | meta_indices (4-byte each)         | Indices to access the account meta.            |
+    |                                    | The Nth entry in addresses corresponds         |
+    |                                    | Nth entry in meta_offsets.                     |
+    +------------------------------------+------------------------------------------------+
 
 ### Owners Block
 The owners block includes one address for each unique owner.  As multiple accounts
@@ -273,10 +277,11 @@ easier for account metas block.
     |                                    | pointing to its owner's address.            |
     +------------------------------------+---------------------------------------------+
 
-### Account Metas Block
-Account Metas block contains one entry for each account in this file.
-Each account-meta is a fixed-size entry that includes its account's metadata and
-how to access its account data, owner, and optional fields.
+### Accounts Blocks
+Accounts blocks contain one entry for each account in this file.
+Each entry of one account includes its account metadata (or meta), data, and optional
+fields.  Account meta includes lamports and information about how to access its account
+data, owner, and optional fields.
 
 The size of each account meta entry is described in the `account_meta_entry_size`
 field in the footer.  The `account_metas_format` field in the footer also provides
@@ -285,15 +290,15 @@ information about how to correctly read each account-meta entry.
 We make the format flexible so that cold and hot storage can use different
 account meta storage format.
 
-Note that account metas block has two sections. The first section stores regular
-account metas, and the second section stores program account metas.  The index
-to the first program account meta is stored in the `first_program_account_index`
-field under the Footer.  This allows us to know whether an account is executable
-or not by simply comparing its index.  In addition, this also saves us 1 bit
-per account.
+Note that account blocks has two sections. The first section stores non-program
+accounts (i.e., accounts whose data isn't executable), and the second section
+stores program accounts.  The index to the first program account is stored in the
+`first_program_account_index` field under the Footer.  This allows us to know
+whether an account is executable or not by simply comparing its index.
+In addition, this also saves us 1 bit per account.
 
     +-------------------------------------------------------------------------------+
-    | Regular Account Metas                                                         |
+    | Non-program Account Metas                                                     |
     +-------------------------------------------------------------------------------+
     | Program Account Metas                                                         |
     +-------------------------------------------------------------------------------+
@@ -313,7 +318,7 @@ account data blocks and the number of padding bytes.
     +--------------------------------------------------------------------------------+
     | Account Meta Entry -- 24 bytes per account                                     |
     +--------------------------------------------------------------------------------+
-    | lamport (8 bytes)              | The lamport balance of this account.          |
+    | lamports (8 bytes)             | The lamport balance of this account.          |
     |                                |                                               |
     | data_block_offset (7 bytes)    | Value * 8 is the offset of its data block.    |
     | padding_info (1 bytes)         | 3 bits for the number of padding bytes.       |
@@ -348,7 +353,7 @@ optional field.
     +--------------------------------------------------------------------------------+
     | Account Meta Entry -- 28 bytes per account                                     |
     +--------------------------------------------------------------------------------+
-    | lamport (8 bytes)              | The lamport balance of this account.          |
+    | lamports (8 bytes)             | The lamport balance of this account.          |
     |                                |                                               |
     | data_block_offset (8 bytes)    | The offset to the account's data block.       |
     | intra_block_offset (2 bytes)   | The inner-block offset to the accounts' data  |
