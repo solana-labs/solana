@@ -13102,3 +13102,93 @@ fn test_reward_interval_warmup() {
     assert_eq!(bank.get_reward_calculation_interval(), 1);
     assert_eq!(bank.get_reward_credit_interval(), 1);
 }
+
+/// Test reward calculation
+#[test]
+fn test_reward_calculation() {
+    solana_logger::setup();
+
+    let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    // create a bank that ticks really slowly...
+    let mut bank0 = Bank::new_for_tests(&GenesisConfig {
+        accounts: (0..42)
+            .map(|_| {
+                (
+                    solana_sdk::pubkey::new_rand(),
+                    Account::new(1_000_000_000, 0, &Pubkey::default()),
+                )
+            })
+            .collect(),
+        // set it up so the first epoch is a full year long
+        poh_config: PohConfig {
+            target_tick_duration: Duration::from_secs(
+                SECONDS_PER_YEAR as u64 / MINIMUM_SLOTS_PER_EPOCH / DEFAULT_TICKS_PER_SLOT,
+            ),
+            hashes_per_tick: None,
+            target_tick_count: None,
+        },
+        cluster_type: ClusterType::MainnetBeta,
+
+        ..GenesisConfig::default()
+    });
+
+    bank0.set_partitioned_rewards_enable(true);
+    let bank0 = Arc::new(bank0);
+
+    // enable lazy rent collection because this test depends on rent-due accounts
+    // not being eagerly-collected for exact rewards calculation
+    bank0.restore_old_behavior_for_fragile_tests();
+
+    assert_eq!(
+        bank0.capitalization(),
+        42 * 1_000_000_000 + genesis_sysvar_and_builtin_program_lamports(),
+    );
+
+    let ((vote_id, mut vote_account), (stake_id, stake_account)) =
+        crate::stakes::tests::create_staked_node_accounts(10_000);
+    let starting_vote_and_stake_balance = 10_000 + 1;
+
+    // set up accounts
+    bank0.store_account_and_update_capitalization(&stake_id, &stake_account);
+
+    // generate some rewards
+    let mut vote_state = Some(vote_state::from(&vote_account).unwrap());
+    for i in 0..MAX_LOCKOUT_HISTORY + 42 {
+        if let Some(v) = vote_state.as_mut() {
+            vote_state::process_slot_vote_unchecked(v, i as u64)
+        }
+        let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+        vote_state::to(&versioned, &mut vote_account).unwrap();
+        bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
+        match versioned {
+            VoteStateVersions::Current(v) => {
+                vote_state = Some(*v);
+            }
+            _ => panic!("Has to be of type Current"),
+        };
+    }
+    bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
+    bank0.freeze();
+
+    assert_eq!(
+        bank0.capitalization(),
+        42 * 1_000_000_000
+            + genesis_sysvar_and_builtin_program_lamports()
+            + starting_vote_and_stake_balance
+            + bank0_sysvar_delta(),
+    );
+    assert!(bank0.rewards.read().unwrap().is_empty());
+
+    // put a child bank in epoch 1, which calls update_rewards()...
+    let mut bank1 = Bank::new_from_parent(
+        &bank0,
+        &Pubkey::default(),
+        bank0.get_slots_in_epoch(bank0.epoch()) + 1,
+    );
+
+    let epoch = bank1.epoch();
+    let mut metrics = RewardsMetrics::default();
+    bank1.calculate_rewards_with_thread_pool(epoch, null_tracer(), &thread_pool, &mut metrics);
+
+    // TODO -assert rewards
+}
