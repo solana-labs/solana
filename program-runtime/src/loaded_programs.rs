@@ -285,6 +285,26 @@ impl LoadedProgramsForTxBatch {
         (self.entries.insert(key, entry.clone()).is_some(), entry)
     }
 
+    /// Insert/Update the relevant entry for all the programs from the given iterator to the cache.
+    /// Relevant entry: the most recently deployed program entry with effective slot <= current slot.
+    /// For example, on a program upgrade, the iterator can have two entries for the program, one
+    /// tombstone (for the delay visibility) and another Unloaded/Live entry for the program.
+    /// The tombstone will be effective immediately, while the second entry will be effective after
+    /// 1 slot. This function will replace any existing entry for the given program with the tombstone.
+    pub fn replenish_many(
+        &mut self,
+        programs: impl Iterator<Item = (Pubkey, Vec<Arc<LoadedProgram>>)>,
+    ) {
+        programs.for_each(|(key, updated)| {
+            let maybe_relevant_entry = updated
+                .iter()
+                .rfind(|entry| entry.effective_slot <= self.slot);
+            if let Some(relevant_entry) = maybe_relevant_entry {
+                self.replenish(key, relevant_entry.clone());
+            }
+        })
+    }
+
     pub fn find(&self, key: Pubkey) -> Option<Arc<LoadedProgram>> {
         self.entries.get(&key).cloned()
     }
@@ -354,6 +374,23 @@ impl LoadedPrograms {
         let (was_occupied, entry) = self.replenish(key, entry);
         debug_assert!(!was_occupied);
         entry
+    }
+
+    /// Insert all the entries from the iterator to the cache.
+    pub fn replenish_many(
+        &mut self,
+        programs: impl Iterator<Item = (Pubkey, Vec<Arc<LoadedProgram>>)>,
+    ) {
+        programs.for_each(|(key, updated)| {
+            let second_level = self.entries.entry(key).or_insert_with(Vec::new);
+            if second_level.is_empty() {
+                second_level.extend_from_slice(&updated);
+            } else {
+                updated.iter().for_each(|program| {
+                    self.replenish(key, program.clone());
+                })
+            }
+        })
     }
 
     /// Before rerooting the blockstore this removes all programs of orphan forks
@@ -1687,5 +1724,282 @@ mod tests {
                 .deployment_slot,
             0
         );
+    }
+
+    #[test]
+    fn test_cache_replenish_many() {
+        let mut cache = LoadedPrograms::default();
+
+        // Fork graph created for the test
+        //                   0
+        //                 /   \
+        //                10    5
+        //                |     |
+        //                20    11
+        //                |     | \
+        //                22   15  25
+        //                      |   |
+        //                     16  27
+        //                      |
+        //                     19
+        //                      |
+        //                     23
+
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 10, 20, 22]);
+        fork_graph.insert_fork(&[0, 5, 11, 15, 16]);
+        fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
+
+        let program1 = Pubkey::new_unique();
+        assert!(!cache.replenish(program1, new_test_builtin_program(0, 1)).0);
+        assert!(
+            !cache
+                .replenish(program1, new_test_builtin_program(10, 11))
+                .0
+        );
+
+        let program2 = Pubkey::new_unique();
+        assert!(!cache.replenish(program2, new_test_builtin_program(5, 6)).0);
+
+        let program3 = Pubkey::new_unique();
+        assert!(
+            !cache
+                .replenish(program3, new_test_builtin_program(25, 26))
+                .0
+        );
+
+        let program4 = Pubkey::new_unique();
+        assert!(!cache.replenish(program4, new_test_builtin_program(0, 1)).0);
+
+        // Build the updates to the cache
+        let mut cache_updates = LoadedPrograms::default();
+        assert!(
+            !cache_updates
+                .replenish(program1, new_test_builtin_program(20, 21))
+                .0
+        );
+
+        assert!(
+            !cache_updates
+                .replenish(program2, new_test_builtin_program(11, 12))
+                .0
+        );
+
+        assert!(
+            !cache_updates
+                .replenish(program4, new_test_builtin_program(5, 6))
+                .0
+        );
+        // The following is a special case, where effective slot is 4 slots in the future
+        assert!(
+            !cache_updates
+                .replenish(program4, new_test_builtin_program(15, 19))
+                .0
+        );
+
+        cache.replenish_many(cache_updates.entries.into_iter());
+
+        // Testing fork 0 - 10 - 12 - 22 with current slot at 22
+        let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 20, 22));
+        assert!(match_slot(&found, &program4, 0, 22));
+
+        assert!(missing.contains(&program2));
+        assert!(missing.contains(&program3));
+
+        // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 16
+        let mut working_slot = TestWorkingSlot::new(16, &[0, 5, 11, 15, 16, 19, 23]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0, 16));
+        assert!(match_slot(&found, &program2, 11, 16));
+
+        // The effective slot of program4 deployed in slot 15 is 19. So it should not be usable in slot 16.
+        assert!(match_slot(&found, &program4, 5, 16));
+
+        assert!(missing.contains(&program3));
+
+        // Testing the same fork above, but current slot is now 19 (equal to effective slot of program4).
+        working_slot.update_slot(19);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0, 19));
+        assert!(match_slot(&found, &program2, 11, 19));
+
+        // The effective slot of program4 deployed in slot 15 is 19. So it should be usable in slot 19.
+        assert!(match_slot(&found, &program4, 15, 19));
+
+        assert!(missing.contains(&program3));
+
+        // Testing the same fork above, but current slot is now 23 (future slot than effective slot of program4).
+        working_slot.update_slot(23);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0, 23));
+        assert!(match_slot(&found, &program2, 11, 23));
+
+        // The effective slot of program4 deployed in slot 15 is 19. So it should be usable in slot 23.
+        assert!(match_slot(&found, &program4, 15, 23));
+
+        assert!(missing.contains(&program3));
+
+        // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 11
+        let working_slot = TestWorkingSlot::new(11, &[0, 5, 11, 15, 16]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0, 11));
+        assert!(match_slot(&found, &program2, 5, 11));
+        assert!(match_slot(&found, &program4, 5, 11));
+
+        assert!(missing.contains(&program3));
+    }
+
+    #[test]
+    fn test_tx_batch_cache_replenish_many() {
+        let mut cache = LoadedPrograms::default();
+
+        // Fork graph created for the test
+        //                   0
+        //                 /   \
+        //                10    5
+        //                |     |
+        //                20    11
+        //                |     | \
+        //                22   15  25
+        //                      |   |
+        //                     16  27
+        //                      |
+        //                     19
+        //                      |
+        //                     23
+
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 10, 20, 22]);
+        fork_graph.insert_fork(&[0, 5, 11, 15, 16]);
+        fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
+
+        let program1 = Pubkey::new_unique();
+        assert!(!cache.replenish(program1, new_test_builtin_program(0, 1)).0);
+        assert!(
+            !cache
+                .replenish(program1, new_test_builtin_program(10, 11))
+                .0
+        );
+
+        let program2 = Pubkey::new_unique();
+        let program3 = Pubkey::new_unique();
+        assert!(
+            !cache
+                .replenish(program3, new_test_builtin_program(25, 26))
+                .0
+        );
+
+        let program4 = Pubkey::new_unique();
+        assert!(!cache.replenish(program4, new_test_builtin_program(0, 1)).0);
+
+        // Testing fork 0 - 10 - 12 - 22 with current slot at 22
+        let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
+        let (mut found, missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 10, 22));
+        assert!(match_slot(&found, &program4, 0, 22));
+
+        assert!(missing.contains(&program2));
+        assert!(missing.contains(&program3));
+
+        // Build the updates to the cache
+        let mut cache_updates = LoadedPrograms::default();
+        // Insert 3 new entries for program1 in the update. Only entry with effective slot 22 should be inserted in the cache.
+        assert!(
+            !cache_updates
+                .replenish(program1, new_test_builtin_program(20, 21))
+                .0
+        );
+
+        assert!(
+            !cache_updates
+                .replenish(program1, new_test_builtin_program(22, 22))
+                .0
+        );
+
+        assert!(
+            !cache_updates
+                .replenish(program1, new_test_builtin_program(22, 23))
+                .0
+        );
+
+        assert!(
+            !cache_updates
+                .replenish(program2, new_test_builtin_program(10, 12))
+                .0
+        );
+
+        found.replenish_many(cache_updates.entries.into_iter());
+        assert!(match_slot(&found, &program1, 22, 22));
+        // Test that the program1 entry has effective slot 22
+        found
+            .find(program1)
+            .map(|entry| assert_eq!(entry.effective_slot, 22));
+
+        assert!(match_slot(&found, &program2, 10, 22));
+        assert!(match_slot(&found, &program4, 0, 22));
+
+        assert!(missing.contains(&program3));
     }
 }
