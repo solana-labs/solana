@@ -46,7 +46,7 @@ const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) a
 // It also sets transaction's compute-unit to TRANSFER_TRANSACTION_COMPUTE_UNIT. Therefore the
 // max additional cost is `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE / 1_000_000`
 const MAX_COMPUTE_UNIT_PRICE: u64 = 50;
-const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 200;
+const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 450;
 /// calculate maximum possible prioritization fee, if `use-randomized-compute-unit-price` is
 /// enabled, round to nearest lamports.
 pub fn max_lamports_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
