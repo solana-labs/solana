@@ -482,15 +482,12 @@ impl MultiIteratorScheduler {
             );
 
             match retryable_id_iter.peek() {
-                Some(retryable_index) if &index == retryable_index => {
+                Some(retryable_index) if index == *retryable_index => {
                     self.container
                         .retry_transaction(id, transaction, max_age_slot);
                     retryable_id_iter.next(); // advance the iterator
                 }
-                Some(_) => {
-                    panic!("retryable_indexes should be sorted and unique")
-                }
-                None => {
+                _ => {
                     let packet_entry = self
                         .container
                         .get_packet_entry(id)
