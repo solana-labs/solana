@@ -1,7 +1,7 @@
 use {
     crate::metrics::submit_counter,
     log::*,
-    solana_sdk::timing,
+    solana_sdk::{timing, timing::AtomicInterval},
     std::{
         env,
         sync::atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -22,6 +22,8 @@ pub struct Counter {
     pub lastlog: AtomicUsize,
     pub lograte: AtomicUsize,
     pub metricsrate: AtomicU64,
+    // interval for checking if metrics should be reported
+    pub metrics_interval: AtomicInterval,
 }
 
 #[derive(Clone, Debug)]
@@ -51,6 +53,7 @@ macro_rules! create_counter {
             lastlog: std::sync::atomic::AtomicUsize::new(0),
             lograte: std::sync::atomic::AtomicUsize::new($lograte),
             metricsrate: std::sync::atomic::AtomicU64::new($metricsrate),
+            metrics_interval: solana_sdk::timing::AtomicInterval::const_default(),
         }
     };
 }
@@ -188,12 +191,9 @@ impl Counter {
             );
         }
 
-        let lastlog = self.lastlog.load(Ordering::Relaxed);
-        #[allow(deprecated)]
-        let prev = self
-            .lastlog
-            .compare_and_swap(lastlog, counts, Ordering::Relaxed);
-        if prev == lastlog {
+        // Accumulate counts for `metricsrate` and then send to agent
+        if self.metrics_interval.should_update(metricsrate) {
+            let lastlog = self.lastlog.swap(counts, Ordering::Relaxed);
             let bucket = now / metricsrate;
             let counter = CounterPoint {
                 name: self.name,
