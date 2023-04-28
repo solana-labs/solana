@@ -194,10 +194,10 @@ the offset of the Footer Body.
     +----------------------------------------------------------------------------------+
     | Footer Tail (88 bytes)                                                           |
     +------------------------------------+---------------------------------------------+
-    | footer_size (8 bytes)              | The size of the footer block.               |
-    | format_version (8 bytes)           | The format version of this file.            |
     | min_account_address (32 bytes)     | The minimum account address in this file.   |
     | max_account_address (32 bytes)     | The maximum account address in this file.   |
+    | footer_size (8 bytes)              | The size of the footer block.               |
+    | format_version (8 bytes)           | The format version of this file.            |
     | magic_number (8 bytes)             | A predefined const magic number to indicate |
     |                                    | the file type and make sure the file itself |
     |                                    | is completed without truncation.            |
@@ -209,31 +209,29 @@ each section.
     +------------------------------------------------------------------------------------+
     | Footer Body                                                                        |
     +------------------------------------------------------------------------------------+
-    | (data_block_offset) (0 bytes)         | (This offset is omitted as it's always 0.) |
-    | data_block_format (8 bytes)           | The format of the account data blocks.     |
-    | data_block_size (8 bytes)             | The size of the account data block.        |
-    |                                       | (Defult: 4k, uncompressed)                 |
+    | account_meta_format (8 bytes)         | Describes account meta format.             |
+    | owners_block_format (8 bytes)         | Describes owners block format.             |
+    | account_index_format (8 bytes)        | Describes account index block format.      |
+    | data_block_format (8 bytes)           | Describes account data format.             |
     |                                       |                                            |
-    | account_metas_offset (8 bytes)        | The offset of the account metas block.     |
     | account_meta_count (8 bytes)          | The number of account meta entries.        |
     | account_meta_entry_size (8 bytes)     | The size of each account meta entry.       |
-    | account_metas_format (8 bytes)        | The format of the account meta section.    |
+    | account_data_block_size (8 bytes)     | The max size of each account data block    |
+    |                                       | for non-blob account.                      |
+    | optional_field_version  (8 bytes)     | The version of the account optional fields.|
     | program_account_starting_index        | Index to the first program account meta.   |
     | (8 bytes)                             | Non-executable account metas store first,  |
     |                                       | then the program account.  This allows us  |
     |                                       | to distinguish regular / program accounts. |
     |                                       |                                            |
-    | owners_offset (8 bytes)               | The offset of the owners block.            |
     | owner_count (8 bytes)                 | The number of unique owners in this file.  |
     | owner_entry_size (8 bytes)            | The size of each owner entry in bytes.     |
     |                                       |                                            |
+    | account_blocks_offset (0 bytes)       | Omitted as it's always 0.                  |
     | account_index_offset (8 bytes)        | The offset of the account address block.   |
-    | account_index_format (8 bytes)        | Describe the format of the account index   |
-    |                                       | block.                                     |
+    | owners_offset (8 bytes)               | The offset of the owners block.            |
     |                                       |                                            |
     | file_hash (32 bytes)                  | The hash of the entire file.               |
-    |                                       |                                            |
-    | optional_field_version  (8 bytes)     | The version of the account optional fields.|
     +------------------------------------------------------------------------------------+
 
 ### Account Index Block
