@@ -1,14 +1,14 @@
 use {
-    super::{
-        consumer::MAX_NUM_TRANSACTIONS_PER_BATCH,
-        decision_maker::{BufferedPacketsDecision, DecisionMaker},
-        scheduler_messages::{
-            ConsumeWork, FinishedConsumeWork, FinishedForwardWork, ForwardWork, TransactionBatchId,
-            TransactionId,
-        },
-        thread_aware_account_locks::{ThreadAwareAccountLocks, ThreadId, ThreadSet},
-    },
     crate::{
+        banking_stage::{
+            consumer::MAX_NUM_TRANSACTIONS_PER_BATCH,
+            decision_maker::{BufferedPacketsDecision, DecisionMaker},
+            scheduler_messages::{
+                ConsumeWork, FinishedConsumeWork, FinishedForwardWork, ForwardWork,
+                TransactionBatchId, TransactionId,
+            },
+            thread_aware_account_locks::{ThreadAwareAccountLocks, ThreadId, ThreadSet},
+        },
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         multi_iterator_scanner::{MultiIteratorScanner, ProcessingDecision},
         packet_deserializer::{PacketDeserializer, ReceivePacketResults},
@@ -40,123 +40,6 @@ use {
     },
     thiserror::Error,
 };
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-struct TransactionPriorityId {
-    priority: u64,
-    id: TransactionId,
-}
-
-impl TransactionPriorityId {
-    fn new(priority: u64, id: TransactionId) -> Self {
-        Self { priority, id }
-    }
-}
-
-impl Ord for TransactionPriorityId {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.priority.cmp(&other.priority)
-    }
-}
-
-impl PartialOrd for TransactionPriorityId {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-struct SanitizedTransactionTTL {
-    transaction: SanitizedTransaction,
-    max_age_slot: Slot,
-}
-
-struct TransactionPacketContainer {
-    priority_queue: MinMaxHeap<TransactionPriorityId>,
-    id_to_transaction_ttl: HashMap<TransactionId, SanitizedTransactionTTL>,
-    id_to_packet: HashMap<TransactionId, DeserializedPacket>,
-}
-
-impl TransactionPacketContainer {
-    fn with_capacity(capacity: usize) -> Self {
-        Self {
-            priority_queue: MinMaxHeap::with_capacity(capacity),
-            id_to_transaction_ttl: HashMap::with_capacity(capacity),
-            id_to_packet: HashMap::with_capacity(capacity),
-        }
-    }
-
-    fn push_priority_queue_with_map_inserts(
-        &mut self,
-        transaction_id: TransactionId,
-        packet: ImmutableDeserializedPacket,
-        transaction_ttl: SanitizedTransactionTTL,
-    ) {
-        let priority_id = TransactionPriorityId::new(packet.priority(), transaction_id);
-        if self.push_priority_queue(priority_id) {
-            self.id_to_packet.insert(
-                transaction_id,
-                DeserializedPacket::from_immutable_section(packet),
-            );
-            self.id_to_transaction_ttl
-                .insert(transaction_id, transaction_ttl);
-        }
-    }
-
-    /// Returns true if the id was successfully pushed into the priority queue
-    fn push_priority_queue(&mut self, priority_id: TransactionPriorityId) -> bool {
-        if self.priority_queue.len() == self.priority_queue.capacity() {
-            let popped_id = self.priority_queue.push_pop_min(priority_id);
-            if popped_id == priority_id {
-                return false;
-            } else {
-                self.id_to_packet.remove(&popped_id.id).unwrap();
-                self.id_to_transaction_ttl.remove(&popped_id.id).unwrap();
-            }
-        } else {
-            self.priority_queue.push(priority_id);
-        }
-
-        true
-    }
-
-    fn remove_by_id(&mut self, id: TransactionId) {
-        self.id_to_packet.remove(&id);
-        self.id_to_transaction_ttl.remove(&id);
-    }
-
-    fn succeed_transaction(&mut self, id: TransactionId) {
-        self.id_to_packet.remove(&id).unwrap();
-    }
-
-    fn retry_transaction(
-        &mut self,
-        id: TransactionId,
-        transaction: SanitizedTransaction,
-        max_age_slot: Slot,
-    ) {
-        let priority = self
-            .id_to_packet
-            .get(&id)
-            .expect("packet exists")
-            .immutable_section()
-            .priority();
-        let priority_id = TransactionPriorityId::new(priority, id);
-        if self.push_priority_queue(priority_id) {
-            // The packet remained in the map while we executed, so we only need to
-            // push the transaction back in.
-            self.id_to_transaction_ttl.insert(
-                id,
-                SanitizedTransactionTTL {
-                    transaction,
-                    max_age_slot,
-                },
-            );
-        } else {
-            // If the id was the minimum priority and dropped, we must remove the packet
-            self.id_to_packet.remove(&id).unwrap();
-        }
-    }
-}
 
 struct TransactionIdGenerator {
     index: u64,
