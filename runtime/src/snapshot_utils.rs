@@ -427,8 +427,8 @@ pub enum VerifySlotDeltasError {
 /// This is useful if the process does not have permission
 /// to delete the top level directory it might be able to
 /// delete the contents of that directory.
-fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
-    if let Ok(dir_entries) = std::fs::read_dir(path) {
+fn delete_contents_of_path(path: impl AsRef<Path>) {
+    if let Ok(dir_entries) = std::fs::read_dir(&path) {
         for entry in dir_entries.flatten() {
             let sub_path = entry.path();
             let metadata = match entry.metadata() {
@@ -474,9 +474,9 @@ fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
 /// If the process is killed and the deleting process is not done,
 /// the leftover path will be deleted in the next process life, so
 /// there is no file space leaking.
-pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
+pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
     let mut path_delete = PathBuf::new();
-    path_delete.push(path);
+    path_delete.push(&path);
     path_delete.set_file_name(format!(
         "{}{}",
         path_delete.file_name().unwrap().to_str().unwrap(),
@@ -491,7 +491,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
         return;
     }
 
-    if let Err(err) = std::fs::rename(path, &path_delete) {
+    if let Err(err) = std::fs::rename(&path, &path_delete) {
         warn!(
             "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
             err.to_string()
