@@ -22,8 +22,8 @@ use {
     solana_perf::perf_libs,
     solana_runtime::{
         bank::{Bank, BankStatusCache},
+        bank_forks::BankForks,
         blockhash_queue::BlockhashQueue,
-        root_bank_cache::RootBankCache,
         transaction_error_metrics::TransactionErrorMetrics,
     },
     solana_sdk::{
@@ -34,7 +34,11 @@ use {
         nonce::state::DurableNonce,
         transaction::SanitizedTransaction,
     },
-    std::{collections::HashMap, sync::RwLockReadGuard, time::Duration},
+    std::{
+        collections::HashMap,
+        sync::{Arc, RwLock, RwLockReadGuard},
+        time::Duration,
+    },
     thiserror::Error,
 };
 
@@ -138,8 +142,8 @@ pub struct MultiIteratorScheduler {
     container: TransactionPacketContainer,
     /// Tracks all in-flight transactions
     in_flight_tracker: InFlightTracker,
-    /// Cached root bank for sanitizing transactions - updates only as new root banks are set
-    root_bank_cache: RootBankCache,
+    /// BankForks for getting working bank for sanitization
+    bank_forks: Arc<RwLock<BankForks>>,
     /// Senders for consuming transactions - 1 per worker
     consume_work_senders: Vec<Sender<ConsumeWork>>,
     /// Receiver for finished consumed transactions
@@ -160,7 +164,7 @@ impl MultiIteratorScheduler {
     pub fn new(
         num_threads: usize,
         decision_maker: DecisionMaker,
-        root_bank_cache: RootBankCache,
+        bank_forks: Arc<RwLock<BankForks>>,
         consume_work_senders: Vec<Sender<ConsumeWork>>,
         finished_consume_work_receiver: Receiver<FinishedConsumeWork>,
         forward_work_sender: Sender<ForwardWork>,
@@ -174,7 +178,7 @@ impl MultiIteratorScheduler {
             account_locks: ThreadAwareAccountLocks::new(num_threads),
             container: TransactionPacketContainer::with_capacity(700_000),
             in_flight_tracker: InFlightTracker::new(num_threads),
-            root_bank_cache,
+            bank_forks,
             consume_work_senders,
             finished_consume_work_receiver,
             forward_work_sender,
@@ -275,7 +279,7 @@ impl MultiIteratorScheduler {
 
     fn schedule_forward(&mut self, hold: bool) -> Result<(), SchedulerError> {
         let transaction_priority_ids = self.container.drain_queue().collect_vec();
-        let bank = self.root_bank_cache.root_bank();
+        let bank = self.bank_forks.read().unwrap().root_bank();
 
         let mut scanner = MultiIteratorScanner::new(
             &transaction_priority_ids,
@@ -379,13 +383,11 @@ impl MultiIteratorScheduler {
     }
 
     fn sanitize_and_buffer(&mut self, receive_packet_results: ReceivePacketResults) {
-        let root_bank = self.root_bank_cache.root_bank();
-        let tx_account_lock_limit = root_bank.get_transaction_account_lock_limit();
-        let root_bank_slot = root_bank.slot();
-        let last_slot_in_epoch = root_bank
-            .epoch_schedule()
-            .get_last_slot_in_epoch(root_bank.epoch());
-        let r_blockhash = root_bank.blockhash_queue.read().unwrap();
+        let bank = self.bank_forks.read().unwrap().working_bank();
+        let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
+        let bank_slot = bank.slot();
+        let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.epoch());
+        let r_blockhash = bank.blockhash_queue.read().unwrap();
 
         for (packet, transaction, age) in receive_packet_results
             .deserialized_packets
@@ -393,9 +395,9 @@ impl MultiIteratorScheduler {
             .filter_map(|packet| {
                 packet
                     .build_sanitized_transaction(
-                        &root_bank.feature_set,
-                        root_bank.vote_only_bank(),
-                        root_bank.as_ref(),
+                        &bank.feature_set,
+                        bank.vote_only_bank(),
+                        bank.as_ref(),
                     )
                     .map(|tx| (packet, tx))
             })
@@ -412,7 +414,7 @@ impl MultiIteratorScheduler {
                     .map(|age| (packet, transaction, age))
             })
         {
-            let max_age_slot = root_bank_slot
+            let max_age_slot = bank_slot
                 .saturating_add((MAX_PROCESSING_AGE as u64).saturating_sub(age))
                 .min(last_slot_in_epoch);
 
@@ -805,7 +807,6 @@ mod tests {
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = bank_forks.read().unwrap().working_bank();
-        let root_bank_cache = RootBankCache::new(bank_forks);
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path())
@@ -848,7 +849,7 @@ mod tests {
         let multi_iterator_scheduler = MultiIteratorScheduler::new(
             num_threads,
             decision_maker,
-            root_bank_cache,
+            bank_forks,
             consume_work_senders,
             finished_consume_work_receiver,
             forward_work_sender,
