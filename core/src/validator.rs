@@ -108,10 +108,8 @@ use {
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
-        fs::create_dir_all,
         net::SocketAddr,
         path::{Path, PathBuf},
-        process::exit,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, RwLock,
@@ -2186,13 +2184,13 @@ fn cleanup_accounts_paths(config: &ValidatorConfig) {
         move_and_async_delete_path(accounts_path);
         if !accounts_path.exists() {
             // Keep the empty directory
-            create_dir_all(accounts_path).unwrap_or_else(|err| {
+            fs::create_dir_all(accounts_path).unwrap_or_else(|err| {
                 eprintln!(
                     "Failed to create accounts directory {}: {}",
                     accounts_path.display(),
                     err
                 );
-                exit(1);
+                process::exit(1);
             });
         }
     }
