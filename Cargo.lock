@@ -919,15 +919,16 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.15.0"
+version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3abb7553d5b9b8421c6de7cb02606ff15e0c6eea7d8eadd75ef013fd636bec36"
+checksum = "eee4243f1f26fc7a42710e7439c149e2b10b05472f88090acce52632f231a73a"
 dependencies = [
  "camino",
  "cargo-platform",
  "semver 1.0.16",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
