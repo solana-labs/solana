@@ -387,7 +387,7 @@ impl MultiIteratorScheduler {
         let bank = self.bank_forks.read().unwrap().working_bank();
         let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
         let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.epoch());
-        let r_blockhash = bank.blockhash_queue.read().unwrap();
+        let r_blockhash = bank.read_blockhash_queue().unwrap();
 
         for (packet, transaction) in receive_packet_results
             .deserialized_packets
@@ -434,7 +434,7 @@ impl MultiIteratorScheduler {
     fn receive_and_process_finished_consume_work(&mut self) -> Result<(), SchedulerError> {
         let bank = self.bank_forks.read().unwrap().working_bank();
         let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.epoch());
-        let r_blockhash_queue = bank.blockhash_queue.read().unwrap();
+        let r_blockhash_queue = bank.read_blockhash_queue().unwrap();
         loop {
             match self.finished_consume_work_receiver.try_recv() {
                 Ok(finished_consume_work) => self.process_finished_consume_work(
@@ -727,7 +727,7 @@ struct ForwardPayload<'a> {
 
 impl<'a> ForwardPayload<'a> {
     fn new(container: &'a mut TransactionPacketContainer, bank: &'a Bank) -> Self {
-        let blockhash_queue = bank.blockhash_queue.read().unwrap();
+        let blockhash_queue = bank.read_blockhash_queue().unwrap();
         let status_cache = bank.status_cache.read().unwrap();
         let next_durable_nonce = DurableNonce::from_blockhash(&blockhash_queue.last_hash());
         // Calculate max forwarding age
