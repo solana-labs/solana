@@ -341,6 +341,7 @@ solana-rpc-client = { path = "rpc-client", version = "=1.16.0", default-features
 solana-rpc-client-api = { path = "rpc-client-api", version = "=1.16.0" }
 solana-rpc-client-nonce-utils = { path = "rpc-client-nonce-utils", version = "=1.16.0" }
 solana-runtime = { path = "runtime", version = "=1.16.0" }
+solana-sanitize = { path = "sdk/program/sanitize", version = "=1.16.0" }
 solana-sdk = { path = "sdk", version = "=1.16.0" }
 solana-sdk-macro = { path = "sdk/macro", version = "=1.16.0" }
 solana-send-transaction-service = { path = "send-transaction-service", version = "=1.16.0" }

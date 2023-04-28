@@ -515,7 +515,7 @@ pub mod program_stubs;
 pub mod program_utils;
 pub mod pubkey;
 pub mod rent;
-pub mod sanitize;
+pub use solana_sanitize as sanitize;
 pub mod secp256k1_program;
 pub mod secp256k1_recover;
 pub mod serde_varint;

@@ -3,7 +3,7 @@
 //! [blake3]: https://github.com/BLAKE3-team/BLAKE3
 
 use {
-    crate::sanitize::Sanitize,
+    solana_sanitize::Sanitize,
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
     std::{convert::TryFrom, fmt, mem, str::FromStr},
     thiserror::Error,

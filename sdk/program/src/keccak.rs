@@ -3,7 +3,7 @@
 //! [keccak]: https://keccak.team/keccak.html
 
 use {
-    crate::sanitize::Sanitize,
+    solana_sanitize::Sanitize,
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
     sha3::{Digest, Keccak256},
     std::{convert::TryFrom, fmt, mem, str::FromStr},

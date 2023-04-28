@@ -9,20 +9,23 @@
 //! [`v0`]: crate::message::v0
 //! [future message format]: https://docs.solana.com/proposals/versioned-transactions
 
-use crate::{
-    address_lookup_table_account::AddressLookupTableAccount,
-    bpf_loader_upgradeable,
-    hash::Hash,
-    instruction::{CompiledInstruction, Instruction},
-    message::{
-        compiled_keys::{CompileError, CompiledKeys},
-        legacy::is_builtin_key_or_sysvar,
-        AccountKeys, MessageHeader, MESSAGE_VERSION_PREFIX,
+use {
+    crate::{
+        address_lookup_table_account::AddressLookupTableAccount,
+        bpf_loader_upgradeable,
+        hash::Hash,
+        instruction::{CompiledInstruction, Instruction},
+        message::{
+            compiled_keys::{CompileError, CompiledKeys},
+            legacy::is_builtin_key_or_sysvar,
+            AccountKeys, MessageHeader, MESSAGE_VERSION_PREFIX,
+        },
+        pubkey::Pubkey,
+        short_vec,
     },
-    pubkey::Pubkey,
-    sanitize::SanitizeError,
-    short_vec,
+    solana_sanitize::SanitizeError,
 };
+
 pub use loaded::*;
 
 mod loaded;

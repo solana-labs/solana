@@ -6360,6 +6360,7 @@ dependencies = [
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
  "solana-logger 1.16.0",
+ "solana-sanitize",
  "solana-sdk-macro 1.16.0",
  "static_assertions",
  "thiserror",
@@ -6720,6 +6721,13 @@ dependencies = [
  "test-case",
  "thiserror",
  "zstd",
+]
+
+[[package]]
+name = "solana-sanitize"
+version = "1.16.0"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
