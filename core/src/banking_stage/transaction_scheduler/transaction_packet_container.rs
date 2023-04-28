@@ -68,7 +68,7 @@ impl TransactionPacketContainer {
         }
     }
 
-    /// Get packet by id.
+    /// Get transaction by id.
     /// Panics if the transaction does not exist.
     pub(crate) fn get_transaction_entry(
         &mut self,
@@ -78,6 +78,26 @@ impl TransactionPacketContainer {
             Entry::Occupied(entry) => entry,
             Entry::Vacant(_) => panic!("transaction must exist"),
         }
+    }
+
+    /// Get transaction and packet entries by id.
+    /// Panics if either does not exist.
+    pub(crate) fn get_transaction_and_packet_entries(
+        &mut self,
+        id: TransactionId,
+    ) -> (
+        OccupiedEntry<TransactionId, SanitizedTransactionTTL>,
+        OccupiedEntry<TransactionId, DeserializedPacket>,
+    ) {
+        let Entry::Occupied(transaction_entry) = self.id_to_transaction_ttl.entry(id) else {
+            panic!("transaction must exist");
+        };
+
+        let Entry::Occupied(packet_entry) = self.id_to_packet.entry(id) else {
+            panic!("packet must exist");
+        };
+
+        (transaction_entry, packet_entry)
     }
 
     /// Insert a new transaction into the container's queues and maps.
