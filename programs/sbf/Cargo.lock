@@ -5633,7 +5633,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sanitize"
-version = "1.16.0"
+version = "0.0.1"
 dependencies = [
  "thiserror",
 ]
