@@ -1,4 +1,8 @@
 use {
+    super::{
+        transaction_packet_container::{SanitizedTransactionTTL, TransactionPacketContainer},
+        transaction_priority_id::TransactionPriorityId,
+    },
     crate::{
         banking_stage::{
             consumer::MAX_NUM_TRANSACTIONS_PER_BATCH,
@@ -9,15 +13,12 @@ use {
             },
             thread_aware_account_locks::{ThreadAwareAccountLocks, ThreadId, ThreadSet},
         },
-        immutable_deserialized_packet::ImmutableDeserializedPacket,
         multi_iterator_scanner::{MultiIteratorScanner, ProcessingDecision},
         packet_deserializer::{PacketDeserializer, ReceivePacketResults},
         read_write_account_set::ReadWriteAccountSet,
-        unprocessed_packet_batches::DeserializedPacket,
     },
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TryRecvError},
     itertools::{izip, Itertools},
-    min_max_heap::MinMaxHeap,
     solana_perf::perf_libs,
     solana_runtime::{
         bank::{Bank, BankStatusCache},
@@ -33,11 +34,7 @@ use {
         nonce::state::DurableNonce,
         transaction::SanitizedTransaction,
     },
-    std::{
-        collections::{hash_map::Entry, HashMap},
-        sync::RwLockReadGuard,
-        time::Duration,
-    },
+    std::{collections::HashMap, sync::RwLockReadGuard, time::Duration},
     thiserror::Error,
 };
 
@@ -192,7 +189,7 @@ impl MultiIteratorScheduler {
         loop {
             // If there are queued transactions/packets, make a decision about what to do with them
             // and schedule work accordingly
-            if !self.container.priority_queue.is_empty() {
+            if !self.container.is_empty() {
                 let decision = self.decision_maker.make_consume_or_forward_decision();
                 match decision {
                     BufferedPacketsDecision::Consume(bank_start) => {
@@ -210,28 +207,15 @@ impl MultiIteratorScheduler {
     }
 
     fn schedule_consume(&mut self, scheduling_slot: Slot) -> Result<(), SchedulerError> {
-        struct TopIter<'a, T: Ord + Sized> {
-            heap: &'a mut MinMaxHeap<T>,
-        }
-
-        impl<'a, T: Ord + Sized> TopIter<'a, T> {
-            fn take(&mut self, n: usize) -> impl Iterator<Item = T> + '_ {
-                (0..n).map_while(|_| self.heap.pop_max())
-            }
-        }
-
         // Take the top transactions from the priority queue
         // Note: we do not take all the transactions into a single batch
         //       because serialization time can be excessive when the queue
         //       is very large
         const MAX_TRANSACTIONS_PER_SCHEDULE_ITERATION: usize = 100_000;
-        let transaction_ids = {
-            TopIter {
-                heap: &mut self.container.priority_queue,
-            }
-            .take(MAX_TRANSACTIONS_PER_SCHEDULE_ITERATION)
-            .collect_vec()
-        };
+        let transaction_ids = self
+            .container
+            .take_top_n(MAX_TRANSACTIONS_PER_SCHEDULE_ITERATION)
+            .collect_vec();
 
         let mut scanner = MultiIteratorScanner::new(
             &transaction_ids,
@@ -290,7 +274,7 @@ impl MultiIteratorScheduler {
     }
 
     fn schedule_forward(&mut self, hold: bool) -> Result<(), SchedulerError> {
-        let transaction_priority_ids = self.container.priority_queue.drain_desc().collect_vec();
+        let transaction_priority_ids = self.container.drain_queue().collect_vec();
         let bank = self.root_bank_cache.root_bank();
 
         let mut scanner = MultiIteratorScanner::new(
@@ -312,9 +296,9 @@ impl MultiIteratorScheduler {
                     .map(|id| {
                         payload
                             .container
-                            .id_to_packet
-                            .get(id)
+                            .get_packet_entry(*id)
                             .unwrap()
+                            .get()
                             .immutable_section()
                             .clone()
                     })
@@ -323,14 +307,15 @@ impl MultiIteratorScheduler {
                 // Remove both transaction and packet from the scheduler container
                 ids.iter()
                     .map(|id| {
-                        payload.container.id_to_transaction_ttl.remove(id).unwrap();
-                        payload
+                        let packet = payload
                             .container
-                            .id_to_packet
-                            .remove(id)
+                            .get_packet_entry(*id)
                             .unwrap()
+                            .get()
                             .immutable_section()
-                            .clone()
+                            .clone();
+                        payload.container.remove_by_id(id);
+                        packet
                     })
                     .collect_vec()
             };
@@ -362,22 +347,20 @@ impl MultiIteratorScheduler {
             .filter(|(_, already_processed)| !already_processed)
             .map(|(id, _)| id)
             .for_each(|id| {
-                self.container.push_priority_queue(id);
+                self.container.push_id_into_queue(id);
             })
     }
 
     fn receive_and_buffer_packets(&mut self) -> Result<(), SchedulerError> {
         const EMPTY_RECEIVE_TIMEOUT: Duration = Duration::from_millis(100);
         const NON_EMPTY_RECEIVE_TIMEOUT: Duration = Duration::from_millis(0);
-        let timeout = if self.container.priority_queue.is_empty() {
+        let timeout = if self.container.is_empty() {
             EMPTY_RECEIVE_TIMEOUT
         } else {
             NON_EMPTY_RECEIVE_TIMEOUT
         };
 
-        let remaining_capacity =
-            self.container.priority_queue.capacity() - self.container.priority_queue.len();
-
+        let remaining_capacity = self.container.remaining_queue_capacity();
         let receive_packet_results = self
             .packet_deserializer
             .receive_packets(timeout, remaining_capacity);
@@ -439,11 +422,8 @@ impl MultiIteratorScheduler {
             };
 
             let transaction_id = self.transaction_id_generator.next();
-            self.container.push_priority_queue_with_map_inserts(
-                transaction_id,
-                packet,
-                transaction_ttl,
-            );
+            self.container
+                .insert_new_transaction(transaction_id, packet, transaction_ttl);
         }
     }
 
@@ -499,7 +479,10 @@ impl MultiIteratorScheduler {
                         .retry_transaction(id, transaction, max_age_slot);
                     retryable_id_iter.next(); // advance the iterator
                 }
-                _ => self.container.succeed_transaction(id),
+                Some(_) => {
+                    panic!("retryable_indexes should be sorted and unique")
+                }
+                None => self.container.remove_by_id(&id),
             }
         }
     }
@@ -529,8 +512,8 @@ impl MultiIteratorScheduler {
     ) {
         if successful {
             for id in ids {
-                if let Some(deserialized_packet) = self.container.id_to_packet.get_mut(&id) {
-                    deserialized_packet.forwarded = true;
+                if let Some(mut deserialized_packet) = self.container.get_packet_entry(id) {
+                    deserialized_packet.get_mut().forwarded = true;
                 } else {
                     // If a packet is not in the map, then it was forwarded *without* holding
                     // and this can return early without iterating over the remaining ids.
@@ -597,16 +580,14 @@ impl<'a> ConsumePayload<'a> {
         payload: &mut Self,
     ) -> ProcessingDecision {
         let scheduler = &mut *payload.scheduler;
-        let Entry::Occupied(transaction_entry) = scheduler.container.id_to_transaction_ttl.entry(priority_id.id) else {
-            panic!("transaction id should exist in container");
-        };
+        let transaction_entry = scheduler.container.get_transaction_entry(priority_id.id);
         let SanitizedTransactionTTL {
             transaction,
             max_age_slot,
         } = transaction_entry.get();
 
         if *max_age_slot < payload.scheduling_slot {
-            scheduler.container.remove_by_id(priority_id.id);
+            scheduler.container.remove_by_id(&priority_id.id);
             return ProcessingDecision::Never;
         }
 
@@ -726,14 +707,11 @@ impl<'a> ForwardPayload<'a> {
         priority_id: &TransactionPriorityId,
         payload: &mut Self,
     ) -> ProcessingDecision {
+        let transaction_entry = payload.container.get_transaction_entry(priority_id.id);
         let SanitizedTransactionTTL {
             transaction,
             max_age_slot,
-        } = payload
-            .container
-            .id_to_transaction_ttl
-            .get(&priority_id.id)
-            .unwrap();
+        } = transaction_entry.get();
 
         // If the transaction is too old, we don't forward it
         if *max_age_slot < payload.bank.slot()
@@ -749,7 +727,7 @@ impl<'a> ForwardPayload<'a> {
                 .0
                 .is_err()
         {
-            payload.container.remove_by_id(priority_id.id);
+            payload.container.remove_by_id(&priority_id.id);
             return ProcessingDecision::Never;
         }
 
