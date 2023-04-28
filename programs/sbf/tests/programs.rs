@@ -1394,7 +1394,7 @@ fn assert_instruction_count() {
         let mut load_program_metrics = LoadProgramMetrics::default();
         let loaded_program = Arc::new(
             load_program_from_bytes(
-                &FeatureSet::default(),
+                &FeatureSet::all_enabled(),
                 &ComputeBudget::default(),
                 None,
                 &mut load_program_metrics,
