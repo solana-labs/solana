@@ -8,7 +8,6 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         invoke_context::{BpfAllocator, InvokeContext, SyscallContext},
         loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
@@ -55,7 +54,7 @@ use {
         },
     },
     std::{
-        cell::{RefCell, RefMut},
+        cell::RefCell,
         mem,
         rc::Rc,
         sync::{atomic::Ordering, Arc},
@@ -146,7 +145,6 @@ pub fn load_program_from_account(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
-    tx_executor_cache: Option<RefMut<TransactionExecutorCache>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
     debugging_features: bool,
@@ -157,17 +155,6 @@ pub fn load_program_from_account(
             "Executable account not owned by the BPF loader"
         );
         return Err(InstructionError::IncorrectProgramId);
-    }
-
-    if let Some(ref tx_executor_cache) = tx_executor_cache {
-        if let Some(loaded_program) = tx_executor_cache.get(program.get_key()) {
-            if loaded_program.is_tombstone() {
-                // We cached that the Executor does not exist, abort
-                return Err(InstructionError::InvalidAccountData);
-            }
-            // Executor exists and is cached, use it
-            return Ok((loaded_program, None));
-        }
     }
 
     let (programdata_offset, deployment_slot) =
@@ -199,15 +186,6 @@ pub fn load_program_from_account(
         false, /* reject_deployment_of_broken_elfs */
         debugging_features,
     )?);
-    if let Some(mut tx_executor_cache) = tx_executor_cache {
-        tx_executor_cache.set(
-            *program.get_key(),
-            loaded_program.clone(),
-            false,
-            feature_set.is_active(&delay_visibility_of_program_deployment::id()),
-            deployment_slot,
-        );
-    }
 
     Ok((loaded_program, Some(load_program_metrics)))
 }
@@ -583,39 +561,23 @@ fn process_instruction_inner(
         return Err(Box::new(InstructionError::IncorrectProgramId));
     }
 
-    let programdata_account = if bpf_loader_upgradeable::check_id(program_account.get_owner()) {
-        instruction_context
-            .try_borrow_program_account(
-                transaction_context,
-                instruction_context
-                    .get_number_of_program_accounts()
-                    .saturating_sub(2),
-            )
-            .ok()
-    } else {
-        None
-    };
-
     let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-    let (executor, load_program_metrics) = load_program_from_account(
-        &invoke_context.feature_set,
-        invoke_context.get_compute_budget(),
-        log_collector,
-        Some(invoke_context.tx_executor_cache.borrow_mut()),
-        &program_account,
-        programdata_account.as_ref().unwrap_or(&program_account),
-        false, /* debugging_features */
-    )?;
+    let executor = invoke_context
+        .tx_executor_cache
+        .borrow()
+        .get(program_account.get_key())
+        .ok_or(InstructionError::InvalidAccountData)?;
+
+    if executor.is_tombstone() {
+        return Err(Box::new(InstructionError::InvalidAccountData));
+    }
+
     drop(program_account);
-    drop(programdata_account);
     get_or_create_executor_time.stop();
     saturating_add_assign!(
         invoke_context.timings.get_or_create_executor_us,
         get_or_create_executor_time.as_us()
     );
-    if let Some(load_program_metrics) = load_program_metrics {
-        load_program_metrics.submit_datapoint(&mut invoke_context.timings);
-    }
 
     executor.usage_counter.fetch_add(1, Ordering::Relaxed);
     match &executor.program {
@@ -1759,6 +1721,51 @@ mod tests {
         )
     }
 
+    fn process_instruction_with_loaded_programs(
+        loader_id: &Pubkey,
+        program_indices: &[IndexOfAccount],
+        instruction_data: &[u8],
+        transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
+        instruction_accounts: Vec<AccountMeta>,
+        expected_result: Result<(), InstructionError>,
+        loaded_programs: &[(Pubkey, Arc<LoadedProgram>)],
+    ) -> Vec<AccountSharedData> {
+        mock_process_instruction(
+            loader_id,
+            program_indices.to_vec(),
+            instruction_data,
+            transaction_accounts,
+            instruction_accounts,
+            expected_result,
+            super::process_instruction,
+            |invoke_context| {
+                let mut cache = invoke_context.tx_executor_cache.borrow_mut();
+                loaded_programs.iter().for_each(|(pubkey, program)| {
+                    cache.set(*pubkey, program.clone(), true, false, 0)
+                });
+            },
+            |_invoke_context| {},
+        )
+    }
+
+    fn load_test_program(program_account: &AccountSharedData, loader_id: Pubkey) -> LoadedProgram {
+        let mut load_program_metrics = LoadProgramMetrics::default();
+
+        load_program_from_bytes(
+            &FeatureSet::default(),
+            &ComputeBudget::default(),
+            None,
+            &mut load_program_metrics,
+            program_account.data(),
+            &loader_id,
+            program_account.data().len(),
+            0,
+            true,
+            false,
+        )
+        .expect("Failed to load the test program")
+    }
+
     fn load_program_account_from_elf(loader_id: &Pubkey, path: &str) -> AccountSharedData {
         let mut file = File::open(path).expect("file open failed");
         let mut elf = Vec::new();
@@ -1936,28 +1943,32 @@ mod tests {
             is_writable: false,
         };
 
+        let loaded_program = Arc::new(load_test_program(&program_account, loader_id));
+
         // Case: No program account
-        process_instruction(
+        process_instruction_with_loaded_programs(
             &loader_id,
             &[],
             &[],
             Vec::new(),
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
+            &[(program_id, loaded_program.clone())],
         );
 
         // Case: Only a program account
-        process_instruction(
+        process_instruction_with_loaded_programs(
             &loader_id,
             &[0],
             &[],
             vec![(program_id, program_account.clone())],
             Vec::new(),
             Ok(()),
+            &[(program_id, loaded_program.clone())],
         );
 
         // Case: With program and parameter account
-        process_instruction(
+        process_instruction_with_loaded_programs(
             &loader_id,
             &[0],
             &[],
@@ -1967,10 +1978,11 @@ mod tests {
             ],
             vec![parameter_meta.clone()],
             Ok(()),
+            &[(program_id, loaded_program.clone())],
         );
 
         // Case: With duplicate accounts
-        process_instruction(
+        process_instruction_with_loaded_programs(
             &loader_id,
             &[0],
             &[],
@@ -1980,6 +1992,7 @@ mod tests {
             ],
             vec![parameter_meta.clone(), parameter_meta],
             Ok(()),
+            &[(program_id, loaded_program.clone())],
         );
 
         // Case: limited budget
@@ -1993,19 +2006,22 @@ mod tests {
             super::process_instruction,
             |invoke_context| {
                 invoke_context.mock_set_remaining(0);
+                let mut cache = invoke_context.tx_executor_cache.borrow_mut();
+                cache.set(program_id, loaded_program.clone(), true, false, 0);
             },
             |_invoke_context| {},
         );
 
         // Case: Account not a program
         program_account.set_executable(false);
-        process_instruction(
+        process_instruction_with_loaded_programs(
             &loader_id,
             &[0],
             &[],
             vec![(program_id, program_account)],
             Vec::new(),
             Err(InstructionError::IncorrectProgramId),
+            &[(program_id, loaded_program)],
         );
     }
 
@@ -2023,8 +2039,10 @@ mod tests {
             is_writable: false,
         };
 
+        let loaded_program = Arc::new(load_test_program(&program_account, loader_id));
+
         // Case: With program and parameter account
-        process_instruction(
+        process_instruction_with_loaded_programs(
             &loader_id,
             &[0],
             &[],
@@ -2034,10 +2052,11 @@ mod tests {
             ],
             vec![parameter_meta.clone()],
             Ok(()),
+            &[(program_id, loaded_program.clone())],
         );
 
         // Case: With duplicate accounts
-        process_instruction(
+        process_instruction_with_loaded_programs(
             &loader_id,
             &[0],
             &[],
@@ -2047,6 +2066,7 @@ mod tests {
             ],
             vec![parameter_meta.clone(), parameter_meta],
             Ok(()),
+            &[(program_id, loaded_program)],
         );
     }
 
@@ -2064,8 +2084,10 @@ mod tests {
             is_writable: false,
         };
 
+        let loaded_program = Arc::new(load_test_program(&program_account, loader_id));
+
         // Case: With program and parameter account
-        process_instruction(
+        process_instruction_with_loaded_programs(
             &loader_id,
             &[0],
             &[],
@@ -2075,10 +2097,11 @@ mod tests {
             ],
             vec![parameter_meta.clone()],
             Ok(()),
+            &[(program_id, loaded_program.clone())],
         );
 
         // Case: With duplicate accounts
-        process_instruction(
+        process_instruction_with_loaded_programs(
             &loader_id,
             &[0],
             &[],
@@ -2088,6 +2111,7 @@ mod tests {
             ],
             vec![parameter_meta.clone(), parameter_meta],
             Ok(()),
+            &[(program_id, loaded_program)],
         );
     }
 
