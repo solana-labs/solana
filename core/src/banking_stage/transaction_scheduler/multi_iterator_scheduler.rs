@@ -13,6 +13,7 @@ use {
                 TransactionBatchId, TransactionId,
             },
         },
+        immutable_deserialized_packet::ImmutableDeserializedPacket,
         multi_iterator_scanner::{MultiIteratorScanner, ProcessingDecision},
         packet_deserializer::{PacketDeserializer, ReceivePacketResults},
         read_write_account_set::ReadWriteAccountSet,
@@ -385,11 +386,10 @@ impl MultiIteratorScheduler {
     fn sanitize_and_buffer(&mut self, receive_packet_results: ReceivePacketResults) {
         let bank = self.bank_forks.read().unwrap().working_bank();
         let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
-        let bank_slot = bank.slot();
         let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.epoch());
         let r_blockhash = bank.blockhash_queue.read().unwrap();
 
-        for (packet, transaction, age) in receive_packet_results
+        for (packet, transaction) in receive_packet_results
             .deserialized_packets
             .into_iter()
             .filter_map(|packet| {
@@ -411,16 +411,13 @@ impl MultiIteratorScheduler {
             .filter_map(|(packet, transaction)| {
                 r_blockhash
                     .get_hash_age(transaction.message().recent_blockhash())
-                    .map(|age| (packet, transaction, age))
+                    .filter(|age| *age <= MAX_PROCESSING_AGE as u64)
+                    .map(|_| (packet, transaction))
             })
         {
-            let max_age_slot = bank_slot
-                .saturating_add((MAX_PROCESSING_AGE as u64).saturating_sub(age))
-                .min(last_slot_in_epoch);
-
             let transaction_ttl = SanitizedTransactionTTL {
                 transaction,
-                max_age_slot,
+                max_age_slot: last_slot_in_epoch,
             };
 
             let transaction_id = self.transaction_id_generator.next();
@@ -435,11 +432,17 @@ impl MultiIteratorScheduler {
     }
 
     fn receive_and_process_finished_consume_work(&mut self) -> Result<(), SchedulerError> {
+        let bank = self.bank_forks.read().unwrap().working_bank();
+        let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.epoch());
+        let r_blockhash_queue = bank.blockhash_queue.read().unwrap();
         loop {
             match self.finished_consume_work_receiver.try_recv() {
-                Ok(finished_consume_work) => {
-                    self.process_finished_consume_work(finished_consume_work)
-                }
+                Ok(finished_consume_work) => self.process_finished_consume_work(
+                    &bank,
+                    &r_blockhash_queue,
+                    last_slot_in_epoch,
+                    finished_consume_work,
+                ),
                 Err(TryRecvError::Empty) => return Ok(()),
                 Err(TryRecvError::Disconnected) => {
                     return Err(SchedulerError::DisconnectedReceiveChannel(
@@ -452,6 +455,9 @@ impl MultiIteratorScheduler {
 
     fn process_finished_consume_work(
         &mut self,
+        bank: &Bank,
+        r_blockhash_queue: &BlockhashQueue,
+        last_slot_in_epoch: Slot,
         FinishedConsumeWork {
             work:
                 ConsumeWork {
@@ -484,9 +490,53 @@ impl MultiIteratorScheduler {
                 Some(_) => {
                     panic!("retryable_indexes should be sorted and unique")
                 }
-                None => self.container.remove_by_id(&id),
+                None => {
+                    let packet_entry = self
+                        .container
+                        .get_packet_entry(id)
+                        .expect("packet must exist");
+
+                    if max_age_slot == 0 {
+                        if let Some(resanitized_transaction) =
+                            Self::should_retry_expired_transaction(
+                                packet_entry.get().immutable_section(),
+                                bank,
+                                r_blockhash_queue,
+                            )
+                        {
+                            // re-insert
+                            self.container.retry_transaction(
+                                id,
+                                resanitized_transaction,
+                                last_slot_in_epoch,
+                            );
+                            continue;
+                        }
+                    }
+
+                    packet_entry.remove_entry();
+                }
             }
         }
+    }
+
+    fn should_retry_expired_transaction(
+        packet: &ImmutableDeserializedPacket,
+        bank: &Bank,
+        r_blockhash_queue: &BlockhashQueue,
+    ) -> Option<SanitizedTransaction> {
+        // Check age
+        r_blockhash_queue
+            .get_hash_age(
+                packet
+                    .transaction()
+                    .get_message()
+                    .message
+                    .recent_blockhash(),
+            )
+            .filter(|age| *age <= MAX_PROCESSING_AGE as u64)?;
+
+        packet.build_sanitized_transaction(&bank.feature_set, bank.vote_only_bank(), bank)
     }
 
     fn receive_and_process_finished_forward_work(&mut self) -> Result<(), SchedulerError> {

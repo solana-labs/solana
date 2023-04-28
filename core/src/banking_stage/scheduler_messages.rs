@@ -30,6 +30,7 @@ pub struct ConsumeWork {
     pub batch_id: TransactionBatchId,
     pub ids: Vec<TransactionId>,
     pub transactions: Vec<SanitizedTransaction>,
+    /// Sentinal value of 0 ON return to indicate the transaction expired
     pub max_age_slots: Vec<Slot>,
 }
 
