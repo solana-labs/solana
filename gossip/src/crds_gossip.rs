@@ -348,7 +348,7 @@ pub(crate) fn get_gossip_nodes<R: Rng>(
             if value.local_timestamp < active_cutoff {
                 // In order to mitigate eclipse attack, for staked nodes
                 // continue retrying periodically.
-                let stake = stakes.get(&node.id).copied().unwrap_or_default();
+                let stake = stakes.get(node.pubkey()).copied().unwrap_or_default();
                 if stake == 0u64 || !rng.gen_ratio(1, 16) {
                     return None;
                 }
@@ -356,14 +356,14 @@ pub(crate) fn get_gossip_nodes<R: Rng>(
             Some(node)
         })
         .filter(|node| {
-            &node.id != pubkey
+            node.pubkey() != pubkey
                 && verify_shred_version(node.shred_version())
                 && node
                     .gossip()
                     .map(|addr| socket_addr_space.check(&addr))
                     .unwrap_or_default()
                 && match gossip_validators {
-                    Some(nodes) => nodes.contains(&node.id),
+                    Some(nodes) => nodes.contains(node.pubkey()),
                     None => true,
                 }
         })
@@ -381,7 +381,7 @@ pub(crate) fn dedup_gossip_addresses(
         .filter_map(|node| Some((node.gossip().ok()?, node)))
         .into_grouping_map()
         .aggregate(|acc, _node_gossip, node| {
-            let stake = stakes.get(&node.id).copied().unwrap_or_default();
+            let stake = stakes.get(node.pubkey()).copied().unwrap_or_default();
             match acc {
                 Some((ref s, _)) if s >= &stake => acc,
                 Some(_) | None => Some((stake, node)),
@@ -410,7 +410,7 @@ pub(crate) fn maybe_ping_gossip_addresses<R: Rng + CryptoRng>(
                 Ok(addr) => addr,
             };
             let (check, ping) = {
-                let node = (node.id, node_gossip);
+                let node = (*node.pubkey(), node_gossip);
                 ping_cache.check(now, node, &mut pingf)
             };
             if let Some(ping) = ping {
@@ -465,7 +465,7 @@ mod test {
         //incorrect dest
         let mut res = crds_gossip.process_prune_msg(
             &id,
-            &ci.id,
+            ci.pubkey(),
             &Pubkey::from(hash(&[1; 32]).to_bytes()),
             &[prune_pubkey],
             now,
@@ -476,7 +476,7 @@ mod test {
         //correct dest
         res = crds_gossip.process_prune_msg(
             &id,             // self_pubkey
-            &ci.id,          // peer
+            ci.pubkey(),     // peer
             &id,             // destination
             &[prune_pubkey], // origins
             now,
@@ -488,7 +488,7 @@ mod test {
         let timeout = now + crds_gossip.push.prune_timeout * 2;
         res = crds_gossip.process_prune_msg(
             &id,             // self_pubkey
-            &ci.id,          // peer
+            ci.pubkey(),     // peer
             &id,             // destination
             &[prune_pubkey], // origins
             now,

@@ -2104,7 +2104,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
             // Contact infos are refreshed twice during this period.
             age < CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS
         })
-        .map(|node| (node.id, node))
+        .map(|node| (*node.pubkey(), node))
         .collect();
     let my_shred_version = cluster_info.my_shred_version();
     let my_id = cluster_info.id();

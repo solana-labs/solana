@@ -115,7 +115,7 @@ fn test_consistency_halt() {
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
     let mut known_validators = HashSet::new();
-    known_validators.insert(cluster_nodes[0].id);
+    known_validators.insert(*cluster_nodes[0].pubkey());
 
     validator_snapshot_test_config
         .validator_config

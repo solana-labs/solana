@@ -197,7 +197,7 @@ fn process_spy_results(
             }
         }
         if let Some(node) = pubkey {
-            if !validators.iter().any(|x| x.id == node) {
+            if !validators.iter().any(|x| x.pubkey() == &node) {
                 eprintln!("Error: Could not find node {node:?}");
                 exit(1);
             }

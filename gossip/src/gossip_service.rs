@@ -254,7 +254,7 @@ fn spy(
         tvu_peers = spy_ref.all_tvu_peers();
 
         let found_node_by_pubkey = if let Some(pubkey) = find_node_by_pubkey {
-            all_peers.iter().any(|x| x.id == pubkey)
+            all_peers.iter().any(|node| node.pubkey() == &pubkey)
         } else {
             false
         };

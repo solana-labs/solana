@@ -267,13 +267,13 @@ pub(crate) enum RepairResponse {
 impl RepairProtocol {
     fn sender(&self) -> &Pubkey {
         match self {
-            Self::LegacyWindowIndex(ci, _, _) => &ci.id,
-            Self::LegacyHighestWindowIndex(ci, _, _) => &ci.id,
-            Self::LegacyOrphan(ci, _) => &ci.id,
-            Self::LegacyWindowIndexWithNonce(ci, _, _, _) => &ci.id,
-            Self::LegacyHighestWindowIndexWithNonce(ci, _, _, _) => &ci.id,
-            Self::LegacyOrphanWithNonce(ci, _, _) => &ci.id,
-            Self::LegacyAncestorHashes(ci, _, _) => &ci.id,
+            Self::LegacyWindowIndex(ci, _, _) => ci.pubkey(),
+            Self::LegacyHighestWindowIndex(ci, _, _) => ci.pubkey(),
+            Self::LegacyOrphan(ci, _) => ci.pubkey(),
+            Self::LegacyWindowIndexWithNonce(ci, _, _, _) => ci.pubkey(),
+            Self::LegacyHighestWindowIndexWithNonce(ci, _, _, _) => ci.pubkey(),
+            Self::LegacyOrphanWithNonce(ci, _, _) => ci.pubkey(),
+            Self::LegacyAncestorHashes(ci, _, _) => ci.pubkey(),
             Self::Pong(pong) => pong.from(),
             Self::WindowIndex { header, .. } => &header.sender,
             Self::HighestWindowIndex { header, .. } => &header.sender,
@@ -346,7 +346,7 @@ impl RepairPeers {
             .zip(weights)
             .filter_map(|(peer, &weight)| {
                 let addr = peer.serve_repair().ok()?;
-                Some(((peer.id, addr), weight))
+                Some(((*peer.pubkey(), addr), weight))
             })
             .unzip();
         if peers.is_empty() {
@@ -1077,7 +1077,7 @@ impl ServeRepair {
             .map(|i| index[i])
             .filter_map(|i| {
                 let addr = repair_peers[i].serve_repair().ok()?;
-                Some((repair_peers[i].id, addr))
+                Some((*repair_peers[i].pubkey(), addr))
             })
             .take(ANCESTOR_HASH_REPAIR_SAMPLE_SIZE)
             .collect();
@@ -1100,7 +1100,7 @@ impl ServeRepair {
             .unzip();
         let k = WeightedIndex::new(weights)?.sample(&mut rand::thread_rng());
         let n = index[k];
-        Ok((repair_peers[n].id, repair_peers[n].serve_repair()?))
+        Ok((*repair_peers[n].pubkey(), repair_peers[n].serve_repair()?))
     }
 
     pub(crate) fn map_repair_request(
@@ -2172,7 +2172,7 @@ mod tests {
         let known_validators = Some(vec![*contact_info2.pubkey()].into_iter().collect());
         let repair_peers = serve_repair.repair_peers(&known_validators, 1);
         assert_eq!(repair_peers.len(), 1);
-        assert_eq!(&repair_peers[0].id, contact_info2.pubkey());
+        assert_eq!(repair_peers[0].pubkey(), contact_info2.pubkey());
         assert!(serve_repair
             .repair_request(
                 &cluster_slots,
@@ -2190,7 +2190,7 @@ mod tests {
         let repair_peers: HashSet<Pubkey> = serve_repair
             .repair_peers(&None, 1)
             .into_iter()
-            .map(|c| c.id)
+            .map(|node| *node.pubkey())
             .collect();
         assert_eq!(repair_peers.len(), 2);
         assert!(repair_peers.contains(contact_info2.pubkey()));

@@ -598,7 +598,7 @@ impl CrdsValue {
     }
     pub fn pubkey(&self) -> Pubkey {
         match &self.data {
-            CrdsData::LegacyContactInfo(contact_info) => contact_info.id,
+            CrdsData::LegacyContactInfo(contact_info) => *contact_info.pubkey(),
             CrdsData::Vote(_, vote) => vote.from,
             CrdsData::LowestSlot(_, slots) => slots.from,
             CrdsData::LegacySnapshotHashes(hash) => hash.from,
@@ -719,7 +719,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let v = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(LegacyContactInfo::default()));
         assert_eq!(v.wallclock(), 0);
-        let key = v.contact_info().unwrap().id;
+        let key = *v.contact_info().unwrap().pubkey();
         assert_eq!(v.label(), CrdsValueLabel::LegacyContactInfo(key));
 
         let v = Vote::new(Pubkey::default(), new_test_vote_tx(&mut rng), 0).unwrap();
