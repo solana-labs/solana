@@ -138,7 +138,7 @@ all_test_steps() {
   wait_step
 
   # Full test suite
-  .buildkite/scripts/build-stable.sh >> "$output_file"
+  .buildkite/scripts/build-stable.sh sol-private >> "$output_file"
 
   # Docs tests
   if affects \
