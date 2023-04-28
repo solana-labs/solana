@@ -2,8 +2,8 @@ use {
     crate::{
         instruction::InstructionError,
         message::{AddressLoaderError, SanitizeMessageError},
-        sanitize::SanitizeError,
     },
+    solana_sanitize::SanitizeError,
     serde::Serialize,
     thiserror::Error,
 };

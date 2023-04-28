@@ -19,6 +19,9 @@ serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
+solana-sanitize = { workspace = true }
+
+[dev-dependencies]
 solana-sdk = { workspace = true }
 
 [lib]

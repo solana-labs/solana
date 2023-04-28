@@ -41,6 +41,7 @@ solana-net-utils = { workspace = true }
 solana-perf = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-runtime = { workspace = true }
+solana-sanitize = { workspace = true }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }
 solana-thin-client = { workspace = true }

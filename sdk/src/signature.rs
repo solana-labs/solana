@@ -26,7 +26,7 @@ const MAX_BASE58_SIGNATURE_LEN: usize = 88;
 )]
 pub struct Signature(GenericArray<u8, U64>);
 
-impl crate::sanitize::Sanitize for Signature {}
+impl solana_sanitize::Sanitize for Signature {}
 
 impl Signature {
     pub fn new(signature_slice: &[u8]) -> Self {

@@ -6,7 +6,6 @@ use {
     crate::{
         hash::Hash,
         message::VersionedMessage,
-        sanitize::SanitizeError,
         short_vec,
         signature::Signature,
         signer::SignerError,
@@ -14,6 +13,7 @@ use {
         transaction::{Result, Transaction, TransactionError},
     },
     serde::Serialize,
+    solana_sanitize::SanitizeError,
     std::cmp::Ordering,
 };
 

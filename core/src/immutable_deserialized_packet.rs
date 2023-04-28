@@ -3,11 +3,11 @@ use {
     solana_runtime::transaction_priority_details::{
         GetTransactionPriorityDetails, TransactionPriorityDetails,
     },
+    solana_sanitize::SanitizeError,
     solana_sdk::{
         feature_set,
         hash::Hash,
         message::Message,
-        sanitize::SanitizeError,
         short_vec::decode_shortu16_len,
         signature::Signature,
         transaction::{

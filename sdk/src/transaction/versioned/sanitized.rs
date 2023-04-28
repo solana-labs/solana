@@ -1,7 +1,8 @@
 use {
     super::VersionedTransaction,
-    crate::{sanitize::SanitizeError, signature::Signature},
+    crate::signature::Signature,
     solana_program::message::SanitizedVersionedMessage,
+    solana_sanitize::SanitizeError,
 };
 
 /// Wraps a sanitized `VersionedTransaction` to provide a safe API

@@ -6,9 +6,9 @@ use {
         },
         crds_value::MAX_WALLCLOCK,
     },
+    solana_sanitize::{Sanitize, SanitizeError},
     solana_sdk::{
         pubkey::Pubkey,
-        sanitize::{Sanitize, SanitizeError},
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,

@@ -120,7 +120,6 @@ use {
         precompiles::verify_if_precompile,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        sanitize::{Sanitize, SanitizeError},
         short_vec,
         signature::{Signature, SignerError},
         signers::Signers,
@@ -128,6 +127,7 @@ use {
     },
     serde::Serialize,
     solana_program::{system_instruction::SystemInstruction, system_program},
+    solana_sanitize::{Sanitize, SanitizeError},
     solana_sdk::feature_set,
     std::result,
 };

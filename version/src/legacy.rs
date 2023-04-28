@@ -1,7 +1,7 @@
 use {
     crate::compute_commit,
     serde_derive::{Deserialize, Serialize},
-    solana_sdk::sanitize::Sanitize,
+    solana_sanitize::Sanitize,
     std::{convert::TryInto, fmt},
 };
 

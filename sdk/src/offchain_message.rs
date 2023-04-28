@@ -6,9 +6,9 @@ use {
     crate::{
         hash::Hash,
         pubkey::Pubkey,
-        sanitize::SanitizeError,
         signature::{Signature, Signer},
     },
+    solana_sanitize::SanitizeError,
     num_enum::{IntoPrimitive, TryFromPrimitive},
 };
 
@@ -49,8 +49,8 @@ pub mod v0 {
         crate::{
             hash::{Hash, Hasher},
             packet::PACKET_DATA_SIZE,
-            sanitize::SanitizeError,
         },
+        solana_sanitize::SanitizeError,
     };
 
     /// OffchainMessage Version 0.
