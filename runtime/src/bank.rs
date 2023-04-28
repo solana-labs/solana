@@ -3698,7 +3698,11 @@ impl Bank {
                     curr_stake_account
                         .checked_add_lamports(reward_amount.try_into().unwrap())
                         .unwrap();
+
+                    // make sure that lamports matches
                     assert_eq!(curr_stake_account.lamports(), post_stake_account.lamports());
+                    // make sure that the stake_account didn't change in reward phase
+                    assert_eq!(&curr_stake_account, post_stake_account);
                 }
             }
         }
