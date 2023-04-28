@@ -200,7 +200,7 @@ hex = "0.4.3"
 hidapi = { version = "2.2.0", default-features = false }
 histogram = "0.6.9"
 hmac = "0.12.1"
-http = "0.2.8"
+http = "0.2.9"
 humantime = "2.0.1"
 hyper = "0.14.25"
 hyper-proxy = "0.9.1"
