@@ -5569,6 +5569,7 @@ dependencies = [
  "ouroboros",
  "percentage",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rayon",
  "regex",
  "rustc_version 0.4.0",
