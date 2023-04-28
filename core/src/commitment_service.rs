@@ -488,7 +488,7 @@ mod tests {
 
     #[test]
     fn test_reward_accounts_lock() {
-        use solana_sdk::transaction::TransactionError::LockedRewardAccountsDuringRewardInterval;
+        use solana_sdk::transaction::TransactionError::StakeProgramUnavailable;
 
         let validator_vote_keypairs = ValidatorVoteKeypairs::new_rand();
         let validator_keypairs = vec![&validator_vote_keypairs];
@@ -522,7 +522,7 @@ mod tests {
             bank.process_transaction(&vote).unwrap();
 
             // Insert a transfer transaction to stake account to violate the
-            // LockedRewardAccountsDuringRewardInterval at the beginning of epoch 1.
+            // StakeProgramUnavailable at the beginning of epoch 1.
             if x == 32 {
                 let tx = system_transaction::transfer(
                     node_key,
@@ -530,9 +530,9 @@ mod tests {
                     1,
                     bank.last_blockhash(),
                 );
-                // This should result in an error for `LockedRewardAccountsDuringRewardInterval`
+                // This should result in an error for `StakeProgramUnavailable`
                 let r = bank.process_transaction(&tx);
-                assert!(r == Err(LockedRewardAccountsDuringRewardInterval));
+                assert!(r == Err(StakeProgramUnavailable));
                 reward_account_lock_hit = true;
             }
             bank_forks.insert(bank);

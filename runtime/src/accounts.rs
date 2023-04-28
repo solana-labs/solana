@@ -479,7 +479,7 @@ impl Accounts {
                         && solana_stake_program::check_id(account.owner())
                     {
                         error_counters.locked_reward_account += 1;
-                        return Err(TransactionError::LockedRewardAccountsDuringRewardInterval);
+                        return Err(TransactionError::StakeProgramUnavailable);
                     }
 
                     tx_rent += rent;
