@@ -95,7 +95,7 @@ use {
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         builtin_program::BuiltinPrograms,
         compute_budget::{self, ComputeBudget},
-        executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
+        executor_cache::{BankExecutorCache, MAX_CACHED_EXECUTORS},
         loaded_programs::{
             LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, LoadedPrograms,
             LoadedProgramsForTxBatch, WorkingSlot,
@@ -188,6 +188,9 @@ use {
         time::{Duration, Instant},
     },
 };
+
+#[cfg(test)]
+use solana_program_runtime::executor_cache::TransactionExecutorCache;
 
 /// params to `verify_accounts_hash`
 struct VerifyAccountsHashConfig {
@@ -321,7 +324,7 @@ pub struct TransactionExecutionDetails {
 pub enum TransactionExecutionResult {
     Executed {
         details: TransactionExecutionDetails,
-        tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
+        programs_modified_by_tx: Rc<RefCell<LoadedProgramsForTxBatch>>,
     },
     NotExecuted(TransactionError),
 }
@@ -4108,6 +4111,7 @@ impl Bank {
     }
 
     /// Add executors back to the bank's cache if they were missing and not re-/deployed
+    #[cfg(test)]
     fn store_executors_which_added_to_the_cache(
         &self,
         tx_executor_cache: &RefCell<TransactionExecutorCache>,
@@ -4124,6 +4128,7 @@ impl Bank {
     }
 
     /// Add re-/deployed executors to the bank's cache
+    #[cfg(test)]
     fn store_executors_which_were_deployed(
         &self,
         tx_executor_cache: &RefCell<TransactionExecutorCache>,
@@ -4174,7 +4179,6 @@ impl Bank {
         }
     }
 
-    #[allow(dead_code)] // Preparation for BankExecutorCache rework
     pub fn load_program(
         &self,
         pubkey: &Pubkey,
@@ -4263,7 +4267,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
-        tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
+        programs_loaded_for_tx_batch: Rc<RefCell<LoadedProgramsForTxBatch>>,
     ) -> TransactionExecutionResult {
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
@@ -4313,7 +4317,7 @@ impl Bank {
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
 
         let mut executed_units = 0u64;
-
+        let programs_modified_by_tx = Rc::new(RefCell::new(LoadedProgramsForTxBatch::default()));
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             &self.builtin_programs,
@@ -4322,7 +4326,8 @@ impl Bank {
             &mut transaction_context,
             self.rent_collector.rent,
             log_collector.clone(),
-            tx_executor_cache.clone(),
+            programs_loaded_for_tx_batch,
+            programs_modified_by_tx.clone(),
             self.feature_set.clone(),
             compute_budget,
             timings,
@@ -4337,15 +4342,6 @@ impl Bank {
         saturating_add_assign!(
             timings.execute_accessories.process_message_us,
             process_message_time.as_us()
-        );
-
-        let mut store_executors_which_added_to_the_cache_time =
-            Measure::start("store_executors_which_added_to_the_cache_time");
-        self.store_executors_which_added_to_the_cache(&tx_executor_cache);
-        store_executors_which_added_to_the_cache_time.stop();
-        saturating_add_assign!(
-            timings.execute_accessories.update_executors_us,
-            store_executors_which_added_to_the_cache_time.as_us()
         );
 
         let status = process_result
@@ -4425,6 +4421,17 @@ impl Bank {
             None
         };
 
+        let mut store_executors_which_added_to_the_cache_time =
+            Measure::start("store_executors_which_added_to_the_cache_time");
+        if status.is_ok() {
+            //                            programs_loaded_for_tx_batch.borrow_mut().replenish_many();
+        }
+        store_executors_which_added_to_the_cache_time.stop();
+        saturating_add_assign!(
+            timings.execute_accessories.update_executors_us,
+            store_executors_which_added_to_the_cache_time.as_us()
+        );
+
         TransactionExecutionResult::Executed {
             details: TransactionExecutionDetails {
                 status,
@@ -4435,7 +4442,7 @@ impl Bank {
                 executed_units,
                 accounts_data_len_delta,
             },
-            tx_executor_cache,
+            programs_modified_by_tx,
         }
     }
 
@@ -4448,8 +4455,7 @@ impl Bank {
             || self.cluster_type() != ClusterType::MainnetBeta
     }
 
-    #[allow(dead_code)] // Preparation for BankExecutorCache rework
-    fn load_and_get_programs_from_cache(
+    fn replenish_program_cache(
         &self,
         program_accounts_map: &HashMap<Pubkey, &Pubkey>,
     ) -> LoadedProgramsForTxBatch {
@@ -4507,6 +4513,7 @@ impl Bank {
         loaded_programs_for_txs
     }
 
+    #[allow(dead_code)] // Preparation for BankExecutorCache rework
     fn replenish_executor_cache(
         &self,
         program_accounts_map: &HashMap<Pubkey, &Pubkey>,
@@ -4626,17 +4633,7 @@ impl Bank {
             &self.blockhash_queue.read().unwrap(),
         );
 
-        // The following code is currently commented out. This is how the new cache will
-        // finally be used, once rest of the code blocks are in place.
-        /*
-        let loaded_programs_map =
-            self.load_and_get_programs_from_cache(&program_accounts_map);
-        */
-        let loaded_programs_map = self.replenish_executor_cache(&program_accounts_map);
-
-        let tx_executor_cache = Rc::new(RefCell::new(TransactionExecutorCache::new(
-            loaded_programs_map.clone().into_iter(),
-        )));
+        let programs_loaded_for_tx_batch = self.replenish_program_cache(&program_accounts_map);
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = self.rc.accounts.load_accounts(
@@ -4650,10 +4647,11 @@ impl Bank {
             &self.fee_structure,
             account_overrides,
             &program_accounts_map,
-            &loaded_programs_map,
+            &programs_loaded_for_tx_batch,
         );
         load_time.stop();
 
+        let programs_loaded_for_tx_batch = Rc::new(RefCell::new(programs_loaded_for_tx_batch));
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
 
@@ -4707,7 +4705,7 @@ impl Bank {
                         timings,
                         &mut error_counters,
                         log_messages_bytes_limit,
-                        tx_executor_cache.clone(),
+                        programs_loaded_for_tx_batch.clone(),
                     )
                 }
             })
@@ -5193,11 +5191,11 @@ impl Bank {
         for execution_result in &execution_results {
             if let TransactionExecutionResult::Executed {
                 details,
-                tx_executor_cache,
+                programs_modified_by_tx: _,
             } = execution_result
             {
                 if details.status.is_ok() {
-                    self.store_executors_which_were_deployed(tx_executor_cache);
+                    //                    self.loaded_programs_cache.write().unwrap().replenish_many();
                 }
             }
         }

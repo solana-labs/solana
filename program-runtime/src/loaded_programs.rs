@@ -283,7 +283,7 @@ pub struct LoadedProgramsForTxBatch {
 impl LoadedProgramsForTxBatch {
     /// Refill the cache with a single entry. It's typically called during transaction loading, and
     /// transaction processing (for program management instructions).
-    /// The replaces the existing entry (if any) with the provided entry. The return value contains
+    /// It replaces the existing entry (if any) with the provided entry. The return value contains
     /// `true` if an entry existed.
     /// The function also returns the newly inserted value.
     pub fn replenish(
@@ -291,7 +291,6 @@ impl LoadedProgramsForTxBatch {
         key: Pubkey,
         entry: Arc<LoadedProgram>,
     ) -> (bool, Arc<LoadedProgram>) {
-        debug_assert!(entry.effective_slot <= self.slot);
         (self.entries.insert(key, entry.clone()).is_some(), entry)
     }
 
@@ -313,6 +312,10 @@ impl LoadedProgramsForTxBatch {
 
     pub fn slot(&self) -> Slot {
         self.slot
+    }
+
+    pub fn set_slot(&mut self, slot: Slot) {
+        self.slot = slot;
     }
 }
 
