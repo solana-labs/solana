@@ -179,7 +179,7 @@ mod tests {
             leader_schedule_epoch: 4,
             unix_timestamp: 5,
         };
-        #![allow(clippy::redundant_clone)]
+        #[allow(clippy::redundant_clone)]
         let cloned_clock = clock.clone();
         assert_eq!(cloned_clock, clock);
     }

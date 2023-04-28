@@ -64,7 +64,7 @@ mod tests {
                 lamports_per_signature: 1,
             },
         };
-        #![allow(clippy::redundant_clone)]
+        #[allow(clippy::redundant_clone)]
         let cloned_fees = fees.clone();
         assert_eq!(cloned_fees, fees);
     }
