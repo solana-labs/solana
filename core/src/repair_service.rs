@@ -10,6 +10,7 @@ use {
         ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
         cluster_info_vote_listener::VerifiedVoteReceiver,
         cluster_slots::ClusterSlots,
+        duplicate_repair_status::AncestorDuplicateSlotsToRepair,
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,
         serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
@@ -49,8 +50,8 @@ use {
 const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
 const DEFER_REPAIR_THRESHOLD_TICKS: u64 = DEFER_REPAIR_THRESHOLD.as_millis() as u64 / MS_PER_TICK;
 
-pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
-pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
+pub type AncestorDuplicateSlotsSender = CrossbeamSender<AncestorDuplicateSlotsToRepair>;
+pub type AncestorDuplicateSlotsReceiver = CrossbeamReceiver<AncestorDuplicateSlotsToRepair>;
 pub type ConfirmedSlotsSender = CrossbeamSender<Vec<Slot>>;
 pub type ConfirmedSlotsReceiver = CrossbeamReceiver<Vec<Slot>>;
 pub type DumpedSlotsSender = CrossbeamSender<Vec<(Slot, Hash)>>;
@@ -199,7 +200,7 @@ pub struct RepairInfo {
     pub cluster_info: Arc<ClusterInfo>,
     pub cluster_slots: Arc<ClusterSlots>,
     pub epoch_schedule: EpochSchedule,
-    pub duplicate_slots_reset_sender: DuplicateSlotsResetSender,
+    pub ancestor_duplicate_slots_sender: AncestorDuplicateSlotsSender,
     // Validators from which repairs are requested
     pub repair_validators: Option<HashSet<Pubkey>>,
     // Validators which should be given priority when serving

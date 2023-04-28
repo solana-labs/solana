@@ -65,11 +65,15 @@ pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 11;
 pub(crate) const REPAIR_PEERS_CACHE_CAPACITY: usize = 128;
 // Limit cache entries ttl in order to avoid re-using outdated data.
 const REPAIR_PEERS_CACHE_TTL: Duration = Duration::from_secs(10);
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(MAX_ANCESTOR_BYTES_IN_PACKET, 1220);
 pub const MAX_ANCESTOR_BYTES_IN_PACKET: usize =
     PACKET_DATA_SIZE -
     SIZE_OF_NONCE -
     4 /*(response version enum discriminator)*/ -
     4 /*slot_hash length*/;
+
 pub const MAX_ANCESTOR_RESPONSES: usize =
     MAX_ANCESTOR_BYTES_IN_PACKET / std::mem::size_of::<(Slot, Hash)>();
 /// Number of bytes in the randomly generated token sent with ping messages.
