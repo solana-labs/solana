@@ -102,8 +102,8 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 #[allow(unused_attributes)]
 // Send + Sync is needed to be a field of Bank
 pub trait InstalledScheduler: Send + Sync + Debug {
-    fn scheduler_id(&self) -> SchedulerId;
-    fn scheduler_pool(&self) -> InstalledSchedulerPoolArc;
+    fn id(&self) -> SchedulerId;
+    fn pool(&self) -> InstalledSchedulerPoolArc;
 
     // Calling this is illegal as soon as schedule_termiantion is called on &self.
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
@@ -120,8 +120,8 @@ pub trait InstalledScheduler: Send + Sync + Debug {
     // suppress false clippy complaints arising from mockall-derive:
     //   warning: the following explicit lifetimes could be elided: 'a
     #[allow(clippy::needless_lifetimes)]
-    fn scheduling_context<'a>(&'a self) -> Option<&'a SchedulingContext>;
-    fn replace_scheduling_context(&mut self, context: SchedulingContext);
+    fn context<'a>(&'a self) -> Option<&'a SchedulingContext>;
+    fn replace_context(&mut self, context: SchedulingContext);
 }
 
 pub type InstalledSchedulerPoolArc = Arc<dyn InstalledSchedulerPool>;
@@ -264,7 +264,7 @@ impl Bank {
             .expect("not poisoned")
             .0
             .as_ref()
-            .and_then(|scheduler| scheduler.scheduling_context())
+            .and_then(|scheduler| scheduler.context())
             .is_some()
     }
 
@@ -309,7 +309,7 @@ impl Bank {
                 .and_then(|scheduler| scheduler.wait_for_termination(&reason));
             if !matches!(reason, WaitReason::ReinitializedForRecentBlockhash) {
                 let scheduler = scheduler.take().expect("scheduler after waiting");
-                scheduler.scheduler_pool().return_to_pool(scheduler);
+                scheduler.pool().return_to_pool(scheduler);
             }
             result_with_timings
         } else {
@@ -395,7 +395,7 @@ mod tests {
                 .returning(|_| None);
         }
 
-        mock.expect_scheduler_pool()
+        mock.expect_pool()
             .times(1)
             .in_sequence(&mut seq)
             .returning(move || setup_mocked_scheduler_pool(&mut seq));

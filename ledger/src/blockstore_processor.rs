@@ -4587,7 +4587,7 @@ pub mod tests {
             .expect_wait_for_termination()
             .times(1)
             .returning(|_| None);
-        mocked_scheduler.expect_scheduler_pool().returning(move || {
+        mocked_scheduler.expect_pool().returning(move || {
             let mut mocked_pool = MockInstalledSchedulerPool::new();
             mocked_pool
                 .expect_return_to_pool()

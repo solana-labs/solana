@@ -73,7 +73,7 @@ impl InstalledSchedulerPool for SchedulerPool {
         // returned recently
         let maybe_scheduler = schedulers.pop();
         if let Some(mut scheduler) = maybe_scheduler {
-            scheduler.replace_scheduling_context(context);
+            scheduler.replace_context(context);
             scheduler
         } else {
             Box::new(PooledScheduler::spawn(self.self_arc(), context))
@@ -81,7 +81,7 @@ impl InstalledSchedulerPool for SchedulerPool {
     }
 
     fn return_to_pool(&self, scheduler: InstalledSchedulerBox) {
-        assert!(scheduler.scheduling_context().is_none());
+        assert!(scheduler.context().is_none());
 
         self.schedulers
             .lock()
@@ -112,11 +112,11 @@ impl PooledScheduler {
     }
 }
 impl InstalledScheduler for PooledScheduler {
-    fn scheduler_id(&self) -> SchedulerId {
+    fn id(&self) -> SchedulerId {
         self.id
     }
 
-    fn scheduler_pool(&self) -> InstalledSchedulerPoolArc {
+    fn pool(&self) -> InstalledSchedulerPoolArc {
         self.pool.clone()
     }
 
@@ -186,11 +186,11 @@ impl InstalledScheduler for PooledScheduler {
         }
     }
 
-    fn scheduling_context(&self) -> Option<&SchedulingContext> {
+    fn context(&self) -> Option<&SchedulingContext> {
         self.context.as_ref()
     }
 
-    fn replace_scheduling_context(&mut self, context: SchedulingContext) {
+    fn replace_context(&mut self, context: SchedulingContext) {
         self.context = Some(context);
         *self.result_with_timings.lock().expect("not poisoned") = None;
     }
@@ -251,9 +251,9 @@ mod tests {
         let context = &SchedulingContext::new(SchedulingMode::BlockVerification, bank);
 
         let mut scheduler1 = pool.take_from_pool(context.clone());
-        let scheduler_id1 = scheduler1.scheduler_id();
+        let scheduler_id1 = scheduler1.id();
         let mut scheduler2 = pool.take_from_pool(context.clone());
-        let scheduler_id2 = scheduler2.scheduler_id();
+        let scheduler_id2 = scheduler2.id();
         assert_ne!(scheduler_id1, scheduler_id2);
 
         assert_matches!(
@@ -268,9 +268,9 @@ mod tests {
         pool.return_to_pool(scheduler2);
 
         let scheduler3 = pool.take_from_pool(context.clone());
-        assert_eq!(scheduler_id2, scheduler3.scheduler_id());
+        assert_eq!(scheduler_id2, scheduler3.id());
         let scheduler4 = pool.take_from_pool(context.clone());
-        assert_eq!(scheduler_id1, scheduler4.scheduler_id());
+        assert_eq!(scheduler_id1, scheduler4.id());
     }
 
     #[test]
@@ -284,12 +284,12 @@ mod tests {
 
         let mut scheduler = pool.take_from_pool(context.clone());
 
-        assert!(scheduler.scheduling_context().is_some());
+        assert!(scheduler.context().is_some());
         assert_matches!(
             scheduler.wait_for_termination(&WaitReason::ReinitializedForRecentBlockhash),
             None
         );
-        assert!(scheduler.scheduling_context().is_none());
+        assert!(scheduler.context().is_none());
     }
 
     #[test]
@@ -308,7 +308,7 @@ mod tests {
             &SchedulingContext::new(SchedulingMode::BlockVerification, new_bank.clone());
 
         let mut scheduler = pool.take_from_pool(old_context.clone());
-        let scheduler_id = scheduler.scheduler_id();
+        let scheduler_id = scheduler.id();
         assert_matches!(
             scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
             None
@@ -316,11 +316,8 @@ mod tests {
         pool.return_to_pool(scheduler);
 
         let scheduler = pool.take_from_pool(new_context.clone());
-        assert_eq!(scheduler_id, scheduler.scheduler_id());
-        assert!(Arc::ptr_eq(
-            scheduler.scheduling_context().unwrap().bank(),
-            new_bank
-        ));
+        assert_eq!(scheduler_id, scheduler.id());
+        assert!(Arc::ptr_eq(scheduler.context().unwrap().bank(), new_bank));
     }
 
     #[test]
