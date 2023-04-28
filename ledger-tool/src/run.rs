@@ -295,6 +295,29 @@ impl<'a, 'b> LazyAnalysis<'a, 'b> {
     }
 }
 
+fn output_trace(
+    matches: &ArgMatches<'_>,
+    trace: &[[u64; 12]],
+    frame: usize,
+    analysis: &mut LazyAnalysis,
+) {
+    if matches.value_of("trace").unwrap() == "stdout" {
+        writeln!(&mut std::io::stdout(), "Frame {frame}").unwrap();
+        analysis
+            .analyze()
+            .disassemble_trace_log(&mut std::io::stdout(), trace)
+            .unwrap();
+    } else {
+        let filename = format!("{}.{}", matches.value_of("trace").unwrap(), frame);
+        let mut fd = File::create(filename).unwrap();
+        writeln!(&fd, "Frame {frame}").unwrap();
+        analysis
+            .analyze()
+            .disassemble_trace_log(&mut fd, trace)
+            .unwrap();
+    }
+}
+
 pub fn run(ledger_path: &Path, matches: &ArgMatches<'_>) {
     let bank = load_blockstore(ledger_path, matches);
     let loader_id = bpf_loader_upgradeable::id();
@@ -385,7 +408,7 @@ pub fn run(ledger_path: &Path, matches: &ArgMatches<'_>) {
     );
 
     for key in cached_account_keys {
-        let program = bank.load_program(&key).unwrap_or_else(|err| {
+        let program = bank.load_program(&key, true).unwrap_or_else(|err| {
             // Create a tombstone for the program in the cache
             debug!("Failed to load program {}, error {:?}", key, err);
             Arc::new(LoadedProgram::new_tombstone(
@@ -417,6 +440,7 @@ pub fn run(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .get_current_instruction_context()
             .unwrap(),
         true, // should_cap_ix_accounts
+        true, // copy_account_data
     )
     .unwrap();
 
@@ -511,32 +535,16 @@ pub fn run(ledger_path: &Path, matches: &ArgMatches<'_>) {
     let (instruction_count, result) = vm.execute_program(interpreted);
     let duration = Instant::now() - start_time;
     if matches.occurrences_of("trace") > 0 {
-        for (frame, syscall_context) in vm
-            .env
-            .context_object_pointer
-            .syscall_context
-            .iter()
-            .enumerate()
-        {
-            if syscall_context.is_none() {
-                continue;
-            }
-            let trace_log = syscall_context.as_ref().unwrap().trace_log.as_slice();
-            if matches.value_of("trace").unwrap() == "stdout" {
-                writeln!(&mut std::io::stdout(), "Frame {frame}").unwrap();
-                analysis
-                    .analyze()
-                    .disassemble_trace_log(&mut std::io::stdout(), trace_log)
-                    .unwrap();
-            } else {
-                let filename = format!("{}.{}", matches.value_of("trace").unwrap(), frame);
-                let mut fd = File::create(filename).unwrap();
-                writeln!(&fd, "Frame {frame}").unwrap();
-                analysis
-                    .analyze()
-                    .disassemble_trace_log(&mut fd, trace_log)
-                    .unwrap();
-            }
+        // top level trace is stored in syscall_context
+        if let Some(Some(syscall_context)) = vm.env.context_object_pointer.syscall_context.last() {
+            let trace = syscall_context.trace_log.as_slice();
+            output_trace(matches, trace, 0, &mut analysis);
+        }
+        // the remaining traces are saved in InvokeContext when
+        // corresponding syscall_contexts are popped
+        let traces = vm.env.context_object_pointer.get_traces();
+        for (frame, trace) in traces.iter().filter(|t| !t.is_empty()).enumerate() {
+            output_trace(matches, trace, frame + 1, &mut analysis);
         }
     }
     drop(vm);
