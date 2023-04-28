@@ -275,6 +275,7 @@ pub struct ReplayTiming {
     process_gossip_duplicate_confirmed_slots_elapsed: u64,
     process_duplicate_slots_elapsed: u64,
     process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
+    process_popular_pruned_forks_elapsed: u64,
     repair_correct_slots_elapsed: u64,
     retransmit_not_propagated_elapsed: u64,
     generate_new_bank_forks_read_lock_us: u64,
@@ -303,6 +304,7 @@ impl ReplayTiming {
         process_ancestor_hashes_duplicate_slots_elapsed: u64,
         process_gossip_duplicate_confirmed_slots_elapsed: u64,
         process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
+        process_popular_pruned_forks_elapsed: u64,
         process_duplicate_slots_elapsed: u64,
         repair_correct_slots_elapsed: u64,
         retransmit_not_propagated_elapsed: u64,
@@ -326,6 +328,7 @@ impl ReplayTiming {
             process_gossip_duplicate_confirmed_slots_elapsed;
         self.process_unfrozen_gossip_verified_vote_hashes_elapsed +=
             process_unfrozen_gossip_verified_vote_hashes_elapsed;
+        self.process_popular_pruned_forks_elapsed += process_popular_pruned_forks_elapsed;
         self.process_duplicate_slots_elapsed += process_duplicate_slots_elapsed;
         self.repair_correct_slots_elapsed += repair_correct_slots_elapsed;
         self.retransmit_not_propagated_elapsed += retransmit_not_propagated_elapsed;
@@ -401,6 +404,11 @@ impl ReplayTiming {
                 (
                     "process_unfrozen_gossip_verified_vote_hashes_elapsed",
                     self.process_unfrozen_gossip_verified_vote_hashes_elapsed as i64,
+                    i64
+                ),
+                (
+                    "process_popular_pruned_forks_elapsed",
+                    self.process_popular_pruned_forks_elapsed as i64,
                     i64
                 ),
                 (
@@ -493,7 +501,7 @@ impl ReplayStage {
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
         dumped_slots_sender: DumpedSlotsSender,
         banking_tracer: Arc<BankingTracer>,
-        _pruned_duplicate_confirmed_slots_receiver: PopularPrunedForksReceiver,
+        popular_pruned_forks_receiver: PopularPrunedForksReceiver,
     ) -> Result<Self, String> {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
             let tower = process_blockstore.process_to_create_tower()?;
@@ -692,6 +700,24 @@ impl ReplayStage {
                 );
                 for _ in gossip_verified_vote_hash_receiver.try_iter() {}
                 process_unfrozen_gossip_verified_vote_hashes_time.stop();
+
+                let mut process_popular_pruned_forks_time =
+                    Measure::start("process_popular_pruned_forks_time");
+                // Check for "popular" (52+% stake aggregated across versions/descendants) forks
+                // that are pruned, which would not be detected by normal means.
+                // Signalled by `repair_service`.
+                Self::process_popular_pruned_forks(
+                    &popular_pruned_forks_receiver,
+                    &blockstore,
+                    &mut duplicate_slots_tracker,
+                    &mut epoch_slots_frozen_slots,
+                    &bank_forks,
+                    &mut heaviest_subtree_fork_choice,
+                    &mut duplicate_slots_to_repair,
+                    &ancestor_hashes_replay_update_sender,
+                    &mut purge_repair_slot_counter,
+                );
+                process_popular_pruned_forks_time.stop();
 
                 // Check to remove any duplicated slots from fork choice
                 let mut process_duplicate_slots_time = Measure::start("process_duplicate_slots");
@@ -1071,6 +1097,7 @@ impl ReplayStage {
                     process_ancestor_hashes_duplicate_slots_time.as_us(),
                     process_gossip_duplicate_confirmed_slots_time.as_us(),
                     process_unfrozen_gossip_verified_vote_hashes_time.as_us(),
+                    process_popular_pruned_forks_time.as_us(),
                     process_duplicate_slots_time.as_us(),
                     dump_then_repair_correct_slots_time.as_us(),
                     retransmit_not_propagated_time.as_us(),
@@ -1308,10 +1335,9 @@ impl ReplayStage {
                         }
                     } else {
                         warn!(
-                            "Trying to dump slot {} which does not exist in bank forks",
+                            "Dumping slot {} which does not exist in bank forks (possibly pruned)",
                             *duplicate_slot
                         );
-                        return false;
                     }
 
 
@@ -1413,6 +1439,7 @@ impl ReplayStage {
                             .get(epoch_slots_frozen_slot)
                             .map(|b| b.hash())
                     },
+                    request_type.is_pruned(),
                 );
                 check_slot_agrees_with_cluster(
                     epoch_slots_frozen_slot,
@@ -1549,6 +1576,40 @@ impl ReplayStage {
         descendants
             .remove(&slot)
             .expect("must exist based on earlier check");
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn process_popular_pruned_forks(
+        popular_pruned_forks_receiver: &PopularPrunedForksReceiver,
+        blockstore: &Blockstore,
+        duplicate_slots_tracker: &mut DuplicateSlotsTracker,
+        epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
+        bank_forks: &RwLock<BankForks>,
+        fork_choice: &mut HeaviestSubtreeForkChoice,
+        duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
+        ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
+        purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
+    ) {
+        let root = bank_forks.read().unwrap().root();
+        for new_popular_pruned_slots in popular_pruned_forks_receiver.try_iter() {
+            for new_popular_pruned_slot in new_popular_pruned_slots {
+                if new_popular_pruned_slot <= root {
+                    continue;
+                }
+                check_slot_agrees_with_cluster(
+                    new_popular_pruned_slot,
+                    root,
+                    blockstore,
+                    duplicate_slots_tracker,
+                    epoch_slots_frozen_slots,
+                    fork_choice,
+                    duplicate_slots_to_repair,
+                    ancestor_hashes_replay_update_sender,
+                    purge_repair_slot_counter,
+                    SlotStateUpdate::PopularPrunedFork,
+                );
+            }
+        }
     }
 
     // Check for any newly confirmed slots by the cluster. This is only detects

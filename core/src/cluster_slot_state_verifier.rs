@@ -219,6 +219,7 @@ pub struct EpochSlotsFrozenState {
     epoch_slots_frozen_hash: Hash,
     duplicate_confirmed_hash: Option<Hash>,
     bank_status: BankStatus,
+    is_popular_pruned: bool,
 }
 impl EpochSlotsFrozenState {
     pub fn new_from_state(
@@ -228,6 +229,7 @@ impl EpochSlotsFrozenState {
         fork_choice: &mut HeaviestSubtreeForkChoice,
         is_dead: impl Fn() -> bool,
         get_hash: impl Fn() -> Option<Hash>,
+        is_popular_pruned: bool,
     ) -> Self {
         let bank_status = BankStatus::new(is_dead, get_hash);
         let duplicate_confirmed_hash = get_duplicate_confirmed_hash_from_state(
@@ -240,6 +242,7 @@ impl EpochSlotsFrozenState {
             epoch_slots_frozen_hash,
             duplicate_confirmed_hash,
             bank_status,
+            is_popular_pruned,
         )
     }
 
@@ -247,12 +250,18 @@ impl EpochSlotsFrozenState {
         epoch_slots_frozen_hash: Hash,
         duplicate_confirmed_hash: Option<Hash>,
         bank_status: BankStatus,
+        is_popular_pruned: bool,
     ) -> Self {
         Self {
             epoch_slots_frozen_hash,
             duplicate_confirmed_hash,
             bank_status,
+            is_popular_pruned,
         }
+    }
+
+    fn is_popular_pruned(&self) -> bool {
+        self.is_popular_pruned
     }
 }
 
@@ -263,14 +272,18 @@ pub enum SlotStateUpdate {
     Dead(DeadState),
     Duplicate(DuplicateState),
     EpochSlotsFrozen(EpochSlotsFrozenState),
+    // The fork is pruned but has reached `DUPLICATE_THRESHOLD` from votes aggregated across
+    // descendants and all versions of the slots on this fork.
+    PopularPrunedFork,
 }
 
 impl SlotStateUpdate {
     fn into_state_changes(self, slot: Slot) -> Vec<ResultingStateChange> {
         let bank_frozen_hash = self.bank_hash();
-        if bank_frozen_hash.is_none() {
+        if bank_frozen_hash.is_none() && !self.is_popular_pruned() {
             // If the bank hasn't been frozen yet, then there's nothing to do
             // since replay of the slot hasn't finished yet.
+            // However if the bank is pruned, then replay will never finish so we still process now
             return vec![];
         }
 
@@ -286,6 +299,7 @@ impl SlotStateUpdate {
             SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state) => {
                 on_epoch_slots_frozen(slot, epoch_slots_frozen_state)
             }
+            SlotStateUpdate::PopularPrunedFork => on_popular_pruned_fork(slot),
         }
     }
 
@@ -300,6 +314,17 @@ impl SlotStateUpdate {
             SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state) => {
                 epoch_slots_frozen_state.bank_status.bank_hash()
             }
+            SlotStateUpdate::PopularPrunedFork => None,
+        }
+    }
+
+    fn is_popular_pruned(&self) -> bool {
+        match self {
+            SlotStateUpdate::PopularPrunedFork => true,
+            SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state) => {
+                epoch_slots_frozen_state.is_popular_pruned()
+            }
+            _ => false,
         }
     }
 }
@@ -344,6 +369,7 @@ fn check_duplicate_confirmed_hash_against_frozen_hash(
                 slot, duplicate_confirmed_hash, bank_frozen_hash
             );
         }
+
         state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
         state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
             duplicate_confirmed_hash,
@@ -364,6 +390,7 @@ fn check_epoch_slots_hash_against_frozen_hash(
     epoch_slots_frozen_hash: Hash,
     bank_frozen_hash: Hash,
     is_dead: bool,
+    is_popular_pruned: bool,
 ) {
     if epoch_slots_frozen_hash != bank_frozen_hash {
         if is_dead {
@@ -372,6 +399,12 @@ fn check_epoch_slots_hash_against_frozen_hash(
             warn!(
                 "EpochSlots sample returned slot {} with hash {}, but we marked slot dead",
                 slot, epoch_slots_frozen_hash
+            );
+        } else if is_popular_pruned {
+            // The cluster sample found the troublesome slot which caused this fork to be pruned
+            warn!(
+                "EpochSlots sample returned slot {slot} with hash {epoch_slots_frozen_hash}, but we
+                have pruned it due to incorrect ancestry"
             );
         } else {
             // The duplicate confirmed slot hash does not match our frozen hash.
@@ -383,7 +416,11 @@ fn check_epoch_slots_hash_against_frozen_hash(
                 slot, epoch_slots_frozen_hash, bank_frozen_hash
             );
         }
-        state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
+        if !is_popular_pruned {
+            // If the slot is already pruned, it will already be pruned from fork choice so no
+            // reason to mark as duplicate
+            state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
+        }
         state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
             epoch_slots_frozen_hash,
         ));
@@ -420,12 +457,14 @@ fn on_dead_slot(slot: Slot, dead_state: DeadState) -> Vec<ResultingStateChange> 
                 // match arm above.
                 let bank_hash = Hash::default();
                 let is_dead = true;
+                let is_popular_pruned = false;
                 check_epoch_slots_hash_against_frozen_hash(
                     &mut state_changes,
                     slot,
                     epoch_slots_frozen_hash,
                     bank_hash,
                     is_dead,
+                    is_popular_pruned,
                 );
             }
         }
@@ -466,12 +505,14 @@ fn on_frozen_slot(slot: Slot, bank_frozen_state: BankFrozenState) -> Vec<Resulti
                 // Lower priority than having seen an actual duplicate confirmed hash in the
                 // match arm above.
                 let is_dead = false;
+                let is_popular_pruned = false;
                 check_epoch_slots_hash_against_frozen_hash(
                     &mut state_changes,
                     slot,
                     epoch_slots_frozen_hash,
                     frozen_hash,
                     is_dead,
+                    is_popular_pruned,
                 );
             }
         }
@@ -559,28 +600,49 @@ fn on_epoch_slots_frozen(
         bank_status,
         epoch_slots_frozen_hash,
         duplicate_confirmed_hash,
+        is_popular_pruned,
     } = epoch_slots_frozen_state;
 
-    if let Some(duplicate_confirmed_hash) = duplicate_confirmed_hash {
-        if epoch_slots_frozen_hash != duplicate_confirmed_hash {
-            warn!(
-                "EpochSlots sample returned slot {} with hash {}, but we already saw
+    // If `slot` has already been duplicate confirmed, `epoch_slots_frozen` becomes redundant as
+    // one of the following triggers would have already processed `slot`:
+    //
+    // 1) If the bank was replayed and then duplicate confirmed through turbine/gossip, the
+    //    corresponding `SlotStateUpdate::DuplicateConfirmed`
+    // 2) If the slot was first duplicate confirmed through gossip and then replayed, the
+    //    corresponding `SlotStateUpdate::BankFrozen` or `SlotStateUpdate::Dead`
+    //
+    // However if `slot` was first duplicate confirmed through gossip and then pruned before
+    // we got a chance to replay, there was no trigger that would have processed `slot`.
+    // The original `SlotStateUpdate::DuplicateConfirmed` is a no-op when the bank has not been
+    // replayed yet, and unlike 2) there is no upcoming `SlotStateUpdate::BankFrozen` or
+    // `SlotStateUpdate::Dead`, as `slot` is pruned and will not be replayed.
+    //
+    // Thus if we have a duplicate confirmation, but `slot` is pruned, we continue
+    // processing it as `epoch_slots_frozen`.
+    if !is_popular_pruned {
+        if let Some(duplicate_confirmed_hash) = duplicate_confirmed_hash {
+            if epoch_slots_frozen_hash != duplicate_confirmed_hash {
+                warn!(
+                    "EpochSlots sample returned slot {} with hash {}, but we already saw
                 duplicate confirmation on hash: {:?}",
-                slot, epoch_slots_frozen_hash, duplicate_confirmed_hash
-            );
-        }
-        return vec![];
-    }
-
-    match bank_status {
-        BankStatus::Dead | BankStatus::Frozen(_) => (),
-        // No action to be taken yet
-        BankStatus::Unprocessed => {
+                    slot, epoch_slots_frozen_hash, duplicate_confirmed_hash
+                );
+            }
             return vec![];
         }
     }
 
-    let frozen_hash = bank_status.bank_hash().expect("bank hash must exist");
+    match bank_status {
+        BankStatus::Dead | BankStatus::Frozen(_) => (),
+        // No action to be taken yet unless `slot` is pruned in which case it will never be played
+        BankStatus::Unprocessed => {
+            if !is_popular_pruned {
+                return vec![];
+            }
+        }
+    }
+
+    let frozen_hash = bank_status.bank_hash().unwrap_or_default();
     let is_dead = bank_status.is_dead();
     let mut state_changes = vec![];
     check_epoch_slots_hash_against_frozen_hash(
@@ -589,9 +651,19 @@ fn on_epoch_slots_frozen(
         epoch_slots_frozen_hash,
         frozen_hash,
         is_dead,
+        is_popular_pruned,
     );
 
     state_changes
+}
+
+fn on_popular_pruned_fork(slot: Slot) -> Vec<ResultingStateChange> {
+    warn!("{slot} is part of a pruned fork which has reached the DUPLICATE_THRESHOLD aggregating across descendants
+            and slot versions. It is suspected to be duplicate or have an ancestor that is duplicate.
+            Notifying ancestor_hashes_service");
+    vec![ResultingStateChange::SendAncestorHashesReplayUpdate(
+        AncestorHashesReplayUpdate::PopularPrunedFork(slot),
+    )]
 }
 
 fn get_cluster_confirmed_hash_from_state(
@@ -1252,7 +1324,7 @@ mod test {
             let epoch_slots_frozen_hash = Hash::new_unique();
             let duplicate_confirmed_hash = None;
             let bank_status = BankStatus::Unprocessed;
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 Vec::<ResultingStateChange>::new()
@@ -1262,7 +1334,7 @@ mod test {
             let epoch_slots_frozen_hash = Hash::new_unique();
             let duplicate_confirmed_hash = Some(Hash::new_unique());
             let bank_status = BankStatus::Unprocessed;
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 Vec::<ResultingStateChange>::new()
@@ -1272,7 +1344,7 @@ mod test {
             let epoch_slots_frozen_hash = Hash::new_unique();
             let duplicate_confirmed_hash = Some(epoch_slots_frozen_hash);
             let bank_status = BankStatus::Unprocessed;
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 Vec::<ResultingStateChange>::new()
@@ -1282,7 +1354,7 @@ mod test {
             let epoch_slots_frozen_hash = Hash::new_unique();
             let duplicate_confirmed_hash = None;
             let bank_status = BankStatus::Dead;
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 vec![
@@ -1294,7 +1366,7 @@ mod test {
             let epoch_slots_frozen_hash = Hash::new_unique();
             let duplicate_confirmed_hash = Some(Hash::new_unique());
             let bank_status = BankStatus::Dead;
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 Vec::<ResultingStateChange>::new()
@@ -1304,7 +1376,7 @@ mod test {
             let epoch_slots_frozen_hash = Hash::new_unique();
             let duplicate_confirmed_hash = Some(epoch_slots_frozen_hash);
             let bank_status = BankStatus::Dead;
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 Vec::<ResultingStateChange>::new()
@@ -1315,7 +1387,7 @@ mod test {
             let duplicate_confirmed_hash = None;
             let frozen_hash = Hash::new_unique();
             let bank_status = BankStatus::Frozen(frozen_hash);
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 vec![
@@ -1327,7 +1399,7 @@ mod test {
             let epoch_slots_frozen_hash = Hash::new_unique();
             let duplicate_confirmed_hash = None;
             let bank_status = BankStatus::Frozen(epoch_slots_frozen_hash);
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 Vec::<ResultingStateChange>::new()
@@ -1337,7 +1409,7 @@ mod test {
             let epoch_slots_frozen_hash = Hash::new_unique();
             let duplicate_confirmed_hash = Some(Hash::new_unique());
             let bank_status = BankStatus::Frozen(Hash::new_unique());
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 Vec::<ResultingStateChange>::new()
@@ -1347,7 +1419,7 @@ mod test {
             let epoch_slots_frozen_hash = Hash::new_unique();
             let duplicate_confirmed_hash = Some(Hash::new_unique());
             let bank_status = BankStatus::Frozen(epoch_slots_frozen_hash);
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 Vec::<ResultingStateChange>::new()
@@ -1357,10 +1429,119 @@ mod test {
             let epoch_slots_frozen_hash = Hash::new_unique();
             let duplicate_confirmed_hash = Some(Hash::new_unique());
             let bank_status = BankStatus::Frozen(duplicate_confirmed_hash.unwrap());
-            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
                 Vec::<ResultingStateChange>::new()
+            )
+        },
+        epoch_slots_frozen_state_update_11: {
+            let epoch_slots_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = None;
+            let bank_status = BankStatus::Unprocessed;
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, true);
+            (
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+                vec![ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
+            )
+        },
+        epoch_slots_frozen_state_update_12: {
+            let epoch_slots_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let bank_status = BankStatus::Unprocessed;
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, true);
+            (
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+                vec![ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
+            )
+        },
+        epoch_slots_frozen_state_update_13: {
+            let epoch_slots_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(epoch_slots_frozen_hash);
+            let bank_status = BankStatus::Unprocessed;
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, true);
+            (
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+                vec![ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
+            )
+        },
+        epoch_slots_frozen_state_update_14: {
+            let epoch_slots_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = None;
+            let bank_status = BankStatus::Dead;
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, true);
+            (
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+                vec![ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
+            )
+        },
+        epoch_slots_frozen_state_update_15: {
+            let epoch_slots_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let bank_status = BankStatus::Dead;
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, true);
+            (
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+                vec![ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
+            )
+        },
+        epoch_slots_frozen_state_update_16: {
+            let epoch_slots_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(epoch_slots_frozen_hash);
+            let bank_status = BankStatus::Dead;
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, true);
+            (
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+                vec![ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
+            )
+        },
+        epoch_slots_frozen_state_update_17: {
+            let epoch_slots_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = None;
+            let frozen_hash = Hash::new_unique();
+            let bank_status = BankStatus::Frozen(frozen_hash);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, true);
+            (
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+                vec![ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
+            )
+        },
+        epoch_slots_frozen_state_update_18: {
+            let epoch_slots_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = None;
+            let bank_status = BankStatus::Frozen(epoch_slots_frozen_hash);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, true);
+            (
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+                Vec::<ResultingStateChange>::new()
+            )
+        },
+        epoch_slots_frozen_state_update_19: {
+            let epoch_slots_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let bank_status = BankStatus::Frozen(Hash::new_unique());
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, true);
+            (
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+                vec![ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
+            )
+        },
+        epoch_slots_frozen_state_update_20: {
+            let epoch_slots_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let bank_status = BankStatus::Frozen(epoch_slots_frozen_hash);
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, true);
+            (
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+                Vec::<ResultingStateChange>::new()
+            )
+        },
+        popular_pruned_fork: {
+            (
+                SlotStateUpdate::PopularPrunedFork,
+                vec![ResultingStateChange::SendAncestorHashesReplayUpdate(
+                    AncestorHashesReplayUpdate::PopularPrunedFork(10),
+                )]
             )
         },
     }
@@ -2072,6 +2253,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             || progress.is_dead(3).unwrap_or(false),
             || Some(slot3_hash),
+            false,
         );
         let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
             unbounded();
@@ -2165,6 +2347,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             || progress.is_dead(3).unwrap_or(false),
             || Some(slot3_hash),
+            false,
         );
         let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
             unbounded();
