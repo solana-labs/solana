@@ -286,7 +286,7 @@ impl LoadedProgramsForSlot {
     }
 
     pub fn find(&self, key: Pubkey) -> Option<Arc<LoadedProgram>> {
-        self.entries.get(&key).map(|value| value.clone())
+        self.entries.get(&key).cloned()
     }
 
     pub fn slot(&self) -> Slot {
