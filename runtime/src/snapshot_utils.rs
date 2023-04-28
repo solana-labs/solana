@@ -208,6 +208,10 @@ impl BankSnapshotInfo {
             // There are also possible hardlink files under <account_path>/snapshot/<slot>/, referred by this
             // snapshot dir's symlinks.  They are cleaned up in clean_orphaned_account_snapshot_dirs() at the
             // boot time.
+            info!(
+                "This snapshot dir: {} is incomplete, removing it, and returning IncompleteDir error",
+                &bank_snapshot_dir.display()
+            );
             fs::remove_dir_all(bank_snapshot_dir)?;
             return Err(SnapshotNewFromDirError::IncompleteDir(completion_flag_file));
         }
