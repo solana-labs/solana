@@ -248,17 +248,61 @@ to allow binary search.  It has two sections: `account_addrsses` and `meta_indic
 `account_addresses` section stores every pubkeys in sorted order.  Each account
 address entry has a correspinding entry in the `meta_indices` section.
 
-    +------------------------------------+------------------------------------------------+
-    | Account Index Block (Binary Search Format) -- 40 bytes per account                  |
+#### Hot Account Index Block
+
+    +-------------------------------------------------------------------------------------+
+    | Hot Account Index Block (Binary Search Format) -- 40 bytes per account              |
     +------------------------------------+------------------------------------------------+
     | addresses (32-byte each)           | Each entry is 32-byte (Pubkey).                |
     |                                    | Entries are either sorted or hashed, depending |
     |                                    | on the index format specified in the footer.   |
     +------------------------------------+------------------------------------------------+
-    | meta_indices (4-byte each)         | Indices to access the account meta.            |
-    |                                    | The Nth entry in addresses corresponds         |
-    |                                    | Nth entry in meta_offsets.                     |
+    | offsets (8-byte each)              | Indices to access the account entry.           |
+    |                                    | The Nth address in the addresses section       |
+    |                                    | corresponds to Nth entry in offsets section.   |
     +------------------------------------+------------------------------------------------+
+
+#### Cold Account Index Block
+As we will mention later in the cold account data block format, cold accounts are stored in
+compressed blocks.  As a result, accessing one cold account entry requires the offset of
+its compressed data block, the intra block offset after decompression, and the uncompressed
+data size.
+    
+    +-------------------------------------------------------------------------------------+
+    | Cold Account Index Block (Binary Search Format) -- 44 bytes per account             |
+    +------------------------------------+------------------------------------------------+
+    | addresses (32-byte each)           | Each entry is 32-byte (Pubkey).                |
+    |                                    | Entries are either sorted or hashed, depending |
+    |                                    | on the index format specified in the footer.   |
+    +------------------------------------+------------------------------------------------+
+    | offset_infos (12-byte each)        | Information to access the cold account.        |
+    |                                    | The Nth address in the addresses section       |
+    |                                    | corresponds to Nth info entry                  |
+    +------------------------------------+------------------------------------------------+
+
+    +---------------------------------------------------------------------------------+
+    | Cold Account Entry Offset Info                                                  |
+    +---------------------------------------------------------------------------------+
+    | data_block_offset (8 bytes)    | The offset to the account's data block.        |
+    | intra_block_offset (2 bytes)   | The inner-block offset to the accounts' data   |
+    |                                | after decompressing its data block.            |
+    |                                |                                                |
+    | uncompressed_data_len (2 bytes)| The length of the uncompressed_data.           |
+    |                                | If this value is u16::MAX, it means the cold   |
+    |                                | account has its own account block              |
+    |                                | In this case, its block size can be derived    |
+    |                                | by comparing the offset of the next cold index |
+    |                                | entry which has a different data_block_offset. |
+    +---------------------------------------------------------------------------------+
+
+For account data that exceeds the configured data block size (default 4K), its
+account data and optional fields will have their own data block that exceeds
+the data block size.  For such blob accounts which account data size exceeds
+the configured data block size, their `uncompressed_data_len` will be u16::MAX,
+indicating it owns the entire data block.  Its account data size can be derived
+by comparing its account data block offset and the next account data block offset
+minus the size of its account meta entry and the size of optional fields.
+
 
 ### Owners Block
 The owners block includes one address for each unique owner.  As multiple accounts
@@ -276,9 +320,9 @@ easier for account metas block.
     +------------------------------------+---------------------------------------------+
 
 ### Accounts Blocks
-Accounts blocks contain one entry for each account in this file.
-Each entry of one account includes its account metadata (or meta), data, and optional
-fields.  Account meta includes lamports and information about how to access its account
+Accounts blocks contain one entry for each account in this file.  Each entry of
+one account includes its account metadata (or meta), data, and optional fields.
+Account meta includes lamports and information about how to access its account
 data, owner, and optional fields.
 
 The size of each account meta entry is described in the `account_meta_entry_size`
@@ -296,144 +340,123 @@ whether an account is executable or not by simply comparing its index.
 In addition, this also saves us 1 bit per account.
 
     +-------------------------------------------------------------------------------+
-    | Non-program Account Metas                                                     |
+    | Non-program Account Blocks                                                    |
     +-------------------------------------------------------------------------------+
-    | Program Account Metas                                                         |
+    | Program Account Blocks                                                        |
     +-------------------------------------------------------------------------------+
 
+#### Account Entry
+Both hot account entry and cold account entry contain the following three
+sub-entries --- account meta, account data, and optional fields:
 
-#### Hot Storage Account Meta Format
+    +-------------------------------+
+    | Account Meta                  |
+    +-------------------------------+
+    | Account Data                  |
+    +-------------------------------+
+    | Optional Fields               |
+    +-------------------------------+
+
+While they share the same logical structure, hot account and cold account
+can different implementations of each sub-entry.  The following subsections
+describe the details.
+
+#### Hot Account Blocks
 All entries in hot storage file format are uncompressed and aligned.  As a result,
-each account data will have its own aligned and uncompressed block.  Thus, we don't
-need to store `intra_block_offset` and `uncompressed_data_len`.
+each account data will have its own aligned and uncompressed block.
 
-Instead, we store `data_block_offset / 8` and `padding_bytes` in one 8 bytes unit.
-As the offset of each data block is aligned, we use 7 bytes to store
-`data_block_offset / 8` and 1 byte to store the number of `padding_bytes`.  Again,
-the length of one acount data can be derived by the offsets of two consecutive
-account data blocks and the number of padding bytes.
+    +----------------------------------------------+
+    | account entry 1                              |
+    +----------------------------------------------+
+    | account entry 2                              |
+    +----------------------------------------------+
+    | ...                                          |
+    +----------------------------------------------+
+    | account entry n                              |
+    +----------------------------------------------+
+
+Each account entry follows the following format.  Specifically, there's a
+0-7 bytes of padding to ensure the alignment:
+
+    +-----------------------------------------------+
+    | Account Meta (16 bytes)                       |
+    +-----------------------------------------------+
+    | Account Data (variable length)                |
+    +-----------------------------------------------+
+    | 0-7 bytes of padding                          |
+    +-----------------------------------------------+
+    | Optional fields                               |
+    +-----------------------------------------------+
+
+And below is the hot account meta format, which includes lamports, padding information,
+owner index, and flags:
+
+    +---------------------------------------------------------------------------------+
+    | Hot Account Meta -- 16 bytes per account                                        |
+    +---------------------------------------------------------------------------------+
+    | lamports (8 bytes)             | The lamport balance of this account.           |
+    |                                |                                                |
+    | padding_and_owner_index        | The high 3-bits are used to store padding size |
+    | (4 bytes)                      | while the remaining bits are for owner index.  |
+    |                                |                                                |
+    | flags (4 bytes)                | Boolean flags, including one bit for each      |
+    |                                | optional field.                                |
+    +---------------------------------------------------------------------------------+
+    
+#### Cold Account Blocks
+Different from the hot account blocks, one cold account data block may contain entries
+for multiple accounts.  In addition, each account data block is compressed individually
+based on the `data_block_format` field in the footer.
+
+    +-------------------------------+
+    | cold account block 1          |
+    +-------------------------------+
+    | cold account block 2          |
+    +-------------------------------+
+    | ...                           |
+    +-------------------------------+
+    | cold account block n          |
+    +-------------------------------+
+
+
+Inside each cold account block, it stores a list of cold account entries:
+
+    +-------------------------------+
+    | cold account entry 1          |
+    +-------------------------------+
+    | cold account entry 2          |
+    +-------------------------------+
+    | ...                           |
+    +-------------------------------+
+    | cold account entry n          |
+    +-------------------------------+
+
+The cold account entry follows the same account entry format mentioned earlier.
+The difference is that cold account entry does not have padding bytes between
+its account data and optional fields.
+    
+    +-------------------------------+
+    | Account Meta                  |
+    +-------------------------------+
+    | Account Data                  |
+    +-------------------------------+
+    | Optional Fields               |
+    +-------------------------------+
+
+And here's the cold account meta entry format:
 
     +--------------------------------------------------------------------------------+
-    | Account Meta Entry -- 24 bytes per account                                     |
+    | Cold Account Meta Entry -- 16 bytes per account                                |
     +--------------------------------------------------------------------------------+
     | lamports (8 bytes)             | The lamport balance of this account.          |
-    |                                |                                               |
-    | data_block_offset (7 bytes)    | Value * 8 is the offset of its data block.    |
-    | padding_info (1 bytes)         | 3 bits for the number of padding bytes.       |
-    |                                | 2 bits to describe whether the account:       |
-    |                                | - 00: has its own account data block.         |
-    |                                | - 01: the 1st account in a shared data block. |
-    |                                | - 02: the 2nd account in a shared data block. |
     |                                |                                               |
     | owner_index (4 bytes)          | The index of the account's owner address in   |
     |                                | the owners block.                             |
     | flags (4 bytes)                | Flags include executable and whether this     |
     |                                | account has a particular optional field.      |
     +--------------------------------------------------------------------------------+
-    
-#### Cold Storage Account Meta Format
-In cold storage file format, one account data block may contain account data and
-optional fields for multiple accounts, and each account data block is compressed.
 
-As a result, to access the account data of one account, it requires the offset
-of the compressed data block, the intra offset to its account data after
-decompression, and the length of the account data after decompression.
-
-For account data that exceeds the configured data block size (default 4K), its
-account data and optional fields will have their own data block that exceeds
-the data block size.  For such blob accounts, their `intra_block_offset` will
-be 0, and their `uncompressed_data_len` will be u16::MAX.
-
-The `flags` field is used to store one account's boolean attributes (such as
-whether its account data is executable) and whether the account has a particular
-optional field.
-
-    +--------------------------------------------------------------------------------+
-    | Account Meta Entry -- 28 bytes per account                                     |
-    +--------------------------------------------------------------------------------+
-    | lamports (8 bytes)             | The lamport balance of this account.          |
-    |                                |                                               |
-    | data_block_offset (8 bytes)    | The offset to the account's data block.       |
-    | intra_block_offset (2 bytes)   | The inner-block offset to the accounts' data  |
-    |                                | after decompressing its data block.           |
-    | uncompressed_data_len (2 bytes)| The length of the uncompressed_data.          |
-    |                                | If this value is u16::MAX, then the size is   |
-    |                                | the entire data block minus optional fields.  |
-    |                                |                                               |
-    | owner_index (4 bytes)          | The index of the account's owner address in   |
-    |                                | the owners block.                             |
-    | flags (4 bytes)                | Flags include executable and whether this     |
-    |                                | account has a particular optional field.      |
-    +--------------------------------------------------------------------------------+
-
-### Account Data Blocks
-An account data block consists of one or more account data entries.  Each account
-data entry includes the data and the optional fields of one account.
-
-    +--------------------------------------------------------------------------------+
-    | Account Data Entry                                                             |
-    +--------------------------------------------------------------------------------+
-    | account_data               |                                                   |
-    |                            |                                                   |
-    | optional_field_1           |                                                   |
-    | ...                        |                                                   |
-    | optional_field_n           |                                                   |
-    +--------------------------------------------------------------------------------+
-
-#### Hot Storage Account Data Blocks
-For hot account storage, there're two types of account data block.
-
-The first type is simple: an account data block that contains only one account entry.
-The only difference is that there're 0-7 padding bytes between the account data
-and the optional fields.
-
-    +--------------------------------------------------------------------------------+
-    | Single Account Data Block                                                      |
-    +--------------------------------------------------------------------------------+
-    | account_data               |                                                   |
-    | [0-7 bytes padding]        |                                                   |
-    | optional_field_1           |                                                   |
-    | ...                        |                                                   |
-    | optional_field_n           |                                                   |
-    +--------------------------------------------------------------------------------+
-
-In the second type, one account data block contains two account data entries, where
-the lengths of two account data together is a multiple of 8. This optimization is to
-avoid the extra padding bytes for alignment.
-    
-    +--------------------------------------------------------------------------------+
-    | Dual Account Data Block                                                        |
-    +--------------------------------------------------------------------------------+
-    | account_data_a             |                                                   |
-    | account_data_b             |                                                   |
-    | optional_field_a_1         |                                                   |
-    | ...                        |                                                   |
-    | optional_field_a_n         |                                                   |
-    | optional_field_b_1         |                                                   |
-    | ...                        |                                                   |
-    | optional_field_b_n         |                                                   |
-    +--------------------------------------------------------------------------------+
-
-#### Cold Storage Account Data Blocks
-    
-    +--------------------------------------------------------------------------------+
-    | Account Data Block (Compressed)                                                |
-    +--------------------------------------------------------------------------------+
-    | Account Data Entry 1                                                           |
-    | Account Data Entry 2                                                           |
-    | ...                                                                            |
-    | Account Data Entry N                                                           |
-    +--------------------------------------------------------------------------------+
-
-    +--------------------------------------------------------------------------------+
-    | Account Data Entry                                                             |
-    +--------------------------------------------------------------------------------+
-    | account_data       |                                                           |
-    | optional_field_1   |                                                           |
-    | optional_field_2   | If the associated bit in account meta's "flags" is on,    |
-    | ...                | then the exact number of bytes is reserved for this field.|
-    | optional_field_n   | Otherwise, 0 bytes is used.                               |
-    +--------------------------------------------------------------------------------+
+## Performance Difference Between Hot and Cold Accounts (To be completed)
 
 ## Backwards Compatibility
 While the existing AppendVec and the proposed can support the existing AccountsDB
