@@ -15,6 +15,7 @@ pub const DEALLOC_AND_ASSIGN_TO_CALLER: u8 = 7;
 pub const CHECK: u8 = 8;
 pub const ZERO_INIT: u8 = 9;
 pub const REALLOC_EXTEND_AND_UNDO: u8 = 10;
+pub const EXTEND_AND_WRITE_U64: u8 = 11;
 
 pub fn realloc(program_id: &Pubkey, address: &Pubkey, size: usize, bump: &mut u8) -> Instruction {
     let mut instruction_data = vec![REALLOC, *bump];
@@ -81,6 +82,17 @@ pub fn realloc_extend_and_undo(
     instruction_data.extend_from_slice(&size.to_le_bytes());
 
     *bump = bump.saturating_add(1);
+
+    Instruction::new_with_bytes(
+        *program_id,
+        &instruction_data,
+        vec![AccountMeta::new(*address, false)],
+    )
+}
+
+pub fn extend_and_write_u64(program_id: &Pubkey, address: &Pubkey, value: u64) -> Instruction {
+    let mut instruction_data = vec![EXTEND_AND_WRITE_U64];
+    instruction_data.extend_from_slice(&value.to_le_bytes());
 
     Instruction::new_with_bytes(
         *program_id,

@@ -20,21 +20,24 @@ use {
         aligned_memory::AlignedMemory,
         ebpf::{self, HOST_ALIGN, MM_HEAP_START},
         elf::Executable,
-        memory_region::{MemoryCowCallback, MemoryMapping, MemoryRegion},
+        error::EbpfError,
+        memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
         verifier::RequisiteVerifier,
         vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
+        account::WritableAccount,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::Slot,
-        entrypoint::SUCCESS,
+        entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
-            delay_visibility_of_program_deployment, disable_deploy_of_alloc_free_syscall,
-            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
-            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id, FeatureSet,
+            bpf_account_data_direct_mapping, cap_accounts_data_allocations_per_transaction,
+            cap_bpf_program_instruction_accounts, delay_visibility_of_program_deployment,
+            disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
+            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
+            limit_max_instruction_trace_length, native_programs_consume_cu,
+            remove_bpf_loader_incorrect_program_id, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -302,8 +305,31 @@ pub fn create_vm<'a, 'b>(
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
     let stack_size = stack.len();
     let heap_size = heap.len();
-    let memory_mapping =
-        create_memory_mapping(program.get_executable(), stack, heap, regions, None)?;
+    let accounts = Arc::clone(invoke_context.transaction_context.accounts());
+    let memory_mapping = create_memory_mapping(
+        program.get_executable(),
+        stack,
+        heap,
+        regions,
+        Some(Box::new(move |index_in_transaction| {
+            // The two calls below can't really fail. If they fail because of a bug,
+            // whatever is writing will trigger an EbpfError::AccessViolation like
+            // if the region was readonly, and the transaction will fail gracefully.
+            let mut account = accounts
+                .try_borrow_mut(index_in_transaction as IndexOfAccount)
+                .map_err(|_| ())?;
+            accounts
+                .touch(index_in_transaction as IndexOfAccount)
+                .map_err(|_| ())?;
+
+            if account.is_shared() {
+                // See BorrowedAccount::make_data_mut() as to why we reserve extra
+                // MAX_PERMITTED_DATA_INCREASE bytes here.
+                account.reserve(MAX_PERMITTED_DATA_INCREASE);
+            }
+            Ok(account.data_as_mut_slice().as_mut_ptr() as u64)
+        })),
+    )?;
     invoke_context.set_syscall_context(SyscallContext {
         allocator: BpfAllocator::new(heap_size as u64),
         orig_account_lengths,
@@ -1524,6 +1550,9 @@ fn execute<'a, 'b: 'a>(
     let use_jit = false;
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     let use_jit = executable.get_executable().get_compiled_program().is_some();
+    let bpf_account_data_direct_mapping = invoke_context
+        .feature_set
+        .is_active(&bpf_account_data_direct_mapping::id());
 
     let mut serialize_time = Measure::start("serialize");
     let (parameter_bytes, regions, account_lengths) = serialization::serialize_parameters(
@@ -1532,8 +1561,18 @@ fn execute<'a, 'b: 'a>(
         invoke_context
             .feature_set
             .is_active(&cap_bpf_program_instruction_accounts::ID),
+        !bpf_account_data_direct_mapping,
     )?;
     serialize_time.stop();
+
+    // save the account addresses so in case of AccessViolation below we can
+    // map to InstructionError::ReadonlyDataModified, which is easier to
+    // diagnose from developers
+    let account_region_addrs = regions
+        .iter()
+        .map(|r| r.vm_addr..r.vm_addr.saturating_add(r.len))
+        .collect::<Vec<_>>();
+    let addr_is_account_data = |addr: u64| account_region_addrs.iter().any(|r| r.contains(&addr));
 
     let mut create_vm_time = Measure::start("create_vm");
     let mut execute_time;
@@ -1597,7 +1636,24 @@ fn execute<'a, 'b: 'a>(
                 };
                 Err(Box::new(error) as Box<dyn std::error::Error>)
             }
-            ProgramResult::Err(error) => Err(error),
+            ProgramResult::Err(error) => {
+                let error = match error.downcast_ref() {
+                    Some(EbpfError::AccessViolation(
+                        _pc,
+                        AccessType::Store,
+                        address,
+                        _size,
+                        _section_name,
+                    )) if addr_is_account_data(*address) => {
+                        // We can get here if direct_mapping is enabled and a program tries to
+                        // write to a readonly account. Map the error to ReadonlyDataModified so
+                        // it's easier for devs to diagnose what happened.
+                        Box::new(InstructionError::ReadonlyDataModified)
+                    }
+                    _ => error,
+                };
+                Err(error)
+            }
             _ => Ok(()),
         }
     };
@@ -1606,12 +1662,14 @@ fn execute<'a, 'b: 'a>(
     fn deserialize_parameters(
         invoke_context: &mut InvokeContext,
         parameter_bytes: &[u8],
+        copy_account_data: bool,
     ) -> Result<(), InstructionError> {
         serialization::deserialize_parameters(
             invoke_context.transaction_context,
             invoke_context
                 .transaction_context
                 .get_current_instruction_context()?,
+            copy_account_data,
             parameter_bytes,
             &invoke_context.get_syscall_context()?.orig_account_lengths,
         )
@@ -1619,8 +1677,12 @@ fn execute<'a, 'b: 'a>(
 
     let mut deserialize_time = Measure::start("deserialize");
     let execute_or_deserialize_result = execution_result.and_then(|_| {
-        deserialize_parameters(invoke_context, parameter_bytes.as_slice())
-            .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
+        deserialize_parameters(
+            invoke_context,
+            parameter_bytes.as_slice(),
+            !bpf_account_data_direct_mapping,
+        )
+        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
     });
     deserialize_time.stop();
 

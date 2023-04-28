@@ -39,7 +39,7 @@ use {
         clock::MAX_PROCESSING_AGE,
         compute_budget::ComputeBudgetInstruction,
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
-        feature_set::FeatureSet,
+        feature_set::{self, FeatureSet},
         fee::FeeStructure,
         loader_instruction,
         message::{v0::LoadedAddresses, SanitizedMessage},
@@ -1110,7 +1110,7 @@ fn test_program_sbf_invoke_sanity() {
             .map(|ix| &message.account_keys[ix.instruction.program_id_index as usize])
             .cloned()
             .collect();
-        assert_eq!(invoked_programs, vec![system_program::id()]);
+        assert_eq!(invoked_programs, vec![]);
         assert_eq!(
             result.unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
@@ -2761,200 +2761,57 @@ fn test_program_sbf_realloc() {
     } = create_genesis_config(1_000_000_000_000);
     let mint_pubkey = mint_keypair.pubkey();
     let signer = &[&mint_keypair];
+    for direct_mapping in [false, true] {
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        let feature_set = Arc::make_mut(&mut bank.feature_set);
+        // by default test banks have all features enabled, so we only need to
+        // disable when needed
+        if !direct_mapping {
+            feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
+        }
+        let bank = Arc::new(bank);
+        let bank_client = BankClient::new_shared(&bank);
 
-    let bank = Bank::new_for_tests(&genesis_config);
-    let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
+        let program_id = load_program(
+            &bank_client,
+            &bpf_loader::id(),
+            &mint_keypair,
+            "solana_sbf_rust_realloc",
+        );
 
-    let program_id = load_program(
-        &bank_client,
-        &bpf_loader::id(),
-        &mint_keypair,
-        "solana_sbf_rust_realloc",
-    );
+        let mut bump = 0;
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+        let account = AccountSharedData::new(START_BALANCE, 5, &program_id);
+        bank.store_account(&pubkey, &account);
 
-    let mut bump = 0;
-    let keypair = Keypair::new();
-    let pubkey = keypair.pubkey();
-    let account = AccountSharedData::new(START_BALANCE, 5, &program_id);
-    bank.store_account(&pubkey, &account);
+        // Realloc RO account
+        let mut instruction = realloc(&program_id, &pubkey, 0, &mut bump);
+        instruction.accounts[0].is_writable = false;
+        assert_eq!(
+            bank_client
+                .send_and_confirm_message(signer, Message::new(&[instruction], Some(&mint_pubkey),),)
+                .unwrap_err()
+                .unwrap(),
+            TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
+        );
 
-    // Realloc RO account
-    let mut instruction = realloc(&program_id, &pubkey, 0, &mut bump);
-    instruction.accounts[0].is_writable = false;
-    assert_eq!(
-        bank_client
-            .send_and_confirm_message(signer, Message::new(&[instruction], Some(&mint_pubkey),),)
-            .unwrap_err()
-            .unwrap(),
-        TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
-    );
-
-    // Realloc account to overflow
-    assert_eq!(
-        bank_client
-            .send_and_confirm_message(
-                signer,
-                Message::new(
-                    &[realloc(&program_id, &pubkey, usize::MAX, &mut bump)],
-                    Some(&mint_pubkey),
-                ),
-            )
-            .unwrap_err()
-            .unwrap(),
-        TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
-    );
-
-    // Realloc account to 0
-    bank_client
-        .send_and_confirm_message(
-            signer,
-            Message::new(
-                &[realloc(&program_id, &pubkey, 0, &mut bump)],
-                Some(&mint_pubkey),
-            ),
-        )
-        .unwrap();
-    let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
-    assert_eq!(0, data.len());
-
-    // Realloc account to max then undo
-    bank_client
-        .send_and_confirm_message(
-            signer,
-            Message::new(
-                &[realloc_extend_and_undo(
-                    &program_id,
-                    &pubkey,
-                    MAX_PERMITTED_DATA_INCREASE,
-                    &mut bump,
-                )],
-                Some(&mint_pubkey),
-            ),
-        )
-        .unwrap();
-    let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
-    assert_eq!(0, data.len());
-
-    // Realloc account to max + 1 then undo
-    assert_eq!(
-        bank_client
-            .send_and_confirm_message(
-                signer,
-                Message::new(
-                    &[realloc_extend_and_undo(
-                        &program_id,
-                        &pubkey,
-                        MAX_PERMITTED_DATA_INCREASE + 1,
-                        &mut bump,
-                    )],
-                    Some(&mint_pubkey),
-                ),
-            )
-            .unwrap_err()
-            .unwrap(),
-        TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
-    );
-
-    // Realloc to max + 1
-    assert_eq!(
-        bank_client
-            .send_and_confirm_message(
-                signer,
-                Message::new(
-                    &[realloc(
-                        &program_id,
-                        &pubkey,
-                        MAX_PERMITTED_DATA_INCREASE + 1,
-                        &mut bump
-                    )],
-                    Some(&mint_pubkey),
-                ),
-            )
-            .unwrap_err()
-            .unwrap(),
-        TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
-    );
-
-    // Realloc to max length in max increase increments
-    for i in 0..MAX_PERMITTED_DATA_LENGTH as usize / MAX_PERMITTED_DATA_INCREASE {
-        let mut bump = i as u64;
-        bank_client
-            .send_and_confirm_message(
-                signer,
-                Message::new(
-                    &[realloc_extend_and_fill(
-                        &program_id,
-                        &pubkey,
-                        MAX_PERMITTED_DATA_INCREASE,
-                        1,
-                        &mut bump,
-                    )],
-                    Some(&mint_pubkey),
-                ),
-            )
-            .unwrap();
-        let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
-        assert_eq!((i + 1) * MAX_PERMITTED_DATA_INCREASE, data.len());
-    }
-    for i in 0..data.len() {
-        assert_eq!(data[i], 1);
-    }
-
-    // and one more time should fail
-    assert_eq!(
-        bank_client
-            .send_and_confirm_message(
-                signer,
-                Message::new(
-                    &[realloc_extend(
-                        &program_id,
-                        &pubkey,
-                        MAX_PERMITTED_DATA_INCREASE,
-                        &mut bump
-                    )],
-                    Some(&mint_pubkey),
+        // Realloc account to overflow
+        assert_eq!(
+            bank_client
+                .send_and_confirm_message(
+                    signer,
+                    Message::new(
+                        &[realloc(&program_id, &pubkey, usize::MAX, &mut bump)],
+                        Some(&mint_pubkey),
+                    ),
                 )
-            )
-            .unwrap_err()
-            .unwrap(),
-        TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
-    );
+                .unwrap_err()
+                .unwrap(),
+            TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
+        );
 
-    // Realloc to 0
-    bank_client
-        .send_and_confirm_message(
-            signer,
-            Message::new(
-                &[realloc(&program_id, &pubkey, 0, &mut bump)],
-                Some(&mint_pubkey),
-            ),
-        )
-        .unwrap();
-    let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
-    assert_eq!(0, data.len());
-
-    // Realloc and assign
-    bank_client
-        .send_and_confirm_message(
-            signer,
-            Message::new(
-                &[Instruction::new_with_bytes(
-                    program_id,
-                    &[REALLOC_AND_ASSIGN],
-                    vec![AccountMeta::new(pubkey, false)],
-                )],
-                Some(&mint_pubkey),
-            ),
-        )
-        .unwrap();
-    let account = bank.get_account(&pubkey).unwrap();
-    assert_eq!(&solana_sdk::system_program::id(), account.owner());
-    let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
-    assert_eq!(MAX_PERMITTED_DATA_INCREASE, data.len());
-
-    // Realloc to 0 with wrong owner
-    assert_eq!(
+        // Realloc account to 0
         bank_client
             .send_and_confirm_message(
                 signer,
@@ -2963,82 +2820,264 @@ fn test_program_sbf_realloc() {
                     Some(&mint_pubkey),
                 ),
             )
-            .unwrap_err()
-            .unwrap(),
-        TransactionError::InstructionError(0, InstructionError::AccountDataSizeChanged)
-    );
+            .unwrap();
+        let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+        assert_eq!(0, data.len());
 
-    // realloc and assign to self via cpi
-    assert_eq!(
+        // Realloc account to max then undo
+        bank_client
+            .send_and_confirm_message(
+                signer,
+                Message::new(
+                    &[realloc_extend_and_undo(
+                        &program_id,
+                        &pubkey,
+                        MAX_PERMITTED_DATA_INCREASE,
+                        &mut bump,
+                    )],
+                    Some(&mint_pubkey),
+                ),
+            )
+            .unwrap();
+        let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+        assert_eq!(0, data.len());
+
+        // Realloc account to max + 1 then undo
+        assert_eq!(
+            bank_client
+                .send_and_confirm_message(
+                    signer,
+                    Message::new(
+                        &[realloc_extend_and_undo(
+                            &program_id,
+                            &pubkey,
+                            MAX_PERMITTED_DATA_INCREASE + 1,
+                            &mut bump,
+                        )],
+                        Some(&mint_pubkey),
+                    ),
+                )
+                .unwrap_err()
+                .unwrap(),
+            TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
+        );
+
+        // Realloc to max + 1
+        assert_eq!(
+            bank_client
+                .send_and_confirm_message(
+                    signer,
+                    Message::new(
+                        &[realloc(
+                            &program_id,
+                            &pubkey,
+                            MAX_PERMITTED_DATA_INCREASE + 1,
+                            &mut bump
+                        )],
+                        Some(&mint_pubkey),
+                    ),
+                )
+                .unwrap_err()
+                .unwrap(),
+            TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
+        );
+
+        // Realloc to max length in max increase increments
+        for i in 0..MAX_PERMITTED_DATA_LENGTH as usize / MAX_PERMITTED_DATA_INCREASE {
+            let mut bump = i as u64;
+            bank_client
+                .send_and_confirm_message(
+                    signer,
+                    Message::new(
+                        &[realloc_extend_and_fill(
+                            &program_id,
+                            &pubkey,
+                            MAX_PERMITTED_DATA_INCREASE,
+                            1,
+                            &mut bump,
+                        )],
+                        Some(&mint_pubkey),
+                    ),
+                )
+                .unwrap();
+            let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+            assert_eq!((i + 1) * MAX_PERMITTED_DATA_INCREASE, data.len());
+        }
+        for i in 0..data.len() {
+            assert_eq!(data[i], 1);
+        }
+
+        // and one more time should fail
+        assert_eq!(
+            bank_client
+                .send_and_confirm_message(
+                    signer,
+                    Message::new(
+                        &[realloc_extend(
+                            &program_id,
+                            &pubkey,
+                            MAX_PERMITTED_DATA_INCREASE,
+                            &mut bump
+                        )],
+                        Some(&mint_pubkey),
+                    )
+                )
+                .unwrap_err()
+                .unwrap(),
+            TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
+        );
+
+        // Realloc to 6 bytes
+        bank_client
+            .send_and_confirm_message(
+                signer,
+                Message::new(
+                    &[realloc(&program_id, &pubkey, 6, &mut bump)],
+                    Some(&mint_pubkey),
+                ),
+            )
+            .unwrap();
+        let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+        assert_eq!(6, data.len());
+
+        // Extend by 2 bytes and write a u64. This ensures that we can do writes that span the original
+        // account length (6 bytes) and the realloc data (2 bytes).
+        bank_client
+            .send_and_confirm_message(
+                signer,
+                Message::new(
+                    &[extend_and_write_u64(
+                        &program_id,
+                        &pubkey,
+                        0x1122334455667788,
+                    )],
+                    Some(&mint_pubkey),
+                ),
+            )
+            .unwrap();
+        let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+        assert_eq!(8, data.len());
+        assert_eq!(0x1122334455667788, unsafe { *data.as_ptr().cast::<u64>() });
+
+        // Realloc to 0
+        bank_client
+            .send_and_confirm_message(
+                signer,
+                Message::new(
+                    &[realloc(&program_id, &pubkey, 0, &mut bump)],
+                    Some(&mint_pubkey),
+                ),
+            )
+            .unwrap();
+        let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+        assert_eq!(0, data.len());
+
+        // Realloc and assign
+        bank_client
+            .send_and_confirm_message(
+                signer,
+                Message::new(
+                    &[Instruction::new_with_bytes(
+                        program_id,
+                        &[REALLOC_AND_ASSIGN],
+                        vec![AccountMeta::new(pubkey, false)],
+                    )],
+                    Some(&mint_pubkey),
+                ),
+            )
+            .unwrap();
+        let account = bank.get_account(&pubkey).unwrap();
+        assert_eq!(&solana_sdk::system_program::id(), account.owner());
+        let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+        assert_eq!(MAX_PERMITTED_DATA_INCREASE, data.len());
+
+        // Realloc to 0 with wrong owner
+        assert_eq!(
+            bank_client
+                .send_and_confirm_message(
+                    signer,
+                    Message::new(
+                        &[realloc(&program_id, &pubkey, 0, &mut bump)],
+                        Some(&mint_pubkey),
+                    ),
+                )
+                .unwrap_err()
+                .unwrap(),
+            TransactionError::InstructionError(0, InstructionError::AccountDataSizeChanged)
+        );
+
+        // realloc and assign to self via cpi
+        assert_eq!(
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &keypair],
+                    Message::new(
+                        &[Instruction::new_with_bytes(
+                            program_id,
+                            &[REALLOC_AND_ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM],
+                            vec![
+                                AccountMeta::new(pubkey, true),
+                                AccountMeta::new(solana_sdk::system_program::id(), false),
+                            ],
+                        )],
+                        Some(&mint_pubkey),
+                    )
+                )
+                .unwrap_err()
+                .unwrap(),
+            TransactionError::InstructionError(0, InstructionError::AccountDataSizeChanged)
+        );
+
+        // Assign to self and realloc via cpi
         bank_client
             .send_and_confirm_message(
                 &[&mint_keypair, &keypair],
                 Message::new(
                     &[Instruction::new_with_bytes(
                         program_id,
-                        &[REALLOC_AND_ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM],
+                        &[ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM_AND_REALLOC],
                         vec![
                             AccountMeta::new(pubkey, true),
                             AccountMeta::new(solana_sdk::system_program::id(), false),
                         ],
                     )],
                     Some(&mint_pubkey),
-                )
+                ),
             )
-            .unwrap_err()
-            .unwrap(),
-        TransactionError::InstructionError(0, InstructionError::AccountDataSizeChanged)
-    );
+            .unwrap();
+        let account = bank.get_account(&pubkey).unwrap();
+        assert_eq!(&program_id, account.owner());
+        let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+        assert_eq!(2 * MAX_PERMITTED_DATA_INCREASE, data.len());
 
-    // Assign to self and realloc via cpi
-    bank_client
-        .send_and_confirm_message(
-            &[&mint_keypair, &keypair],
-            Message::new(
-                &[Instruction::new_with_bytes(
-                    program_id,
-                    &[ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM_AND_REALLOC],
-                    vec![
-                        AccountMeta::new(pubkey, true),
-                        AccountMeta::new(solana_sdk::system_program::id(), false),
-                    ],
-                )],
-                Some(&mint_pubkey),
-            ),
-        )
-        .unwrap();
-    let account = bank.get_account(&pubkey).unwrap();
-    assert_eq!(&program_id, account.owner());
-    let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
-    assert_eq!(2 * MAX_PERMITTED_DATA_INCREASE, data.len());
+        // Realloc to 0
+        bank_client
+            .send_and_confirm_message(
+                signer,
+                Message::new(
+                    &[realloc(&program_id, &pubkey, 0, &mut bump)],
+                    Some(&mint_pubkey),
+                ),
+            )
+            .unwrap();
+        let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+        assert_eq!(0, data.len());
 
-    // Realloc to 0
-    bank_client
-        .send_and_confirm_message(
-            signer,
-            Message::new(
-                &[realloc(&program_id, &pubkey, 0, &mut bump)],
-                Some(&mint_pubkey),
-            ),
-        )
-        .unwrap();
-    let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
-    assert_eq!(0, data.len());
-
-    // zero-init
-    bank_client
-        .send_and_confirm_message(
-            &[&mint_keypair, &keypair],
-            Message::new(
-                &[Instruction::new_with_bytes(
-                    program_id,
-                    &[ZERO_INIT],
-                    vec![AccountMeta::new(pubkey, true)],
-                )],
-                Some(&mint_pubkey),
-            ),
-        )
-        .unwrap();
+        // zero-init
+        bank_client
+            .send_and_confirm_message(
+                &[&mint_keypair, &keypair],
+                Message::new(
+                    &[Instruction::new_with_bytes(
+                        program_id,
+                        &[ZERO_INIT],
+                        vec![AccountMeta::new(pubkey, true)],
+                    )],
+                    Some(&mint_pubkey),
+                ),
+            )
+            .unwrap();
+    }
 }
 
 #[test]

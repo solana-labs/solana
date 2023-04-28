@@ -235,6 +235,7 @@ before execting it in the virtual machine.",
             .get_current_instruction_context()
             .unwrap(),
         true, // should_cap_ix_accounts
+        true,
     )
     .unwrap();
 
