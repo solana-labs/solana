@@ -15,8 +15,11 @@ use {
     solana_account_decoder::parse_bpf_loader::{
         parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
     },
+    solana_bpf_loader_program::load_program_from_bytes,
     solana_ledger::token_balances::collect_token_balances,
-    solana_program_runtime::{compute_budget::ComputeBudget, timings::ExecuteTimings},
+    solana_program_runtime::{
+        compute_budget::ComputeBudget, loaded_programs::LoadProgramMetrics, timings::ExecuteTimings,
+    },
     solana_rbpf::vm::ContextObject,
     solana_runtime::{
         bank::{
@@ -1384,10 +1387,26 @@ fn assert_instruction_count() {
             is_signer: false,
             is_writable: false,
         }];
-        transaction_accounts[0]
-            .1
-            .set_data_from_slice(&load_program_from_file(program_name));
+        let program_data = load_program_from_file(program_name);
+        transaction_accounts[0].1.set_data_from_slice(&program_data);
         transaction_accounts[0].1.set_executable(true);
+
+        let mut load_program_metrics = LoadProgramMetrics::default();
+        let loaded_program = Arc::new(
+            load_program_from_bytes(
+                &FeatureSet::default(),
+                &ComputeBudget::default(),
+                None,
+                &mut load_program_metrics,
+                &program_data,
+                &loader_id,
+                program_data.len(),
+                0,
+                true,
+                false,
+            )
+            .expect("Failed to load the program"),
+        );
 
         let prev_compute_meter = RefCell::new(0);
         print!("  {:36} {:8}", program_name, *expected_consumption);
@@ -1401,6 +1420,8 @@ fn assert_instruction_count() {
             solana_bpf_loader_program::process_instruction,
             |invoke_context| {
                 *prev_compute_meter.borrow_mut() = invoke_context.get_remaining();
+                let mut cache = invoke_context.tx_executor_cache.borrow_mut();
+                cache.set(program_key, loaded_program.clone(), true, false, 0);
             },
             |invoke_context| {
                 let consumption = prev_compute_meter
