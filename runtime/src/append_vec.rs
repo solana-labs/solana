@@ -484,7 +484,7 @@ impl AppendVec {
     /// Return a reference to the type at `offset` if its data doesn't overrun the internal buffer.
     /// Otherwise return None. Also return the offset of the first byte after the requested data
     /// that falls on a 64-byte boundary.
-    fn get_type<'a, T>(&self, offset: usize) -> Option<(&'a T, usize)> {
+    fn get_type<T>(&self, offset: usize) -> Option<(&T, usize)> {
         let (data, next) = self.get_slice(offset, mem::size_of::<T>())?;
         let ptr: *const T = data.as_ptr() as *const T;
         //UNSAFE: The cast is safe because the slice is aligned and fits into the memory
@@ -495,10 +495,10 @@ impl AppendVec {
     /// Return stored account metadata for the account at `offset` if its data doesn't overrun
     /// the internal buffer. Otherwise return None. Also return the offset of the first byte
     /// after the requested data that falls on a 64-byte boundary.
-    pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccountMeta<'a>, usize)> {
-        let (meta, next): (&'a StoredMeta, _) = self.get_type(offset)?;
-        let (account_meta, next): (&'a AccountMeta, _) = self.get_type(next)?;
-        let (hash, next): (&'a Hash, _) = self.get_type(next)?;
+    pub fn get_account(&self, offset: usize) -> Option<(StoredAccountMeta, usize)> {
+        let (meta, next): (&StoredMeta, _) = self.get_type(offset)?;
+        let (account_meta, next): (&AccountMeta, _) = self.get_type(next)?;
+        let (hash, next): (&Hash, _) = self.get_type(next)?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         let stored_size = next - offset;
         Some((
@@ -514,7 +514,7 @@ impl AppendVec {
         ))
     }
 
-    fn get_account_meta<'a>(&self, offset: usize) -> Option<&'a AccountMeta> {
+    fn get_account_meta(&self, offset: usize) -> Option<&AccountMeta> {
         // Skip over StoredMeta data in the account
         let offset = offset.checked_add(mem::size_of::<StoredMeta>())?;
         // u64_align! does an unchecked add for alignment. Check that it won't cause an overflow.
