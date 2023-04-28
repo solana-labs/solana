@@ -118,10 +118,10 @@ Details on the warmup and cooldown timing can be found
 #### Lockups
 
 Stake accounts can have a lockup which prevents the tokens they hold from being
-withdrawn before a particular date or epoch has been
-reached. While locked up, the stake account can still be delegated, un-delegated,
-or split, and its stake and withdraw authorities can be changed as normal. Only
-withdrawal into a wallet address is not allowed.
+withdrawn before a particular date or epoch has been reached. While locked up,
+the stake account can still be delegated, un-delegated, or split, and its stake
+authority can be changed as normal. Only withdrawal into another wallet or
+updating the withdraw authority is not allowed.
 
 A lockup can only be added when a stake account is first created, but it can be
 modified later, by the _lockup authority_ or _custodian_, the address of which
