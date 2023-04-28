@@ -4149,7 +4149,11 @@ impl Bank {
     }
 
     #[allow(dead_code)] // Preparation for BankExecutorCache rework
-    fn load_program(&self, pubkey: &Pubkey) -> Result<Arc<LoadedProgram>> {
+    pub fn load_program(
+        &self,
+        pubkey: &Pubkey,
+        debugging_features: bool,
+    ) -> Result<Arc<LoadedProgram>> {
         let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
             program
         } else {
@@ -4209,7 +4213,7 @@ impl Bank {
             None,
             &program,
             programdata.as_ref().unwrap_or(&program),
-            false, /* debugging_features */
+            debugging_features,
         )
         .map(|(loaded_program, _create_executor_metrics)| loaded_program)
         .map_err(|err| TransactionError::InstructionError(0, err))
@@ -4455,7 +4459,7 @@ impl Bank {
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
             .iter()
             .map(|key| {
-                let program = self.load_program(key).unwrap_or_else(|err| {
+                let program = self.load_program(key, false).unwrap_or_else(|err| {
                     // Create a tombstone for the program in the cache
                     debug!("Failed to load program {}, error {:?}", key, err);
                     Arc::new(LoadedProgram::new_tombstone(
@@ -4502,7 +4506,7 @@ impl Bank {
         filter_missing_programs_time.stop();
 
         let executors = missing_executors.iter().map(|pubkey| {
-            let program = self.load_program(pubkey).unwrap_or_else(|err| {
+            let program = self.load_program(pubkey, false).unwrap_or_else(|err| {
                 // Create a tombstone for the program in the cache
                 debug!("Failed to load program {}, error {:?}", pubkey, err);
                 Arc::new(LoadedProgram::new_tombstone(
@@ -7826,6 +7830,11 @@ impl Bank {
                 .saturating_sub(forward_transactions_to_leader_at_slot_offset as usize),
             &mut error_counters,
         )
+    }
+
+    /// Return reference to builtin_progams
+    pub fn get_builtin_programs(&self) -> &BuiltinPrograms {
+        &self.builtin_programs
     }
 }
 

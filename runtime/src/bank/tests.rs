@@ -7500,7 +7500,7 @@ fn test_bank_load_program() {
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-    let program = bank.load_program(&key1);
+    let program = bank.load_program(&key1, false);
     assert!(program.is_ok());
     let program = program.unwrap();
     assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
