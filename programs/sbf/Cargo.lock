@@ -4580,7 +4580,7 @@ dependencies = [
  "serde_derive",
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
- "solana-sdk 1.16.0",
+ "solana-sanitize",
 ]
 
 [[package]]
@@ -4805,6 +4805,7 @@ dependencies = [
  "solana-rpc",
  "solana-rpc-client-api",
  "solana-runtime",
+ "solana-sanitize",
  "solana-sdk 1.16.0",
  "solana-send-transaction-service",
  "solana-streamer",
@@ -5044,6 +5045,7 @@ dependencies = [
  "solana-perf",
  "solana-rayon-threadlimit",
  "solana-runtime",
+ "solana-sanitize",
  "solana-sdk 1.16.0",
  "solana-streamer",
  "solana-thin-client",
@@ -5324,6 +5326,7 @@ dependencies = [
  "sha3 0.10.4",
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
+ "solana-sanitize",
  "solana-sdk-macro 1.16.0",
  "thiserror",
  "tiny-bip39",
@@ -5626,6 +5629,13 @@ dependencies = [
  "tempfile",
  "thiserror",
  "zstd",
+]
+
+[[package]]
+name = "solana-sanitize"
+version = "1.16.0"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
@@ -6112,6 +6122,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.16.0",
  "solana-logger 1.16.0",
  "solana-program 1.16.0",
+ "solana-sanitize",
  "solana-sdk-macro 1.16.0",
  "thiserror",
  "uriparse",
@@ -6448,6 +6459,7 @@ dependencies = [
  "serde_derive",
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
+ "solana-sanitize",
  "solana-sdk 1.16.0",
 ]
 
