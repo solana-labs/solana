@@ -106,6 +106,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --log-messages-bytes-limit ]]; then
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 = --block-production-method ]]; then
+      args+=("$1" "$2")
+      shift 2
     else
       echo "Unknown argument: $1"
       $program --help

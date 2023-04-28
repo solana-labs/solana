@@ -4458,7 +4458,7 @@ impl Bank {
             .collect()
     }
 
-    fn check_transaction_age(
+    pub fn check_transaction_age(
         &self,
         tx: &SanitizedTransaction,
         max_age: usize,
@@ -4479,7 +4479,7 @@ impl Bank {
         }
     }
 
-    fn is_transaction_already_processed(
+    pub fn is_transaction_already_processed(
         &self,
         sanitized_tx: &SanitizedTransaction,
         status_cache: &BankStatusCache,
@@ -7896,6 +7896,20 @@ impl Bank {
     pub fn prevent_rent_paying_rent_recipients(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::prevent_rent_paying_rent_recipients::id())
+    }
+
+    pub fn credits_auto_rewind(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::credits_auto_rewind::id())
+    }
+
+    pub fn send_to_tpu_vote_port_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::send_to_tpu_vote_port::id())
+    }
+
+    pub fn read_blockhash_queue(&self) -> LockResult<RwLockReadGuard<BlockhashQueue>> {
+        self.blockhash_queue.read()
     }
 
     pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {

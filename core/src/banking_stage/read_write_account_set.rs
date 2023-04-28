@@ -49,7 +49,7 @@ impl ReadWriteAccountSet {
     }
 
     /// Check if a sanitized message's account locks are available.
-    fn check_sanitized_message_account_locks(&self, message: &SanitizedMessage) -> bool {
+    pub fn check_sanitized_message_account_locks(&self, message: &SanitizedMessage) -> bool {
         !message
             .account_keys()
             .iter()
@@ -64,7 +64,7 @@ impl ReadWriteAccountSet {
     }
 
     /// Insert the read and write locks for a sanitized message.
-    fn add_sanitized_message_account_locks(&mut self, message: &SanitizedMessage) {
+    pub fn add_sanitized_message_account_locks(&mut self, message: &SanitizedMessage) {
         message
             .account_keys()
             .iter()

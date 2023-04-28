@@ -166,6 +166,7 @@ impl BlockVerificationMethod {
 pub enum BlockProductionMethod {
     #[default]
     ThreadLocalMultiIterator,
+    CentralSchedulerMultiIterator,
 }
 
 impl BlockProductionMethod {
@@ -1247,6 +1248,7 @@ impl Validator {
             config.staked_nodes_overrides.clone(),
             banking_tracer,
             tracer_thread,
+            config.block_production_method.clone(),
             tpu_enable_udp,
             &prioritization_fee_cache,
             config.generator_config.clone(),
