@@ -198,7 +198,7 @@ impl MultiIteratorScheduler {
                 let decision = self.decision_maker.make_consume_or_forward_decision();
                 match decision {
                     BufferedPacketsDecision::Consume(bank_start) => {
-                        self.schedule_consume(bank_start.working_bank.slot())?
+                        self.schedule_consume(&bank_start.working_bank)?
                     }
                     BufferedPacketsDecision::Forward => self.schedule_forward(false)?,
                     BufferedPacketsDecision::ForwardAndHold => self.schedule_forward(true)?,
@@ -211,7 +211,7 @@ impl MultiIteratorScheduler {
         }
     }
 
-    fn schedule_consume(&mut self, scheduling_slot: Slot) -> Result<(), SchedulerError> {
+    fn schedule_consume(&mut self, bank: &Bank) -> Result<(), SchedulerError> {
         // Take the top transactions from the priority queue
         // Note: we do not take all the transactions into a single batch
         //       because serialization time can be excessive when the queue
@@ -225,7 +225,7 @@ impl MultiIteratorScheduler {
         let mut scanner = MultiIteratorScanner::new(
             &transaction_ids,
             self.num_threads * MAX_NUM_TRANSACTIONS_PER_BATCH,
-            ConsumePayload::new(scheduling_slot, self),
+            ConsumePayload::new(bank, self),
             ConsumePayload::should_consume,
         );
 
@@ -574,7 +574,9 @@ impl MultiIteratorScheduler {
 }
 
 struct ConsumePayload<'a> {
-    scheduling_slot: Slot,
+    bank: &'a Bank,
+    blockhash_queue: RwLockReadGuard<'a, BlockhashQueue>,
+    last_slot_in_epoch: Slot,
     scheduler: &'a mut MultiIteratorScheduler,
     batch_account_locks: ReadWriteAccountSet,
     transaction_id_batches: Vec<Vec<TransactionId>>,
@@ -584,10 +586,14 @@ struct ConsumePayload<'a> {
 }
 
 impl<'a> ConsumePayload<'a> {
-    fn new(scheduling_slot: Slot, scheduler: &'a mut MultiIteratorScheduler) -> Self {
+    fn new(bank: &'a Bank, scheduler: &'a mut MultiIteratorScheduler) -> Self {
         let num_threads = scheduler.num_threads;
+        let blockhash_queue = bank.read_blockhash_queue().unwrap();
+        let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.slot());
         Self {
-            scheduling_slot,
+            bank,
+            blockhash_queue,
+            last_slot_in_epoch,
             scheduler,
             batch_account_locks: ReadWriteAccountSet::default(),
             transaction_id_batches: vec![
@@ -629,16 +635,31 @@ impl<'a> ConsumePayload<'a> {
         payload: &mut Self,
     ) -> ProcessingDecision {
         let scheduler = &mut *payload.scheduler;
-        let transaction_entry = scheduler.container.get_transaction_entry(priority_id.id);
-        let SanitizedTransactionTTL {
-            transaction,
-            max_age_slot,
-        } = transaction_entry.get();
 
-        if *max_age_slot < payload.scheduling_slot {
-            scheduler.container.remove_by_id(&priority_id.id);
-            return ProcessingDecision::Never;
+        let (mut transaction_entry, packet_entry) = scheduler
+            .container
+            .get_transaction_and_packet_entries(priority_id.id);
+
+        // If expired - check if the transaction can be re-sanitized
+        if transaction_entry.get().max_age_slot < payload.bank.slot() {
+            if let Some(resanitized_transaction) =
+                MultiIteratorScheduler::should_retry_expired_transaction(
+                    packet_entry.get().immutable_section(),
+                    payload.bank,
+                    &payload.blockhash_queue,
+                )
+            {
+                let mut entry = transaction_entry.get_mut();
+                entry.max_age_slot = payload.last_slot_in_epoch;
+                entry.transaction = resanitized_transaction;
+            } else {
+                transaction_entry.remove();
+                packet_entry.remove();
+                return ProcessingDecision::Never;
+            }
         }
+
+        let SanitizedTransactionTTL { transaction, .. } = transaction_entry.get();
 
         let account_locks = transaction.get_account_locks_unchecked();
 
