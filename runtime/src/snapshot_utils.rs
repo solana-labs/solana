@@ -1758,10 +1758,11 @@ pub fn bank_from_latest_snapshot_dir(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> Result<Bank> {
-    info!("Loading bank from snapshot dir");
     let bank_snapshot = get_highest_bank_snapshot_post(&bank_snapshots_dir).ok_or_else(|| {
         SnapshotError::NoSnapshotSlotDir(bank_snapshots_dir.as_ref().to_path_buf())
     })?;
+
+    info!("Loading bank from snapshot dir {:?}", bank_snapshot.slot);
 
     let (bank, timings) = bank_from_snapshot_dir(
         account_paths,
