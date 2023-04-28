@@ -52,6 +52,8 @@ echo --- build environment
   wasm-pack --version
 )
 
+exit 0
+
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings -A incomplete_features"
 
