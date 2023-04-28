@@ -186,8 +186,24 @@ impl BankSnapshotInfo {
             ));
         }
 
+        // Among the files checks, the completion flag file check should be done first to avoid the later
+        // I/O errors.
+
+        // There is a time window from the slot directory being created, and the content being completely
+        // filled.  Check the completion to avoid using a highest found slot directory with missing content.
+        let completion_flag_file = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+        if !completion_flag_file.is_file() {
+            // If the directory is incomplete, it should be removed.
+            // There are also possible hardlink files under <account_path>/snapshot/<slot>/, referred by this
+            // snapshot dir's symlinks.  They are cleaned up in clean_orphaned_account_snapshot_dirs() at the
+            // boot time.
+            info!("Removing incomplete snapshot dir: {:?}", bank_snapshot_dir);
+            fs::remove_dir_all(&bank_snapshot_dir)?;
+            return Err(SnapshotNewFromDirError::IncompleteDir(bank_snapshot_dir));
+        }
+
         let status_cache_file = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-        if !fs::metadata(&status_cache_file)?.is_file() {
+        if !status_cache_file.is_file() {
             return Err(SnapshotNewFromDirError::MissingStatusCacheFile(
                 status_cache_file,
             ));
@@ -199,18 +215,6 @@ impl BankSnapshotInfo {
         ))?;
         let snapshot_version = SnapshotVersion::from_str(version_str.as_str())
             .or(Err(SnapshotNewFromDirError::InvalidVersion))?;
-
-        // There is a time window from the slot directory being created, and the content being completely
-        // filled.  Check the completion to avoid using a highest found slot directory with missing content.
-        let completion_flag_file = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
-        if !completion_flag_file.is_file() {
-            // If the directory is incomplete, it should be removed.
-            // There are also possible hardlink files under <account_path>/snapshot/<slot>/, referred by this
-            // snapshot dir's symlinks.  They are cleaned up in clean_orphaned_account_snapshot_dirs() at the
-            // boot time.
-            fs::remove_dir_all(bank_snapshot_dir)?;
-            return Err(SnapshotNewFromDirError::IncompleteDir(completion_flag_file));
-        }
 
         let bank_snapshot_post_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
         let bank_snapshot_pre_path =
