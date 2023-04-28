@@ -15,27 +15,14 @@ use {
 };
 
 pub(crate) struct SanitizedTransactionTTL {
-    transaction: SanitizedTransaction,
-    max_age_slot: Slot,
+    pub(crate) transaction: SanitizedTransaction,
+    pub(crate) max_age_slot: Slot,
 }
 
 pub(crate) struct TransactionPacketContainer {
     priority_queue: MinMaxHeap<TransactionPriorityId>,
     id_to_transaction_ttl: HashMap<TransactionId, SanitizedTransactionTTL>,
     id_to_packet: HashMap<TransactionId, DeserializedPacket>,
-}
-
-/// A non-consuming iterator over the top `n` transactions in the queue.
-/// Unlike `drain`, this does not leave the queue empty.
-/// It only removes the top `n` elements.
-struct TopIter<'a, T: Ord + Sized> {
-    queue: &'a mut MinMaxHeap<T>,
-}
-
-impl<'a, T: Ord + Sized> TopIter<'a, T> {
-    fn take(&mut self, n: usize) -> impl Iterator<Item = T> + '_ {
-        (0..n).map_while(|_| self.queue.pop_max())
-    }
 }
 
 impl TransactionPacketContainer {
@@ -52,6 +39,11 @@ impl TransactionPacketContainer {
         self.priority_queue.is_empty()
     }
 
+    /// Returns the remaining capacity of the queue
+    pub(crate) fn remaining_queue_capacity(&self) -> usize {
+        self.priority_queue.capacity() - self.priority_queue.len()
+    }
+
     /// Draining iterator (leaves the queue empty).
     pub(crate) fn drain_queue(&mut self) -> impl Iterator<Item = TransactionPriorityId> + '_ {
         self.priority_queue.drain_desc()
@@ -66,14 +58,13 @@ impl TransactionPacketContainer {
     }
 
     /// Get packet by id.
-    /// Panics if the packet does not exist.
     pub(crate) fn get_packet_entry(
         &mut self,
         id: TransactionId,
-    ) -> OccupiedEntry<TransactionId, DeserializedPacket> {
+    ) -> Option<OccupiedEntry<TransactionId, DeserializedPacket>> {
         match self.id_to_packet.entry(id) {
-            Entry::Occupied(entry) => entry,
-            Entry::Vacant(_) => panic!("packet must exist"),
+            Entry::Occupied(entry) => Some(entry),
+            Entry::Vacant(_) => None,
         }
     }
 
@@ -104,6 +95,31 @@ impl TransactionPacketContainer {
             );
             self.id_to_transaction_ttl
                 .insert(transaction_id, transaction_ttl);
+        }
+    }
+
+    /// Retries a transaction - inserts transaction back into map (but not packet).
+    pub(crate) fn retry_transaction(
+        &mut self,
+        transaction_id: TransactionId,
+        transaction: SanitizedTransaction,
+        max_age_slot: Slot,
+    ) {
+        let priority = self
+            .id_to_packet
+            .get(&transaction_id)
+            .unwrap()
+            .immutable_section()
+            .priority();
+        let priority_id = TransactionPriorityId::new(priority, transaction_id);
+        if self.push_id_into_queue(priority_id) {
+            self.id_to_transaction_ttl.insert(
+                transaction_id,
+                SanitizedTransactionTTL {
+                    transaction,
+                    max_age_slot,
+                },
+            );
         }
     }
 
@@ -270,12 +286,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "packet must exist")]
-    fn test_get_packet_entry_panic() {
+    fn test_get_packet_entry_missing() {
         let mut container = TransactionPacketContainer::with_capacity(5);
         push_to_container(&mut container, 5);
 
-        let _ = container.get_packet_entry(TransactionId::new(7));
+        assert!(container.get_packet_entry(TransactionId::new(7)).is_none());
     }
 
     #[test]
@@ -284,7 +299,7 @@ mod tests {
         push_to_container(&mut container, 5);
 
         let transaction_id = TransactionId::new(3);
-        let packet_entry = container.get_packet_entry(transaction_id);
+        let packet_entry = container.get_packet_entry(transaction_id).unwrap();
         assert_eq!(*packet_entry.key(), transaction_id);
     }
 
