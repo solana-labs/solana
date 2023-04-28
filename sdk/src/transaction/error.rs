@@ -3,8 +3,8 @@ use {
         instruction::InstructionError,
         message::{AddressLoaderError, SanitizeMessageError},
     },
-    solana_sanitize::SanitizeError,
     serde::Serialize,
+    solana_sanitize::SanitizeError,
     thiserror::Error,
 };
 

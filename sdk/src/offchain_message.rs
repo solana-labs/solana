@@ -8,8 +8,8 @@ use {
         pubkey::Pubkey,
         signature::{Signature, Signer},
     },
-    solana_sanitize::SanitizeError,
     num_enum::{IntoPrimitive, TryFromPrimitive},
+    solana_sanitize::SanitizeError,
 };
 
 #[cfg(test)]

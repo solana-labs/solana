@@ -1,10 +1,7 @@
 //! Helpers for reading and writing bytes.
 
 #![allow(clippy::integer_arithmetic)]
-use {
-    crate::pubkey::Pubkey,
-    solana_sanitize::SanitizeError
-};
+use {crate::pubkey::Pubkey, solana_sanitize::SanitizeError};
 
 pub fn append_u16(buf: &mut Vec<u8>, data: u16) {
     let start = buf.len();
