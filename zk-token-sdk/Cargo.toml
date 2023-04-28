@@ -27,7 +27,7 @@ merlin = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-sha3 = "0.9"
+sha3 = "0.10"
 solana-sdk = { workspace = true }
 subtle = { workspace = true }
 thiserror = { workspace = true }
