@@ -198,12 +198,12 @@ impl BankSnapshotInfo {
             // snapshot dir's symlinks.  They are cleaned up in clean_orphaned_account_snapshot_dirs() at the
             // boot time.
             info!("Removing incomplete snapshot dir: {:?}", bank_snapshot_dir);
-            fs::remove_dir_all(bank_snapshot_dir)?;
-            return Err(SnapshotNewFromDirError::IncompleteDir(completion_flag_file));
+            fs::remove_dir_all(&bank_snapshot_dir)?;
+            return Err(SnapshotNewFromDirError::IncompleteDir(bank_snapshot_dir));
         }
 
         let status_cache_file = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-        if !fs::metadata(&status_cache_file)?.is_file() {
+        if !status_cache_file.is_file() {
             return Err(SnapshotNewFromDirError::MissingStatusCacheFile(
                 status_cache_file,
             ));
