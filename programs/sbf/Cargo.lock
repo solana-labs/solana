@@ -2114,7 +2114,7 @@ checksum = "d87c48c02e0dc5e3b849a2041db3029fd066650f8f717c07bf8ed78ccb895cac"
 dependencies = [
  "http",
  "hyper",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "tokio",
  "tokio-rustls 0.23.2",
 ]
@@ -3634,7 +3634,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "thiserror",
  "tokio",
  "tracing",
@@ -3651,7 +3651,7 @@ dependencies = [
  "rand 0.8.5",
  "ring",
  "rustc-hash",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "rustls-native-certs",
  "slab",
  "thiserror",
@@ -3888,7 +3888,7 @@ dependencies = [
  "once_cell",
  "percent-encoding 2.1.0",
  "pin-project-lite",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "rustls-pemfile 1.0.0",
  "serde",
  "serde_json",
@@ -4043,9 +4043,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.20.6"
+version = "0.20.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aab8ee6c7097ed6057f43c187a62418d0c05a4bd5f18b3571db50ee0f9ce033"
+checksum = "fff78fc74d175294f4e83b28343315ffcfb114b156f0185e9741cb5570f50e2f"
 dependencies = [
  "log",
  "ring",
@@ -5420,7 +5420,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rcgen",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "solana-connection-cache",
  "solana-measure",
  "solana-metrics",
@@ -6239,7 +6239,7 @@ dependencies = [
  "quinn-udp",
  "rand 0.7.3",
  "rcgen",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "solana-metrics",
  "solana-perf",
  "solana-sdk 1.16.0",
@@ -7053,7 +7053,7 @@ version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a27d5f2b839802bd8267fa19b0530f5a08b9c08cd417976be2a65d130fe1c11b"
 dependencies = [
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "tokio",
  "webpki 0.22.0",
 ]
@@ -7093,7 +7093,7 @@ checksum = "f714dd15bead90401d77e04243611caec13726c2408afd5b31901dfcdcb3b181"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "tokio",
  "tokio-rustls 0.23.2",
  "tungstenite",
@@ -7374,7 +7374,7 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.8.5",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "sha-1 0.10.0",
  "thiserror",
  "url 2.2.2",

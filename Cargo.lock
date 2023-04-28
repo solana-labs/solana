@@ -2385,7 +2385,7 @@ checksum = "d87c48c02e0dc5e3b849a2041db3029fd066650f8f717c07bf8ed78ccb895cac"
 dependencies = [
  "http",
  "hyper",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "tokio",
  "tokio-rustls 0.23.3",
 ]
@@ -3958,7 +3958,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "thiserror",
  "tokio",
  "tracing",
@@ -3975,7 +3975,7 @@ dependencies = [
  "rand 0.8.5",
  "ring",
  "rustc-hash",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "rustls-native-certs",
  "slab",
  "thiserror",
@@ -4278,7 +4278,7 @@ dependencies = [
  "once_cell",
  "percent-encoding 2.1.0",
  "pin-project-lite",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "rustls-pemfile 1.0.0",
  "serde",
  "serde_json",
@@ -4433,9 +4433,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.20.6"
+version = "0.20.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aab8ee6c7097ed6057f43c187a62418d0c05a4bd5f18b3571db50ee0f9ce033"
+checksum = "fff78fc74d175294f4e83b28343315ffcfb114b156f0185e9741cb5570f50e2f"
 dependencies = [
  "log",
  "ring",
@@ -6461,7 +6461,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rcgen",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "solana-connection-cache",
  "solana-logger 1.16.0",
  "solana-measure",
@@ -6986,7 +6986,7 @@ dependencies = [
  "quinn-udp",
  "rand 0.7.3",
  "rcgen",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "solana-logger 1.16.0",
  "solana-metrics",
  "solana-perf",
@@ -7965,7 +7965,7 @@ version = "0.23.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4151fda0cf2798550ad0b34bcfc9b9dcc2a9d2471c895c68f3a8818e54f2389e"
 dependencies = [
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "tokio",
  "webpki 0.22.0",
 ]
@@ -8005,7 +8005,7 @@ checksum = "f714dd15bead90401d77e04243611caec13726c2408afd5b31901dfcdcb3b181"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "tokio",
  "tokio-rustls 0.23.3",
  "tungstenite",
@@ -8285,7 +8285,7 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.8.5",
- "rustls 0.20.6",
+ "rustls 0.20.8",
  "sha-1 0.10.0",
  "thiserror",
  "url 2.2.2",
