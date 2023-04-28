@@ -13205,7 +13205,12 @@ fn test_reward_calculation() {
 
     let epoch = bank1.epoch();
     let mut metrics = RewardsMetrics::default();
-    bank1.calculate_rewards_with_thread_pool(epoch, null_tracer(), &thread_pool, &mut metrics);
+    bank1.calculate_rewards_and_distribute_vote_rewards_with_thread_pool(
+        epoch,
+        null_tracer(),
+        &thread_pool,
+        &mut metrics,
+    );
 
     // TODO -assert rewards
 }
