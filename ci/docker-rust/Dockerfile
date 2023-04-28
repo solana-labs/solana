@@ -2,6 +2,7 @@
 # ci/rust-version.sh to pick up the new image tag
 FROM rust:1.69.0
 
+
 RUN set -x \
  && apt update \
  && apt-get install apt-transport-https \
