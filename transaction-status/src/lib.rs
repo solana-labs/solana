@@ -462,7 +462,9 @@ impl UiTransactionStatusMeta {
                 .map(|balance| balance.into_iter().map(Into::into).collect())
                 .into(),
             rewards: if show_rewards { meta.rewards } else { None }.into(),
-            loaded_addresses: OptionSerializer::Skip,
+            loaded_addresses: OptionSerializer::Some(UiLoadedAddresses::from(
+                &meta.loaded_addresses,
+            )),
             return_data: OptionSerializer::or_skip(
                 meta.return_data.map(|return_data| return_data.into()),
             ),
