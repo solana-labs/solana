@@ -44,6 +44,7 @@ use {
             ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_index_storage::Startup,
+        accounts_partition::RentPayingAccountsByPartition,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
@@ -61,7 +62,6 @@ use {
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
-        rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
         serde_snapshot::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
         snapshot_utils::create_accounts_run_and_snapshot_dirs,
         sorted_storages::SortedStorages,
@@ -5912,7 +5912,10 @@ impl AccountsDb {
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
     ) {
         // Slot purged from cache should not exist in the backing store
-        assert!(self.storage.get_slot_storage_entry(purged_slot).is_none());
+        assert!(self
+            .storage
+            .get_slot_storage_entry_shrinking_in_progress_ok(purged_slot)
+            .is_none());
         let num_purged_keys = pubkey_to_slot_set.len();
         let (reclaims, _) = self.purge_keys_exact(pubkey_to_slot_set.iter());
         assert_eq!(reclaims.len(), num_purged_keys);
@@ -6920,7 +6923,6 @@ impl AccountsDb {
         // We'll also accumulate the lamports within each chunk and fewer chunks results in less contention to accumulate the sum.
         let chunks = crate::accounts_hash::MERKLE_FANOUT.pow(4);
         let total_lamports = Mutex::<u64>::new(0);
-        let stats = HashStats::default();
 
         let get_hashes = || {
             keys.par_chunks(chunks)
@@ -7011,16 +7013,6 @@ impl AccountsDb {
             ("hash", hash_time.as_us(), i64),
             ("hash_total", hash_total, i64),
             ("collect", collect.as_us(), i64),
-            (
-                "rehashed_rewrites",
-                stats.rehash_required.load(Ordering::Relaxed),
-                i64
-            ),
-            (
-                "rehashed_rewrites_unnecessary",
-                stats.rehash_unnecessary.load(Ordering::Relaxed),
-                i64
-            ),
         );
         self.assert_safe_squashing_accounts_hash(max_slot, config.epoch_schedule);
 

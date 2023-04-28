@@ -6,8 +6,6 @@
 use {solana_rbpf::memory_region::MemoryState, std::slice};
 
 extern crate test;
-#[macro_use]
-extern crate solana_bpf_loader_program;
 
 use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
@@ -193,9 +191,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let mut bank = Bank::new_for_benches(&genesis_config);
-    let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, &id, entrypoint);
+    let bank = Bank::new_for_benches(&genesis_config);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 

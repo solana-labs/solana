@@ -352,7 +352,7 @@ fn test_forwarding() {
 
     let validator_info = cluster_nodes
         .iter()
-        .find(|c| c.id != leader_pubkey)
+        .find(|c| c.pubkey() != &leader_pubkey)
         .unwrap();
 
     // Confirm that transactions were forwarded to and processed by the leader.
@@ -1359,7 +1359,7 @@ fn test_snapshots_blockstore_floor() {
     )
     .unwrap();
     let mut known_validators = HashSet::new();
-    known_validators.insert(cluster_nodes[0].id);
+    known_validators.insert(*cluster_nodes[0].pubkey());
     validator_snapshot_test_config
         .validator_config
         .known_validators = Some(known_validators);

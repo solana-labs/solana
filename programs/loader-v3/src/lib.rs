@@ -37,7 +37,7 @@ use {
     },
 };
 
-fn get_state(data: &[u8]) -> Result<&LoaderV3State, InstructionError> {
+pub fn get_state(data: &[u8]) -> Result<&LoaderV3State, InstructionError> {
     unsafe {
         let data = data
             .get(0..LoaderV3State::program_data_offset())

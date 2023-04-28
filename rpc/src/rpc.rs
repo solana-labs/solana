@@ -3459,14 +3459,14 @@ pub mod rpc_full {
                             .unwrap_or_default()
                     {
                         let (version, feature_set) = if let Some(version) =
-                            cluster_info.get_node_version(&contact_info.id)
+                            cluster_info.get_node_version(contact_info.pubkey())
                         {
                             (Some(version.to_string()), Some(version.feature_set))
                         } else {
                             (None, None)
                         };
                         Some(RpcContactInfo {
-                            pubkey: contact_info.id.to_string(),
+                            pubkey: contact_info.pubkey().to_string(),
                             gossip: contact_info.gossip().ok(),
                             tpu: contact_info
                                 .tpu()

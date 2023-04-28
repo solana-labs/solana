@@ -285,7 +285,7 @@ mod tests {
                     archive_format: ArchiveFormat::Tar,
                 },
                 block_height: slot,
-                snapshot_links: TempDir::new().unwrap(),
+                snapshot_links: PathBuf::default(),
                 snapshot_storages: Vec::default(),
                 snapshot_version: SnapshotVersion::default(),
                 snapshot_type,

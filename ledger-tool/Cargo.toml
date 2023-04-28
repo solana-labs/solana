@@ -30,6 +30,7 @@ solana-cli-output = { workspace = true }
 solana-core = { workspace = true }
 solana-entry = { workspace = true }
 solana-geyser-plugin-manager = { workspace = true }
+solana-gossip = { workspace = true }
 solana-ledger = { workspace = true }
 solana-logger = { workspace = true }
 solana-measure = { workspace = true }
@@ -38,6 +39,7 @@ solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-storage-bigtable = { workspace = true }
+solana-streamer = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }

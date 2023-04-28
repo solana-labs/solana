@@ -31,14 +31,14 @@ use {
     solana_rpc_client_api::config::RpcGetVoteAccountsConfig,
     solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
-        account::Account, commitment_config::CommitmentConfig, message::Message,
+        account::Account, commitment_config::CommitmentConfig, feature, message::Message,
         native_token::lamports_to_sol, pubkey::Pubkey, system_instruction::SystemError,
         transaction::Transaction,
     },
     solana_vote_program::{
         vote_error::VoteError,
-        vote_instruction::{self, withdraw},
-        vote_state::{VoteAuthorize, VoteInit, VoteState},
+        vote_instruction::{self, withdraw, CreateVoteAccountConfig},
+        vote_state::{VoteAuthorize, VoteInit, VoteState, VoteStateVersions},
     },
     std::sync::Arc,
 };
@@ -800,6 +800,13 @@ pub fn process_create_vote_account(
     let fee_payer = config.signers[fee_payer];
     let nonce_authority = config.signers[nonce_authority];
 
+    let is_feature_active = (!sign_only)
+        .then(solana_sdk::feature_set::vote_state_add_vote_latency::id)
+        .and_then(|feature_address| rpc_client.get_account(&feature_address).ok())
+        .and_then(|account| feature::from_account(&account))
+        .map_or(false, |feature| feature.activated_at.is_some());
+    let space = VoteStateVersions::vote_state_size_of(is_feature_active) as u64;
+
     let build_message = |lamports| {
         let vote_init = VoteInit {
             node_pubkey: identity_pubkey,
@@ -807,28 +814,27 @@ pub fn process_create_vote_account(
             authorized_withdrawer,
             commission,
         };
-
-        let ixs = if let Some(seed) = seed {
-            vote_instruction::create_account_with_seed(
-                &config.signers[0].pubkey(), // from
-                &vote_account_address,       // to
-                &vote_account_pubkey,        // base
-                seed,                        // seed
-                &vote_init,
-                lamports,
-            )
-            .with_memo(memo)
-            .with_compute_unit_price(compute_unit_price)
-        } else {
-            vote_instruction::create_account(
-                &config.signers[0].pubkey(),
-                &vote_account_pubkey,
-                &vote_init,
-                lamports,
-            )
-            .with_memo(memo)
-            .with_compute_unit_price(compute_unit_price)
+        let mut create_vote_account_config = CreateVoteAccountConfig {
+            space,
+            ..CreateVoteAccountConfig::default()
         };
+        let to = if let Some(seed) = seed {
+            create_vote_account_config.with_seed = Some((&vote_account_pubkey, seed));
+            &vote_account_address
+        } else {
+            &vote_account_pubkey
+        };
+
+        let ixs = vote_instruction::create_account_with_config(
+            &config.signers[0].pubkey(),
+            to,
+            &vote_init,
+            lamports,
+            create_vote_account_config,
+        )
+        .with_memo(memo)
+        .with_compute_unit_price(compute_unit_price);
+
         if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(
                 ixs,

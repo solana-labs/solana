@@ -21,7 +21,6 @@ solana-send-transaction-service = { workspace = true }
 tarpc = { workspace = true, features = ["full"] }
 tokio = { workspace = true, features = ["full"] }
 tokio-serde = { workspace = true, features = ["bincode"] }
-tokio-stream = { workspace = true }
 
 [lib]
 crate-type = ["lib"]

@@ -5,6 +5,7 @@ use {
         accounts_db::{
             AccountStorageEntry, AccountsDb, GetUniqueAccountsResult, PurgeStats, StoreReclaims,
         },
+        accounts_partition,
         bank::Bank,
         builtins, static_ids,
     },
@@ -145,7 +146,7 @@ impl<'a> SnapshotMinimizer<'a> {
         };
 
         partitions.into_iter().for_each(|partition| {
-            let subrange = Bank::pubkey_range_from_partition(partition);
+            let subrange = accounts_partition::pubkey_range_from_partition(partition);
             // This may be overkill since we just need the pubkeys and don't need to actually load the accounts.
             // Leaving it for now as this is only used by ledger-tool. If used in runtime, we will need to instead use
             // some of the guts of `load_to_collect_rent_eagerly`.

@@ -297,7 +297,7 @@ impl AccountsHashVerifier {
 
         if let Some(snapshot_info) = &accounts_package.snapshot_info {
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                snapshot_info.snapshot_links.path(),
+                &snapshot_info.snapshot_links,
                 accounts_package.slot,
                 &accounts_hash_for_reserialize,
                 bank_incremental_snapshot_persistence.as_ref(),

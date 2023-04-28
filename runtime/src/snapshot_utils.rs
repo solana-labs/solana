@@ -83,7 +83,6 @@ pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const MAX_SNAPSHOT_VERSION_FILE_SIZE: u64 = 8; // byte
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
-pub(crate) const TMP_BANK_SNAPSHOT_PREFIX: &str = "tmp-bank-snapshot-";
 pub const TMP_SNAPSHOT_ARCHIVE_PREFIX: &str = "tmp-snapshot-archive-";
 pub const BANK_SNAPSHOT_PRE_FILENAME_EXTENSION: &str = "pre";
 // Save some bank snapshots but not too many
@@ -428,8 +427,8 @@ pub enum VerifySlotDeltasError {
 /// This is useful if the process does not have permission
 /// to delete the top level directory it might be able to
 /// delete the contents of that directory.
-fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
-    if let Ok(dir_entries) = std::fs::read_dir(path) {
+fn delete_contents_of_path(path: impl AsRef<Path>) {
+    if let Ok(dir_entries) = std::fs::read_dir(&path) {
         for entry in dir_entries.flatten() {
             let sub_path = entry.path();
             let metadata = match entry.metadata() {
@@ -475,9 +474,9 @@ fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
 /// If the process is killed and the deleting process is not done,
 /// the leftover path will be deleted in the next process life, so
 /// there is no file space leaking.
-pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
+pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
     let mut path_delete = PathBuf::new();
-    path_delete.push(path);
+    path_delete.push(&path);
     path_delete.set_file_name(format!(
         "{}{}",
         path_delete.file_name().unwrap().to_str().unwrap(),
@@ -492,7 +491,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
         return;
     }
 
-    if let Err(err) = std::fs::rename(path, &path_delete) {
+    if let Err(err) = std::fs::rename(&path, &path_delete) {
         warn!(
             "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
             err.to_string()
@@ -623,16 +622,43 @@ pub fn archive_snapshot_package(
     let staging_accounts_dir = staging_dir.path().join("accounts");
     let staging_snapshots_dir = staging_dir.path().join("snapshots");
     let staging_version_file = staging_dir.path().join(SNAPSHOT_VERSION_FILENAME);
+
+    // Create staging/accounts/
     fs::create_dir_all(&staging_accounts_dir).map_err(|e| {
-        SnapshotError::IoWithSourceAndFile(e, "create staging path", staging_accounts_dir.clone())
+        SnapshotError::IoWithSourceAndFile(
+            e,
+            "create staging accounts path",
+            staging_accounts_dir.clone(),
+        )
     })?;
 
-    // Add the snapshots to the staging directory
-    symlink::symlink_dir(
-        snapshot_package.snapshot_links.path(),
-        staging_snapshots_dir,
-    )
-    .map_err(|e| SnapshotError::IoWithSource(e, "create staging symlinks"))?;
+    let slot_str = snapshot_package.slot().to_string();
+    let staging_snapshot_dir = staging_snapshots_dir.join(&slot_str);
+    // Creates staging snapshots/<slot>/
+    fs::create_dir_all(&staging_snapshot_dir).map_err(|e| {
+        SnapshotError::IoWithSourceAndFile(
+            e,
+            "create staging snapshots path",
+            staging_snapshots_dir.clone(),
+        )
+    })?;
+
+    let src_snapshot_dir = snapshot_package.snapshot_links.join(&slot_str);
+    // To be a source for symlinking and archiving, the path need to be an aboslute path
+    let src_snapshot_dir = src_snapshot_dir
+        .canonicalize()
+        .map_err(|_e| SnapshotError::InvalidSnapshotDirPath(src_snapshot_dir.clone()))?;
+    let staging_snapshot_file = staging_snapshot_dir.join(&slot_str);
+    let src_snapshot_file = src_snapshot_dir.join(slot_str);
+    symlink::symlink_file(src_snapshot_file, staging_snapshot_file)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create snapshot symlink"))?;
+
+    // Following the existing archive format, the status cache is under snapshots/, not under <slot>/
+    // like in the snapshot dir.
+    let staging_status_cache = staging_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    let src_status_cache = src_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    symlink::symlink_file(src_status_cache, staging_status_cache)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create status cache symlink"))?;
 
     // Add the AppendVecs into the compressible list
     for storage in snapshot_package.snapshot_storages.iter() {
@@ -967,13 +993,10 @@ fn deserialize_snapshot_data_files_capped<T: Sized>(
 
 /// Before running the deserializer function, perform common operations on the snapshot archive
 /// files, such as checking the file size and opening the file into a stream.
-fn create_snapshot_data_file_stream<P>(
-    snapshot_root_file_path: P,
+fn create_snapshot_data_file_stream(
+    snapshot_root_file_path: impl AsRef<Path>,
     maximum_file_size: u64,
-) -> Result<(u64, BufReader<File>)>
-where
-    P: AsRef<Path>,
-{
+) -> Result<(u64, BufReader<File>)> {
     let snapshot_file_size = fs::metadata(&snapshot_root_file_path)?.len();
 
     if snapshot_file_size > maximum_file_size {
@@ -993,14 +1016,11 @@ where
 
 /// After running the deserializer function, perform common checks to ensure the snapshot archive
 /// files were consumed correctly.
-fn check_deserialize_file_consumed<P>(
+fn check_deserialize_file_consumed(
     file_size: u64,
-    file_path: P,
+    file_path: impl AsRef<Path>,
     file_stream: &mut BufReader<File>,
-) -> Result<()>
-where
-    P: AsRef<Path>,
-{
+) -> Result<()> {
     let consumed_size = file_stream.stream_position()?;
 
     if consumed_size != file_size {
@@ -1203,7 +1223,7 @@ pub fn add_bank_snapshot(
                 .join(&slot_str);
             if account_snapshot_path.is_dir() {
                 // remove the account snapshot directory
-                fs::remove_dir_all(&account_snapshot_path)?;
+                move_and_async_delete_path(&account_snapshot_path);
             }
         }
     }
@@ -1317,10 +1337,7 @@ fn serialize_status_cache(
 }
 
 /// Remove the snapshot directory for this slot
-pub fn remove_bank_snapshot<P>(slot: Slot, bank_snapshots_dir: P) -> Result<()>
-where
-    P: AsRef<Path>,
-{
+pub fn remove_bank_snapshot(slot: Slot, bank_snapshots_dir: impl AsRef<Path>) -> Result<()> {
     let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
     let accounts_hardlinks_dir = bank_snapshot_dir.join("accounts_hardlinks");
     if fs::metadata(&accounts_hardlinks_dir).is_ok() {
@@ -1328,7 +1345,7 @@ where
         // They should all be removed.
         for entry in fs::read_dir(accounts_hardlinks_dir)? {
             let dst_path = fs::read_link(entry?.path())?;
-            fs::remove_dir_all(dst_path)?;
+            move_and_async_delete_path(&dst_path);
         }
     }
     fs::remove_dir_all(bank_snapshot_dir)?;
@@ -1404,7 +1421,6 @@ fn verify_and_unarchive_snapshots(
 /// Utility for parsing out bank specific information from a snapshot archive. This utility can be used
 /// to parse out bank specific information like the leader schedule, epoch schedule, etc.
 pub fn bank_fields_from_snapshot_archives(
-    bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
 ) -> Result<BankFieldsToDeserialize> {
@@ -1417,15 +1433,14 @@ pub fn bank_fields_from_snapshot_archives(
         full_snapshot_archive_info.slot(),
     );
 
-    let temp_dir = tempfile::Builder::new()
-        .prefix("dummy-accounts-path")
-        .tempdir()?;
+    let temp_unpack_dir = TempDir::new()?;
+    let temp_accounts_dir = TempDir::new()?;
 
-    let account_paths = vec![temp_dir.path().to_path_buf()];
+    let account_paths = vec![temp_accounts_dir.path().to_path_buf()];
 
     let (unarchived_full_snapshot, unarchived_incremental_snapshot, _next_append_vec_id) =
         verify_and_unarchive_snapshots(
-            &bank_snapshots_dir,
+            &temp_unpack_dir,
             &full_snapshot_archive_info,
             incremental_snapshot_archive_info.as_ref(),
             &account_paths,
@@ -1903,20 +1918,16 @@ fn create_snapshot_meta_files_for_unarchived_snapshot(unpack_dir: impl AsRef<Pat
 /// Perform the common tasks when unarchiving a snapshot.  Handles creating the temporary
 /// directories, untaring, reading the version file, and then returning those fields plus the
 /// rebuilt storage
-fn unarchive_snapshot<P, Q>(
-    bank_snapshots_dir: P,
+fn unarchive_snapshot(
+    bank_snapshots_dir: impl AsRef<Path>,
     unpacked_snapshots_dir_prefix: &'static str,
-    snapshot_archive_path: Q,
+    snapshot_archive_path: impl AsRef<Path>,
     measure_name: &'static str,
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
     next_append_vec_id: Arc<AtomicAppendVecId>,
-) -> Result<UnarchivedSnapshot>
-where
-    P: AsRef<Path>,
-    Q: AsRef<Path>,
-{
+) -> Result<UnarchivedSnapshot> {
     let unpack_dir = tempfile::Builder::new()
         .prefix(unpacked_snapshots_dir_prefix)
         .tempdir_in(bank_snapshots_dir)?;
@@ -2478,8 +2489,8 @@ fn untar_snapshot_create_shared_buffer(
     }
 }
 
-fn untar_snapshot_in<P: AsRef<Path>>(
-    snapshot_tar: P,
+fn untar_snapshot_in(
+    snapshot_tar: impl AsRef<Path>,
     unpack_dir: &Path,
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
@@ -2832,7 +2843,7 @@ pub(crate) fn get_snapshot_file_name(slot: Slot) -> String {
     slot.to_string()
 }
 
-pub(crate) fn get_bank_snapshots_dir<P: AsRef<Path>>(path: P, slot: Slot) -> PathBuf {
+pub(crate) fn get_bank_snapshots_dir(path: impl AsRef<Path>, slot: Slot) -> PathBuf {
     path.as_ref().join(slot.to_string())
 }
 
@@ -2851,16 +2862,13 @@ pub enum VerifyBank {
     NonDeterministic,
 }
 
-pub fn verify_snapshot_archive<P, Q>(
-    snapshot_archive: P,
-    snapshots_to_verify: Q,
+pub fn verify_snapshot_archive(
+    snapshot_archive: impl AsRef<Path>,
+    snapshots_to_verify: impl AsRef<Path>,
     archive_format: ArchiveFormat,
     verify_bank: VerifyBank,
     slot: Slot,
-) where
-    P: AsRef<Path>,
-    Q: AsRef<Path>,
-{
+) {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
     let unpack_account_dir = create_accounts_run_and_snapshot_dirs(unpack_dir).unwrap().0;
@@ -4934,12 +4942,8 @@ mod tests {
         )
         .unwrap();
 
-        let bank_fields = bank_fields_from_snapshot_archives(
-            &all_snapshots_dir,
-            &all_snapshots_dir,
-            &all_snapshots_dir,
-        )
-        .unwrap();
+        let bank_fields =
+            bank_fields_from_snapshot_archives(&all_snapshots_dir, &all_snapshots_dir).unwrap();
         assert_eq!(bank_fields.slot, bank2.slot());
         assert_eq!(bank_fields.parent_slot, bank2.parent_slot());
     }

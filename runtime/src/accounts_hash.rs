@@ -134,14 +134,6 @@ pub struct HashStats {
     pub min_bin_size: usize,
     pub max_bin_size: usize,
     pub storage_size_quartiles: StorageSizeQuartileStats,
-    /// time spent hashing during rehash calls
-    pub rehash_hash_us: AtomicU64,
-    /// time spent determining whether to rehash during rehash calls
-    pub rehash_calc_us: AtomicU64,
-    /// # rehashes that took place and were necessary
-    pub rehash_required: AtomicUsize,
-    /// # rehashes that took place and were UNnecessary
-    pub rehash_unnecessary: AtomicUsize,
     pub oldest_root: Slot,
     pub roots_older_than_epoch: AtomicUsize,
     pub accounts_in_roots_older_than_epoch: AtomicUsize,
@@ -241,26 +233,6 @@ impl HashStats {
                 i64
             ),
             ("total_us", total_time_us as i64, i64),
-            (
-                "rehashed_rewrites",
-                self.rehash_required.load(Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "rehash_hash_us",
-                self.rehash_hash_us.load(Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "rehash_calc_us",
-                self.rehash_calc_us.load(Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "rehashed_rewrites_unnecessary",
-                self.rehash_unnecessary.load(Ordering::Relaxed) as i64,
-                i64
-            ),
             (
                 "roots_older_than_epoch",
                 self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,
