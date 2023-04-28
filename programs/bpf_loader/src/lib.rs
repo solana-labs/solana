@@ -1752,7 +1752,7 @@ mod tests {
         let mut load_program_metrics = LoadProgramMetrics::default();
 
         load_program_from_bytes(
-            &FeatureSet::default(),
+            &FeatureSet::all_enabled(),
             &ComputeBudget::default(),
             None,
             &mut load_program_metrics,
