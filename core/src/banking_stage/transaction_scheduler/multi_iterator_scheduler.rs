@@ -1,5 +1,6 @@
 use {
     super::{
+        thread_aware_account_locks::{ThreadAwareAccountLocks, ThreadId, ThreadSet},
         transaction_packet_container::{SanitizedTransactionTTL, TransactionPacketContainer},
         transaction_priority_id::TransactionPriorityId,
     },
@@ -11,7 +12,6 @@ use {
                 ConsumeWork, FinishedConsumeWork, FinishedForwardWork, ForwardWork,
                 TransactionBatchId, TransactionId,
             },
-            thread_aware_account_locks::{ThreadAwareAccountLocks, ThreadId, ThreadSet},
         },
         multi_iterator_scanner::{MultiIteratorScanner, ProcessingDecision},
         packet_deserializer::{PacketDeserializer, ReceivePacketResults},
