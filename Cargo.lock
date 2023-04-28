@@ -6699,6 +6699,7 @@ dependencies = [
  "solana-config-program",
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
+ "solana-loader-v3-program",
  "solana-logger 1.16.0",
  "solana-measure",
  "solana-metrics",

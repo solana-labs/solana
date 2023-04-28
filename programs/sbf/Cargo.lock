@@ -5114,6 +5114,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-loader-v3-program"
+version = "1.16.0"
+dependencies = [
+ "log",
+ "rand 0.7.3",
+ "solana-measure",
+ "solana-program-runtime",
+ "solana-sdk 1.16.0",
+ "solana_rbpf",
+]
+
+[[package]]
 name = "solana-logger"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5608,6 +5620,7 @@ dependencies = [
  "solana-config-program",
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
+ "solana-loader-v3-program",
  "solana-measure",
  "solana-metrics",
  "solana-perf",

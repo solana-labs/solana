@@ -136,6 +136,7 @@ use {
         inflation::Inflation,
         instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},
         lamports::LamportsError,
+        loader_v3,
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
@@ -257,6 +258,7 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
+use solana_program_runtime::loaded_programs::LoadedProgramMatchCriteria;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -794,6 +796,7 @@ impl PartialEq for Bank {
             fee_structure: _,
             incremental_snapshot_persistence: _,
             loaded_programs_cache: _,
+            check_program_modification_slot: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -1049,6 +1052,8 @@ pub struct Bank {
 
     pub loaded_programs_cache: Arc<RwLock<LoadedPrograms>>,
 
+    pub check_program_modification_slot: bool,
+
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
 }
@@ -1269,6 +1274,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
+            check_program_modification_slot: false,
         };
 
         bank.bank_created();
@@ -1567,6 +1573,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
+            check_program_modification_slot: false,
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1893,6 +1900,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
+            check_program_modification_slot: false,
         };
         bank.bank_created();
 
@@ -4110,6 +4118,36 @@ impl Bank {
         let _ = self.executor_cache.write().unwrap().remove(pubkey);
     }
 
+    fn program_modification_slot(&self, pubkey: &Pubkey) -> Result<Slot> {
+        let program = self
+            .get_account_with_fixed_root(pubkey)
+            .ok_or(TransactionError::ProgramAccountNotFound)?;
+        if bpf_loader_upgradeable::check_id(program.owner()) {
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = program.state()
+            {
+                let programdata = self
+                    .get_account_with_fixed_root(&programdata_address)
+                    .ok_or(TransactionError::ProgramAccountNotFound)?;
+                if let Ok(UpgradeableLoaderState::ProgramData {
+                    slot,
+                    upgrade_authority_address: _,
+                }) = programdata.state()
+                {
+                    return Ok(slot);
+                }
+            }
+            Err(TransactionError::ProgramAccountNotFound)
+        } else if loader_v3::check_id(program.owner()) {
+            let state = solana_loader_v3_program::get_state(program.data())
+                .map_err(|_| TransactionError::ProgramAccountNotFound)?;
+            Ok(state.slot)
+        } else {
+            Ok(0)
+        }
+    }
+
     #[allow(dead_code)] // Preparation for BankExecutorCache rework
     fn load_program(&self, pubkey: &Pubkey) -> Result<Arc<LoadedProgram>> {
         let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
@@ -4386,10 +4424,31 @@ impl Bank {
         &self,
         program_accounts_map: &HashMap<Pubkey, &Pubkey>,
     ) -> HashMap<Pubkey, Arc<LoadedProgram>> {
+        let programs_and_slots: Vec<(Pubkey, LoadedProgramMatchCriteria)> =
+            if self.check_program_modification_slot {
+                program_accounts_map
+                    .keys()
+                    .map(|pubkey| {
+                        (
+                            *pubkey,
+                            self.program_modification_slot(pubkey)
+                                .map_or(LoadedProgramMatchCriteria::Closed, |slot| {
+                                    LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot)
+                                }),
+                        )
+                    })
+                    .collect()
+            } else {
+                program_accounts_map
+                    .keys()
+                    .map(|pubkey| (*pubkey, LoadedProgramMatchCriteria::NoCriteria))
+                    .collect()
+            };
+
         let (mut loaded_programs_for_txs, missing_programs) = {
             // Lock the global cache to figure out which programs need to be loaded
             let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
-            loaded_programs_cache.extract(self, program_accounts_map.keys().cloned())
+            loaded_programs_cache.extract(self, programs_and_slots.into_iter())
         };
 
         // Load missing programs while global cache is unlocked
