@@ -6270,6 +6270,7 @@ dependencies = [
  "futures 0.3.28",
  "histogram",
  "itertools",
+ "lazy_static",
  "log",
  "num_cpus",
  "regex",

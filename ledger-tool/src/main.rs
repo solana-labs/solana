@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::{args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*, program::*},
+    crate::{args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*, program::*, prioritization_fee_output::*},
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -108,6 +108,7 @@ mod ledger_path;
 mod ledger_utils;
 mod output;
 mod program;
+mod prioritization_fee_output;
 
 #[derive(PartialEq, Eq)]
 enum LedgerOutputMethod {
@@ -951,6 +952,54 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     );
     println!("  Programs: {program_ids:?}");
 
+    Ok(())
+}
+
+fn print_local_fee_market_by_slot(
+    blockstore: &Blockstore,
+    slot: Slot,
+    verbose_level: u64,
+) -> Result<(), String> {
+    if blockstore.is_dead(slot) {
+        return Err("Dead slot".to_string());
+    }
+
+    let (entries, _num_shreds, _is_full) = blockstore
+        .get_slot_entries_with_shred_info(slot, 0, false)
+        .map_err(|err| format!(" Slot: {slot}, Failed to load entries, err {err:?}"))?;
+
+    let mut priority_fee_output = PriorityFeeBySlot::new(slot);
+    for (entry_index, entry) in entries.iter().enumerate() {
+        entry
+            .transactions
+            .iter()
+            .enumerate()
+            .filter_map(|(transaction_index, transaction)| {
+                let sanitized_transaction = SanitizedTransaction::try_create(
+                    transaction.clone(),
+                    MessageHash::Compute,
+                    None,
+                    SimpleAddressLoader::Disabled,
+                    true, // require_static_program_ids
+                )
+                .map_err(|err| {
+                    warn!("Failed to sanitize transaction: {:?}", err);
+                });
+                if sanitized_transaction.is_ok() {
+                    return Some((transaction_index, sanitized_transaction.unwrap()));
+                }
+                None
+            })
+            .for_each(|(transaction_index, sanitized_transaction)| {
+                priority_fee_output.insert(
+                    entry_index as u64,
+                    transaction_index as u64,
+                    &sanitized_transaction,
+                );
+            });
+    }
+
+    priority_fee_output.print(verbose_level);
     Ok(())
 }
 
@@ -2150,6 +2199,21 @@ fn main() {
             )
         )
         .program_subcommand()
+        .subcommand(
+            SubCommand::with_name("local-fee-market")
+            .about("Print prioritization fee usage, and local fee market details per writable \
+                    accounts and block space.")
+            .arg(
+                Arg::with_name("slots")
+                    .index(1)
+                    .value_name("SLOTS")
+                    .validator(is_slot)
+                    .multiple(true)
+                    .takes_value(true)
+                    .help("Slots that their per block prioritization fee details are printed, \
+                           default to all slots in ledger"),
+            )
+        )
         .get_matches();
 
     info!("{} {}", crate_name!(), solana_version::version!());
@@ -4196,6 +4260,31 @@ fn main() {
                 let sst_file_name = arg_matches.value_of("file_name");
                 if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
                     eprintln!("{err}");
+                }
+            }
+            ("local-fee-market", Some(arg_matches)) => {
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    force_update_to_open,
+                );
+
+                let mut slots: Vec<u64> = vec![];
+                if !arg_matches.is_present("slots") {
+                    if let Ok(metas) = blockstore.slot_meta_iterator(0) {
+                        slots = metas.map(|(slot, _)| slot).collect();
+                    }
+                } else {
+                    slots = values_t_or_exit!(arg_matches, "slots", Slot);
+                }
+
+                for slot in slots {
+                    if let Err(err) =
+                        print_local_fee_market_by_slot(&blockstore, slot, verbose_level)
+                    {
+                        eprintln!("{err}");
+                    }
                 }
             }
             ("", _) => {
