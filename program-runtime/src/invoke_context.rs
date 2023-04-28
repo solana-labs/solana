@@ -165,6 +165,7 @@ pub struct InvokeContext<'a> {
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
     pub syscall_context: Vec<Option<SyscallContext>>,
+    traces: Vec<Vec<[u64; 12]>>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -199,6 +200,7 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
+            traces: Vec::new(),
         }
     }
 
@@ -288,7 +290,9 @@ impl<'a> InvokeContext<'a> {
 
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
-        self.syscall_context.pop();
+        if let Some(Some(syscall_context)) = self.syscall_context.pop() {
+            self.traces.push(syscall_context.trace_log);
+        }
         self.transaction_context.pop()
     }
 
@@ -864,6 +868,11 @@ impl<'a> InvokeContext<'a> {
             .last_mut()
             .and_then(|syscall_context| syscall_context.as_mut())
             .ok_or(InstructionError::CallDepth)
+    }
+
+    /// Return a references to traces
+    pub fn get_traces(&self) -> &Vec<Vec<[u64; 12]>> {
+        &self.traces
     }
 }
 
