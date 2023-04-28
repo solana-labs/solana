@@ -993,13 +993,10 @@ fn deserialize_snapshot_data_files_capped<T: Sized>(
 
 /// Before running the deserializer function, perform common operations on the snapshot archive
 /// files, such as checking the file size and opening the file into a stream.
-fn create_snapshot_data_file_stream<P>(
-    snapshot_root_file_path: P,
+fn create_snapshot_data_file_stream(
+    snapshot_root_file_path: impl AsRef<Path>,
     maximum_file_size: u64,
-) -> Result<(u64, BufReader<File>)>
-where
-    P: AsRef<Path>,
-{
+) -> Result<(u64, BufReader<File>)> {
     let snapshot_file_size = fs::metadata(&snapshot_root_file_path)?.len();
 
     if snapshot_file_size > maximum_file_size {
@@ -1019,14 +1016,11 @@ where
 
 /// After running the deserializer function, perform common checks to ensure the snapshot archive
 /// files were consumed correctly.
-fn check_deserialize_file_consumed<P>(
+fn check_deserialize_file_consumed(
     file_size: u64,
-    file_path: P,
+    file_path: impl AsRef<Path>,
     file_stream: &mut BufReader<File>,
-) -> Result<()>
-where
-    P: AsRef<Path>,
-{
+) -> Result<()> {
     let consumed_size = file_stream.stream_position()?;
 
     if consumed_size != file_size {
@@ -1343,10 +1337,7 @@ fn serialize_status_cache(
 }
 
 /// Remove the snapshot directory for this slot
-pub fn remove_bank_snapshot<P>(slot: Slot, bank_snapshots_dir: P) -> Result<()>
-where
-    P: AsRef<Path>,
-{
+pub fn remove_bank_snapshot(slot: Slot, bank_snapshots_dir: impl AsRef<Path>) -> Result<()> {
     let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
     let accounts_hardlinks_dir = bank_snapshot_dir.join("accounts_hardlinks");
     if fs::metadata(&accounts_hardlinks_dir).is_ok() {
@@ -1927,20 +1918,16 @@ fn create_snapshot_meta_files_for_unarchived_snapshot(unpack_dir: impl AsRef<Pat
 /// Perform the common tasks when unarchiving a snapshot.  Handles creating the temporary
 /// directories, untaring, reading the version file, and then returning those fields plus the
 /// rebuilt storage
-fn unarchive_snapshot<P, Q>(
-    bank_snapshots_dir: P,
+fn unarchive_snapshot(
+    bank_snapshots_dir: impl AsRef<Path>,
     unpacked_snapshots_dir_prefix: &'static str,
-    snapshot_archive_path: Q,
+    snapshot_archive_path: impl AsRef<Path>,
     measure_name: &'static str,
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
     next_append_vec_id: Arc<AtomicAppendVecId>,
-) -> Result<UnarchivedSnapshot>
-where
-    P: AsRef<Path>,
-    Q: AsRef<Path>,
-{
+) -> Result<UnarchivedSnapshot> {
     let unpack_dir = tempfile::Builder::new()
         .prefix(unpacked_snapshots_dir_prefix)
         .tempdir_in(bank_snapshots_dir)?;
@@ -2502,8 +2489,8 @@ fn untar_snapshot_create_shared_buffer(
     }
 }
 
-fn untar_snapshot_in<P: AsRef<Path>>(
-    snapshot_tar: P,
+fn untar_snapshot_in(
+    snapshot_tar: impl AsRef<Path>,
     unpack_dir: &Path,
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
@@ -2856,7 +2843,7 @@ pub(crate) fn get_snapshot_file_name(slot: Slot) -> String {
     slot.to_string()
 }
 
-pub(crate) fn get_bank_snapshots_dir<P: AsRef<Path>>(path: P, slot: Slot) -> PathBuf {
+pub(crate) fn get_bank_snapshots_dir(path: impl AsRef<Path>, slot: Slot) -> PathBuf {
     path.as_ref().join(slot.to_string())
 }
 
@@ -2875,16 +2862,13 @@ pub enum VerifyBank {
     NonDeterministic,
 }
 
-pub fn verify_snapshot_archive<P, Q>(
-    snapshot_archive: P,
-    snapshots_to_verify: Q,
+pub fn verify_snapshot_archive(
+    snapshot_archive: impl AsRef<Path>,
+    snapshots_to_verify: impl AsRef<Path>,
     archive_format: ArchiveFormat,
     verify_bank: VerifyBank,
     slot: Slot,
-) where
-    P: AsRef<Path>,
-    Q: AsRef<Path>,
-{
+) {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
     let unpack_account_dir = create_accounts_run_and_snapshot_dirs(unpack_dir).unwrap().0;
