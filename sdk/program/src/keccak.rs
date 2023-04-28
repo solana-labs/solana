@@ -3,9 +3,9 @@
 //! [keccak]: https://keccak.team/keccak.html
 
 use {
-    solana_sanitize::Sanitize,
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
     sha3::{Digest, Keccak256},
+    solana_sanitize::Sanitize,
     std::{convert::TryFrom, fmt, mem, str::FromStr},
     thiserror::Error,
 };
