@@ -7713,7 +7713,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     }
 
     let loaded_program = bank
-        .load_program(&program_keypair.pubkey())
+        .load_program(&program_keypair.pubkey(), false)
         .expect("Failed to load the program");
 
     // Invoke deployed program
