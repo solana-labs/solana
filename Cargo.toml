@@ -85,6 +85,7 @@ members = [
     "sdk/gen-headers",
     "sdk/macro",
     "sdk/program",
+    "sdk/program/sanitize",
     "send-transaction-service",
     "stake-accounts",
     "storage-bigtable",
