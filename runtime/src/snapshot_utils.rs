@@ -193,12 +193,6 @@ impl BankSnapshotInfo {
         // filled.  Check the completion to avoid using a highest found slot directory with missing content.
         let completion_flag_file = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
         if !completion_flag_file.is_file() {
-            // If the directory is incomplete, it should be removed.
-            // There are also possible hardlink files under <account_path>/snapshot/<slot>/, referred by this
-            // snapshot dir's symlinks.  They are cleaned up in clean_orphaned_account_snapshot_dirs() at the
-            // boot time.
-            info!("Removing incomplete snapshot dir: {:?}", bank_snapshot_dir);
-            fs::remove_dir_all(&bank_snapshot_dir)?;
             return Err(SnapshotNewFromDirError::IncompleteDir(bank_snapshot_dir));
         }
 
@@ -819,7 +813,11 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
                         bank_snapshots.push(snapshot_info);
                     }
                     Err(err) => {
-                        error!("Unable to read bank snapshot for slot {}: {}", slot, err);
+                        error!(
+                            "Unable to read bank snapshot for slot {}: {}.  Removing the dir",
+                            slot, err
+                        );
+                        remove_bank_snapshot(slot, &bank_snapshots_dir);
                     }
                 },
             ),
@@ -1213,7 +1211,7 @@ pub fn add_bank_snapshot(
         // the system may not be booted from the latest snapshot directory, but an older and complete
         // directory.  Then, when adding new snapshots, the newer incomplete snapshot directory could
         // be found.  If so, it should be removed.
-        remove_bank_snapshot(slot, &bank_snapshots_dir)?;
+        remove_bank_snapshot(slot, &bank_snapshots_dir);
     } else {
         // Even the snapshot directory is not found, still ensure the account snapshot directory
         // is also clean.  hardlink failure will happen if an old file exists.
@@ -1341,19 +1339,27 @@ fn serialize_status_cache(
 }
 
 /// Remove the snapshot directory for this slot
-pub fn remove_bank_snapshot(slot: Slot, bank_snapshots_dir: impl AsRef<Path>) -> Result<()> {
+///
+/// This function does the snapshot dir cleanup.  It should handle all the snapshot dirs in
+/// good or bad states, ensure the dir is removed, without raising any error upwards.
+/// It would panic on fs system errors which are unlikely.
+/// It is quite possible that a snapshot dir in bad state could cause some IO errors.  Such
+/// errors should be handled internally, because the upper layers do not really have options
+/// to handle them other than ignoring or panicking.
+/// Its unit-test function verifies the job is done for all the possible cases.
+pub fn remove_bank_snapshot(slot: Slot, bank_snapshots_dir: impl AsRef<Path>) {
     let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
     let accounts_hardlinks_dir = bank_snapshot_dir.join("accounts_hardlinks");
-    if fs::metadata(&accounts_hardlinks_dir).is_ok() {
+    if accounts_hardlinks_dir.is_dir() {
         // This directory contain symlinks to all accounts snapshot directories.
         // They should all be removed.
-        for entry in fs::read_dir(accounts_hardlinks_dir)? {
-            let dst_path = fs::read_link(entry?.path())?;
+        for entry in fs::read_dir(accounts_hardlinks_dir).expect("read dir failed") {
+            let dst_path =
+                fs::read_link(entry.expect("dir entry").path()).expect("readlink failed");
             move_and_async_delete_path(&dst_path);
         }
     }
-    fs::remove_dir_all(bank_snapshot_dir)?;
-    Ok(())
+    fs::remove_dir_all(bank_snapshot_dir).expect("remove dir");
 }
 
 #[derive(Debug, Default)]
@@ -2972,13 +2978,7 @@ pub fn purge_old_bank_snapshots(
             .rev()
             .skip(num_bank_snapshots_to_retain)
             .for_each(|bank_snapshot| {
-                let r = remove_bank_snapshot(bank_snapshot.slot, &bank_snapshots_dir);
-                if r.is_err() {
-                    warn!(
-                        "Couldn't remove bank snapshot at: {}",
-                        bank_snapshot.snapshot_dir.display()
-                    );
-                }
+                remove_bank_snapshot(bank_snapshot.slot, &bank_snapshots_dir);
             })
     };
 
@@ -5142,7 +5142,7 @@ mod tests {
             hardlink_dirs.push(dst_path);
         }
 
-        assert!(remove_bank_snapshot(bank.slot(), bank_snapshots_dir).is_ok());
+        remove_bank_snapshot(bank.slot(), bank_snapshots_dir);
 
         // When the bank snapshot is removed, all the snapshot hardlink directories should be removed.
         assert!(hardlink_dirs.iter().all(|dir| fs::metadata(dir).is_err()));
@@ -5557,6 +5557,64 @@ mod tests {
             deserialized_bank, bank,
             "Ensure rebuilding bank from the highest snapshot dir results in the highest bank",
         );
+    }
+
+    #[test]
+    fn test_remove_bank_snapshot() {
+        solana_logger::setup();
+
+        let genesis_config = GenesisConfig::default();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+        let bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 4, 3);
+        let account_paths = &bank.rc.accounts.accounts_db.paths;
+
+        let mut bank_snapshots = get_bank_snapshots(&bank_snapshots_dir);
+
+        // remove the top PRE snapshot dir
+        let bank_snapshot = bank_snapshots.pop().unwrap();
+        assert!(bank_snapshot.snapshot_dir.exists());
+        assert!(bank_snapshot.snapshot_type == BankSnapshotType::Pre);
+        remove_bank_snapshot(bank_snapshot.slot, &bank_snapshots_dir);
+        assert!(!bank_snapshot.snapshot_dir.exists());
+        // verify that <account_path>/snapshot/<slot> dirs are removed
+        account_paths.iter().for_each(|path| {
+            let account_snapshot_path = path
+                .parent()
+                .unwrap()
+                .join("snapshot")
+                .join(bank_snapshot.slot.to_string());
+            assert!(!account_snapshot_path.exists());
+        });
+
+        // remove the top POST snapshot dir
+        let bank_snapshot = bank_snapshots.pop().unwrap();
+        assert!(bank_snapshot.snapshot_dir.exists());
+        remove_bank_snapshot(bank_snapshot.slot, &bank_snapshots_dir);
+        assert!(!bank_snapshot.snapshot_dir.exists());
+
+        // remove an incomplete snapshot dir
+        let bank_snapshot = bank_snapshots.pop().unwrap();
+        assert!(bank_snapshot.snapshot_dir.exists());
+        let complete_state_file = bank_snapshot
+            .snapshot_dir
+            .join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+        fs::remove_file(complete_state_file).unwrap();
+        remove_bank_snapshot(bank_snapshot.slot, &bank_snapshots_dir);
+        assert!(!bank_snapshot.snapshot_dir.exists());
+
+        // remove a snapshot dir for which the <account_path>/snapshot/<slot> dirs are missing
+        let bank_snapshot = bank_snapshots.pop().unwrap();
+        assert!(bank_snapshot.snapshot_dir.exists());
+        account_paths.iter().for_each(|path| {
+            let account_snapshot_path = path
+                .parent()
+                .unwrap()
+                .join("snapshot")
+                .join(bank_snapshot.slot.to_string());
+            fs::remove_dir_all(account_snapshot_path).unwrap();
+        });
+        remove_bank_snapshot(bank_snapshot.slot, &bank_snapshots_dir);
+        assert!(!bank_snapshot.snapshot_dir.exists());
     }
 
     #[test]
