@@ -52,8 +52,6 @@ echo --- build environment
   wasm-pack --version
 )
 
-exit 0
-
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings -A incomplete_features"
 
@@ -77,7 +75,7 @@ fi
 
  _ ci/order-crates-for-publishing.py
 
-nightly_clippy_allows=()
+nightly_clippy_allows=(--allow=clippy::redundant_clone --allow clippy::match-result-ok)
 
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
  _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
