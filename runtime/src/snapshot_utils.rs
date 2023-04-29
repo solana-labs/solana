@@ -5569,6 +5569,7 @@ mod tests {
         let account_paths = &bank.rc.accounts.accounts_db.paths;
 
         let mut bank_snapshots = get_bank_snapshots(&bank_snapshots_dir);
+        bank_snapshots.sort_unstable();
 
         // remove the top PRE snapshot dir
         let bank_snapshot = bank_snapshots.pop().unwrap();
@@ -5611,7 +5612,9 @@ mod tests {
                 .unwrap()
                 .join("snapshot")
                 .join(bank_snapshot.slot.to_string());
-            fs::remove_dir_all(account_snapshot_path).unwrap();
+            if account_snapshot_path.exists() {
+                fs::remove_dir_all(account_snapshot_path).unwrap();
+            }
         });
         remove_bank_snapshot(bank_snapshot.slot, &bank_snapshots_dir);
         assert!(!bank_snapshot.snapshot_dir.exists());
