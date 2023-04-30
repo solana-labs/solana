@@ -1359,9 +1359,15 @@ pub fn remove_bank_snapshot(slot: Slot, bank_snapshots_dir: impl AsRef<Path>) {
             let symlink = entry
                 .expect("an entry from the iterator should be a DirEntry")
                 .path();
-            let dst_path = fs::read_link(&symlink)
-                .unwrap_or_else(|e| panic!("read_link error {} on {}", e, symlink.display()));
-            move_and_async_delete_path(&dst_path);
+            match fs::read_link(&symlink) {
+                Ok(dst_path) => move_and_async_delete_path(dst_path),
+                Err(e) => {
+                    warn!(
+                        "{}",
+                        format!("read_link error {} on {}", e, symlink.display())
+                    );
+                }
+            }
         }
     }
     fs::remove_dir_all(bank_snapshot_dir).expect("remove dir should succeed");
