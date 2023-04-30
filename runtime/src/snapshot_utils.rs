@@ -1250,7 +1250,6 @@ pub fn add_bank_snapshot(
     // from the operational accounts/ directory to here.
     hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)?;
 
-    let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
         let serde_style = match snapshot_version {
             SnapshotVersion::V1_2_0 => SerdeStyle::Newer,
@@ -1263,13 +1262,15 @@ pub fn add_bank_snapshot(
         )?;
         Ok(())
     };
-    let consumed_size =
-        serialize_snapshot_data_file(&bank_snapshot_path, bank_snapshot_serializer)?;
-    bank_serialize.stop();
+    let (bank_snapshot_consumed_size, bank_serialize) = measure!(serialize_snapshot_data_file(
+        &bank_snapshot_path,
+        bank_snapshot_serializer
+    )?);
     add_snapshot_time.stop();
 
     let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-    serialize_status_cache(slot, &slot_deltas, &status_cache_path)?;
+    let (status_cache_consumed_size, status_cache_serialize) =
+        measure!(serialize_status_cache(&slot_deltas, &status_cache_path)?);
 
     let version_path = bank_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
     write_snapshot_version_file(version_path, snapshot_version).unwrap();
@@ -1282,11 +1283,16 @@ pub fn add_bank_snapshot(
     datapoint_info!(
         "snapshot-bank-file",
         ("slot", slot, i64),
-        ("size", consumed_size, i64)
+        ("bank_size", bank_snapshot_consumed_size, i64),
+        ("status_cache_size", status_cache_consumed_size, i64),
+        ("bank_serialize_ms", bank_serialize.as_ms(), i64),
+        ("add_snapshot_ms", add_snapshot_time.as_ms(), i64),
+        (
+            "status_cache_serialize_ms",
+            status_cache_serialize.as_ms(),
+            i64
+        ),
     );
-
-    inc_new_counter_info!("bank-serialize-ms", bank_serialize.as_ms() as usize);
-    inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
 
     info!(
         "{} for slot {} at {}",
@@ -1314,30 +1320,11 @@ pub(crate) fn get_storages_to_serialize(
         .collect::<Vec<_>>()
 }
 
-fn serialize_status_cache(
-    slot: Slot,
-    slot_deltas: &[BankSlotDelta],
-    status_cache_path: &Path,
-) -> Result<()> {
-    let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
-    let consumed_size = serialize_snapshot_data_file(status_cache_path, |stream| {
+fn serialize_status_cache(slot_deltas: &[BankSlotDelta], status_cache_path: &Path) -> Result<u64> {
+    serialize_snapshot_data_file(status_cache_path, |stream| {
         serialize_into(stream, slot_deltas)?;
         Ok(())
-    })?;
-    status_cache_serialize.stop();
-
-    // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
-    datapoint_info!(
-        "snapshot-status-cache-file",
-        ("slot", slot, i64),
-        ("size", consumed_size, i64)
-    );
-
-    inc_new_counter_info!(
-        "serialize-status-cache-ms",
-        status_cache_serialize.as_ms() as usize
-    );
-    Ok(())
+    })
 }
 
 /// Remove the snapshot directory for this slot
