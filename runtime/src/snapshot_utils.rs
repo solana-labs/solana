@@ -1252,7 +1252,6 @@ pub fn add_bank_snapshot(
     // from the operational accounts/ directory to here.
     hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)?;
 
-    let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
         let serde_style = match snapshot_version {
             SnapshotVersion::V1_2_0 => SerdeStyle::Newer,
@@ -1265,15 +1264,15 @@ pub fn add_bank_snapshot(
         )?;
         Ok(())
     };
-    let bank_snapshot_consumed_size =
-        serialize_snapshot_data_file(&bank_snapshot_path, bank_snapshot_serializer)?;
-    bank_serialize.stop();
+    let (bank_snapshot_consumed_size, bank_serialize) = measure!(serialize_snapshot_data_file(
+        &bank_snapshot_path,
+        bank_snapshot_serializer
+    )?);
     add_snapshot_time.stop();
 
-    let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
     let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-    let status_cache_consumed_size = serialize_status_cache(&slot_deltas, &status_cache_path)?;
-    status_cache_serialize.stop();
+    let (status_cache_consumed_size, status_cache_serialize) =
+        measure!(serialize_status_cache(&slot_deltas, &status_cache_path)?);
 
     let version_path = bank_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
     write_snapshot_version_file(version_path, snapshot_version).unwrap();
