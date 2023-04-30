@@ -1353,13 +1353,18 @@ pub fn remove_bank_snapshot(slot: Slot, bank_snapshots_dir: impl AsRef<Path>) {
     if accounts_hardlinks_dir.is_dir() {
         // This directory contain symlinks to all accounts snapshot directories.
         // They should all be removed.
-        for entry in fs::read_dir(accounts_hardlinks_dir).expect("read dir failed") {
-            let dst_path =
-                fs::read_link(entry.expect("dir entry").path()).expect("readlink failed");
+        for entry in
+            fs::read_dir(accounts_hardlinks_dir).expect("read dir should return an iterator")
+        {
+            let symlink = entry
+                .expect("a entry from the iterator should be a DirEntry")
+                .path();
+            let dst_path = fs::read_link(&symlink)
+                .unwrap_or_else(|e| panic!("read_link error {} on {}", e, symlink.display()));
             move_and_async_delete_path(&dst_path);
         }
     }
-    fs::remove_dir_all(bank_snapshot_dir).expect("remove dir");
+    fs::remove_dir_all(bank_snapshot_dir).expect("remove dir should succeed");
 }
 
 #[derive(Debug, Default)]
