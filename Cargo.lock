@@ -4737,6 +4737,8 @@ dependencies = [
  "clap 3.2.23",
  "log",
  "regex",
+ "reqwest",
+ "semver 1.0.10",
  "serial_test",
  "solana-download-utils",
  "solana-logger 1.14.18",
