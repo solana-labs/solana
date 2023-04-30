@@ -1357,7 +1357,7 @@ pub fn remove_bank_snapshot(slot: Slot, bank_snapshots_dir: impl AsRef<Path>) {
             fs::read_dir(accounts_hardlinks_dir).expect("read dir should return an iterator")
         {
             let symlink = entry
-                .expect("a entry from the iterator should be a DirEntry")
+                .expect("an entry from the iterator should be a DirEntry")
                 .path();
             let dst_path = fs::read_link(&symlink)
                 .unwrap_or_else(|e| panic!("read_link error {} on {}", e, symlink.display()));
