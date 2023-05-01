@@ -33,7 +33,6 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-use rand::seq::SliceRandom;
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
@@ -86,6 +85,7 @@ use {
     itertools::Itertools,
     log::*,
     percentage::Percentage,
+    rand::seq::SliceRandom,
     rand_chacha::{rand_core::SeedableRng, ChaChaRng},
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
@@ -770,8 +770,8 @@ pub struct BankFieldsToDeserialize {
     pub(crate) accounts_data_len: u64,
     pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
     pub(crate) epoch_accounts_hash: Option<Hash>,
-    pub(crate) epoch_reward_calculator: Option<StakeRewards>,
-    pub(crate) epoch_reward_calc_start: Option<(Slot, u64)>,
+    pub(crate) calculated_epoch_stake_rewards: Option<StakeRewards>,
+    pub(crate) epoch_reward_status: Option<EpochRewardStatus>,
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -972,8 +972,8 @@ impl AbiExample for BuiltinPrograms {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-struct SlotBlockHeight {
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlotBlockHeight {
     slot: Slot,
     block_height: u64,
 }
@@ -983,8 +983,8 @@ struct SlotBlockHeight {
 /// point for epoch reward calculation, i.e. parent_slot and parent_block height for the starting
 /// block of the current epoch.
 /// - Inactive variant indicates that the block is outside of the rewarding phases.
-#[derive(Debug, Clone)]
-enum EpochRewardStatus {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EpochRewardStatus {
     Active(SlotBlockHeight),
     Inactive,
 }
@@ -3207,6 +3207,30 @@ impl Bank {
         }
     }
 
+    fn divide_by_hash_bucket(stake_rewards: &Vec<StakeReward>) -> Vec<Vec<&StakeReward>> {
+        let N = stake_rewards.len() + 4095 / 4096;
+        let mut kv = stake_rewards
+            .par_iter()
+            .map(|reward| {
+                const PREFIX_SIZE: usize = mem::size_of::<usize>();
+                let v = usize::from_be_bytes(
+                    reward.stake_pubkey.as_ref()[0..PREFIX_SIZE]
+                        .try_into()
+                        .unwrap(),
+                );
+
+                (v % N, reward)
+            })
+            .collect::<Vec<_>>();
+
+        kv.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        kv.into_iter()
+            .group_by(|x| x.0)
+            .into_iter()
+            .map(|(_key, group)| group.map(|x| x.1).collect_vec())
+            .collect()
+    }
+
     /// Load, calculate and payout epoch rewards for stake and vote accounts
     fn pay_validator_rewards_with_thread_pool(
         &mut self,
@@ -3732,6 +3756,8 @@ impl Bank {
         let mut total: i64 = 0;
         let (begin, end) = self.get_partition_begin_end(partition_index, n);
 
+        // call optmized batch store w/o extra checks fn because the stake_accounts has already
+        // checked during reward calculation.
         let to_storable = (
             self.slot(),
             &stake_rewards[begin..end],
@@ -3757,6 +3783,8 @@ impl Bank {
             let vote_rewards: Vec<_> = vote_rewards.into_iter().flatten().collect();
             let vote_accounts: Vec<_> = vote_accounts.iter().flatten().collect();
 
+            // call optmized batch store w/o extra checks fn because the vote_accounts has already
+            // checked during reward calculation.
             let to_storable = (self.slot(), &vote_accounts[..], self.include_slot_in_hash());
             self.store_accounts_batch_stake_cache_update(to_storable, true);
             vote_rewards
@@ -3871,7 +3899,7 @@ impl Bank {
             self.capitalization
                 .fetch_add(validator_rewards_paid, AcqRel);
 
-            // TODO (assert!)
+            // TODO (assert! and add EpochReward sysvar)
 
             report_partitioned_reward_metrics(
                 self.slot(),
@@ -7301,7 +7329,7 @@ impl Bank {
             .fetch_add(m.as_us(), Relaxed);
     }
 
-    /// Optimized large number of stake/vote accounts stores by batching stake cache updates and accounts-db store
+    /// Optimized large number of stake/vote accounts stores by batching stake cache updates and accounts-db stores
     fn store_accounts_batch_stake_cache_update<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
@@ -8916,12 +8944,14 @@ impl Bank {
         Some(epoch_accounts_hash)
     }
 
-    pub fn get_epoch_reward_calc_start_to_serialize(&self) -> Option<(Slot, u64)> {
-        todo!("store this in snapshot");
+    /// Return the epoch_reward_status field on the bank to serialize
+    pub fn get_epoch_reward_status_to_serialize(&self) -> Option<EpochRewardStatus> {
+        Some(self.epoch_reward_status.clone())
     }
 
-    pub fn get_epoch_reward_calculator_to_serialize(&self) -> Option<StakeRewards> {
-        todo!();
+    /// Return the calculated_epoch_stake_rewards field on the bank to serialize
+    pub fn get_calculated_epoch_stake_rewards_to_serialize(&self) -> Option<&StakeRewards> {
+        (*self.calculated_epoch_stake_rewards).as_ref()
     }
 
     /// Convenience fn to get the Epoch Accounts Hash

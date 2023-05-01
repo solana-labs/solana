@@ -99,8 +99,8 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             is_delta: dvb.is_delta,
             incremental_snapshot_persistence: None,
             epoch_accounts_hash: None,
-            epoch_reward_calculator: None,
-            epoch_reward_calc_start: None,
+            calculated_epoch_stake_rewards: None,
+            epoch_reward_status: None,
         }
     }
 }
@@ -221,12 +221,12 @@ impl<'a> TypeContext<'a> for Context {
                 .map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()),
             serializable_bank
                 .bank
-                .get_epoch_reward_calculator_to_serialize()
-                .map(|epoch_reward_calculator| epoch_reward_calculator.clone()),
+                .get_calculated_epoch_stake_rewards_to_serialize()
+                .map(|stake_rewards| stake_rewards),
             serializable_bank
                 .bank
-                .get_epoch_reward_calc_start_to_serialize()
-                .map(|epoch_reward_calc_start| epoch_reward_calc_start),
+                .get_epoch_reward_status_to_serialize()
+                .map(|epoch_reward_status| epoch_reward_status),
         )
             .serialize(serializer)
     }
@@ -354,11 +354,11 @@ impl<'a> TypeContext<'a> for Context {
         let epoch_accounts_hash = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.epoch_accounts_hash = epoch_accounts_hash;
 
-        let epoch_reward_calculator = ignore_eof_error(deserialize_from(&mut stream))?;
-        bank_fields.epoch_reward_calculator = epoch_reward_calculator;
+        let calculated_epoch_stake_rewards = ignore_eof_error(deserialize_from(&mut stream))?;
+        bank_fields.calculated_epoch_stake_rewards = calculated_epoch_stake_rewards;
 
-        let epoch_reward_calc_start = ignore_eof_error(deserialize_from(stream))?;
-        bank_fields.epoch_reward_calc_start = epoch_reward_calc_start;
+        let epoch_reward_status = ignore_eof_error(deserialize_from(stream))?;
+        bank_fields.epoch_reward_status = epoch_reward_status;
 
         Ok((bank_fields, accounts_db_fields))
     }
@@ -393,8 +393,8 @@ impl<'a> TypeContext<'a> for Context {
         let hard_forks = RwLock::new(std::mem::take(&mut rhs.hard_forks));
         let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
         let epoch_accounts_hash = rhs.epoch_accounts_hash.as_ref();
-        let epoch_reward_calculator = rhs.epoch_reward_calculator.as_ref();
-        let epoch_reward_calc_start = rhs.epoch_reward_calc_start.as_ref();
+        let calculated_epoch_stake_rewards = rhs.calculated_epoch_stake_rewards.as_ref();
+        let epoch_reward_status = rhs.epoch_reward_status.as_ref();
 
         let bank = SerializableVersionedBank {
             blockhash_queue: &blockhash_queue,
@@ -439,8 +439,8 @@ impl<'a> TypeContext<'a> for Context {
                 lamports_per_signature,
                 incremental_snapshot_persistence,
                 epoch_accounts_hash,
-                epoch_reward_calculator,
-                epoch_reward_calc_start,
+                calculated_epoch_stake_rewards,
+                epoch_reward_status,
             ),
         )
     }

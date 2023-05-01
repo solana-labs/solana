@@ -97,7 +97,6 @@ impl StakesCache {
         (0..accounts.len()).for_each(|i| {
             let pubkey = accounts.pubkey(i);
             let account = accounts.account(i).to_account_shared_data();
-            // let vote_account = VoteAccount::try_from(account).unwrap();
             match VoteAccount::try_from(account.to_account_shared_data()) {
                 Ok(vote_account) => {
                     {
