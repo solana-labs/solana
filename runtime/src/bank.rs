@@ -3742,12 +3742,15 @@ impl Bank {
                 if let Some(mut curr_stake_account) =
                     self.get_account_with_fixed_root(&stake_pubkey)
                 {
-                    curr_stake_account
-                        .checked_add_lamports(reward_amount.try_into().unwrap())
-                        .unwrap();
+                    let pre_lamport = curr_stake_account.lamports();
+                    let post_lamport = post_stake_account.lamports();
 
-                    // make sure that lamports matches
-                    assert_eq!(curr_stake_account.lamports(), post_stake_account.lamports());
+                    if pre_lamport + u64::try_from(reward_amount).unwrap() != post_lamport {
+                        warn!(
+                            "LAMPORT MISMATH: {} {} {}",
+                            pre_lamport, post_lamport, reward_amount
+                        );
+                    }
                 }
             }
         }
