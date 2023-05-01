@@ -263,14 +263,14 @@ pub struct LoadedPrograms {
 }
 
 #[derive(Debug, Default)]
-pub struct LoadedProgramsForSlot {
+pub struct LoadedProgramsForTxBatch {
     /// Pubkey is the address of a program.
     /// LoadedProgram is the corresponding program entry valid for the slot in which a transaction is being executed.
     entries: HashMap<Pubkey, Arc<LoadedProgram>>,
     slot: Slot,
 }
 
-impl LoadedProgramsForSlot {
+impl LoadedProgramsForTxBatch {
     /// Refill the cache with a single entry. It's typically called during transaction loading, and
     /// transaction processing (for program management instructions).
     /// The replaces the existing entry (if any) with the provided entry. The return value contains
@@ -405,7 +405,7 @@ impl LoadedPrograms {
         &self,
         working_slot: &S,
         keys: impl Iterator<Item = (Pubkey, LoadedProgramMatchCriteria)>,
-    ) -> (LoadedProgramsForSlot, Vec<Pubkey>) {
+    ) -> (LoadedProgramsForTxBatch, Vec<Pubkey>) {
         let mut missing = Vec::new();
         let found = keys
             .filter_map(|(key, match_criteria)| {
@@ -443,7 +443,7 @@ impl LoadedPrograms {
             })
             .collect();
         (
-            LoadedProgramsForSlot {
+            LoadedProgramsForTxBatch {
                 entries: found,
                 slot: working_slot.current_slot(),
             },
@@ -566,7 +566,7 @@ mod tests {
     use {
         crate::loaded_programs::{
             BlockRelation, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
-            LoadedPrograms, LoadedProgramsForSlot, WorkingSlot,
+            LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot,
         },
         percentage::Percentage,
         solana_rbpf::vm::BuiltInProgram,
@@ -1143,7 +1143,7 @@ mod tests {
     }
 
     fn match_slot(
-        table: &LoadedProgramsForSlot,
+        table: &LoadedProgramsForTxBatch,
         program: &Pubkey,
         deployment_slot: Slot,
         working_slot: Slot,

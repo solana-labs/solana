@@ -99,7 +99,7 @@ use {
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
         loaded_programs::{
             LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, LoadedPrograms,
-            LoadedProgramsForSlot, WorkingSlot,
+            LoadedProgramsForTxBatch, WorkingSlot,
         },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
@@ -4425,7 +4425,7 @@ impl Bank {
     fn load_and_get_programs_from_cache(
         &self,
         program_accounts_map: &HashMap<Pubkey, &Pubkey>,
-    ) -> LoadedProgramsForSlot {
+    ) -> LoadedProgramsForTxBatch {
         let programs_and_slots: Vec<(Pubkey, LoadedProgramMatchCriteria)> =
             if self.check_program_modification_slot {
                 program_accounts_map
