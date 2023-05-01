@@ -117,15 +117,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ansi_term"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee49baf6cb617b853aa8d93bf420db2383fab46d314482ca2803b40d5fde979b"
-dependencies = [
- "winapi 0.3.9",
-]
-
-[[package]]
 name = "anyhow"
 version = "1.0.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -940,33 +931,27 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "2.33.3"
+version = "3.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37e58ac78573c40708d45522f0d80fa2f01cc4f9b4e2bf749807255454312002"
+checksum = "4ea181bf566f71cb9a5d17a59e1871af638180a18fb0035c92ae62b705207123"
 dependencies = [
- "ansi_term",
  "atty",
  "bitflags",
- "strsim 0.8.0",
- "textwrap 0.11.0",
- "unicode-width",
- "vec_map",
+ "clap_lex",
+ "indexmap",
+ "once_cell",
+ "strsim",
+ "termcolor",
+ "textwrap",
 ]
 
 [[package]]
-name = "clap"
-version = "3.1.6"
+name = "clap_lex"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8c93436c21e4698bacadf42917db28b23017027a4deccb35dbe47a7e7840123"
+checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
 dependencies = [
- "atty",
- "bitflags",
- "indexmap",
- "lazy_static",
  "os_str_bytes",
- "strsim 0.10.0",
- "termcolor",
- "textwrap 0.15.0",
 ]
 
 [[package]]
@@ -1202,7 +1187,7 @@ dependencies = [
  "ident_case",
  "proc-macro2 1.0.53",
  "quote 1.0.26",
- "strsim 0.10.0",
+ "strsim",
  "syn 1.0.109",
 ]
 
@@ -3139,9 +3124,6 @@ name = "os_str_bytes"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "ouroboros"
@@ -4640,7 +4622,7 @@ name = "solana-clap-utils"
 version = "1.16.0"
 dependencies = [
  "chrono",
- "clap 2.33.3",
+ "clap",
  "rpassword",
  "solana-perf",
  "solana-remote-wallet",
@@ -4672,7 +4654,7 @@ dependencies = [
  "Inflector",
  "base64 0.13.1",
  "chrono",
- "clap 2.33.3",
+ "clap",
  "console",
  "humantime",
  "indicatif",
@@ -4861,7 +4843,7 @@ version = "1.16.0"
 dependencies = [
  "bincode",
  "byteorder 1.4.3",
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "log",
  "serde",
@@ -5014,7 +4996,7 @@ version = "1.16.0"
 dependencies = [
  "bincode",
  "bv",
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "flate2",
  "indexmap",
@@ -5179,7 +5161,7 @@ name = "solana-net-utils"
 version = "1.16.0"
 dependencies = [
  "bincode",
- "clap 3.1.6",
+ "clap",
  "crossbeam-channel",
  "log",
  "nix",
@@ -5569,7 +5551,7 @@ dependencies = [
 name = "solana-rpc-client-nonce-utils"
 version = "1.16.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "solana-clap-utils",
  "solana-rpc-client",
  "solana-sdk 1.16.0",
@@ -6264,7 +6246,7 @@ dependencies = [
 name = "solana-sys-tuner"
 version = "1.16.0"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "libc",
  "log",
  "nix",
@@ -6394,7 +6376,7 @@ name = "solana-validator"
 version = "1.16.0"
 dependencies = [
  "chrono",
- "clap 2.33.3",
+ "clap",
  "console",
  "core_affinity",
  "crossbeam-channel",
@@ -6674,12 +6656,6 @@ dependencies = [
 
 [[package]]
 name = "strsim"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
-
-[[package]]
-name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
@@ -6872,18 +6848,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.11.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
-dependencies = [
- "unicode-width",
-]
-
-[[package]]
-name = "textwrap"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
+checksum = "222a222a5bfe1bba4a77b45ec488a741b3cb8872e5e499451fd7d0129c9c7c3d"
 
 [[package]]
 name = "thiserror"
@@ -7564,12 +7531,6 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
-
-[[package]]
-name = "vec_map"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "version_check"
