@@ -647,7 +647,7 @@ pub fn archive_snapshot_package(
         )
     })?;
 
-    let src_snapshot_dir = snapshot_package.snapshot_links.join(&slot_str);
+    let src_snapshot_dir = &snapshot_package.bank_snapshot_dir;
     // To be a source for symlinking and archiving, the path need to be an aboslute path
     let src_snapshot_dir = src_snapshot_dir
         .canonicalize()
@@ -3132,7 +3132,7 @@ pub fn package_and_archive_full_snapshot(
         .get_accounts_hash()
         .expect("accounts hash is required for snapshot");
     crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        accounts_package.snapshot_links_dir(),
+        accounts_package.bank_snapshot_dir(),
         accounts_package.slot,
         &accounts_hash,
         None,
@@ -3217,7 +3217,7 @@ pub fn package_and_archive_incremental_snapshot(
         };
 
     crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        accounts_package.snapshot_links_dir(),
+        accounts_package.bank_snapshot_dir(),
         accounts_package.slot,
         &accounts_hash_for_reserialize,
         bank_incremental_snapshot_persistence.as_ref(),
@@ -3282,7 +3282,7 @@ pub fn create_snapshot_dirs_for_tests(
 
         let snapshot_storages = bank.get_snapshot_storages(None);
         let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
-        add_bank_snapshot(
+        let bank_snapshot_info = add_bank_snapshot(
             &bank_snapshots_dir,
             &bank,
             &snapshot_storages,
@@ -3299,7 +3299,7 @@ pub fn create_snapshot_dirs_for_tests(
         // to construct a bank.
         assert!(
             crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                &bank_snapshots_dir,
+                &bank_snapshot_info.snapshot_dir,
                 bank.slot(),
                 &bank.get_accounts_hash().unwrap(),
                 None

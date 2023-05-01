@@ -93,7 +93,7 @@ mod tests {
                     archive_format: ArchiveFormat::Tar,
                 },
                 block_height: slot,
-                snapshot_links: PathBuf::default(),
+                bank_snapshot_dir: PathBuf::default(),
                 snapshot_storages: Vec::default(),
                 snapshot_version: SnapshotVersion::default(),
                 snapshot_type,

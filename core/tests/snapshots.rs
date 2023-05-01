@@ -260,7 +260,7 @@ fn run_bank_forks_snapshot_n<F>(
     let accounts_hash =
         last_bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        accounts_package.snapshot_links_dir(),
+        accounts_package.bank_snapshot_dir(),
         accounts_package.slot,
         &accounts_hash,
         None,
@@ -523,7 +523,7 @@ fn test_concurrent_snapshot_packaging(
                 let accounts_package = real_accounts_package_receiver.try_recv().unwrap();
                 let accounts_hash = AccountsHash(Hash::default());
                 solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                    accounts_package.snapshot_links_dir(),
+                    accounts_package.bank_snapshot_dir(),
                     accounts_package.slot,
                     &accounts_hash,
                     None,
@@ -555,7 +555,7 @@ fn test_concurrent_snapshot_packaging(
 
     // files were saved off before we reserialized the bank in the hacked up accounts_hash_verifier stand-in.
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        saved_snapshots_dir.path(),
+        saved_snapshots_dir.path().join(saved_slot.to_string()),
         saved_slot,
         &AccountsHash(Hash::default()),
         None,

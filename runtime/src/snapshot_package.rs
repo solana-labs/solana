@@ -8,9 +8,7 @@ use {
         rent_collector::RentCollector,
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
         snapshot_hash::SnapshotHash,
-        snapshot_utils::{
-            self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotError, SnapshotVersion,
-        },
+        snapshot_utils::{self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion},
     },
     log::*,
     solana_sdk::{clock::Slot, feature_set, sysvar::epoch_schedule::EpochSchedule},
@@ -75,14 +73,8 @@ impl AccountsPackage {
             }
         }
 
-        let bank_snapshot_dir = &bank_snapshot_info.snapshot_dir;
-        let bank_snapshots_dir = bank_snapshot_dir
-            .parent()
-            .ok_or_else(|| SnapshotError::InvalidSnapshotDirPath(bank_snapshot_dir.to_path_buf()))?
-            .to_path_buf();
-
         let snapshot_info = SupplementalSnapshotInfo {
-            snapshot_links: bank_snapshots_dir,
+            bank_snapshot_dir: bank_snapshot_info.snapshot_dir.clone(),
             archive_format,
             snapshot_version,
             full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
@@ -159,7 +151,7 @@ impl AccountsPackage {
             rent_collector: RentCollector::default(),
             is_incremental_accounts_hash_feature_enabled: bool::default(),
             snapshot_info: Some(SupplementalSnapshotInfo {
-                snapshot_links: PathBuf::default(),
+                bank_snapshot_dir: PathBuf::default(),
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
                 full_snapshot_archives_dir: PathBuf::default(),
@@ -170,16 +162,16 @@ impl AccountsPackage {
         }
     }
 
-    /// Returns the path to the snapshot links directory
+    /// Returns the path to the snapshot dir
     ///
     /// NOTE: This fn will panic if the AccountsPackage is of type EpochAccountsHash.
-    pub fn snapshot_links_dir(&self) -> &Path {
+    pub fn bank_snapshot_dir(&self) -> &Path {
         match self.package_type {
             AccountsPackageType::AccountsHashVerifier | AccountsPackageType::Snapshot(..) => self
                 .snapshot_info
                 .as_ref()
                 .unwrap()
-                .snapshot_links
+                .bank_snapshot_dir
                 .as_path(),
             AccountsPackageType::EpochAccountsHash => {
                 panic!("EAH accounts packages do not contain snapshot information")
@@ -200,7 +192,7 @@ impl std::fmt::Debug for AccountsPackage {
 
 /// Supplemental information needed for snapshots
 pub struct SupplementalSnapshotInfo {
-    pub snapshot_links: PathBuf,
+    pub bank_snapshot_dir: PathBuf,
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
     pub full_snapshot_archives_dir: PathBuf,
@@ -222,7 +214,7 @@ pub enum AccountsPackageType {
 pub struct SnapshotPackage {
     pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
-    pub snapshot_links: PathBuf,
+    pub bank_snapshot_dir: PathBuf,
     pub snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     pub snapshot_version: SnapshotVersion,
     pub snapshot_type: SnapshotType,
@@ -274,7 +266,7 @@ impl SnapshotPackage {
                 archive_format: snapshot_info.archive_format,
             },
             block_height: accounts_package.block_height,
-            snapshot_links: snapshot_info.snapshot_links,
+            bank_snapshot_dir: snapshot_info.bank_snapshot_dir,
             snapshot_storages,
             snapshot_version: snapshot_info.snapshot_version,
             snapshot_type,
