@@ -474,7 +474,8 @@ impl Accounts {
                     } else if account.executable() && message.is_writable(i) {
                         error_counters.invalid_writable_account += 1;
                         return Err(TransactionError::InvalidWritableAccount);
-                    } else if in_reward_interval
+                    } else if false
+                        && in_reward_interval
                         && message.is_writable(i)
                         && solana_stake_program::check_id(account.owner())
                     {
