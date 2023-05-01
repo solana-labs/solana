@@ -9,7 +9,8 @@ pub(crate) const MAX_DEBUG_ACCOUNT_DATA: usize = 64;
 /// If `data`'s length is greater than 0, add a field called "data" to `f`. The
 /// first 64 bytes of `data` is displayed; bytes after that are ignored.
 pub fn debug_account_data(data: &[u8], f: &mut fmt::DebugStruct<'_, '_>) {
-    let data_len = cmp::min(MAX_DEBUG_ACCOUNT_DATA, data.len());
+    //let data_len = cmp::min(MAX_DEBUG_ACCOUNT_DATA, data.len());
+    let data_len = data.len();
     if data_len > 0 {
         f.field("data", &Hex(&data[..data_len]));
     }
