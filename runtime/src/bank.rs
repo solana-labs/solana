@@ -97,7 +97,10 @@ use {
         builtin_program::{BuiltinProgram, BuiltinPrograms, ProcessInstructionWithContext},
         compute_budget::{self, ComputeBudget},
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
-        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot},
+        loaded_programs::{
+            LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, LoadedPrograms,
+            LoadedProgramsForTxBatch, WorkingSlot,
+        },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -258,7 +261,6 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
-use solana_program_runtime::loaded_programs::LoadedProgramMatchCriteria;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -4427,7 +4429,7 @@ impl Bank {
     fn load_and_get_programs_from_cache(
         &self,
         program_accounts_map: &HashMap<Pubkey, &Pubkey>,
-    ) -> HashMap<Pubkey, Arc<LoadedProgram>> {
+    ) -> LoadedProgramsForTxBatch {
         let programs_and_slots: Vec<(Pubkey, LoadedProgramMatchCriteria)> =
             if self.check_program_modification_slot {
                 program_accounts_map
@@ -4476,7 +4478,7 @@ impl Bank {
         for (key, program) in missing_programs {
             let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
             // Use the returned entry as that might have been deduplicated globally
-            loaded_programs_for_txs.insert(key, entry);
+            loaded_programs_for_txs.replenish(key, entry);
         }
 
         loaded_programs_for_txs
