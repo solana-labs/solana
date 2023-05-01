@@ -1905,6 +1905,8 @@ impl Bank {
         let (_, update_rewards_with_thread_pool_time) = measure!(
             {
                 if self.partitioned_rewards_enabled() {
+                    warn!("run partitioned rewards");
+
                     self.epoch_reward_status = EpochRewardStatus::Active(SlotBlockHeight {
                         slot: parent_slot,
                         block_height: parent_height,
@@ -1925,6 +1927,8 @@ impl Bank {
                         &mut rewards_metrics,
                     )
                 } else {
+                    warn!("run regular rewards");
+
                     // After saving a snapshot of stakes, apply stake rewards and commission
                     self.update_rewards_with_thread_pool(
                         parent_epoch,
@@ -2672,11 +2676,6 @@ impl Bank {
 
         self.calculated_epoch_stake_rewards = Arc::new(stake_rewards);
 
-        /// test-code
-        for i in 0..self.get_reward_credit_interval() {
-            self.credit_epoch_rewards_in_partition(i);
-        }
-
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
 
         // This is for vote rewards only.
@@ -2707,6 +2706,7 @@ impl Bank {
             "distributed vote rewards: {} out of {}, remaining {}",
             validator_rewards_paid, validator_rewards, total
         );
+
         let (num_stake_accounts, num_vote_accounts) = {
             let stakes = self.stakes_cache.stakes();
             (
@@ -2716,6 +2716,11 @@ impl Bank {
         };
         self.capitalization
             .fetch_add(validator_rewards_paid, Relaxed);
+
+        // test-code to simulate stake reward payment
+        for i in 0..self.get_reward_credit_interval() {
+            self.credit_epoch_rewards_in_partition(i);
+        }
 
         let active_stake = if let Some(stake_history_entry) =
             self.stakes_cache.stakes().history().get(prev_epoch)
@@ -3495,6 +3500,9 @@ impl Bank {
                             return None;
                         }
                     };
+
+                    let pre_lamport = stake_account.lamports();
+
                     let redeemed = stake_state::redeem_rewards(
                         rewarded_epoch,
                         stake_state,
@@ -3506,7 +3514,14 @@ impl Bank {
                         credits_auto_rewind,
                     );
 
+                    let post_lamport = stake_account.lamports();
+
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
+                        warn!(
+                            "CALCULATED REWARD: {} {} {} {}",
+                            stake_pubkey, pre_lamport, post_lamport, stakers_reward
+                        );
+
                         // track voter rewards
                         let mut voters_reward_entry = vote_account_rewards
                             .entry(vote_pubkey)
@@ -3747,8 +3762,8 @@ impl Bank {
 
                     if pre_lamport + u64::try_from(reward_amount).unwrap() != post_lamport {
                         warn!(
-                            "LAMPORT MISMATH: {} {} {}",
-                            pre_lamport, post_lamport, reward_amount
+                            "LAMPORT MISMATH: {} {} {} {} ",
+                            stake_pubkey, pre_lamport, post_lamport, reward_amount
                         );
                     }
                 }
@@ -3903,6 +3918,8 @@ impl Bank {
             let validator_rewards_paid: u64 = u64::try_from(total_stake_rewards).unwrap();
             self.capitalization
                 .fetch_add(validator_rewards_paid, AcqRel);
+
+            metrics.post_capitalization = self.capitalization();
 
             // TODO (assert! and add EpochReward sysvar)
 
