@@ -3502,18 +3502,19 @@ impl Bank {
 
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
-                        let mut entry =
-                            vote_account_rewards
-                                .entry(vote_pubkey)
-                                .or_insert(VoteReward {
-                                    vote_account: vote_account.into(),
-                                    commission: vote_state.commission,
-                                    vote_rewards: 0,
-                                    vote_needs_store: false,
-                                });
+                        let voters_reward_entry = vote_account_rewards
+                            .entry(vote_pubkey)
+                            .or_insert(VoteReward {
+                                vote_account: vote_account.into(),
+                                commission: vote_state.commission,
+                                vote_rewards: 0,
+                                vote_needs_store: false,
+                            });
 
-                        entry.vote_needs_store = true;
-                        entry.vote_rewards = entry.vote_rewards.saturating_add(voters_reward);
+                        voters_reward_entry.vote_needs_store = true;
+                        voters_reward_entry.vote_rewards = voters_reward_entry
+                            .vote_rewards
+                            .saturating_add(voters_reward);
 
                         let post_balance = stake_account.lamports();
                         return Some(StakeReward {
