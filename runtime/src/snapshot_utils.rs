@@ -1362,10 +1362,7 @@ pub fn remove_bank_snapshot(slot: Slot, bank_snapshots_dir: impl AsRef<Path>) {
             match fs::read_link(&symlink) {
                 Ok(dst_path) => move_and_async_delete_path(dst_path),
                 Err(e) => {
-                    warn!(
-                        "{}",
-                        format!("read_link error {} on {}", e, symlink.display())
-                    );
+                    warn!("read_link error {} on {}", e, symlink.display());
                 }
             }
         }
