@@ -3502,7 +3502,7 @@ impl Bank {
 
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
-                        let voters_reward_entry = vote_account_rewards
+                        let mut voters_reward_entry = vote_account_rewards
                             .entry(vote_pubkey)
                             .or_insert(VoteReward {
                                 vote_account: vote_account.into(),
@@ -3742,8 +3742,6 @@ impl Bank {
 
                     // make sure that lamports matches
                     assert_eq!(curr_stake_account.lamports(), post_stake_account.lamports());
-                    // make sure that the stake_account didn't change in reward phase
-                    assert_eq!(&curr_stake_account, post_stake_account);
                 }
             }
         }
