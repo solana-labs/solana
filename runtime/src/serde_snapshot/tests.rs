@@ -320,7 +320,7 @@ fn test_bank_serialize_style(
 
     if reserialize_accounts_hash || incremental_snapshot_persistence {
         let temp_dir = TempDir::new().unwrap();
-        let slot_dir = snapshot_utils::get_bank_snapshots_dir(&temp_dir, slot);
+        let slot_dir = snapshot_utils::get_bank_snapshot_dir(&temp_dir, slot);
         let post_path = slot_dir.join(slot.to_string());
         let pre_path = post_path.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
         std::fs::create_dir(&slot_dir).unwrap();

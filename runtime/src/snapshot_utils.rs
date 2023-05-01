@@ -178,7 +178,7 @@ impl BankSnapshotInfo {
     ) -> std::result::Result<BankSnapshotInfo, SnapshotNewFromDirError> {
         // check this directory to see if there is a BankSnapshotPre and/or
         // BankSnapshotPost file
-        let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
+        let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
 
         if !bank_snapshot_dir.is_dir() {
             return Err(SnapshotNewFromDirError::InvalidBankSnapshotDir(
@@ -1206,7 +1206,7 @@ pub fn add_bank_snapshot(
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     let slot = bank.slot();
     // bank_snapshots_dir/slot
-    let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
+    let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
     if bank_snapshot_dir.is_dir() {
         // There is a time window from when a snapshot directory is created to when its content
         // is fully filled to become a full state good to construct a bank from.  At the init time,
@@ -1329,7 +1329,7 @@ fn serialize_status_cache(slot_deltas: &[BankSlotDelta], status_cache_path: &Pat
 
 /// Remove the snapshot directory for this slot
 pub fn remove_bank_snapshot(slot: Slot, bank_snapshots_dir: impl AsRef<Path>) -> Result<()> {
-    let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
+    let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
     let accounts_hardlinks_dir = bank_snapshot_dir.join("accounts_hardlinks");
     if fs::metadata(&accounts_hardlinks_dir).is_ok() {
         // This directory contain symlinks to all accounts snapshot directories.
@@ -2830,12 +2830,16 @@ fn verify_slot_deltas_with_history(
     Ok(())
 }
 
-pub(crate) fn get_snapshot_file_name(slot: Slot) -> String {
+/// Returns the file name of the bank snapshot for `slot`
+pub fn get_snapshot_file_name(slot: Slot) -> String {
     slot.to_string()
 }
 
-pub(crate) fn get_bank_snapshots_dir(path: impl AsRef<Path>, slot: Slot) -> PathBuf {
-    path.as_ref().join(slot.to_string())
+/// Constructs the path to the bank snapshot directory for `slot` within `bank_snapshots_dir`
+pub fn get_bank_snapshot_dir(bank_snapshots_dir: impl AsRef<Path>, slot: Slot) -> PathBuf {
+    bank_snapshots_dir
+        .as_ref()
+        .join(get_snapshot_file_name(slot))
 }
 
 fn get_io_error(error: &str) -> SnapshotError {
@@ -3703,7 +3707,7 @@ mod tests {
         max_slot: Slot,
     ) {
         for slot in min_slot..max_slot {
-            let snapshot_dir = get_bank_snapshots_dir(bank_snapshots_dir, slot);
+            let snapshot_dir = get_bank_snapshot_dir(bank_snapshots_dir, slot);
             fs::create_dir_all(&snapshot_dir).unwrap();
 
             let snapshot_filename = get_snapshot_file_name(slot);
@@ -5116,7 +5120,7 @@ mod tests {
         .unwrap();
 
         let accounts_hardlinks_dir =
-            get_bank_snapshots_dir(&bank_snapshots_dir, bank.slot()).join("accounts_hardlinks");
+            get_bank_snapshot_dir(&bank_snapshots_dir, bank.slot()).join("accounts_hardlinks");
         assert!(fs::metadata(&accounts_hardlinks_dir).is_ok());
 
         let mut hardlink_dirs: Vec<PathBuf> = Vec::new();
