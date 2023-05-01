@@ -3207,6 +3207,7 @@ impl Bank {
         }
     }
 
+    #[allow(dead_code)]
     fn divide_by_hash_bucket(stake_rewards: &Vec<StakeReward>) -> Vec<Vec<&StakeReward>> {
         let N = stake_rewards.len() + 4095 / 4096;
         let mut kv = stake_rewards
