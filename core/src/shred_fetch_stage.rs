@@ -54,6 +54,7 @@ impl ShredFetchStage {
         let mut stats = ShredFetchStats::default();
 
         for mut packet_batch in recvr {
+            stats.maybe_submit(name, STATS_SUBMIT_CADENCE);
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
                 {
@@ -82,29 +83,27 @@ impl ShredFetchStage {
                     );
                 }
             }
-
+            if turbine_disabled.load(Ordering::Relaxed) {
+                continue;
+            }
             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
             let should_drop_merkle_shreds =
                 |shred_slot| should_drop_merkle_shreds(shred_slot, &root_bank);
-            let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
             for packet in packet_batch.iter_mut().filter(|p| !p.meta().discard()) {
-                if turbine_disabled
-                    || should_discard_shred(
-                        packet,
-                        last_root,
-                        max_slot,
-                        shred_version,
-                        should_drop_merkle_shreds,
-                        &mut stats,
-                    )
-                {
+                if should_discard_shred(
+                    packet,
+                    last_root,
+                    max_slot,
+                    shred_version,
+                    should_drop_merkle_shreds,
+                    &mut stats,
+                ) {
                     packet.meta_mut().set_discard(true);
                 } else {
                     packet.meta_mut().flags.insert(flags);
                 }
             }
-            stats.maybe_submit(name, STATS_SUBMIT_CADENCE);
             if sendr.send(packet_batch).is_err() {
                 break;
             }
