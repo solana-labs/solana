@@ -3755,16 +3755,11 @@ impl Bank {
         let n = stake_rewards.len() as u64;
         let mut total: i64 = 0;
         let (begin, end) = self.get_partition_begin_end(partition_index, n);
-
-        // call optmized batch store w/o extra checks fn because the stake_accounts has already
-        // checked during reward calculation.
-        let to_storable = (
+        self.store_accounts((
             self.slot(),
             &stake_rewards[begin..end],
             self.include_slot_in_hash(),
-        );
-        self.store_accounts_batch_stake_cache_update(to_storable, false);
-
+        ));
         for a in &stake_rewards[begin..end] {
             total += a.stake_reward_info.lamports;
         }
@@ -3783,10 +3778,7 @@ impl Bank {
             let vote_rewards: Vec<_> = vote_rewards.into_iter().flatten().collect();
             let vote_accounts: Vec<_> = vote_accounts.iter().flatten().collect();
 
-            // call optmized batch store w/o extra checks fn because the vote_accounts has already
-            // checked during reward calculation.
-            let to_storable = (self.slot(), &vote_accounts[..], self.include_slot_in_hash());
-            self.store_accounts_batch_stake_cache_update(to_storable, true);
+            self.store_accounts((self.slot(), &vote_accounts[..], self.include_slot_in_hash()));
             vote_rewards
         });
 
@@ -7327,33 +7319,6 @@ impl Bank {
             .stats
             .stakes_cache_check_and_store_us
             .fetch_add(m.as_us(), Relaxed);
-    }
-
-    /// Optimized large number of stake/vote accounts stores by batching stake cache updates and accounts-db stores
-    fn store_accounts_batch_stake_cache_update<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
-        &self,
-        accounts: impl StorableAccounts<'a, T>,
-        is_vote: bool,
-    ) {
-        assert!(!self.freeze_started());
-
-        let mut m = Measure::start("stakes_cache.check_and_store");
-        if is_vote {
-            self.stakes_cache
-                .store_vote_accounts_batch_no_check(&accounts);
-        } else {
-            self.stakes_cache
-                .store_stake_accounts_batch_no_check(&accounts);
-        }
-        m.stop();
-        self.rc
-            .accounts
-            .accounts_db
-            .stats
-            .stakes_cache_check_and_store_us
-            .fetch_add(m.as_us(), Relaxed);
-
-        self.rc.accounts.store_accounts_cached(accounts);
     }
 
     pub fn force_flush_accounts_cache(&self) {
