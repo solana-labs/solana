@@ -1576,7 +1576,8 @@ impl Bank {
     }
 
     pub fn partitioned_rewards_enabled(&self) -> bool {
-        self.feature_set
+        true || self
+            .feature_set
             .is_active(&enable_partitioned_epoch_reward::id())
     }
 
@@ -1966,7 +1967,7 @@ impl Bank {
 
             if height >= credit_start && height < credit_end {
                 let partition_index = height - credit_start;
-                self.credit_epoch_rewards_in_partition(partition_index);
+                //self.credit_epoch_rewards_in_partition(partition_index);
             }
 
             if height >= credit_end && self.epoch_reward_status.is_active() {
@@ -2670,6 +2671,11 @@ impl Bank {
             );
 
         self.calculated_epoch_stake_rewards = Arc::new(stake_rewards);
+
+        /// test-code
+        for i in 0..self.get_reward_credit_interval() {
+            self.credit_epoch_rewards_in_partition(i);
+        }
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
 
