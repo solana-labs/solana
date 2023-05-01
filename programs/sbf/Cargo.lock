@@ -4500,16 +4500,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-bpf-rust-alt-bn128"
-version = "1.16.0"
-dependencies = [
- "array-bytes",
- "serde",
- "serde_json",
- "solana-program",
-]
-
-[[package]]
 name = "solana-bpf-rust-big-mod-exp"
 version = "1.16.0"
 dependencies = [
@@ -5478,6 +5468,14 @@ dependencies = [
 name = "solana-sbf-rust-alloc"
 version = "1.16.0"
 dependencies = [
+ "solana-program",
+]
+
+[[package]]
+name = "solana-sbf-rust-alt-bn128"
+version = "1.16.0"
+dependencies = [
+ "array-bytes",
  "solana-program",
 ]
 
