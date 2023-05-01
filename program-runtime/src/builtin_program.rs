@@ -1,44 +1,28 @@
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-use {crate::declare_process_instruction, solana_frozen_abi::abi_example::AbiExample};
+use solana_frozen_abi::abi_example::AbiExample;
 use {
-    crate::invoke_context::InvokeContext, solana_rbpf::vm::BuiltInFunction,
+    crate::{invoke_context::InvokeContext, loaded_programs::LoadedProgram},
+    solana_rbpf::vm::{BuiltInFunction, BuiltInProgram},
     solana_sdk::pubkey::Pubkey,
+    std::sync::Arc,
 };
 
 pub type ProcessInstructionWithContext = BuiltInFunction<InvokeContext<'static>>;
 
-#[derive(Clone)]
-pub struct BuiltinProgram {
-    pub name: String,
-    pub program_id: Pubkey,
-    pub process_instruction: ProcessInstructionWithContext,
-}
-
-impl std::fmt::Debug for BuiltinProgram {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Builtin [name={}, id={}]", self.name, self.program_id)
-    }
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for BuiltinProgram {
-    fn example() -> Self {
-        declare_process_instruction!(empty_mock_process_instruction, 1, |_invoke_context| {
-            // Do nothing
-            Ok(())
-        });
-
-        Self {
-            name: String::default(),
-            program_id: Pubkey::default(),
-            process_instruction: empty_mock_process_instruction,
-        }
-    }
+pub fn create_builtin(
+    name: String,
+    process_instruction: ProcessInstructionWithContext,
+) -> Arc<LoadedProgram> {
+    let mut program = BuiltInProgram::default();
+    program
+        .register_function_by_name("entrypoint", process_instruction)
+        .unwrap();
+    Arc::new(LoadedProgram::new_builtin(name, 0, program))
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct BuiltinPrograms {
-    pub vec: Vec<BuiltinProgram>,
+    pub vec: Vec<(Pubkey, Arc<LoadedProgram>)>,
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
@@ -54,11 +38,10 @@ impl BuiltinPrograms {
         process_instruction: ProcessInstructionWithContext,
     ) -> Self {
         Self {
-            vec: vec![BuiltinProgram {
-                name: "mock instruction processor".to_string(),
+            vec: vec![(
                 program_id,
-                process_instruction,
-            }],
+                create_builtin("mockup".to_string(), process_instruction),
+            )],
         }
     }
 }

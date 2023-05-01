@@ -72,7 +72,7 @@ pub enum LoadedProgramType {
     Typed(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     #[cfg(test)]
     TestLoaded,
-    BuiltIn(BuiltInProgram<InvokeContext<'static>>),
+    Builtin(String, BuiltInProgram<InvokeContext<'static>>),
 }
 
 impl Debug for LoadedProgramType {
@@ -89,7 +89,9 @@ impl Debug for LoadedProgramType {
             LoadedProgramType::Typed(_) => write!(f, "LoadedProgramType::Typed"),
             #[cfg(test)]
             LoadedProgramType::TestLoaded => write!(f, "LoadedProgramType::TestLoaded"),
-            LoadedProgramType::BuiltIn(_) => write!(f, "LoadedProgramType::BuiltIn"),
+            LoadedProgramType::Builtin(name, _) => {
+                write!(f, "LoadedProgramType::Builtin({name})")
+            }
         }
     }
 }
@@ -215,7 +217,8 @@ impl LoadedProgram {
     }
 
     /// Creates a new built-in program
-    pub fn new_built_in(
+    pub fn new_builtin(
+        name: String,
         deployment_slot: Slot,
         program: BuiltInProgram<InvokeContext<'static>>,
     ) -> Self {
@@ -225,7 +228,7 @@ impl LoadedProgram {
             effective_slot: deployment_slot.saturating_add(1),
             maybe_expiration_slot: None,
             usage_counter: AtomicU64::new(0),
-            program: LoadedProgramType::BuiltIn(program),
+            program: LoadedProgramType::Builtin(name, program),
         }
     }
 
@@ -291,16 +294,6 @@ impl LoadedProgramsForTxBatch {
 
     pub fn slot(&self) -> Slot {
         self.slot
-    }
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl solana_frozen_abi::abi_example::AbiExample for LoadedPrograms {
-    fn example() -> Self {
-        // Delegate AbiExample impl to Default before going deep and stuck with
-        // not easily impl-able Arc<dyn Executor> due to rust's coherence issue
-        // This is safe because LoadedPrograms isn't serializable by definition.
-        Self::default()
     }
 }
 
@@ -474,7 +467,7 @@ impl LoadedPrograms {
                         LoadedProgramType::FailedVerification
                         | LoadedProgramType::Closed
                         | LoadedProgramType::DelayVisibility
-                        | LoadedProgramType::BuiltIn(_) => None,
+                        | LoadedProgramType::Builtin(_, _) => None,
                     })
             })
             .sorted_by_cached_key(|(order, (_id, program))| {
@@ -561,6 +554,22 @@ impl LoadedPrograms {
     }
 }
 
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl solana_frozen_abi::abi_example::AbiExample for LoadedProgram {
+    fn example() -> Self {
+        // LoadedProgram isn't serializable by definition.
+        Self::default()
+    }
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl solana_frozen_abi::abi_example::AbiExample for LoadedPrograms {
+    fn example() -> Self {
+        // LoadedPrograms isn't serializable by definition.
+        Self::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -582,7 +591,7 @@ mod tests {
 
     fn new_test_builtin_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
-            program: LoadedProgramType::BuiltIn(BuiltInProgram::default()),
+            program: LoadedProgramType::Builtin("mockup".to_string(), BuiltInProgram::default()),
             account_size: 0,
             deployment_slot,
             effective_slot,

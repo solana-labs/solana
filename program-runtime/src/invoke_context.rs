@@ -5,6 +5,7 @@ use {
         compute_budget::ComputeBudget,
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
+        loaded_programs::LoadedProgramType,
         log_collector::LogCollector,
         pre_account::PreAccount,
         stable_log,
@@ -40,7 +41,7 @@ use {
         cell::RefCell,
         fmt::{self, Debug},
         rc::Rc,
-        sync::Arc,
+        sync::{atomic::Ordering, Arc},
     },
 };
 
@@ -719,19 +720,29 @@ impl<'a> InvokeContext<'a> {
         };
 
         for entry in self.builtin_programs.vec.iter() {
-            if entry.program_id == builtin_id {
+            if entry.0 == builtin_id {
+                // The Murmur3 hash value (used by RBPF) of the string "entrypoint"
+                const ENTRYPOINT_KEY: u32 = 0x71E3CF81;
+                let process_instruction = match &entry.1.program {
+                    LoadedProgramType::Builtin(_name, program) => program
+                        .lookup_function(ENTRYPOINT_KEY)
+                        .map(|(_name, process_instruction)| process_instruction),
+                    _ => None,
+                }
+                .ok_or(InstructionError::GenericError)?;
+                entry.1.usage_counter.fetch_add(1, Ordering::Relaxed);
+
                 let program_id =
                     *instruction_context.get_last_program_key(self.transaction_context)?;
                 self.transaction_context
                     .set_return_data(program_id, Vec::new())?;
-
                 let logger = self.get_log_collector();
                 stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
                 let pre_remaining_units = self.get_remaining();
                 let mock_config = Config::default();
                 let mut mock_memory_mapping = MemoryMapping::new(Vec::new(), &mock_config).unwrap();
                 let mut result = ProgramResult::Ok(0);
-                (entry.process_instruction)(
+                process_instruction(
                     // Removes lifetime tracking
                     unsafe { std::mem::transmute::<&mut InvokeContext, &mut InvokeContext>(self) },
                     0,
