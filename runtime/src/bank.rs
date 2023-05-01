@@ -2701,6 +2701,7 @@ impl Bank {
             "distributed vote rewards: {} out of {}, remaining {}",
             validator_rewards_paid, validator_rewards, total
         );
+
         let (num_stake_accounts, num_vote_accounts) = {
             let stakes = self.stakes_cache.stakes();
             (
@@ -3489,6 +3490,9 @@ impl Bank {
                             return None;
                         }
                     };
+
+                    let pre_lamport = stake_account.lamports();
+
                     let redeemed = stake_state::redeem_rewards(
                         rewarded_epoch,
                         stake_state,
@@ -3500,7 +3504,14 @@ impl Bank {
                         credits_auto_rewind,
                     );
 
+                    let post_lamport = stake_account.lamports();
+
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
+                        debug!(
+                            "CALCULATED REWARD: {} {} {} {}",
+                            stake_pubkey, pre_lamport, post_lamport, stakers_reward
+                        );
+
                         // track voter rewards
                         let mut voters_reward_entry = vote_account_rewards
                             .entry(vote_pubkey)
@@ -3721,6 +3732,12 @@ impl Bank {
         stake_rewards: &[StakeReward],
         partition_index: u64,
     ) -> (usize, i64) {
+        // store stake account even if staker's reward is 0
+        // because credits observed has changed
+        let n = stake_rewards.len() as u64;
+        let mut total: i64 = 0;
+        let (begin, end) = self.get_partition_begin_end(partition_index, n);
+
         // Verify that stake account `lamports + reward_amount` matches what we have in the
         // rewarded account. This code will have a performance hit -  an extra load and compare of
         // the stake accounts. This is for debugging. Once we are confident, we can disable the
@@ -3729,28 +3746,25 @@ impl Bank {
         const VERIFY_REWARD_LAMPORT: bool = true;
 
         if VERIFY_REWARD_LAMPORT {
-            for r in stake_rewards {
+            for r in &stake_rewards[begin..end] {
                 let stake_pubkey = r.stake_pubkey;
                 let reward_amount = r.get_stake_reward();
                 let post_stake_account = r.get_stake_account();
-                if let Some(mut curr_stake_account) =
-                    self.get_account_with_fixed_root(&stake_pubkey)
-                {
-                    curr_stake_account
-                        .checked_add_lamports(reward_amount.try_into().unwrap())
-                        .unwrap();
+                if let Some(curr_stake_account) = self.get_account_with_fixed_root(&stake_pubkey) {
+                    let pre_lamport = curr_stake_account.lamports();
+                    let post_lamport = post_stake_account.lamports();
 
-                    // make sure that lamports matches
-                    assert_eq!(curr_stake_account.lamports(), post_stake_account.lamports());
+                    if pre_lamport + u64::try_from(reward_amount).unwrap() != post_lamport {
+                        warn!(
+                            "LAMPORT MISMATH: {} {} {} {} ",
+                            stake_pubkey, pre_lamport, post_lamport, reward_amount
+                        );
+                        panic!("stake account lamport has changed since the reward calculation!");
+                    }
                 }
             }
         }
 
-        // store stake account even if staker's reward is 0
-        // because credits observed has changed
-        let n = stake_rewards.len() as u64;
-        let mut total: i64 = 0;
-        let (begin, end) = self.get_partition_begin_end(partition_index, n);
         self.store_accounts((
             self.slot(),
             &stake_rewards[begin..end],
@@ -3894,6 +3908,8 @@ impl Bank {
             let validator_rewards_paid: u64 = u64::try_from(total_stake_rewards).unwrap();
             self.capitalization
                 .fetch_add(validator_rewards_paid, AcqRel);
+
+            metrics.post_capitalization = self.capitalization();
 
             // TODO (assert! and add EpochReward sysvar)
 
