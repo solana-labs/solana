@@ -3502,15 +3502,18 @@ impl Bank {
 
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
-                        let mut entry = vote_account_rewards.entry(vote_pubkey).or_insert((
-                            vote_account.into(),
-                            vote_state.commission,
-                            0,
-                            false,
-                        ));
+                        let mut entry =
+                            vote_account_rewards
+                                .entry(vote_pubkey)
+                                .or_insert(VoteReward {
+                                    vote_account: vote_account.into(),
+                                    commission: vote_state.commission,
+                                    vote_rewards: 0,
+                                    vote_needs_store: false,
+                                });
 
-                        entry.3 = true;
-                        entry.2 = entry.2.saturating_add(voters_reward);
+                        entry.vote_needs_store = true;
+                        entry.vote_rewards = entry.vote_rewards.saturating_add(voters_reward);
 
                         let post_balance = stake_account.lamports();
                         return Some(StakeReward {
@@ -3539,7 +3542,12 @@ impl Bank {
                 vote_account_rewards.into_iter().map(
                     |(
                         vote_pubkey,
-                        (mut vote_account, commission, vote_rewards, vote_needs_store),
+                        VoteReward {
+                            mut vote_account,
+                            commission,
+                            vote_rewards,
+                            vote_needs_store,
+                        },
                     )| {
                         if let Err(err) = vote_account.checked_add_lamports(vote_rewards) {
                             debug!("reward redemption failed for {}: {:?}", vote_pubkey, err);
