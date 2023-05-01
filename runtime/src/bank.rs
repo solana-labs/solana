@@ -3207,31 +3207,6 @@ impl Bank {
         }
     }
 
-    #[allow(dead_code)]
-    fn divide_by_hash_bucket(stake_rewards: &Vec<StakeReward>) -> Vec<Vec<&StakeReward>> {
-        let N = stake_rewards.len() + 4095 / 4096;
-        let mut kv = stake_rewards
-            .par_iter()
-            .map(|reward| {
-                const PREFIX_SIZE: usize = mem::size_of::<usize>();
-                let v = usize::from_be_bytes(
-                    reward.stake_pubkey.as_ref()[0..PREFIX_SIZE]
-                        .try_into()
-                        .unwrap(),
-                );
-
-                (v % N, reward)
-            })
-            .collect::<Vec<_>>();
-
-        kv.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-        kv.into_iter()
-            .group_by(|x| x.0)
-            .into_iter()
-            .map(|(_key, group)| group.map(|x| x.1).collect_vec())
-            .collect()
-    }
-
     /// Load, calculate and payout epoch rewards for stake and vote accounts
     fn pay_validator_rewards_with_thread_pool(
         &mut self,
