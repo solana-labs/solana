@@ -567,10 +567,10 @@ impl AccountsHashVerifier {
                 }
             }
         }
-        inc_new_counter_info!("accounts_hash_verifier-hashes_verified", verified_count);
         datapoint_info!(
             "accounts_hash_verifier",
             ("highest_slot_verified", highest_slot, i64),
+            ("num_verified", verified_count, i64),
         );
         false
     }
