@@ -11,7 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 bs58 = { workspace = true }
-clap = { version = "3.1.5", features = ["cargo"] }
+clap = { version = "3.2.23", features = ["cargo"] }
 dirs-next = { workspace = true }
 num_cpus = { workspace = true }
 solana-clap-v3-utils = { workspace = true }

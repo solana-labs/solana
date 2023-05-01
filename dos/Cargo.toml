@@ -11,7 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 bincode = { workspace = true }
-clap = { version = "3.1.5", features = ["derive", "cargo"] }
+clap = { version = "3.2.23", features = ["derive", "cargo"] }
 crossbeam-channel = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }

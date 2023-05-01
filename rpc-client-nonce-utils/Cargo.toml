@@ -10,7 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-clap = "2.33.0"
+clap = "3.2.23"
 solana-clap-utils = { workspace = true }
 solana-rpc-client = { workspace = true }
 solana-sdk = { workspace = true }
