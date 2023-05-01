@@ -1081,7 +1081,14 @@ struct LoadVoteAndStakeAccountsResult {
     vote_accounts_cache_miss_count: usize,
 }
 
-type VoteRewards = DashMap<Pubkey, (AccountSharedData, u8, u64, bool)>;
+struct VoteReward {
+    vote_account: AccountSharedData,
+    commission: u8,
+    vote_rewards: u64,
+    vote_needs_store: bool,
+}
+
+type VoteRewards = DashMap<Pubkey, VoteReward>;
 type StakeRewards = Vec<StakeReward>;
 
 #[derive(Debug, Default)]
@@ -2920,8 +2927,15 @@ impl Bank {
                     delegations,
                 },
             )| {
-                vote_account_rewards
-                    .insert(vote_pubkey, (vote_account, vote_state.commission, 0, false));
+                vote_account_rewards.insert(
+                    vote_pubkey,
+                    VoteReward {
+                        vote_account,
+                        commission: vote_state.commission,
+                        vote_rewards: 0,
+                        vote_needs_store: false,
+                    },
+                );
                 delegations
                     .into_par_iter()
                     .map(move |delegation| (vote_pubkey, Arc::clone(&vote_state), delegation))
@@ -2952,12 +2966,12 @@ impl Bank {
                     );
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
-                        if let Some((
-                            _vote_account,
-                            _commission,
-                            vote_rewards_sum,
+                        if let Some(VoteReward {
+                            vote_account: _,
+                            commission: _,
+                            vote_rewards: vote_rewards_sum,
                             vote_needs_store,
-                        )) = vote_account_rewards.get_mut(&vote_pubkey).as_deref_mut()
+                        }) = vote_account_rewards.get_mut(&vote_pubkey).as_deref_mut()
                         {
                             *vote_needs_store = true;
                             *vote_rewards_sum = vote_rewards_sum.saturating_add(voters_reward);
@@ -3007,7 +3021,15 @@ impl Bank {
         let (vote_rewards, measure) = measure!(vote_account_rewards
             .into_iter()
             .filter_map(
-                |(vote_pubkey, (mut vote_account, commission, vote_rewards, vote_needs_store))| {
+                |(
+                    vote_pubkey,
+                    VoteReward {
+                        mut vote_account,
+                        commission,
+                        vote_rewards,
+                        vote_needs_store,
+                    },
+                )| {
                     if let Err(err) = vote_account.checked_add_lamports(vote_rewards) {
                         debug!("reward redemption failed for {}: {:?}", vote_pubkey, err);
                         return None;
