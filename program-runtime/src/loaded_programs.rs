@@ -1993,9 +1993,9 @@ mod tests {
         found.replenish_many(cache_updates.entries.into_iter());
         assert!(match_slot(&found, &program1, 22, 22));
         // Test that the program1 entry has effective slot 22
-        found
-            .find(program1)
-            .map(|entry| assert_eq!(entry.effective_slot, 22));
+        if let Some(entry) = found.find(program1) {
+            assert_eq!(entry.effective_slot, 22);
+        }
 
         assert!(match_slot(&found, &program2, 10, 22));
         assert!(match_slot(&found, &program4, 0, 22));
