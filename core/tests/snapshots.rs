@@ -555,7 +555,7 @@ fn test_concurrent_snapshot_packaging(
 
     // files were saved off before we reserialized the bank in the hacked up accounts_hash_verifier stand-in.
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        saved_snapshots_dir.path().join(saved_slot.to_string()),
+        snapshot_utils::get_bank_snapshot_dir(&saved_snapshots_dir, saved_slot),
         saved_slot,
         &AccountsHash(Hash::default()),
         None,
