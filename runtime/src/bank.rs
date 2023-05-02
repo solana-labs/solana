@@ -1304,6 +1304,17 @@ impl WorkingSlot for Bank {
     }
 }
 
+#[derive(Default)]
+struct RewardCalculationResult {
+    stake_rewards: Option<StakeRewards>,
+    total_rewards: u64,
+}
+
+struct DistributedRewardsSum {
+    num_rewards: usize,
+    total: i64,
+}
+
 impl Bank {
     /// The reward calculation happens synchronously at the first block of the epoch boundary.
     const REWARD_CALCULATION_INTERVAL: u64 = 1;
@@ -1611,6 +1622,7 @@ impl Bank {
                     0
                 };
 
+            // Limit the reward credit interval up to 5% of the total number of slots in a epoch
             (num_chunks as u64).clamp(1, self.epoch_schedule.slots_per_epoch / 20)
         }
     }
@@ -1620,6 +1632,7 @@ impl Bank {
         Self::REWARD_CALCULATION_INTERVAL + self.get_reward_credit_interval()
     }
 
+    /// Return true if the current bank falls in epoch reward interval
     pub fn in_reward_interval(&self) -> bool {
         self.epoch_reward_status.is_active()
     }
@@ -2660,7 +2673,10 @@ impl Bank {
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
 
-        let (stake_rewards, total) = self
+        let RewardCalculationResult {
+            stake_rewards,
+            total_rewards: total,
+        } = self
             .do_calculate_validator_rewards_and_distribute_vote_rewards_with_thread_pool_no_join(
                 prev_epoch,
                 validator_rewards,
@@ -3170,7 +3186,7 @@ impl Bank {
         credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
-    ) -> (Option<StakeRewards>, u64) {
+    ) -> RewardCalculationResult {
         let stakes = self.stakes_cache.stakes();
         let reward_calculate_param = self.get_epoch_reward_calculate_param_info(&stakes);
 
@@ -3209,9 +3225,12 @@ impl Bank {
 
             self.update_reward_history(vec![], vote_rewards);
 
-            (Some(stake_rewards), u64::try_from(total).unwrap())
+            RewardCalculationResult {
+                stake_rewards: Some(stake_rewards),
+                total_rewards: u64::try_from(total).unwrap(),
+            }
         } else {
-            (None, 0)
+            RewardCalculationResult::default()
         }
     }
 
@@ -3728,13 +3747,14 @@ impl Bank {
 
     /// store stake rewards in partition
     /// return the number of rewards stored and the sum of all the stored rewards
+    ///
+    /// Note: even if staker's reward is 0, the stake account still need to be stored because
+    /// credits observed has changed
     fn store_stake_accounts_in_partition(
         &self,
         stake_rewards: &[StakeReward],
         partition_index: u64,
-    ) -> (usize, i64) {
-        // store stake account even if staker's reward is 0
-        // because credits observed has changed
+    ) -> DistributedRewardsSum {
         let n = stake_rewards.len() as u64;
         let mut total: i64 = 0;
         let (begin, end) = self.get_partition_begin_end(partition_index, n);
@@ -3774,7 +3794,11 @@ impl Bank {
         for a in &stake_rewards[begin..end] {
             total += a.stake_reward_info.lamports;
         }
-        (end - begin, total)
+
+        DistributedRewardsSum {
+            num_rewards: end - begin,
+            total,
+        }
     }
 
     fn store_vote_accounts2(
@@ -3897,7 +3921,13 @@ impl Bank {
             metrics.total_stake_accounts_count = stake_rewards.len();
             metrics.partition_index = partition_index;
 
-            let ((stake_store_counts, total_stake_rewards), measure) = measure!(
+            let (
+                DistributedRewardsSum {
+                    num_rewards: stake_store_counts,
+                    total: total_stake_rewards,
+                },
+                measure,
+            ) = measure!(
                 self.store_stake_accounts_in_partition(stake_rewards, partition_index),
                 "store_stake_account_in_partition"
             );

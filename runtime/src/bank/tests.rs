@@ -13075,14 +13075,16 @@ fn test_epoch_credit_rewards() {
     let mut total_rewards = 0;
 
     for partition_index in 0..bank.get_reward_credit_interval() {
-        let (num_accounts, reward) =
-            bank.store_stake_accounts_in_partition(&stake_rewards, partition_index);
+        let DistributedRewardsSum {
+            num_rewards: num_accounts,
+            total: rewards,
+        } = bank.store_stake_accounts_in_partition(&stake_rewards, partition_index);
 
         let num_in_history =
             bank.update_reward_history_in_partition(&stake_rewards, partition_index);
         assert_eq!(num_accounts, num_in_history);
         total_num += num_accounts;
-        total_rewards += reward;
+        total_rewards += rewards;
     }
 
     assert_eq!(total_num, expected_num);
