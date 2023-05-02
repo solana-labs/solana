@@ -11,7 +11,7 @@ use {
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
     solana_program_runtime::{
-        builtin_program::{BuiltinProgram, BuiltinPrograms, ProcessInstructionWithContext},
+        builtin_program::{create_builtin, BuiltinPrograms, ProcessInstructionWithContext},
         compute_budget::ComputeBudget,
         ic_msg, stable_log,
         timings::ExecuteTimings,
@@ -692,11 +692,10 @@ impl ProgramTest {
         process_instruction: ProcessInstructionWithContext,
     ) {
         info!("\"{}\" builtin program", program_name);
-        self.builtin_programs.vec.push(BuiltinProgram {
-            name: program_name.to_string(),
+        self.builtin_programs.vec.push((
             program_id,
-            process_instruction,
-        });
+            create_builtin(program_name.to_string(), process_instruction),
+        ));
     }
 
     /// Deactivate a runtime feature.
@@ -791,12 +790,8 @@ impl ProgramTest {
         }
 
         // User-supplied additional builtins
-        for builtin in self.builtin_programs.vec.iter() {
-            bank.add_builtin(
-                &builtin.name,
-                &builtin.program_id,
-                builtin.process_instruction,
-            );
+        for (program_id, builtin) in self.builtin_programs.vec.iter() {
+            bank.add_builtin(*program_id, builtin.clone());
         }
 
         for (address, account) in self.accounts.iter() {

@@ -94,7 +94,7 @@ use {
     solana_perf::perf_libs,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
-        builtin_program::{BuiltinProgram, BuiltinPrograms, ProcessInstructionWithContext},
+        builtin_program::BuiltinPrograms,
         compute_budget::{self, ComputeBudget},
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
         loaded_programs::{
@@ -6350,12 +6350,8 @@ impl Bank {
                 .extend_from_slice(&additional_builtins.feature_transitions);
         }
         if !debug_do_not_add_builtins {
-            for builtin in builtins.genesis_builtins {
-                self.add_builtin(
-                    &builtin.name,
-                    &builtin.program_id,
-                    builtin.process_instruction,
-                );
+            for (program_id, builtin) in builtins.genesis_builtins {
+                self.add_builtin(program_id, builtin);
             }
             for precompile in get_precompiles() {
                 if precompile.feature.is_none() {
@@ -7379,27 +7375,24 @@ impl Bank {
     }
 
     /// Add an instruction processor to intercept instructions before the dynamic loader.
-    pub fn add_builtin(
-        &mut self,
-        name: &str,
-        program_id: &Pubkey,
-        process_instruction: ProcessInstructionWithContext,
-    ) {
+    pub fn add_builtin(&mut self, program_id: Pubkey, builtin: Arc<LoadedProgram>) {
+        let name = match &builtin.program {
+            LoadedProgramType::Builtin(name, _) => name,
+            _ => unreachable!(),
+        };
         debug!("Adding program {} under {:?}", name, program_id);
-        self.add_builtin_account(name, program_id, false);
+        self.add_builtin_account(name.as_str(), &program_id, false);
         if let Some(entry) = self
             .builtin_programs
             .vec
             .iter_mut()
-            .find(|entry| entry.program_id == *program_id)
+            .find(|entry| entry.0 == program_id)
         {
-            entry.process_instruction = process_instruction;
+            entry.1 = builtin.clone();
         } else {
-            self.builtin_programs.vec.push(BuiltinProgram {
-                name: name.to_string(),
-                program_id: *program_id,
-                process_instruction,
-            });
+            self.builtin_programs
+                .vec
+                .push((program_id, builtin.clone()));
         }
         debug!("Added program {} under {:?}", name, program_id);
     }
@@ -7413,7 +7406,7 @@ impl Bank {
             .builtin_programs
             .vec
             .iter()
-            .position(|entry| entry.program_id == *program_id)
+            .position(|entry| entry.0 == *program_id)
         {
             self.builtin_programs.vec.remove(position);
         }
@@ -7665,11 +7658,9 @@ impl Bank {
                 transition.to_action(&should_apply_action_for_feature_transition)
             {
                 match builtin_action {
-                    BuiltinAction::Add(builtin) => self.add_builtin(
-                        &builtin.name,
-                        &builtin.program_id,
-                        builtin.process_instruction,
-                    ),
+                    BuiltinAction::Add(program_id, builtin) => {
+                        self.add_builtin(program_id, builtin)
+                    }
                     BuiltinAction::Remove(program_id) => self.remove_builtin(&program_id),
                 }
             }
