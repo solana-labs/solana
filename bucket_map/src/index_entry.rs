@@ -404,11 +404,7 @@ impl<T: Copy + 'static> IndexEntryPlaceInBucket<T> {
                 assert!(!data_bucket.is_free(loc));
 
                 ref_count = MultipleSlots::ref_count(data_bucket, loc);
-                data_bucket.get_cell_slice::<T>(
-                    loc,
-                    multiple_slots.num_slots,
-                    IncludeHeader::NoHeader,
-                )
+                data_bucket.get_slice::<T>(loc, multiple_slots.num_slots, IncludeHeader::NoHeader)
             }
             _ => {
                 panic!("trying to read data from a free entry");

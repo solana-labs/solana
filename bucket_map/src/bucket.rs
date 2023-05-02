@@ -457,7 +457,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
 
                 // write data
                 assert!(!current_bucket.is_free(elem_loc));
-                let slice: &mut [T] = current_bucket.get_mut_cell_slice(
+                let slice: &mut [T] = current_bucket.get_slice_mut(
                     elem_loc,
                     data_len as u64,
                     IncludeHeader::NoHeader,
@@ -511,8 +511,7 @@ impl<'b, T: Clone + Copy + 'static> Bucket<T> {
                 best_bucket.occupy(ix, false).unwrap();
                 if num_slots > 0 {
                     // copy slotlist into the data bucket
-                    let slice =
-                        best_bucket.get_mut_cell_slice(ix, num_slots, IncludeHeader::NoHeader);
+                    let slice = best_bucket.get_slice_mut(ix, num_slots, IncludeHeader::NoHeader);
                     slice.iter_mut().zip(data).for_each(|(dest, src)| {
                         *dest = *src;
                     });
