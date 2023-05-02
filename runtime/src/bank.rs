@@ -172,7 +172,7 @@ use {
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
-        ops::{AddAssign, Deref, RangeInclusive},
+        ops::{AddAssign, Deref, Range, RangeInclusive},
         path::PathBuf,
         rc::Rc,
         sync::{
@@ -974,18 +974,22 @@ impl AbiExample for BuiltinPrograms {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SlotBlockHeight {
-    slot: Slot,
-    block_height: u64,
+    /// the slot at which rewards distribution began
+    /// only used for metrics
+    start_slot: Slot,
+    /// the block height at which rewards distribution began
+    start_block_height: u64,
 }
 
-/// An Enum for epoch reward status.
-/// - Active variant indicates that the block is in the rewarding phases. It contains the start
-/// point for epoch reward calculation, i.e. parent_slot and parent_block height for the starting
-/// block of the current epoch.
-/// - Inactive variant indicates that the block is outside of the rewarding phases.
+/// Represent whether bank is in the reward phase or not.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EpochRewardStatus {
+    /// this bank is in the reward phase.
+    /// Contents are the start point for epoch reward calculation,
+    /// i.e. parent_slot and parent_block height for the starting
+    /// block of the current epoch.
     Active(SlotBlockHeight),
+    /// this bank is outside of the rewarding phase.
     Inactive,
 }
 
@@ -1177,10 +1181,11 @@ pub struct Bank {
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
 
-    /// Epoch stake rewards calculated at the beginning block of current epoch
+    /// If Some, epoch stake rewards calculated at the beginning block of current epoch
     calculated_epoch_stake_rewards: Arc<Option<StakeRewards>>,
 
     /// Epoch reward status
+    /// jwash: we can combine these 2 members (calculated_epoch_stake_rewards and epoch_reward_status)
     epoch_reward_status: EpochRewardStatus,
 }
 
@@ -1251,22 +1256,18 @@ pub struct CommitTransactionCounts {
 }
 
 #[derive(AbiExample, Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct StakeReward {
+pub(crate) struct StakeReward {
     stake_pubkey: Pubkey,
     stake_reward_info: RewardInfo,
     stake_account: AccountSharedData,
 }
 
 impl StakeReward {
-    pub fn get_stake_reward(&self) -> i64 {
+    fn get_stake_reward(&self) -> i64 {
         self.stake_reward_info.lamports
     }
 
-    pub fn get_post_balance(&self) -> u64 {
-        self.stake_reward_info.post_balance
-    }
-
-    pub fn get_stake_account(&self) -> &AccountSharedData {
+    fn get_stake_account(&self) -> &AccountSharedData {
         &self.stake_account
     }
 }
@@ -1312,12 +1313,14 @@ struct RewardCalculationResult {
 
 struct DistributedRewardsSum {
     num_rewards: usize,
+    /// jwash: total what?
     total: i64,
 }
 
 impl Bank {
-    /// The reward calculation happens synchronously at the first block of the epoch boundary.
-    const REWARD_CALCULATION_INTERVAL: u64 = 1;
+    /// reward calculation happens synchronously during the first block of the epoch boundary.
+    /// So, # blocks for reward calculation is 1.
+    const REWARD_CALCULATION_NUM_BLOCKS: u64 = 1;
 
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
@@ -1586,13 +1589,14 @@ impl Bank {
         rent_collector.clone_with_epoch(epoch)
     }
 
-    pub fn partitioned_rewards_enabled(&self) -> bool {
+    fn partitioned_rewards_feature_enabled(&self) -> bool {
         self.feature_set
             .is_active(&enable_partitioned_epoch_reward::id())
     }
 
     // For testing only
-    pub fn set_partitioned_rewards_enable(&mut self, enable: bool) {
+    #[cfg(test)]
+    pub(crate) fn set_partitioned_rewards_feature_enabled_for_tests(&mut self, enable: bool) {
         if enable {
             self.activate_feature(&enable_partitioned_epoch_reward::id())
         } else {
@@ -1600,40 +1604,42 @@ impl Bank {
         }
     }
 
-    /// Calculate the reward credit interval.
-    pub fn get_reward_credit_interval(&self) -> u64 {
-        /// Target to store 64 rewards per entry/tick in a block. A block has a minimal of 64
-        /// entries/ticks. This gives 4096 total rewards to store in one block.
-        const CHUNK_SIZE: usize = 4096;
+    /// Target to store 64 rewards per entry/tick in a block. A block has a minimal of 64
+    /// entries/ticks. This gives 4096 total rewards to store in one block.
+    /// This constant affects consensus.
+    const PARTITION_REWARDS_STORES_PER_BLOCK: u64 = 4096;
 
+    /// Calculate the reward credit interval.
+    fn get_reward_credit_num_blocks(&self) -> u64 {
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
         } else {
             let num_chunks =
                 if let Some(stake_rewards) = self.calculated_epoch_stake_rewards.as_ref() {
-                    let n = stake_rewards.len();
-
-                    (n + CHUNK_SIZE - 1) / CHUNK_SIZE
+                    crate::accounts_hash::AccountsHasher::div_ceil(
+                        stake_rewards.len(),
+                        Self::PARTITION_REWARDS_STORES_PER_BLOCK as usize,
+                    ) as u64
                 } else {
                     // To be consistent to the meaning of `num_chunks`. When stake_rewards is none. num_chunks = 0
-                    // yeah. clamp to 1. Make sure that there is at lease one block for reward credit.
+                    // yeah. clamp to 1. Make sure that there is at least one block for reward credit.
                     // when we have sysvar account, we will need to do something after all rewards are distributed.
                     // Maybe we don't need to do anything. If that's the case, we can change to clamp to 0.
                     0
                 };
 
-            // Limit the reward credit interval up to 5% of the total number of slots in a epoch
-            (num_chunks as u64).clamp(1, self.epoch_schedule.slots_per_epoch / 20)
+            // Limit the reward credit interval to 5% of the total number of slots in a epoch
+            num_chunks.clamp(1, (self.epoch_schedule.slots_per_epoch as u64 / 20).max(1))
         }
     }
 
     /// Return the overall reward interval (including both calculation and crediting).
-    pub fn get_reward_interval(&self) -> u64 {
-        Self::REWARD_CALCULATION_INTERVAL + self.get_reward_credit_interval()
+    fn get_reward_interval(&self) -> u64 {
+        Self::REWARD_CALCULATION_NUM_BLOCKS + self.get_reward_credit_num_blocks()
     }
 
     /// Return true if the current bank falls in epoch reward interval
-    pub fn in_reward_interval(&self) -> bool {
+    fn in_reward_interval(&self) -> bool {
         self.epoch_reward_status.is_active()
     }
 
@@ -1825,7 +1831,7 @@ impl Bank {
                 assert!(new.epoch_schedule.slots_per_epoch > new.get_reward_interval());
 
                 // Start partitioned reward distribution.
-                if new.partitioned_rewards_enabled() {
+                if new.partitioned_rewards_feature_enabled() {
                     new.distribute_epoch_rewards();
                 }
             }
@@ -1916,10 +1922,11 @@ impl Bank {
 
         let (_, update_rewards_with_thread_pool_time) = measure!(
             {
-                if self.partitioned_rewards_enabled() {
+                if self.partitioned_rewards_feature_enabled() {
                     self.epoch_reward_status = EpochRewardStatus::Active(SlotBlockHeight {
-                        slot: parent_slot,
-                        block_height: parent_height,
+                        // jwash: why is this parent_slot?
+                        start_slot: parent_slot,
+                        start_block_height: parent_height,
                     });
 
                     datapoint_warn!(
@@ -1965,24 +1972,25 @@ impl Bank {
         );
     }
 
-    /// Process reward distribution for the block when it is inside reward interval.
+    /// Process reward distribution for the block if it is inside reward interval.
     fn distribute_epoch_rewards(&mut self) {
         if let EpochRewardStatus::Active(slot_block_height) = self.epoch_reward_status {
             let SlotBlockHeight {
-                slot: start_slot,
-                block_height: start_height,
+                start_slot,
+                start_block_height,
             } = slot_block_height;
 
             let height = self.block_height();
-            let credit_start = start_height + Self::REWARD_CALCULATION_INTERVAL + 1;
-            let credit_end = credit_start + self.get_reward_credit_interval();
+            // jwash: why + 1 here?
+            let credit_start = start_block_height + Self::REWARD_CALCULATION_NUM_BLOCKS + 1;
+            let credit_end_exclusive = credit_start + self.get_reward_credit_num_blocks();
 
-            if height >= credit_start && height < credit_end {
+            if height >= credit_start && height < credit_end_exclusive {
                 let partition_index = height - credit_start;
                 self.credit_epoch_rewards_in_partition(partition_index);
             }
 
-            if height >= credit_end && self.epoch_reward_status.is_active() {
+            if height >= credit_end_exclusive && self.epoch_reward_status.is_active() {
                 self.epoch_reward_status = EpochRewardStatus::Inactive;
                 self.calculated_epoch_stake_rewards = Arc::new(None);
                 datapoint_warn!(
@@ -1990,7 +1998,7 @@ impl Bank {
                     ("slot", self.slot(), i64),
                     ("activate", 0, i64),
                     ("start_slot", start_slot, i64),
-                    ("start_height", start_height, i64),
+                    ("start_height", start_block_height, i64),
                 );
             }
         }
@@ -3731,18 +3739,16 @@ impl Bank {
     }
 
     /// Return the reward partition start/end index
-    ///
-    fn get_partition_begin_end(&self, partition_index: u64, n: u64) -> (usize, usize) {
-        assert!(partition_index < self.get_reward_credit_interval());
-        let step = n / self.get_reward_credit_interval();
-        let begin = step * partition_index;
-        let end = if partition_index == self.get_reward_credit_interval() - 1 {
-            n
-        } else {
-            step * (partition_index + 1)
-        };
-
-        (begin as usize, end as usize)
+    fn get_partition_begin_end(
+        &self,
+        partition_index: u64,
+        stake_rewards_len: u64,
+    ) -> Range<usize> {
+        assert!(partition_index < self.get_reward_credit_num_blocks());
+        let begin = Self::PARTITION_REWARDS_STORES_PER_BLOCK * partition_index;
+        let end_exclusive =
+            (begin + Self::PARTITION_REWARDS_STORES_PER_BLOCK).min(stake_rewards_len);
+        (begin as usize)..(end_exclusive as usize)
     }
 
     /// store stake rewards in partition
@@ -3757,7 +3763,7 @@ impl Bank {
     ) -> DistributedRewardsSum {
         let n = stake_rewards.len() as u64;
         let mut total: i64 = 0;
-        let (begin, end) = self.get_partition_begin_end(partition_index, n);
+        let range = self.get_partition_begin_end(partition_index, n);
 
         // Verify that stake account `lamports + reward_amount` matches what we have in the
         // rewarded account. This code will have a performance hit -  an extra load and compare of
@@ -3767,7 +3773,7 @@ impl Bank {
         const VERIFY_REWARD_LAMPORT: bool = true;
 
         if VERIFY_REWARD_LAMPORT {
-            for r in &stake_rewards[begin..end] {
+            for r in &stake_rewards[range.clone()] {
                 let stake_pubkey = r.stake_pubkey;
                 let reward_amount = r.get_stake_reward();
                 let post_stake_account = r.get_stake_account();
@@ -3788,15 +3794,15 @@ impl Bank {
 
         self.store_accounts((
             self.slot(),
-            &stake_rewards[begin..end],
+            &stake_rewards[range.clone()],
             self.include_slot_in_hash(),
         ));
-        for a in &stake_rewards[begin..end] {
+        for a in &stake_rewards[range.clone()] {
             total += a.stake_reward_info.lamports;
         }
 
         DistributedRewardsSum {
-            num_rewards: end - begin,
+            num_rewards: range.len(),
             total,
         }
     }
@@ -3897,9 +3903,9 @@ impl Bank {
         let mut rewards = self.rewards.write().unwrap();
 
         let n = stake_rewards.len() as u64;
-        let (begin, end) = self.get_partition_begin_end(partition_index, n);
+        let range = self.get_partition_begin_end(partition_index, n);
         let mut num_stake_rewards: usize = 0;
-        for x in &stake_rewards[begin..end] {
+        for x in &stake_rewards[range] {
             if x.get_stake_reward() > 0 {
                 rewards.push((x.stake_pubkey, x.stake_reward_info));
                 num_stake_rewards += 1;
@@ -8961,12 +8967,12 @@ impl Bank {
     }
 
     /// Return the epoch_reward_status field on the bank to serialize
-    pub fn get_epoch_reward_status_to_serialize(&self) -> Option<EpochRewardStatus> {
-        Some(self.epoch_reward_status.clone())
+    pub(crate) fn get_epoch_reward_status_to_serialize(&self) -> Option<&EpochRewardStatus> {
+        Some(&self.epoch_reward_status)
     }
 
     /// Return the calculated_epoch_stake_rewards field on the bank to serialize
-    pub fn get_calculated_epoch_stake_rewards_to_serialize(&self) -> Option<&StakeRewards> {
+    pub(crate) fn get_calculated_epoch_stake_rewards_to_serialize(&self) -> Option<&StakeRewards> {
         (*self.calculated_epoch_stake_rewards).as_ref()
     }
 

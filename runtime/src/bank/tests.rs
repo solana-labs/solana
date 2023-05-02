@@ -13027,11 +13027,11 @@ fn test_partitioned_reward_enable() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
 
     let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.set_partitioned_rewards_enable(true);
-    assert!(bank.partitioned_rewards_enabled());
+    bank.set_partitioned_rewards_feature_enabled_for_tests(true);
+    assert!(bank.partitioned_rewards_feature_enabled());
 
-    bank.set_partitioned_rewards_enable(false);
-    assert!(!bank.partitioned_rewards_enabled());
+    bank.set_partitioned_rewards_feature_enabled_for_tests(false);
+    assert!(!bank.partitioned_rewards_feature_enabled());
 }
 
 /// Test that parition begin/end covers the whole index range
@@ -13041,11 +13041,11 @@ fn test_get_epoch_reward_partition_begin_end() {
     let bank = Bank::new_for_tests(&genesis_config);
 
     let n: u64 = 65312;
-    let (begin, _) = bank.get_partition_begin_end(0, n);
-    assert_eq!(begin, 0);
+    let range = bank.get_partition_begin_end(0, n);
+    assert_eq!(range.start, 0);
 
-    let (_, end) = bank.get_partition_begin_end(bank.get_reward_credit_interval() - 1, n);
-    assert_eq!(end, n as usize);
+    let range = bank.get_partition_begin_end(bank.get_reward_credit_num_blocks() - 1, n);
+    assert_eq!(range.end, n as usize);
 }
 
 /// Test partitioned stores of epoch rewards
@@ -13074,7 +13074,7 @@ fn test_epoch_credit_rewards() {
     let mut total_num = 0;
     let mut total_rewards = 0;
 
-    for partition_index in 0..bank.get_reward_credit_interval() {
+    for partition_index in 0..bank.get_reward_credit_num_blocks() {
         let DistributedRewardsSum {
             num_rewards: num_accounts,
             total: rewards,
@@ -13098,7 +13098,7 @@ fn test_reward_interval_normal() {
     genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
 
     let bank = Bank::new_for_tests(&genesis_config);
-    assert_eq!(bank.get_reward_credit_interval(), 50);
+    assert_eq!(bank.get_reward_credit_num_blocks(), 50);
 }
 
 /// Test get_reward_interval during small epoch
@@ -13108,7 +13108,7 @@ fn test_reward_interval_cap() {
     genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
 
     let bank = Bank::new_for_tests(&genesis_config);
-    assert_eq!(bank.get_reward_credit_interval(), 1);
+    assert_eq!(bank.get_reward_credit_num_blocks(), 1);
     assert_eq!(bank.get_reward_interval(), 2);
 }
 
@@ -13118,7 +13118,7 @@ fn test_reward_interval_warmup() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
 
     let bank = Bank::new_for_tests(&genesis_config);
-    assert_eq!(bank.get_reward_credit_interval(), 1);
+    assert_eq!(bank.get_reward_credit_num_blocks(), 1);
     assert_eq!(bank.get_reward_interval(), 2);
 }
 
@@ -13151,7 +13151,7 @@ fn test_reward_calculation() {
         ..GenesisConfig::default()
     });
 
-    bank0.set_partitioned_rewards_enable(true);
+    bank0.set_partitioned_rewards_feature_enabled_for_tests(true);
     let bank0 = Arc::new(bank0);
 
     // enable lazy rent collection because this test depends on rent-due accounts
