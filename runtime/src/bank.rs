@@ -5171,6 +5171,7 @@ impl Bank {
 
         let mut write_time = Measure::start("write_time");
         let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
+        // Store accounts in cache and force update_index to be inlined (no thread pool)
         self.rc.accounts.store_cached_inline_update_index(
             self.slot(),
             sanitized_txs,
