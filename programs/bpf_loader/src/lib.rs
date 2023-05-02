@@ -8,7 +8,6 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         invoke_context::{BpfAllocator, InvokeContext, SyscallContext},
         loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
@@ -55,7 +54,7 @@ use {
         },
     },
     std::{
-        cell::{RefCell, RefMut},
+        cell::RefCell,
         mem,
         rc::Rc,
         sync::{atomic::Ordering, Arc},
@@ -146,7 +145,6 @@ pub fn load_program_from_account(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
-    tx_executor_cache: Option<RefMut<TransactionExecutorCache>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
     debugging_features: bool,
@@ -157,17 +155,6 @@ pub fn load_program_from_account(
             "Executable account not owned by the BPF loader"
         );
         return Err(InstructionError::IncorrectProgramId);
-    }
-
-    if let Some(ref tx_executor_cache) = tx_executor_cache {
-        if let Some(loaded_program) = tx_executor_cache.get(program.get_key()) {
-            if loaded_program.is_tombstone() {
-                // We cached that the Executor does not exist, abort
-                return Err(InstructionError::InvalidAccountData);
-            }
-            // Executor exists and is cached, use it
-            return Ok((loaded_program, None));
-        }
     }
 
     let (programdata_offset, deployment_slot) =
@@ -199,15 +186,6 @@ pub fn load_program_from_account(
         false, /* reject_deployment_of_broken_elfs */
         debugging_features,
     )?);
-    if let Some(mut tx_executor_cache) = tx_executor_cache {
-        tx_executor_cache.set(
-            *program.get_key(),
-            loaded_program.clone(),
-            false,
-            feature_set.is_active(&delay_visibility_of_program_deployment::id()),
-            deployment_slot,
-        );
-    }
 
     Ok((loaded_program, Some(load_program_metrics)))
 }
@@ -583,39 +561,23 @@ fn process_instruction_inner(
         return Err(Box::new(InstructionError::IncorrectProgramId));
     }
 
-    let programdata_account = if bpf_loader_upgradeable::check_id(program_account.get_owner()) {
-        instruction_context
-            .try_borrow_program_account(
-                transaction_context,
-                instruction_context
-                    .get_number_of_program_accounts()
-                    .saturating_sub(2),
-            )
-            .ok()
-    } else {
-        None
-    };
-
     let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-    let (executor, load_program_metrics) = load_program_from_account(
-        &invoke_context.feature_set,
-        invoke_context.get_compute_budget(),
-        log_collector,
-        Some(invoke_context.tx_executor_cache.borrow_mut()),
-        &program_account,
-        programdata_account.as_ref().unwrap_or(&program_account),
-        false, /* debugging_features */
-    )?;
+    let executor = invoke_context
+        .tx_executor_cache
+        .borrow()
+        .get(program_account.get_key())
+        .ok_or(InstructionError::InvalidAccountData)?;
+
+    if executor.is_tombstone() {
+        return Err(Box::new(InstructionError::InvalidAccountData));
+    }
+
     drop(program_account);
-    drop(programdata_account);
     get_or_create_executor_time.stop();
     saturating_add_assign!(
         invoke_context.timings.get_or_create_executor_us,
         get_or_create_executor_time.as_us()
     );
-    if let Some(load_program_metrics) = load_program_metrics {
-        load_program_metrics.submit_datapoint(&mut invoke_context.timings);
-    }
 
     executor.usage_counter.fetch_add(1, Ordering::Relaxed);
     match &executor.program {
@@ -1698,6 +1660,47 @@ fn execute<'a, 'b: 'a>(
     execute_or_deserialize_result
 }
 
+pub mod test_utils {
+    use {super::*, solana_sdk::account::ReadableAccount};
+
+    pub fn load_all_invoked_programs(invoke_context: &mut InvokeContext) {
+        let num_accounts = invoke_context.transaction_context.get_number_of_accounts();
+        for index in 0..num_accounts {
+            let account = invoke_context
+                .transaction_context
+                .get_account_at_index(index)
+                .expect("Failed to get the account")
+                .borrow();
+
+            let owner = account.owner();
+            if check_loader_id(owner) {
+                let pubkey = invoke_context
+                    .transaction_context
+                    .get_key_of_account_at_index(index)
+                    .expect("Failed to get account key");
+
+                let mut load_program_metrics = LoadProgramMetrics::default();
+
+                if let Ok(loaded_program) = load_program_from_bytes(
+                    &FeatureSet::all_enabled(),
+                    &ComputeBudget::default(),
+                    None,
+                    &mut load_program_metrics,
+                    account.data(),
+                    owner,
+                    account.data().len(),
+                    0,
+                    true,
+                    false,
+                ) {
+                    let mut cache = invoke_context.tx_executor_cache.borrow_mut();
+                    cache.set(*pubkey, Arc::new(loaded_program), true, false, 0)
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -1754,7 +1757,9 @@ mod tests {
             instruction_accounts,
             expected_result,
             super::process_instruction,
-            |_invoke_context| {},
+            |invoke_context| {
+                test_utils::load_all_invoked_programs(invoke_context);
+            },
             |_invoke_context| {},
         )
     }
@@ -1993,6 +1998,7 @@ mod tests {
             super::process_instruction,
             |invoke_context| {
                 invoke_context.mock_set_remaining(0);
+                test_utils::load_all_invoked_programs(invoke_context);
             },
             |_invoke_context| {},
         );

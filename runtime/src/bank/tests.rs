@@ -7754,6 +7754,10 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(*elf.get(i).unwrap(), *byte);
     }
 
+    let loaded_program = bank
+        .load_program(&program_keypair.pubkey(), false)
+        .expect("Failed to load the program");
+
     // Invoke deployed program
     mock_process_instruction(
         &bpf_loader_upgradeable::id(),
@@ -7766,7 +7770,16 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         Vec::new(),
         Ok(()),
         solana_bpf_loader_program::process_instruction,
-        |_invoke_context| {},
+        |invoke_context| {
+            let mut cache = invoke_context.tx_executor_cache.borrow_mut();
+            cache.set(
+                program_keypair.pubkey(),
+                loaded_program.clone(),
+                true,
+                false,
+                0,
+            );
+        },
         |_invoke_context| {},
     );
 

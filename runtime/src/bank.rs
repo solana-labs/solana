@@ -4234,7 +4234,6 @@ impl Bank {
             &self.feature_set,
             &self.runtime_config.compute_budget.unwrap_or_default(),
             None, // log_collector
-            None,
             &program,
             programdata.as_ref().unwrap_or(&program),
             debugging_features,

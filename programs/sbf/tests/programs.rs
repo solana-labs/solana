@@ -1401,6 +1401,7 @@ fn assert_instruction_count() {
             solana_bpf_loader_program::process_instruction,
             |invoke_context| {
                 *prev_compute_meter.borrow_mut() = invoke_context.get_remaining();
+                solana_bpf_loader_program::test_utils::load_all_invoked_programs(invoke_context);
             },
             |invoke_context| {
                 let consumption = prev_compute_meter
