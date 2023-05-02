@@ -21,7 +21,7 @@ num-derive = { workspace = true }
 num-traits = { workspace = true }
 percentage = { workspace = true }
 rand = { workspace = true }
-serde = { version = "1.0.159", features = ["derive", "rc"] }
+serde = { version = "1.0.160", features = ["derive", "rc"] }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-measure = { workspace = true }
