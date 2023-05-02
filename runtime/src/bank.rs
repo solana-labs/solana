@@ -3470,7 +3470,7 @@ impl Bank {
                     });
 
                     let stake_pubkey = **stake_pubkey;
-                    let stake_account = (*stake_account).clone();
+                    let stake_account = (*stake_account).to_owned();
 
                     let delegation = stake_account.delegation();
                     let (mut stake_account, stake_state) =
