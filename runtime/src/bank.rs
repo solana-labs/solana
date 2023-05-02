@@ -1971,6 +1971,7 @@ impl Bank {
 
             if height >= credit_end && self.epoch_reward_status.is_active() {
                 self.epoch_reward_status = EpochRewardStatus::Inactive;
+                self.calculated_epoch_stake_rewards = Arc::new(None);
                 datapoint_warn!(
                     "reward-status-update",
                     ("slot", self.slot(), i64),
