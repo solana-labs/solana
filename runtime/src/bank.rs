@@ -1976,6 +1976,7 @@ impl Bank {
 
             if height >= credit_end && self.epoch_reward_status.is_active() {
                 self.epoch_reward_status = EpochRewardStatus::Inactive;
+                self.calculated_epoch_stake_rewards = Arc::new(None);
                 datapoint_warn!(
                     "reward-status-update",
                     ("slot", self.slot(), i64),
@@ -3479,7 +3480,7 @@ impl Bank {
                     });
 
                     let stake_pubkey = **stake_pubkey;
-                    let stake_account = (*stake_account).clone();
+                    let stake_account = (*stake_account).to_owned();
 
                     let delegation = stake_account.delegation();
                     let (mut stake_account, stake_state) =
