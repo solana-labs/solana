@@ -1660,6 +1660,47 @@ fn execute<'a, 'b: 'a>(
     execute_or_deserialize_result
 }
 
+pub mod test_utils {
+    use {super::*, solana_sdk::account::ReadableAccount};
+
+    pub fn load_all_invoked_programs(invoke_context: &mut InvokeContext) {
+        let num_accounts = invoke_context.transaction_context.get_number_of_accounts();
+        for index in 0..num_accounts {
+            let account = invoke_context
+                .transaction_context
+                .get_account_at_index(index)
+                .expect("Failed to get the account")
+                .borrow();
+
+            let owner = account.owner();
+            if check_loader_id(owner) {
+                let pubkey = invoke_context
+                    .transaction_context
+                    .get_key_of_account_at_index(index)
+                    .expect("Failed to get account key");
+
+                let mut load_program_metrics = LoadProgramMetrics::default();
+
+                if let Ok(loaded_program) = load_program_from_bytes(
+                    &FeatureSet::all_enabled(),
+                    &ComputeBudget::default(),
+                    None,
+                    &mut load_program_metrics,
+                    account.data(),
+                    owner,
+                    account.data().len(),
+                    0,
+                    true,
+                    false,
+                ) {
+                    let mut cache = invoke_context.tx_executor_cache.borrow_mut();
+                    cache.set(*pubkey, Arc::new(loaded_program), true, false, 0)
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -1716,54 +1757,11 @@ mod tests {
             instruction_accounts,
             expected_result,
             super::process_instruction,
-            |_invoke_context| {},
-            |_invoke_context| {},
-        )
-    }
-
-    fn process_instruction_with_loaded_programs(
-        loader_id: &Pubkey,
-        program_indices: &[IndexOfAccount],
-        instruction_data: &[u8],
-        transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
-        instruction_accounts: Vec<AccountMeta>,
-        expected_result: Result<(), InstructionError>,
-        loaded_programs: &[(Pubkey, Arc<LoadedProgram>)],
-    ) -> Vec<AccountSharedData> {
-        mock_process_instruction(
-            loader_id,
-            program_indices.to_vec(),
-            instruction_data,
-            transaction_accounts,
-            instruction_accounts,
-            expected_result,
-            super::process_instruction,
             |invoke_context| {
-                let mut cache = invoke_context.tx_executor_cache.borrow_mut();
-                loaded_programs.iter().for_each(|(pubkey, program)| {
-                    cache.set(*pubkey, program.clone(), true, false, 0)
-                });
+                test_utils::load_all_invoked_programs(invoke_context);
             },
             |_invoke_context| {},
         )
-    }
-
-    fn load_test_program(program_account: &AccountSharedData, loader_id: Pubkey) -> LoadedProgram {
-        let mut load_program_metrics = LoadProgramMetrics::default();
-
-        load_program_from_bytes(
-            &FeatureSet::all_enabled(),
-            &ComputeBudget::default(),
-            None,
-            &mut load_program_metrics,
-            program_account.data(),
-            &loader_id,
-            program_account.data().len(),
-            0,
-            true,
-            false,
-        )
-        .expect("Failed to load the test program")
     }
 
     fn load_program_account_from_elf(loader_id: &Pubkey, path: &str) -> AccountSharedData {
@@ -1943,32 +1941,28 @@ mod tests {
             is_writable: false,
         };
 
-        let loaded_program = Arc::new(load_test_program(&program_account, loader_id));
-
         // Case: No program account
-        process_instruction_with_loaded_programs(
+        process_instruction(
             &loader_id,
             &[],
             &[],
             Vec::new(),
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
-            &[(program_id, loaded_program.clone())],
         );
 
         // Case: Only a program account
-        process_instruction_with_loaded_programs(
+        process_instruction(
             &loader_id,
             &[0],
             &[],
             vec![(program_id, program_account.clone())],
             Vec::new(),
             Ok(()),
-            &[(program_id, loaded_program.clone())],
         );
 
         // Case: With program and parameter account
-        process_instruction_with_loaded_programs(
+        process_instruction(
             &loader_id,
             &[0],
             &[],
@@ -1978,11 +1972,10 @@ mod tests {
             ],
             vec![parameter_meta.clone()],
             Ok(()),
-            &[(program_id, loaded_program.clone())],
         );
 
         // Case: With duplicate accounts
-        process_instruction_with_loaded_programs(
+        process_instruction(
             &loader_id,
             &[0],
             &[],
@@ -1992,7 +1985,6 @@ mod tests {
             ],
             vec![parameter_meta.clone(), parameter_meta],
             Ok(()),
-            &[(program_id, loaded_program.clone())],
         );
 
         // Case: limited budget
@@ -2006,22 +1998,20 @@ mod tests {
             super::process_instruction,
             |invoke_context| {
                 invoke_context.mock_set_remaining(0);
-                let mut cache = invoke_context.tx_executor_cache.borrow_mut();
-                cache.set(program_id, loaded_program.clone(), true, false, 0);
+                test_utils::load_all_invoked_programs(invoke_context);
             },
             |_invoke_context| {},
         );
 
         // Case: Account not a program
         program_account.set_executable(false);
-        process_instruction_with_loaded_programs(
+        process_instruction(
             &loader_id,
             &[0],
             &[],
             vec![(program_id, program_account)],
             Vec::new(),
             Err(InstructionError::IncorrectProgramId),
-            &[(program_id, loaded_program)],
         );
     }
 
@@ -2039,10 +2029,8 @@ mod tests {
             is_writable: false,
         };
 
-        let loaded_program = Arc::new(load_test_program(&program_account, loader_id));
-
         // Case: With program and parameter account
-        process_instruction_with_loaded_programs(
+        process_instruction(
             &loader_id,
             &[0],
             &[],
@@ -2052,11 +2040,10 @@ mod tests {
             ],
             vec![parameter_meta.clone()],
             Ok(()),
-            &[(program_id, loaded_program.clone())],
         );
 
         // Case: With duplicate accounts
-        process_instruction_with_loaded_programs(
+        process_instruction(
             &loader_id,
             &[0],
             &[],
@@ -2066,7 +2053,6 @@ mod tests {
             ],
             vec![parameter_meta.clone(), parameter_meta],
             Ok(()),
-            &[(program_id, loaded_program)],
         );
     }
 
@@ -2084,10 +2070,8 @@ mod tests {
             is_writable: false,
         };
 
-        let loaded_program = Arc::new(load_test_program(&program_account, loader_id));
-
         // Case: With program and parameter account
-        process_instruction_with_loaded_programs(
+        process_instruction(
             &loader_id,
             &[0],
             &[],
@@ -2097,11 +2081,10 @@ mod tests {
             ],
             vec![parameter_meta.clone()],
             Ok(()),
-            &[(program_id, loaded_program.clone())],
         );
 
         // Case: With duplicate accounts
-        process_instruction_with_loaded_programs(
+        process_instruction(
             &loader_id,
             &[0],
             &[],
@@ -2111,7 +2094,6 @@ mod tests {
             ],
             vec![parameter_meta.clone(), parameter_meta],
             Ok(()),
-            &[(program_id, loaded_program)],
         );
     }
 
