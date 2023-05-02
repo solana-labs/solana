@@ -1186,6 +1186,9 @@ pub struct Bank {
 
     /// Epoch reward status
     /// jwash: we can combine these 2 members (calculated_epoch_stake_rewards and epoch_reward_status)
+    /// hyi: Yes. we can combine them together. The reason that these two are separated is because
+    /// in async compute case where computation takes multiple blocks, then the reward_status and
+    /// calculated result don't change at the same time.
     epoch_reward_status: EpochRewardStatus,
 }
 
@@ -1314,7 +1317,8 @@ struct RewardCalculationResult {
 struct DistributedRewardsSum {
     num_rewards: usize,
     /// jwash: total what?
-    total: i64,
+    /// total distributed rewards in lamports
+    total_rewards_in_lamports: i64,
 }
 
 impl Bank {
@@ -1634,7 +1638,8 @@ impl Bank {
     }
 
     /// Return the overall reward interval (including both calculation and crediting).
-    fn get_reward_interval(&self) -> u64 {
+    /// This method is marked 'pub' because it used by bank_server.rs to be exposed as a RPC method.
+    pub fn get_reward_interval(&self) -> u64 {
         Self::REWARD_CALCULATION_NUM_BLOCKS + self.get_reward_credit_num_blocks()
     }
 
@@ -1925,6 +1930,15 @@ impl Bank {
                 if self.partitioned_rewards_feature_enabled() {
                     self.epoch_reward_status = EpochRewardStatus::Active(SlotBlockHeight {
                         // jwash: why is this parent_slot?
+                        // [hyi] Again from the legacy design. Storing the parent_slot, we could possible reuse the reward computation results during forks.
+                        //  N1 -->   N2
+                        //    \-->   N3
+                        //     \ --> N4
+                        // Let's there are 3 forks at the epoch boundaries, where N2/N3/N4 are the start blocks in the epoch and N1 is the parent of these three.
+                        // Then the rewards computed from N2,N3,N4 should all be the same.
+                        // To avoid redundant computation, we could store the calculated rewards in a map indexed by parent block N1's slot number, then computation from N3 and N4 can be avoided.
+                        // This optimization is also applicable for current design in theory, i.e. change `calculated_rewards` into a map of parent_slot->StakeRewards, to avoid repeated computation in forks.
+                        // Store parent_slot will leave room for future optimization if needed.
                         start_slot: parent_slot,
                         start_block_height: parent_height,
                     });
@@ -1982,6 +1996,7 @@ impl Bank {
 
             let height = self.block_height();
             // jwash: why + 1 here?
+            // [hyi] because start_block_height is the parent block of the current epoch.
             let credit_start = start_block_height + Self::REWARD_CALCULATION_NUM_BLOCKS + 1;
             let credit_end_exclusive = credit_start + self.get_reward_credit_num_blocks();
 
@@ -3803,7 +3818,7 @@ impl Bank {
 
         DistributedRewardsSum {
             num_rewards: range.len(),
-            total,
+            total_rewards_in_lamports: total,
         }
     }
 
@@ -3930,7 +3945,7 @@ impl Bank {
             let (
                 DistributedRewardsSum {
                     num_rewards: stake_store_counts,
-                    total: total_stake_rewards,
+                    total_rewards_in_lamports: total_stake_rewards,
                 },
                 measure,
             ) = measure!(

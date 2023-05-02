@@ -13077,7 +13077,7 @@ fn test_epoch_credit_rewards() {
     for partition_index in 0..bank.get_reward_credit_num_blocks() {
         let DistributedRewardsSum {
             num_rewards: num_accounts,
-            total: rewards,
+            total_rewards_in_lamports: rewards,
         } = bank.store_stake_accounts_in_partition(&stake_rewards, partition_index);
 
         let num_in_history =
