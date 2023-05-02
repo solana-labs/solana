@@ -1309,34 +1309,6 @@ impl Accounts {
             durable_nonce,
             lamports_per_signature,
         );
-        self.accounts_db.store_cached(
-            (slot, &accounts_to_store[..], include_slot_in_hash),
-            Some(&transactions),
-        );
-    }
-
-    /// Store the accounts into the DB
-    // allow(clippy) needed for various gating flags
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn store_cached_inline_update_index(
-        &self,
-        slot: Slot,
-        txs: &[SanitizedTransaction],
-        res: &[TransactionExecutionResult],
-        loaded: &mut [TransactionLoadResult],
-        rent_collector: &RentCollector,
-        durable_nonce: &DurableNonce,
-        lamports_per_signature: u64,
-        include_slot_in_hash: IncludeSlotInHash,
-    ) {
-        let (accounts_to_store, transactions) = self.collect_accounts_to_store(
-            txs,
-            res,
-            loaded,
-            rent_collector,
-            durable_nonce,
-            lamports_per_signature,
-        );
         self.accounts_db.store_cached_inline_update_index(
             (slot, &accounts_to_store[..], include_slot_in_hash),
             Some(&transactions),
