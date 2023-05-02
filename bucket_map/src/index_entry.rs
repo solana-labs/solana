@@ -46,19 +46,16 @@ pub struct BucketWithHeader {
 impl BucketOccupied for BucketWithHeader {
     fn occupy(&mut self, element: &mut [u8], ix: usize) {
         assert!(self.is_free(element, ix));
-        let entry: &mut DataBucketRefCountOccupiedHeader =
-            BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
+        let entry = get_mut_from_bytes::<DataBucketRefCountOccupiedHeader>(element);
         entry.packed_ref_count.set_occupied(OCCUPIED_OCCUPIED);
     }
     fn free(&mut self, element: &mut [u8], ix: usize) {
         assert!(!self.is_free(element, ix));
-        let entry: &mut DataBucketRefCountOccupiedHeader =
-            BucketStorage::<BucketWithHeader>::get_mut_from_parts(element);
+        let entry = get_mut_from_bytes::<DataBucketRefCountOccupiedHeader>(element);
         entry.packed_ref_count.set_occupied(OCCUPIED_FREE);
     }
     fn is_free(&self, element: &[u8], _ix: usize) -> bool {
-        let entry: &DataBucketRefCountOccupiedHeader =
-            BucketStorage::<BucketWithHeader>::get_from_parts(element);
+        let entry = get_from_bytes::<DataBucketRefCountOccupiedHeader>(element);
         entry.packed_ref_count.occupied() == OCCUPIED_FREE
     }
     fn offset_to_first_data() -> usize {
@@ -424,6 +421,18 @@ impl<T: Copy + 'static> IndexEntryPlaceInBucket<T> {
         let entry: &IndexEntry<T> = index_bucket.get(self.ix);
         &entry.key
     }
+}
+
+fn get_from_bytes<T>(item_slice: &[u8]) -> &T {
+    debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
+    let item = item_slice.as_ptr() as *const T;
+    unsafe { &*item }
+}
+
+fn get_mut_from_bytes<T>(item_slice: &mut [u8]) -> &mut T {
+    debug_assert!(std::mem::size_of::<T>() <= item_slice.len());
+    let item = item_slice.as_mut_ptr() as *mut T;
+    unsafe { &mut *item }
 }
 
 #[cfg(test)]
