@@ -44,7 +44,6 @@ use {
     sha3::{Digest, Sha3_512},
     std::{
         error, fmt,
-        fs::{self, File, OpenOptions},
         io::{Read, Write},
         path::Path,
     },
@@ -209,8 +208,7 @@ impl ElGamalKeypair {
 
     /// Reads keypair from a file
     pub fn read_json_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
-        let mut file = File::open(path.as_ref())?;
-        Self::read_json(&mut file)
+        Self::read_from_file(path)
     }
 
     /// Writes to a `Write` implementer with JSON-encoding
@@ -226,29 +224,7 @@ impl ElGamalKeypair {
         &self,
         outfile: F,
     ) -> Result<String, Box<dyn error::Error>> {
-        let outfile = outfile.as_ref();
-
-        if let Some(outdir) = outfile.parent() {
-            fs::create_dir_all(outdir)?;
-        }
-
-        let mut f = {
-            #[cfg(not(unix))]
-            {
-                OpenOptions::new()
-            }
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                OpenOptions::new().mode(0o600)
-            }
-        }
-        .write(true)
-        .truncate(true)
-        .create(true)
-        .open(outfile)?;
-
-        self.write_json(&mut f)
+        self.write_to_file(outfile)
     }
 
     /// Derive a keypair from an entropy seed.
@@ -676,6 +652,7 @@ mod tests {
         crate::encryption::pedersen::Pedersen,
         bip39::{Language, Mnemonic, MnemonicType, Seed},
         solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::null_signer::NullSigner},
+        std::fs::{self, File},
     };
 
     #[test]
