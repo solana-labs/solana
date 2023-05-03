@@ -92,9 +92,9 @@ impl<O: BucketOccupied> Drop for BucketStorage<O> {
     }
 }
 
-#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub(crate) enum IncludeHeader {
-    /// caller wants header
+    /// caller wants header included
     Header,
     /// caller wants header skipped
     NoHeader,
@@ -290,6 +290,10 @@ impl<O: BucketOccupied> BucketStorage<O> {
     }
 
     pub(crate) fn get_slice<T>(&self, ix: u64, len: u64, header: IncludeHeader) -> &[T] {
+        // If the caller is including the header, then `len` *must* be 1
+        debug_assert!(
+            (header == IncludeHeader::NoHeader) || (header == IncludeHeader::Header && len == 1)
+        );
         let start = self.get_start_offset(ix, header);
         let slice = {
             let size = std::mem::size_of::<T>() * len as usize;
@@ -311,6 +315,10 @@ impl<O: BucketOccupied> BucketStorage<O> {
         len: u64,
         header: IncludeHeader,
     ) -> &mut [T] {
+        // If the caller is including the header, then `len` *must* be 1
+        debug_assert!(
+            (header == IncludeHeader::NoHeader) || (header == IncludeHeader::Header && len == 1)
+        );
         let start = self.get_start_offset(ix, header);
         let slice = {
             let size = std::mem::size_of::<T>() * len as usize;
