@@ -77,12 +77,15 @@ while.
 
         Cold Storage                 Hot Storage
     (Compressed Format)       (Mmapped/Aligned Format)
-     +------+ +------+           +------+  +------+
-     |      | |      |   Shrink  |      |  |      |
-     | Slot | | Slot | / Compact | Slot |  | Slot |
-     |  N   | | N + 1|   .....   | L - 1|  |Latest|
-     |      | |      |           |      |  |      |
-     +------+ +------+           +------+  +------+
+     +------+  +------+           +------+  +------+
+     |      |  |      |   Shrink  |      |  |      |
+     | File |  | File | / Compact | Slot |  | Slot |
+     |  1   |..|  M   |   .....   | L - 1|  |Latest|
+     |      |  |      |           |      |  |      |
+     +------+  +------+           +------+  +------+
+  (Together represents
+   accounts from Slot N
+   to Slot L)
 
 Note that for the cold storage, it does not require files to be
 slot-range-partitioned.  It can support pubkey-range-partitioned as well.
