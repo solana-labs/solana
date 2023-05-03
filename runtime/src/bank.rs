@@ -4325,7 +4325,7 @@ impl Bank {
             &mut transaction_context,
             self.rent_collector.rent,
             log_collector.clone(),
-            programs_loaded_for_tx_batch,
+            programs_loaded_for_tx_batch.clone(),
             programs_modified_by_tx.clone(),
             self.feature_set.clone(),
             compute_budget,
@@ -4423,7 +4423,9 @@ impl Bank {
         let mut store_executors_which_added_to_the_cache_time =
             Measure::start("store_executors_which_added_to_the_cache_time");
         if status.is_ok() {
-            //                            programs_loaded_for_tx_batch.borrow_mut().replenish_many();
+            programs_loaded_for_tx_batch
+                .borrow_mut()
+                .filter_and_extend(&programs_modified_by_tx.borrow());
         }
         store_executors_which_added_to_the_cache_time.stop();
         saturating_add_assign!(
@@ -5190,11 +5192,18 @@ impl Bank {
         for execution_result in &execution_results {
             if let TransactionExecutionResult::Executed {
                 details,
-                programs_modified_by_tx: _,
+                programs_modified_by_tx,
             } = execution_result
             {
                 if details.status.is_ok() {
-                    //                    self.loaded_programs_cache.write().unwrap().replenish_many();
+                    let mut cache = self.loaded_programs_cache.write().unwrap();
+                    programs_modified_by_tx
+                        .borrow()
+                        .entries
+                        .iter()
+                        .for_each(|(key, entry)| {
+                            cache.replenish(*key, entry.clone());
+                        })
                 }
             }
         }

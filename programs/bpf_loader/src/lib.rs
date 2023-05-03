@@ -10,9 +10,7 @@ use {
         compute_budget::ComputeBudget,
         ic_logger_msg, ic_msg,
         invoke_context::{BpfAllocator, InvokeContext, SyscallContext},
-        loaded_programs::{
-            LoadProgramMetrics, LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch,
-        },
+        loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,
@@ -192,37 +190,9 @@ pub fn load_program_from_account(
     Ok((loaded_program, Some(load_program_metrics)))
 }
 
-fn update_program_cache(
-    cache: Rc<RefCell<LoadedProgramsForTxBatch>>,
-    key: Pubkey,
-    executor: Arc<LoadedProgram>,
-    _upgrade: bool,
-    _delay_visibility_of_program_deployment: bool,
-    _current_slot: Slot,
-) {
-    /*
-    if upgrade && delay_visibility_of_program_deployment {
-        // Place a tombstone in the cache so that
-        // we don't load the new version from the database as it should remain invisible
-        cache.borrow_mut().assign_program(
-            key,
-            Arc::new(LoadedProgram::new_tombstone(
-                current_slot,
-                LoadedProgramType::DelayVisibility,
-            )),
-        );
-    }
-
-     */
-    cache.borrow_mut().replenish(key, executor);
-}
-
 macro_rules! deploy_program {
     ($invoke_context:expr, $program_id:expr, $loader_key:expr,
      $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
-        let delay_visibility_of_program_deployment = $invoke_context
-            .feature_set
-            .is_active(&delay_visibility_of_program_deployment::id());
         let mut load_program_metrics = LoadProgramMetrics::default();
         let executor = load_program_from_bytes(
             &$invoke_context.feature_set,
@@ -243,14 +213,7 @@ macro_rules! deploy_program {
         $drop
         load_program_metrics.program_id = $program_id.to_string();
         load_program_metrics.submit_datapoint(&mut $invoke_context.timings);
-        update_program_cache(
-            $invoke_context.programs_modified_by_tx.clone(),
-            $program_id,
-            Arc::new(executor),
-            true,
-            delay_visibility_of_program_deployment,
-            $slot,
-        );
+        $invoke_context.programs_modified_by_tx.borrow_mut().replenish($program_id, Arc::new(executor));
     }};
 }
 

@@ -276,7 +276,7 @@ pub struct LoadedPrograms {
 pub struct LoadedProgramsForTxBatch {
     /// Pubkey is the address of a program.
     /// LoadedProgram is the corresponding program entry valid for the slot in which a transaction is being executed.
-    entries: HashMap<Pubkey, Arc<LoadedProgram>>,
+    pub entries: HashMap<Pubkey, Arc<LoadedProgram>>,
     slot: Slot,
 }
 
@@ -314,8 +314,21 @@ impl LoadedProgramsForTxBatch {
         self.slot
     }
 
-    pub fn set_slot(&mut self, slot: Slot) {
-        self.slot = slot;
+    // Insert/update the entries which are effective for the current slot.
+    // Update only if the new entry is newer than the existing entry in the cache.
+    pub fn filter_and_extend(&mut self, other: &LoadedProgramsForTxBatch) {
+        other.entries.iter().for_each(|(key, updated)| {
+            if updated.effective_slot <= self.slot {
+                self.entries
+                    .entry(*key)
+                    .and_modify(|old| {
+                        if old.deployment_slot < updated.deployment_slot {
+                            *old = updated.clone();
+                        }
+                    })
+                    .or_insert_with(|| updated.clone());
+            }
+        })
     }
 }
 

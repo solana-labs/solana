@@ -416,6 +416,7 @@ pub fn run(ledger_path: &Path, matches: &ArgMatches<'_>) {
         bank.get_builtin_programs()
     );
 
+    let mut loaded_programs = LoadedProgramsForTxBatch::default();
     for key in cached_account_keys {
         let program = bank.load_program(&key, true).unwrap_or_else(|err| {
             // Create a tombstone for the program in the cache
@@ -426,11 +427,9 @@ pub fn run(ledger_path: &Path, matches: &ArgMatches<'_>) {
             ))
         });
         debug!("Loaded program {}", key);
-        invoke_context
-            .tx_executor_cache
-            .borrow_mut()
-            .set(key, program, false, false, 0);
+        loaded_programs.replenish(key, program);
     }
+    invoke_context.programs_loaded_for_tx_batch = Rc::new(RefCell::new(loaded_programs));
 
     invoke_context
         .transaction_context
