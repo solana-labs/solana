@@ -45,8 +45,8 @@ use {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Account {
-    key: Pubkey,
-    owner: Option<Pubkey>,
+    key: String,
+    owner: Option<String>,
     is_signer: Option<bool>,
     is_writable: Option<bool>,
     lamports: Option<u64>,
@@ -54,7 +54,7 @@ struct Account {
 }
 #[derive(Serialize, Deserialize)]
 struct Input {
-    program_id: Pubkey,
+    program_id: String,
     accounts: Vec<Account>,
     instruction_data: Vec<u8>,
 }
@@ -62,7 +62,7 @@ fn load_accounts(path: &Path) -> Result<Input> {
     let file = File::open(path).unwrap();
     let input: Input = serde_json::from_reader(file)?;
     info!("Program input:");
-    info!("program_id: {:?}", &input.program_id);
+    info!("program_id: {}", &input.program_id);
     info!("accounts {:?}", &input.accounts);
     info!("instruction_data {:?}", &input.instruction_data);
     info!("----------------------------------------");
@@ -145,27 +145,18 @@ The tool executes on-chain programs in a mocked environment.
 The input data for a program execution have to be in JSON format
 and the following fields are required
 {
-    "program_id": [
-        56, 202, 173, 30, 148, 75, 192, 236, 76, 171, 147, 178, 157, 128, 8, 246,
-        45, 158, 59, 208, 87, 94, 199, 191, 69, 83, 196, 158, 110, 241, 126, 239
-    ],
+    "program_id": "DozgQiYtGbdyniV2T74xMdmjZJvYDzoRFFqw7UR5MwPK",
     "accounts": [
         {
-            "key": [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-            ],
-            "owner": [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-            ],
+            "key": "524HMdYYBy6TAn4dK5vCcjiTmT2sxV6Xoue5EXrz22Ca",
+            "owner": "BPFLoaderUpgradeab1e11111111111111111111111",
             "is_signer": false,
             "is_writable": true,
             "lamports": 1000,
             "data": [0, 0, 0, 3]
         }
     ],
-    "instruction_data": []
+    "instruction_data": [31, 32, 23, 24]
 }
 "##,
         )
@@ -344,9 +335,21 @@ pub fn run(ledger_path: &Path, matches: &ArgMatches<'_>) {
         }
         Err(_) => {
             let input = load_accounts(Path::new(matches.value_of("input").unwrap())).unwrap();
-            program_id = input.program_id;
+            program_id = input.program_id.parse::<Pubkey>().unwrap_or_else(|err| {
+                eprintln!(
+                    "Invalid program ID in input {}, error {}",
+                    input.program_id, err,
+                );
+                program_id
+            });
             for (index, account_info) in input.accounts.into_iter().enumerate() {
-                if let Some(account) = bank.get_account_with_fixed_root(&account_info.key) {
+                let pubkey = account_info.key.parse::<Pubkey>().unwrap_or_else(|err| {
+                    eprintln!("Invalid key in input {}, error {}", account_info.key, err);
+                    exit(1);
+                });
+                let data = account_info.data.unwrap_or(vec![]);
+                let space = data.len();
+                let account = if let Some(account) = bank.get_account_with_fixed_root(&pubkey) {
                     let owner = *account.owner();
                     if bpf_loader_upgradeable::check_id(&owner) {
                         if let Ok(UpgradeableLoaderState::Program {
@@ -358,34 +361,40 @@ pub fn run(ledger_path: &Path, matches: &ArgMatches<'_>) {
                                 .get_account_with_fixed_root(&programdata_address)
                                 .is_some()
                             {
-                                cached_account_keys.push(account_info.key);
+                                cached_account_keys.push(pubkey);
                             }
                         }
                     }
-                    transaction_accounts.push((account_info.key, account));
-                    instruction_accounts.push(InstructionAccount {
-                        index_in_transaction: index as IndexOfAccount,
-                        index_in_caller: index as IndexOfAccount,
-                        index_in_callee: index as IndexOfAccount,
-                        is_signer: account_info.is_signer.unwrap_or(false),
-                        is_writable: account_info.is_writable.unwrap_or(false),
-                    });
+                    // Override account data and lamports from input file if provided
+                    if space > 0 {
+                        let lamports = account_info.lamports.unwrap_or(account.lamports());
+                        let mut account = AccountSharedData::new(lamports, space, &owner);
+                        account.set_data(data);
+                        account
+                    } else {
+                        account
+                    }
                 } else {
-                    let data = account_info.data.unwrap_or(vec![]);
-                    let space = data.len();
-                    let owner = account_info.owner.unwrap_or(Pubkey::new_unique());
+                    let owner = account_info
+                        .owner
+                        .unwrap_or(Pubkey::new_unique().to_string());
+                    let owner = owner.parse::<Pubkey>().unwrap_or_else(|err| {
+                        eprintln!("Invalid owner key in input {owner}, error {err}");
+                        Pubkey::new_unique()
+                    });
                     let lamports = account_info.lamports.unwrap_or(0);
                     let mut account = AccountSharedData::new(lamports, space, &owner);
                     account.set_data(data);
-                    transaction_accounts.push((account_info.key, account));
-                    instruction_accounts.push(InstructionAccount {
-                        index_in_transaction: index as IndexOfAccount,
-                        index_in_caller: index as IndexOfAccount,
-                        index_in_callee: index as IndexOfAccount,
-                        is_signer: account_info.is_signer.unwrap_or(false),
-                        is_writable: account_info.is_writable.unwrap_or(false),
-                    });
-                }
+                    account
+                };
+                transaction_accounts.push((pubkey, account));
+                instruction_accounts.push(InstructionAccount {
+                    index_in_transaction: index as IndexOfAccount,
+                    index_in_caller: index as IndexOfAccount,
+                    index_in_callee: index as IndexOfAccount,
+                    is_signer: account_info.is_signer.unwrap_or(false),
+                    is_writable: account_info.is_writable.unwrap_or(false),
+                });
             }
             input.instruction_data
         }
