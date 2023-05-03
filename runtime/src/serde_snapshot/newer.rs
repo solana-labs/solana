@@ -221,12 +221,8 @@ impl<'a> TypeContext<'a> for Context {
                 .map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()),
             serializable_bank
                 .bank
-                .get_calculated_epoch_stake_rewards_to_serialize()
-                .map(|stake_rewards| stake_rewards),
-            serializable_bank
-                .bank
-                .get_epoch_reward_status_to_serialize()
-                .map(|epoch_reward_status| epoch_reward_status),
+                .get_epoch_reward_progress_to_serialize()
+                .map(|progress| progress),
         )
             .serialize(serializer)
     }

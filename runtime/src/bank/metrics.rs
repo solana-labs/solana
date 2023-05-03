@@ -85,6 +85,11 @@ pub(crate) fn report_new_epoch_metrics(
         ),
         ("redeem_rewards_us", metrics.redeem_rewards_us, i64),
         (
+            "store_stake_accounts_us",
+            metrics.store_stake_accounts_us.load(Relaxed),
+            i64
+        ),
+        (
             "store_vote_accounts_us",
             metrics.store_vote_accounts_us.load(Relaxed),
             i64
