@@ -235,6 +235,7 @@ pub fn spawn_server(
     Ok((endpoint, handle))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn dispatch_handle_conn(
     exit: Arc<AtomicBool>,
     conn_recv: AsyncReceiver<Connection>,
@@ -664,7 +665,7 @@ async fn setup_connection(
             // connection from the unstaked connection table.
             if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
                 new_connection,
-                unstaked_connection_table.clone(),
+                unstaked_connection_table,
                 max_unstaked_connections,
                 &params,
                 wait_for_chunk_timeout,
@@ -683,7 +684,7 @@ async fn setup_connection(
         }
     } else if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
         new_connection,
-        unstaked_connection_table.clone(),
+        unstaked_connection_table,
         max_unstaked_connections,
         &params,
         wait_for_chunk_timeout,
