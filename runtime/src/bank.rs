@@ -882,8 +882,7 @@ impl PartialEq for Bank {
             fee_structure: _,
             incremental_snapshot_persistence: _,
             loaded_programs_cache: _,
-            calculated_epoch_stake_rewards: _,
-            epoch_reward_status: _,
+            epoch_reward_progress: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -994,8 +993,52 @@ pub enum EpochRewardStatus {
 }
 
 impl EpochRewardStatus {
-    pub fn is_active(&self) -> bool {
+    fn is_active(&self) -> bool {
         matches!(self, EpochRewardStatus::Active(_))
+    }
+}
+
+/// EpochRewardProgress - A data structure to track the progress of epoch rewards
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpochRewardProgress {
+    /// epoch reward status
+    epoch_reward_status: EpochRewardStatus,
+
+    /// calculated epoch rewards pending distribution
+    calculated_epoch_stake_rewards: Arc<Option<StakeRewards>>,
+}
+
+impl EpochRewardProgress {
+    fn new() -> Self {
+        EpochRewardProgress {
+            epoch_reward_status: EpochRewardStatus::Inactive,
+            calculated_epoch_stake_rewards: Arc::new(None),
+        }
+    }
+
+    fn activate(&mut self, slot_block_height: SlotBlockHeight) {
+        self.epoch_reward_status = EpochRewardStatus::Active(slot_block_height);
+    }
+
+    fn deactivate(&mut self) {
+        self.epoch_reward_status = EpochRewardStatus::Inactive;
+        self.calculated_epoch_stake_rewards = Arc::new(None);
+    }
+
+    fn is_active(&self) -> bool {
+        self.epoch_reward_status.is_active()
+    }
+
+    fn get_calculated_epoch_stake_rewards(&self) -> Arc<Option<StakeRewards>> {
+        self.calculated_epoch_stake_rewards.clone()
+    }
+
+    fn get_epoch_reward_status(&self) -> EpochRewardStatus {
+        self.epoch_reward_status.to_owned()
+    }
+
+    fn set_calculated_epoch_stake_rewards(&mut self, stake_rewards: Option<Vec<StakeReward>>) {
+        self.calculated_epoch_stake_rewards = Arc::new(stake_rewards);
     }
 }
 
@@ -1181,15 +1224,8 @@ pub struct Bank {
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
 
-    /// If Some, epoch stake rewards calculated at the beginning block of current epoch
-    calculated_epoch_stake_rewards: Arc<Option<StakeRewards>>,
-
-    /// Epoch reward status
-    /// jwash: we can combine these 2 members (calculated_epoch_stake_rewards and epoch_reward_status)
-    /// hyi: Yes. we can combine them together. The reason that these two are separated is because
-    /// in async compute case where computation takes multiple blocks, then the reward_status and
-    /// calculated result don't change at the same time.
-    epoch_reward_status: EpochRewardStatus,
+    // Track epoch reward progress
+    epoch_reward_progress: EpochRewardProgress,
 }
 
 struct VoteWithStakeDelegations {
@@ -1450,8 +1486,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
-            calculated_epoch_stake_rewards: Arc::new(None),
-            epoch_reward_status: EpochRewardStatus::Inactive,
+            epoch_reward_progress: EpochRewardProgress::new(),
         };
 
         bank.bank_created();
@@ -1618,19 +1653,22 @@ impl Bank {
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
         } else {
-            let num_chunks =
-                if let Some(stake_rewards) = self.calculated_epoch_stake_rewards.as_ref() {
-                    crate::accounts_hash::AccountsHasher::div_ceil(
-                        stake_rewards.len(),
-                        Self::PARTITION_REWARDS_STORES_PER_BLOCK as usize,
-                    ) as u64
-                } else {
-                    // To be consistent to the meaning of `num_chunks`. When stake_rewards is none. num_chunks = 0
-                    // yeah. clamp to 1. Make sure that there is at least one block for reward credit.
-                    // when we have sysvar account, we will need to do something after all rewards are distributed.
-                    // Maybe we don't need to do anything. If that's the case, we can change to clamp to 0.
-                    0
-                };
+            let num_chunks = if let Some(stake_rewards) = self
+                .epoch_reward_progress
+                .get_calculated_epoch_stake_rewards()
+                .as_ref()
+            {
+                crate::accounts_hash::AccountsHasher::div_ceil(
+                    stake_rewards.len(),
+                    Self::PARTITION_REWARDS_STORES_PER_BLOCK as usize,
+                ) as u64
+            } else {
+                // To be consistent to the meaning of `num_chunks`. When stake_rewards is none. num_chunks = 0
+                // yeah. clamp to 1. Make sure that there is at least one block for reward credit.
+                // when we have sysvar account, we will need to do something after all rewards are distributed.
+                // Maybe we don't need to do anything. If that's the case, we can change to clamp to 0.
+                0
+            };
 
             // Limit the reward credit interval to 5% of the total number of slots in a epoch
             num_chunks.clamp(1, (self.epoch_schedule.slots_per_epoch as u64 / 20).max(1))
@@ -1645,7 +1683,9 @@ impl Bank {
 
     /// Return true if the current bank falls in epoch reward interval
     fn in_reward_interval(&self) -> bool {
-        self.epoch_reward_status.is_active()
+        self.epoch_reward_progress
+            .get_epoch_reward_status()
+            .is_active()
     }
 
     fn _new_from_parent(
@@ -1805,8 +1845,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
-            calculated_epoch_stake_rewards: parent.calculated_epoch_stake_rewards.clone(),
-            epoch_reward_status: parent.epoch_reward_status.clone(),
+            epoch_reward_progress: parent.epoch_reward_progress.clone(),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1928,7 +1967,7 @@ impl Bank {
         let (_, update_rewards_with_thread_pool_time) = measure!(
             {
                 if self.partitioned_rewards_feature_enabled() {
-                    self.epoch_reward_status = EpochRewardStatus::Active(SlotBlockHeight {
+                    self.epoch_reward_progress.activate(SlotBlockHeight {
                         // jwash: why is this parent_slot?
                         // [hyi] Again from the legacy design. Storing the parent_slot, we could possible reuse the reward computation results during forks.
                         //  N1 -->   N2
@@ -1988,7 +2027,9 @@ impl Bank {
 
     /// Process reward distribution for the block if it is inside reward interval.
     fn distribute_epoch_rewards(&mut self) {
-        if let EpochRewardStatus::Active(slot_block_height) = self.epoch_reward_status {
+        if let EpochRewardStatus::Active(slot_block_height) =
+            self.epoch_reward_progress.get_epoch_reward_status()
+        {
             let SlotBlockHeight {
                 start_slot,
                 start_block_height,
@@ -2005,9 +2046,8 @@ impl Bank {
                 self.credit_epoch_rewards_in_partition(partition_index);
             }
 
-            if height >= credit_end_exclusive && self.epoch_reward_status.is_active() {
-                self.epoch_reward_status = EpochRewardStatus::Inactive;
-                self.calculated_epoch_stake_rewards = Arc::new(None);
+            if height >= credit_end_exclusive && self.epoch_reward_progress.is_active() {
+                self.epoch_reward_progress.deactivate();
                 datapoint_warn!(
                     "reward-status-update",
                     ("slot", self.slot(), i64),
@@ -2212,8 +2252,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
-            calculated_epoch_stake_rewards: Arc::new(None),
-            epoch_reward_status: EpochRewardStatus::Inactive,
+            epoch_reward_progress: EpochRewardProgress::new(),
         };
         bank.bank_created();
 
@@ -2709,7 +2748,8 @@ impl Bank {
                 metrics,
             );
 
-        self.calculated_epoch_stake_rewards = Arc::new(stake_rewards);
+        self.epoch_reward_progress
+            .set_calculated_epoch_stake_rewards(stake_rewards);
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
 
@@ -3934,7 +3974,11 @@ impl Bank {
     ///     - partition_index: reward partition index
     /// Store the rewards to AccountsDB, update reward history record and total capital.
     fn credit_epoch_rewards_in_partition(&mut self, partition_index: u64) {
-        if let Some(stake_rewards) = self.calculated_epoch_stake_rewards.as_ref() {
+        if let Some(stake_rewards) = self
+            .epoch_reward_progress
+            .get_calculated_epoch_stake_rewards()
+            .as_ref()
+        {
             let mut metrics = RewardsStoreMetrics::default();
 
             metrics.pre_capitalization = self.capitalization();
@@ -8981,14 +9025,9 @@ impl Bank {
         Some(epoch_accounts_hash)
     }
 
-    /// Return the epoch_reward_status field on the bank to serialize
-    pub(crate) fn get_epoch_reward_status_to_serialize(&self) -> Option<&EpochRewardStatus> {
-        Some(&self.epoch_reward_status)
-    }
-
-    /// Return the calculated_epoch_stake_rewards field on the bank to serialize
-    pub(crate) fn get_calculated_epoch_stake_rewards_to_serialize(&self) -> Option<&StakeRewards> {
-        (*self.calculated_epoch_stake_rewards).as_ref()
+    /// Return the epoch_reward_progress field on the bank to serialize
+    pub(crate) fn get_epoch_reward_progress_to_serialize(&self) -> Option<&EpochRewardProgress> {
+        Some(&self.epoch_reward_progress)
     }
 
     /// Convenience fn to get the Epoch Accounts Hash
