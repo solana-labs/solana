@@ -465,8 +465,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
             .to_string()
             .parse()
             .map_err(|_| "can't parse keypair-multiplier")?;
-        if args.keypair_multiplier >= 2 {
-            return Err("args.keypair_multiplier must be lower than 2");
+        if args.keypair_multiplier < 2 {
+            return Err("args.keypair_multiplier must be greater than or equal to 2");
         }
     }
 

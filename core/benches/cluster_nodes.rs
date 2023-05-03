@@ -63,7 +63,7 @@ fn get_retransmit_peers_deterministic_wrapper(b: &mut Bencher, unstaked_ratio: O
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new_for_benches(&genesis_config);
     let (nodes, cluster_nodes) = make_cluster_nodes(&mut rng, unstaked_ratio);
-    let slot_leader = nodes[1..].choose(&mut rng).unwrap().id;
+    let slot_leader = *nodes[1..].choose(&mut rng).unwrap().pubkey();
     let slot = rand::random::<u64>();
     b.iter(|| {
         get_retransmit_peers_deterministic(

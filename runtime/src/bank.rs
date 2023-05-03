@@ -51,6 +51,7 @@ use {
         },
         accounts_hash::{AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash},
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
+        accounts_partition::{self, Partition, PartitionIndex},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         bank::metrics::*,
@@ -82,7 +83,6 @@ use {
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
-    itertools::Itertools,
     log::*,
     percentage::Percentage,
     rayon::{
@@ -94,10 +94,13 @@ use {
     solana_perf::perf_libs,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
-        builtin_program::{BuiltinProgram, BuiltinPrograms, ProcessInstructionWithContext},
+        builtin_program::BuiltinPrograms,
         compute_budget::{self, ComputeBudget},
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
-        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot},
+        loaded_programs::{
+            LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, LoadedPrograms,
+            LoadedProgramsForTxBatch, WorkingSlot,
+        },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -136,6 +139,7 @@ use {
         inflation::Inflation,
         instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},
         lamports::LamportsError,
+        loader_v3,
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
@@ -221,21 +225,6 @@ pub type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "GBTLfFjModD9ykS9LV4pGi4S8eCrUj2JjWSDQLf8tMwV")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
-// Eager rent collection repeats in cyclic manner.
-// Each cycle is composed of <partition_count> number of tiny pubkey subranges
-// to scan, which is always multiple of the number of slots in epoch.
-pub(crate) type PartitionIndex = u64;
-pub type PartitionsPerCycle = u64;
-type Partition = (PartitionIndex, PartitionIndex, PartitionsPerCycle);
-type RentCollectionCycleParams = (
-    Epoch,
-    SlotCount,
-    bool,
-    Epoch,
-    EpochCount,
-    PartitionsPerCycle,
-);
-
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SquashTiming {
     pub squash_accounts_ms: u64,
@@ -255,8 +244,6 @@ impl AddAssign for SquashTiming {
         self.squash_cache_ms += rhs.squash_cache_ms;
     }
 }
-
-type EpochCount = u64;
 
 #[derive(Debug)]
 pub struct BankRc {
@@ -811,6 +798,7 @@ impl PartialEq for Bank {
             fee_structure: _,
             incremental_snapshot_persistence: _,
             loaded_programs_cache: _,
+            check_program_modification_slot: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -1066,6 +1054,8 @@ pub struct Bank {
 
     pub loaded_programs_cache: Arc<RwLock<LoadedPrograms>>,
 
+    pub check_program_modification_slot: bool,
+
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
 }
@@ -1091,7 +1081,14 @@ struct LoadVoteAndStakeAccountsResult {
     vote_accounts_cache_miss_count: usize,
 }
 
-type VoteRewards = DashMap<Pubkey, (AccountSharedData, u8, u64, bool)>;
+struct VoteReward {
+    vote_account: AccountSharedData,
+    commission: u8,
+    vote_rewards: u64,
+    vote_needs_store: bool,
+}
+
+type VoteRewards = DashMap<Pubkey, VoteReward>;
 type StakeRewards = Vec<StakeReward>;
 
 #[derive(Debug, Default)]
@@ -1215,10 +1212,7 @@ impl Bank {
     ) -> Self {
         Self::new_with_paths_for_tests(
             genesis_config,
-            Arc::new(RuntimeConfig {
-                bpf_jit: true,
-                ..RuntimeConfig::default()
-            }),
+            Arc::new(RuntimeConfig::default()),
             Vec::new(),
             account_indexes,
             shrink_ratio,
@@ -1289,6 +1283,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
+            check_program_modification_slot: false,
         };
 
         bank.bank_created();
@@ -1587,6 +1582,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
+            check_program_modification_slot: false,
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1913,6 +1909,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
+            check_program_modification_slot: false,
         };
         bank.bank_created();
 
@@ -2930,8 +2927,15 @@ impl Bank {
                     delegations,
                 },
             )| {
-                vote_account_rewards
-                    .insert(vote_pubkey, (vote_account, vote_state.commission, 0, false));
+                vote_account_rewards.insert(
+                    vote_pubkey,
+                    VoteReward {
+                        vote_account,
+                        commission: vote_state.commission,
+                        vote_rewards: 0,
+                        vote_needs_store: false,
+                    },
+                );
                 delegations
                     .into_par_iter()
                     .map(move |delegation| (vote_pubkey, Arc::clone(&vote_state), delegation))
@@ -2962,12 +2966,12 @@ impl Bank {
                     );
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
-                        if let Some((
-                            _vote_account,
-                            _commission,
-                            vote_rewards_sum,
+                        if let Some(VoteReward {
+                            vote_account: _,
+                            commission: _,
+                            vote_rewards: vote_rewards_sum,
                             vote_needs_store,
-                        )) = vote_account_rewards.get_mut(&vote_pubkey).as_deref_mut()
+                        }) = vote_account_rewards.get_mut(&vote_pubkey).as_deref_mut()
                         {
                             *vote_needs_store = true;
                             *vote_rewards_sum = vote_rewards_sum.saturating_add(voters_reward);
@@ -3017,7 +3021,15 @@ impl Bank {
         let (vote_rewards, measure) = measure!(vote_account_rewards
             .into_iter()
             .filter_map(
-                |(vote_pubkey, (mut vote_account, commission, vote_rewards, vote_needs_store))| {
+                |(
+                    vote_pubkey,
+                    VoteReward {
+                        mut vote_account,
+                        commission,
+                        vote_rewards,
+                        vote_needs_store,
+                    },
+                )| {
                     if let Err(err) = vote_account.checked_add_lamports(vote_rewards) {
                         debug!("reward redemption failed for {}: {:?}", vote_pubkey, err);
                         return None;
@@ -4130,8 +4142,42 @@ impl Bank {
         let _ = self.executor_cache.write().unwrap().remove(pubkey);
     }
 
+    fn program_modification_slot(&self, pubkey: &Pubkey) -> Result<Slot> {
+        let program = self
+            .get_account_with_fixed_root(pubkey)
+            .ok_or(TransactionError::ProgramAccountNotFound)?;
+        if bpf_loader_upgradeable::check_id(program.owner()) {
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = program.state()
+            {
+                let programdata = self
+                    .get_account_with_fixed_root(&programdata_address)
+                    .ok_or(TransactionError::ProgramAccountNotFound)?;
+                if let Ok(UpgradeableLoaderState::ProgramData {
+                    slot,
+                    upgrade_authority_address: _,
+                }) = programdata.state()
+                {
+                    return Ok(slot);
+                }
+            }
+            Err(TransactionError::ProgramAccountNotFound)
+        } else if loader_v3::check_id(program.owner()) {
+            let state = solana_loader_v3_program::get_state(program.data())
+                .map_err(|_| TransactionError::ProgramAccountNotFound)?;
+            Ok(state.slot)
+        } else {
+            Ok(0)
+        }
+    }
+
     #[allow(dead_code)] // Preparation for BankExecutorCache rework
-    fn load_program(&self, pubkey: &Pubkey) -> Result<Arc<LoadedProgram>> {
+    pub fn load_program(
+        &self,
+        pubkey: &Pubkey,
+        debugging_features: bool,
+    ) -> Result<Arc<LoadedProgram>> {
         let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
             program
         } else {
@@ -4188,11 +4234,9 @@ impl Bank {
             &self.feature_set,
             &self.runtime_config.compute_budget.unwrap_or_default(),
             None, // log_collector
-            None,
             &program,
             programdata.as_ref().unwrap_or(&program),
-            self.runtime_config.bpf_jit,
-            false, /* debugging_features */
+            debugging_features,
         )
         .map(|(loaded_program, _create_executor_metrics)| loaded_program)
         .map_err(|err| TransactionError::InstructionError(0, err))
@@ -4406,18 +4450,39 @@ impl Bank {
     fn load_and_get_programs_from_cache(
         &self,
         program_accounts_map: &HashMap<Pubkey, &Pubkey>,
-    ) -> HashMap<Pubkey, Arc<LoadedProgram>> {
+    ) -> LoadedProgramsForTxBatch {
+        let programs_and_slots: Vec<(Pubkey, LoadedProgramMatchCriteria)> =
+            if self.check_program_modification_slot {
+                program_accounts_map
+                    .keys()
+                    .map(|pubkey| {
+                        (
+                            *pubkey,
+                            self.program_modification_slot(pubkey)
+                                .map_or(LoadedProgramMatchCriteria::Closed, |slot| {
+                                    LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot)
+                                }),
+                        )
+                    })
+                    .collect()
+            } else {
+                program_accounts_map
+                    .keys()
+                    .map(|pubkey| (*pubkey, LoadedProgramMatchCriteria::NoCriteria))
+                    .collect()
+            };
+
         let (mut loaded_programs_for_txs, missing_programs) = {
             // Lock the global cache to figure out which programs need to be loaded
             let loaded_programs_cache = self.loaded_programs_cache.read().unwrap();
-            loaded_programs_cache.extract(self, program_accounts_map.keys().cloned())
+            loaded_programs_cache.extract(self, programs_and_slots.into_iter())
         };
 
         // Load missing programs while global cache is unlocked
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
             .iter()
             .map(|key| {
-                let program = self.load_program(key).unwrap_or_else(|err| {
+                let program = self.load_program(key, false).unwrap_or_else(|err| {
                     // Create a tombstone for the program in the cache
                     debug!("Failed to load program {}, error {:?}", key, err);
                     Arc::new(LoadedProgram::new_tombstone(
@@ -4434,7 +4499,7 @@ impl Bank {
         for (key, program) in missing_programs {
             let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
             // Use the returned entry as that might have been deduplicated globally
-            loaded_programs_for_txs.insert(key, entry);
+            loaded_programs_for_txs.replenish(key, entry);
         }
 
         loaded_programs_for_txs
@@ -4464,7 +4529,7 @@ impl Bank {
         filter_missing_programs_time.stop();
 
         let executors = missing_executors.iter().map(|pubkey| {
-            let program = self.load_program(pubkey).unwrap_or_else(|err| {
+            let program = self.load_program(pubkey, false).unwrap_or_else(|err| {
                 // Create a tombstone for the program in the cache
                 debug!("Failed to load program {}, error {:?}", pubkey, err);
                 Arc::new(LoadedProgram::new_tombstone(
@@ -5410,28 +5475,6 @@ impl Bank {
             });
     }
 
-    /// return all end partition indexes for the given partition
-    /// partition could be (0, 1, N). In this case we only return [1]
-    ///  the single 'end_index' that covers this partition.
-    /// partition could be (0, 2, N). In this case, we return [1, 2], which are all
-    /// the 'end_index' values contained in that range.
-    /// (0, 0, N) returns [0] as a special case.
-    /// There is a relationship between
-    /// 1. 'pubkey_range_from_partition'
-    /// 2. 'partition_from_pubkey'
-    /// 3. this function
-    fn get_partition_end_indexes(partition: &Partition) -> Vec<PartitionIndex> {
-        if partition.0 == partition.1 && partition.0 == 0 {
-            // special case for start=end=0. ie. (0, 0, N). This returns [0]
-            vec![0]
-        } else {
-            // normal case of (start, end, N)
-            // so, we want [start+1, start+2, ..=end]
-            // if start == end, then return []
-            (partition.0..partition.1).map(|index| index + 1).collect()
-        }
-    }
-
     fn collect_rent_eagerly(&self) {
         if self.lazy_rent_collection.load(Relaxed) {
             return;
@@ -5446,7 +5489,12 @@ impl Bank {
         if parallel {
             let ranges = partitions
                 .iter()
-                .map(|partition| (*partition, Self::pubkey_range_from_partition(*partition)))
+                .map(|partition| {
+                    (
+                        *partition,
+                        accounts_partition::pubkey_range_from_partition(*partition),
+                    )
+                })
                 .collect::<Vec<_>>();
             // test every range to make sure ranges are not overlapping
             // some tests collect rent from overlapping ranges
@@ -5587,7 +5635,7 @@ impl Bank {
                                 self.slot(),
                                 self.parent().map(|bank| bank.slot()),
                                 partition_index,
-                                Bank::partition_from_pubkey(pubkey, self.epoch_schedule.slots_per_epoch),
+                                accounts_partition::partition_from_pubkey(pubkey, self.epoch_schedule.slots_per_epoch),
                             );
                         }
                     }
@@ -5632,7 +5680,7 @@ impl Bank {
 
     /// convert 'partition' to a pubkey range and 'collect_rent_in_range'
     fn collect_rent_in_partition(&self, partition: Partition, metrics: &RentMetrics) {
-        let subrange_full = Self::pubkey_range_from_partition(partition);
+        let subrange_full = accounts_partition::pubkey_range_from_partition(partition);
         self.collect_rent_in_range(partition, subrange_full, metrics)
     }
 
@@ -5646,7 +5694,7 @@ impl Bank {
             .get()
             .and_then(|rent_paying_accounts| {
                 rent_paying_accounts.is_initialized().then(|| {
-                    Self::get_partition_end_indexes(partition)
+                    accounts_partition::get_partition_end_indexes(partition)
                         .into_iter()
                         .flat_map(|end_index| {
                             rent_paying_accounts.get_pubkeys_in_partition_index(end_index)
@@ -5686,8 +5734,8 @@ impl Bank {
             // It has special handling of 0..0 and partition_count changes affect all ranges unevenly.
             let num_threads = crate::accounts_db::quarter_thread_count() as u64;
             let sz = std::mem::size_of::<u64>();
-            let start_prefix = Self::prefix_from_pubkey(subrange_full.start());
-            let end_prefix_inclusive = Self::prefix_from_pubkey(subrange_full.end());
+            let start_prefix = accounts_partition::prefix_from_pubkey(subrange_full.start());
+            let end_prefix_inclusive = accounts_partition::prefix_from_pubkey(subrange_full.end());
             let range = end_prefix_inclusive - start_prefix;
             let increment = range / num_threads;
             let mut results = (0..num_threads)
@@ -5762,239 +5810,17 @@ impl Bank {
         rent_amount == 0 && account.rent_epoch() != 0
     }
 
-    fn prefix_from_pubkey(pubkey: &Pubkey) -> u64 {
-        const PREFIX_SIZE: usize = mem::size_of::<u64>();
-        u64::from_be_bytes(pubkey.as_ref()[0..PREFIX_SIZE].try_into().unwrap())
-    }
-
-    /// This is the inverse of pubkey_range_from_partition.
-    /// return the lowest end_index which would contain this pubkey
-    pub fn partition_from_pubkey(
-        pubkey: &Pubkey,
-        partition_count: PartitionsPerCycle,
-    ) -> PartitionIndex {
-        type Prefix = u64;
-        const PREFIX_MAX: Prefix = Prefix::max_value();
-
-        if partition_count == 1 {
-            return 0;
-        }
-
-        // not-overflowing way of `(Prefix::max_value() + 1) / partition_count`
-        let partition_width = (PREFIX_MAX - partition_count + 1) / partition_count + 1;
-
-        let prefix = Self::prefix_from_pubkey(pubkey);
-        if prefix == 0 {
-            return 0;
-        }
-
-        if prefix == PREFIX_MAX {
-            return partition_count - 1;
-        }
-
-        let mut result = (prefix + 1) / partition_width;
-        if (prefix + 1) % partition_width == 0 {
-            // adjust for integer divide
-            result = result.saturating_sub(1);
-        }
-        result
-    }
-
-    // Mostly, the pair (start_index & end_index) is equivalent to this range:
-    // start_index..=end_index. But it has some exceptional cases, including
-    // this important and valid one:
-    //   0..=0: the first partition in the new epoch when crossing epochs
-    pub fn pubkey_range_from_partition(
-        (start_index, end_index, partition_count): Partition,
-    ) -> RangeInclusive<Pubkey> {
-        assert!(start_index <= end_index);
-        assert!(start_index < partition_count);
-        assert!(end_index < partition_count);
-        assert!(0 < partition_count);
-
-        type Prefix = u64;
-        const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
-        const PREFIX_MAX: Prefix = Prefix::max_value();
-
-        let mut start_pubkey = [0x00u8; 32];
-        let mut end_pubkey = [0xffu8; 32];
-
-        if partition_count == 1 {
-            assert_eq!(start_index, 0);
-            assert_eq!(end_index, 0);
-            return Pubkey::new_from_array(start_pubkey)..=Pubkey::new_from_array(end_pubkey);
-        }
-
-        // not-overflowing way of `(Prefix::max_value() + 1) / partition_count`
-        let partition_width = (PREFIX_MAX - partition_count + 1) / partition_count + 1;
-        let mut start_key_prefix = if start_index == 0 && end_index == 0 {
-            0
-        } else if start_index + 1 == partition_count {
-            PREFIX_MAX
-        } else {
-            (start_index + 1) * partition_width
-        };
-
-        let mut end_key_prefix = if end_index + 1 == partition_count {
-            PREFIX_MAX
-        } else {
-            (end_index + 1) * partition_width - 1
-        };
-
-        if start_index != 0 && start_index == end_index {
-            // n..=n (n != 0): a noop pair across epochs without a gap under
-            // multi_epoch_cycle, just nullify it.
-            if end_key_prefix == PREFIX_MAX {
-                start_key_prefix = end_key_prefix;
-                start_pubkey = end_pubkey;
-            } else {
-                end_key_prefix = start_key_prefix;
-                end_pubkey = start_pubkey;
-            }
-        }
-
-        start_pubkey[0..PREFIX_SIZE].copy_from_slice(&start_key_prefix.to_be_bytes());
-        end_pubkey[0..PREFIX_SIZE].copy_from_slice(&end_key_prefix.to_be_bytes());
-        let start_pubkey_final = Pubkey::new_from_array(start_pubkey);
-        let end_pubkey_final = Pubkey::new_from_array(end_pubkey);
-        trace!(
-            "pubkey_range_from_partition: ({}-{})/{} [{}]: {}-{}",
-            start_index,
-            end_index,
-            partition_count,
-            (end_key_prefix - start_key_prefix),
-            start_pubkey.iter().map(|x| format!("{x:02x}")).join(""),
-            end_pubkey.iter().map(|x| format!("{x:02x}")).join(""),
-        );
-        #[cfg(test)]
-        if start_index != end_index {
-            assert_eq!(
-                if start_index == 0 && end_index == 0 {
-                    0
-                } else {
-                    start_index + 1
-                },
-                Self::partition_from_pubkey(&start_pubkey_final, partition_count),
-                "{start_index}, {end_index}, start_key_prefix: {start_key_prefix}, {start_pubkey_final}, {partition_count}"
-            );
-            assert_eq!(
-                end_index,
-                Self::partition_from_pubkey(&end_pubkey_final, partition_count),
-                "{start_index}, {end_index}, {end_pubkey_final}, {partition_count}"
-            );
-            if start_index != 0 {
-                start_pubkey[0..PREFIX_SIZE]
-                    .copy_from_slice(&start_key_prefix.saturating_sub(1).to_be_bytes());
-                let pubkey_test = Pubkey::new_from_array(start_pubkey);
-                assert_eq!(
-                    start_index,
-                    Self::partition_from_pubkey(&pubkey_test, partition_count),
-                    "{}, {}, start_key_prefix-1: {}, {}, {}",
-                    start_index,
-                    end_index,
-                    start_key_prefix.saturating_sub(1),
-                    pubkey_test,
-                    partition_count
-                );
-            }
-            if end_index != partition_count - 1 && end_index != 0 {
-                end_pubkey[0..PREFIX_SIZE]
-                    .copy_from_slice(&end_key_prefix.saturating_add(1).to_be_bytes());
-                let pubkey_test = Pubkey::new_from_array(end_pubkey);
-                assert_eq!(
-                    end_index.saturating_add(1),
-                    Self::partition_from_pubkey(&pubkey_test, partition_count),
-                    "start: {}, end: {}, pubkey: {}, partition_count: {}, prefix_before_addition: {}, prefix after: {}",
-                    start_index,
-                    end_index,
-                    pubkey_test,
-                    partition_count,
-                    end_key_prefix,
-                    end_key_prefix.saturating_add(1),
-                );
-            }
-        }
-        // should be an inclusive range (a closed interval) like this:
-        // [0xgg00-0xhhff], [0xii00-0xjjff], ... (where 0xii00 == 0xhhff + 1)
-        start_pubkey_final..=end_pubkey_final
-    }
-
-    pub fn get_partitions(
-        slot: Slot,
-        parent_slot: Slot,
-        slot_count_in_two_day: SlotCount,
-    ) -> Vec<Partition> {
-        let parent_cycle = parent_slot / slot_count_in_two_day;
-        let current_cycle = slot / slot_count_in_two_day;
-        let mut parent_cycle_index = parent_slot % slot_count_in_two_day;
-        let current_cycle_index = slot % slot_count_in_two_day;
-        let mut partitions = vec![];
-        if parent_cycle < current_cycle {
-            if current_cycle_index > 0 {
-                // generate and push gapped partitions because some slots are skipped
-                let parent_last_cycle_index = slot_count_in_two_day - 1;
-
-                // ... for parent cycle
-                partitions.push((
-                    parent_cycle_index,
-                    parent_last_cycle_index,
-                    slot_count_in_two_day,
-                ));
-
-                // ... for current cycle
-                partitions.push((0, 0, slot_count_in_two_day));
-            }
-            parent_cycle_index = 0;
-        }
-
-        partitions.push((
-            parent_cycle_index,
-            current_cycle_index,
-            slot_count_in_two_day,
-        ));
-
-        partitions
-    }
-
     pub(crate) fn fixed_cycle_partitions_between_slots(
         &self,
         starting_slot: Slot,
         ending_slot: Slot,
     ) -> Vec<Partition> {
         let slot_count_in_two_day = self.slot_count_in_two_day();
-        Self::get_partitions(ending_slot, starting_slot, slot_count_in_two_day)
+        accounts_partition::get_partitions(ending_slot, starting_slot, slot_count_in_two_day)
     }
 
     fn fixed_cycle_partitions(&self) -> Vec<Partition> {
         self.fixed_cycle_partitions_between_slots(self.parent_slot(), self.slot())
-    }
-
-    /// used only by filler accounts in debug path
-    /// previous means slot - 1, not parent
-    pub fn variable_cycle_partition_from_previous_slot(
-        epoch_schedule: &EpochSchedule,
-        slot: Slot,
-    ) -> Partition {
-        // similar code to Bank::variable_cycle_partitions
-        let (current_epoch, current_slot_index) = epoch_schedule.get_epoch_and_slot_index(slot);
-        let (parent_epoch, mut parent_slot_index) =
-            epoch_schedule.get_epoch_and_slot_index(slot.saturating_sub(1));
-        let cycle_params = Self::rent_single_epoch_collection_cycle_params(
-            current_epoch,
-            epoch_schedule.get_slots_in_epoch(current_epoch),
-        );
-
-        if parent_epoch < current_epoch {
-            parent_slot_index = 0;
-        }
-
-        let generated_for_gapped_epochs = false;
-        Self::get_partition_from_slot_indexes(
-            cycle_params,
-            parent_slot_index,
-            current_slot_index,
-            generated_for_gapped_epochs,
-        )
     }
 
     pub(crate) fn variable_cycle_partitions_between_slots(
@@ -6054,70 +5880,28 @@ impl Bank {
         epoch: Epoch,
         generated_for_gapped_epochs: bool,
     ) -> Partition {
-        let cycle_params = self.determine_collection_cycle_params(epoch);
-        Self::get_partition_from_slot_indexes(
+        let slot_count_per_epoch = self.get_slots_in_epoch(epoch);
+
+        let cycle_params = if !self.use_multi_epoch_collection_cycle(epoch) {
+            // mnb should always go through this code path
+            accounts_partition::rent_single_epoch_collection_cycle_params(
+                epoch,
+                slot_count_per_epoch,
+            )
+        } else {
+            accounts_partition::rent_multi_epoch_collection_cycle_params(
+                epoch,
+                slot_count_per_epoch,
+                self.first_normal_epoch(),
+                self.slot_count_in_two_day() / slot_count_per_epoch,
+            )
+        };
+        accounts_partition::get_partition_from_slot_indexes(
             cycle_params,
             start_slot_index,
             end_slot_index,
             generated_for_gapped_epochs,
         )
-    }
-
-    fn get_partition_from_slot_indexes(
-        cycle_params: RentCollectionCycleParams,
-        start_slot_index: SlotIndex,
-        end_slot_index: SlotIndex,
-        generated_for_gapped_epochs: bool,
-    ) -> Partition {
-        let (_, _, in_multi_epoch_cycle, _, _, partition_count) = cycle_params;
-
-        // use common codepath for both very likely and very unlikely for the sake of minimized
-        // risk of any miscalculation instead of negligibly faster computation per slot for the
-        // likely case.
-        let mut start_partition_index =
-            Self::partition_index_from_slot_index(start_slot_index, cycle_params);
-        let mut end_partition_index =
-            Self::partition_index_from_slot_index(end_slot_index, cycle_params);
-
-        // Adjust partition index for some edge cases
-        let is_special_new_epoch = start_slot_index == 0 && end_slot_index != 1;
-        let in_middle_of_cycle = start_partition_index > 0;
-        if in_multi_epoch_cycle && is_special_new_epoch && in_middle_of_cycle {
-            // Adjust slot indexes so that the final partition ranges are continuous!
-            // This is need because the caller gives us off-by-one indexes when
-            // an epoch boundary is crossed.
-            // Usually there is no need for this adjustment because cycles are aligned
-            // with epochs. But for multi-epoch cycles, adjust the indexes if it
-            // happens in the middle of a cycle for both gapped and not-gapped cases:
-            //
-            // epoch (slot range)|slot idx.*1|raw part. idx.|adj. part. idx.|epoch boundary
-            // ------------------+-----------+--------------+---------------+--------------
-            // 3 (20..30)        | [7..8]    |   7.. 8      |   7.. 8
-            //                   | [8..9]    |   8.. 9      |   8.. 9
-            // 4 (30..40)        | [0..0]    |<10>..10      | <9>..10      <--- not gapped
-            //                   | [0..1]    |  10..11      |  10..12
-            //                   | [1..2]    |  11..12      |  11..12
-            //                   | [2..9   *2|  12..19      |  12..19      <-+
-            // 5 (40..50)        |  0..0   *2|<20>..<20>    |<19>..<19> *3 <-+- gapped
-            //                   |  0..4]    |<20>..24      |<19>..24      <-+
-            //                   | [4..5]    |  24..25      |  24..25
-            //                   | [5..6]    |  25..26      |  25..26
-            //
-            // NOTE: <..> means the adjusted slots
-            //
-            // *1: The range of parent_bank.slot() and current_bank.slot() is firstly
-            //     split by the epoch boundaries and then the split ones are given to us.
-            //     The original ranges are denoted as [...]
-            // *2: These are marked with generated_for_gapped_epochs = true.
-            // *3: This becomes no-op partition
-            start_partition_index -= 1;
-            if generated_for_gapped_epochs {
-                assert_eq!(start_slot_index, end_slot_index);
-                end_partition_index -= 1;
-            }
-        }
-
-        (start_partition_index, end_partition_index, partition_count)
     }
 
     fn partition_from_normal_slot_indexes(
@@ -6136,57 +5920,6 @@ impl Bank {
         epoch: Epoch,
     ) -> Partition {
         self.do_partition_from_slot_indexes(start_slot_index, end_slot_index, epoch, true)
-    }
-
-    fn rent_single_epoch_collection_cycle_params(
-        epoch: Epoch,
-        slot_count_per_epoch: SlotCount,
-    ) -> RentCollectionCycleParams {
-        (
-            epoch,
-            slot_count_per_epoch,
-            false,
-            0,
-            1,
-            slot_count_per_epoch,
-        )
-    }
-
-    fn determine_collection_cycle_params(&self, epoch: Epoch) -> RentCollectionCycleParams {
-        let slot_count_per_epoch = self.get_slots_in_epoch(epoch);
-
-        if !self.use_multi_epoch_collection_cycle(epoch) {
-            // mnb should always go through this code path
-            Self::rent_single_epoch_collection_cycle_params(epoch, slot_count_per_epoch)
-        } else {
-            let epoch_count_in_cycle = self.slot_count_in_two_day() / slot_count_per_epoch;
-            let partition_count = slot_count_per_epoch * epoch_count_in_cycle;
-
-            (
-                epoch,
-                slot_count_per_epoch,
-                true,
-                self.first_normal_epoch(),
-                epoch_count_in_cycle,
-                partition_count,
-            )
-        }
-    }
-
-    fn partition_index_from_slot_index(
-        slot_index_in_epoch: SlotIndex,
-        (
-            epoch,
-            slot_count_per_epoch,
-            _,
-            base_epoch,
-            epoch_count_per_cycle,
-            _,
-        ): RentCollectionCycleParams,
-    ) -> PartitionIndex {
-        let epoch_offset = epoch - base_epoch;
-        let epoch_index_in_cycle = epoch_offset % epoch_count_per_cycle;
-        slot_index_in_epoch + epoch_index_in_cycle * slot_count_per_epoch
     }
 
     // Given short epochs, it's too costly to collect rent eagerly
@@ -6616,12 +6349,8 @@ impl Bank {
                 .extend_from_slice(&additional_builtins.feature_transitions);
         }
         if !debug_do_not_add_builtins {
-            for builtin in builtins.genesis_builtins {
-                self.add_builtin(
-                    &builtin.name,
-                    &builtin.program_id,
-                    builtin.process_instruction,
-                );
+            for (program_id, builtin) in builtins.genesis_builtins {
+                self.add_builtin(program_id, builtin);
             }
             for precompile in get_precompiles() {
                 if precompile.feature.is_none() {
@@ -7645,27 +7374,24 @@ impl Bank {
     }
 
     /// Add an instruction processor to intercept instructions before the dynamic loader.
-    pub fn add_builtin(
-        &mut self,
-        name: &str,
-        program_id: &Pubkey,
-        process_instruction: ProcessInstructionWithContext,
-    ) {
+    pub fn add_builtin(&mut self, program_id: Pubkey, builtin: Arc<LoadedProgram>) {
+        let name = match &builtin.program {
+            LoadedProgramType::Builtin(name, _) => name,
+            _ => unreachable!(),
+        };
         debug!("Adding program {} under {:?}", name, program_id);
-        self.add_builtin_account(name, program_id, false);
+        self.add_builtin_account(name.as_str(), &program_id, false);
         if let Some(entry) = self
             .builtin_programs
             .vec
             .iter_mut()
-            .find(|entry| entry.program_id == *program_id)
+            .find(|entry| entry.0 == program_id)
         {
-            entry.process_instruction = process_instruction;
+            entry.1 = builtin.clone();
         } else {
-            self.builtin_programs.vec.push(BuiltinProgram {
-                name: name.to_string(),
-                program_id: *program_id,
-                process_instruction,
-            });
+            self.builtin_programs
+                .vec
+                .push((program_id, builtin.clone()));
         }
         debug!("Added program {} under {:?}", name, program_id);
     }
@@ -7679,7 +7405,7 @@ impl Bank {
             .builtin_programs
             .vec
             .iter()
-            .position(|entry| entry.program_id == *program_id)
+            .position(|entry| entry.0 == *program_id)
         {
             self.builtin_programs.vec.remove(position);
         }
@@ -7931,11 +7657,9 @@ impl Bank {
                 transition.to_action(&should_apply_action_for_feature_transition)
             {
                 match builtin_action {
-                    BuiltinAction::Add(builtin) => self.add_builtin(
-                        &builtin.name,
-                        &builtin.program_id,
-                        builtin.process_instruction,
-                    ),
+                    BuiltinAction::Add(program_id, builtin) => {
+                        self.add_builtin(program_id, builtin)
+                    }
                     BuiltinAction::Remove(program_id) => self.remove_builtin(&program_id),
                 }
             }
@@ -8120,6 +7844,11 @@ impl Bank {
                 .saturating_sub(forward_transactions_to_leader_at_slot_offset as usize),
             &mut error_counters,
         )
+    }
+
+    /// Return reference to builtin_progams
+    pub fn get_builtin_programs(&self) -> &BuiltinPrograms {
+        &self.builtin_programs
     }
 }
 

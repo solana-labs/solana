@@ -272,7 +272,7 @@ impl CrdsGossipPush {
         );
         let nodes = crds_gossip::dedup_gossip_addresses(nodes, stakes)
             .into_values()
-            .map(|(_stake, node)| node.id)
+            .map(|(_stake, node)| *node.pubkey())
             .collect::<Vec<_>>();
         if nodes.is_empty() {
             return;
@@ -336,7 +336,7 @@ mod tests {
         // push a new message
         assert_eq!(
             push.process_push_message(&crds, vec![(Pubkey::default(), vec![value])], 0),
-            [ci.id].into_iter().collect()
+            [*ci.pubkey()].into_iter().collect()
         );
 
         // push an old version
@@ -372,7 +372,7 @@ mod tests {
         let crds = RwLock::<Crds>::default();
         let push = CrdsGossipPush::default();
         let mut ci = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
-        let origin = ci.id;
+        let origin = *ci.pubkey();
         ci.set_wallclock(0);
         let value_old = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci.clone()));
 
@@ -398,7 +398,7 @@ mod tests {
         let push = CrdsGossipPush::default();
         let mut ping_cache = new_ping_cache();
         let peer = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
-        ping_cache.mock_pong(peer.id, peer.gossip().unwrap(), Instant::now());
+        ping_cache.mock_pong(*peer.pubkey(), peer.gossip().unwrap(), Instant::now());
         let peer = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(peer));
         assert_eq!(
             crds.insert(peer.clone(), now, GossipRoute::LocalMessage),
@@ -450,7 +450,7 @@ mod tests {
             .map(|wallclock| {
                 let mut peer = ContactInfo::new_rand(&mut rng, /*pubkey=*/ None);
                 peer.set_wallclock(wallclock);
-                ping_cache.mock_pong(peer.id, peer.gossip().unwrap(), Instant::now());
+                ping_cache.mock_pong(*peer.pubkey(), peer.gossip().unwrap(), Instant::now());
                 CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(peer))
             })
             .collect();

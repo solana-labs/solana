@@ -4,12 +4,16 @@
 #[cfg(all(not(target_os = "solana"), debug_assertions))]
 use crate::signature::Signature;
 #[cfg(not(target_os = "solana"))]
-use crate::{
-    account::WritableAccount,
-    rent::Rent,
-    system_instruction::{
-        MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
+use {
+    crate::{
+        account::WritableAccount,
+        rent::Rent,
+        system_instruction::{
+            MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
+        },
     },
+    solana_program::entrypoint::MAX_PERMITTED_DATA_INCREASE,
+    std::mem::MaybeUninit,
 };
 use {
     crate::{
@@ -18,9 +22,10 @@ use {
         pubkey::Pubkey,
     },
     std::{
-        cell::{RefCell, RefMut},
+        cell::{Ref, RefCell, RefMut},
         collections::HashSet,
         pin::Pin,
+        sync::Arc,
     },
 };
 
@@ -51,15 +56,93 @@ pub struct InstructionAccount {
 /// An account key and the matching account
 pub type TransactionAccount = (Pubkey, AccountSharedData);
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransactionAccounts {
+    accounts: Vec<RefCell<AccountSharedData>>,
+    touched_flags: RefCell<Box<[bool]>>,
+    is_early_verification_of_account_modifications_enabled: bool,
+}
+
+impl TransactionAccounts {
+    #[cfg(not(target_os = "solana"))]
+    fn new(
+        accounts: Vec<RefCell<AccountSharedData>>,
+        is_early_verification_of_account_modifications_enabled: bool,
+    ) -> TransactionAccounts {
+        TransactionAccounts {
+            touched_flags: RefCell::new(vec![false; accounts.len()].into_boxed_slice()),
+            accounts,
+            is_early_verification_of_account_modifications_enabled,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.accounts.len()
+    }
+
+    pub fn get(&self, index: IndexOfAccount) -> Option<&RefCell<AccountSharedData>> {
+        self.accounts.get(index as usize)
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    pub fn touch(&self, index: IndexOfAccount) -> Result<(), InstructionError> {
+        if self.is_early_verification_of_account_modifications_enabled {
+            *self
+                .touched_flags
+                .borrow_mut()
+                .get_mut(index as usize)
+                .ok_or(InstructionError::NotEnoughAccountKeys)? = true;
+        }
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    pub fn touched_count(&self) -> usize {
+        self.touched_flags
+            .borrow()
+            .iter()
+            .fold(0usize, |accumulator, was_touched| {
+                accumulator.saturating_add(*was_touched as usize)
+            })
+    }
+
+    pub fn try_borrow(
+        &self,
+        index: IndexOfAccount,
+    ) -> Result<Ref<'_, AccountSharedData>, InstructionError> {
+        self.accounts
+            .get(index as usize)
+            .ok_or(InstructionError::MissingAccount)?
+            .try_borrow()
+            .map_err(|_| InstructionError::AccountBorrowFailed)
+    }
+
+    pub fn try_borrow_mut(
+        &self,
+        index: IndexOfAccount,
+    ) -> Result<RefMut<'_, AccountSharedData>, InstructionError> {
+        self.accounts
+            .get(index as usize)
+            .ok_or(InstructionError::MissingAccount)?
+            .try_borrow_mut()
+            .map_err(|_| InstructionError::AccountBorrowFailed)
+    }
+
+    pub fn into_accounts(self) -> Vec<AccountSharedData> {
+        self.accounts
+            .into_iter()
+            .map(|account| account.into_inner())
+            .collect()
+    }
+}
+
 /// Loaded transaction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a transaction being processed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransactionContext {
     account_keys: Pin<Box<[Pubkey]>>,
-    accounts: Pin<Box<[RefCell<AccountSharedData>]>>,
-    #[cfg(not(target_os = "solana"))]
-    account_touched_flags: RefCell<Pin<Box<[bool]>>>,
+    accounts: Arc<TransactionAccounts>,
     instruction_stack_capacity: usize,
     instruction_trace_capacity: usize,
     instruction_stack: Vec<usize>,
@@ -84,16 +167,13 @@ impl TransactionContext {
         instruction_stack_capacity: usize,
         instruction_trace_capacity: usize,
     ) -> Self {
-        let (account_keys, accounts): (Vec<Pubkey>, Vec<RefCell<AccountSharedData>>) =
-            transaction_accounts
-                .into_iter()
-                .map(|(key, account)| (key, RefCell::new(account)))
-                .unzip();
-        let account_touched_flags = vec![false; accounts.len()];
+        let (account_keys, accounts): (Vec<_>, Vec<_>) = transaction_accounts
+            .into_iter()
+            .map(|(key, account)| (key, RefCell::new(account)))
+            .unzip();
         Self {
             account_keys: Pin::new(account_keys.into_boxed_slice()),
-            accounts: Pin::new(accounts.into_boxed_slice()),
-            account_touched_flags: RefCell::new(Pin::new(account_touched_flags.into_boxed_slice())),
+            accounts: Arc::new(TransactionAccounts::new(accounts, rent.is_some())),
             instruction_stack_capacity,
             instruction_trace_capacity,
             instruction_stack: Vec::with_capacity(instruction_stack_capacity),
@@ -113,10 +193,15 @@ impl TransactionContext {
         if !self.instruction_stack.is_empty() {
             return Err(InstructionError::CallDepth);
         }
-        Ok(Vec::from(Pin::into_inner(self.accounts))
-            .into_iter()
-            .map(|account| account.into_inner())
-            .collect())
+
+        Ok(Arc::try_unwrap(self.accounts)
+            .expect("transaction_context.accounts has unexpected outstanding refs")
+            .into_accounts())
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    pub fn accounts(&self) -> &Arc<TransactionAccounts> {
+        &self.accounts
     }
 
     /// Returns true if `enable_early_verification_of_account_modifications` is active
@@ -159,7 +244,7 @@ impl TransactionContext {
         index_in_transaction: IndexOfAccount,
     ) -> Result<&RefCell<AccountSharedData>, InstructionError> {
         self.accounts
-            .get(index_in_transaction as usize)
+            .get(index_in_transaction)
             .ok_or(InstructionError::NotEnoughAccountKeys)
     }
 
@@ -553,7 +638,7 @@ impl InstructionContext {
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
         let account = transaction_context
             .accounts
-            .get(index_in_transaction as usize)
+            .get(index_in_transaction)
             .ok_or(InstructionError::MissingAccount)?
             .try_borrow_mut()
             .map_err(|_| InstructionError::AccountBorrowFailed)?;
@@ -663,6 +748,11 @@ pub struct BorrowedAccount<'a> {
 }
 
 impl<'a> BorrowedAccount<'a> {
+    /// Returns the transaction context
+    pub fn transaction_context(&self) -> &TransactionContext {
+        self.transaction_context
+    }
+
     /// Returns the index of this account (transaction wide)
     #[inline]
     pub fn get_index_in_transaction(&self) -> IndexOfAccount {
@@ -782,23 +872,35 @@ impl<'a> BorrowedAccount<'a> {
     pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
         self.can_data_be_changed()?;
         self.touch()?;
+        self.make_data_mut();
         Ok(self.account.data_as_mut_slice())
+    }
+
+    /// Returns the spare capacity of the vector backing the account data.
+    ///
+    /// This method should only ever be used during CPI, where after a shrinking
+    /// realloc we want to zero the spare capacity.
+    #[cfg(not(target_os = "solana"))]
+    pub fn spare_data_capacity_mut(&mut self) -> Result<&mut [MaybeUninit<u8>], InstructionError> {
+        debug_assert!(!self.account.is_shared());
+        Ok(self.account.spare_data_capacity_mut())
     }
 
     /// Overwrites the account data and size (transaction wide).
     ///
-    /// Call this when you have an owned buffer and want to replace the account
-    /// data with it.
+    /// You should always prefer set_data_from_slice(). Calling this method is
+    /// currently safe but requires some special casing during CPI when direct
+    /// account mapping is enabled.
     ///
-    /// If you have a slice, use [`Self::set_data_from_slice()`].
+    /// Currently only used by tests and the program-test crate.
     #[cfg(not(target_os = "solana"))]
     pub fn set_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
         self.touch()?;
+
         self.update_accounts_resize_delta(data.len())?;
         self.account.set_data(data);
-
         Ok(())
     }
 
@@ -806,14 +908,19 @@ impl<'a> BorrowedAccount<'a> {
     ///
     /// Call this when you have a slice of data you do not own and want to
     /// replace the account data with it.
-    ///
-    /// If you have an owned buffer (eg [`Vec<u8>`]), use [`Self::set_data()`].
     #[cfg(not(target_os = "solana"))]
     pub fn set_data_from_slice(&mut self, data: &[u8]) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
         self.touch()?;
         self.update_accounts_resize_delta(data.len())?;
+        // Calling make_data_mut() here guarantees that set_data_from_slice()
+        // copies in places, extending the account capacity if necessary but
+        // never reducing it. This is required as the account migh be directly
+        // mapped into a MemoryRegion, and therefore reducing capacity would
+        // leave a hole in the vm address space. After CPI or upon program
+        // termination, the runtime will zero the extra capacity.
+        self.make_data_mut();
         self.account.set_data_from_slice(data);
 
         Ok(())
@@ -832,7 +939,7 @@ impl<'a> BorrowedAccount<'a> {
         }
         self.touch()?;
         self.update_accounts_resize_delta(new_length)?;
-        self.account.data_mut().resize(new_length, 0);
+        self.account.resize(new_length, 0);
         Ok(())
     }
 
@@ -849,8 +956,56 @@ impl<'a> BorrowedAccount<'a> {
 
         self.touch()?;
         self.update_accounts_resize_delta(new_len)?;
-        self.account.data_mut().extend_from_slice(data);
+        // Even if extend_from_slice never reduces capacity, still realloc using
+        // make_data_mut() if necessary so that we grow the account of the full
+        // max realloc length in one go, avoiding smaller reallocations.
+        self.make_data_mut();
+        self.account.extend_from_slice(data);
         Ok(())
+    }
+
+    /// Reserves capacity for at least additional more elements to be inserted
+    /// in the given account. Does nothing if capacity is already sufficient.
+    #[cfg(not(target_os = "solana"))]
+    pub fn reserve(&mut self, additional: usize) -> Result<(), InstructionError> {
+        self.can_data_be_changed()?;
+        self.make_data_mut();
+        self.account.reserve(additional);
+
+        Ok(())
+    }
+
+    /// Returns the number of bytes the account can hold without reallocating.
+    #[cfg(not(target_os = "solana"))]
+    pub fn capacity(&self) -> usize {
+        self.account.capacity()
+    }
+
+    /// Returns whether the underlying AccountSharedData is shared.
+    ///
+    /// The data is shared if the account has been loaded from the accounts database and has never
+    /// been written to. Writing to an account unshares it.
+    ///
+    /// During account serialization, if an account is shared it'll get mapped as CoW, else it'll
+    /// get mapped directly as writable.
+    #[cfg(not(target_os = "solana"))]
+    pub fn is_shared(&self) -> bool {
+        self.account.is_shared()
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    fn make_data_mut(&mut self) {
+        // if the account is still shared, it means this is the first time we're
+        // about to write into it. Make the account mutable by copying it in a
+        // buffer with MAX_PERMITTED_DATA_INCREASE capacity so that if the
+        // transaction reallocs, we don't have to copy the whole account data a
+        // second time to fullfill the realloc.
+        //
+        // NOTE: The account memory region CoW code in Serializer::push_account_region() implements
+        // the same logic and must be kept in sync.
+        if self.account.is_shared() {
+            self.account.reserve(MAX_PERMITTED_DATA_INCREASE);
+        }
     }
 
     /// Deserializes the account data into a state
@@ -1023,19 +1178,9 @@ impl<'a> BorrowedAccount<'a> {
 
     #[cfg(not(target_os = "solana"))]
     fn touch(&self) -> Result<(), InstructionError> {
-        if self
-            .transaction_context
-            .is_early_verification_of_account_modifications_enabled()
-        {
-            *self
-                .transaction_context
-                .account_touched_flags
-                .try_borrow_mut()
-                .map_err(|_| InstructionError::GenericError)?
-                .get_mut(self.index_in_transaction as usize)
-                .ok_or(InstructionError::NotEnoughAccountKeys)? = true;
-        }
-        Ok(())
+        self.transaction_context
+            .accounts()
+            .touch(self.index_in_transaction)
     }
 
     #[cfg(not(target_os = "solana"))]
@@ -1064,23 +1209,14 @@ pub struct ExecutionRecord {
 #[cfg(not(target_os = "solana"))]
 impl From<TransactionContext> for ExecutionRecord {
     fn from(context: TransactionContext) -> Self {
-        let account_touched_flags = context
-            .account_touched_flags
-            .try_borrow()
-            .expect("borrowing transaction_context.account_touched_flags failed");
-        let touched_account_count = account_touched_flags
-            .iter()
-            .fold(0u64, |accumulator, was_touched| {
-                accumulator.saturating_add(*was_touched as u64)
-            });
+        let accounts = Arc::try_unwrap(context.accounts)
+            .expect("transaction_context.accounts has unexpectd outstanding refs");
+        let touched_account_count = accounts.touched_count() as u64;
+        let accounts = accounts.into_accounts();
         Self {
             accounts: Vec::from(Pin::into_inner(context.account_keys))
                 .into_iter()
-                .zip(
-                    Vec::from(Pin::into_inner(context.accounts))
-                        .into_iter()
-                        .map(|account| account.into_inner()),
-                )
+                .zip(accounts)
                 .collect(),
             return_data: context.return_data,
             touched_account_count,

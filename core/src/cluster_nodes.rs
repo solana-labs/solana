@@ -93,7 +93,7 @@ impl Node {
     fn pubkey(&self) -> Pubkey {
         match &self.node {
             NodeId::Pubkey(pubkey) => *pubkey,
-            NodeId::ContactInfo(node) => node.id,
+            NodeId::ContactInfo(node) => *node.pubkey(),
         }
     }
 
@@ -245,11 +245,11 @@ impl ClusterNodes<RetransmitStage> {
             .inspect(|node| {
                 if let Some(node) = node.contact_info() {
                     if let Ok(addr) = node.tvu() {
-                        addrs.entry(addr).or_insert(node.id);
+                        addrs.entry(addr).or_insert(*node.pubkey());
                     }
                     if !drop_redundant_turbine_path {
                         if let Ok(addr) = node.tvu_forwards() {
-                            frwds.entry(addr).or_insert(node.id);
+                            frwds.entry(addr).or_insert(*node.pubkey());
                         }
                     }
                 }
@@ -341,7 +341,7 @@ fn get_nodes(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Vec<N
     })
     // All known tvu-peers from gossip.
     .chain(cluster_info.tvu_peers().into_iter().map(|node| {
-        let stake = stakes.get(&node.id).copied().unwrap_or_default();
+        let stake = stakes.get(node.pubkey()).copied().unwrap_or_default();
         let node = NodeId::from(node);
         Node { node, stake }
     }))
@@ -603,7 +603,13 @@ mod tests {
                 .map(|node| (node.pubkey(), node))
                 .collect();
             for node in &nodes {
-                assert_eq!(cluster_nodes[&node.id].contact_info().unwrap().id, node.id);
+                assert_eq!(
+                    cluster_nodes[node.pubkey()]
+                        .contact_info()
+                        .unwrap()
+                        .pubkey(),
+                    node.pubkey()
+                );
             }
             for (pubkey, stake) in &stakes {
                 if *stake > 0 {
@@ -633,7 +639,13 @@ mod tests {
                 .map(|node| (node.pubkey(), node))
                 .collect();
             for node in &nodes {
-                assert_eq!(cluster_nodes[&node.id].contact_info().unwrap().id, node.id);
+                assert_eq!(
+                    cluster_nodes[node.pubkey()]
+                        .contact_info()
+                        .unwrap()
+                        .pubkey(),
+                    node.pubkey()
+                );
             }
             for (pubkey, stake) in &stakes {
                 if *stake > 0 {

@@ -304,7 +304,7 @@ fn test_stake_account_lifetime() {
 
     // Create Vote Account
     let message = Message::new(
-        &vote_instruction::create_account(
+        &vote_instruction::create_account_with_config(
             &mint_pubkey,
             &vote_pubkey,
             &VoteInit {
@@ -314,6 +314,10 @@ fn test_stake_account_lifetime() {
                 commission: 50,
             },
             vote_balance,
+            vote_instruction::CreateVoteAccountConfig {
+                space: VoteStateVersions::vote_state_size_of(true) as u64,
+                ..vote_instruction::CreateVoteAccountConfig::default()
+            },
         ),
         Some(&mint_pubkey),
     );
@@ -569,7 +573,7 @@ fn test_create_stake_account_from_seed() {
 
     // Create Vote Account
     let message = Message::new(
-        &vote_instruction::create_account(
+        &vote_instruction::create_account_with_config(
             &mint_pubkey,
             &vote_pubkey,
             &VoteInit {
@@ -579,6 +583,10 @@ fn test_create_stake_account_from_seed() {
                 commission: 50,
             },
             10,
+            vote_instruction::CreateVoteAccountConfig {
+                space: VoteStateVersions::vote_state_size_of(true) as u64,
+                ..vote_instruction::CreateVoteAccountConfig::default()
+            },
         ),
         Some(&mint_pubkey),
     );

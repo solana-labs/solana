@@ -297,7 +297,7 @@ impl AccountsHashVerifier {
 
         if let Some(snapshot_info) = &accounts_package.snapshot_info {
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                snapshot_info.snapshot_links.path(),
+                &snapshot_info.bank_snapshot_dir,
                 accounts_package.slot,
                 &accounts_hash_for_reserialize,
                 bank_incremental_snapshot_persistence.as_ref(),
@@ -567,10 +567,10 @@ impl AccountsHashVerifier {
                 }
             }
         }
-        inc_new_counter_info!("accounts_hash_verifier-hashes_verified", verified_count);
         datapoint_info!(
             "accounts_hash_verifier",
             ("highest_slot_verified", highest_slot, i64),
+            ("num_verified", verified_count, i64),
         );
         false
     }

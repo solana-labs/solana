@@ -50,9 +50,11 @@ for file in "${files[@]}"; do
     fi
   done
 
-  result="$(cargo owner --list -q "$crate_name" --token "$CRATE_TOKEN" 2>&1)"
-  if [[ $result =~ ^error ]]; then
-    if [[ $result == *"Not Found"* ]]; then
+  response=$(curl -s https://crates.io/api/v1/crates/"$crate_name"/owners)
+  errors=$(echo "$response" | jq .errors)
+  if [[ $errors != "null" ]]; then
+    details=$(echo "$response" | jq .errors | jq -r ".[0].detail")
+    if [[ $details = *"Not Found"* ]]; then
       ((error_count++))
       echo "❌ new crate $crate_name not found on crates.io. you can either
 
@@ -83,10 +85,10 @@ or
 "
     else
       ((error_count++))
-      echo "❌ $result"
+      echo "❌ $response"
     fi
   else
-    readarray -t owners <<<"$result"
+    readarray -t owners <<<"$(echo "$response" | jq .users | jq -r ".[] | .login")"
 
     verified_owner_count=0
     unverified_owner_count=0
@@ -113,6 +115,7 @@ or
     fi
   fi
   echo ""
+
 done
 
 if [ "$error_count" -eq 0 ]; then

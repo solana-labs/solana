@@ -46,6 +46,10 @@ echo --- build environment
   cargo audit --version
 
   grcov --version
+
+  sccache --version
+
+  wasm-pack --version
 )
 
 export RUST_BACKTRACE=1
@@ -78,6 +82,7 @@ nightly_clippy_allows=()
    --deny=warnings \
    --deny=clippy::default_trait_access \
    --deny=clippy::integer_arithmetic \
+   --deny=clippy::used_underscore_binding \
    "${nightly_clippy_allows[@]}"
 
 if [[ -n $CI ]]; then

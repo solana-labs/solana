@@ -392,7 +392,7 @@ pub fn wasm_bindgen_stub(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 for field in fields.named.iter_mut() {
                     field.attrs.retain(|attr| {
                         !attr
-                            .path
+                            .path()
                             .segments
                             .iter()
                             .any(|segment| segment.ident == "wasm_bindgen")

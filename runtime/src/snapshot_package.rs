@@ -8,20 +8,15 @@ use {
         rent_collector::RentCollector,
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
         snapshot_hash::SnapshotHash,
-        snapshot_utils::{
-            self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotError, SnapshotVersion,
-            SNAPSHOT_STATUS_CACHE_FILENAME, TMP_BANK_SNAPSHOT_PREFIX,
-        },
+        snapshot_utils::{self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion},
     },
     log::*,
     solana_sdk::{clock::Slot, feature_set, sysvar::epoch_schedule::EpochSchedule},
     std::{
-        fs,
         path::{Path, PathBuf},
         sync::Arc,
         time::Instant,
     },
-    tempfile::TempDir,
 };
 
 mod compare;
@@ -78,32 +73,8 @@ impl AccountsPackage {
             }
         }
 
-        // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
-        let bank_snapshot_dir = &bank_snapshot_info.snapshot_dir;
-        let bank_snapshots_dir = bank_snapshot_dir
-            .parent()
-            .ok_or_else(|| SnapshotError::InvalidSnapshotDirPath(bank_snapshot_dir.clone()))?;
-        let snapshot_links = tempfile::Builder::new()
-            .prefix(&format!("{}{}-", TMP_BANK_SNAPSHOT_PREFIX, bank.slot()))
-            .tempdir_in(bank_snapshots_dir)?;
-        {
-            let snapshot_hardlink_dir = snapshot_links
-                .path()
-                .join(bank_snapshot_info.slot.to_string());
-            fs::create_dir_all(&snapshot_hardlink_dir)?;
-            let snapshot_path = bank_snapshot_info.snapshot_path();
-            let file_name = snapshot_utils::path_to_file_name_str(&snapshot_path)?;
-            fs::hard_link(&snapshot_path, snapshot_hardlink_dir.join(file_name))?;
-            let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-            let status_cache_file_name = snapshot_utils::path_to_file_name_str(&status_cache_path)?;
-            fs::hard_link(
-                &status_cache_path,
-                snapshot_links.path().join(status_cache_file_name),
-            )?;
-        }
-
         let snapshot_info = SupplementalSnapshotInfo {
-            snapshot_links,
+            bank_snapshot_dir: bank_snapshot_info.snapshot_dir.clone(),
             archive_format,
             snapshot_version,
             full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
@@ -180,7 +151,7 @@ impl AccountsPackage {
             rent_collector: RentCollector::default(),
             is_incremental_accounts_hash_feature_enabled: bool::default(),
             snapshot_info: Some(SupplementalSnapshotInfo {
-                snapshot_links: TempDir::new().unwrap(),
+                bank_snapshot_dir: PathBuf::default(),
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
                 full_snapshot_archives_dir: PathBuf::default(),
@@ -191,16 +162,17 @@ impl AccountsPackage {
         }
     }
 
-    /// Returns the path to the snapshot links directory
+    /// Returns the path to the snapshot dir
     ///
-    /// NOTE 1: This path is within the TempDir created for the AccountsPackage, *not* the bank
-    ///         snapshots dir passed into `new_for_snapshot()` when creating the AccountsPackage.
-    /// NOTE 2: This fn will panic if the AccountsPackage is of type EpochAccountsHash.
-    pub fn snapshot_links_dir(&self) -> &Path {
+    /// NOTE: This fn will panic if the AccountsPackage is of type EpochAccountsHash.
+    pub fn bank_snapshot_dir(&self) -> &Path {
         match self.package_type {
-            AccountsPackageType::AccountsHashVerifier | AccountsPackageType::Snapshot(..) => {
-                self.snapshot_info.as_ref().unwrap().snapshot_links.path()
-            }
+            AccountsPackageType::AccountsHashVerifier | AccountsPackageType::Snapshot(..) => self
+                .snapshot_info
+                .as_ref()
+                .unwrap()
+                .bank_snapshot_dir
+                .as_path(),
             AccountsPackageType::EpochAccountsHash => {
                 panic!("EAH accounts packages do not contain snapshot information")
             }
@@ -220,7 +192,7 @@ impl std::fmt::Debug for AccountsPackage {
 
 /// Supplemental information needed for snapshots
 pub struct SupplementalSnapshotInfo {
-    pub snapshot_links: TempDir,
+    pub bank_snapshot_dir: PathBuf,
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
     pub full_snapshot_archives_dir: PathBuf,
@@ -242,7 +214,7 @@ pub enum AccountsPackageType {
 pub struct SnapshotPackage {
     pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
-    pub snapshot_links: TempDir,
+    pub bank_snapshot_dir: PathBuf,
     pub snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     pub snapshot_version: SnapshotVersion,
     pub snapshot_type: SnapshotType,
@@ -294,7 +266,7 @@ impl SnapshotPackage {
                 archive_format: snapshot_info.archive_format,
             },
             block_height: accounts_package.block_height,
-            snapshot_links: snapshot_info.snapshot_links,
+            bank_snapshot_dir: snapshot_info.bank_snapshot_dir,
             snapshot_storages,
             snapshot_version: snapshot_info.snapshot_version,
             snapshot_type,

@@ -455,13 +455,14 @@ where
 /// write serialized bank to post file
 /// return true if pre file found
 pub fn reserialize_bank_with_new_accounts_hash(
-    bank_snapshots_dir: impl AsRef<Path>,
+    bank_snapshot_dir: impl AsRef<Path>,
     slot: Slot,
     accounts_hash: &AccountsHash,
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> bool {
-    let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
-    let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
+    let bank_post = bank_snapshot_dir
+        .as_ref()
+        .join(snapshot_utils::get_snapshot_file_name(slot));
     let bank_pre = bank_post.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     let mut found = false;

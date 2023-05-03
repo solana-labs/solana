@@ -761,7 +761,6 @@ mod test {
         super::*,
         crate::{
             cluster_slot_state_verifier::{DuplicateSlotsToRepair, PurgeRepairSlotCounter},
-            repair_service::DuplicateSlotsResetReceiver,
             replay_stage::{
                 tests::{replay_blockstore_components, ReplayBlockstoreComponents},
                 ReplayStage,
@@ -1039,7 +1038,6 @@ mod test {
         repairable_dead_slot_pool: HashSet<Slot>,
         request_throttle: Vec<u64>,
         repair_stats: AncestorRepairRequestsStats,
-        _duplicate_slots_reset_receiver: DuplicateSlotsResetReceiver,
         retryable_slots_sender: RetryableSlotsSender,
         retryable_slots_receiver: RetryableSlotsReceiver,
         ancestor_hashes_replay_update_sender: AncestorHashesReplayUpdateSender,
@@ -1089,7 +1087,6 @@ mod test {
                 repairable_dead_slot_pool: HashSet::new(),
                 request_throttle: vec![],
                 repair_stats: AncestorRepairRequestsStats::default(),
-                _duplicate_slots_reset_receiver,
                 ancestor_hashes_replay_update_sender,
                 ancestor_hashes_replay_update_receiver,
                 retryable_slots_sender,

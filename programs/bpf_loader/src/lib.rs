@@ -1,18 +1,13 @@
 #![deny(clippy::integer_arithmetic)]
 #![deny(clippy::indexing_slicing)]
 
-pub mod deprecated;
 pub mod serialization;
 pub mod syscalls;
-pub mod upgradeable;
-pub mod upgradeable_with_jit;
-pub mod with_jit;
 
 use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         invoke_context::{BpfAllocator, InvokeContext, SyscallContext},
         loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
@@ -24,21 +19,24 @@ use {
         aligned_memory::AlignedMemory,
         ebpf::{self, HOST_ALIGN, MM_HEAP_START},
         elf::Executable,
-        memory_region::{MemoryCowCallback, MemoryMapping, MemoryRegion},
+        error::EbpfError,
+        memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
         verifier::RequisiteVerifier,
         vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
+        account::WritableAccount,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::Slot,
-        entrypoint::SUCCESS,
+        entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
-            delay_visibility_of_program_deployment, disable_deploy_of_alloc_free_syscall,
-            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
-            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id, FeatureSet,
+            bpf_account_data_direct_mapping, cap_accounts_data_allocations_per_transaction,
+            cap_bpf_program_instruction_accounts, delay_visibility_of_program_deployment,
+            disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
+            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
+            limit_max_instruction_trace_length, native_programs_consume_cu,
+            remove_bpf_loader_incorrect_program_id, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -56,18 +54,12 @@ use {
         },
     },
     std::{
-        cell::{RefCell, RefMut},
+        cell::RefCell,
         mem,
         rc::Rc,
         sync::{atomic::Ordering, Arc},
     },
 };
-
-solana_sdk::declare_builtin!(
-    solana_sdk::bpf_loader::ID,
-    solana_bpf_loader_program,
-    solana_bpf_loader_program::process_instruction
-);
 
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
@@ -79,7 +71,6 @@ pub fn load_program_from_bytes(
     loader_key: &Pubkey,
     account_size: usize,
     deployment_slot: Slot,
-    use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
     debugging_features: bool,
 ) -> Result<LoadedProgram, InstructionError> {
@@ -99,13 +90,11 @@ pub fn load_program_from_bytes(
     })?;
     register_syscalls_time.stop();
     load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
-
     let effective_slot = if feature_set.is_active(&delay_visibility_of_program_deployment::id()) {
         deployment_slot.saturating_add(1)
     } else {
         deployment_slot
     };
-
     let loaded_program = LoadedProgram::new(
         loader_key,
         loader,
@@ -114,7 +103,6 @@ pub fn load_program_from_bytes(
         None,
         programdata,
         account_size,
-        use_jit,
         load_program_metrics,
     )
     .map_err(|err| {
@@ -157,10 +145,8 @@ pub fn load_program_from_account(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
-    tx_executor_cache: Option<RefMut<TransactionExecutorCache>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
-    use_jit: bool,
     debugging_features: bool,
 ) -> Result<(Arc<LoadedProgram>, Option<LoadProgramMetrics>), InstructionError> {
     if !check_loader_id(program.get_owner()) {
@@ -169,17 +155,6 @@ pub fn load_program_from_account(
             "Executable account not owned by the BPF loader"
         );
         return Err(InstructionError::IncorrectProgramId);
-    }
-
-    if let Some(ref tx_executor_cache) = tx_executor_cache {
-        if let Some(loaded_program) = tx_executor_cache.get(program.get_key()) {
-            if loaded_program.is_tombstone() {
-                // We cached that the Executor does not exist, abort
-                return Err(InstructionError::InvalidAccountData);
-            }
-            // Executor exists and is cached, use it
-            return Ok((loaded_program, None));
-        }
     }
 
     let (programdata_offset, deployment_slot) =
@@ -208,25 +183,15 @@ pub fn load_program_from_account(
         program.get_owner(),
         program.get_data().len().saturating_add(programdata_size),
         deployment_slot,
-        use_jit,
         false, /* reject_deployment_of_broken_elfs */
         debugging_features,
     )?);
-    if let Some(mut tx_executor_cache) = tx_executor_cache {
-        tx_executor_cache.set(
-            *program.get_key(),
-            loaded_program.clone(),
-            false,
-            feature_set.is_active(&delay_visibility_of_program_deployment::id()),
-            deployment_slot,
-        );
-    }
 
     Ok((loaded_program, Some(load_program_metrics)))
 }
 
 macro_rules! deploy_program {
-    ($invoke_context:expr, $use_jit:expr, $program_id:expr, $loader_key:expr,
+    ($invoke_context:expr, $program_id:expr, $loader_key:expr,
      $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
         let delay_visibility_of_program_deployment = $invoke_context
             .feature_set
@@ -241,7 +206,6 @@ macro_rules! deploy_program {
             $loader_key,
             $account_size,
             $slot,
-            $use_jit,
             true, /* reject_deployment_of_broken_elfs */
             false, /* debugging_features */
         )?;
@@ -319,8 +283,31 @@ pub fn create_vm<'a, 'b>(
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
     let stack_size = stack.len();
     let heap_size = heap.len();
-    let memory_mapping =
-        create_memory_mapping(program.get_executable(), stack, heap, regions, None)?;
+    let accounts = Arc::clone(invoke_context.transaction_context.accounts());
+    let memory_mapping = create_memory_mapping(
+        program.get_executable(),
+        stack,
+        heap,
+        regions,
+        Some(Box::new(move |index_in_transaction| {
+            // The two calls below can't really fail. If they fail because of a bug,
+            // whatever is writing will trigger an EbpfError::AccessViolation like
+            // if the region was readonly, and the transaction will fail gracefully.
+            let mut account = accounts
+                .try_borrow_mut(index_in_transaction as IndexOfAccount)
+                .map_err(|_| ())?;
+            accounts
+                .touch(index_in_transaction as IndexOfAccount)
+                .map_err(|_| ())?;
+
+            if account.is_shared() {
+                // See BorrowedAccount::make_data_mut() as to why we reserve extra
+                // MAX_PERMITTED_DATA_INCREASE bytes here.
+                account.reserve(MAX_PERMITTED_DATA_INCREASE);
+            }
+            Ok(account.data_as_mut_slice().as_mut_ptr() as u64)
+        })),
+    )?;
     invoke_context.set_syscall_context(SyscallContext {
         allocator: BpfAllocator::new(heap_size as u64),
         orig_account_lengths,
@@ -447,25 +434,11 @@ pub fn process_instruction(
     _memory_mapping: &mut MemoryMapping,
     result: &mut ProgramResult,
 ) {
-    *result = process_instruction_inner(invoke_context, false).into();
-}
-
-pub fn process_instruction_jit(
-    invoke_context: &mut InvokeContext,
-    _arg0: u64,
-    _arg1: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _memory_mapping: &mut MemoryMapping,
-    result: &mut ProgramResult,
-) {
-    *result = process_instruction_inner(invoke_context, true).into();
+    *result = process_instruction_inner(invoke_context).into();
 }
 
 fn process_instruction_inner(
     invoke_context: &mut InvokeContext,
-    use_jit: bool,
 ) -> Result<u64, Box<dyn std::error::Error>> {
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
@@ -562,12 +535,12 @@ fn process_instruction_inner(
             if native_programs_consume_cu {
                 invoke_context.consume_checked(2_370)?;
             }
-            process_loader_upgradeable_instruction(invoke_context, use_jit)
+            process_loader_upgradeable_instruction(invoke_context)
         } else if bpf_loader::check_id(program_id) {
             if native_programs_consume_cu {
                 invoke_context.consume_checked(570)?;
             }
-            process_loader_instruction(invoke_context, use_jit)
+            process_loader_instruction(invoke_context)
         } else if bpf_loader_deprecated::check_id(program_id) {
             if native_programs_consume_cu {
                 invoke_context.consume_checked(1_140)?;
@@ -588,40 +561,23 @@ fn process_instruction_inner(
         return Err(Box::new(InstructionError::IncorrectProgramId));
     }
 
-    let programdata_account = if bpf_loader_upgradeable::check_id(program_account.get_owner()) {
-        instruction_context
-            .try_borrow_program_account(
-                transaction_context,
-                instruction_context
-                    .get_number_of_program_accounts()
-                    .saturating_sub(2),
-            )
-            .ok()
-    } else {
-        None
-    };
-
     let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-    let (executor, load_program_metrics) = load_program_from_account(
-        &invoke_context.feature_set,
-        invoke_context.get_compute_budget(),
-        log_collector,
-        Some(invoke_context.tx_executor_cache.borrow_mut()),
-        &program_account,
-        programdata_account.as_ref().unwrap_or(&program_account),
-        use_jit,
-        false, /* debugging_features */
-    )?;
+    let executor = invoke_context
+        .tx_executor_cache
+        .borrow()
+        .get(program_account.get_key())
+        .ok_or(InstructionError::InvalidAccountData)?;
+
+    if executor.is_tombstone() {
+        return Err(Box::new(InstructionError::InvalidAccountData));
+    }
+
     drop(program_account);
-    drop(programdata_account);
     get_or_create_executor_time.stop();
     saturating_add_assign!(
         invoke_context.timings.get_or_create_executor_us,
         get_or_create_executor_time.as_us()
     );
-    if let Some(load_program_metrics) = load_program_metrics {
-        load_program_metrics.submit_datapoint(&mut invoke_context.timings);
-    }
 
     executor.usage_counter.fetch_add(1, Ordering::Relaxed);
     match &executor.program {
@@ -639,7 +595,6 @@ fn process_instruction_inner(
 
 fn process_loader_upgradeable_instruction(
     invoke_context: &mut InvokeContext,
-    use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
@@ -823,7 +778,6 @@ fn process_loader_upgradeable_instruction(
                 instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
             deploy_program!(
                 invoke_context,
-                use_jit,
                 new_program_id,
                 &owner_id,
                 UpgradeableLoaderState::size_of_program().saturating_add(programdata_len),
@@ -1012,7 +966,6 @@ fn process_loader_upgradeable_instruction(
                 instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
             deploy_program!(
                 invoke_context,
-                use_jit,
                 new_program_id,
                 program_id,
                 UpgradeableLoaderState::size_of_program().saturating_add(programdata_len),
@@ -1502,10 +1455,7 @@ fn common_close_account(
     Ok(())
 }
 
-fn process_loader_instruction(
-    invoke_context: &mut InvokeContext,
-    use_jit: bool,
-) -> Result<(), InstructionError> {
+fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
@@ -1535,7 +1485,6 @@ fn process_loader_instruction(
             }
             deploy_program!(
                 invoke_context,
-                use_jit,
                 *program.get_key(),
                 program.get_owner(),
                 program.get_data().len(),
@@ -1563,6 +1512,9 @@ fn execute<'a, 'b: 'a>(
     let use_jit = false;
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     let use_jit = executable.get_executable().get_compiled_program().is_some();
+    let bpf_account_data_direct_mapping = invoke_context
+        .feature_set
+        .is_active(&bpf_account_data_direct_mapping::id());
 
     let mut serialize_time = Measure::start("serialize");
     let (parameter_bytes, regions, account_lengths) = serialization::serialize_parameters(
@@ -1571,8 +1523,18 @@ fn execute<'a, 'b: 'a>(
         invoke_context
             .feature_set
             .is_active(&cap_bpf_program_instruction_accounts::ID),
+        !bpf_account_data_direct_mapping,
     )?;
     serialize_time.stop();
+
+    // save the account addresses so in case of AccessViolation below we can
+    // map to InstructionError::ReadonlyDataModified, which is easier to
+    // diagnose from developers
+    let account_region_addrs = regions
+        .iter()
+        .map(|r| r.vm_addr..r.vm_addr.saturating_add(r.len))
+        .collect::<Vec<_>>();
+    let addr_is_account_data = |addr: u64| account_region_addrs.iter().any(|r| r.contains(&addr));
 
     let mut create_vm_time = Measure::start("create_vm");
     let mut execute_time;
@@ -1636,7 +1598,24 @@ fn execute<'a, 'b: 'a>(
                 };
                 Err(Box::new(error) as Box<dyn std::error::Error>)
             }
-            ProgramResult::Err(error) => Err(error),
+            ProgramResult::Err(error) => {
+                let error = match error.downcast_ref() {
+                    Some(EbpfError::AccessViolation(
+                        _pc,
+                        AccessType::Store,
+                        address,
+                        _size,
+                        _section_name,
+                    )) if addr_is_account_data(*address) => {
+                        // We can get here if direct_mapping is enabled and a program tries to
+                        // write to a readonly account. Map the error to ReadonlyDataModified so
+                        // it's easier for devs to diagnose what happened.
+                        Box::new(InstructionError::ReadonlyDataModified)
+                    }
+                    _ => error,
+                };
+                Err(error)
+            }
             _ => Ok(()),
         }
     };
@@ -1645,12 +1624,14 @@ fn execute<'a, 'b: 'a>(
     fn deserialize_parameters(
         invoke_context: &mut InvokeContext,
         parameter_bytes: &[u8],
+        copy_account_data: bool,
     ) -> Result<(), InstructionError> {
         serialization::deserialize_parameters(
             invoke_context.transaction_context,
             invoke_context
                 .transaction_context
                 .get_current_instruction_context()?,
+            copy_account_data,
             parameter_bytes,
             &invoke_context.get_syscall_context()?.orig_account_lengths,
         )
@@ -1658,8 +1639,12 @@ fn execute<'a, 'b: 'a>(
 
     let mut deserialize_time = Measure::start("deserialize");
     let execute_or_deserialize_result = execution_result.and_then(|_| {
-        deserialize_parameters(invoke_context, parameter_bytes.as_slice())
-            .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
+        deserialize_parameters(
+            invoke_context,
+            parameter_bytes.as_slice(),
+            !bpf_account_data_direct_mapping,
+        )
+        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
     });
     deserialize_time.stop();
 
@@ -1673,6 +1658,47 @@ fn execute<'a, 'b: 'a>(
         .saturating_add(deserialize_time.as_us());
 
     execute_or_deserialize_result
+}
+
+pub mod test_utils {
+    use {super::*, solana_sdk::account::ReadableAccount};
+
+    pub fn load_all_invoked_programs(invoke_context: &mut InvokeContext) {
+        let num_accounts = invoke_context.transaction_context.get_number_of_accounts();
+        for index in 0..num_accounts {
+            let account = invoke_context
+                .transaction_context
+                .get_account_at_index(index)
+                .expect("Failed to get the account")
+                .borrow();
+
+            let owner = account.owner();
+            if check_loader_id(owner) {
+                let pubkey = invoke_context
+                    .transaction_context
+                    .get_key_of_account_at_index(index)
+                    .expect("Failed to get account key");
+
+                let mut load_program_metrics = LoadProgramMetrics::default();
+
+                if let Ok(loaded_program) = load_program_from_bytes(
+                    &FeatureSet::all_enabled(),
+                    &ComputeBudget::default(),
+                    None,
+                    &mut load_program_metrics,
+                    account.data(),
+                    owner,
+                    account.data().len(),
+                    0,
+                    true,
+                    false,
+                ) {
+                    let mut cache = invoke_context.tx_executor_cache.borrow_mut();
+                    cache.set(*pubkey, Arc::new(loaded_program), true, false, 0)
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1731,7 +1757,9 @@ mod tests {
             instruction_accounts,
             expected_result,
             super::process_instruction,
-            |_invoke_context| {},
+            |invoke_context| {
+                test_utils::load_all_invoked_programs(invoke_context);
+            },
             |_invoke_context| {},
         )
     }
@@ -1970,6 +1998,7 @@ mod tests {
             super::process_instruction,
             |invoke_context| {
                 invoke_context.mock_set_remaining(0);
+                test_utils::load_all_invoked_programs(invoke_context);
             },
             |_invoke_context| {},
         );
@@ -4044,7 +4073,6 @@ mod tests {
         file.read_to_end(&mut elf).unwrap();
         deploy_program!(
             invoke_context,
-            false,
             program_id,
             &bpf_loader_upgradeable::id(),
             elf.len(),

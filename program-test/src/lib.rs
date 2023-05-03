@@ -11,7 +11,7 @@ use {
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
     solana_program_runtime::{
-        builtin_program::{BuiltinProgram, BuiltinPrograms, ProcessInstructionWithContext},
+        builtin_program::{create_builtin, BuiltinPrograms, ProcessInstructionWithContext},
         compute_budget::ComputeBudget,
         ic_msg, stable_log,
         timings::ExecuteTimings,
@@ -72,9 +72,6 @@ pub use {
 
 pub mod programs;
 
-#[macro_use]
-extern crate solana_bpf_loader_program;
-
 /// Errors from the program test environment
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProgramTestError {
@@ -126,7 +123,8 @@ pub fn builtin_process_instruction(
         invoke_context
             .transaction_context
             .get_current_instruction_context()?,
-        true,
+        true, // should_cap_ix_accounts
+        true, // copy_account_data // There is no VM so direct mapping can not be implemented here
     )?;
 
     // Deserialize data back into instruction params
@@ -440,7 +438,6 @@ pub struct ProgramTest {
     builtin_programs: BuiltinPrograms,
     compute_max_units: Option<u64>,
     prefer_bpf: bool,
-    use_bpf_jit: bool,
     deactivate_feature_set: HashSet<Pubkey>,
     transaction_account_lock_limit: Option<usize>,
 }
@@ -478,7 +475,6 @@ impl Default for ProgramTest {
             builtin_programs: BuiltinPrograms::default(),
             compute_max_units: None,
             prefer_bpf,
-            use_bpf_jit: false,
             deactivate_feature_set,
             transaction_account_lock_limit: None,
         }
@@ -523,11 +519,6 @@ impl ProgramTest {
     #[deprecated(since = "1.8.0", note = "please use `set_compute_max_units` instead")]
     pub fn set_bpf_compute_max_units(&mut self, bpf_compute_max_units: u64) {
         self.compute_max_units = Some(bpf_compute_max_units);
-    }
-
-    /// Execute the SBF program with JIT if true, interpreted if false
-    pub fn use_bpf_jit(&mut self, use_bpf_jit: bool) {
-        self.use_bpf_jit = use_bpf_jit;
     }
 
     /// Add an account to the test environment
@@ -701,11 +692,10 @@ impl ProgramTest {
         process_instruction: ProcessInstructionWithContext,
     ) {
         info!("\"{}\" builtin program", program_name);
-        self.builtin_programs.vec.push(BuiltinProgram {
-            name: program_name.to_string(),
+        self.builtin_programs.vec.push((
             program_id,
-            process_instruction,
-        });
+            create_builtin(program_name.to_string(), process_instruction),
+        ));
     }
 
     /// Deactivate a runtime feature.
@@ -785,7 +775,6 @@ impl ProgramTest {
         let mut bank = Bank::new_with_runtime_config_for_tests(
             &genesis_config,
             Arc::new(RuntimeConfig {
-                bpf_jit: self.use_bpf_jit,
                 compute_budget: self.compute_max_units.map(|max_units| ComputeBudget {
                     compute_unit_limit: max_units,
                     ..ComputeBudget::default()
@@ -795,33 +784,14 @@ impl ProgramTest {
             }),
         );
 
-        // Add loaders
-        macro_rules! add_builtin {
-            ($b:expr) => {
-                bank.add_builtin(&$b.0, &$b.1, $b.2)
-            };
-        }
-        add_builtin!(solana_bpf_loader_deprecated_program!());
-        if self.use_bpf_jit {
-            add_builtin!(solana_bpf_loader_program_with_jit!());
-            add_builtin!(solana_bpf_loader_upgradeable_program_with_jit!());
-        } else {
-            add_builtin!(solana_bpf_loader_program!());
-            add_builtin!(solana_bpf_loader_upgradeable_program!());
-        }
-
         // Add commonly-used SPL programs as a convenience to the user
         for (program_id, account) in programs::spl_programs(&Rent::default()).iter() {
             bank.store_account(program_id, account);
         }
 
         // User-supplied additional builtins
-        for builtin in self.builtin_programs.vec.iter() {
-            bank.add_builtin(
-                &builtin.name,
-                &builtin.program_id,
-                builtin.process_instruction,
-            );
+        for (program_id, builtin) in self.builtin_programs.vec.iter() {
+            bank.add_builtin(*program_id, builtin.clone());
         }
 
         for (address, account) in self.accounts.iter() {

@@ -314,10 +314,10 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     .unwrap()
                     .remove(shred.signature())
                 {
-                    if cluster_partition.contains(&node.id) {
+                    if cluster_partition.contains(node.pubkey()) {
                         info!(
                             "skipping node {} for original shred index {}, slot {}",
-                            node.id,
+                            node.pubkey(),
                             shred.index(),
                             shred.slot()
                         );

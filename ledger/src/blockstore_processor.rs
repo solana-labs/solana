@@ -45,6 +45,7 @@ use {
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
+        saturating_add_assign,
         signature::{Keypair, Signature},
         timing,
         transaction::{
@@ -443,7 +444,7 @@ pub fn process_entries_for_tests(
             })
             .collect();
 
-    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+    let ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
     let result = process_entries(
         bank,
         &mut replay_entries,
@@ -452,7 +453,7 @@ pub fn process_entries_for_tests(
         replay_vote_sender,
         &mut batch_timing,
         None,
-        &_ignored_prioritization_fee_cache,
+        &ignored_prioritization_fee_cache,
     );
 
     debug!("process_entries: {:?}", batch_timing);
@@ -712,7 +713,7 @@ pub(crate) fn process_blockstore_for_bank_0(
         Arc::new(opts.runtime_config.clone()),
         account_paths,
         opts.debug_keys.clone(),
-        Some(&crate::builtins::get(opts.runtime_config.bpf_jit)),
+        None,
         opts.account_indexes.clone(),
         opts.shrink_ratio,
         false,
@@ -903,7 +904,7 @@ fn confirm_full_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.run_verification;
-    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+    let ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
 
     confirm_slot(
         blockstore,
@@ -916,7 +917,7 @@ fn confirm_full_slot(
         recyclers,
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
-        &_ignored_prioritization_fee_cache,
+        &ignored_prioritization_fee_cache,
     )?;
 
     timing.accumulate(&confirmation_timing.batch_execute.totals);
@@ -1433,7 +1434,7 @@ fn load_frozen_forks(
             let mut progress = ConfirmationProgress::new(last_entry_hash);
 
             let mut m = Measure::start("process_single_slot");
-            let bank = bank_forks.write().unwrap().insert(bank);
+            let bank = bank_forks.write().unwrap().insert_from_ledger(bank);
             if process_single_slot(
                 blockstore,
                 &bank,
@@ -1808,7 +1809,7 @@ pub mod tests {
         matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
-        solana_program_runtime::declare_process_instruction,
+        solana_program_runtime::{builtin_program::create_builtin, declare_process_instruction},
         solana_runtime::{
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
@@ -2970,7 +2971,10 @@ pub mod tests {
         let mock_program_id = solana_sdk::pubkey::new_rand();
 
         let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.add_builtin("mock_processor", &mock_program_id, mock_processor_ok);
+        bank.add_builtin(
+            mock_program_id,
+            create_builtin("mockup".to_string(), mock_processor_ok),
+        );
 
         let tx = Transaction::new_signed_with_payer(
             &[Instruction::new_with_bincode(
@@ -3011,7 +3015,10 @@ pub mod tests {
 
         (0..get_instruction_errors().len()).for_each(|err| {
             let mut bank = Bank::new_for_tests(&genesis_config);
-            bank.add_builtin("mock_processor", &mock_program_id, mock_processor_err);
+            bank.add_builtin(
+                mock_program_id,
+                create_builtin("mockup".to_string(), mock_processor_err),
+            );
 
             let tx = Transaction::new_signed_with_payer(
                 &[Instruction::new_with_bincode(
