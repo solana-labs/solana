@@ -485,21 +485,20 @@ impl Accounts {
             }
             depth += 1;
 
-            program_account_index = match self.accounts_db.load_with_fixed_root(
+            program_account_index = accounts.len();
+            match self.accounts_db.load_with_fixed_root(
                 ancestors,
                 &program_id,
                 load_zero_lamports,
             ) {
                 Some((program_account, _)) => {
-                    let account_index = accounts.len();
                     accounts.push((program_id, program_account));
-                    account_index
                 }
                 None => {
                     error_counters.account_not_found += 1;
                     return Err(TransactionError::ProgramAccountNotFound);
                 }
-            };
+            }
             let program = &accounts[program_account_index].1;
             if !program.executable() {
                 error_counters.invalid_program_for_execution += 1;
@@ -515,21 +514,20 @@ impl Accounts {
                     programdata_address,
                 }) = program.state()
                 {
-                    let programdata_account_index = match self.accounts_db.load_with_fixed_root(
+                    let programdata_account_index = accounts.len();
+                    match self.accounts_db.load_with_fixed_root(
                         ancestors,
                         &programdata_address,
                         load_zero_lamports,
                     ) {
                         Some((programdata_account, _)) => {
-                            let account_index = accounts.len();
                             accounts.push((programdata_address, programdata_account));
-                            account_index
                         }
                         None => {
                             error_counters.account_not_found += 1;
                             return Err(TransactionError::ProgramAccountNotFound);
                         }
-                    };
+                    }
                     account_indices.insert(0, programdata_account_index);
                 } else {
                     error_counters.invalid_program_for_execution += 1;
