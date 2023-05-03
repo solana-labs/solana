@@ -1,6 +1,6 @@
 #!/bin/bash -ex
 #
-# (Re)starts the InfluxDB/Chronograf containers
+# (Re)starts the InfluxDB services
 #
 
 cd "$(dirname "$0")"
@@ -27,44 +27,33 @@ check_service() {
     if ssh -o StrictHostKeyChecking=no sol@"$server" sudo systemctl is-active "$service" >/dev/null; then
       # Service is running
       status="running"
-      break
-    fi
-  done
+      message="The $service service is running on $server."
+      echo "$message"
+    else
+      # Service is not running, try to restart it
+      message="The $service service is not running on $server. Restarting..."
+      echo "$message"
+      curl -H "Content-Type: application/json" -d '{"content":"'"$message"'"}' "$DISCORD_WEBHOOK"
 
-  # If the service is not running, send an alert to Discord and try to restart it
-  if [[ "$status" == "unknown" ]]; then
-    message="The $service service is not running on $server. Restarting..."
-    echo "$message"
-    curl -H "Content-Type: application/json" -d '{"content":"'"$message"'"}' "$DISCORD_WEBHOOK"
-
-    for server in "${servers[@]}"; do
-      # Try to restart the service
       ssh -o StrictHostKeyChecking=no sol@"$server" sudo systemctl restart "$service"
       sleep 10 # Wait for the service to start
+
       if ssh -o StrictHostKeyChecking=no sol@"$server" sudo systemctl is-active "$service" >/dev/null; then
         # Service restarted successfully
         status="restarted"
         message="The $service service was restarted successfully on $server."
-        break
+        echo "$message"
+        curl -H "Content-Type: application/json" -d '{"content":"'"$message"'"}' "$DISCORD_WEBHOOK"
+      else
+        # Service failed to restart
+        status="failed"
+        message="ERROR: The $service service failed to restart on $server."
+        echo "$message"
+        curl -H "Content-Type: application/json" -d '{"content":"'"$message"', manual intervention is required."}' "$DISCORD_WEBHOOK"
+        curl -H "Content-Type: application/json" -d '{"routing_key":"<your-pagerduty-service-key>","event_action":"trigger","payload":{"summary":"The '"$service"' service failed to restart on '"$server"'.","severity":"critical"}}' "$PAGERDUTY_WEBHOOK"
       fi
-    done
-  fi
-
-  # Send message to Discord and PagerDuty
-  case "$status" in
-    "running")
-      # No message is sent when the service is already running properly
-      ;;
-    "restarted")
-      echo "$message"
-      curl -H "Content-Type: application/json" -d '{"content":"'"$message"'"}' "$DISCORD_WEBHOOK"
-      ;;
-    *)
-      echo "ERROR: The '$service' service failed to restart on '$server'."
-      curl -H "Content-Type: application/json" -d '{"content":"ERROR: The '"$service"' service failed to restart on '"$server"', manual intervention is required."}' "$DISCORD_WEBHOOK"
-      curl -H "Content-Type: application/json" -d '{"routing_key":"<your-pagerduty-service-key>","event_action":"trigger","payload":{"summary":"The '"$service"' service failed to restart on '"$server"'.","severity":"critical"}}' "$PAGERDUTY_WEBHOOK"
-      ;;
-  esac
+    fi
+  done
 }
 
 # Check the influxdb service
