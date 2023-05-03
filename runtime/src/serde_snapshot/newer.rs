@@ -99,8 +99,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             is_delta: dvb.is_delta,
             incremental_snapshot_persistence: None,
             epoch_accounts_hash: None,
-            calculated_epoch_stake_rewards: None,
-            epoch_reward_status: None,
+            epoch_reward_progress: None,
         }
     }
 }
@@ -350,11 +349,8 @@ impl<'a> TypeContext<'a> for Context {
         let epoch_accounts_hash = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.epoch_accounts_hash = epoch_accounts_hash;
 
-        let calculated_epoch_stake_rewards = ignore_eof_error(deserialize_from(&mut stream))?;
-        bank_fields.calculated_epoch_stake_rewards = calculated_epoch_stake_rewards;
-
-        let epoch_reward_status = ignore_eof_error(deserialize_from(stream))?;
-        bank_fields.epoch_reward_status = epoch_reward_status;
+        let epoch_reward_progress = ignore_eof_error(deserialize_from(&mut stream))?;
+        bank_fields.epoch_reward_progress = epoch_reward_progress;
 
         Ok((bank_fields, accounts_db_fields))
     }
@@ -389,8 +385,7 @@ impl<'a> TypeContext<'a> for Context {
         let hard_forks = RwLock::new(std::mem::take(&mut rhs.hard_forks));
         let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
         let epoch_accounts_hash = rhs.epoch_accounts_hash.as_ref();
-        let calculated_epoch_stake_rewards = rhs.calculated_epoch_stake_rewards.as_ref();
-        let epoch_reward_status = rhs.epoch_reward_status.as_ref();
+        let epoch_reward_progress = rhs.epoch_reward_progress.as_ref();
 
         let bank = SerializableVersionedBank {
             blockhash_queue: &blockhash_queue,
@@ -435,8 +430,7 @@ impl<'a> TypeContext<'a> for Context {
                 lamports_per_signature,
                 incremental_snapshot_persistence,
                 epoch_accounts_hash,
-                calculated_epoch_stake_rewards,
-                epoch_reward_status,
+                epoch_reward_progress,
             ),
         )
     }

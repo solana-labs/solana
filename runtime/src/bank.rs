@@ -770,8 +770,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) accounts_data_len: u64,
     pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
     pub(crate) epoch_accounts_hash: Option<Hash>,
-    pub(crate) calculated_epoch_stake_rewards: Option<StakeRewards>,
-    pub(crate) epoch_reward_status: Option<EpochRewardStatus>,
+    pub(crate) epoch_reward_progress: Option<EpochRewardProgress>,
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -999,7 +998,7 @@ impl EpochRewardStatus {
 }
 
 /// EpochRewardProgress - A data structure to track the progress of epoch rewards
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EpochRewardProgress {
     /// epoch reward status
     epoch_reward_status: EpochRewardStatus,
