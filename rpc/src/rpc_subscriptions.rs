@@ -2018,6 +2018,7 @@ pub(crate) mod tests {
             }));
 
         let mut highest_confirmed_slot: Slot = 0;
+        let mut highest_root_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
         // Optimistically notifying slot 3 without notifying slot 1 and 2, bank3 is unfrozen, we expect
         // to see transaction for alice and bob to be notified in order.
@@ -2029,6 +2030,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2079,6 +2081,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2187,6 +2190,7 @@ pub(crate) mod tests {
             }));
 
         let mut highest_confirmed_slot: Slot = 0;
+        let mut highest_root_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
         // Optimistically notifying slot 3 without notifying slot 1 and 2, bank3 is not in the bankforks, we do not
         // expect to see any RPC notifications.
@@ -2198,6 +2202,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2301,6 +2306,7 @@ pub(crate) mod tests {
             }));
 
         let mut highest_confirmed_slot: Slot = 0;
+        let mut highest_root_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
         // Optimistically notifying slot 3 without notifying slot 1 and 2, bank3 is not in the bankforks, we expect
         // to see transaction for alice and bob to be notified only when bank3 is added to the fork and
@@ -2313,6 +2319,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2365,6 +2372,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2789,6 +2797,7 @@ pub(crate) mod tests {
 
         // First, notify the unfrozen bank first to queue pending notification
         let mut highest_confirmed_slot: Slot = 0;
+        let mut highest_root_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(2),
@@ -2798,6 +2807,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2811,6 +2821,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
 
@@ -2861,6 +2872,7 @@ pub(crate) mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
         let response = receiver1.recv();

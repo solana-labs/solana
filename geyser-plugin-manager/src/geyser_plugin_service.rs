@@ -9,7 +9,12 @@ use {
     crossbeam_channel::Receiver,
     log::*,
     solana_rpc::{
+<<<<<<< HEAD
         optimistically_confirmed_bank_tracker::BankNotification,
+=======
+        entry_notifier_interface::EntryNotifierLock,
+        optimistically_confirmed_bank_tracker::SlotNotification,
+>>>>>>> 7cf50e60fc (Fixed missing Root notifications via geyser plugin framework (#31180))
         transaction_notifier_interface::TransactionNotifierLock,
     },
     solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -68,9 +73,23 @@ impl GeyserPluginService {
     ///    It is usually used to configure the connection information for the external data store.
 
     pub fn new(
-        confirmed_bank_receiver: Receiver<BankNotification>,
+        confirmed_bank_receiver: Receiver<SlotNotification>,
         geyser_plugin_config_files: &[PathBuf],
     ) -> Result<Self, GeyserPluginServiceError> {
+<<<<<<< HEAD
+=======
+        Self::new_with_receiver(confirmed_bank_receiver, geyser_plugin_config_files, None)
+    }
+
+    pub fn new_with_receiver(
+        confirmed_bank_receiver: Receiver<SlotNotification>,
+        geyser_plugin_config_files: &[PathBuf],
+        rpc_to_plugin_manager_receiver_and_exit: Option<(
+            Receiver<GeyserPluginManagerRequest>,
+            Arc<AtomicBool>,
+        )>,
+    ) -> Result<Self, GeyserPluginServiceError> {
+>>>>>>> 7cf50e60fc (Fixed missing Root notifications via geyser plugin framework (#31180))
         info!(
             "Starting GeyserPluginService from config files: {:?}",
             geyser_plugin_config_files
