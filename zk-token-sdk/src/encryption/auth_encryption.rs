@@ -4,7 +4,6 @@
 //! token-2022 application where the plaintext is always `u64`.
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::errors::AuthenticatedEncryptionError,
     aes_gcm_siv::{
         aead::{Aead, NewAead},
         Aes128GcmSiv,
@@ -28,8 +27,18 @@ use {
         io::{Read, Write},
     },
     subtle::ConstantTimeEq,
+    thiserror::Error,
     zeroize::Zeroize,
 };
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum AuthenticatedEncryptionError {
+    #[error("key derivation method not supported")]
+    DerivationMethodNotSupported,
+
+    #[error("pubkey does not exist")]
+    PubkeyDoesNotExist,
+}
 
 /// Algorithm handle for the AES-GCM-SIV authenticated encryption scheme
 struct AuthenticatedEncryption;
