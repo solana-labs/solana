@@ -162,7 +162,7 @@ mod test {
 
         // derived ElGamal keypair
         let keypair =
-            ElGamalKeypair::new_from_signer(&Keypair::new(), &Pubkey::default().as_ref()).unwrap();
+            ElGamalKeypair::new_from_signer(&Keypair::new(), Pubkey::default().as_ref()).unwrap();
 
         let mut prover_transcript = Transcript::new(b"test");
         let mut verifier_transcript = Transcript::new(b"test");

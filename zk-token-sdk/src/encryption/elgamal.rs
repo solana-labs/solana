@@ -896,17 +896,17 @@ mod tests {
         let keypair2 = Keypair::new();
 
         assert_ne!(
-            ElGamalSecretKey::new_from_signer(&keypair1, &Pubkey::default().as_ref())
+            ElGamalSecretKey::new_from_signer(&keypair1, Pubkey::default().as_ref())
                 .unwrap()
                 .0,
-            ElGamalSecretKey::new_from_signer(&keypair2, &Pubkey::default().as_ref())
+            ElGamalSecretKey::new_from_signer(&keypair2, Pubkey::default().as_ref())
                 .unwrap()
                 .0,
         );
 
         let null_signer = NullSigner::new(&Pubkey::default());
         assert!(
-            ElGamalSecretKey::new_from_signer(&null_signer, &Pubkey::default().as_ref()).is_err()
+            ElGamalSecretKey::new_from_signer(&null_signer, Pubkey::default().as_ref()).is_err()
         );
     }
 
