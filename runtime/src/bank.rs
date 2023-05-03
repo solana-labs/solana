@@ -2797,7 +2797,7 @@ impl Bank {
             .fetch_add(validator_rewards_paid, Relaxed);
 
         // test-code to simulate partitioned stake reward payout
-        for i in 0..self.get_reward_credit_interval() {
+        for i in 0..self.get_reward_credit_num_blocks() {
             self.credit_epoch_rewards_in_partition(i);
         }
 
