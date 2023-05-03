@@ -391,6 +391,7 @@ impl Accounts {
                     .iter()
                     .map(|instruction| {
                         self.load_executable_accounts(
+                            feature_set,
                             ancestors,
                             &mut accounts,
                             instruction.program_id_index as usize,
@@ -463,6 +464,7 @@ impl Accounts {
 
     fn load_executable_accounts(
         &self,
+        feature_set: &FeatureSet,
         ancestors: &Ancestors,
         accounts: &mut Vec<TransactionAccount>,
         mut program_account_index: usize,
@@ -528,6 +530,23 @@ impl Accounts {
                 }
             }
 
+            if feature_set.is_active(&feature_set::disable_builtin_loader_ownership_chains::id()) {
+                if native_loader::check_id(&owner_id) {
+                    return Ok(account_indices);
+                }
+                let owner_account_index = accounts.len();
+                if let Some((owner_account, _)) =
+                    self.accounts_db
+                        .load_with_fixed_root(ancestors, &owner_id, load_zero_lamports)
+                {
+                    accounts.push((owner_id, owner_account));
+                } else {
+                    error_counters.account_not_found += 1;
+                    return Err(TransactionError::ProgramAccountNotFound);
+                }
+                account_indices.insert(0, owner_account_index);
+                return Ok(account_indices);
+            }
             program_id = owner_id;
         }
         Ok(account_indices)
@@ -2422,6 +2441,7 @@ mod tests {
 
         assert_eq!(
             accounts.load_executable_accounts(
+                &FeatureSet::default(),
                 &ancestors,
                 &mut vec![(keypair.pubkey(), account)],
                 0,
