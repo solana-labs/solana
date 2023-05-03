@@ -18,7 +18,6 @@ check_service() {
   local service=$1
   shift
   local servers=("$@")
-  local status="unknown"
   local message=""
 
   # Loop through the servers
@@ -26,7 +25,6 @@ check_service() {
     # Check if the service is running
     if ssh -o StrictHostKeyChecking=no sol@"$server" sudo systemctl is-active "$service" >/dev/null; then
       # Service is running
-      status="running"
       message="The $service service is running on $server."
       echo "$message"
     else
@@ -40,13 +38,11 @@ check_service() {
 
       if ssh -o StrictHostKeyChecking=no sol@"$server" sudo systemctl is-active "$service" >/dev/null; then
         # Service restarted successfully
-        status="restarted"
         message="The $service service was restarted successfully on $server."
         echo "$message"
         curl -H "Content-Type: application/json" -d '{"content":"'"$message"'"}' "$DISCORD_WEBHOOK"
       else
         # Service failed to restart
-        status="failed"
         message="ERROR: The $service service failed to restart on $server."
         echo "$message"
         curl -H "Content-Type: application/json" -d '{"content":"'"$message"', manual intervention is required."}' "$DISCORD_WEBHOOK"
