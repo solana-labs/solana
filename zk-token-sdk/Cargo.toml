@@ -33,5 +33,8 @@ subtle = { workspace = true }
 thiserror = { workspace = true }
 zeroize = { workspace = true, features = ["zeroize_derive"] }
 
+[dev-dependencies]
+tiny-bip39 = { workspace = true }
+
 [lib]
 crate-type = ["cdylib", "rlib"]
