@@ -4,14 +4,15 @@
 pub mod serialization;
 pub mod syscalls;
 
-use solana_program_runtime::loaded_programs::LoadedProgramsForTxBatch;
 use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
         ic_logger_msg, ic_msg,
         invoke_context::{BpfAllocator, InvokeContext, SyscallContext},
-        loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
+        loaded_programs::{
+            LoadProgramMetrics, LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch,
+        },
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,

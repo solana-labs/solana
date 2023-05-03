@@ -33,6 +33,8 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
+#[cfg(test)]
+use solana_program_runtime::executor_cache::TransactionExecutorCache;
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
@@ -188,9 +190,6 @@ use {
         time::{Duration, Instant},
     },
 };
-
-#[cfg(test)]
-use solana_program_runtime::executor_cache::TransactionExecutorCache;
 
 /// params to `verify_accounts_hash`
 struct VerifyAccountsHashConfig {
