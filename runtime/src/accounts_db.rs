@@ -4658,10 +4658,14 @@ impl AccountsDb {
         &self,
         dropped_roots: impl Iterator<Item = Slot>,
     ) {
+        let mut accounts_delta_hashes = self.accounts_delta_hashes.lock().unwrap();
+        let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
+
         dropped_roots.for_each(|slot| {
             self.accounts_index
                 .clean_dead_slot(slot, &mut AccountsIndexRootsStats::default());
-            self.remove_bank_hash_info(&slot);
+            accounts_delta_hashes.remove(&slot);
+            bank_hash_stats.remove(&slot);
             // the storage has been removed from this slot and recycled or dropped
             assert!(self.storage.remove(&slot, false).is_none());
         });
@@ -7953,28 +7957,6 @@ impl AccountsDb {
         self.bank_hash_stats.lock().unwrap().get(&slot).cloned()
     }
 
-    /// Remove "bank hash info" for `slot`
-    ///
-    /// This fn removes the accounts delta hash, accounts hash, and bank hash stats for `slot` from
-    /// their respective maps.
-    fn remove_bank_hash_info(&self, slot: &Slot) {
-        self.remove_bank_hash_infos(std::iter::once(slot));
-    }
-
-    /// Remove "bank hash info" for `slots`
-    ///
-    /// This fn removes the accounts delta hash and bank hash stats for `slots` from
-    /// their respective maps.
-    fn remove_bank_hash_infos<'s>(&self, slots: impl IntoIterator<Item = &'s Slot>) {
-        let mut accounts_delta_hashes = self.accounts_delta_hashes.lock().unwrap();
-        let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
-
-        for slot in slots {
-            accounts_delta_hashes.remove(slot);
-            bank_hash_stats.remove(slot);
-        }
-    }
-
     fn update_index<'a, T: ReadableAccount + Sync>(
         &self,
         infos: Vec<AccountInfo>,
@@ -8186,7 +8168,16 @@ impl AccountsDb {
             purged_stored_account_slots,
             pubkeys_removed_from_accounts_index,
         );
-        self.remove_bank_hash_infos(dead_slots_iter);
+
+        let mut accounts_delta_hashes = self.accounts_delta_hashes.lock().unwrap();
+        let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
+        for slot in dead_slots_iter {
+            accounts_delta_hashes.remove(slot);
+            bank_hash_stats.remove(slot);
+        }
+        drop(accounts_delta_hashes);
+        drop(bank_hash_stats);
+
         measure.stop();
         inc_new_counter_info!("remove_dead_slots_metadata-ms", measure.as_ms() as usize);
     }
