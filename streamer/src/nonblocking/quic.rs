@@ -8,7 +8,7 @@ use {
         unbounded as async_unbounded, Receiver as AsyncReceiver, Sender as AsyncSender,
     },
     bytes::Bytes,
-    crossbeam_channel::Sender,
+    crossbeam_channel::{bounded, Receiver, Sender},
     indexmap::map::{Entry, IndexMap},
     percentage::Percentage,
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
@@ -28,17 +28,20 @@ use {
         timing,
     },
     std::{
+        future::Future,
         iter::repeat_with,
         net::{IpAddr, SocketAddr, UdpSocket},
+        pin::Pin,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, Mutex, MutexGuard, RwLock,
         },
+        task::{Context, Poll},
         time::{Duration, Instant},
     },
     tokio::{
         task::JoinHandle,
-        time::{sleep, timeout},
+        time::{sleep, timeout, Timeout},
     },
 };
 
@@ -58,6 +61,33 @@ const CONNECTION_CLOSE_REASON_EXCEED_MAX_STREAM_COUNT: &[u8] = b"exceed_max_stre
 
 const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
 const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
+
+// I basically just made up the values for the two consts below;
+// feel free to tune/change
+
+// Max number of Connecting tasks (incomplete connection handshakes)
+// to allow before dropping incoming ones
+// TODO: this can allow for trivial DOS if we just get spammed with
+// INITIAL packets. But at the same time, the entire reason
+// we're using ConnectionHandshakeHandler is to mitigate a resource
+// exhaustion attack from being spammed with INITIAL packets...
+// Maybe we can limit connection attempts per IP?
+const MAX_CONNECTION_HANDSHAKES: usize = 1024;
+// Max number of Connecting tasks for ConnectionHandshakeHandler
+// to add per poll call
+// polling the Connecting tasks, to prevent being
+// rendered unresponsive from being spammed with
+// incoming connection initiations
+const MAX_CONNECTION_HANDSHAKES_PER_POLL: usize = 16;
+
+// TODO: Make this name better
+// Not a super important constant, basically just to ensure
+// we don't sleep our dispatch_handle_conn forever, but will wake up
+// occasionally to check if it should exit.
+// Even without the timeout, it really should wake up when the other
+// end of channel gets dropped and the recv call errors, but that's a little
+// too hacky for me if it can be avoided
+const CONNECTION_DISPATCH_WAIT_TIMEOUT: Duration = Duration::from_millis(500);
 
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
@@ -81,6 +111,93 @@ struct PacketChunk {
 struct PacketAccumulator {
     pub meta: Meta,
     pub chunks: Vec<PacketChunk>,
+}
+
+struct ConnectionHandshakeHandler {
+    futures: Vec<Pin<Box<Timeout<Connecting>>>>,
+    task_receiver: Receiver<Connecting>,
+    done_sender: AsyncSender<Connection>,
+    stats: Arc<StreamStats>,
+    exit: Arc<AtomicBool>,
+}
+
+impl ConnectionHandshakeHandler {
+    pub fn new(
+        exit: Arc<AtomicBool>,
+        stats: Arc<StreamStats>,
+    ) -> (Self, Sender<Connecting>, AsyncReceiver<Connection>) {
+        let (task_sendr, task_recvr) = bounded(MAX_CONNECTION_HANDSHAKES);
+        let (done_sendr, done_recvr) = async_unbounded();
+
+        (
+            Self {
+                futures: Vec::with_capacity(MAX_CONNECTION_HANDSHAKES),
+                task_receiver: task_recvr,
+                done_sender: done_sendr,
+                stats,
+                exit,
+            },
+            task_sendr,
+            done_recvr,
+        )
+    }
+}
+
+impl Future for ConnectionHandshakeHandler {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        if !self.exit.load(Ordering::Relaxed) {
+            let mut num_added = 0;
+            while num_added < MAX_CONNECTION_HANDSHAKES_PER_POLL
+                && self.futures.len() < MAX_CONNECTION_HANDSHAKES
+            {
+                if let Ok(future) = self.task_receiver.try_recv() {
+                    self.futures
+                        .push(Box::pin(timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, future)));
+                    num_added += 1;
+                } else {
+                    break;
+                }
+            }
+
+            let mut i = 0;
+
+            while i < self.futures.len() {
+                while i < self.futures.len() {
+                    let from = self.futures[i].get_ref().remote_address();
+                    // TODO: make this less bad T_T
+                    // and confirm it's right
+                    if let Poll::Ready(res) = Pin::new(&mut (self.futures[i])).poll(cx) {
+                        let end = self.futures.len() - 1;
+                        self.futures.swap(i, end);
+                        self.futures.pop();
+                        if let Ok(res) = res {
+                            match res {
+                                Ok(conn) => {
+                                    // We can't await here, but fortunately we can do try_send
+                                    // which should not fail unless the other end is dropped (since the channel's unbounded)
+                                    let _ = self.done_sender.try_send(conn);
+                                }
+                                Err(err) => {
+                                    handle_connection_error(err, &self.stats, from);
+                                }
+                            }
+                        } else {
+                            self.stats
+                                .connection_setup_timeout
+                                .fetch_add(1, Ordering::Relaxed);
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                i += 1;
+            }
+            cx.waker().wake_by_ref();
+            return Poll::Pending;
+        }
+        Poll::Ready(())
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -118,6 +235,37 @@ pub fn spawn_server(
     Ok((endpoint, handle))
 }
 
+async fn dispatch_handle_conn(
+    exit: Arc<AtomicBool>,
+    conn_recv: AsyncReceiver<Connection>,
+    unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
+    staked_connection_table: Arc<Mutex<ConnectionTable>>,
+    sender: AsyncSender<PacketAccumulator>,
+    max_connections_per_peer: usize,
+    staked_nodes: Arc<RwLock<StakedNodes>>,
+    max_staked_connections: usize,
+    max_unstaked_connections: usize,
+    stats: Arc<StreamStats>,
+    wait_for_chunk_timeout: Duration,
+) {
+    while !exit.load(Ordering::Relaxed) {
+        if let Ok(Ok(conn)) = timeout(CONNECTION_DISPATCH_WAIT_TIMEOUT, conn_recv.recv()).await {
+            tokio::spawn(setup_connection(
+                conn,
+                unstaked_connection_table.clone(),
+                staked_connection_table.clone(),
+                sender.clone(),
+                max_connections_per_peer,
+                staked_nodes.clone(),
+                max_staked_connections,
+                max_unstaked_connections,
+                stats.clone(),
+                wait_for_chunk_timeout,
+            ));
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run_server(
     incoming: Endpoint,
@@ -148,6 +296,26 @@ pub async fn run_server(
         stats.clone(),
         coalesce,
     ));
+
+    let (conn_handshake_handler, task_sendr, conn_recvr) =
+        ConnectionHandshakeHandler::new(exit.clone(), stats.clone());
+
+    tokio::spawn(conn_handshake_handler);
+
+    tokio::spawn(dispatch_handle_conn(
+        exit.clone(),
+        conn_recvr,
+        unstaked_connection_table.clone(),
+        staked_connection_table.clone(),
+        sender.clone(),
+        max_connections_per_peer,
+        staked_nodes.clone(),
+        max_staked_connections,
+        max_unstaked_connections,
+        stats.clone(),
+        wait_for_chunk_timeout,
+    ));
+
     while !exit.load(Ordering::Relaxed) {
         let timeout_connection = timeout(WAIT_FOR_CONNECTION_TIMEOUT, incoming.accept()).await;
 
@@ -158,18 +326,10 @@ pub async fn run_server(
 
         if let Ok(Some(connection)) = timeout_connection {
             info!("Got a connection {:?}", connection.remote_address());
-            tokio::spawn(setup_connection(
-                connection,
-                unstaked_connection_table.clone(),
-                staked_connection_table.clone(),
-                sender.clone(),
-                max_connections_per_peer,
-                staked_nodes.clone(),
-                max_staked_connections,
-                max_unstaked_connections,
-                stats.clone(),
-                wait_for_chunk_timeout,
-            ));
+
+            if let Err(err) = task_sendr.try_send(connection) {
+                info!("Could not send Connecting task: {:?}", err);
+            }
             sleep(WAIT_BETWEEN_NEW_CONNECTIONS).await;
         } else {
             debug!("accept(): Timed out waiting for connection");
@@ -446,7 +606,7 @@ fn compute_recieve_window(
 
 #[allow(clippy::too_many_arguments)]
 async fn setup_connection(
-    connecting: Connecting,
+    new_connection: Connection,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
     staked_connection_table: Arc<Mutex<ConnectionTable>>,
     packet_sender: AsyncSender<PacketAccumulator>,
@@ -458,98 +618,82 @@ async fn setup_connection(
     wait_for_chunk_timeout: Duration,
 ) {
     const PRUNE_RANDOM_SAMPLE_SIZE: usize = 2;
-    let from = connecting.remote_address();
-    if let Ok(connecting_result) = timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await {
-        match connecting_result {
-            Ok(new_connection) => {
-                stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
+    stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
 
-                let params = get_connection_stake(&new_connection, &staked_nodes).map_or(
-                    NewConnectionHandlerParams::new_unstaked(
-                        packet_sender.clone(),
-                        max_connections_per_peer,
-                        stats.clone(),
-                    ),
-                    |(pubkey, stake, total_stake, max_stake, min_stake)| {
-                        NewConnectionHandlerParams {
-                            packet_sender,
-                            remote_pubkey: Some(pubkey),
-                            stake,
-                            total_stake,
-                            max_connections_per_peer,
-                            stats: stats.clone(),
-                            max_stake,
-                            min_stake,
-                        }
-                    },
-                );
+    let params = get_connection_stake(&new_connection, &staked_nodes).map_or(
+        NewConnectionHandlerParams::new_unstaked(
+            packet_sender.clone(),
+            max_connections_per_peer,
+            stats.clone(),
+        ),
+        |(pubkey, stake, total_stake, max_stake, min_stake)| NewConnectionHandlerParams {
+            packet_sender,
+            remote_pubkey: Some(pubkey),
+            stake,
+            total_stake,
+            max_connections_per_peer,
+            stats: stats.clone(),
+            max_stake,
+            min_stake,
+        },
+    );
 
-                if params.stake > 0 {
-                    let mut connection_table_l = staked_connection_table.lock().unwrap();
-                    if connection_table_l.total_size >= max_staked_connections {
-                        let num_pruned =
-                            connection_table_l.prune_random(PRUNE_RANDOM_SAMPLE_SIZE, params.stake);
-                        stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                    }
+    if params.stake > 0 {
+        let mut connection_table_l = staked_connection_table.lock().unwrap();
+        if connection_table_l.total_size >= max_staked_connections {
+            let num_pruned =
+                connection_table_l.prune_random(PRUNE_RANDOM_SAMPLE_SIZE, params.stake);
+            stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+        }
 
-                    if connection_table_l.total_size < max_staked_connections {
-                        if let Ok(()) = handle_and_cache_new_connection(
-                            new_connection,
-                            connection_table_l,
-                            staked_connection_table.clone(),
-                            &params,
-                            wait_for_chunk_timeout,
-                        ) {
-                            stats
-                                .connection_added_from_staked_peer
-                                .fetch_add(1, Ordering::Relaxed);
-                        }
-                    } else {
-                        // If we couldn't prune a connection in the staked connection table, let's
-                        // put this connection in the unstaked connection table. If needed, prune a
-                        // connection from the unstaked connection table.
-                        if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
-                            new_connection,
-                            unstaked_connection_table.clone(),
-                            max_unstaked_connections,
-                            &params,
-                            wait_for_chunk_timeout,
-                        ) {
-                            stats
-                                .connection_added_from_staked_peer
-                                .fetch_add(1, Ordering::Relaxed);
-                        } else {
-                            stats
-                                .connection_add_failed_on_pruning
-                                .fetch_add(1, Ordering::Relaxed);
-                            stats
-                                .connection_add_failed_staked_node
-                                .fetch_add(1, Ordering::Relaxed);
-                        }
-                    }
-                } else if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
-                    new_connection,
-                    unstaked_connection_table.clone(),
-                    max_unstaked_connections,
-                    &params,
-                    wait_for_chunk_timeout,
-                ) {
-                    stats
-                        .connection_added_from_unstaked_peer
-                        .fetch_add(1, Ordering::Relaxed);
-                } else {
-                    stats
-                        .connection_add_failed_unstaked_node
-                        .fetch_add(1, Ordering::Relaxed);
-                }
+        if connection_table_l.total_size < max_staked_connections {
+            if let Ok(()) = handle_and_cache_new_connection(
+                new_connection,
+                connection_table_l,
+                staked_connection_table.clone(),
+                &params,
+                wait_for_chunk_timeout,
+            ) {
+                stats
+                    .connection_added_from_staked_peer
+                    .fetch_add(1, Ordering::Relaxed);
             }
-            Err(e) => {
-                handle_connection_error(e, &stats, from);
+        } else {
+            // If we couldn't prune a connection in the staked connection table, let's
+            // put this connection in the unstaked connection table. If needed, prune a
+            // connection from the unstaked connection table.
+            if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
+                new_connection,
+                unstaked_connection_table.clone(),
+                max_unstaked_connections,
+                &params,
+                wait_for_chunk_timeout,
+            ) {
+                stats
+                    .connection_added_from_staked_peer
+                    .fetch_add(1, Ordering::Relaxed);
+            } else {
+                stats
+                    .connection_add_failed_on_pruning
+                    .fetch_add(1, Ordering::Relaxed);
+                stats
+                    .connection_add_failed_staked_node
+                    .fetch_add(1, Ordering::Relaxed);
             }
         }
+    } else if let Ok(()) = prune_unstaked_connections_and_add_new_connection(
+        new_connection,
+        unstaked_connection_table.clone(),
+        max_unstaked_connections,
+        &params,
+        wait_for_chunk_timeout,
+    ) {
+        stats
+            .connection_added_from_unstaked_peer
+            .fetch_add(1, Ordering::Relaxed);
     } else {
         stats
-            .connection_setup_timeout
+            .connection_add_failed_unstaked_node
             .fetch_add(1, Ordering::Relaxed);
     }
 }
