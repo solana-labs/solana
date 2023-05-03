@@ -74,7 +74,7 @@ const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 // Maybe we can limit connection attempts per IP?
 const MAX_CONNECTION_HANDSHAKES: usize = 1024;
 // Max number of Connecting tasks for ConnectionHandshakeHandler
-// to add per poll call
+// to add per poll call before
 // polling the Connecting tasks, to prevent being
 // rendered unresponsive from being spammed with
 // incoming connection initiations
