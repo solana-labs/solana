@@ -1675,9 +1675,9 @@ impl Bank {
         }
     }
 
-    /// Return the overall reward interval (including both calculation and crediting).
+    /// Return the total number of blocks in reward interval (including both calculation and crediting).
     /// This method is marked 'pub' because it used by bank_server.rs to be exposed as a RPC method.
-    pub fn get_reward_interval(&self) -> u64 {
+    pub fn get_reward_total_num_blocks(&self) -> u64 {
         Self::REWARD_CALCULATION_NUM_BLOCKS + self.get_reward_credit_num_blocks()
     }
 
@@ -1872,7 +1872,7 @@ impl Bank {
                 let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
                 new.update_epoch_stakes(leader_schedule_epoch);
 
-                assert!(new.epoch_schedule.slots_per_epoch > new.get_reward_interval());
+                assert!(new.epoch_schedule.slots_per_epoch > new.get_reward_total_num_blocks());
 
                 // Start partitioned reward distribution.
                 if new.partitioned_rewards_feature_enabled() {

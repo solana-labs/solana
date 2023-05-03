@@ -679,7 +679,7 @@ impl JsonRpcRequestProcessor {
 
     pub fn get_reward_interval(&self, config: RpcContextConfig) -> Result<u64> {
         let bank = self.get_bank_with_config(config)?;
-        Ok(bank.get_reward_interval())
+        Ok(bank.get_reward_total_num_blocks())
     }
 
     fn get_fee_calculator_for_blockhash(

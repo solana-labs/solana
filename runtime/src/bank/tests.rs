@@ -13109,7 +13109,7 @@ fn test_reward_interval_cap() {
 
     let bank = Bank::new_for_tests(&genesis_config);
     assert_eq!(bank.get_reward_credit_num_blocks(), 1);
-    assert_eq!(bank.get_reward_interval(), 2);
+    assert_eq!(bank.get_reward_total_num_blocks(), 2);
 }
 
 /// Test get_reward_interval during warm up epoch
@@ -13119,7 +13119,7 @@ fn test_reward_interval_warmup() {
 
     let bank = Bank::new_for_tests(&genesis_config);
     assert_eq!(bank.get_reward_credit_num_blocks(), 1);
-    assert_eq!(bank.get_reward_interval(), 2);
+    assert_eq!(bank.get_reward_total_num_blocks(), 2);
 }
 
 /// Test reward calculation
