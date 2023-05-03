@@ -269,7 +269,7 @@ rcgen = "0.10.0"
 reed-solomon-erasure = "6.0.0"
 regex = "1.6.0"
 rolling-file = "0.2.0"
-reqwest = { version = "0.11.12", default-features = false }
+reqwest = { version = "0.11.17", default-features = false }
 rpassword = "7.2"
 rustc_version = "0.4"
 rustls = { version = "0.20.8", default-features = false }
