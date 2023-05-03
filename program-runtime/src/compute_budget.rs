@@ -1,5 +1,7 @@
 use {
-    crate::prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+    crate::prioritization_fee::{
+        PrioritizationFeeDetails, PrioritizationFeeType, MICRO_LAMPORTS_PER_LAMPORT,
+    },
     solana_sdk::{
         borsh::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
@@ -175,6 +177,7 @@ impl ComputeBudget {
         support_request_units_deprecated: bool,
         enable_request_heap_frame_ix: bool,
         support_set_loaded_accounts_data_size_limit_ix: bool,
+        round_compute_unit_price: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
         let mut num_non_compute_budget_instructions: usize = 0;
         let mut updated_compute_unit_limit = None;
@@ -221,8 +224,13 @@ impl ComputeBudget {
                         if prioritization_fee.is_some() {
                             return Err(duplicate_instruction_error);
                         }
-                        prioritization_fee =
-                            Some(PrioritizationFeeType::ComputeUnitPrice(micro_lamports));
+                        prioritization_fee = Some(PrioritizationFeeType::ComputeUnitPrice(
+                            if round_compute_unit_price {
+                                Self::round_prioritization_fee(micro_lamports)
+                            } else {
+                                micro_lamports
+                            },
+                        ));
                     }
                     Ok(ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit(bytes))
                         if support_set_loaded_accounts_data_size_limit_ix =>
@@ -276,6 +284,14 @@ impl ComputeBudget {
             .map(|fee_type| PrioritizationFeeDetails::new(fee_type, self.compute_unit_limit))
             .unwrap_or_default())
     }
+
+    // https://github.com/solana-labs/solana/issues/31453 to round compute-unit-price, in micro-lamports,
+    // down to its nearest lamport.
+    fn round_prioritization_fee(micro_lamports: u64) -> u64 {
+        micro_lamports
+            .saturating_div(MICRO_LAMPORTS_PER_LAMPORT)
+            .saturating_mul(MICRO_LAMPORTS_PER_LAMPORT)
+    }
 }
 
 #[cfg(test)]
@@ -308,6 +324,7 @@ mod tests {
                 false, /*not support request_units_deprecated*/
                 $enable_request_heap_frame_ix,
                 $support_set_loaded_accounts_data_size_limit_ix,
+                false, // not support round_compute_unit_price, it is tested separately
             );
             assert_eq!($expected_result, result);
             assert_eq!(compute_budget, $expected_budget);
@@ -675,6 +692,113 @@ mod tests {
     }
 
     #[test]
+    fn test_set_compute_unit_price_instruction() {
+        macro_rules! test_set_compute_unit_price {
+            ( $instructions: expr, $expected_result: expr, $support_round_compute_unit_price: expr ) => {
+                let payer_keypair = Keypair::new();
+                let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
+                    &[&payer_keypair],
+                    Message::new($instructions, Some(&payer_keypair.pubkey())),
+                    Hash::default(),
+                ));
+                let mut compute_budget = ComputeBudget::default();
+                let result = compute_budget.process_instructions(
+                    tx.message().program_instructions_iter(),
+                    true, // default_units_per_instruction
+                    true, // support_request_units_deprecated
+                    true, // enable_request_heap_frame_ix
+                    true, // support_set_loaded_accounts_data_size_limit_ix
+                    $support_round_compute_unit_price,
+                );
+                assert_eq!($expected_result, result);
+            };
+        }
+
+        for support_round_compute_unit_price in [true, false] {
+            test_set_compute_unit_price!(
+                &[],
+                Ok(PrioritizationFeeDetails::default()),
+                support_round_compute_unit_price
+            );
+        }
+
+        for support_round_compute_unit_price in [true, false] {
+            test_set_compute_unit_price!(
+                &[ComputeBudgetInstruction::set_compute_unit_price(0)],
+                Ok(PrioritizationFeeDetails::new(
+                    PrioritizationFeeType::ComputeUnitPrice(0),
+                    0
+                )),
+                support_round_compute_unit_price
+            );
+        }
+
+        for support_round_compute_unit_price in [true, false] {
+            let cu_price = MICRO_LAMPORTS_PER_LAMPORT - 1;
+            let expected_cu_price = if support_round_compute_unit_price {
+                0
+            } else {
+                cu_price
+            };
+            test_set_compute_unit_price!(
+                &[ComputeBudgetInstruction::set_compute_unit_price(cu_price)],
+                Ok(PrioritizationFeeDetails::new(
+                    PrioritizationFeeType::ComputeUnitPrice(expected_cu_price),
+                    0
+                )),
+                support_round_compute_unit_price
+            );
+        }
+
+        for support_round_compute_unit_price in [true, false] {
+            test_set_compute_unit_price!(
+                &[ComputeBudgetInstruction::set_compute_unit_price(
+                    MICRO_LAMPORTS_PER_LAMPORT
+                )],
+                Ok(PrioritizationFeeDetails::new(
+                    PrioritizationFeeType::ComputeUnitPrice(MICRO_LAMPORTS_PER_LAMPORT),
+                    0
+                )),
+                support_round_compute_unit_price
+            );
+        }
+
+        for support_round_compute_unit_price in [true, false] {
+            let cu_price = MICRO_LAMPORTS_PER_LAMPORT + 1;
+            let expected_cu_price = if support_round_compute_unit_price {
+                MICRO_LAMPORTS_PER_LAMPORT
+            } else {
+                cu_price
+            };
+            test_set_compute_unit_price!(
+                &[ComputeBudgetInstruction::set_compute_unit_price(cu_price)],
+                Ok(PrioritizationFeeDetails::new(
+                    PrioritizationFeeType::ComputeUnitPrice(expected_cu_price),
+                    0
+                )),
+                support_round_compute_unit_price
+            );
+        }
+
+        for support_round_compute_unit_price in [true, false] {
+            let cu_price = 3 * MICRO_LAMPORTS_PER_LAMPORT - 1;
+            let expected_cu_price = if support_round_compute_unit_price {
+                2 * MICRO_LAMPORTS_PER_LAMPORT
+            } else {
+                cu_price
+            };
+            test_set_compute_unit_price!(
+                &[ComputeBudgetInstruction::set_compute_unit_price(cu_price)],
+                Ok(PrioritizationFeeDetails::new(
+                    PrioritizationFeeType::ComputeUnitPrice(expected_cu_price),
+                    0
+                )),
+                support_round_compute_unit_price
+            );
+        }
+    }
+
+    #[test]
     fn test_process_loaded_accounts_data_size_limit_instruction() {
         let enable_request_heap_frame_ix: bool = true;
 
@@ -834,5 +958,38 @@ mod tests {
                 support_set_loaded_accounts_data_size_limit_ix
             );
         }
+    }
+
+    #[test]
+    fn test_round_prioritization_fee() {
+        assert_eq!(
+            ComputeBudget::round_prioritization_fee(1),
+            0,
+            "less than MICRO_LAMPORTS_PER_LAMPORT should round down to zero"
+        );
+
+        assert_eq!(
+            ComputeBudget::round_prioritization_fee(MICRO_LAMPORTS_PER_LAMPORT - 1),
+            0,
+            "less than MICRO_LAMPORTS_PER_LAMPORT should round down to zero"
+        );
+
+        assert_eq!(
+            ComputeBudget::round_prioritization_fee(MICRO_LAMPORTS_PER_LAMPORT),
+            MICRO_LAMPORTS_PER_LAMPORT,
+            "MICRO_LAMPORTS_PER_LAMPORT should round to itself"
+        );
+
+        assert_eq!(
+            ComputeBudget::round_prioritization_fee(MICRO_LAMPORTS_PER_LAMPORT + 1),
+            MICRO_LAMPORTS_PER_LAMPORT,
+            "more than MICRO_LAMPORTS_PER_LAMPORT should round down to nearest lamport"
+        );
+
+        assert_eq!(
+            ComputeBudget::round_prioritization_fee(MICRO_LAMPORTS_PER_LAMPORT * 3 - 1),
+            MICRO_LAMPORTS_PER_LAMPORT * 2,
+            "more than MICRO_LAMPORTS_PER_LAMPORT should round down to nearest lamport"
+        );
     }
 }

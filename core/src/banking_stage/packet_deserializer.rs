@@ -9,6 +9,7 @@ use {
     crossbeam_channel::RecvTimeoutError,
     solana_perf::packet::PacketBatch,
     solana_runtime::bank_forks::BankForks,
+    solana_sdk::feature_set,
     std::{
         sync::{Arc, RwLock},
         time::{Duration, Instant},
@@ -55,8 +56,10 @@ impl PacketDeserializer {
 
         // Note: this can be removed after feature `round_compute_unit_price` is activated in
         // mainnet-beta
-        let _working_bank = self.bank_forks.read().unwrap().working_bank();
-        let round_compute_unit_price_enabled = false; // TODO get from working_bank.feature_set
+        let working_bank = self.bank_forks.read().unwrap().working_bank();
+        let round_compute_unit_price_enabled = working_bank
+            .feature_set
+            .is_active(&feature_set::round_compute_unit_price::id());
 
         Ok(Self::deserialize_and_collect_packets(
             packet_count,

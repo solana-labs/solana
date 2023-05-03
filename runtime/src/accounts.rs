@@ -37,8 +37,8 @@ use {
             self, add_set_tx_loaded_accounts_data_size_instruction, enable_request_heap_frame_ix,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
-            simplify_writable_program_account_check, use_default_units_in_fee_calculation,
-            FeatureSet,
+            round_compute_unit_price, simplify_writable_program_account_check,
+            use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -256,6 +256,7 @@ impl Accounts {
                 !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
                 true, // don't reject txs that use request heap size ix
                 feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+                feature_set.is_active(&round_compute_unit_price::id()),
             );
             // sanitize against setting size limit to zero
             NonZeroUsize::new(compute_budget.loaded_accounts_data_size_limit).map_or(
@@ -732,6 +733,7 @@ impl Accounts {
                             feature_set.is_active(&enable_request_heap_frame_ix::id()) || self.accounts_db.expected_cluster_type() != ClusterType::MainnetBeta,
                             feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
                             feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                            feature_set.is_active(&round_compute_unit_price::id()),
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -1769,6 +1771,7 @@ mod tests {
             true,
             true,
             true,
+            false,
             false,
         );
         assert_eq!(fee, lamports_per_signature);
@@ -4332,6 +4335,7 @@ mod tests {
             true,
             true,
             true,
+            false,
             false,
         );
         assert_eq!(fee, lamports_per_signature + prioritization_fee);

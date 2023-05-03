@@ -8,7 +8,8 @@ use {
     lru::LruCache,
     solana_measure::measure,
     solana_sdk::{
-        clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
+        clock::Slot, feature_set, pubkey::Pubkey, saturating_add_assign,
+        transaction::SanitizedTransaction,
     },
     std::{
         collections::HashMap,
@@ -212,7 +213,9 @@ impl PrioritizationFeeCache {
                         continue;
                     }
 
-                    let round_compute_unit_price_enabled = false; // TODO: bank.feture_set.is_active(round_compute_unit_price)
+                    let round_compute_unit_price_enabled = bank
+                        .feature_set
+                        .is_active(&feature_set::round_compute_unit_price::id());
                     let priority_details = sanitized_transaction
                         .get_transaction_priority_details(round_compute_unit_price_enabled);
                     let account_locks = sanitized_transaction

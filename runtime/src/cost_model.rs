@@ -15,7 +15,7 @@ use {
         feature_set::{
             add_set_tx_loaded_accounts_data_size_instruction,
             include_loaded_accounts_data_size_in_fee_calculation,
-            remove_deprecated_request_unit_ix, FeatureSet,
+            remove_deprecated_request_unit_ix, round_compute_unit_price, FeatureSet,
         },
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,
@@ -120,6 +120,7 @@ impl CostModel {
             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
             enable_request_heap_frame_ix,
             feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+            feature_set.is_active(&round_compute_unit_price::id()),
         );
 
         // if failed to process compute_budget instructions, the transaction will not be executed

@@ -672,6 +672,10 @@ pub mod last_restart_slot_sysvar {
     solana_sdk::declare_id!("HooKD5NC9QNxk25QuzCssB8ecrEzGt6eXEPBUxWp1LaR");
 }
 
+pub mod round_compute_unit_price {
+    solana_sdk::declare_id!("6J6GS57v5q4CnPrLgDMsyZLFfpPEBPZ66h8efDEpesPk");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -835,6 +839,7 @@ lazy_static! {
         (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
         (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
+        (round_compute_unit_price::id(), "round down compute-unit-price to the nearest lamports #31453"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

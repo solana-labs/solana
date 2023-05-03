@@ -130,7 +130,7 @@ use {
             enable_early_verification_of_account_modifications, enable_request_heap_frame_ix,
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
-            use_default_units_in_fee_calculation, FeatureSet,
+            round_compute_unit_price, use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -4561,6 +4561,7 @@ impl Bank {
                 .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
             self.feature_set
                 .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+            self.feature_set.is_active(&round_compute_unit_price::id()),
         ))
     }
 
@@ -4612,6 +4613,7 @@ impl Bank {
                 .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
             self.feature_set
                 .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+            self.feature_set.is_active(&round_compute_unit_price::id()),
         )
     }
 
@@ -5602,6 +5604,7 @@ impl Bank {
                             true, // don't reject txs that use request heap size ix
                             self.feature_set
                                 .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+                            self.feature_set.is_active(&round_compute_unit_price::id()),
                         );
                         compute_budget_process_transaction_time.stop();
                         saturating_add_assign!(
@@ -5898,6 +5901,7 @@ impl Bank {
     }
 
     /// Calculate fee for `SanitizedMessage`
+    #[allow(clippy::too_many_arguments)]
     pub fn calculate_fee(
         message: &SanitizedMessage,
         lamports_per_signature: u64,
@@ -5908,6 +5912,7 @@ impl Bank {
         enable_request_heap_frame_ix: bool,
         support_set_accounts_data_size_limit_ix: bool,
         include_loaded_account_data_size_in_fee: bool,
+        support_round_compute_unit_price: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
         let congestion_multiplier = if lamports_per_signature == 0 {
@@ -5928,6 +5933,7 @@ impl Bank {
                 support_request_units_deprecated,
                 enable_request_heap_frame_ix,
                 support_set_accounts_data_size_limit_ix,
+                support_round_compute_unit_price,
             )
             .unwrap_or_default();
         let prioritization_fee = prioritization_fee_details.get_fee();
@@ -6013,6 +6019,7 @@ impl Bank {
                         .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
                     self.feature_set
                         .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                    self.feature_set.is_active(&round_compute_unit_price::id()),
                 );
 
                 // In case of instruction error, even though no accounts

@@ -3010,6 +3010,7 @@ fn test_bank_tx_compute_unit_fee() {
         true,
         true,
         false,
+        false,
     );
 
     let (expected_fee_collected, expected_fee_burned) =
@@ -3195,6 +3196,7 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         true,
         true,
         false,
+        false,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -3216,6 +3218,7 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         true,
         true,
         true,
+        false,
         false,
     );
     assert_eq!(
@@ -3333,6 +3336,7 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
                         true,
                         true,
                         true,
+                        false,
                         false,
                     ) * 2
                 )
@@ -10268,6 +10272,7 @@ fn test_calculate_fee() {
                 true,
                 support_set_accounts_data_size_limit_ix,
                 false,
+                false,
             ),
             0
         );
@@ -10288,6 +10293,7 @@ fn test_calculate_fee() {
                 true,
                 true,
                 support_set_accounts_data_size_limit_ix,
+                false,
                 false,
             ),
             1
@@ -10314,6 +10320,7 @@ fn test_calculate_fee() {
                 true,
                 true,
                 support_set_accounts_data_size_limit_ix,
+                false,
                 false,
             ),
             4
@@ -10346,6 +10353,7 @@ fn test_calculate_fee_compute_units() {
                 true,
                 support_set_accounts_data_size_limit_ix,
                 false,
+                false,
             ),
             max_fee + lamports_per_signature
         );
@@ -10368,6 +10376,7 @@ fn test_calculate_fee_compute_units() {
                 true,
                 true,
                 support_set_accounts_data_size_limit_ix,
+                false,
                 false,
             ),
             max_fee + 3 * lamports_per_signature
@@ -10414,6 +10423,7 @@ fn test_calculate_fee_compute_units() {
                 true,
                 support_set_accounts_data_size_limit_ix,
                 false,
+                false,
             );
             assert_eq!(
                 fee,
@@ -10431,12 +10441,7 @@ fn test_calculate_prioritization_fee() {
     };
 
     let request_units = 1_000_000_u32;
-    let request_unit_price = 2_000_000_000_u64;
-    let prioritization_fee_details = PrioritizationFeeDetails::new(
-        PrioritizationFeeType::ComputeUnitPrice(request_unit_price),
-        request_units as u64,
-    );
-    let prioritization_fee = prioritization_fee_details.get_fee();
+    let request_unit_price = 2_000_999_999_u64;
 
     let message = SanitizedMessage::try_from(Message::new(
         &[
@@ -10447,20 +10452,46 @@ fn test_calculate_prioritization_fee() {
     ))
     .unwrap();
 
-    let fee = Bank::calculate_fee(
-        &message,
-        fee_structure.lamports_per_signature,
-        &fee_structure,
-        true,  // use_default_units_per_instruction
-        false, // not support_request_units_deprecated
-        true,  // remove_congestion_multiplier
-        true,  // enable_request_heap_frame_ix
-        true,  // support_set_accounts_data_size_limit_ix,
-        false, // include_loaded_account_data_size_in_fee
-    );
     assert_eq!(
-        fee,
-        fee_structure.lamports_per_signature + prioritization_fee
+        Bank::calculate_fee(
+            &message,
+            fee_structure.lamports_per_signature,
+            &fee_structure,
+            true,  // use_default_units_per_instruction
+            false, // not support_request_units_deprecated
+            true,  // remove_congestion_multiplier
+            true,  // enable_request_heap_frame_ix
+            true,  // support_set_accounts_data_size_limit_ix,
+            false, // include_loaded_account_data_size_in_fee
+            false, // not rounding compute-unit-price
+        ),
+        fee_structure.lamports_per_signature
+            + PrioritizationFeeDetails::new(
+                PrioritizationFeeType::ComputeUnitPrice(request_unit_price),
+                request_units as u64,
+            )
+            .get_fee()
+    );
+
+    assert_eq!(
+        Bank::calculate_fee(
+            &message,
+            fee_structure.lamports_per_signature,
+            &fee_structure,
+            true,  // use_default_units_per_instruction
+            false, // not support_request_units_deprecated
+            true,  // remove_congestion_multiplier
+            true,  // enable_request_heap_frame_ix
+            true,  // support_set_accounts_data_size_limit_ix,
+            false, // include_loaded_account_data_size_in_fee
+            true,  // rounding compute-unit-price
+        ),
+        fee_structure.lamports_per_signature
+            + PrioritizationFeeDetails::new(
+                PrioritizationFeeType::ComputeUnitPrice(2_000_999_999_u64),
+                request_units as u64,
+            )
+            .get_fee()
     );
 }
 
@@ -10506,6 +10537,7 @@ fn test_calculate_fee_secp256k1() {
                 true,
                 support_set_accounts_data_size_limit_ix,
                 false,
+                false,
             ),
             2
         );
@@ -10529,6 +10561,7 @@ fn test_calculate_fee_secp256k1() {
                 true,
                 true,
                 support_set_accounts_data_size_limit_ix,
+                false,
                 false,
             ),
             11
@@ -12231,6 +12264,7 @@ fn test_calculate_fee_with_congestion_multiplier() {
                 true,
                 true,
                 false,
+                false,
             ),
             signature_fee * signature_count
         );
@@ -12255,6 +12289,7 @@ fn test_calculate_fee_with_congestion_multiplier() {
                 remove_congestion_multiplier,
                 true,
                 true,
+                false,
                 false,
             ),
             signature_fee * signature_count / denominator
@@ -12299,6 +12334,7 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
             enable_request_heap_frame_ix,
             true,
             false,
+            false,
         ),
         signature_fee + request_cu * lamports_per_cu
     );
@@ -12316,6 +12352,7 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
             true,
             enable_request_heap_frame_ix,
             true,
+            false,
             false,
         ),
         signature_fee

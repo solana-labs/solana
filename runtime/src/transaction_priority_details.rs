@@ -21,7 +21,7 @@ pub trait GetTransactionPriorityDetails {
 
     fn process_compute_budget_instruction<'a>(
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-        _round_compute_unit_price_enabled: bool,
+        round_compute_unit_price_enabled: bool,
     ) -> Option<TransactionPriorityDetails> {
         let mut compute_budget = ComputeBudget::default();
         let prioritization_fee_details = compute_budget
@@ -31,7 +31,7 @@ pub trait GetTransactionPriorityDetails {
                 false, // stop supporting prioritization by request_units_deprecated instruction
                 true,  // enable request heap frame instruction
                 true,  // enable support set accounts data size instruction
-                       // TODO: round_compute_unit_price_enabled: bool
+                round_compute_unit_price_enabled,
             )
             .ok()?;
         Some(TransactionPriorityDetails {
