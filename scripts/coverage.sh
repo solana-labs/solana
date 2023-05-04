@@ -42,7 +42,6 @@ coverageFlags+=("-Ccodegen-units=1")     # Disable code generation parallelism w
 coverageFlags+=("-Cinline-threshold=0")  # Disable inlining, which complicates control flow.
 coverageFlags+=("-Copt-level=0")
 coverageFlags+=("-Coverflow-checks=off") # Disable overflow checks, which create unnecessary branches.
-coverageFlags+=("-Cdebug-assertions=off") # aaaa
 
 export RUSTFLAGS="${coverageFlags[*]} $RUSTFLAGS"
 export CARGO_INCREMENTAL=0

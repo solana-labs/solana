@@ -563,6 +563,7 @@ mod tests {
         },
         std::{
             cell::RefCell,
+            mem::transmute,
             rc::Rc,
             slice::{self, from_raw_parts, from_raw_parts_mut},
         },
@@ -1002,8 +1003,7 @@ mod tests {
 
         // number of accounts present
 
-        #[allow(clippy::cast_ptr_alignment)]
-        let num_accounts = *(input.add(offset) as *const u64) as usize;
+        let num_accounts = (input.add(offset) as *const u64).read_unaligned() as usize;
         offset += size_of::<u64>();
 
         // account Infos
@@ -1013,23 +1013,30 @@ mod tests {
             let dup_info = *(input.add(offset) as *const u8);
             offset += size_of::<u8>();
             if dup_info == NON_DUP_MARKER {
-                #[allow(clippy::cast_ptr_alignment)]
-                let is_signer = *(input.add(offset) as *const u8) != 0;
+                let is_signer = (input.add(offset) as *const u8).read_unaligned() != 0;
                 offset += size_of::<u8>();
 
-                #[allow(clippy::cast_ptr_alignment)]
-                let is_writable = *(input.add(offset) as *const u8) != 0;
+                let is_writable = (input.add(offset) as *const u8).read_unaligned() != 0;
                 offset += size_of::<u8>();
 
                 let key: &Pubkey = &*(input.add(offset) as *const Pubkey);
                 offset += size_of::<Pubkey>();
 
-                #[allow(clippy::cast_ptr_alignment)]
-                let lamports = Rc::new(RefCell::new(&mut *(input.add(offset) as *mut u64)));
+                let lamports = Rc::new(RefCell::new({
+                    // rustc started to insert debug_assert! for misaligned pointer dereference,
+                    // starting from [1]. so, use std::mem::transmute as the last resort while
+                    // preventing clippy from complaining to suggest not to use it.
+                    // [1]: https://github.com/rust-lang/rust/commit/22a7a19f9333bc1fcba97ce444a3515cb5fb33e6
+                    // as for the ub nature itself in the misaligned pointer dereference, this is
+                    // acceptable given that this is cfg(test) code and we're only cared with
+                    // x86-64 and the target only incurs some perf. penalty, not like segfaults in
+                    // other targets.
+                    #[allow(clippy::transmute_ptr_to_ref)]
+                    transmute(input.add(offset))
+                }));
                 offset += size_of::<u64>();
 
-                #[allow(clippy::cast_ptr_alignment)]
-                let data_len = *(input.add(offset) as *const u64) as usize;
+                let data_len = (input.add(offset) as *const u64).read_unaligned() as usize;
                 offset += size_of::<u64>();
 
                 let data = Rc::new(RefCell::new({
@@ -1040,12 +1047,10 @@ mod tests {
                 let owner: &Pubkey = &*(input.add(offset) as *const Pubkey);
                 offset += size_of::<Pubkey>();
 
-                #[allow(clippy::cast_ptr_alignment)]
-                let executable = *(input.add(offset) as *const u8) != 0;
+                let executable = (input.add(offset) as *const u8).read_unaligned() != 0;
                 offset += size_of::<u8>();
 
-                #[allow(clippy::cast_ptr_alignment)]
-                let rent_epoch = *(input.add(offset) as *const u64);
+                let rent_epoch = (input.add(offset) as *const u64).read_unaligned();
                 offset += size_of::<u64>();
 
                 accounts.push(AccountInfo {
@@ -1066,8 +1071,7 @@ mod tests {
 
         // instruction data
 
-        #[allow(clippy::cast_ptr_alignment)]
-        let instruction_data_len = *(input.add(offset) as *const u64) as usize;
+        let instruction_data_len = (input.add(offset) as *const u64).read_unaligned() as usize;
         offset += size_of::<u64>();
 
         let instruction_data = { from_raw_parts(input.add(offset), instruction_data_len) };
