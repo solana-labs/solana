@@ -1449,7 +1449,7 @@ mod tests {
         let ping = ping_pong::Ping::<[u8; 32]>::new_rand(&mut rng, &keypair).unwrap();
         let pong = Pong::new(&ping, &keypair).unwrap();
         let request = RepairProtocol::Pong(pong);
-        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut pkt = Packet::from_data(None, request).unwrap();
         let mut batch = PacketBatch::new(vec![pkt.clone()]);
         let mut stats = ServeRepairStats::default();
         let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
@@ -1466,7 +1466,7 @@ mod tests {
             slot: 123,
             shred_index: 456,
         };
-        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut pkt = Packet::from_data(None, request).unwrap();
         let mut batch = PacketBatch::new(vec![pkt.clone()]);
         let mut stats = ServeRepairStats::default();
         let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
@@ -1482,7 +1482,7 @@ mod tests {
             header: repair_request_header_for_tests(),
             slot: 123,
         };
-        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut pkt = Packet::from_data(None, request).unwrap();
         let mut batch = PacketBatch::new(vec![pkt.clone()]);
         let mut stats = ServeRepairStats::default();
         let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
@@ -1495,7 +1495,7 @@ mod tests {
         assert_eq!(stats.err_malformed, 1);
 
         let request = RepairProtocol::LegacyOrphan(LegacyContactInfo::default(), 123);
-        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut pkt = Packet::from_data(None, request).unwrap();
         let mut batch = PacketBatch::new(vec![pkt.clone()]);
         let mut stats = ServeRepairStats::default();
         let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
