@@ -1381,7 +1381,6 @@ mod test {
         );
     }
 
-
     #[test]
     fn test_set_root() {
         let mut heaviest_subtree_fork_choice = setup_forks();

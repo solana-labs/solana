@@ -5,10 +5,7 @@ use {
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
         tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
     },
-    solana_core::{
-        broadcast_stage::BroadcastStageType,
-        validator::ValidatorConfig,
-    },
+    solana_core::{broadcast_stage::BroadcastStageType, validator::ValidatorConfig},
     solana_gossip::gossip_service::discover_cluster,
     solana_ledger::{
         ancestor_iterator::AncestorIterator,

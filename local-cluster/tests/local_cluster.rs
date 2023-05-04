@@ -14,8 +14,7 @@ use {
     solana_core::{
         broadcast_stage::BroadcastStageType,
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
-        replay_stage::DUPLICATE_THRESHOLD,
-        validator::ValidatorConfig,
+        replay_stage::DUPLICATE_THRESHOLD, validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot_archive,
     solana_gossip::{contact_info::LegacyContactInfo, gossip_service::discover_cluster},

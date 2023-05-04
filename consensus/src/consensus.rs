@@ -1490,13 +1490,10 @@ pub fn reconcile_blockstore_roots_with_external_source(
 pub mod test {
     use {
         super::*,
-        crate::{
-            heaviest_subtree_fork_choice::SlotHashKey,
-            tower_storage::FileTowerStorage,
-        },
+        crate::{heaviest_subtree_fork_choice::SlotHashKey, tower_storage::FileTowerStorage},
         itertools::Itertools,
         solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path},
-        solana_runtime::{vote_account::VoteAccount},
+        solana_runtime::vote_account::VoteAccount,
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
             clock::Slot,

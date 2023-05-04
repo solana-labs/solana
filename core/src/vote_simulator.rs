@@ -377,13 +377,11 @@ pub fn initialize_state(
 pub mod test {
     use {
         super::*,
+        itertools::Itertools,
         solana_consensus::{
-            consensus::SwitchForkDecision,
-            fork_choice::ForkChoice,
-            tree_diff::TreeDiff,
+            consensus::SwitchForkDecision, fork_choice::ForkChoice, tree_diff::TreeDiff,
         },
         solana_sdk::sysvar::slot_history::SlotHistory,
-        itertools::Itertools,
     };
 
     #[test]
@@ -1247,5 +1245,4 @@ pub mod test {
             .collect_vec()
             .is_empty());
     }
-
 }
