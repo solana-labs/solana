@@ -1338,12 +1338,12 @@ dependencies = [
 
 [[package]]
 name = "ctrlc"
-version = "3.2.3"
+version = "3.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d91974fbbe88ec1df0c24a4f00f99583667a7e2e6272b2b92d294d81e462173"
+checksum = "bbcf33c2a618cbe41ee43ae6e9f2e48368cd9f9db2896f10167d8d762679f639"
 dependencies = [
- "nix",
- "winapi 0.3.9",
+ "nix 0.26.2",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -3085,6 +3085,18 @@ dependencies = [
  "libc",
  "memoffset 0.6.4",
  "pin-utils",
+]
+
+[[package]]
+name = "nix"
+version = "0.26.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfdda3d196821d6af13126e40375cdf7da646a96114af134d5f417a9a1dc8e1a"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "libc",
+ "static_assertions",
 ]
 
 [[package]]
@@ -5871,7 +5883,7 @@ dependencies = [
  "dirs-next",
  "indicatif",
  "lazy_static",
- "nix",
+ "nix 0.25.1",
  "reqwest",
  "scopeguard",
  "semver 1.0.17",
@@ -6163,7 +6175,7 @@ dependencies = [
  "clap 3.2.23",
  "crossbeam-channel",
  "log",
- "nix",
+ "nix 0.25.1",
  "rand 0.7.3",
  "serde",
  "serde_derive",
@@ -6201,7 +6213,7 @@ dependencies = [
  "libc",
  "log",
  "matches",
- "nix",
+ "nix 0.25.1",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
@@ -6972,7 +6984,7 @@ dependencies = [
  "itertools",
  "libc",
  "log",
- "nix",
+ "nix 0.25.1",
  "pem",
  "percentage",
  "pkcs8",
@@ -6998,7 +7010,7 @@ dependencies = [
  "clap 2.33.3",
  "libc",
  "log",
- "nix",
+ "nix 0.25.1",
  "solana-logger 1.16.0",
  "solana-version",
  "sysctl",
