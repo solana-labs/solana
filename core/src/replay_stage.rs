@@ -3681,14 +3681,16 @@ pub(crate) mod tests {
         super::*,
         crate::{
             broadcast_stage::RetransmitSlotsReceiver,
-            consensus::Tower,
-            progress_map::{ValidatorStakeInfo, RETRANSMIT_BASE_DELAY_MS},
             replay_stage::ReplayStage,
-            tree_diff::TreeDiff,
             vote_simulator::{self, VoteSimulator},
         },
         crossbeam_channel::unbounded,
         itertools::Itertools,
+        solana_consensus::{
+            consensus::Tower,
+            progress_map::{ValidatorStakeInfo, RETRANSMIT_BASE_DELAY_MS},
+            tree_diff::TreeDiff,
+        },
         solana_entry::entry::{self, Entry},
         solana_gossip::{cluster_info::Node, crds::Cursor},
         solana_ledger::{
@@ -6590,7 +6592,7 @@ pub(crate) mod tests {
             vote_simulator,
             ..
         } = replay_blockstore_components(None, 10, None::<GenerateVotes>);
-        let tower_storage = crate::tower_storage::NullTowerStorage::default();
+        let tower_storage = solana_consensus::tower_storage::NullTowerStorage::default();
 
         let VoteSimulator {
             mut validator_keypairs,

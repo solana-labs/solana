@@ -1,10 +1,12 @@
 #![allow(clippy::integer_arithmetic, dead_code)]
 use {
     log::*,
-    solana_core::{
-        broadcast_stage::BroadcastStageType,
+    solana_consensus::{
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
         tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
+    },
+    solana_core::{
+        broadcast_stage::BroadcastStageType,
         validator::ValidatorConfig,
     },
     solana_gossip::gossip_service::discover_cluster,

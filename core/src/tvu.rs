@@ -453,7 +453,7 @@ pub mod tests {
             )),
             &poh_recorder,
             None,
-            Arc::new(crate::tower_storage::FileTowerStorage::default()),
+            Arc::new(solana_consensus::tower_storage::FileTowerStorage::default()),
             &leader_schedule_cache,
             &exit,
             block_commitment_cache,

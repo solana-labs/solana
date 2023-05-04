@@ -7,12 +7,14 @@ use {
     log::*,
     serial_test::serial,
     solana_client::thin_client::ThinClient,
+    solana_consensus::{
+        consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
+        tower_storage::FileTowerStorage,
+    },
     solana_core::{
         broadcast_stage::BroadcastStageType,
-        consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
-        tower_storage::FileTowerStorage,
         validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot_archive,
