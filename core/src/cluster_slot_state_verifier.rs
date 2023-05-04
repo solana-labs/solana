@@ -1,10 +1,9 @@
 use {
-    crate::{
-        ancestor_hashes_service::{AncestorHashesReplayUpdate, AncestorHashesReplayUpdateSender},
+    crate::ancestor_hashes_service::{
+        AncestorHashesReplayUpdate, AncestorHashesReplayUpdateSender,
     },
     solana_consensus::{
-        fork_choice::ForkChoice,
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        fork_choice::ForkChoice, heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     },
     solana_ledger::blockstore::Blockstore,
     solana_sdk::{clock::Slot, hash::Hash},

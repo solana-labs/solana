@@ -5,9 +5,9 @@ pub mod fork_choice;
 pub mod heaviest_subtree_fork_choice;
 pub mod latest_validator_votes_for_frozen_banks;
 pub mod progress_map;
-pub mod tower_storage;
-mod tower1_7_14;
 mod tower1_14_11;
+mod tower1_7_14;
+pub mod tower_storage;
 pub mod tree_diff;
 pub mod vote_stake_tracker;
 

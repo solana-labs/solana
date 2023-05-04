@@ -27,12 +27,15 @@ use {
     solana_consensus::{
         consensus::{
             ComputedBankState, Stake, SwitchForkDecision, ThresholdDecision, Tower, VotedStakes,
-            SWITCH_FORK_THRESHOLD, SUPERMINORITY_THRESHOLD,
+            SUPERMINORITY_THRESHOLD, SWITCH_FORK_THRESHOLD,
         },
-        fork_choice::{ForkChoice, SelectVoteAndResetForkResult, HeaviestForkFailures},
+        fork_choice::{ForkChoice, HeaviestForkFailures, SelectVoteAndResetForkResult},
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::{initialize_progress_and_fork_choice, ForkProgress, ProgressMap, PropagatedStats, ReplaySlotStats},
+        progress_map::{
+            initialize_progress_and_fork_choice, ForkProgress, ProgressMap, PropagatedStats,
+            ReplaySlotStats,
+        },
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
     },
     solana_entry::entry::VerifyRecyclers,

@@ -28,8 +28,8 @@ use {
         window_service::WindowService,
     },
     crossbeam_channel::{unbounded, Receiver},
-    solana_consensus::tower_storage::TowerStorage,
     solana_client::connection_cache::ConnectionCache,
+    solana_consensus::tower_storage::TowerStorage,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::{
         cluster_info::ClusterInfo, duplicate_shred_handler::DuplicateShredHandler,

@@ -2,7 +2,7 @@ use {
     crate::{
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::{LockoutIntervals, ProgressMap, initialize_progress_and_fork_choice},
+        progress_map::{initialize_progress_and_fork_choice, LockoutIntervals, ProgressMap},
         tower1_14_11::Tower1_14_11,
         tower1_7_14::Tower1_7_14,
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
@@ -279,13 +279,12 @@ impl Tower {
         vote_account: &Pubkey,
     ) -> Self {
         let root_bank = bank_forks.root_bank();
-        let (_progress, heaviest_subtree_fork_choice) =
-            initialize_progress_and_fork_choice(
-                root_bank.deref(),
-                bank_forks.frozen_banks().values().cloned().collect(),
-                node_pubkey,
-                vote_account,
-            );
+        let (_progress, heaviest_subtree_fork_choice) = initialize_progress_and_fork_choice(
+            root_bank.deref(),
+            bank_forks.frozen_banks().values().cloned().collect(),
+            node_pubkey,
+            vote_account,
+        );
         let root = root_bank.slot();
 
         let (best_slot, best_hash) = heaviest_subtree_fork_choice.best_overall_slot();

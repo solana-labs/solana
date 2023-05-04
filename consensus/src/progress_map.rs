@@ -1,7 +1,7 @@
 use {
     crate::{
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         consensus::{Stake, ThresholdDecision, VotedStakes, SUPERMINORITY_THRESHOLD},
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         vote_stake_tracker::VoteStakeTracker,
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
@@ -569,10 +569,8 @@ pub fn initialize_progress_and_fork_choice(
         );
     }
     let root = root_bank.slot();
-    let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_frozen_banks(
-        (root, root_bank.hash()),
-        &frozen_banks,
-    );
+    let heaviest_subtree_fork_choice =
+        HeaviestSubtreeForkChoice::new_from_frozen_banks((root, root_bank.hash()), &frozen_banks);
 
     (progress, heaviest_subtree_fork_choice)
 }

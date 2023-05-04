@@ -6,7 +6,6 @@ use {
         serve_repair::ShredRepairType,
     },
     solana_consensus::heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-
     solana_ledger::{
         ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_meta::SlotMeta,
     },

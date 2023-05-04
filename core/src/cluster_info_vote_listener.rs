@@ -11,12 +11,10 @@ use {
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,
+    solana_consensus::progress_map::SlotVoteTracker,
     solana_gossip::{
         cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
         crds::Cursor,
-    },
-    solana_consensus::{
-        progress_map::SlotVoteTracker,
     },
     solana_ledger::blockstore::Blockstore,
     solana_measure::measure::Measure,
