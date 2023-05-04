@@ -150,15 +150,16 @@ impl Future for ConnectionHandshakeHandler {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         if !self.exit.load(Ordering::Relaxed) {
             let mut will_awake = false;
-            let mut num_added = 0;
-            while num_added < MAX_CONNECTION_HANDSHAKES_PER_POLL
-                && self.futures.len() < MAX_CONNECTION_HANDSHAKES
-            {
+            let mut num_processed = 0;
+            while num_processed < MAX_CONNECTION_HANDSHAKES_PER_POLL {
                 if let Poll::Ready(res) = Pin::new(&mut self.task_receiver).poll_next(cx) {
                     if let Some(future) = res {
-                        self.futures
-                            .push(Box::pin(timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, future)));
-                        num_added += 1;
+                        // If we don't have the capacity, just drop the incoming handshakes
+                        if self.futures.len() < MAX_CONNECTION_HANDSHAKES {
+                            self.futures
+                                .push(Box::pin(timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, future)));
+                        }
+                        num_processed += 1;
                     } else {
                         // The stream returning Poll::Ready(None) means
                         // the channel's closed
