@@ -1490,8 +1490,8 @@ pub mod test {
     use {
         super::*,
         crate::{
-            fork_choice::ForkChoice, heaviest_subtree_fork_choice::SlotHashKey,
-            replay_stage::HeaviestForkFailures, tower_storage::FileTowerStorage,
+            fork_choice::HeaviestForkFailures, heaviest_subtree_fork_choice::SlotHashKey,
+            tower_storage::FileTowerStorage,
             vote_simulator::VoteSimulator,
         },
         itertools::Itertools,
