@@ -4563,7 +4563,6 @@ impl Bank {
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
-        inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
         let mut error_counters = TransactionErrorMetrics::default();
 
         let retryable_transaction_indexes: Vec<_> = batch
@@ -5145,16 +5144,6 @@ impl Bank {
             committed_non_vote_transactions_count,
         );
         self.increment_signature_count(signature_count);
-
-        inc_new_counter_info!(
-            "bank-process_transactions-txs",
-            committed_transactions_count as usize
-        );
-        inc_new_counter_info!(
-            "bank-process_non_vote_transactions-txs",
-            committed_non_vote_transactions_count as usize
-        );
-        inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
         if committed_with_failure_result_count > 0 {
             self.transaction_error_count
