@@ -122,6 +122,32 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
 
 /// The last parameter exists until this feature is activated:
 ///  ignore slot when calculating an account hash #28420
+impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
+    for (Slot, &'a [&'a (Pubkey, T)], IncludeSlotInHash)
+{
+    fn pubkey(&self, index: usize) -> &Pubkey {
+        &self.1[index].0
+    }
+    fn account(&self, index: usize) -> &T {
+        &self.1[index].1
+    }
+    fn slot(&self, _index: usize) -> Slot {
+        // per-index slot is not unique per slot when per-account slot is not included in the source data
+        self.target_slot()
+    }
+    fn target_slot(&self) -> Slot {
+        self.0
+    }
+    fn len(&self) -> usize {
+        self.1.len()
+    }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.2
+    }
+}
+
+/// The last parameter exists until this feature is activated:
+///  ignore slot when calculating an account hash #28420
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     for (Slot, &'a [&'a StoredAccountMeta<'a>], IncludeSlotInHash)
 {

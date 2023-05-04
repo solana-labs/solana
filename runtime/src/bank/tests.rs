@@ -16,6 +16,7 @@ use {
         accounts_partition::{self, PartitionIndex, RentPayingAccountsByPartition},
         ancestors::Ancestors,
         bank_client::BankClient,
+        bank_forks::BankForks,
         genesis_utils::{
             self, activate_all_features, activate_feature, bootstrap_validator_stake_lamports,
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
@@ -101,6 +102,7 @@ use {
         vote_state::{
             self, BlockTimestamp, Vote, VoteInit, VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY,
         },
+        vote_transaction,
     },
     std::{
         cell::RefCell,
@@ -122,6 +124,54 @@ use {
     },
     test_case::test_case,
 };
+
+impl StakeReward {
+    #[cfg(test)]
+    pub fn random() -> Self {
+        let mut rng = rand::thread_rng();
+
+        let rent = Rent::free();
+
+        let validator_pubkey = solana_sdk::pubkey::new_rand();
+        let validator_stake_lamports = 20;
+        let validator_staking_keypair = Keypair::new();
+        let validator_voting_keypair = Keypair::new();
+
+        let validator_vote_account = vote_state::create_account(
+            &validator_voting_keypair.pubkey(),
+            &validator_pubkey,
+            10,
+            validator_stake_lamports,
+        );
+
+        let validator_stake_account = stake_state::create_account(
+            &validator_staking_keypair.pubkey(),
+            &validator_voting_keypair.pubkey(),
+            &validator_vote_account,
+            &rent,
+            validator_stake_lamports,
+        );
+
+        Self {
+            stake_pubkey: Pubkey::new_unique(),
+            stake_reward_info: RewardInfo {
+                reward_type: RewardType::Staking,
+                lamports: rng.gen_range(1, 200),
+                post_balance: rng.gen_range(1, 2000),
+                commission: Some(rng.gen_range(1, 10)),
+            },
+
+            stake_account: validator_stake_account,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn credit(&mut self, amount: u64) {
+        self.stake_reward_info.lamports = amount as i64;
+        self.stake_reward_info.post_balance += amount;
+        self.stake_account.checked_add_lamports(amount).unwrap();
+    }
+}
 
 #[test]
 fn test_race_register_tick_freeze() {
@@ -11505,6 +11555,7 @@ fn test_rent_state_list_len() {
         &bank.feature_set,
         &FeeStructure::default(),
         None,
+        false,
         &HashMap::new(),
         &HashMap::new(),
     );
@@ -12763,6 +12814,251 @@ fn test_squash_timing_add_assign() {
     t0 += t1;
 
     assert!(t0 == expected);
+}
+
+/// Test partitioned_reward_enable feature
+#[test]
+fn test_partitioned_reward_enable() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    bank.set_partitioned_rewards_feature_enabled_for_tests(true);
+    assert!(bank.partitioned_rewards_feature_enabled());
+
+    bank.set_partitioned_rewards_feature_enabled_for_tests(false);
+    assert!(!bank.partitioned_rewards_feature_enabled());
+}
+
+/// Test that parition begin/end covers the whole index range
+#[test]
+fn test_get_epoch_reward_partition_begin_end() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let n: u64 = 65312;
+    let range = bank.get_partition_range(0, n);
+    assert_eq!(range.start, 0);
+
+    let range = bank.get_partition_range(bank.get_reward_credit_num_blocks() - 1, n);
+    assert_eq!(range.end, n as usize);
+}
+
+/// Test partitioned stores of epoch rewards
+#[test]
+fn test_epoch_credit_rewards() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    // setup stake/vote accounts
+    let expected_num = 1234;
+
+    let mut stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::random())
+        .collect::<Vec<_>>();
+
+    bank.store_accounts((bank.slot(), &stake_rewards[..], bank.include_slot_in_hash()));
+
+    // Simulate rewards
+    let mut expected_rewards = 0;
+    for stake_reward in &mut stake_rewards {
+        stake_reward.credit(1);
+        expected_rewards += 1;
+    }
+
+    // Test partitioned stores
+    let mut total_num = 0;
+    let mut total_rewards = 0;
+
+    for partition_index in 0..bank.get_reward_credit_num_blocks() {
+        let DistributedRewardsSum {
+            num_rewards: num_accounts,
+            total_rewards_in_lamports: rewards,
+        } = bank.store_stake_accounts_in_partition(&stake_rewards, partition_index);
+
+        let num_in_history =
+            bank.update_reward_history_in_partition(&stake_rewards, partition_index);
+        assert_eq!(num_accounts, num_in_history);
+        total_num += num_accounts;
+        total_rewards += rewards;
+    }
+
+    assert_eq!(total_num, expected_num);
+    assert_eq!(total_rewards, expected_rewards);
+}
+
+/// Test get_reward_interval during normal epoch
+#[test]
+fn test_reward_interval_normal() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+    assert_eq!(bank.get_reward_credit_num_blocks(), 50);
+}
+
+/// Test get_reward_interval during small epoch
+#[test]
+fn test_reward_interval_cap() {
+    let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+    genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+    assert_eq!(bank.get_reward_credit_num_blocks(), 1);
+    assert_eq!(bank.get_reward_total_num_blocks(), 2);
+}
+
+/// Test get_reward_interval during warm up epoch
+#[test]
+fn test_reward_interval_warmup() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+    assert_eq!(bank.get_reward_credit_num_blocks(), 1);
+    assert_eq!(bank.get_reward_total_num_blocks(), 2);
+}
+
+/// Test reward calculation
+#[test]
+fn test_reward_calculation() {
+    solana_logger::setup();
+
+    let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    // create a bank that ticks really slowly...
+    let mut bank0 = Bank::new_for_tests(&GenesisConfig {
+        accounts: (0..42)
+            .map(|_| {
+                (
+                    solana_sdk::pubkey::new_rand(),
+                    Account::new(1_000_000_000, 0, &Pubkey::default()),
+                )
+            })
+            .collect(),
+        // set it up so the first epoch is a full year long
+        poh_config: PohConfig {
+            target_tick_duration: Duration::from_secs(
+                SECONDS_PER_YEAR as u64 / MINIMUM_SLOTS_PER_EPOCH / DEFAULT_TICKS_PER_SLOT,
+            ),
+            hashes_per_tick: None,
+            target_tick_count: None,
+        },
+        cluster_type: ClusterType::MainnetBeta,
+
+        ..GenesisConfig::default()
+    });
+
+    bank0.set_partitioned_rewards_feature_enabled_for_tests(true);
+    let bank0 = Arc::new(bank0);
+
+    // enable lazy rent collection because this test depends on rent-due accounts
+    // not being eagerly-collected for exact rewards calculation
+    bank0.restore_old_behavior_for_fragile_tests();
+
+    assert_eq!(
+        bank0.capitalization(),
+        42 * 1_000_000_000 + genesis_sysvar_and_builtin_program_lamports(),
+    );
+
+    let ((vote_id, mut vote_account), (stake_id, stake_account)) =
+        crate::stakes::tests::create_staked_node_accounts(10_000);
+    let starting_vote_and_stake_balance = 10_000 + 1;
+
+    // set up accounts
+    bank0.store_account_and_update_capitalization(&stake_id, &stake_account);
+
+    // generate some rewards
+    let mut vote_state = Some(vote_state::from(&vote_account).unwrap());
+    for i in 0..MAX_LOCKOUT_HISTORY + 42 {
+        if let Some(v) = vote_state.as_mut() {
+            vote_state::process_slot_vote_unchecked(v, i as u64)
+        }
+        let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+        vote_state::to(&versioned, &mut vote_account).unwrap();
+        bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
+        match versioned {
+            VoteStateVersions::Current(v) => {
+                vote_state = Some(*v);
+            }
+            _ => panic!("Has to be of type Current"),
+        };
+    }
+    bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
+    bank0.freeze();
+
+    assert_eq!(
+        bank0.capitalization(),
+        42 * 1_000_000_000
+            + genesis_sysvar_and_builtin_program_lamports()
+            + starting_vote_and_stake_balance
+            + bank0_sysvar_delta(),
+    );
+    assert!(bank0.rewards.read().unwrap().is_empty());
+
+    // put a child bank in epoch 1, which calls update_rewards()...
+    let mut bank1 = Bank::new_from_parent(
+        &bank0,
+        &Pubkey::default(),
+        bank0.get_slots_in_epoch(bank0.epoch()) + 1,
+    );
+
+    let epoch = bank1.epoch();
+    let mut metrics = RewardsMetrics::default();
+    bank1.calculate_rewards_and_distribute_vote_rewards_with_thread_pool(
+        epoch,
+        null_tracer(),
+        &thread_pool,
+        &mut metrics,
+    );
+}
+
+#[test]
+fn test_reward_accounts_lock() {
+    use solana_sdk::transaction::TransactionError::StakeProgramUnavailable;
+
+    let validator_vote_keypairs = ValidatorVoteKeypairs::new_rand();
+    let validator_keypairs = vec![&validator_vote_keypairs];
+    let GenesisConfigInfo { genesis_config, .. } =
+        create_genesis_config_with_vote_accounts(1_000_000_000, &validator_keypairs, vec![100; 1]);
+
+    let node_key = &validator_vote_keypairs.node_keypair;
+    let stake_key = &validator_vote_keypairs.stake_keypair;
+
+    let bank0 = Bank::new_for_tests(&genesis_config);
+    let mut bank_forks = BankForks::new(bank0);
+
+    // Fill bank_forks with banks with votes landing in the next slot
+    // Create enough banks such that vote account will root slots 0 and 1
+    let mut reward_account_lock_hit = false;
+    for x in 0..33 {
+        let previous_bank = bank_forks.get(x).unwrap();
+        let bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), x + 1);
+        let vote = vote_transaction::new_vote_transaction(
+            vec![x],
+            previous_bank.hash(),
+            previous_bank.last_blockhash(),
+            &validator_vote_keypairs.node_keypair,
+            &validator_vote_keypairs.vote_keypair,
+            &validator_vote_keypairs.vote_keypair,
+            None,
+        );
+        bank.process_transaction(&vote).unwrap();
+
+        // Insert a transfer transaction to stake account to violate the
+        // StakeProgramUnavailable at the beginning of epoch 1.
+        if x == 32 {
+            let tx = system_transaction::transfer(
+                node_key,
+                &stake_key.pubkey(),
+                1,
+                bank.last_blockhash(),
+            );
+            // This should result in an error for `StakeProgramUnavailable`
+            let r = bank.process_transaction(&tx);
+            assert!(r == Err(StakeProgramUnavailable));
+            reward_account_lock_hit = true;
+        }
+        bank_forks.insert(bank);
+    }
+    assert!(reward_account_lock_hit);
 }
 
 #[test]
