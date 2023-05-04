@@ -486,18 +486,14 @@ impl Accounts {
             depth += 1;
 
             program_account_index = accounts.len();
-            match self.accounts_db.load_with_fixed_root(
-                ancestors,
-                &program_id,
-                load_zero_lamports,
-            ) {
-                Some((program_account, _)) => {
-                    accounts.push((program_id, program_account));
-                }
-                None => {
-                    error_counters.account_not_found += 1;
-                    return Err(TransactionError::ProgramAccountNotFound);
-                }
+            if let Some((program_account, _)) =
+                self.accounts_db
+                    .load_with_fixed_root(ancestors, &program_id, load_zero_lamports)
+            {
+                accounts.push((program_id, program_account));
+            } else {
+                error_counters.account_not_found += 1;
+                return Err(TransactionError::ProgramAccountNotFound);
             }
             let program = &accounts[program_account_index].1;
             if !program.executable() {
@@ -515,18 +511,15 @@ impl Accounts {
                 }) = program.state()
                 {
                     let programdata_account_index = accounts.len();
-                    match self.accounts_db.load_with_fixed_root(
+                    if let Some((programdata_account, _)) = self.accounts_db.load_with_fixed_root(
                         ancestors,
                         &programdata_address,
                         load_zero_lamports,
                     ) {
-                        Some((programdata_account, _)) => {
-                            accounts.push((programdata_address, programdata_account));
-                        }
-                        None => {
-                            error_counters.account_not_found += 1;
-                            return Err(TransactionError::ProgramAccountNotFound);
-                        }
+                        accounts.push((programdata_address, programdata_account));
+                    } else {
+                        error_counters.account_not_found += 1;
+                        return Err(TransactionError::ProgramAccountNotFound);
                     }
                     account_indices.insert(0, programdata_account_index);
                 } else {
