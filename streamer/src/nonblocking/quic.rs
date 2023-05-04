@@ -5,10 +5,12 @@ use {
         tls_certificates::get_pubkey_from_tls_certificate,
     },
     async_channel::{
-        unbounded as async_unbounded, Receiver as AsyncReceiver, Sender as AsyncSender,
+        bounded as async_bounded, unbounded as async_unbounded, Receiver as AsyncReceiver,
+        Sender as AsyncSender,
     },
     bytes::Bytes,
-    crossbeam_channel::{bounded, Receiver, Sender},
+    crossbeam_channel::Sender,
+    futures_util::Stream,
     indexmap::map::{Entry, IndexMap},
     percentage::Percentage,
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
@@ -115,7 +117,7 @@ struct PacketAccumulator {
 
 struct ConnectionHandshakeHandler {
     futures: Vec<Pin<Box<Timeout<Connecting>>>>,
-    task_receiver: Receiver<Connecting>,
+    task_receiver: AsyncReceiver<Connecting>,
     done_sender: AsyncSender<Connection>,
     stats: Arc<StreamStats>,
     exit: Arc<AtomicBool>,
@@ -125,8 +127,8 @@ impl ConnectionHandshakeHandler {
     pub fn new(
         exit: Arc<AtomicBool>,
         stats: Arc<StreamStats>,
-    ) -> (Self, Sender<Connecting>, AsyncReceiver<Connection>) {
-        let (task_sendr, task_recvr) = bounded(MAX_CONNECTION_HANDSHAKES);
+    ) -> (Self, AsyncSender<Connecting>, AsyncReceiver<Connection>) {
+        let (task_sendr, task_recvr) = async_bounded(MAX_CONNECTION_HANDSHAKES);
         let (done_sendr, done_recvr) = async_unbounded();
 
         (
@@ -147,15 +149,21 @@ impl Future for ConnectionHandshakeHandler {
     type Output = ();
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         if !self.exit.load(Ordering::Relaxed) {
+            let mut will_awake = false;
             let mut num_added = 0;
             while num_added < MAX_CONNECTION_HANDSHAKES_PER_POLL
                 && self.futures.len() < MAX_CONNECTION_HANDSHAKES
             {
-                if let Ok(future) = self.task_receiver.try_recv() {
-                    self.futures
-                        .push(Box::pin(timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, future)));
-                    num_added += 1;
+                if let Poll::Ready(res) = Pin::new(&mut self.task_receiver).poll_next(cx) {
+                    if let Some(future) = res {
+                        self.futures
+                            .push(Box::pin(timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, future)));
+                        num_added += 1;
+                    } else {
+                        break;
+                    }
                 } else {
+                    will_awake = true;
                     break;
                 }
             }
@@ -188,12 +196,15 @@ impl Future for ConnectionHandshakeHandler {
                                 .fetch_add(1, Ordering::Relaxed);
                         }
                     } else {
+                        will_awake = true;
                         break;
                     }
                 }
                 i += 1;
             }
-            cx.waker().wake_by_ref();
+            if !will_awake {
+                cx.waker().wake_by_ref();
+            }
             return Poll::Pending;
         }
         Poll::Ready(())
