@@ -8,3 +8,9 @@ pub enum DiscreteLogError {
     #[error("discrete log batch size too large")]
     DiscreteLogBatchSize,
 }
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum ElGamalError {
+    #[error("key derivation method not supported")]
+    DerivationMethodNotSupported,
+}
