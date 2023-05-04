@@ -1671,7 +1671,7 @@ impl Bank {
             };
 
             // Limit the reward credit interval to 5% of the total number of slots in a epoch
-            num_chunks.clamp(1, (self.epoch_schedule.slots_per_epoch as u64 / 20).max(1))
+            num_chunks.clamp(1, (self.epoch_schedule.slots_per_epoch / 20).max(1))
         }
     }
 
@@ -3800,12 +3800,8 @@ impl Bank {
             .fetch_add(measure.as_us(), Relaxed);
     }
 
-    /// Return the reward partition start/end index
-    fn get_partition_begin_end(
-        &self,
-        partition_index: u64,
-        stake_rewards_len: u64,
-    ) -> Range<usize> {
+    /// Return the reward partition range
+    fn get_partition_range(&self, partition_index: u64, stake_rewards_len: u64) -> Range<usize> {
         assert!(partition_index < self.get_reward_credit_num_blocks());
         let begin = Self::PARTITION_REWARDS_STORES_PER_BLOCK * partition_index;
         let end_exclusive =
@@ -3825,7 +3821,7 @@ impl Bank {
     ) -> DistributedRewardsSum {
         let n = stake_rewards.len() as u64;
         let mut total: i64 = 0;
-        let range = self.get_partition_begin_end(partition_index, n);
+        let range = self.get_partition_range(partition_index, n);
 
         // Verify that stake account `lamports + reward_amount` matches what we have in the
         // rewarded account. This code will have a performance hit -  an extra load and compare of
@@ -3965,7 +3961,7 @@ impl Bank {
         let mut rewards = self.rewards.write().unwrap();
 
         let n = stake_rewards.len() as u64;
-        let range = self.get_partition_begin_end(partition_index, n);
+        let range = self.get_partition_range(partition_index, n);
         let mut num_stake_rewards: usize = 0;
         for x in &stake_rewards[range] {
             if x.get_stake_reward() > 0 {
@@ -3986,12 +3982,12 @@ impl Bank {
             .get_calculated_epoch_stake_rewards()
             .as_ref()
         {
-            let mut metrics = RewardsStoreMetrics::default();
-
-            metrics.pre_capitalization = self.capitalization();
-
-            metrics.total_stake_accounts_count = stake_rewards.len();
-            metrics.partition_index = partition_index;
+            let mut metrics = RewardsStoreMetrics {
+                pre_capitalization: self.capitalization(),
+                total_stake_accounts_count: stake_rewards.len(),
+                partition_index,
+                ..RewardsStoreMetrics::default()
+            };
 
             let (
                 DistributedRewardsSum {

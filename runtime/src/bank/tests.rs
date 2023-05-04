@@ -96,12 +96,12 @@ use {
         transaction_context::{TransactionAccount, TransactionContext},
     },
     solana_stake_program::stake_state::{self, StakeState},
-    solana_vote_program::vote_transaction,
     solana_vote_program::{
         vote_instruction,
         vote_state::{
             self, BlockTimestamp, Vote, VoteInit, VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY,
         },
+        vote_transaction,
     },
     std::{
         cell::RefCell,
@@ -13043,10 +13043,10 @@ fn test_get_epoch_reward_partition_begin_end() {
     let bank = Bank::new_for_tests(&genesis_config);
 
     let n: u64 = 65312;
-    let range = bank.get_partition_begin_end(0, n);
+    let range = bank.get_partition_range(0, n);
     assert_eq!(range.start, 0);
 
-    let range = bank.get_partition_begin_end(bank.get_reward_credit_num_blocks() - 1, n);
+    let range = bank.get_partition_range(bank.get_reward_credit_num_blocks() - 1, n);
     assert_eq!(range.end, n as usize);
 }
 
