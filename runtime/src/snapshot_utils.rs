@@ -1330,17 +1330,7 @@ fn serialize_status_cache(slot_deltas: &[BankSlotDelta], status_cache_path: &Pat
 /// Remove the snapshot directory for this slot
 pub fn remove_bank_snapshot(slot: Slot, bank_snapshots_dir: impl AsRef<Path>) -> Result<()> {
     let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
-    let accounts_hardlinks_dir = bank_snapshot_dir.join("accounts_hardlinks");
-    if fs::metadata(&accounts_hardlinks_dir).is_ok() {
-        // This directory contain symlinks to all accounts snapshot directories.
-        // They should all be removed.
-        for entry in fs::read_dir(accounts_hardlinks_dir)? {
-            let dst_path = fs::read_link(entry?.path())?;
-            move_and_async_delete_path(&dst_path);
-        }
-    }
-    fs::remove_dir_all(bank_snapshot_dir)?;
-    Ok(())
+    purge_bank_snapshot(bank_snapshot_dir)
 }
 
 #[derive(Debug, Default)]
@@ -2979,6 +2969,21 @@ pub fn purge_old_bank_snapshots(
         None => get_bank_snapshots(&bank_snapshots_dir),
     };
     do_purge(bank_snapshots);
+}
+
+/// Remove the bank snapshot at this path
+fn purge_bank_snapshot(bank_snapshot_dir: impl AsRef<Path>) -> Result<()> {
+    let accounts_hardlinks_dir = bank_snapshot_dir.as_ref().join(SNAPSHOT_ACCOUNTS_HARDLINKS);
+    if accounts_hardlinks_dir.is_dir() {
+        // This directory contain symlinks to all accounts snapshot directories.
+        // They should all be removed.
+        for accounts_hardlink_dir in fs::read_dir(accounts_hardlinks_dir)? {
+            let accounts_hardlink_dir = fs::read_link(accounts_hardlink_dir?.path())?;
+            move_and_async_delete_path(&accounts_hardlink_dir);
+        }
+    }
+    fs::remove_dir_all(bank_snapshot_dir)?;
+    Ok(())
 }
 
 /// Get the snapshot storages for this bank
