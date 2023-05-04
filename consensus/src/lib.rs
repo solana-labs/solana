@@ -1,3 +1,4 @@
+#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 #![recursion_limit = "2048"]
 
 pub mod consensus;
