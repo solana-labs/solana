@@ -254,13 +254,15 @@ fn spy(
         tvu_peers = spy_ref.all_tvu_peers();
 
         let found_node_by_pubkey = if let Some(pubkey) = find_node_by_pubkey {
-            all_peers.iter().any(|x| x.id == pubkey)
+            all_peers.iter().any(|node| node.pubkey() == &pubkey)
         } else {
             false
         };
 
         let found_node_by_gossip_addr = if let Some(gossip_addr) = find_node_by_gossip_addr {
-            all_peers.iter().any(|x| x.gossip == *gossip_addr)
+            all_peers
+                .iter()
+                .any(|node| node.gossip().ok() == Some(*gossip_addr))
         } else {
             false
         };

@@ -606,7 +606,7 @@ fn main() {
         });
 
         info!("done found {} nodes", gossip_nodes.len());
-        gossip_nodes[0].rpc
+        gossip_nodes[0].rpc().unwrap()
     } else {
         info!("Using {:?} as the RPC address", entrypoint_addr);
         entrypoint_addr

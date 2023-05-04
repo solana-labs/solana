@@ -46,6 +46,10 @@ echo --- build environment
   cargo audit --version
 
   grcov --version
+
+  sccache --version
+
+  wasm-pack --version
 )
 
 export RUST_BACKTRACE=1
@@ -76,7 +80,9 @@ nightly_clippy_allows=()
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
  _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
    --deny=warnings \
+   --deny=clippy::default_trait_access \
    --deny=clippy::integer_arithmetic \
+   --deny=clippy::used_underscore_binding \
    "${nightly_clippy_allows[@]}"
 
 if [[ -n $CI ]]; then

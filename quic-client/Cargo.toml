@@ -19,6 +19,7 @@ log = { workspace = true }
 quinn = { workspace = true }
 quinn-proto = { workspace = true }
 quinn-udp = { workspace = true }
+rcgen = { workspace = true }
 rustls = { workspace = true, features = ["dangerous_configuration"] }
 solana-connection-cache = { workspace = true }
 solana-measure = { workspace = true }

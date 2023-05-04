@@ -13,6 +13,7 @@ use {
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ITER_BATCH_SIZE,
         },
+        accounts_partition::{self, PartitionIndex, RentPayingAccountsByPartition},
         ancestors::Ancestors,
         bank_client::BankClient,
         bank_forks::BankForks,
@@ -23,17 +24,17 @@ use {
         },
         inline_spl_token,
         rent_collector::RENT_EXEMPT_RENT_EPOCH,
-        rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
         status_cache::MAX_CACHE_ENTRIES,
         transaction_error_metrics::TransactionErrorMetrics,
     },
     crossbeam_channel::{bounded, unbounded},
+    itertools::Itertools,
     rand::Rng,
     rayon::ThreadPoolBuilder,
     serde::{Deserialize, Serialize},
-    solana_bpf_loader_program::solana_bpf_loader_program,
     solana_logger,
     solana_program_runtime::{
+        builtin_program::create_builtin,
         compute_budget::{self, ComputeBudget, MAX_COMPUTE_UNIT_LIMIT},
         declare_process_instruction,
         executor_cache::TransactionExecutorCache,
@@ -1430,7 +1431,10 @@ fn test_rent_complex() {
     root_bank.restore_old_behavior_for_fragile_tests();
     let root_bank = Arc::new(root_bank);
     let mut bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
-    bank.add_builtin("mock_program", &mock_program_id, process_instruction);
+    bank.add_builtin(
+        mock_program_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     assert_eq!(bank.last_blockhash(), genesis_config.hash());
 
@@ -1595,8 +1599,10 @@ fn test_rent_collection_partitions(bank: &Bank) -> Vec<Partition> {
     let partitions = bank.rent_collection_partitions();
     let slot = bank.slot();
     if slot.saturating_sub(1) == bank.parent_slot() {
-        let partition =
-            Bank::variable_cycle_partition_from_previous_slot(bank.epoch_schedule(), bank.slot());
+        let partition = accounts_partition::variable_cycle_partition_from_previous_slot(
+            bank.epoch_schedule(),
+            bank.slot(),
+        );
         assert_eq!(
             partitions.last().unwrap(),
             &partition,
@@ -1942,284 +1948,6 @@ fn test_rent_eager_under_fixed_cycle_for_development() {
             (0, 39, 432_000)
         ]
     );
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_minimal() {
-    let range = Bank::pubkey_range_from_partition((0, 0, 1));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([0x00; 32])..=Pubkey::new_from_array([0xff; 32])
-    );
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_maximum() {
-    let max = !0;
-
-    let range = Bank::pubkey_range_from_partition((0, 0, max));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([0x00; 32])
-            ..=Pubkey::new_from_array([
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let range = Bank::pubkey_range_from_partition((0, 1, max));
-    const ONE: u8 = 0x01;
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, ONE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
-        ])
-            ..=Pubkey::new_from_array([
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let range = Bank::pubkey_range_from_partition((max - 3, max - 2, max));
-    const FD: u8 = 0xfd;
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
-        ])
-            ..=Pubkey::new_from_array([
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, FD, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let range = Bank::pubkey_range_from_partition((max - 2, max - 1, max));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
-        ])..=pubkey_max_value()
-    );
-
-    fn should_cause_overflow(partition_count: u64) -> bool {
-        // Check `partition_width = (u64::max_value() + 1) / partition_count` is exact and
-        // does not have a remainder.
-        // This way, `partition_width * partition_count == (u64::max_value() + 1)`,
-        // so the test actually tests for overflow
-        (u64::max_value() - partition_count + 1) % partition_count == 0
-    }
-
-    let max_exact = 64;
-    // Make sure `max_exact` divides evenly when calculating `calculate_partition_width`
-    assert!(should_cause_overflow(max_exact));
-    // Make sure `max_inexact` doesn't divide evenly when calculating `calculate_partition_width`
-    let max_inexact = 10;
-    assert!(!should_cause_overflow(max_inexact));
-
-    for max in &[max_exact, max_inexact] {
-        let range = Bank::pubkey_range_from_partition((max - 1, max - 1, *max));
-        assert_eq!(range, pubkey_max_value()..=pubkey_max_value());
-    }
-}
-
-fn map_to_test_bad_range() -> std::collections::BTreeMap<Pubkey, i8> {
-    let mut map = std::collections::BTreeMap::new();
-    // when empty, std::collections::BTreeMap doesn't sanitize given range...
-    map.insert(solana_sdk::pubkey::new_rand(), 1);
-    map
-}
-
-#[test]
-#[should_panic(expected = "range start is greater than range end in BTreeMap")]
-fn test_rent_eager_bad_range() {
-    let test_map = map_to_test_bad_range();
-    let _ = test_map.range(
-        Pubkey::new_from_array([
-            0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x01,
-        ])
-            ..=Pubkey::new_from_array([
-                0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00,
-            ]),
-    );
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_noop_range() {
-    let test_map = map_to_test_bad_range();
-
-    let range = Bank::pubkey_range_from_partition((0, 0, 3));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([0x00; 32])
-            ..=Pubkey::new_from_array([
-                0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x54, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-
-    let range = Bank::pubkey_range_from_partition((1, 1, 3));
-    let same = Pubkey::new_from_array([
-        0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00,
-    ]);
-    assert_eq!(range, same..=same);
-    let _ = test_map.range(range);
-
-    let range = Bank::pubkey_range_from_partition((2, 2, 3));
-    assert_eq!(range, pubkey_max_value()..=pubkey_max_value());
-    let _ = test_map.range(range);
-}
-
-fn pubkey_max_value() -> Pubkey {
-    let highest = Pubkey::from_str("JEKNVnkbo3jma5nREBBJCDoXFVeKkD56V3xKrvRmWxFG").unwrap();
-    let arr = Pubkey::new_from_array([0xff; 32]);
-    assert_eq!(highest, arr);
-    arr
-}
-
-#[test]
-fn test_rent_pubkey_range_max() {
-    // start==end && start != 0 is curious behavior. Verifying it here.
-    solana_logger::setup();
-    let range = Bank::pubkey_range_from_partition((1, 1, 3));
-    let p = Bank::partition_from_pubkey(range.start(), 3);
-    assert_eq!(p, 2);
-    let range = Bank::pubkey_range_from_partition((1, 2, 3));
-    let p = Bank::partition_from_pubkey(range.start(), 3);
-    assert_eq!(p, 2);
-    let range = Bank::pubkey_range_from_partition((2, 2, 3));
-    let p = Bank::partition_from_pubkey(range.start(), 3);
-    assert_eq!(p, 2);
-    let range = Bank::pubkey_range_from_partition((1, 1, 16));
-    let p = Bank::partition_from_pubkey(range.start(), 16);
-    assert_eq!(p, 2);
-    let range = Bank::pubkey_range_from_partition((1, 2, 16));
-    let p = Bank::partition_from_pubkey(range.start(), 16);
-    assert_eq!(p, 2);
-    let range = Bank::pubkey_range_from_partition((2, 2, 16));
-    let p = Bank::partition_from_pubkey(range.start(), 16);
-    assert_eq!(p, 3);
-    let range = Bank::pubkey_range_from_partition((15, 15, 16));
-    let p = Bank::partition_from_pubkey(range.start(), 16);
-    assert_eq!(p, 15);
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_dividable() {
-    let test_map = map_to_test_bad_range();
-    let range = Bank::pubkey_range_from_partition((0, 0, 2));
-
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([0x00; 32])
-            ..=Pubkey::new_from_array([
-                0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-
-    let range = Bank::pubkey_range_from_partition((0, 1, 2));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00
-        ])
-            ..=Pubkey::new_from_array([
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_not_dividable() {
-    solana_logger::setup();
-
-    let test_map = map_to_test_bad_range();
-    let range = Bank::pubkey_range_from_partition((0, 0, 3));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([0x00; 32])
-            ..=Pubkey::new_from_array([
-                0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x54, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-
-    let range = Bank::pubkey_range_from_partition((0, 1, 3));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00
-        ])
-            ..=Pubkey::new_from_array([
-                0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xa9, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-
-    let range = Bank::pubkey_range_from_partition((1, 2, 3));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00
-        ])
-            ..=Pubkey::new_from_array([
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
-}
-
-#[test]
-fn test_rent_eager_pubkey_range_gap() {
-    solana_logger::setup();
-
-    let test_map = map_to_test_bad_range();
-    let range = Bank::pubkey_range_from_partition((120, 1023, 12345));
-    assert_eq!(
-        range,
-        Pubkey::new_from_array([
-            0x02, 0x82, 0x5a, 0x89, 0xd1, 0xac, 0x58, 0x9c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00
-        ])
-            ..=Pubkey::new_from_array([
-                0x15, 0x3c, 0x1d, 0xf1, 0xc6, 0x39, 0xef, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-    );
-    let _ = test_map.range(range);
 }
 
 impl Bank {
@@ -4765,7 +4493,7 @@ fn test_bank_vote_accounts() {
                                         // to have a vote account
 
     let vote_keypair = Keypair::new();
-    let instructions = vote_instruction::create_account(
+    let instructions = vote_instruction::create_account_with_config(
         &mint_keypair.pubkey(),
         &vote_keypair.pubkey(),
         &VoteInit {
@@ -4775,6 +4503,10 @@ fn test_bank_vote_accounts() {
             commission: 0,
         },
         10,
+        vote_instruction::CreateVoteAccountConfig {
+            space: VoteStateVersions::vote_state_size_of(true) as u64,
+            ..vote_instruction::CreateVoteAccountConfig::default()
+        },
     );
 
     let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
@@ -4829,7 +4561,7 @@ fn test_bank_cloned_stake_delegations() {
     };
 
     let vote_keypair = Keypair::new();
-    let mut instructions = vote_instruction::create_account(
+    let mut instructions = vote_instruction::create_account_with_config(
         &mint_keypair.pubkey(),
         &vote_keypair.pubkey(),
         &VoteInit {
@@ -4839,6 +4571,10 @@ fn test_bank_cloned_stake_delegations() {
             commission: 0,
         },
         vote_balance,
+        vote_instruction::CreateVoteAccountConfig {
+            space: VoteStateVersions::vote_state_size_of(true) as u64,
+            ..vote_instruction::CreateVoteAccountConfig::default()
+        },
     );
 
     let stake_keypair = Keypair::new();
@@ -5135,15 +4871,14 @@ fn test_add_builtin() {
 
     assert!(bank.get_account(&mock_vote_program_id()).is_none());
     bank.add_builtin(
-        "mock_vote_program",
-        &mock_vote_program_id(),
-        process_instruction,
+        mock_vote_program_id(),
+        create_builtin("mockup".to_string(), process_instruction),
     );
     assert!(bank.get_account(&mock_vote_program_id()).is_some());
 
     let mock_account = Keypair::new();
     let mock_validator_identity = Keypair::new();
-    let mut instructions = vote_instruction::create_account(
+    let mut instructions = vote_instruction::create_account_with_config(
         &mint_keypair.pubkey(),
         &mock_account.pubkey(),
         &VoteInit {
@@ -5151,6 +4886,10 @@ fn test_add_builtin() {
             ..VoteInit::default()
         },
         1,
+        vote_instruction::CreateVoteAccountConfig {
+            space: VoteStateVersions::vote_state_size_of(true) as u64,
+            ..vote_instruction::CreateVoteAccountConfig::default()
+        },
     );
     instructions[1].program_id = mock_vote_program_id();
 
@@ -5185,7 +4924,7 @@ fn test_add_duplicate_static_program() {
 
     let mock_account = Keypair::new();
     let mock_validator_identity = Keypair::new();
-    let instructions = vote_instruction::create_account(
+    let instructions = vote_instruction::create_account_with_config(
         &mint_keypair.pubkey(),
         &mock_account.pubkey(),
         &VoteInit {
@@ -5193,6 +4932,10 @@ fn test_add_duplicate_static_program() {
             ..VoteInit::default()
         },
         1,
+        vote_instruction::CreateVoteAccountConfig {
+            space: VoteStateVersions::vote_state_size_of(true) as u64,
+            ..vote_instruction::CreateVoteAccountConfig::default()
+        },
     );
 
     let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
@@ -5204,9 +4947,8 @@ fn test_add_duplicate_static_program() {
 
     let vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
     bank.add_builtin(
-        "solana_vote_program",
-        &solana_vote_program::id(),
-        process_instruction,
+        solana_vote_program::id(),
+        create_builtin("mockup".to_string(), process_instruction),
     );
     let new_vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
     // Vote loader account should not be updated since it was included in the genesis config.
@@ -5258,8 +5000,14 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
             continue;
         }
 
-        bank.add_builtin("mock_program1", &vote_id, process_instruction);
-        bank.add_builtin("mock_program2", &stake_id, process_instruction);
+        bank.add_builtin(
+            vote_id,
+            create_builtin("mock_program1".to_string(), process_instruction),
+        );
+        bank.add_builtin(
+            stake_id,
+            create_builtin("mock_program2".to_string(), process_instruction),
+        );
         {
             let stakes = bank.stakes_cache.stakes();
             assert!(stakes.vote_accounts().as_ref().is_empty());
@@ -5282,8 +5030,14 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
         // Re-adding builtin programs should be no-op
         bank.update_accounts_hash_for_tests();
         let old_hash = bank.get_accounts_hash().unwrap();
-        bank.add_builtin("mock_program1", &vote_id, process_instruction);
-        bank.add_builtin("mock_program2", &stake_id, process_instruction);
+        bank.add_builtin(
+            vote_id,
+            create_builtin("mockup".to_string(), process_instruction),
+        );
+        bank.add_builtin(
+            stake_id,
+            create_builtin("mockup".to_string(), process_instruction),
+        );
         add_root_and_flush_write_cache(&bank);
         bank.update_accounts_hash_for_tests();
         let new_hash = bank.get_accounts_hash().unwrap();
@@ -6534,7 +6288,10 @@ fn test_transaction_with_duplicate_accounts_in_instruction() {
     });
 
     let mock_program_id = Pubkey::from([2u8; 32]);
-    bank.add_builtin("mock_program", &mock_program_id, process_instruction);
+    bank.add_builtin(
+        mock_program_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     let from_pubkey = solana_sdk::pubkey::new_rand();
     let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -6570,7 +6327,10 @@ fn test_transaction_with_program_ids_passed_to_programs() {
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     let mock_program_id = Pubkey::from([2u8; 32]);
-    bank.add_builtin("mock_program", &mock_program_id, process_instruction);
+    bank.add_builtin(
+        mock_program_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     let from_pubkey = solana_sdk::pubkey::new_rand();
     let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -6622,7 +6382,10 @@ fn test_account_ids_after_program_ids() {
 
     tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
 
-    bank.add_builtin("mock_vote", &solana_vote_program::id(), process_instruction);
+    bank.add_builtin(
+        solana_vote_program::id(),
+        create_builtin("mockup".to_string(), process_instruction),
+    );
     let result = bank.process_transaction(&tx);
     assert_eq!(result, Ok(()));
     let account = bank.get_account(&solana_vote_program::id()).unwrap();
@@ -6672,7 +6435,10 @@ fn test_duplicate_account_key() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin("mock_vote", &solana_vote_program::id(), process_instruction);
+    bank.add_builtin(
+        solana_vote_program::id(),
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6701,7 +6467,10 @@ fn test_process_transaction_with_too_many_account_locks() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin("mock_vote", &solana_vote_program::id(), process_instruction);
+    bank.add_builtin(
+        solana_vote_program::id(),
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6734,7 +6503,10 @@ fn test_program_id_as_payer() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin("mock_vote", &solana_vote_program::id(), process_instruction);
+    bank.add_builtin(
+        solana_vote_program::id(),
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6777,7 +6549,10 @@ fn test_ref_account_key_after_program_id() {
         AccountMeta::new(to_pubkey, false),
     ];
 
-    bank.add_builtin("mock_vote", &solana_vote_program::id(), process_instruction);
+    bank.add_builtin(
+        solana_vote_program::id(),
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     let instruction = Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
     let mut tx = Transaction::new_signed_with_payer(
@@ -6808,7 +6583,7 @@ fn test_fuzz_instructions() {
         .map(|i| {
             let key = solana_sdk::pubkey::new_rand();
             let name = format!("program{i:?}");
-            bank.add_builtin(&name, &key, process_instruction);
+            bank.add_builtin(key, create_builtin(name.clone(), process_instruction));
             (key, name.as_bytes().to_vec())
         })
         .collect();
@@ -6972,25 +6747,25 @@ fn test_bank_hash_consistency() {
         if bank.slot == 0 {
             assert_eq!(
                 bank.hash().to_string(),
-                "5gY6TCgB9NymbbxgFgAjvYLpXjyXiVyyruS1aEwbWKLK"
+                "FVZwMQ5YJiivwGctYDvPcoQrTECbUaNcmTnJeFDdb1a3"
             );
         }
         if bank.slot == 32 {
             assert_eq!(
                 bank.hash().to_string(),
-                "6uJ5C4QDXWCN39EjJ5Frcz73nnS2jMJ55KgkQff12Fqp"
+                "5AMuFif3LzgsBV8JXGVwdJpHbpZpYKRtcvyrfZjhMGvx"
             );
         }
         if bank.slot == 64 {
             assert_eq!(
                 bank.hash().to_string(),
-                "Ddk6ouAvSSA1U3Cw6BoKdM5v5LdRc9ShruGDzci9fKbY"
+                "GDmYzhnPdXoFLvbr88vPoVF5EYyUbCZJLMWBG9JJv8DQ"
             );
         }
         if bank.slot == 128 {
             assert_eq!(
                 bank.hash().to_string(),
-                "ANodC5vnedLWqeAyhcoErzR3ptNansb5YX6UTQ9cfP7S"
+                "J6Q2ng27mQMyDF2g7CbKSQDwZAeeaNnkUUZifax3FR9Y"
             );
             break;
         }
@@ -7014,7 +6789,10 @@ fn test_same_program_id_uses_unqiue_executable_accounts() {
 
     // Add a new program
     let program1_pubkey = solana_sdk::pubkey::new_rand();
-    bank.add_builtin("program", &program1_pubkey, process_instruction);
+    bank.add_builtin(
+        program1_pubkey,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     // Add a new program owned by the first
     let program2_pubkey = solana_sdk::pubkey::new_rand();
@@ -7214,7 +6992,7 @@ fn test_shrink_candidate_slots_cached() {
     // No more slots should be shrunk
     assert_eq!(bank2.shrink_candidate_slots(), 0);
     // alive_counts represents the count of alive accounts in the three slots 0,1,2
-    assert_eq!(alive_counts, vec![11, 1, 7]);
+    assert_eq!(alive_counts, vec![14, 1, 7]);
 }
 
 #[test]
@@ -7229,15 +7007,17 @@ fn test_add_builtin_no_overwrite() {
     ));
     assert_eq!(bank.get_account_modified_slot(&program_id), None);
 
-    Arc::get_mut(&mut bank)
-        .unwrap()
-        .add_builtin("mock_program", &program_id, process_instruction);
+    Arc::get_mut(&mut bank).unwrap().add_builtin(
+        program_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
     assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
     let mut bank = Arc::new(new_from_parent(&bank));
-    Arc::get_mut(&mut bank)
-        .unwrap()
-        .add_builtin("mock_program", &program_id, process_instruction);
+    Arc::get_mut(&mut bank).unwrap().add_builtin(
+        program_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
     assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 }
 
@@ -7253,15 +7033,17 @@ fn test_add_builtin_loader_no_overwrite() {
     ));
     assert_eq!(bank.get_account_modified_slot(&loader_id), None);
 
-    Arc::get_mut(&mut bank)
-        .unwrap()
-        .add_builtin("mock_program", &loader_id, process_instruction);
+    Arc::get_mut(&mut bank).unwrap().add_builtin(
+        loader_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
     assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
 
     let mut bank = Arc::new(new_from_parent(&bank));
-    Arc::get_mut(&mut bank)
-        .unwrap()
-        .add_builtin("mock_program", &loader_id, process_instruction);
+    Arc::get_mut(&mut bank).unwrap().add_builtin(
+        loader_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
     assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
 }
 
@@ -7755,7 +7537,9 @@ fn test_bank_executor_cache() {
             upgrade_authority_address: None,
         })
         .unwrap();
-    programdata_account.data_mut()[programdata_data_offset..].copy_from_slice(&elf);
+    let mut data = programdata_account.data().to_vec();
+    data[programdata_data_offset..].copy_from_slice(&elf);
+    programdata_account.set_data_from_slice(&data);
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
@@ -7804,11 +7588,11 @@ fn test_bank_load_program() {
             upgrade_authority_address: None,
         })
         .unwrap();
-    programdata_account.data_mut()[programdata_data_offset..].copy_from_slice(&elf);
+    programdata_account.data_as_mut_slice()[programdata_data_offset..].copy_from_slice(&elf);
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-    let program = bank.load_program(&key1);
+    let program = bank.load_program(&key1, false);
     assert!(program.is_ok());
     let program = program.unwrap();
     assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
@@ -7878,11 +7662,6 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000);
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.feature_set = Arc::new(FeatureSet::all_enabled());
-    bank.add_builtin(
-        "solana_bpf_loader_upgradeable_program",
-        &bpf_loader_upgradeable::id(),
-        solana_bpf_loader_program::process_instruction,
-    );
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -8025,6 +7804,10 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         assert_eq!(*elf.get(i).unwrap(), *byte);
     }
 
+    let loaded_program = bank
+        .load_program(&program_keypair.pubkey(), false)
+        .expect("Failed to load the program");
+
     // Invoke deployed program
     mock_process_instruction(
         &bpf_loader_upgradeable::id(),
@@ -8037,7 +7820,16 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         Vec::new(),
         Ok(()),
         solana_bpf_loader_program::process_instruction,
-        |_invoke_context| {},
+        |invoke_context| {
+            let mut cache = invoke_context.tx_executor_cache.borrow_mut();
+            cache.set(
+                program_keypair.pubkey(),
+                loaded_program.clone(),
+                true,
+                false,
+                0,
+            );
+        },
         |_invoke_context| {},
     );
 
@@ -9835,7 +9627,7 @@ fn test_vote_epoch_panic() {
 
     let mut setup_ixs = Vec::new();
     setup_ixs.extend(
-        vote_instruction::create_account(
+        vote_instruction::create_account_with_config(
             &mint_keypair.pubkey(),
             &vote_keypair.pubkey(),
             &VoteInit {
@@ -9845,6 +9637,10 @@ fn test_vote_epoch_panic() {
                 commission: 0,
             },
             1_000_000_000,
+            vote_instruction::CreateVoteAccountConfig {
+                space: VoteStateVersions::vote_state_size_of(true) as u64,
+                ..vote_instruction::CreateVoteAccountConfig::default()
+            },
         )
         .into_iter(),
     );
@@ -10003,7 +9799,10 @@ fn test_tx_return_data() {
 
     let mock_program_id = Pubkey::from([2u8; 32]);
     let blockhash = bank.last_blockhash();
-    bank.add_builtin("mock_program", &mock_program_id, process_instruction);
+    bank.add_builtin(
+        mock_program_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     for index in [
         None,
@@ -10192,7 +9991,10 @@ fn test_transfer_sysvar() {
     });
 
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin("mock_program1", &program_id, process_instruction);
+    bank.add_builtin(
+        program_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     let blockhash = bank.last_blockhash();
     #[allow(deprecated)]
@@ -10368,13 +10170,13 @@ fn test_rent_debits() {
 
     // No entry for 0 rewards
     rent_debits.insert(&Pubkey::new_unique(), 0, 0);
-    assert_eq!(rent_debits.0.len(), 0);
+    assert_eq!(rent_debits.len(), 0);
 
     // Some that actually work
     rent_debits.insert(&Pubkey::new_unique(), 1, 0);
-    assert_eq!(rent_debits.0.len(), 1);
+    assert_eq!(rent_debits.len(), 1);
     rent_debits.insert(&Pubkey::new_unique(), i64::MAX as u64, 0);
-    assert_eq!(rent_debits.0.len(), 2);
+    assert_eq!(rent_debits.len(), 2);
 }
 
 #[test]
@@ -10404,7 +10206,10 @@ fn test_compute_budget_program_noop() {
         Ok(())
     });
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin("mock_program", &program_id, process_instruction);
+    bank.add_builtin(
+        program_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     let message = Message::new(
         &[
@@ -10447,7 +10252,10 @@ fn test_compute_request_instruction() {
         Ok(())
     });
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin("mock_program", &program_id, process_instruction);
+    bank.add_builtin(
+        program_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     let message = Message::new(
         &[
@@ -10497,7 +10305,10 @@ fn test_failed_compute_request_instruction() {
         Ok(())
     });
     let program_id = solana_sdk::pubkey::new_rand();
-    bank.add_builtin("mock_program", &program_id, process_instruction);
+    bank.add_builtin(
+        program_id,
+        create_builtin("mockup".to_string(), process_instruction),
+    );
 
     // This message will not be executed because the compute budget request is invalid
     let message0 = Message::new(
@@ -11172,9 +10983,8 @@ fn test_invalid_rent_state_changes_existing_accounts() {
 
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.add_builtin(
-        "mock_program",
-        &mock_program_id,
-        mock_transfer_process_instruction,
+        mock_program_id,
+        create_builtin("mockup".to_string(), mock_transfer_process_instruction),
     );
     let recent_blockhash = bank.last_blockhash();
 
@@ -11259,9 +11069,8 @@ fn test_invalid_rent_state_changes_new_accounts() {
 
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.add_builtin(
-        "mock_program",
-        &mock_program_id,
-        mock_transfer_process_instruction,
+        mock_program_id,
+        create_builtin("mockup".to_string(), mock_transfer_process_instruction),
     );
     let recent_blockhash = bank.last_blockhash();
 
@@ -11322,9 +11131,8 @@ fn test_drained_created_account() {
 
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.add_builtin(
-        "mock_program",
-        &mock_program_id,
-        mock_transfer_process_instruction,
+        mock_program_id,
+        create_builtin("mockup".to_string(), mock_transfer_process_instruction),
     );
     let recent_blockhash = bank.last_blockhash();
 
@@ -11978,9 +11786,8 @@ fn test_resize_and_rent() {
 
     let mock_program_id = Pubkey::new_unique();
     bank.add_builtin(
-        "mock_realloc_program",
-        &mock_program_id,
-        mock_realloc_process_instruction,
+        mock_program_id,
+        create_builtin("mockup".to_string(), mock_realloc_process_instruction),
     );
     let recent_blockhash = bank.last_blockhash();
 
@@ -12253,9 +12060,8 @@ fn test_accounts_data_size_and_resize_transactions() {
     let mut bank = Bank::new_for_tests(&genesis_config);
     let mock_program_id = Pubkey::new_unique();
     bank.add_builtin(
-        "mock_realloc_program",
-        &mock_program_id,
-        mock_realloc_process_instruction,
+        mock_program_id,
+        create_builtin("mockup".to_string(), mock_realloc_process_instruction),
     );
 
     let recent_blockhash = bank.last_blockhash();
@@ -12330,17 +12136,6 @@ fn test_accounts_data_size_and_resize_transactions() {
 }
 
 #[test]
-fn test_get_partition_end_indexes() {
-    for n in 5..7 {
-        assert_eq!(vec![0], Bank::get_partition_end_indexes(&(0, 0, n)));
-        assert!(Bank::get_partition_end_indexes(&(1, 1, n)).is_empty());
-        assert_eq!(vec![1], Bank::get_partition_end_indexes(&(0, 1, n)));
-        assert_eq!(vec![1, 2], Bank::get_partition_end_indexes(&(0, 2, n)));
-        assert_eq!(vec![3, 4], Bank::get_partition_end_indexes(&(2, 4, n)));
-    }
-}
-
-#[test]
 fn test_get_rent_paying_pubkeys() {
     let lamports = 1;
     let bank = create_simple_test_bank(lamports);
@@ -12352,8 +12147,8 @@ fn test_get_rent_paying_pubkeys() {
 
     let pk1 = Pubkey::from([2; 32]);
     let pk2 = Pubkey::from([3; 32]);
-    let index1 = Bank::partition_from_pubkey(&pk1, n);
-    let index2 = Bank::partition_from_pubkey(&pk2, n);
+    let index1 = accounts_partition::partition_from_pubkey(&pk1, n);
+    let index2 = accounts_partition::partition_from_pubkey(&pk2, n);
     assert!(index1 > 0, "{}", index1);
     assert!(index2 > index1, "{index2}, {index1}");
 
@@ -12803,8 +12598,6 @@ fn test_runtime_feature_enable_with_executor_cache() {
         .accounts
         .remove(&feature_set::reject_callx_r10::id());
     let mut root_bank = Bank::new_for_tests(&genesis_config);
-    let (name, id, entrypoint) = solana_bpf_loader_program!();
-    root_bank.add_builtin(&name, &id, entrypoint);
 
     // Test a basic transfer
     let amount = genesis_config.rent.minimum_balance(0);
@@ -13266,4 +13059,202 @@ fn test_reward_accounts_lock() {
         bank_forks.insert(bank);
     }
     assert!(reward_account_lock_hit);
+}
+
+#[test]
+fn test_system_instruction_allocate() {
+    let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.0));
+    let bank = Bank::new_for_tests(&genesis_config);
+    let bank_client = BankClient::new(bank);
+    let data_len = 2;
+    let amount = genesis_config.rent.minimum_balance(data_len);
+
+    let alice_keypair = Keypair::new();
+    let alice_pubkey = alice_keypair.pubkey();
+    let seed = "seed";
+    let owner = Pubkey::new_unique();
+    let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &owner).unwrap();
+
+    bank_client
+        .transfer_and_confirm(amount, &mint_keypair, &alice_pubkey)
+        .unwrap();
+
+    let allocate_with_seed = Message::new(
+        &[system_instruction::allocate_with_seed(
+            &alice_with_seed,
+            &alice_pubkey,
+            seed,
+            data_len as u64,
+            &owner,
+        )],
+        Some(&alice_pubkey),
+    );
+
+    assert!(bank_client
+        .send_and_confirm_message(&[&alice_keypair], allocate_with_seed)
+        .is_ok());
+
+    let allocate = system_instruction::allocate(&alice_pubkey, data_len as u64);
+
+    assert!(bank_client
+        .send_and_confirm_instruction(&alice_keypair, allocate)
+        .is_ok());
+}
+
+fn with_create_zero_lamport<F>(callback: F)
+where
+    F: Fn(&Bank),
+{
+    solana_logger::setup();
+
+    let alice_keypair = Keypair::new();
+    let bob_keypair = Keypair::new();
+
+    let alice_pubkey = alice_keypair.pubkey();
+    let bob_pubkey = bob_keypair.pubkey();
+
+    let program = Pubkey::new_unique();
+    let collector = Pubkey::new_unique();
+
+    let mint_lamports = sol_to_lamports(1.0);
+    let len1 = 123;
+    let len2 = 456;
+
+    // create initial bank and fund the alice account
+    let (genesis_config, mint_keypair) = create_genesis_config(mint_lamports);
+    let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+    let bank_client = BankClient::new_shared(&bank);
+    bank_client
+        .transfer_and_confirm(mint_lamports, &mint_keypair, &alice_pubkey)
+        .unwrap();
+
+    // create zero-lamports account to be cleaned
+    let account = AccountSharedData::new(0, len1, &program);
+    let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
+    bank.store_account(&bob_pubkey, &account);
+
+    // transfer some to bogus pubkey just to make previous bank (=slot) really cleanable
+    let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
+    let bank_client = BankClient::new_shared(&bank);
+    bank_client
+        .transfer_and_confirm(
+            genesis_config.rent.minimum_balance(0),
+            &alice_keypair,
+            &Pubkey::new_unique(),
+        )
+        .unwrap();
+
+    // super fun time; callback chooses to .clean_accounts(None) or not
+    let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
+    callback(&bank);
+
+    // create a normal account at the same pubkey as the zero-lamports account
+    let lamports = genesis_config.rent.minimum_balance(len2);
+    let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
+    let bank_client = BankClient::new_shared(&bank);
+    let ix = system_instruction::create_account(
+        &alice_pubkey,
+        &bob_pubkey,
+        lamports,
+        len2 as u64,
+        &program,
+    );
+    let message = Message::new(&[ix], Some(&alice_pubkey));
+    let r = bank_client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], message);
+    assert!(r.is_ok());
+}
+
+#[test]
+fn test_create_zero_lamport_with_clean() {
+    with_create_zero_lamport(|bank| {
+        bank.freeze();
+        bank.squash();
+        bank.force_flush_accounts_cache();
+        // do clean and assert that it actually did its job
+        assert_eq!(4, bank.get_snapshot_storages(None).len());
+        bank.clean_accounts(None);
+        assert_eq!(3, bank.get_snapshot_storages(None).len());
+    });
+}
+
+#[test]
+fn test_create_zero_lamport_without_clean() {
+    with_create_zero_lamport(|_| {
+        // just do nothing; this should behave identically with test_create_zero_lamport_with_clean
+    });
+}
+
+#[test]
+fn test_system_instruction_assign_with_seed() {
+    let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.0));
+    let bank = Bank::new_for_tests(&genesis_config);
+    let bank_client = BankClient::new(bank);
+
+    let alice_keypair = Keypair::new();
+    let alice_pubkey = alice_keypair.pubkey();
+    let seed = "seed";
+    let owner = Pubkey::new_unique();
+    let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &owner).unwrap();
+
+    bank_client
+        .transfer_and_confirm(
+            genesis_config.rent.minimum_balance(0),
+            &mint_keypair,
+            &alice_pubkey,
+        )
+        .unwrap();
+
+    let assign_with_seed = Message::new(
+        &[system_instruction::assign_with_seed(
+            &alice_with_seed,
+            &alice_pubkey,
+            seed,
+            &owner,
+        )],
+        Some(&alice_pubkey),
+    );
+
+    assert!(bank_client
+        .send_and_confirm_message(&[&alice_keypair], assign_with_seed)
+        .is_ok());
+}
+
+#[test]
+fn test_system_instruction_unsigned_transaction() {
+    let (genesis_config, alice_keypair) = create_genesis_config(sol_to_lamports(1.0));
+    let alice_pubkey = alice_keypair.pubkey();
+    let mallory_keypair = Keypair::new();
+    let mallory_pubkey = mallory_keypair.pubkey();
+    let amount = genesis_config.rent.minimum_balance(0);
+
+    // Fund to account to bypass AccountNotFound error
+    let bank = Bank::new_for_tests(&genesis_config);
+    let bank_client = BankClient::new(bank);
+    bank_client
+        .transfer_and_confirm(amount, &alice_keypair, &mallory_pubkey)
+        .unwrap();
+
+    // Erroneously sign transaction with recipient account key
+    // No signature case is tested by bank `test_zero_signatures()`
+    let account_metas = vec![
+        AccountMeta::new(alice_pubkey, false),
+        AccountMeta::new(mallory_pubkey, true),
+    ];
+    let malicious_instruction = Instruction::new_with_bincode(
+        system_program::id(),
+        &system_instruction::SystemInstruction::Transfer { lamports: amount },
+        account_metas,
+    );
+    assert_eq!(
+        bank_client
+            .send_and_confirm_instruction(&mallory_keypair, malicious_instruction)
+            .unwrap_err()
+            .unwrap(),
+        TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
+    );
+    assert_eq!(
+        bank_client.get_balance(&alice_pubkey).unwrap(),
+        sol_to_lamports(1.0) - amount
+    );
+    assert_eq!(bank_client.get_balance(&mallory_pubkey).unwrap(), amount);
 }

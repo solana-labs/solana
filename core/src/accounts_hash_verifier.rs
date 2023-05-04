@@ -14,7 +14,7 @@ use {
             AccountsHash, AccountsHashEnum, CalcAccountsHashConfig, HashStats,
             IncrementalAccountsHash,
         },
-        bank::BankIncrementalSnapshotPersistence,
+        serde_snapshot::BankIncrementalSnapshotPersistence,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
             self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
@@ -49,8 +49,8 @@ impl AccountsHashVerifier {
         accounts_package_sender: Sender<AccountsPackage>,
         accounts_package_receiver: Receiver<AccountsPackage>,
         snapshot_package_sender: Option<Sender<SnapshotPackage>>,
-        exit: &Arc<AtomicBool>,
-        cluster_info: &Arc<ClusterInfo>,
+        exit: Arc<AtomicBool>,
+        cluster_info: Arc<ClusterInfo>,
         known_validators: Option<HashSet<Pubkey>>,
         halt_on_known_validators_accounts_hash_mismatch: bool,
         accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
@@ -58,13 +58,15 @@ impl AccountsHashVerifier {
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
         const LOOP_LIMITER: Duration = Duration::from_millis(DEFAULT_MS_PER_SLOT);
-        let exit = exit.clone();
-        let cluster_info = cluster_info.clone();
         let t_accounts_hash_verifier = Builder::new()
             .name("solAcctHashVer".to_string())
             .spawn(move || {
                 info!("AccountsHashVerifier has started");
                 let mut hashes = vec![];
+                // To support fastboot, we must ensure the storages used in the latest POST snapshot are
+                // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
+                // expiring.
+                let mut last_snapshot_storages = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -84,6 +86,8 @@ impl AccountsHashVerifier {
                     info!("handling accounts package: {accounts_package:?}");
                     let enqueued_time = accounts_package.enqueued.elapsed();
 
+                    let snapshot_storages = accounts_package.snapshot_storages.clone();
+
                     let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
                         &cluster_info,
@@ -95,6 +99,20 @@ impl AccountsHashVerifier {
                         &snapshot_config,
                         accounts_hash_fault_injector,
                     ));
+
+                    // Done processing the current snapshot, so the current snapshot dir
+                    // has been converted to POST state.  It is the time to update
+                    // last_snapshot_storages to release the reference counts for the
+                    // previous POST snapshot dir, and save the new ones for the new
+                    // POST snapshot dir.
+                    last_snapshot_storages = Some(snapshot_storages);
+                    debug!(
+                        "Number of snapshot storages kept alive for fastboot: {}",
+                        last_snapshot_storages
+                            .as_ref()
+                            .map(|storages| storages.len())
+                            .unwrap_or(0)
+                    );
 
                     datapoint_info!(
                         "accounts_hash_verifier",
@@ -112,6 +130,13 @@ impl AccountsHashVerifier {
                         ("handling-time-us", handling_time_us, i64),
                     );
                 }
+                debug!(
+                    "Number of snapshot storages kept alive for fastboot: {}",
+                    last_snapshot_storages
+                        .as_ref()
+                        .map(|storages| storages.len())
+                        .unwrap_or(0)
+                );
                 info!("AccountsHashVerifier has stopped");
             })
             .unwrap();
@@ -190,7 +215,7 @@ impl AccountsHashVerifier {
         halt_on_known_validator_accounts_hash_mismatch: bool,
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         hashes: &mut Vec<(Slot, Hash)>,
-        exit: &Arc<AtomicBool>,
+        exit: &AtomicBool,
         snapshot_config: &SnapshotConfig,
         accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
@@ -272,7 +297,7 @@ impl AccountsHashVerifier {
 
         if let Some(snapshot_info) = &accounts_package.snapshot_info {
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                snapshot_info.snapshot_links.path(),
+                &snapshot_info.bank_snapshot_dir,
                 accounts_package.slot,
                 &accounts_hash_for_reserialize,
                 bank_incremental_snapshot_persistence.as_ref(),
@@ -456,7 +481,7 @@ impl AccountsHashVerifier {
         known_validators: Option<&HashSet<Pubkey>>,
         halt_on_known_validator_accounts_hash_mismatch: bool,
         hashes: &mut Vec<(Slot, Hash)>,
-        exit: &Arc<AtomicBool>,
+        exit: &AtomicBool,
         accounts_hash: AccountsHashEnum,
         accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
@@ -542,10 +567,10 @@ impl AccountsHashVerifier {
                 }
             }
         }
-        inc_new_counter_info!("accounts_hash_verifier-hashes_verified", verified_count);
         datapoint_info!(
             "accounts_hash_verifier",
             ("highest_slot_verified", highest_slot, i64),
+            ("num_verified", verified_count, i64),
         );
         false
     }

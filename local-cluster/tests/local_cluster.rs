@@ -352,7 +352,7 @@ fn test_forwarding() {
 
     let validator_info = cluster_nodes
         .iter()
-        .find(|c| c.id != leader_pubkey)
+        .find(|c| c.pubkey() != &leader_pubkey)
         .unwrap();
 
     // Confirm that transactions were forwarded to and processed by the leader.
@@ -1102,7 +1102,11 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // To restart, it is not enough to remove the old bank snapshot directories under snapshot/.
     // The old hardlinks under <account_path>/snapshot/<slot> should also be removed.
     // The purge call covers all of them.
-    snapshot_utils::purge_old_bank_snapshots(validator_snapshot_test_config.bank_snapshots_dir, 0);
+    snapshot_utils::purge_old_bank_snapshots(
+        validator_snapshot_test_config.bank_snapshots_dir,
+        0,
+        None,
+    );
     cluster.restart_node(
         &validator_identity.pubkey(),
         validator_info,
@@ -1355,7 +1359,7 @@ fn test_snapshots_blockstore_floor() {
     )
     .unwrap();
     let mut known_validators = HashSet::new();
-    known_validators.insert(cluster_nodes[0].id);
+    known_validators.insert(*cluster_nodes[0].pubkey());
     validator_snapshot_test_config
         .validator_config
         .known_validators = Some(known_validators);

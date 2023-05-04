@@ -4,7 +4,7 @@
 use {
     rand::{thread_rng, Rng},
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::LegacyContactInfo as ContactInfo},
     solana_poh::poh_recorder::PohRecorder,
     std::{
         sync::{
@@ -46,8 +46,8 @@ impl WarmQuicCacheService {
                             .map_or(true, |last_leader| last_leader != leader_pubkey)
                         {
                             maybe_last_leader = Some(leader_pubkey);
-                            if let Some(addr) = cluster_info
-                                .lookup_contact_info(&leader_pubkey, |leader| leader.tpu)
+                            if let Some(Ok(addr)) = cluster_info
+                                .lookup_contact_info(&leader_pubkey, ContactInfo::tpu)
                             {
                                 let conn = connection_cache.get_connection(&addr);
                                 if let Err(err) = conn.send_data(&[0u8]) {

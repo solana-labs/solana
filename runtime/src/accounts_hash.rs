@@ -122,7 +122,6 @@ pub struct HashStats {
     pub scan_time_total_us: u64,
     pub zeros_time_total_us: u64,
     pub hash_time_total_us: u64,
-    pub hash_time_pre_us: u64,
     pub sort_time_total_us: u64,
     pub hash_total: usize,
     pub unreduced_entries: usize,
@@ -135,14 +134,6 @@ pub struct HashStats {
     pub min_bin_size: usize,
     pub max_bin_size: usize,
     pub storage_size_quartiles: StorageSizeQuartileStats,
-    /// time spent hashing during rehash calls
-    pub rehash_hash_us: AtomicU64,
-    /// time spent determining whether to rehash during rehash calls
-    pub rehash_calc_us: AtomicU64,
-    /// # rehashes that took place and were necessary
-    pub rehash_required: AtomicUsize,
-    /// # rehashes that took place and were UNnecessary
-    pub rehash_unnecessary: AtomicUsize,
     pub oldest_root: Slot,
     pub roots_older_than_epoch: AtomicUsize,
     pub accounts_in_roots_older_than_epoch: AtomicUsize,
@@ -192,7 +183,6 @@ impl HashStats {
             ("accounts_scan_us", self.scan_time_total_us, i64),
             ("eliminate_zeros_us", self.zeros_time_total_us, i64),
             ("hash_us", self.hash_time_total_us, i64),
-            ("hash_time_pre_us", self.hash_time_pre_us, i64),
             ("sort", self.sort_time_total_us, i64),
             ("hash_total", self.hash_total, i64),
             ("storage_sort_us", self.storage_sort_us, i64),
@@ -243,26 +233,6 @@ impl HashStats {
                 i64
             ),
             ("total_us", total_time_us as i64, i64),
-            (
-                "rehashed_rewrites",
-                self.rehash_required.load(Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "rehash_hash_us",
-                self.rehash_hash_us.load(Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "rehash_calc_us",
-                self.rehash_calc_us.load(Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "rehashed_rewrites_unnecessary",
-                self.rehash_unnecessary.load(Ordering::Relaxed) as i64,
-                i64
-            ),
             (
                 "roots_older_than_epoch",
                 self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,

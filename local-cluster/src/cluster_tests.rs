@@ -78,7 +78,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
     assert!(cluster_nodes.len() >= nodes);
     let ignore_nodes = Arc::new(ignore_nodes);
     cluster_nodes.par_iter().for_each(|ingress_node| {
-        if ignore_nodes.contains(&ingress_node.id) {
+        if ignore_nodes.contains(ingress_node.pubkey()) {
             return;
         }
         let random_keypair = Keypair::new();
@@ -101,7 +101,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
             .retry_transfer_until_confirmed(funding_keypair, &mut transaction, 10, confs)
             .unwrap();
         for validator in &cluster_nodes {
-            if ignore_nodes.contains(&validator.id) {
+            if ignore_nodes.contains(validator.pubkey()) {
                 continue;
             }
             let (rpc, tpu) = get_client_facing_addr(validator);
@@ -242,8 +242,8 @@ pub fn kill_entry_and_spend_and_verify_rest(
 
     for ingress_node in &cluster_nodes {
         client
-            .poll_get_balance_with_commitment(&ingress_node.id, CommitmentConfig::processed())
-            .unwrap_or_else(|err| panic!("Node {} has no balance: {}", ingress_node.id, err));
+            .poll_get_balance_with_commitment(ingress_node.pubkey(), CommitmentConfig::processed())
+            .unwrap_or_else(|err| panic!("Node {} has no balance: {}", ingress_node.pubkey(), err));
     }
 
     info!("sleeping for 2 leader fortnights");
@@ -257,7 +257,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     ));
     info!("done sleeping for 2 fortnights");
     for ingress_node in &cluster_nodes {
-        if &ingress_node.id == entry_point_info.pubkey() {
+        if ingress_node.pubkey() == entry_point_info.pubkey() {
             info!("ingress_node.id == entry_point_info.id, continuing...");
             continue;
         }
@@ -384,11 +384,11 @@ pub fn check_no_new_roots(
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             let initial_root = client
                 .get_slot()
-                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.id));
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.pubkey()));
             roots[i] = initial_root;
             client
                 .get_slot_with_commitment(CommitmentConfig::processed())
-                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.id))
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.pubkey()))
         })
         .max()
         .unwrap();
@@ -403,7 +403,7 @@ pub fn check_no_new_roots(
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             current_slot = client
                 .get_slot_with_commitment(CommitmentConfig::processed())
-                .unwrap_or_else(|_| panic!("get_slot for {} failed", contact_infos[0].id));
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", contact_infos[0].pubkey()));
             if current_slot > end_slot {
                 reached_end_slot = true;
                 break;
@@ -411,7 +411,10 @@ pub fn check_no_new_roots(
             if last_print.elapsed().as_secs() > 3 {
                 info!(
                     "{} current slot: {} on validator: {}, waiting for any validator with slot: {}",
-                    test_name, current_slot, contact_info.id, end_slot
+                    test_name,
+                    current_slot,
+                    contact_info.pubkey(),
+                    end_slot
                 );
                 last_print = Instant::now();
             }
@@ -427,7 +430,7 @@ pub fn check_no_new_roots(
         assert_eq!(
             client
                 .get_slot()
-                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.id)),
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.pubkey())),
             roots[i]
         );
     }
@@ -441,7 +444,7 @@ fn poll_all_nodes_for_signature(
     confs: usize,
 ) -> Result<(), TransportError> {
     for validator in cluster_nodes {
-        if &validator.id == entry_point_info.pubkey() {
+        if validator.pubkey() == entry_point_info.pubkey() {
             continue;
         }
         let (rpc, tpu) = get_client_facing_addr(validator);

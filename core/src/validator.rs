@@ -63,7 +63,8 @@ use {
     solana_rpc::{
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::{
-            OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
+            BankNotificationSenderConfig, OptimisticallyConfirmedBank,
+            OptimisticallyConfirmedBankTracker,
         },
         rpc::JsonRpcConfig,
         rpc_completed_slots_service::RpcCompletedSlotsService,
@@ -693,8 +694,8 @@ impl Validator {
                     snapshot_package_sender.clone(),
                     snapshot_package_receiver,
                     starting_snapshot_hashes,
-                    &exit,
-                    &cluster_info,
+                    exit.clone(),
+                    cluster_info.clone(),
                     config.snapshot_config.clone(),
                     enable_gossip_push,
                 );
@@ -711,8 +712,8 @@ impl Validator {
             accounts_package_sender.clone(),
             accounts_package_receiver,
             snapshot_package_sender,
-            &exit,
-            &cluster_info,
+            exit.clone(),
+            cluster_info.clone(),
             config.known_validators.clone(),
             config.halt_on_known_validators_accounts_hash_mismatch,
             config.accounts_hash_fault_injector,
@@ -731,10 +732,10 @@ impl Validator {
         let pruned_banks_request_handler = PrunedBanksRequestHandler {
             pruned_banks_receiver,
         };
-        let last_full_snapshot_slot = starting_snapshot_hashes.map(|x| x.full.hash.0);
+        let last_full_snapshot_slot = starting_snapshot_hashes.map(|x| x.full.0 .0);
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks.clone(),
-            &exit,
+            exit.clone(),
             AbsRequestHandlers {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
@@ -835,7 +836,7 @@ impl Validator {
                 None,
                 bank.ticks_per_slot(),
                 &id,
-                &blockstore,
+                blockstore.clone(),
                 blockstore.get_new_shred_signal(0),
                 &leader_schedule_cache,
                 &genesis_config.poh_config,
@@ -945,7 +946,10 @@ impl Validator {
                     rpc_subscriptions.clone(),
                     confirmed_bank_subscribers,
                 )),
-                Some(bank_notification_sender),
+                Some(BankNotificationSenderConfig {
+                    sender: bank_notification_sender,
+                    should_send_parents: geyser_plugin_service.is_some(),
+                }),
             )
         } else {
             (None, None, None, None)
@@ -1145,7 +1149,7 @@ impl Validator {
             gossip_verified_vote_hash_sender,
             replay_vote_receiver,
             replay_vote_sender,
-            bank_notification_sender,
+            bank_notification_sender.map(|sender| sender.sender),
             config.tpu_coalesce,
             cluster_confirmed_slot_sender,
             &connection_cache,
@@ -2100,11 +2104,11 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
         .all_tvu_peers()
         .into_iter()
         .filter(|node| {
-            let age = now.saturating_sub(node.wallclock);
+            let age = now.saturating_sub(node.wallclock());
             // Contact infos are refreshed twice during this period.
             age < CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS
         })
-        .map(|node| (node.id, node))
+        .map(|node| (*node.pubkey(), node))
         .collect();
     let my_shred_version = cluster_info.my_shred_version();
     let my_id = cluster_info.id();
@@ -2119,7 +2123,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
         let vote_state_node_pubkey = vote_account.node_pubkey().unwrap_or_default();
 
         if let Some(peer) = peers.get(&vote_state_node_pubkey) {
-            if peer.shred_version == my_shred_version {
+            if peer.shred_version() == my_shred_version {
                 trace!(
                     "observed {} in gossip, (activated_stake={})",
                     vote_state_node_pubkey,

@@ -74,11 +74,6 @@ impl Committer {
         executed_non_vote_transactions_count: usize,
         executed_with_successful_result_count: usize,
     ) -> (u64, Vec<CommitTransactionDetails>) {
-        inc_new_counter_info!(
-            "banking_stage-record_transactions_num_to_commit",
-            executed_transactions_count
-        );
-
         let (last_blockhash, lamports_per_signature) =
             bank.last_blockhash_and_lamports_per_signature();
 

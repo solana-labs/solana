@@ -1,4 +1,5 @@
 use {
+    itertools::Itertools,
     log::*,
     rand::{seq::SliceRandom, thread_rng, Rng},
     rayon::prelude::*,
@@ -14,9 +15,8 @@ use {
     solana_metrics::datapoint_info,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
-        snapshot_package::SnapshotType,
-        snapshot_utils::{self},
+        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::SnapshotType,
+        snapshot_utils,
     },
     solana_sdk::{
         clock::Slot,
@@ -28,7 +28,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::{hash_map::RandomState, HashMap, HashSet},
-        net::{SocketAddr, TcpListener, UdpSocket},
+        net::{SocketAddr, TcpListener, TcpStream, UdpSocket},
         path::Path,
         process::exit,
         sync::{
@@ -54,6 +54,8 @@ const NEWER_SNAPSHOT_THRESHOLD: Duration = Duration::from_secs(180);
 const GET_RPC_PEERS_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
+
+pub const PING_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
@@ -111,10 +113,7 @@ fn verify_reachable_ports(
                 tcp_listeners.push((
                     bind_addr.port(),
                     TcpListener::bind(bind_addr).unwrap_or_else(|err| {
-                        error!(
-                            "Unable to bind to tcp {:?} for {}: {}",
-                            bind_addr, purpose, err
-                        );
+                        error!("Unable to bind to tcp {bind_addr:?} for {purpose}: {err}");
                         exit(1);
                     }),
                 ));
@@ -128,7 +127,7 @@ fn verify_reachable_ports(
     }
 
     solana_net_utils::verify_reachable_ports(
-        &cluster_entrypoint.gossip,
+        &cluster_entrypoint.gossip().unwrap(),
         tcp_listeners,
         &udp_sockets,
     )
@@ -190,9 +189,11 @@ fn get_rpc_peers(
         .unwrap_or_else(|| cluster_info.my_shred_version());
     if shred_version == 0 {
         let all_zero_shred_versions = cluster_entrypoints.iter().all(|cluster_entrypoint| {
-            cluster_info
-                .lookup_contact_info_by_gossip_addr(&cluster_entrypoint.gossip)
-                .map_or(false, |entrypoint| entrypoint.shred_version == 0)
+            cluster_entrypoint
+                .gossip()
+                .ok()
+                .and_then(|addr| cluster_info.lookup_contact_info_by_gossip_addr(&addr))
+                .map_or(false, |entrypoint| entrypoint.shred_version() == 0)
         });
 
         if all_zero_shred_versions {
@@ -204,8 +205,7 @@ fn get_rpc_peers(
     }
 
     info!(
-        "Searching for an RPC service with shred version {}{}...",
-        shred_version,
+        "Searching for an RPC service with shred version {shred_version}{}...",
         retry_reason
             .as_ref()
             .map(|s| format!(" (Retrying: {s})"))
@@ -215,12 +215,12 @@ fn get_rpc_peers(
     let mut rpc_peers = cluster_info
         .all_rpc_peers()
         .into_iter()
-        .filter(|contact_info| contact_info.shred_version == shred_version)
+        .filter(|contact_info| contact_info.shred_version() == shred_version)
         .collect::<Vec<_>>();
 
     if bootstrap_config.only_known_rpc {
         rpc_peers.retain(|rpc_peer| {
-            is_known_validator(&rpc_peer.id, &validator_config.known_validators)
+            is_known_validator(rpc_peer.pubkey(), &validator_config.known_validators)
         });
     }
 
@@ -229,18 +229,17 @@ fn get_rpc_peers(
     // Filter out blacklisted nodes
     let rpc_peers: Vec<_> = rpc_peers
         .into_iter()
-        .filter(|rpc_peer| !blacklisted_rpc_nodes.contains(&rpc_peer.id))
+        .filter(|rpc_peer| !blacklisted_rpc_nodes.contains(rpc_peer.pubkey()))
         .collect();
     let rpc_peers_blacklisted = rpc_peers_total - rpc_peers.len();
     let rpc_known_peers = rpc_peers
         .iter()
-        .filter(|rpc_peer| is_known_validator(&rpc_peer.id, &validator_config.known_validators))
+        .filter(|rpc_peer| {
+            is_known_validator(rpc_peer.pubkey(), &validator_config.known_validators)
+        })
         .count();
 
-    info!(
-        "Total {} RPC nodes found. {} known, {} blacklisted ",
-        rpc_peers_total, rpc_known_peers, rpc_peers_blacklisted
-    );
+    info!("Total {rpc_peers_total} RPC nodes found. {rpc_known_peers} known, {rpc_peers_blacklisted} blacklisted");
 
     if rpc_peers_blacklisted == rpc_peers_total {
         *retry_reason = if !blacklisted_rpc_nodes.is_empty()
@@ -359,14 +358,14 @@ pub fn fail_rpc_node(
     rpc_id: &Pubkey,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey, RandomState>,
 ) {
-    warn!("{}", err);
+    warn!("{err}");
     if let Some(ref known_validators) = known_validators {
         if known_validators.contains(rpc_id) {
             return;
         }
     }
 
-    info!("Excluding {} as a future RPC candidate", rpc_id);
+    info!("Excluding {rpc_id} as a future RPC candidate");
     blacklisted_rpc_nodes.insert(*rpc_id);
 }
 
@@ -399,7 +398,7 @@ pub fn attempt_download_genesis_and_snapshot(
     authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
 ) -> Result<(), String> {
     download_then_check_genesis_hash(
-        &rpc_contact_info.rpc,
+        &rpc_contact_info.rpc().map_err(|err| format!("{err:?}"))?,
         ledger_path,
         &mut validator_config.expected_genesis_hash,
         bootstrap_config.max_genesis_archive_unpacked_size,
@@ -415,7 +414,7 @@ pub fn attempt_download_genesis_and_snapshot(
     let rpc_client_slot = rpc_client
         .get_slot_with_commitment(CommitmentConfig::finalized())
         .map_err(|err| format!("Failed to get RPC node slot: {err}"))?;
-    info!("RPC node root slot: {}", rpc_client_slot);
+    info!("RPC node root slot: {rpc_client_slot}");
 
     download_snapshots(
         full_snapshot_archives_dir,
@@ -452,11 +451,20 @@ pub fn attempt_download_genesis_and_snapshot(
             //
             // Power users can always use the `--no-check-vote-account` option to
             // bypass this check entirely
-            error!("{}", err);
+            error!("{err}");
             exit(1);
         });
     }
     Ok(())
+}
+
+/// simple ping helper function which returns the time to connect
+fn ping(addr: &SocketAddr) -> Option<Duration> {
+    let start = Instant::now();
+    match TcpStream::connect_timeout(addr, PING_TIMEOUT) {
+        Ok(_) => Some(start.elapsed()),
+        Err(_) => None,
+    }
 }
 
 // Populates `vetted_rpc_nodes` with a list of RPC nodes that are ready to be
@@ -493,7 +501,7 @@ fn get_vetted_rpc_nodes(
         vetted_rpc_nodes.extend(
             rpc_node_details
                 .into_par_iter()
-                .map(|rpc_node_details| {
+                .filter_map(|rpc_node_details| {
                     let GetRpcNodeResult {
                         rpc_contact_info,
                         snapshot_hash,
@@ -501,31 +509,61 @@ fn get_vetted_rpc_nodes(
 
                     info!(
                         "Using RPC service from node {}: {:?}",
-                        rpc_contact_info.id, rpc_contact_info.rpc
-                    );
-                    let rpc_client = RpcClient::new_socket_with_timeout(
-                        rpc_contact_info.rpc,
-                        Duration::from_secs(5),
+                        rpc_contact_info.pubkey(),
+                        rpc_contact_info.rpc()
                     );
 
-                    (rpc_contact_info, snapshot_hash, rpc_client)
+                    let rpc_addr = rpc_contact_info.rpc().ok()?;
+                    let ping_time = ping(&rpc_addr);
+
+                    let rpc_client =
+                        RpcClient::new_socket_with_timeout(rpc_addr, Duration::from_secs(5));
+
+                    Some((rpc_contact_info, snapshot_hash, rpc_client, ping_time))
                 })
-                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
-                    match rpc_client.get_version() {
+                .filter(
+                    |(rpc_contact_info, _snapshot_hash, rpc_client, ping_time)| match rpc_client
+                        .get_version()
+                    {
                         Ok(rpc_version) => {
-                            info!("RPC node version: {}", rpc_version.solana_core);
-                            true
+                            if let Some(ping_time) = ping_time {
+                                info!(
+                                    "RPC node version: {} Ping: {}ms",
+                                    rpc_version.solana_core,
+                                    ping_time.as_millis()
+                                );
+                                true
+                            } else {
+                                fail_rpc_node(
+                                    "Failed to ping RPC".to_string(),
+                                    &validator_config.known_validators,
+                                    rpc_contact_info.pubkey(),
+                                    &mut newly_blacklisted_rpc_nodes.write().unwrap(),
+                                );
+                                false
+                            }
                         }
                         Err(err) => {
                             fail_rpc_node(
                                 format!("Failed to get RPC node version: {err}"),
                                 &validator_config.known_validators,
-                                &rpc_contact_info.id,
+                                rpc_contact_info.pubkey(),
                                 &mut newly_blacklisted_rpc_nodes.write().unwrap(),
                             );
                             false
                         }
-                    }
+                    },
+                )
+                .collect::<Vec<(
+                    ContactInfo,
+                    Option<SnapshotHash>,
+                    RpcClient,
+                    Option<Duration>,
+                )>>()
+                .into_iter()
+                .sorted_by_key(|(_, _, _, ping_time)| ping_time.unwrap())
+                .map(|(rpc_contact_info, snapshot_hash, rpc_client, _)| {
+                    (rpc_contact_info, snapshot_hash, rpc_client)
                 })
                 .collect::<Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)>>(),
         );
@@ -640,7 +678,7 @@ pub fn rpc_bootstrap(
                 fail_rpc_node(
                     err,
                     &validator_config.known_validators,
-                    &rpc_contact_info.id,
+                    rpc_contact_info.pubkey(),
                     &mut blacklisted_rpc_nodes,
                 );
             }
@@ -745,7 +783,7 @@ fn get_rpc_nodes(
         } else {
             let rpc_peers = peer_snapshot_hashes
                 .iter()
-                .map(|peer_snapshot_hash| peer_snapshot_hash.rpc_contact_info.id)
+                .map(|peer_snapshot_hash| peer_snapshot_hash.rpc_contact_info.pubkey())
                 .collect::<Vec<_>>();
             let final_snapshot_hash = peer_snapshot_hashes[0].snapshot_hash;
             info!(
@@ -812,21 +850,30 @@ fn get_peer_snapshot_hashes(
     known_validators_to_wait_for: KnownValidatorsToWaitFor,
     incremental_snapshot_fetch: bool,
 ) -> Vec<PeerSnapshotHash> {
-    let mut peer_snapshot_hashes =
-        get_eligible_peer_snapshot_hashes(cluster_info, rpc_peers, incremental_snapshot_fetch);
+    let mut peer_snapshot_hashes = get_eligible_peer_snapshot_hashes(cluster_info, rpc_peers);
     if let Some(known_validators) = known_validators {
         let known_snapshot_hashes = get_snapshot_hashes_from_known_validators(
             cluster_info,
             known_validators,
             known_validators_to_wait_for,
-            incremental_snapshot_fetch,
         );
         retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
             &known_snapshot_hashes,
             &mut peer_snapshot_hashes,
         );
     }
-    retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(&mut peer_snapshot_hashes);
+    if incremental_snapshot_fetch {
+        // Only filter by highest incremental snapshot slot if we're actually going to download an
+        // incremental snapshot.  Otherwise this could remove higher full snapshot slots from
+        // being selected.  For example, if there are two peer snapshot hashes:
+        // (A) full snapshot slot: 100, incremental snapshot slot: 160
+        // (B) full snapshot slot: 150, incremental snapshot slot: None
+        // Then (A) has the highest overall snapshot slot.  But if we're not downlading and
+        // incremental snapshot, (B) should be selected since it's full snapshot of 150 is highest.
+        retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
+            &mut peer_snapshot_hashes,
+        );
+    }
     retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
 
     peer_snapshot_hashes
@@ -850,30 +897,14 @@ fn get_snapshot_hashes_from_known_validators(
     cluster_info: &ClusterInfo,
     known_validators: &HashSet<Pubkey>,
     known_validators_to_wait_for: KnownValidatorsToWaitFor,
-    incremental_snapshot_fetch: bool,
 ) -> KnownSnapshotHashes {
-    // Get the full snapshot hashes for a node from CRDS
-    let get_full_snapshot_hashes_for_node = |node| {
-        let mut full_snapshot_hashes = Vec::new();
-        cluster_info.get_legacy_snapshot_hash_for_node(node, |snapshot_hashes| {
-            full_snapshot_hashes = snapshot_hashes.clone();
-        });
-        full_snapshot_hashes
-    };
-
-    // Get the incremental snapshot hashes for a node from CRDS
-    let get_incremental_snapshot_hashes_for_node = |node| {
-        cluster_info
-            .get_snapshot_hashes_for_node(node)
-            .map(|hashes| (hashes.full, hashes.incremental))
-    };
+    // Get the snapshot hashes for a node from CRDS
+    let get_snapshot_hashes_for_node = |node| get_snapshot_hashes_for_node(cluster_info, node);
 
     if !do_known_validators_have_all_snapshot_hashes(
         known_validators,
         known_validators_to_wait_for,
-        get_full_snapshot_hashes_for_node,
-        get_incremental_snapshot_hashes_for_node,
-        incremental_snapshot_fetch,
+        get_snapshot_hashes_for_node,
     ) {
         debug!(
             "Snapshot hashes have not been discovered from known validators. \
@@ -883,58 +914,27 @@ fn get_snapshot_hashes_from_known_validators(
         return KnownSnapshotHashes::default();
     }
 
-    build_known_snapshot_hashes(
-        known_validators,
-        get_full_snapshot_hashes_for_node,
-        get_incremental_snapshot_hashes_for_node,
-        incremental_snapshot_fetch,
-    )
+    build_known_snapshot_hashes(known_validators, get_snapshot_hashes_for_node)
 }
 
 /// Check if we can discover snapshot hashes for the known validators.
 ///
-/// This is a work-around to ensure the gossip tables are populated enough so that the bootstrap
-/// process will download both full and incremental snapshots.  If the incremental snapshot hashes
-/// are not yet populated from gossip, then it is possible (and has been seen often) to only
-/// discover full snapshots—and ones that are very old (up to 25,000 slots)—but *not* discover any
-/// of their associated incremental snapshots.
+/// This is a heuristic to ensure the gossip tables are populated enough so that the bootstrap
+/// process will download snapshots.
 ///
 /// This function will return false if we do not yet have snapshot hashes from known validators;
 /// and true otherwise.  Either require snapshot hashes from *all* or *any* of the known validators
 /// based on the `KnownValidatorsToWaitFor` parameter.
-fn do_known_validators_have_all_snapshot_hashes<'a, F1, F2>(
+fn do_known_validators_have_all_snapshot_hashes<'a>(
     known_validators: impl IntoIterator<Item = &'a Pubkey>,
     known_validators_to_wait_for: KnownValidatorsToWaitFor,
-    get_full_snapshot_hashes_for_node: F1,
-    get_incremental_snapshot_hashes_for_node: F2,
-    incremental_snapshot_fetch: bool,
-) -> bool
-where
-    F1: Fn(&'a Pubkey) -> Vec<(Slot, Hash)>,
-    F2: Fn(&'a Pubkey) -> Option<((Slot, Hash), Vec<(Slot, Hash)>)>,
-{
-    let node_has_full_snapshot_hashes = |node| !get_full_snapshot_hashes_for_node(node).is_empty();
-    let node_has_incremental_snapshot_hashes = |node| {
-        get_incremental_snapshot_hashes_for_node(node)
-            .map(|(_, hashes)| !hashes.is_empty())
-            .unwrap_or(false)
-    };
-
-    // Does this node have all the snapshot hashes?
-    // If incremental snapshots are disabled, only check for full snapshot hashes; otherwise check
-    // for both full and incremental snapshot hashes.
-    let node_has_all_snapshot_hashes = |node| {
-        node_has_full_snapshot_hashes(node)
-            && (!incremental_snapshot_fetch || node_has_incremental_snapshot_hashes(node))
-    };
+    get_snapshot_hashes_for_node: impl Fn(&'a Pubkey) -> Option<SnapshotHash>,
+) -> bool {
+    let node_has_snapshot_hashes = |node| get_snapshot_hashes_for_node(node).is_some();
 
     match known_validators_to_wait_for {
-        KnownValidatorsToWaitFor::All => known_validators
-            .into_iter()
-            .all(node_has_all_snapshot_hashes),
-        KnownValidatorsToWaitFor::Any => known_validators
-            .into_iter()
-            .any(node_has_all_snapshot_hashes),
+        KnownValidatorsToWaitFor::All => known_validators.into_iter().all(node_has_snapshot_hashes),
+        KnownValidatorsToWaitFor::Any => known_validators.into_iter().any(node_has_snapshot_hashes),
     }
 }
 
@@ -948,20 +948,13 @@ enum KnownValidatorsToWaitFor {
 
 /// Build the known snapshot hashes from a set of nodes.
 ///
-/// The `get_full_snapshot_hashes_for_node` and `get_incremental_snapshot_hashes_for_node`
-/// parameters are Fns that map a pubkey to its respective full and incremental snapshot
-/// hashes.  These parameters exist to provide a way to test the inner algorithm without
-/// needing runtime information such as the ClusterInfo or ValidatorConfig.
-fn build_known_snapshot_hashes<'a, F1, F2>(
+/// The `get_snapshot_hashes_for_node` parameter is a function that map a pubkey to its snapshot
+/// hashes.  This parameter exist to provide a way to test the inner algorithm without needing
+/// runtime information such as the ClusterInfo or ValidatorConfig.
+fn build_known_snapshot_hashes<'a>(
     nodes: impl IntoIterator<Item = &'a Pubkey>,
-    get_full_snapshot_hashes_for_node: F1,
-    get_incremental_snapshot_hashes_for_node: F2,
-    incremental_snapshot_fetch: bool,
-) -> KnownSnapshotHashes
-where
-    F1: Fn(&'a Pubkey) -> Vec<(Slot, Hash)>,
-    F2: Fn(&'a Pubkey) -> Option<((Slot, Hash), Vec<(Slot, Hash)>)>,
-{
+    get_snapshot_hashes_for_node: impl Fn(&'a Pubkey) -> Option<SnapshotHash>,
+) -> KnownSnapshotHashes {
     let mut known_snapshot_hashes = KnownSnapshotHashes::new();
 
     /// Check to see if there exists another snapshot hash in the haystack with the *same* slot
@@ -976,141 +969,83 @@ where
     }
 
     'to_next_node: for node in nodes {
-        // First get the full snapshot hashes for each node and add them as the keys in the
-        // known snapshot hashes map.
-        let full_snapshot_hashes = get_full_snapshot_hashes_for_node(node);
-        '_to_next_full_snapshot: for full_snapshot_hash in &full_snapshot_hashes {
-            // Do not add this snapshot hash if there's already a full snapshot hash with the
-            // same slot but with a _different_ hash.
+        let Some(SnapshotHash {full: full_snapshot_hash, incr: incremental_snapshot_hash}) = get_snapshot_hashes_for_node(node) else {
+            continue 'to_next_node;
+        };
+
+        // Do not add this snapshot hash if there's already a full snapshot hash with the
+        // same slot but with a _different_ hash.
+        // NOTE: Nodes should not produce snapshots at the same slot with _different_
+        // hashes.  So if it happens, keep the first and ignore the rest.
+        if is_any_same_slot_and_different_hash(&full_snapshot_hash, known_snapshot_hashes.keys()) {
+            warn!(
+                "Ignoring all snapshot hashes from node {node} since we've seen a different full snapshot hash with this slot.\
+                \nfull snapshot hash: {full_snapshot_hash:?}"
+            );
+            debug!(
+                "known full snapshot hashes: {:#?}",
+                known_snapshot_hashes.keys(),
+            );
+            continue 'to_next_node;
+        }
+
+        // Insert a new full snapshot hash into the known snapshot hashes IFF an entry
+        // doesn't already exist.  This is to ensure we don't overwrite existing
+        // incremental snapshot hashes that may be present for this full snapshot hash.
+        let known_incremental_snapshot_hashes =
+            known_snapshot_hashes.entry(full_snapshot_hash).or_default();
+
+        if let Some(incremental_snapshot_hash) = incremental_snapshot_hash {
+            // Do not add this snapshot hash if there's already an incremental snapshot
+            // hash with the same slot, but with a _different_ hash.
             // NOTE: Nodes should not produce snapshots at the same slot with _different_
             // hashes.  So if it happens, keep the first and ignore the rest.
-            if is_any_same_slot_and_different_hash(full_snapshot_hash, known_snapshot_hashes.keys())
-            {
+            if is_any_same_slot_and_different_hash(
+                &incremental_snapshot_hash,
+                known_incremental_snapshot_hashes.iter(),
+            ) {
                 warn!(
-                    "Ignoring all snapshot hashes from node {} since we've seen a different full snapshot hash with this slot.\nfull snapshot hash: {:?}",
-                    node,
-                    full_snapshot_hash,
+                    "Ignoring incremental snapshot hash from node {node} since we've seen a different incremental snapshot hash with this slot.\
+                    \nfull snapshot hash: {full_snapshot_hash:?}\
+                    \nincremental snapshot hash: {incremental_snapshot_hash:?}"
                 );
                 debug!(
-                    "known full snapshot hashes: {:#?}",
-                    known_snapshot_hashes.keys(),
+                    "known incremental snapshot hashes based on this slot: {:#?}",
+                    known_incremental_snapshot_hashes.iter(),
                 );
                 continue 'to_next_node;
             }
 
-            // Insert a new full snapshot hash into the known snapshot hashes IFF an entry
-            // doesn't already exist.  This is to ensure we don't overwrite existing
-            // incremental snapshot hashes that may be present for this full snapshot hash.
-            let _ = known_snapshot_hashes
-                .entry(*full_snapshot_hash)
-                .or_default();
-        }
-
-        if incremental_snapshot_fetch {
-            // Then get the incremental snapshot hashes for each node and add them as the values in the
-            // known snapshot hashes map.
-            if let Some((base_snapshot_hash, incremental_snapshot_hashes)) =
-                get_incremental_snapshot_hashes_for_node(node)
-            {
-                // Incremental snapshots must be based off a valid full snapshot.  Ensure the node
-                // has a full snapshot hash that matches its base snapshot hash.
-                if !full_snapshot_hashes.contains(&base_snapshot_hash) {
-                    warn!(
-                        "Ignoring all incremental snapshot hashes from node {} since its base snapshot hash does not match any of its full snapshot hashes.\nbase snapshot hash: {:?}\nfull snapshot hashes: {:?}",
-                        node,
-                        base_snapshot_hash,
-                        full_snapshot_hashes
-                    );
-                    continue 'to_next_node;
-                }
-
-                if let Some(known_incremental_snapshot_hashes) =
-                    known_snapshot_hashes.get_mut(&base_snapshot_hash)
-                {
-                    'to_next_incremental_snapshot: for incremental_snapshot_hash in
-                        &incremental_snapshot_hashes
-                    {
-                        // Do not add this snapshot hash if there's already an incremental snapshot
-                        // hash with the same slot, but with a _different_ hash.
-                        // NOTE: Nodes should not produce snapshots at the same slot with _different_
-                        // hashes.  So if it happens, keep the first and ignore the rest.
-                        if is_any_same_slot_and_different_hash(
-                            incremental_snapshot_hash,
-                            known_incremental_snapshot_hashes.iter(),
-                        ) {
-                            warn!(
-                                "Ignoring incremental snapshot hash from node {} since we've seen a different incremental snapshot hash with this slot.\nbase snapshot hash: {:?}\nincremental snapshot hash: {:?}",
-                                node,
-                                base_snapshot_hash,
-                                incremental_snapshot_hash,
-                            );
-                            debug!(
-                                "known incremental snapshot hashes at this slot: {:#?}",
-                                known_incremental_snapshot_hashes.iter(),
-                            );
-                            continue 'to_next_incremental_snapshot;
-                        }
-
-                        known_incremental_snapshot_hashes.insert(*incremental_snapshot_hash);
-                    }
-                } else {
-                    // Since incremental snapshots *must* have a valid base (i.e. full)
-                    // snapshot, if .get() returned None, then that can only happen if there
-                    // already is a full snapshot hash in the known snapshot hashes with the
-                    // same slot but _different_ a hash.  Assert that below.  If the assert
-                    // ever fails, there is a programmer bug.
-                    assert!(
-                        is_any_same_slot_and_different_hash(&base_snapshot_hash, known_snapshot_hashes.keys()),
-                        "There must exist a full snapshot hash already in the known snapshot hashes with the same slot but a different hash!",
-                    );
-                    debug!(
-                        "Ignoring incremental snapshot hashes from node {} since we've seen a different base snapshot hash with this slot.\nbase snapshot hash: {:?}\nknown full snapshot hashes: {:?}",
-                        node,
-                        base_snapshot_hash,
-                        known_snapshot_hashes.keys(),
-                    );
-                    continue 'to_next_node;
-                }
-            }
-        }
-    }
-
-    trace!("known snapshot hashes: {:?}", &known_snapshot_hashes);
-    known_snapshot_hashes
-}
-
-/// Get snapshot hashes from all the eligible peers.  This fn will get only one
-/// snapshot hash per peer (the one with the highest slot).  This may be just a full snapshot
-/// hash, or a combo full (i.e. base) snapshot hash and incremental snapshot hash.
-fn get_eligible_peer_snapshot_hashes(
-    cluster_info: &ClusterInfo,
-    rpc_peers: &[ContactInfo],
-    incremental_snapshot_fetch: bool,
-) -> Vec<PeerSnapshotHash> {
-    let mut peer_snapshot_hashes = Vec::new();
-    for rpc_peer in rpc_peers {
-        // Get this peer's highest (full) snapshot hash.  We need to get these snapshot hashes
-        // (instead of just the IncrementalSnapshotHashes) in case the peer is either (1) not
-        // taking incremental snapshots, or (2) if the last snapshot taken was a full snapshot,
-        // which would get pushed to CRDS here (i.e. `crds_value::SnapshotHashes`) first.
-        let highest_snapshot_hash =
-            get_highest_full_snapshot_hash_for_peer(cluster_info, &rpc_peer.id).max(
-                if incremental_snapshot_fetch {
-                    get_highest_incremental_snapshot_hash_for_peer(cluster_info, &rpc_peer.id)
-                } else {
-                    None
-                },
-            );
-
-        if let Some(snapshot_hash) = highest_snapshot_hash {
-            peer_snapshot_hashes.push(PeerSnapshotHash {
-                rpc_contact_info: rpc_peer.clone(),
-                snapshot_hash,
-            });
+            known_incremental_snapshot_hashes.insert(incremental_snapshot_hash);
         };
     }
 
-    trace!("peer snapshot hashes: {:?}", &peer_snapshot_hashes);
+    trace!("known snapshot hashes: {known_snapshot_hashes:?}");
+    known_snapshot_hashes
+}
+
+/// Get snapshot hashes from all eligible peers.
+///
+/// This fn will get only one snapshot hash per peer (the one with the highest slot).
+/// This may be just a full snapshot hash, or a combo full snapshot hash and
+/// incremental snapshot hash.
+fn get_eligible_peer_snapshot_hashes(
+    cluster_info: &ClusterInfo,
+    rpc_peers: &[ContactInfo],
+) -> Vec<PeerSnapshotHash> {
+    let peer_snapshot_hashes = rpc_peers
+        .iter()
+        .flat_map(|rpc_peer| {
+            get_snapshot_hashes_for_node(cluster_info, rpc_peer.pubkey()).map(|snapshot_hash| {
+                PeerSnapshotHash {
+                    rpc_contact_info: rpc_peer.clone(),
+                    snapshot_hash,
+                }
+            })
+        })
+        .collect();
+
+    trace!("peer snapshot hashes: {peer_snapshot_hashes:?}");
     peer_snapshot_hashes
 }
 
@@ -1136,8 +1071,7 @@ fn retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
     });
 
     trace!(
-        "retain peer snapshot hashes that match known snapshot hashes: {:?}",
-        &peer_snapshot_hashes
+        "retain peer snapshot hashes that match known snapshot hashes: {peer_snapshot_hashes:?}"
     );
 }
 
@@ -1145,50 +1079,38 @@ fn retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
 fn retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(
     peer_snapshot_hashes: &mut Vec<PeerSnapshotHash>,
 ) {
-    // retain the hashes with the highest full snapshot slot
-    // do a two-pass algorithm
-    // 1. find the full snapshot hash with the highest full snapshot slot
-    // 2. retain elems with that full snapshot hash
-    let mut highest_full_snapshot_hash = (Slot::MIN, Hash::default());
-    peer_snapshot_hashes.iter().for_each(|peer_snapshot_hash| {
-        if peer_snapshot_hash.snapshot_hash.full.0 > highest_full_snapshot_hash.0 {
-            highest_full_snapshot_hash = peer_snapshot_hash.snapshot_hash.full;
-        }
-    });
+    let highest_full_snapshot_hash = peer_snapshot_hashes
+        .iter()
+        .map(|peer_snapshot_hash| peer_snapshot_hash.snapshot_hash.full)
+        .max_by_key(|(slot, _hash)| *slot);
+    let Some(highest_full_snapshot_hash) = highest_full_snapshot_hash else {
+        // `max_by_key` will only be `None` IFF the input `peer_snapshot_hashes` is empty.
+        // In that case there's nothing to do (additionally, without a valid 'max' value, there
+        // will be nothing to compare against within the `retain()` predicate).
+        return;
+    };
 
     peer_snapshot_hashes.retain(|peer_snapshot_hash| {
         peer_snapshot_hash.snapshot_hash.full == highest_full_snapshot_hash
     });
 
-    trace!(
-        "retain peer snapshot hashes with highest full snapshot slot: {:?}",
-        &peer_snapshot_hashes
-    );
+    trace!("retain peer snapshot hashes with highest full snapshot slot: {peer_snapshot_hashes:?}");
 }
 
 /// Retain the peer snapshot hashes with the highest incremental snapshot slot
 fn retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
     peer_snapshot_hashes: &mut Vec<PeerSnapshotHash>,
 ) {
-    let mut highest_incremental_snapshot_hash: Option<(Slot, Hash)> = None;
-    peer_snapshot_hashes.iter().for_each(|peer_snapshot_hash| {
-        if let Some(incremental_snapshot_hash) = peer_snapshot_hash.snapshot_hash.incr.as_ref() {
-            if highest_incremental_snapshot_hash.is_none()
-                || incremental_snapshot_hash.0 > highest_incremental_snapshot_hash.unwrap().0
-            {
-                highest_incremental_snapshot_hash = Some(*incremental_snapshot_hash);
-            }
-        };
-    });
+    let highest_incremental_snapshot_hash = peer_snapshot_hashes
+        .iter()
+        .flat_map(|peer_snapshot_hash| peer_snapshot_hash.snapshot_hash.incr)
+        .max_by_key(|(slot, _hash)| *slot);
 
     peer_snapshot_hashes.retain(|peer_snapshot_hash| {
         peer_snapshot_hash.snapshot_hash.incr == highest_incremental_snapshot_hash
     });
 
-    trace!(
-        "retain peer snapshot hashes with highest incremental snapshot slot: {:?}",
-        &peer_snapshot_hashes
-    );
+    trace!("retain peer snapshot hashes with highest incremental snapshot slot: {peer_snapshot_hashes:?}");
 }
 
 /// Check to see if we can use our local snapshots, otherwise download newer ones.
@@ -1256,35 +1178,37 @@ fn download_snapshots(
         )?;
     }
 
-    // Check and see if we've already got the incremental snapshot; if not, download it
-    if let Some(incremental_snapshot_hash) = incremental_snapshot_hash {
-        if snapshot_utils::get_incremental_snapshot_archives(incremental_snapshot_archives_dir)
-            .into_iter()
-            .any(|snapshot_archive| {
-                snapshot_archive.slot() == incremental_snapshot_hash.0
-                    && snapshot_archive.hash().0 == incremental_snapshot_hash.1
-                    && snapshot_archive.base_slot() == full_snapshot_hash.0
-            })
-        {
-            info!(
-                "Incremental snapshot archive already exists locally. Skipping download. slot: {}, hash: {}",
-                incremental_snapshot_hash.0, incremental_snapshot_hash.1
-            );
-        } else {
-            download_snapshot(
-                full_snapshot_archives_dir,
-                incremental_snapshot_archives_dir,
-                validator_config,
-                bootstrap_config,
-                use_progress_bar,
-                start_progress,
-                minimal_snapshot_download_speed,
-                maximum_snapshot_download_abort,
-                download_abort_count,
-                rpc_contact_info,
-                incremental_snapshot_hash,
-                SnapshotType::IncrementalSnapshot(full_snapshot_hash.0),
-            )?;
+    if bootstrap_config.incremental_snapshot_fetch {
+        // Check and see if we've already got the incremental snapshot; if not, download it
+        if let Some(incremental_snapshot_hash) = incremental_snapshot_hash {
+            if snapshot_utils::get_incremental_snapshot_archives(incremental_snapshot_archives_dir)
+                .into_iter()
+                .any(|snapshot_archive| {
+                    snapshot_archive.slot() == incremental_snapshot_hash.0
+                        && snapshot_archive.hash().0 == incremental_snapshot_hash.1
+                        && snapshot_archive.base_slot() == full_snapshot_hash.0
+                })
+            {
+                info!(
+                    "Incremental snapshot archive already exists locally. Skipping download. slot: {}, hash: {}",
+                    incremental_snapshot_hash.0, incremental_snapshot_hash.1
+                );
+            } else {
+                download_snapshot(
+                    full_snapshot_archives_dir,
+                    incremental_snapshot_archives_dir,
+                    validator_config,
+                    bootstrap_config,
+                    use_progress_bar,
+                    start_progress,
+                    minimal_snapshot_download_speed,
+                    maximum_snapshot_download_abort,
+                    download_abort_count,
+                    rpc_contact_info,
+                    incremental_snapshot_hash,
+                    SnapshotType::IncrementalSnapshot(full_snapshot_hash.0),
+                )?;
+            }
         }
     }
 
@@ -1316,14 +1240,14 @@ fn download_snapshot(
 
     *start_progress.write().unwrap() = ValidatorStartProgress::DownloadingSnapshot {
         slot: desired_snapshot_hash.0,
-        rpc_addr: rpc_contact_info.rpc,
+        rpc_addr: rpc_contact_info.rpc().map_err(|err| format!("{err:?}"))?,
     };
     let desired_snapshot_hash = (
         desired_snapshot_hash.0,
         solana_runtime::snapshot_hash::SnapshotHash(desired_snapshot_hash.1),
     );
     download_snapshot_archive(
-        &rpc_contact_info.rpc,
+        &rpc_contact_info.rpc().map_err(|err| format!("{err:?}"))?,
         full_snapshot_archives_dir,
         incremental_snapshot_archives_dir,
         desired_snapshot_hash,
@@ -1332,7 +1256,7 @@ fn download_snapshot(
         maximum_incremental_snapshot_archives_to_retain,
         use_progress_bar,
         &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
-            debug!("Download progress: {:?}", download_progress);
+            debug!("Download progress: {download_progress:?}");
             if download_progress.last_throughput < minimal_snapshot_download_speed
                 && download_progress.notification_count <= 1
                 && download_progress.percentage_done <= 2_f32
@@ -1340,7 +1264,7 @@ fn download_snapshot(
                 && *download_abort_count < maximum_snapshot_download_abort
             {
                 if let Some(ref known_validators) = validator_config.known_validators {
-                    if known_validators.contains(&rpc_contact_info.id)
+                    if known_validators.contains(rpc_contact_info.pubkey())
                         && known_validators.len() == 1
                         && bootstrap_config.only_known_rpc
                     {
@@ -1395,58 +1319,26 @@ fn should_use_local_snapshot(
         incremental_snapshot_fetch,
     ) {
         None => {
-            info!(
-                "Downloading a snapshot for slot {} since there is not a local snapshot.",
-                cluster_snapshot_slot,
-            );
+            info!("Downloading a snapshot for slot {cluster_snapshot_slot} since there is not a local snapshot.");
             false
         }
         Some((local_snapshot_slot, _)) => {
             if local_snapshot_slot
                 >= cluster_snapshot_slot.saturating_sub(maximum_local_snapshot_age)
             {
-                info!(
-                    "Reusing local snapshot at slot {} instead of downloading a snapshot for slot {}.",
-                    local_snapshot_slot,
-                    cluster_snapshot_slot,
-                );
+                info!("Reusing local snapshot at slot {local_snapshot_slot} instead of downloading a snapshot for slot {cluster_snapshot_slot}.");
                 true
             } else {
-                info!(
-                    "Local snapshot from slot {} is too old. Downloading a newer snapshot for slot {}.",
-                    local_snapshot_slot,
-                    cluster_snapshot_slot,
-                );
+                info!("Local snapshot from slot {local_snapshot_slot} is too old. Downloading a newer snapshot for slot {cluster_snapshot_slot}.");
                 false
             }
         }
     }
 }
 
-/// Get the highest full snapshot hash for a peer from CRDS
-fn get_highest_full_snapshot_hash_for_peer(
-    cluster_info: &ClusterInfo,
-    peer: &Pubkey,
-) -> Option<SnapshotHash> {
-    let mut full_snapshot_hashes = Vec::new();
-    cluster_info.get_legacy_snapshot_hash_for_node(peer, |snapshot_hashes| {
-        full_snapshot_hashes = snapshot_hashes.clone()
-    });
-    full_snapshot_hashes
-        .into_iter()
-        .max()
-        .map(|full_snapshot_hash| SnapshotHash {
-            full: full_snapshot_hash,
-            incr: None,
-        })
-}
-
-/// Get the highest incremental snapshot hash for a peer from CRDS
-fn get_highest_incremental_snapshot_hash_for_peer(
-    cluster_info: &ClusterInfo,
-    peer: &Pubkey,
-) -> Option<SnapshotHash> {
-    cluster_info.get_snapshot_hashes_for_node(peer).map(
+/// Get the node's highest snapshot hashes from CRDS
+fn get_snapshot_hashes_for_node(cluster_info: &ClusterInfo, node: &Pubkey) -> Option<SnapshotHash> {
+    cluster_info.get_snapshot_hashes_for_node(node).map(
         |crds_value::SnapshotHashes {
              full, incremental, ..
          }| {
@@ -1480,241 +1372,80 @@ mod tests {
     }
 
     fn default_contact_info_for_tests() -> ContactInfo {
-        let sock_addr = SocketAddr::from(([1, 1, 1, 1], 11_111));
-        ContactInfo {
-            id: Pubkey::default(),
-            gossip: sock_addr,
-            tvu: sock_addr,
-            tvu_forwards: sock_addr,
-            repair: sock_addr,
-            tpu: sock_addr,
-            tpu_forwards: sock_addr,
-            tpu_vote: sock_addr,
-            rpc: sock_addr,
-            rpc_pubsub: sock_addr,
-            serve_repair: sock_addr,
-            wallclock: 123456789,
-            shred_version: 1,
-        }
+        ContactInfo::new_localhost(&Pubkey::default(), /*now:*/ 1_681_834_947_321)
     }
 
     #[test]
     fn test_build_known_snapshot_hashes() {
-        let full_snapshot_hashes1 = vec![
-            (100_000, Hash::new_unique()),
-            (200_000, Hash::new_unique()),
-            (300_000, Hash::new_unique()),
-            (400_000, Hash::new_unique()),
-        ];
-        let full_snapshot_hashes2 = vec![
-            (100_000, Hash::new_unique()),
-            (200_000, Hash::new_unique()),
-            (300_000, Hash::new_unique()),
-            (400_000, Hash::new_unique()),
-        ];
+        solana_logger::setup();
+        let full_snapshot_hash1 = (400_000, Hash::new_unique());
+        let full_snapshot_hash2 = (400_000, Hash::new_unique());
 
-        let base_snapshot_hash1 = full_snapshot_hashes1.last().unwrap();
-        let base_snapshot_hash2 = full_snapshot_hashes2.last().unwrap();
+        let incremental_snapshot_hash1 = (400_800, Hash::new_unique());
+        let incremental_snapshot_hash2 = (400_800, Hash::new_unique());
 
-        let incremental_snapshot_hashes1 = vec![
-            (400_500, Hash::new_unique()),
-            (400_600, Hash::new_unique()),
-            (400_700, Hash::new_unique()),
-            (400_800, Hash::new_unique()),
-        ];
-        let incremental_snapshot_hashes2 = vec![
-            (400_500, Hash::new_unique()),
-            (400_600, Hash::new_unique()),
-            (400_700, Hash::new_unique()),
-            (400_800, Hash::new_unique()),
-        ];
+        // simulate a set of known validators with various snapshot hashes
+        let oracle = {
+            let mut oracle = HashMap::new();
 
-        #[allow(clippy::type_complexity)]
-        let mut oracle: HashMap<
-            Pubkey,
-            (Vec<(Slot, Hash)>, Option<((Slot, Hash), Vec<(Slot, Hash)>)>),
-        > = HashMap::new();
-
-        // no snapshots at all
-        oracle.insert(Pubkey::new_unique(), (vec![], None));
-
-        // just full snapshots
-        oracle.insert(Pubkey::new_unique(), (full_snapshot_hashes1.clone(), None));
-
-        // just full snapshots, with different hashes
-        oracle.insert(Pubkey::new_unique(), (full_snapshot_hashes2.clone(), None));
-
-        // full and incremental snapshots
-        oracle.insert(
-            Pubkey::new_unique(),
-            (
-                full_snapshot_hashes1.clone(),
-                Some((*base_snapshot_hash1, incremental_snapshot_hashes1.clone())),
-            ),
-        );
-
-        // full and incremental snapshots, but base hash is wrong
-        oracle.insert(
-            Pubkey::new_unique(),
-            (
-                full_snapshot_hashes1.clone(),
-                Some((*base_snapshot_hash2, incremental_snapshot_hashes1.clone())),
-            ),
-        );
-
-        // full and incremental snapshots, with different incremental hashes
-        oracle.insert(
-            Pubkey::new_unique(),
-            (
-                full_snapshot_hashes1.clone(),
-                Some((*base_snapshot_hash1, incremental_snapshot_hashes2.clone())),
-            ),
-        );
-
-        // full and incremental snapshots, with different hashes
-        oracle.insert(
-            Pubkey::new_unique(),
-            (
-                full_snapshot_hashes2.clone(),
-                Some((*base_snapshot_hash2, incremental_snapshot_hashes2.clone())),
-            ),
-        );
-
-        // full and incremental snapshots, but base hash is wrong
-        oracle.insert(
-            Pubkey::new_unique(),
-            (
-                full_snapshot_hashes2.clone(),
-                Some((*base_snapshot_hash1, incremental_snapshot_hashes2.clone())),
-            ),
-        );
-
-        // full and incremental snapshots, with different incremental hashes
-        oracle.insert(
-            Pubkey::new_unique(),
-            (
-                full_snapshot_hashes2.clone(),
-                Some((*base_snapshot_hash2, incremental_snapshot_hashes1.clone())),
-            ),
-        );
-
-        // handle duplicates as well
-        oracle.insert(
-            Pubkey::new_unique(),
-            (
-                full_snapshot_hashes1.clone(),
-                Some((*base_snapshot_hash1, incremental_snapshot_hashes1.clone())),
-            ),
-        );
-
-        // handle duplicates as well, with different incremental hashes
-        oracle.insert(
-            Pubkey::new_unique(),
-            (
-                full_snapshot_hashes1.clone(),
-                Some((*base_snapshot_hash1, incremental_snapshot_hashes2.clone())),
-            ),
-        );
-
-        // handle duplicates, with different hashes
-        oracle.insert(
-            Pubkey::new_unique(),
-            (
-                full_snapshot_hashes2.clone(),
-                Some((*base_snapshot_hash2, incremental_snapshot_hashes2.clone())),
-            ),
-        );
-
-        // handle duplicates, with different incremental hashes
-        oracle.insert(
-            Pubkey::new_unique(),
-            (
-                full_snapshot_hashes2.clone(),
-                Some((*base_snapshot_hash2, incremental_snapshot_hashes1.clone())),
-            ),
-        );
-
-        let node_to_full_snapshot_hashes = |node| oracle.get(node).unwrap().clone().0;
-        let node_to_incremental_snapshot_hashes = |node| oracle.get(node).unwrap().clone().1;
-
-        // With incremental snapshots
-        {
-            let known_snapshot_hashes = build_known_snapshot_hashes(
-                oracle.keys(),
-                node_to_full_snapshot_hashes,
-                node_to_incremental_snapshot_hashes,
-                true,
-            );
-
-            let mut known_full_snapshot_hashes: Vec<_> =
-                known_snapshot_hashes.keys().copied().collect();
-            known_full_snapshot_hashes.sort_unstable();
-
-            let known_base_snapshot_hash = known_full_snapshot_hashes.last().unwrap();
-
-            let mut known_incremental_snapshot_hashes: Vec<_> = known_snapshot_hashes
-                .get(known_base_snapshot_hash)
-                .unwrap()
-                .iter()
-                .copied()
-                .collect();
-            known_incremental_snapshot_hashes.sort_unstable();
-
-            // The resulting `known_snapshot_hashes` can be different from run-to-run due to how
-            // `oracle.keys()` returns nodes during iteration.  Because of that, we cannot just assert
-            // the full and incremental snapshot hashes are `full_snapshot_hashes1` and
-            // `incremental_snapshot_hashes2`.  Instead, we assert that the full and incremental
-            // snapshot hashes are exactly one or the other, since it depends on which nodes are seen
-            // "first" when building the known snapshot hashes.
-
-            assert!(
-                known_full_snapshot_hashes == full_snapshot_hashes1
-                    || known_full_snapshot_hashes == full_snapshot_hashes2
-            );
-
-            if known_full_snapshot_hashes == full_snapshot_hashes1 {
-                assert_eq!(known_base_snapshot_hash, base_snapshot_hash1);
-            } else {
-                assert_eq!(known_base_snapshot_hash, base_snapshot_hash2);
+            for (full, incr) in [
+                // only a full snapshot
+                (full_snapshot_hash1, None),
+                // full and incremental snapshots
+                (full_snapshot_hash1, Some(incremental_snapshot_hash1)),
+                // full and incremental snapshots, with different incremental hash
+                (full_snapshot_hash1, Some(incremental_snapshot_hash2)),
+                // ...and now with different full hashes
+                (full_snapshot_hash2, None),
+                (full_snapshot_hash2, Some(incremental_snapshot_hash1)),
+                (full_snapshot_hash2, Some(incremental_snapshot_hash2)),
+            ] {
+                // also simulate multiple known validators having the same snapshot hashes
+                oracle.insert(Pubkey::new_unique(), Some(SnapshotHash { full, incr }));
+                oracle.insert(Pubkey::new_unique(), Some(SnapshotHash { full, incr }));
+                oracle.insert(Pubkey::new_unique(), Some(SnapshotHash { full, incr }));
             }
 
-            assert!(
-                known_incremental_snapshot_hashes == incremental_snapshot_hashes1
-                    || known_incremental_snapshot_hashes == incremental_snapshot_hashes2
-            );
-        }
+            // no snapshots at all
+            oracle.insert(Pubkey::new_unique(), None);
+            oracle.insert(Pubkey::new_unique(), None);
+            oracle.insert(Pubkey::new_unique(), None);
 
-        // Without incremental snapshots
-        {
-            let known_snapshot_hashes = build_known_snapshot_hashes(
-                oracle.keys(),
-                node_to_full_snapshot_hashes,
-                node_to_incremental_snapshot_hashes,
-                false,
-            );
+            oracle
+        };
 
-            let mut known_full_snapshot_hashes: Vec<_> =
-                known_snapshot_hashes.keys().copied().collect();
-            known_full_snapshot_hashes.sort_unstable();
+        let node_to_snapshot_hashes = |node| *oracle.get(node).unwrap();
 
-            let known_base_snapshot_hash = known_full_snapshot_hashes.last().unwrap();
+        let known_snapshot_hashes =
+            build_known_snapshot_hashes(oracle.keys(), node_to_snapshot_hashes);
 
-            let known_incremental_snapshot_hashes =
-                known_snapshot_hashes.get(known_base_snapshot_hash).unwrap();
+        // ensure there's only one full snapshot hash, since they all used the same slot and there
+        // can be only one snapshot hash per slot
+        let known_full_snapshot_hashes = known_snapshot_hashes.keys();
+        assert_eq!(known_full_snapshot_hashes.len(), 1);
+        let known_full_snapshot_hash = known_full_snapshot_hashes.into_iter().next().unwrap();
 
-            // The resulting `known_snapshot_hashes` can be different from run-to-run due to how
-            // `oracle.keys()` returns nodes during iteration.  Because of that, we cannot just
-            // assert the full snapshot hashes are `full_snapshot_hashes1`.  Instead, we assert
-            // that the full snapshot hashes are exactly one or the other, since it depends on
-            // which nodes are seen "first" when building the known snapshot hashes.
+        // and for the same reasons, ensure there is only one incremental snapshot hash
+        let known_incremental_snapshot_hashes =
+            known_snapshot_hashes.get(known_full_snapshot_hash).unwrap();
+        assert_eq!(known_incremental_snapshot_hashes.len(), 1);
+        let known_incremental_snapshot_hash =
+            known_incremental_snapshot_hashes.iter().next().unwrap();
 
-            assert!(
-                known_full_snapshot_hashes == full_snapshot_hashes1
-                    || known_full_snapshot_hashes == full_snapshot_hashes2
-            );
-
-            assert!(known_incremental_snapshot_hashes.is_empty());
-        }
+        // The resulting `known_snapshot_hashes` can be different from run-to-run due to how
+        // `oracle.keys()` returns nodes during iteration.  Because of that, we cannot just assert
+        // the full and incremental snapshot hashes are `full_snapshot_hash1` and
+        // `incremental_snapshot_hash1`.  Instead, we assert that the full and incremental
+        // snapshot hashes are exactly one or the other, since it depends on which nodes are seen
+        // "first" when building the known snapshot hashes.
+        assert!(
+            known_full_snapshot_hash == &full_snapshot_hash1
+                || known_full_snapshot_hash == &full_snapshot_hash2
+        );
+        assert!(
+            known_incremental_snapshot_hash == &incremental_snapshot_hash1
+                || known_incremental_snapshot_hash == &incremental_snapshot_hash2
+        );
     }
 
     #[test]
@@ -1805,6 +1536,7 @@ mod tests {
         let contact_info = default_contact_info_for_tests();
         let peer_snapshot_hashes = vec![
             // old
+            PeerSnapshotHash::new(contact_info.clone(), (100_000, Hash::default()), None),
             PeerSnapshotHash::new(
                 contact_info.clone(),
                 (100_000, Hash::default()),
@@ -1821,6 +1553,7 @@ mod tests {
                 Some((100_300, Hash::default())),
             ),
             // new
+            PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
             PeerSnapshotHash::new(
                 contact_info.clone(),
                 (200_000, Hash::default()),
@@ -1839,6 +1572,7 @@ mod tests {
         ];
 
         let expected = vec![
+            PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
             PeerSnapshotHash::new(
                 contact_info.clone(),
                 (200_000, Hash::default()),
@@ -1861,7 +1595,7 @@ mod tests {
     }
 
     #[test]
-    fn test_retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot() {
+    fn test_retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot_some() {
         let contact_info = default_contact_info_for_tests();
         let peer_snapshot_hashes = vec![
             PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
@@ -1905,5 +1639,40 @@ mod tests {
         let mut actual = peer_snapshot_hashes;
         retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(&mut actual);
         assert_eq!(expected, actual);
+    }
+
+    /// Ensure that retaining the highest incremental snapshot hashes works as expected even if
+    /// there are *zero* peers with incremental snapshots.
+    #[test]
+    fn test_retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot_none() {
+        let contact_info = default_contact_info_for_tests();
+        let peer_snapshot_hashes = vec![
+            PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::new_unique()), None),
+            PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::new_unique()), None),
+            PeerSnapshotHash::new(contact_info, (200_000, Hash::new_unique()), None),
+        ];
+
+        let expected = peer_snapshot_hashes.clone();
+        let mut actual = peer_snapshot_hashes;
+        retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(&mut actual);
+        assert_eq!(expected, actual);
+    }
+
+    /// Ensure that retaining the highest snapshot hashes works (i.e. doesn't crash) even if the
+    /// peer snapshot hashes input is empty.
+    #[test]
+    fn test_retain_peer_snapshot_hashes_with_highest_slot_empty() {
+        {
+            let mut actual = vec![];
+            let expected = actual.clone();
+            retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut actual);
+            assert_eq!(expected, actual);
+        }
+        {
+            let mut actual = vec![];
+            let expected = actual.clone();
+            retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(&mut actual);
+            assert_eq!(expected, actual);
+        }
     }
 }

@@ -305,7 +305,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             .iter()
             .filter_map(|shred| {
                 let node = cluster_nodes.get_broadcast_peer(&shred.id())?;
-                if !ContactInfo::is_valid_address(&node.tvu, socket_addr_space) {
+                if !socket_addr_space.check(&node.tvu().ok()?) {
                     return None;
                 }
                 if self
@@ -314,10 +314,10 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     .unwrap()
                     .remove(shred.signature())
                 {
-                    if cluster_partition.contains(&node.id) {
+                    if cluster_partition.contains(node.pubkey()) {
                         info!(
                             "skipping node {} for original shred index {}, slot {}",
-                            node.id,
+                            node.pubkey(),
                             shred.index(),
                             shred.slot()
                         );
@@ -338,14 +338,15 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                             .iter()
                             .filter_map(|pubkey| {
                                 let tvu = cluster_info
-                                    .lookup_contact_info(pubkey, |contact_info| contact_info.tvu)?;
+                                    .lookup_contact_info(pubkey, ContactInfo::tvu)?
+                                    .ok()?;
                                 Some((shred.payload(), tvu))
                             })
                             .collect(),
                     );
                 }
 
-                Some(vec![(shred.payload(), node.tvu)])
+                Some(vec![(shred.payload(), node.tvu().ok()?)])
             })
             .flatten()
             .collect();

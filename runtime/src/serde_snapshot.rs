@@ -10,7 +10,7 @@ use {
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        bank::{Bank, BankFieldsToDeserialize, BankIncrementalSnapshotPersistence, BankRc},
+        bank::{Bank, BankFieldsToDeserialize, BankRc},
         blockhash_queue::BlockhashQueue,
         builtins::Builtins,
         epoch_accounts_hash::EpochAccountsHash,
@@ -84,6 +84,28 @@ pub struct AccountsDbFields<T>(
     #[serde(deserialize_with = "default_on_eof")]
     Vec<(Slot, Hash)>,
 );
+
+/// Incremental snapshots only calculate their accounts hash based on the
+/// account changes WITHIN the incremental slot range. So, we need to keep track
+/// of the full snapshot expected accounts hash results. We also need to keep
+/// track of the hash and capitalization specific to the incremental snapshot
+/// slot range. The capitalization we calculate for the incremental slot will
+/// NOT be consistent with the bank's capitalization. It is not feasible to
+/// calculate a capitalization delta that is correct given just incremental
+/// slots account data and the full snapshot's capitalization.
+#[derive(Serialize, Deserialize, AbiExample, Clone, Debug, Default, PartialEq, Eq)]
+pub struct BankIncrementalSnapshotPersistence {
+    /// slot of full snapshot
+    pub full_slot: Slot,
+    /// accounts hash from the full snapshot
+    pub full_hash: SerdeAccountsHash,
+    /// capitalization from the full snapshot
+    pub full_capitalization: u64,
+    /// hash of the accounts in the incremental snapshot slot range, including zero-lamport accounts
+    pub incremental_hash: SerdeIncrementalAccountsHash,
+    /// capitalization of the accounts in the incremental snapshot slot range
+    pub incremental_capitalization: u64,
+}
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 struct BankHashInfo {
@@ -433,13 +455,14 @@ where
 /// write serialized bank to post file
 /// return true if pre file found
 pub fn reserialize_bank_with_new_accounts_hash(
-    bank_snapshots_dir: impl AsRef<Path>,
+    bank_snapshot_dir: impl AsRef<Path>,
     slot: Slot,
     accounts_hash: &AccountsHash,
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> bool {
-    let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
-    let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
+    let bank_post = bank_snapshot_dir
+        .as_ref()
+        .join(snapshot_utils::get_snapshot_file_name(slot));
     let bank_pre = bank_post.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     let mut found = false;

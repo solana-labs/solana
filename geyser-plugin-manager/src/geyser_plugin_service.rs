@@ -13,7 +13,7 @@ use {
     log::*,
     solana_rpc::{
         entry_notifier_interface::EntryNotifierLock,
-        optimistically_confirmed_bank_tracker::BankNotification,
+        optimistically_confirmed_bank_tracker::SlotNotification,
         transaction_notifier_interface::TransactionNotifierLock,
     },
     solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -50,14 +50,14 @@ impl GeyserPluginService {
     ///    The rest of the JSON fields' definition is up to to the concrete plugin implementation
     ///    It is usually used to configure the connection information for the external data store.
     pub fn new(
-        confirmed_bank_receiver: Receiver<BankNotification>,
+        confirmed_bank_receiver: Receiver<SlotNotification>,
         geyser_plugin_config_files: &[PathBuf],
     ) -> Result<Self, GeyserPluginServiceError> {
         Self::new_with_receiver(confirmed_bank_receiver, geyser_plugin_config_files, None)
     }
 
     pub fn new_with_receiver(
-        confirmed_bank_receiver: Receiver<BankNotification>,
+        confirmed_bank_receiver: Receiver<SlotNotification>,
         geyser_plugin_config_files: &[PathBuf],
         rpc_to_plugin_manager_receiver_and_exit: Option<(
             Receiver<GeyserPluginManagerRequest>,

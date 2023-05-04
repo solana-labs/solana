@@ -36,6 +36,7 @@ sudo chown buildkite-agent:buildkite-agent certs
 
 # (Re) start the Alertmanager container
 sudo docker run -it -d \
+  --memory=10g \
   --user root:root \
   --publish 9093:9093 \
   --name=alertmanager \

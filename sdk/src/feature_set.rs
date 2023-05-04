@@ -393,8 +393,8 @@ pub mod require_static_program_ids_in_transaction {
 }
 
 pub mod stake_raise_minimum_delegation_to_1_sol {
-    // This is a feature-proposal *feature id*.  The feature keypair address is `3YHAo6wWw5rDbQxb59BmJkQ3XwVhX3m8tdBVbtxnJmma`.
-    solana_sdk::declare_id!("4xmyBuR2VCXzy9H6qYpH9ckfgnTuMDQFPFBfTs4eBCY1");
+    // This is a feature-proposal *feature id*.  The feature keypair address is `GQXzC7YiSNkje6FFUk6sc2p53XRvKoaZ9VMktYzUMnpL`.
+    solana_sdk::declare_id!("9onWzzvCzNC2jfhxxeqRgs5q7nFAAKpCUvkj6T6GJK9i");
 }
 
 pub mod stake_minimum_delegation_for_rewards {
@@ -620,6 +620,9 @@ pub mod delay_visibility_of_program_deployment {
 pub mod apply_cost_tracker_during_replay {
     solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
 }
+pub mod bpf_account_data_direct_mapping {
+    solana_sdk::declare_id!("9gwzizfABsKUereT6phZZxbTzuAnovkgwpVVpdcSxv9h");
+}
 
 pub mod add_set_tx_loaded_accounts_data_size_instruction {
     solana_sdk::declare_id!("G6vbf1UBok8MWb8m25ex86aoQHeKTzDKzuZADHkShqm6");
@@ -651,6 +654,18 @@ pub mod simplify_writable_program_account_check {
 
 pub mod stop_truncating_strings_in_syscalls {
     solana_sdk::declare_id!("16FMCmgLzCNNz6eTwGanbyN2ZxvTBSLuQ6DZhgeMshg");
+}
+
+pub mod clean_up_delegation_errors {
+    solana_sdk::declare_id!("Bj2jmUsM2iRhfdLLDSTkhM5UQRQvQHm57HSmPibPtEyu");
+}
+
+pub mod vote_state_add_vote_latency {
+    solana_sdk::declare_id!("7axKe5BTYBDD87ftzWbk5DfzWMGyRvqmWTduuo22Yaqy");
+}
+
+pub mod checked_arithmetic_in_fee_validation {
+    solana_sdk::declare_id!("5Pecy6ie6XGm22pc9d4P9W5c31BugcFBuy6hsP2zkETv");
 }
 
 lazy_static! {
@@ -811,6 +826,10 @@ lazy_static! {
         (native_programs_consume_cu::id(), "Native program should consume compute units #30620"),
         (simplify_writable_program_account_check::id(), "Simplify checks performed for writable upgradeable program accounts #30559"),
         (stop_truncating_strings_in_syscalls::id(), "Stop truncating strings in syscalls #31029"),
+        (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
+        (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state #31264"),
+        (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
+        (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -3,16 +3,17 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::integer_arithmetic)]
 
-use {solana_rbpf::memory_region::MemoryState, std::slice};
+use {
+    solana_rbpf::memory_region::MemoryState,
+    solana_sdk::feature_set::bpf_account_data_direct_mapping, std::slice,
+};
 
 extern crate test;
-#[macro_use]
-extern crate solana_bpf_loader_program;
 
 use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_bpf_loader_program::{
-        create_ebpf_vm, create_vm, serialization::serialize_parameters, syscalls::create_loader,
+        create_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
     solana_measure::measure::Measure,
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
@@ -68,7 +69,7 @@ macro_rules! with_mock_invoke_context {
             index_in_caller: 2,
             index_in_callee: 0,
             is_signer: false,
-            is_writable: false,
+            is_writable: true,
         }];
         solana_program_runtime::with_mock_invoke_context!(
             $invoke_context,
@@ -131,11 +132,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
     create_vm!(
         vm,
         &verified_executable,
-        stack,
-        heap,
         vec![MemoryRegion::new_writable(&mut inner_iter, MM_INPUT_START)],
         vec![],
-        &mut invoke_context
+        &mut invoke_context,
     );
     let mut vm = vm.unwrap();
 
@@ -195,9 +194,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let mut bank = Bank::new_for_benches(&genesis_config);
-    let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, &id, entrypoint);
+    let bank = Bank::new_for_benches(&genesis_config);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -229,6 +226,9 @@ fn bench_create_vm(bencher: &mut Bencher) {
     const BUDGET: u64 = 200_000;
     invoke_context.mock_set_remaining(BUDGET);
 
+    let direct_mapping = invoke_context
+        .feature_set
+        .is_active(&bpf_account_data_direct_mapping::id());
     let loader = create_loader(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
@@ -250,7 +250,8 @@ fn bench_create_vm(bencher: &mut Bencher) {
             .transaction_context
             .get_current_instruction_context()
             .unwrap(),
-        true, // should_cap_ix_accounts
+        true,            // should_cap_ix_accounts
+        !direct_mapping, // copy_account_data
     )
     .unwrap();
 
@@ -258,13 +259,11 @@ fn bench_create_vm(bencher: &mut Bencher) {
         create_vm!(
             vm,
             &verified_executable,
-            stack,
-            heap,
             clone_regions(&regions),
             account_lengths.clone(),
-            &mut invoke_context
+            &mut invoke_context,
         );
-        let _ = vm.unwrap();
+        vm.unwrap();
     });
 }
 
@@ -275,6 +274,10 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     const BUDGET: u64 = 200_000;
     invoke_context.mock_set_remaining(BUDGET);
 
+    let direct_mapping = invoke_context
+        .feature_set
+        .is_active(&bpf_account_data_direct_mapping::id());
+
     // Serialize account data
     let (_serialized, regions, account_lengths) = serialize_parameters(
         invoke_context.transaction_context,
@@ -282,7 +285,8 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
             .transaction_context
             .get_current_instruction_context()
             .unwrap(),
-        true, // should_cap_ix_accounts
+        true,            // should_cap_ix_accounts
+        !direct_mapping, // copy_account_data
     )
     .unwrap();
 
@@ -303,11 +307,9 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     create_vm!(
         vm,
         &verified_executable,
-        stack,
-        heap,
         regions,
         account_lengths,
-        &mut invoke_context
+        &mut invoke_context,
     );
     let mut vm = vm.unwrap();
 

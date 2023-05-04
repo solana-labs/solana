@@ -158,6 +158,7 @@ impl TryFrom<&str> for Pubkey {
     }
 }
 
+#[allow(clippy::used_underscore_binding)]
 pub fn bytes_are_curve_point<T: AsRef<[u8]>>(_bytes: T) -> bool {
     #[cfg(not(target_os = "solana"))]
     {

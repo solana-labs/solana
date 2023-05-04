@@ -15,7 +15,6 @@ use {
         pubkey::Pubkey, saturating_add_assign,
     },
     std::{
-        cmp,
         collections::HashMap,
         fmt::{Debug, Formatter},
         sync::{
@@ -26,8 +25,6 @@ use {
 };
 
 const MAX_LOADED_ENTRY_COUNT: usize = 256;
-const MAX_UNLOADED_ENTRY_COUNT: usize = 1024;
-const MAX_TOMBSTONE_COUNT: usize = 1024;
 
 /// Relationship between two fork IDs
 #[derive(Copy, Clone, PartialEq)]
@@ -73,7 +70,7 @@ pub enum LoadedProgramType {
     Typed(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     #[cfg(test)]
     TestLoaded,
-    BuiltIn(BuiltInProgram<InvokeContext<'static>>),
+    Builtin(String, BuiltInProgram<InvokeContext<'static>>),
 }
 
 impl Debug for LoadedProgramType {
@@ -90,7 +87,9 @@ impl Debug for LoadedProgramType {
             LoadedProgramType::Typed(_) => write!(f, "LoadedProgramType::Typed"),
             #[cfg(test)]
             LoadedProgramType::TestLoaded => write!(f, "LoadedProgramType::TestLoaded"),
-            LoadedProgramType::BuiltIn(_) => write!(f, "LoadedProgramType::BuiltIn"),
+            LoadedProgramType::Builtin(name, _) => {
+                write!(f, "LoadedProgramType::Builtin({name})")
+            }
         }
     }
 }
@@ -158,7 +157,6 @@ impl LoadedProgram {
         maybe_expiration_slot: Option<Slot>,
         elf_bytes: &[u8],
         account_size: usize,
-        use_jit: bool,
         metrics: &mut LoadProgramMetrics,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut load_elf_time = Measure::start("load_elf_time");
@@ -182,19 +180,17 @@ impl LoadedProgram {
         verify_code_time.stop();
         metrics.verify_code_us = verify_code_time.as_us();
 
-        if use_jit {
-            #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-            {
-                let mut jit_compile_time = Measure::start("jit_compile_time");
-                match &mut program {
-                    LoadedProgramType::LegacyV0(executable) => executable.jit_compile(),
-                    LoadedProgramType::LegacyV1(executable) => executable.jit_compile(),
-                    LoadedProgramType::Typed(executable) => executable.jit_compile(),
-                    _ => Err(EbpfError::JitNotCompiled),
-                }?;
-                jit_compile_time.stop();
-                metrics.jit_compile_us = jit_compile_time.as_us();
-            }
+        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+        {
+            let mut jit_compile_time = Measure::start("jit_compile_time");
+            match &mut program {
+                LoadedProgramType::LegacyV0(executable) => executable.jit_compile(),
+                LoadedProgramType::LegacyV1(executable) => executable.jit_compile(),
+                LoadedProgramType::Typed(executable) => executable.jit_compile(),
+                _ => Err(EbpfError::JitNotCompiled),
+            }?;
+            jit_compile_time.stop();
+            metrics.jit_compile_us = jit_compile_time.as_us();
         }
 
         Ok(Self {
@@ -219,7 +215,8 @@ impl LoadedProgram {
     }
 
     /// Creates a new built-in program
-    pub fn new_built_in(
+    pub fn new_builtin(
+        name: String,
         deployment_slot: Slot,
         program: BuiltInProgram<InvokeContext<'static>>,
     ) -> Self {
@@ -229,7 +226,7 @@ impl LoadedProgram {
             effective_slot: deployment_slot.saturating_add(1),
             maybe_expiration_slot: None,
             usage_counter: AtomicU64::new(0),
-            program: LoadedProgramType::BuiltIn(program),
+            program: LoadedProgramType::Builtin(name, program),
         }
     }
 
@@ -266,14 +263,42 @@ pub struct LoadedPrograms {
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
 }
 
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl solana_frozen_abi::abi_example::AbiExample for LoadedPrograms {
-    fn example() -> Self {
-        // Delegate AbiExample impl to Default before going deep and stuck with
-        // not easily impl-able Arc<dyn Executor> due to rust's coherence issue
-        // This is safe because LoadedPrograms isn't serializable by definition.
-        Self::default()
+#[derive(Debug, Default)]
+pub struct LoadedProgramsForTxBatch {
+    /// Pubkey is the address of a program.
+    /// LoadedProgram is the corresponding program entry valid for the slot in which a transaction is being executed.
+    entries: HashMap<Pubkey, Arc<LoadedProgram>>,
+    slot: Slot,
+}
+
+impl LoadedProgramsForTxBatch {
+    /// Refill the cache with a single entry. It's typically called during transaction loading, and
+    /// transaction processing (for program management instructions).
+    /// The replaces the existing entry (if any) with the provided entry. The return value contains
+    /// `true` if an entry existed.
+    /// The function also returns the newly inserted value.
+    pub fn replenish(
+        &mut self,
+        key: Pubkey,
+        entry: Arc<LoadedProgram>,
+    ) -> (bool, Arc<LoadedProgram>) {
+        debug_assert!(entry.effective_slot <= self.slot);
+        (self.entries.insert(key, entry.clone()).is_some(), entry)
     }
+
+    pub fn find(&self, key: Pubkey) -> Option<Arc<LoadedProgram>> {
+        self.entries.get(&key).cloned()
+    }
+
+    pub fn slot(&self) -> Slot {
+        self.slot
+    }
+}
+
+pub enum LoadedProgramMatchCriteria {
+    DeployedOnOrAfterSlot(Slot),
+    Closed,
+    NoCriteria,
 }
 
 impl LoadedPrograms {
@@ -325,7 +350,7 @@ impl LoadedPrograms {
     /// Before rerooting the blockstore this removes all programs of orphan forks
     pub fn prune<F: ForkGraph>(&mut self, fork_graph: &F, new_root: Slot) {
         self.entries.retain(|_key, second_level| {
-            let mut first_ancestor = true;
+            let mut first_ancestor_found = false;
             *second_level = second_level
                 .iter()
                 .rev()
@@ -333,9 +358,9 @@ impl LoadedPrograms {
                     let relation = fork_graph.relationship(entry.deployment_slot, new_root);
                     if entry.deployment_slot >= new_root {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
-                    } else if first_ancestor {
-                        first_ancestor = false;
-                        matches!(relation, BlockRelation::Ancestor)
+                    } else if !first_ancestor_found && matches!(relation, BlockRelation::Ancestor) {
+                        first_ancestor_found = true;
+                        first_ancestor_found
                     } else {
                         false
                     }
@@ -350,16 +375,31 @@ impl LoadedPrograms {
         self.remove_programs_with_no_entries();
     }
 
+    fn matches_loaded_program(
+        program: &Arc<LoadedProgram>,
+        criteria: &LoadedProgramMatchCriteria,
+    ) -> bool {
+        match criteria {
+            LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot) => {
+                program.deployment_slot >= *slot
+            }
+            LoadedProgramMatchCriteria::Closed => {
+                matches!(program.program, LoadedProgramType::Closed)
+            }
+            LoadedProgramMatchCriteria::NoCriteria => true,
+        }
+    }
+
     /// Extracts a subset of the programs relevant to a transaction batch
     /// and returns which program accounts the accounts DB needs to load.
     pub fn extract<S: WorkingSlot>(
         &self,
         working_slot: &S,
-        keys: impl Iterator<Item = Pubkey>,
-    ) -> (HashMap<Pubkey, Arc<LoadedProgram>>, Vec<Pubkey>) {
+        keys: impl Iterator<Item = (Pubkey, LoadedProgramMatchCriteria)>,
+    ) -> (LoadedProgramsForTxBatch, Vec<Pubkey>) {
         let mut missing = Vec::new();
         let found = keys
-            .filter_map(|key| {
+            .filter_map(|(key, match_criteria)| {
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
                         let current_slot = working_slot.current_slot();
@@ -378,6 +418,11 @@ impl LoadedPrograms {
                                 return None;
                             }
 
+                            if !Self::matches_loaded_program(entry, &match_criteria) {
+                                missing.push(key);
+                                return None;
+                            }
+
                             if current_slot >= entry.effective_slot {
                                 return Some((key, entry.clone()));
                             }
@@ -388,20 +433,18 @@ impl LoadedPrograms {
                 None
             })
             .collect();
-        (found, missing)
+        (
+            LoadedProgramsForTxBatch {
+                entries: found,
+                slot: working_slot.current_slot(),
+            },
+            missing,
+        )
     }
 
-    /// Evicts programs which were used infrequently
-    pub fn sort_and_evict(&mut self, shrink_to: PercentageInteger) {
-        let mut num_loaded: usize = 0;
-        let mut num_unloaded: usize = 0;
-        let mut num_tombstones: usize = 0;
-        // Find eviction candidates and sort by their type and usage counters.
-        // Sorted result will have the following order:
-        //   Loaded entries with ascending order of their usage count
-        //   Unloaded entries with ascending order of their usage count
-        //   Tombstones with ascending order of their usage count
-        let (ordering, sorted_candidates): (Vec<u32>, Vec<(Pubkey, Arc<LoadedProgram>)>) = self
+    /// Unloads programs which were used infrequently
+    pub fn sort_and_unload(&mut self, shrink_to: PercentageInteger) {
+        let sorted_candidates: Vec<(Pubkey, Arc<LoadedProgram>)> = self
             .entries
             .iter()
             .flat_map(|(id, list)| {
@@ -409,53 +452,23 @@ impl LoadedPrograms {
                     .filter_map(move |program| match program.program {
                         LoadedProgramType::LegacyV0(_)
                         | LoadedProgramType::LegacyV1(_)
-                        | LoadedProgramType::Typed(_) => Some((0, (*id, program.clone()))),
+                        | LoadedProgramType::Typed(_) => Some((*id, program.clone())),
                         #[cfg(test)]
-                        LoadedProgramType::TestLoaded => Some((0, (*id, program.clone()))),
-                        LoadedProgramType::Unloaded => Some((1, (*id, program.clone()))),
-                        LoadedProgramType::FailedVerification
+                        LoadedProgramType::TestLoaded => Some((*id, program.clone())),
+                        LoadedProgramType::Unloaded
+                        | LoadedProgramType::FailedVerification
                         | LoadedProgramType::Closed
-                        | LoadedProgramType::DelayVisibility => Some((2, (*id, program.clone()))),
-                        LoadedProgramType::BuiltIn(_) => None,
+                        | LoadedProgramType::DelayVisibility
+                        | LoadedProgramType::Builtin(_, _) => None,
                     })
             })
-            .sorted_by_cached_key(|(order, (_id, program))| {
-                (*order, program.usage_counter.load(Ordering::Relaxed))
-            })
-            .unzip();
+            .sorted_by_cached_key(|(_id, program)| program.usage_counter.load(Ordering::Relaxed))
+            .collect();
 
-        for order in ordering {
-            match order {
-                0 => num_loaded = num_loaded.saturating_add(1),
-                1 => num_unloaded = num_unloaded.saturating_add(1),
-                2 => num_tombstones = num_tombstones.saturating_add(1),
-                _ => unreachable!(),
-            }
-        }
-
-        let num_to_unload = num_loaded.saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
+        let num_to_unload = sorted_candidates
+            .len()
+            .saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
         self.unload_program_entries(sorted_candidates.iter().take(num_to_unload));
-
-        let num_unloaded_to_evict = num_unloaded
-            .saturating_add(num_to_unload)
-            .saturating_sub(shrink_to.apply_to(MAX_UNLOADED_ENTRY_COUNT));
-        let (newly_unloaded_programs, sorted_candidates) = sorted_candidates.split_at(num_loaded);
-        let num_old_unloaded_to_evict = cmp::min(sorted_candidates.len(), num_unloaded_to_evict);
-        self.remove_program_entries(sorted_candidates.iter().take(num_old_unloaded_to_evict));
-
-        let num_newly_unloaded_to_evict =
-            num_unloaded_to_evict.saturating_sub(sorted_candidates.len());
-        self.remove_program_entries(
-            newly_unloaded_programs
-                .iter()
-                .take(num_newly_unloaded_to_evict),
-        );
-
-        let num_tombstones_to_evict =
-            num_tombstones.saturating_sub(shrink_to.apply_to(MAX_TOMBSTONE_COUNT));
-        let (_, sorted_candidates) = sorted_candidates.split_at(num_unloaded);
-        self.remove_program_entries(sorted_candidates.iter().take(num_tombstones_to_evict));
-
         self.remove_programs_with_no_entries();
     }
 
@@ -463,20 +476,6 @@ impl LoadedPrograms {
     pub fn remove_programs(&mut self, keys: impl Iterator<Item = Pubkey>) {
         for k in keys {
             self.entries.remove(&k);
-        }
-    }
-
-    fn remove_program_entries<'a>(
-        &mut self,
-        remove: impl Iterator<Item = &'a (Pubkey, Arc<LoadedProgram>)>,
-    ) {
-        for (id, program) in remove {
-            if let Some(entries) = self.entries.get_mut(id) {
-                let index = entries.iter().position(|entry| entry == program);
-                if let Some(index) = index {
-                    entries.swap_remove(index);
-                }
-            }
         }
     }
 
@@ -509,17 +508,33 @@ impl LoadedPrograms {
     }
 }
 
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl solana_frozen_abi::abi_example::AbiExample for LoadedProgram {
+    fn example() -> Self {
+        // LoadedProgram isn't serializable by definition.
+        Self::default()
+    }
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl solana_frozen_abi::abi_example::AbiExample for LoadedPrograms {
+    fn example() -> Self {
+        // LoadedPrograms isn't serializable by definition.
+        Self::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
         crate::loaded_programs::{
-            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot,
+            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
+            LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot,
         },
         percentage::Percentage,
         solana_rbpf::vm::BuiltInProgram,
         solana_sdk::{clock::Slot, pubkey::Pubkey},
         std::{
-            collections::HashMap,
             ops::ControlFlow,
             sync::{
                 atomic::{AtomicU64, Ordering},
@@ -530,7 +545,7 @@ mod tests {
 
     fn new_test_builtin_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
-            program: LoadedProgramType::BuiltIn(BuiltInProgram::default()),
+            program: LoadedProgramType::Builtin("mockup".to_string(), BuiltInProgram::default()),
             account_size: 0,
             deployment_slot,
             effective_slot,
@@ -539,14 +554,13 @@ mod tests {
         })
     }
 
-    fn set_tombstone(cache: &mut LoadedPrograms, key: Pubkey, slot: Slot) -> Arc<LoadedProgram> {
-        cache.assign_program(
-            key,
-            Arc::new(LoadedProgram::new_tombstone(
-                slot,
-                LoadedProgramType::FailedVerification,
-            )),
-        )
+    fn set_tombstone(
+        cache: &mut LoadedPrograms,
+        key: Pubkey,
+        slot: Slot,
+        reason: LoadedProgramType,
+    ) -> Arc<LoadedProgram> {
+        cache.assign_program(key, Arc::new(LoadedProgram::new_tombstone(slot, reason)))
     }
 
     fn insert_unloaded_program(
@@ -603,7 +617,12 @@ mod tests {
             });
 
         for slot in 21..31 {
-            set_tombstone(&mut cache, program1, slot);
+            set_tombstone(
+                &mut cache,
+                program1,
+                slot,
+                LoadedProgramType::FailedVerification,
+            );
         }
 
         for slot in 31..41 {
@@ -631,7 +650,12 @@ mod tests {
             });
 
         for slot in 21..31 {
-            set_tombstone(&mut cache, program2, slot);
+            set_tombstone(
+                &mut cache,
+                program2,
+                slot,
+                LoadedProgramType::DelayVisibility,
+            );
         }
 
         for slot in 31..41 {
@@ -659,7 +683,7 @@ mod tests {
             });
 
         for slot in 21..31 {
-            set_tombstone(&mut cache, program3, slot);
+            set_tombstone(&mut cache, program3, slot, LoadedProgramType::Closed);
         }
 
         for slot in 31..41 {
@@ -689,9 +713,9 @@ mod tests {
 
         // Evicting to 2% should update cache with
         // * 5 active entries
-        // * 20 unloaded entries
-        // * 20 tombstones
-        cache.sort_and_evict(Percentage::from(2));
+        // * 33 unloaded entries (3 active programs will get unloaded)
+        // * 30 tombstones (tombstones are not evicted)
+        cache.sort_and_unload(Percentage::from(2));
         // Check that every program is still in the cache.
         programs.iter().for_each(|entry| {
             assert!(cache.entries.get(&entry.0).is_some());
@@ -729,81 +753,8 @@ mod tests {
         });
 
         assert_eq!(num_loaded, 5);
-        assert_eq!(num_unloaded, 20);
-        assert_eq!(num_tombstones, 20);
-    }
-
-    #[test]
-    fn test_eviction_unload_underflow() {
-        // Test: Eviction of unloaded programs requires eviction of newly unloaded programs.
-        // 1. Load 26 programs
-        // 2. Insert 1 unloaded program
-        // Eviction will unload 21 programs.
-        // 2 unloaded programs need to be evicted. So 1 old and 1 new unloaded program will be evicted.
-
-        let mut cache = LoadedPrograms::default();
-
-        let program1 = Pubkey::new_unique();
-        let num_total_programs = 26;
-        (0..num_total_programs).for_each(|i| {
-            cache.replenish(
-                program1,
-                new_test_loaded_program_with_usage(i, i + 2, AtomicU64::new(i)),
-            );
-        });
-
-        let program2 = Pubkey::new_unique();
-        insert_unloaded_program(&mut cache, program2, 26);
-
-        let num_loaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::TestLoaded)
-        });
-        let num_unloaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::Unloaded)
-        });
-        let num_tombstones = num_matching_entries(&cache, |program_type| {
-            matches!(
-                program_type,
-                LoadedProgramType::DelayVisibility
-                    | LoadedProgramType::FailedVerification
-                    | LoadedProgramType::Closed
-            )
-        });
-
-        assert_eq!(num_loaded, 26);
-        assert_eq!(num_unloaded, 1);
-        assert_eq!(num_tombstones, 0);
-
-        // Test that program2 exists in the cache. It'll get removed after eviction.
-        assert!(cache.entries.get(&program2).is_some());
-
-        // Evicting to 2% should update cache with
-        // * 5 active entries
-        // * 20 unloaded entries
-        // * 0 tombstones
-        cache.sort_and_evict(Percentage::from(2));
-
-        let num_loaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::TestLoaded)
-        });
-        let num_unloaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::Unloaded)
-        });
-        let num_tombstones = num_matching_entries(&cache, |program_type| {
-            matches!(
-                program_type,
-                LoadedProgramType::DelayVisibility
-                    | LoadedProgramType::FailedVerification
-                    | LoadedProgramType::Closed
-            )
-        });
-
-        assert_eq!(num_loaded, 5);
-        assert_eq!(num_unloaded, 20);
-        assert_eq!(num_tombstones, 0);
-
-        // Test that program2 has been removed after eviction.
-        assert!(cache.entries.get(&program2).is_none());
+        assert_eq!(num_unloaded, 33);
+        assert_eq!(num_tombstones, 30);
     }
 
     #[test]
@@ -820,7 +771,7 @@ mod tests {
         });
 
         // This will unload the program deployed at slot 0, with usage count = 10
-        cache.sort_and_evict(Percentage::from(2));
+        cache.sort_and_unload(Percentage::from(2));
 
         let num_unloaded = num_matching_entries(&cache, |program_type| {
             matches!(program_type, LoadedProgramType::Unloaded)
@@ -877,7 +828,12 @@ mod tests {
 
         let mut cache = LoadedPrograms::default();
         let program1 = Pubkey::new_unique();
-        let tombstone = set_tombstone(&mut cache, program1, 10);
+        let tombstone = set_tombstone(
+            &mut cache,
+            program1,
+            10,
+            LoadedProgramType::FailedVerification,
+        );
         let second_level = &cache
             .entries
             .get(&program1)
@@ -901,7 +857,12 @@ mod tests {
         assert_eq!(second_level.len(), 1);
         assert!(!second_level.get(0).unwrap().is_tombstone());
 
-        let tombstone = set_tombstone(&mut cache, program2, 60);
+        let tombstone = set_tombstone(
+            &mut cache,
+            program2,
+            60,
+            LoadedProgramType::FailedVerification,
+        );
         let second_level = &cache
             .entries
             .get(&program2)
@@ -1072,12 +1033,14 @@ mod tests {
     }
 
     fn match_slot(
-        table: &HashMap<Pubkey, Arc<LoadedProgram>>,
+        table: &LoadedProgramsForTxBatch,
         program: &Pubkey,
         deployment_slot: Slot,
+        working_slot: Slot,
     ) -> bool {
+        assert_eq!(table.slot, working_slot);
         table
-            .get(program)
+            .find(*program)
             .map(|entry| entry.deployment_slot == deployment_slot)
             .unwrap_or(false)
     }
@@ -1146,11 +1109,17 @@ mod tests {
         let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
         let (found, missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3, program4].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
-        assert!(match_slot(&found, &program1, 20));
-        assert!(match_slot(&found, &program4, 0));
+        assert!(match_slot(&found, &program1, 20, 22));
+        assert!(match_slot(&found, &program4, 0, 22));
 
         assert!(missing.contains(&program2));
         assert!(missing.contains(&program3));
@@ -1159,14 +1128,20 @@ mod tests {
         let mut working_slot = TestWorkingSlot::new(16, &[0, 5, 11, 15, 16, 18, 19, 23]);
         let (found, missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3, program4].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
-        assert!(match_slot(&found, &program1, 0));
-        assert!(match_slot(&found, &program2, 11));
+        assert!(match_slot(&found, &program1, 0, 16));
+        assert!(match_slot(&found, &program2, 11, 16));
 
         // The effective slot of program4 deployed in slot 15 is 19. So it should not be usable in slot 16.
-        assert!(match_slot(&found, &program4, 5));
+        assert!(match_slot(&found, &program4, 5, 16));
 
         assert!(missing.contains(&program3));
 
@@ -1174,14 +1149,20 @@ mod tests {
         working_slot.update_slot(18);
         let (found, missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3, program4].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
-        assert!(match_slot(&found, &program1, 0));
-        assert!(match_slot(&found, &program2, 11));
+        assert!(match_slot(&found, &program1, 0, 18));
+        assert!(match_slot(&found, &program2, 11, 18));
 
         // The effective slot of program4 deployed in slot 15 is 18. So it should be usable in slot 18.
-        assert!(match_slot(&found, &program4, 15));
+        assert!(match_slot(&found, &program4, 15, 18));
 
         assert!(missing.contains(&program3));
 
@@ -1189,14 +1170,20 @@ mod tests {
         working_slot.update_slot(23);
         let (found, missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3, program4].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
-        assert!(match_slot(&found, &program1, 0));
-        assert!(match_slot(&found, &program2, 11));
+        assert!(match_slot(&found, &program1, 0, 23));
+        assert!(match_slot(&found, &program2, 11, 23));
 
         // The effective slot of program4 deployed in slot 15 is 19. So it should be usable in slot 23.
-        assert!(match_slot(&found, &program4, 15));
+        assert!(match_slot(&found, &program4, 15, 23));
 
         assert!(missing.contains(&program3));
 
@@ -1204,12 +1191,18 @@ mod tests {
         let working_slot = TestWorkingSlot::new(11, &[0, 5, 11, 15, 16]);
         let (found, missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3, program4].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
-        assert!(match_slot(&found, &program1, 0));
-        assert!(match_slot(&found, &program2, 5));
-        assert!(match_slot(&found, &program4, 5));
+        assert!(match_slot(&found, &program1, 0, 11));
+        assert!(match_slot(&found, &program2, 5, 11));
+        assert!(match_slot(&found, &program4, 5, 11));
 
         assert!(missing.contains(&program3));
 
@@ -1228,13 +1221,19 @@ mod tests {
         let working_slot = TestWorkingSlot::new(19, &[0, 5, 11, 15, 16, 18, 19, 21, 23]);
         let (found, missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3, program4].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
-        assert!(match_slot(&found, &program1, 0));
-        assert!(match_slot(&found, &program2, 11));
+        assert!(match_slot(&found, &program1, 0, 19));
+        assert!(match_slot(&found, &program2, 11, 19));
         // Program4 deployed at slot 19 should not be expired yet
-        assert!(match_slot(&found, &program4, 19));
+        assert!(match_slot(&found, &program4, 19, 19));
 
         assert!(missing.contains(&program3));
 
@@ -1243,11 +1242,17 @@ mod tests {
         let working_slot = TestWorkingSlot::new(21, &[0, 5, 11, 15, 16, 18, 19, 21, 23]);
         let (found, missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3, program4].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
-        assert!(match_slot(&found, &program1, 0));
-        assert!(match_slot(&found, &program2, 11));
+        assert!(match_slot(&found, &program1, 0, 21));
+        assert!(match_slot(&found, &program2, 11, 21));
 
         assert!(missing.contains(&program3));
         assert!(missing.contains(&program4));
@@ -1278,12 +1283,18 @@ mod tests {
         let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
         let (found, missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3, program4].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
         // Since the fork was pruned, we should not find the entry deployed at slot 20.
-        assert!(match_slot(&found, &program1, 0));
-        assert!(match_slot(&found, &program4, 0));
+        assert!(match_slot(&found, &program1, 0, 22));
+        assert!(match_slot(&found, &program4, 0, 22));
 
         assert!(missing.contains(&program2));
         assert!(missing.contains(&program3));
@@ -1292,13 +1303,19 @@ mod tests {
         let working_slot = TestWorkingSlot::new(27, &[0, 5, 11, 25, 27]);
         let (found, _missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3, program4].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
-        assert!(match_slot(&found, &program1, 0));
-        assert!(match_slot(&found, &program2, 11));
-        assert!(match_slot(&found, &program3, 25));
-        assert!(match_slot(&found, &program4, 5));
+        assert!(match_slot(&found, &program1, 0, 27));
+        assert!(match_slot(&found, &program2, 11, 27));
+        assert!(match_slot(&found, &program3, 25, 27));
+        assert!(match_slot(&found, &program4, 5, 27));
 
         cache.prune(&fork_graph, 15);
 
@@ -1321,14 +1338,95 @@ mod tests {
         let working_slot = TestWorkingSlot::new(27, &[0, 5, 11, 25, 27]);
         let (found, missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3, program4].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+                (program4, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
-        assert!(match_slot(&found, &program1, 0));
-        assert!(match_slot(&found, &program2, 11));
-        assert!(match_slot(&found, &program4, 5));
+        assert!(match_slot(&found, &program1, 0, 27));
+        assert!(match_slot(&found, &program2, 11, 27));
+        assert!(match_slot(&found, &program4, 5, 27));
 
         // program3 was deployed on slot 25, which has been pruned
+        assert!(missing.contains(&program3));
+    }
+
+    #[test]
+    fn test_extract_using_deployment_slot() {
+        let mut cache = LoadedPrograms::default();
+
+        // Fork graph created for the test
+        //                   0
+        //                 /   \
+        //                10    5
+        //                |     |
+        //                20    11
+        //                |     | \
+        //                22   15  25
+        //                      |   |
+        //                     16  27
+        //                      |
+        //                     19
+        //                      |
+        //                     23
+
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 10, 20, 22]);
+        fork_graph.insert_fork(&[0, 5, 11, 15, 16, 19, 21, 23]);
+        fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
+
+        let program1 = Pubkey::new_unique();
+        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(20, 21)).0);
+
+        let program2 = Pubkey::new_unique();
+        assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
+        assert!(!cache.replenish(program2, new_test_loaded_program(11, 12)).0);
+
+        let program3 = Pubkey::new_unique();
+        assert!(!cache.replenish(program3, new_test_loaded_program(25, 26)).0);
+
+        // Testing fork 0 - 5 - 11 - 15 - 16 - 19 - 21 - 23 with current slot at 19
+        let working_slot = TestWorkingSlot::new(12, &[0, 5, 11, 12, 15, 16, 18, 19, 21, 23]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0, 12));
+        assert!(match_slot(&found, &program2, 11, 12));
+
+        assert!(missing.contains(&program3));
+
+        // Test the same fork, but request the program modified at a later slot than what's in the cache.
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![
+                (
+                    program1,
+                    LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(5),
+                ),
+                (
+                    program2,
+                    LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(5),
+                ),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
+        );
+
+        assert!(match_slot(&found, &program2, 11, 12));
+
+        assert!(missing.contains(&program1));
         assert!(missing.contains(&program3));
     }
 
@@ -1382,12 +1480,17 @@ mod tests {
         let working_slot = TestWorkingSlot::new(12, &[0, 5, 11, 12, 15, 16, 18, 19, 21, 23]);
         let (found, missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
         // Program1 deployed at slot 11 should not be expired yet
-        assert!(match_slot(&found, &program1, 11));
-        assert!(match_slot(&found, &program2, 11));
+        assert!(match_slot(&found, &program1, 11, 12));
+        assert!(match_slot(&found, &program2, 11, 12));
 
         assert!(missing.contains(&program3));
 
@@ -1396,10 +1499,15 @@ mod tests {
         let working_slot = TestWorkingSlot::new(15, &[0, 5, 11, 15, 16, 18, 19, 21, 23]);
         let (found, missing) = cache.extract(
             &working_slot,
-            vec![program1, program2, program3].into_iter(),
+            vec![
+                (program1, LoadedProgramMatchCriteria::NoCriteria),
+                (program2, LoadedProgramMatchCriteria::NoCriteria),
+                (program3, LoadedProgramMatchCriteria::NoCriteria),
+            ]
+            .into_iter(),
         );
 
-        assert!(match_slot(&found, &program2, 11));
+        assert!(match_slot(&found, &program2, 11, 15));
 
         assert!(missing.contains(&program1));
         assert!(missing.contains(&program3));
@@ -1428,5 +1536,46 @@ mod tests {
         // New root 15 should evict the expired entry for program1
         cache.prune(&fork_graph, 15);
         assert!(cache.entries.get(&program1).is_none());
+    }
+
+    #[test]
+    fn test_fork_prune_find_first_ancestor() {
+        let mut cache = LoadedPrograms::default();
+
+        // Fork graph created for the test
+        //                   0
+        //                 /   \
+        //                10    5
+        //                |
+        //                20
+
+        // Deploy program on slot 0, and slot 5.
+        // Prune the fork that has slot 5. The cache should still have the program
+        // deployed at slot 0.
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 10, 20]);
+        fork_graph.insert_fork(&[0, 5]);
+
+        let program1 = Pubkey::new_unique();
+        assert!(!cache.replenish(program1, new_test_loaded_program(0, 1)).0);
+        assert!(!cache.replenish(program1, new_test_loaded_program(5, 6)).0);
+
+        cache.prune(&fork_graph, 10);
+
+        let working_slot = TestWorkingSlot::new(20, &[0, 10, 20]);
+        let (found, _missing) = cache.extract(
+            &working_slot,
+            vec![(program1, LoadedProgramMatchCriteria::NoCriteria)].into_iter(),
+        );
+
+        // The cache should have the program deployed at slot 0
+        assert_eq!(
+            found
+                .entries
+                .get(&program1)
+                .expect("Did not find the program")
+                .deployment_slot,
+            0
+        );
     }
 }

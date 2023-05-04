@@ -32,7 +32,6 @@ cc = { workspace = true, features = ["jobserver", "parallel"] }
 either = { workspace = true, features = ["use_std"] }
 generic-array = { workspace = true, features = ["serde", "more_lengths"] }
 getrandom = { workspace = true, features = ["dummy"] }
-hashbrown = { workspace = true, features = ["raw"] }
 im = { workspace = true, features = ["rayon", "serde"] }
 memmap2 = { workspace = true }
 once_cell = { workspace = true, features = ["alloc", "race"] }

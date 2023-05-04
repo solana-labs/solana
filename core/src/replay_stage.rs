@@ -50,7 +50,7 @@ use {
     solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     solana_program_runtime::timings::ExecuteTimings,
     solana_rpc::{
-        optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
+        optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSenderConfig},
         rpc_subscriptions::RpcSubscriptions,
     },
     solana_rpc_client_api::response::SlotUpdate,
@@ -237,7 +237,7 @@ pub struct ReplayStageConfig {
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
     pub cache_block_meta_sender: Option<CacheBlockMetaSender>,
-    pub bank_notification_sender: Option<BankNotificationSender>,
+    pub bank_notification_sender: Option<BankNotificationSenderConfig>,
     pub wait_for_vote_to_start_leader: bool,
     pub ancestor_hashes_replay_update_sender: AncestorHashesReplayUpdateSender,
     pub tower_storage: Arc<dyn TowerStorage>,
@@ -561,7 +561,7 @@ impl ReplayStage {
             Self::reset_poh_recorder(
                 &my_pubkey,
                 &blockstore,
-                &working_bank,
+                working_bank,
                 &poh_recorder,
                 &leader_schedule_cache,
             );
@@ -931,7 +931,7 @@ impl ReplayStage {
                         Self::reset_poh_recorder(
                             &my_pubkey,
                             &blockstore,
-                            &reset_bank,
+                            reset_bank.clone(),
                             &poh_recorder,
                             &leader_schedule_cache,
                         );
@@ -1305,6 +1305,18 @@ impl ReplayStage {
                                 We froze slot {duplicate_slot} with hash {frozen_hash:?} while the cluster hash is {correct_hash}");
                     }
 
+                    let attempt_no = purge_repair_slot_counter
+                        .entry(*duplicate_slot)
+                        .and_modify(|x| *x += 1)
+                        .or_insert(1);
+                    if *attempt_no > MAX_REPAIR_RETRY_LOOP_ATTEMPTS {
+                        panic!("We have tried to repair duplicate slot: {duplicate_slot} more than {MAX_REPAIR_RETRY_LOOP_ATTEMPTS} times \
+                            and are unable to freeze a block with bankhash {correct_hash}, \
+                            instead we have a block with bankhash {frozen_hash:?}. \
+                            This is most likely a bug in the runtime. \
+                            At this point manual intervention is needed to make progress. Exiting");
+                    }
+
                     Self::purge_unconfirmed_duplicate_slot(
                         *duplicate_slot,
                         ancestors,
@@ -1317,17 +1329,6 @@ impl ReplayStage {
 
                     dumped.push((*duplicate_slot, *correct_hash));
 
-                    let attempt_no = purge_repair_slot_counter
-                        .entry(*duplicate_slot)
-                        .and_modify(|x| *x += 1)
-                        .or_insert(1);
-                    if *attempt_no > MAX_REPAIR_RETRY_LOOP_ATTEMPTS {
-                        panic!("We have tried to repair duplicate slot: {duplicate_slot} more than {MAX_REPAIR_RETRY_LOOP_ATTEMPTS} times \
-                            and are unable to freeze a block with bankhash {correct_hash}, \
-                            instead we have a block with bankhash {frozen_hash:?}. \
-                            This is most likely a bug in the runtime. \
-                            At this point manual intervention is needed to make progress. Exiting");
-                    }
                     warn!(
                         "Notifying repair service to repair duplicate slot: {}, attempt {}",
                         *duplicate_slot, *attempt_no,
@@ -1995,7 +1996,7 @@ impl ReplayStage {
         rpc_subscriptions: &Arc<RpcSubscriptions>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
-        bank_notification_sender: &Option<BankNotificationSender>,
+        bank_notification_sender: &Option<BankNotificationSenderConfig>,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &mut GossipDuplicateConfirmedSlots,
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
@@ -2021,8 +2022,19 @@ impl ReplayStage {
                 .get(new_root)
                 .expect("Root bank doesn't exist");
             let mut rooted_banks = root_bank.parents();
+            let oldest_parent = rooted_banks.last().map(|last| last.parent_slot());
             rooted_banks.push(root_bank.clone());
             let rooted_slots: Vec<_> = rooted_banks.iter().map(|bank| bank.slot()).collect();
+            // The following differs from  rooted_slots by including the parent slot of the oldest parent bank.
+            let rooted_slots_with_parents = bank_notification_sender
+                .as_ref()
+                .map_or(false, |sender| sender.should_send_parents)
+                .then(|| {
+                    let mut new_chain = rooted_slots.clone();
+                    new_chain.push(oldest_parent.unwrap_or(bank.parent_slot()));
+                    new_chain
+                });
+
             // Call leader schedule_cache.set_root() before blockstore.set_root() because
             // bank_forks.root is consumed by repair_service to update gossip, so we don't want to
             // get shreds for repair on gossip before we update leader schedule, otherwise they may
@@ -2058,8 +2070,16 @@ impl ReplayStage {
             rpc_subscriptions.notify_roots(rooted_slots);
             if let Some(sender) = bank_notification_sender {
                 sender
-                    .send(BankNotification::Root(root_bank))
+                    .sender
+                    .send(BankNotification::NewRootBank(root_bank))
                     .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
+
+                if let Some(new_chain) = rooted_slots_with_parents {
+                    sender
+                        .sender
+                        .send(BankNotification::NewRootedChain(new_chain))
+                        .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
+                }
             }
             latest_root_senders.iter().for_each(|s| {
                 if let Err(e) = s.send(new_root) {
@@ -2358,34 +2378,30 @@ impl ReplayStage {
     fn reset_poh_recorder(
         my_pubkey: &Pubkey,
         blockstore: &Blockstore,
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         poh_recorder: &RwLock<PohRecorder>,
         leader_schedule_cache: &LeaderScheduleCache,
     ) {
+        let slot = bank.slot();
+        let tick_height = bank.tick_height();
+
         let next_leader_slot = leader_schedule_cache.next_leader_slot(
             my_pubkey,
-            bank.slot(),
-            bank,
+            slot,
+            &bank,
             Some(blockstore),
             GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
         );
-        poh_recorder
-            .write()
-            .unwrap()
-            .reset(bank.clone(), next_leader_slot);
+
+        poh_recorder.write().unwrap().reset(bank, next_leader_slot);
 
         let next_leader_msg = if let Some(next_leader_slot) = next_leader_slot {
             format!("My next leader slot is {}", next_leader_slot.0)
         } else {
             "I am not in the leader schedule yet".to_owned()
         };
-
         info!(
-            "{} reset PoH to tick {} (within slot {}). {}",
-            my_pubkey,
-            bank.tick_height(),
-            bank.slot(),
-            next_leader_msg,
+            "{my_pubkey} reset PoH to tick {tick_height} (within slot {slot}). {next_leader_msg}",
         );
     }
 
@@ -2577,7 +2593,7 @@ impl ReplayStage {
         transaction_status_sender: Option<&TransactionStatusSender>,
         cache_block_meta_sender: Option<&CacheBlockMetaSender>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
-        bank_notification_sender: &Option<BankNotificationSender>,
+        bank_notification_sender: &Option<BankNotificationSenderConfig>,
         rewards_recorder_sender: &Option<RewardsRecorderSender>,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
@@ -2701,6 +2717,7 @@ impl ReplayStage {
                 );
                 if let Some(sender) = bank_notification_sender {
                     sender
+                        .sender
                         .send(BankNotification::Frozen(bank.clone()))
                         .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
                 }
@@ -2769,7 +2786,7 @@ impl ReplayStage {
         verify_recyclers: &VerifyRecyclers,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         replay_vote_sender: &ReplayVoteSender,
-        bank_notification_sender: &Option<BankNotificationSender>,
+        bank_notification_sender: &Option<BankNotificationSenderConfig>,
         rewards_recorder_sender: &Option<RewardsRecorderSender>,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
@@ -2894,9 +2911,7 @@ impl ReplayStage {
                         Tower::is_direct_vote_state_update_enabled(bank),
                         bank.get_vote_account(my_vote_pubkey),
                     ) {
-                        if let Some(mut bank_vote_state) =
-                            vote_account.vote_state().as_ref().ok().cloned()
-                        {
+                        if let Ok(mut bank_vote_state) = vote_account.vote_state().cloned() {
                             if bank_vote_state.last_voted_slot()
                                 > tower.vote_state.last_voted_slot()
                             {
@@ -3840,7 +3855,7 @@ pub(crate) mod tests {
                 None,
                 working_bank.ticks_per_slot(),
                 &Pubkey::default(),
-                &blockstore,
+                blockstore.clone(),
                 &leader_schedule_cache,
                 &PohConfig::default(),
                 Arc::new(AtomicBool::new(false)),

@@ -1,9 +1,11 @@
 use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
+        builtin_program::{BuiltinPrograms, ProcessInstructionWithContext},
         compute_budget::ComputeBudget,
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
+        loaded_programs::LoadedProgramType,
         log_collector::LogCollector,
         pre_account::PreAccount,
         stable_log,
@@ -11,12 +13,17 @@ use {
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_measure::measure::Measure,
-    solana_rbpf::vm::ContextObject,
+    solana_rbpf::{
+        ebpf::MM_HEAP_START,
+        memory_region::MemoryMapping,
+        vm::{Config, ContextObject, ProgramResult},
+    },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
+        bpf_loader_deprecated,
         feature_set::{
-            enable_early_verification_of_account_modifications, native_programs_consume_cu,
-            FeatureSet,
+            check_slice_translation_size, enable_early_verification_of_account_modifications,
+            native_programs_consume_cu, FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
@@ -34,7 +41,7 @@ use {
         cell::RefCell,
         fmt::{self, Debug},
         rc::Rc,
-        sync::Arc,
+        sync::{atomic::Ordering, Arc},
     },
 };
 
@@ -44,58 +51,51 @@ macro_rules! declare_process_instruction {
     ($process_instruction:ident, $cu_to_consume:expr, |$invoke_context:ident| $inner:tt) => {
         pub fn $process_instruction(
             invoke_context: &mut $crate::invoke_context::InvokeContext,
-        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+            _arg0: u64,
+            _arg1: u64,
+            _arg2: u64,
+            _arg3: u64,
+            _arg4: u64,
+            _memory_mapping: &mut $crate::solana_rbpf::memory_region::MemoryMapping,
+            result: &mut $crate::solana_rbpf::vm::ProgramResult,
+        ) {
             fn process_instruction_inner(
                 $invoke_context: &mut $crate::invoke_context::InvokeContext,
             ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
                 $inner
             }
-            if invoke_context
-                .feature_set
-                .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
+            let consumption_result = if $cu_to_consume > 0
+                && invoke_context
+                    .feature_set
+                    .is_active(&solana_sdk::feature_set::native_programs_consume_cu::id())
             {
-                invoke_context.consume_checked($cu_to_consume)?;
-            }
-            process_instruction_inner(invoke_context)
-                .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+                invoke_context.consume_checked($cu_to_consume)
+            } else {
+                Ok(())
+            };
+            *result = consumption_result
+                .and_then(|_| {
+                    process_instruction_inner(invoke_context)
+                        .map(|_| 0)
+                        .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+                })
+                .into();
         }
     };
 }
 
-pub type ProcessInstructionWithContext =
-    fn(&mut InvokeContext) -> Result<(), Box<dyn std::error::Error>>;
-
-#[derive(Clone)]
-pub struct BuiltinProgram {
-    pub program_id: Pubkey,
-    pub process_instruction: ProcessInstructionWithContext,
-}
-
-impl std::fmt::Debug for BuiltinProgram {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        // These are just type aliases for work around of Debug-ing above pointers
-        type ErasedProcessInstructionWithContext =
-            fn(&'static mut InvokeContext<'static>) -> Result<(), Box<dyn std::error::Error>>;
-
-        // rustc doesn't compile due to bug without this work around
-        // https://github.com/rust-lang/rust/issues/50280
-        // https://users.rust-lang.org/t/display-function-pointer/17073/2
-        let erased_instruction: ErasedProcessInstructionWithContext = self.process_instruction;
-        write!(f, "{}: {:p}", self.program_id, erased_instruction)
-    }
-}
-
 impl<'a> ContextObject for InvokeContext<'a> {
     fn trace(&mut self, state: [u64; 12]) {
-        self.trace_log_stack
+        self.syscall_context
             .last_mut()
-            .expect("Inconsistent trace log stack")
+            .unwrap()
+            .as_mut()
+            .unwrap()
             .trace_log
             .push(state);
     }
 
     fn consume(&mut self, amount: u64) {
-        self.log_consumed_bpf_units(amount);
         // 1 to 1 instruction to compute unit mapping
         // ignore overflow, Ebpf will bail if exceeded
         let mut compute_meter = self.compute_meter.borrow_mut();
@@ -107,41 +107,54 @@ impl<'a> ContextObject for InvokeContext<'a> {
     }
 }
 
-/// Based loosely on the unstable std::alloc::Alloc trait
-pub trait Alloc {
-    fn alloc(&mut self, layout: Layout) -> Result<u64, AllocErr>;
-    fn dealloc(&mut self, addr: u64, layout: Layout);
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AllocErr;
-
 impl fmt::Display for AllocErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("Error: Memory allocation failed")
     }
 }
 
-struct SyscallContext {
-    check_aligned: bool,
-    check_size: bool,
-    orig_account_lengths: Vec<usize>,
-    allocator: Rc<RefCell<dyn Alloc>>,
+pub struct BpfAllocator {
+    len: u64,
+    pos: u64,
 }
 
-#[derive(Default)]
-pub struct TraceLogStackFrame {
+impl BpfAllocator {
+    pub fn new(len: u64) -> Self {
+        Self { len, pos: 0 }
+    }
+
+    pub fn alloc(&mut self, layout: Layout) -> Result<u64, AllocErr> {
+        let bytes_to_align = (self.pos as *const u8).align_offset(layout.align()) as u64;
+        if self
+            .pos
+            .saturating_add(bytes_to_align)
+            .saturating_add(layout.size() as u64)
+            <= self.len
+        {
+            self.pos = self.pos.saturating_add(bytes_to_align);
+            let addr = MM_HEAP_START.saturating_add(self.pos);
+            self.pos = self.pos.saturating_add(layout.size() as u64);
+            Ok(addr)
+        } else {
+            Err(AllocErr)
+        }
+    }
+}
+
+pub struct SyscallContext {
+    pub allocator: BpfAllocator,
+    pub orig_account_lengths: Vec<usize>,
     pub trace_log: Vec<[u64; 12]>,
-    pub consumed_bpf_units: RefCell<Vec<(usize, u64)>>,
 }
 
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    builtin_programs: &'a [BuiltinProgram],
+    builtin_programs: &'a BuiltinPrograms,
     sysvar_cache: &'a SysvarCache,
-    pub trace_log_stack: Vec<TraceLogStackFrame>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
@@ -152,8 +165,8 @@ pub struct InvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
-    syscall_context: Vec<Option<SyscallContext>>,
-    pub enable_instruction_tracing: bool,
+    pub syscall_context: Vec<Option<SyscallContext>>,
+    traces: Vec<Vec<[u64; 12]>>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -161,7 +174,7 @@ impl<'a> InvokeContext<'a> {
     pub fn new(
         transaction_context: &'a mut TransactionContext,
         rent: Rent,
-        builtin_programs: &'a [BuiltinProgram],
+        builtin_programs: &'a BuiltinPrograms,
         sysvar_cache: &'a SysvarCache,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
@@ -177,7 +190,6 @@ impl<'a> InvokeContext<'a> {
             pre_accounts: Vec::new(),
             builtin_programs,
             sysvar_cache,
-            trace_log_stack: vec![TraceLogStackFrame::default()],
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
@@ -189,7 +201,7 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
-            enable_instruction_tracing: false,
+            traces: Vec::new(),
         }
     }
 
@@ -273,15 +285,15 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
-        self.trace_log_stack.push(TraceLogStackFrame::default());
         self.syscall_context.push(None);
         self.transaction_context.push()
     }
 
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
-        self.trace_log_stack.pop();
-        self.syscall_context.pop();
+        if let Some(Some(syscall_context)) = self.syscall_context.pop() {
+            self.traces.push(syscall_context.trace_log);
+        }
         self.transaction_context.pop()
     }
 
@@ -707,28 +719,54 @@ impl<'a> InvokeContext<'a> {
             }
         };
 
-        for entry in self.builtin_programs {
-            if entry.program_id == builtin_id {
+        for entry in self.builtin_programs.vec.iter() {
+            if entry.0 == builtin_id {
+                // The Murmur3 hash value (used by RBPF) of the string "entrypoint"
+                const ENTRYPOINT_KEY: u32 = 0x71E3CF81;
+                let process_instruction = match &entry.1.program {
+                    LoadedProgramType::Builtin(_name, program) => program
+                        .lookup_function(ENTRYPOINT_KEY)
+                        .map(|(_name, process_instruction)| process_instruction),
+                    _ => None,
+                }
+                .ok_or(InstructionError::GenericError)?;
+                entry.1.usage_counter.fetch_add(1, Ordering::Relaxed);
+
                 let program_id =
                     *instruction_context.get_last_program_key(self.transaction_context)?;
                 self.transaction_context
                     .set_return_data(program_id, Vec::new())?;
-
-                let pre_remaining_units = self.get_remaining();
                 let logger = self.get_log_collector();
                 stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
-                let result = (entry.process_instruction)(self)
-                    .map(|()| {
+                let pre_remaining_units = self.get_remaining();
+                let mock_config = Config::default();
+                let mut mock_memory_mapping = MemoryMapping::new(Vec::new(), &mock_config).unwrap();
+                let mut result = ProgramResult::Ok(0);
+                process_instruction(
+                    // Removes lifetime tracking
+                    unsafe { std::mem::transmute::<&mut InvokeContext, &mut InvokeContext>(self) },
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    &mut mock_memory_mapping,
+                    &mut result,
+                );
+                let result = match result {
+                    ProgramResult::Ok(_) => {
                         stable_log::program_success(&logger, &program_id);
-                    })
-                    .map_err(|err| {
+                        Ok(())
+                    }
+                    ProgramResult::Err(err) => {
                         stable_log::program_failure(&logger, &program_id, err.as_ref());
                         if let Some(err) = err.downcast_ref::<InstructionError>() {
-                            err.clone()
+                            Err(err.clone())
                         } else {
-                            InstructionError::ProgramFailedToComplete
+                            Err(InstructionError::ProgramFailedToComplete)
                         }
-                    });
+                    }
+                };
                 let post_remaining_units = self.get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
 
@@ -764,7 +802,6 @@ impl<'a> InvokeContext<'a> {
 
     /// Consume compute units
     pub fn consume_checked(&self, amount: u64) -> Result<(), Box<dyn std::error::Error>> {
-        self.log_consumed_bpf_units(amount);
         let mut compute_meter = self.compute_meter.borrow_mut();
         let exceeded = *compute_meter < amount;
         *compute_meter = compute_meter.saturating_sub(amount);
@@ -796,80 +833,68 @@ impl<'a> InvokeContext<'a> {
         self.sysvar_cache
     }
 
-    // Set this instruction syscall context
-    pub fn set_syscall_context(
-        &mut self,
-        check_aligned: bool,
-        check_size: bool,
-        orig_account_lengths: Vec<usize>,
-        allocator: Rc<RefCell<dyn Alloc>>,
-    ) -> Result<(), InstructionError> {
-        *self
-            .syscall_context
-            .last_mut()
-            .ok_or(InstructionError::CallDepth)? = Some(SyscallContext {
-            check_aligned,
-            check_size,
-            orig_account_lengths,
-            allocator,
-        });
-        Ok(())
-    }
-
     // Should alignment be enforced during user pointer translation
     pub fn get_check_aligned(&self) -> bool {
-        self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.check_aligned)
+        self.transaction_context
+            .get_current_instruction_context()
+            .and_then(|instruction_context| {
+                let program_account =
+                    instruction_context.try_borrow_last_program_account(self.transaction_context);
+                debug_assert!(program_account.is_ok());
+                program_account
+            })
+            .map(|program_account| *program_account.get_owner() != bpf_loader_deprecated::id())
             .unwrap_or(true)
     }
 
     // Set should type size be checked during user pointer translation
     pub fn get_check_size(&self) -> bool {
-        self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.check_size)
-            .unwrap_or(true)
+        self.feature_set
+            .is_active(&check_slice_translation_size::id())
     }
 
-    /// Get the original account lengths
-    pub fn get_orig_account_lengths(&self) -> Result<&[usize], InstructionError> {
+    // Set this instruction syscall context
+    pub fn set_syscall_context(
+        &mut self,
+        syscall_context: SyscallContext,
+    ) -> Result<(), InstructionError> {
+        *self
+            .syscall_context
+            .last_mut()
+            .ok_or(InstructionError::CallDepth)? = Some(syscall_context);
+        Ok(())
+    }
+
+    // Get this instruction's SyscallContext
+    pub fn get_syscall_context(&self) -> Result<&SyscallContext, InstructionError> {
         self.syscall_context
             .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.orig_account_lengths.as_slice())
+            .and_then(|syscall_context| syscall_context.as_ref())
             .ok_or(InstructionError::CallDepth)
     }
 
-    // Get this instruction's memory allocator
-    pub fn get_allocator(&self) -> Result<Rc<RefCell<dyn Alloc>>, InstructionError> {
+    // Get this instruction's SyscallContext
+    pub fn get_syscall_context_mut(&mut self) -> Result<&mut SyscallContext, InstructionError> {
         self.syscall_context
-            .last()
-            .and_then(|context| context.as_ref())
-            .map(|context| context.allocator.clone())
+            .last_mut()
+            .and_then(|syscall_context| syscall_context.as_mut())
             .ok_or(InstructionError::CallDepth)
     }
 
-    fn log_consumed_bpf_units(&self, amount: u64) {
-        if self.enable_instruction_tracing && amount != 0 {
-            let trace_log_stack_frame = self
-                .trace_log_stack
-                .last()
-                .expect("Inconsistent trace log stack");
-
-            trace_log_stack_frame.consumed_bpf_units.borrow_mut().push((
-                trace_log_stack_frame.trace_log.len().saturating_sub(1),
-                amount,
-            ));
-        }
+    /// Return a references to traces
+    pub fn get_traces(&self) -> &Vec<Vec<[u64; 12]>> {
+        &self.traces
     }
 }
 
 #[macro_export]
-macro_rules! with_mock_invoke_context {
-    ($invoke_context:ident, $transaction_context:ident, $transaction_accounts:expr) => {
+macro_rules! with_mock_invoke_context_and_builtin_programs {
+    (
+        $invoke_context:ident,
+        $transaction_context:ident,
+        $transaction_accounts:expr,
+        $builtin_programs:expr
+    ) => {
         use {
             solana_sdk::{
                 account::ReadableAccount, feature_set::FeatureSet, hash::Hash, sysvar::rent::Rent,
@@ -911,7 +936,7 @@ macro_rules! with_mock_invoke_context {
         let mut $invoke_context = InvokeContext::new(
             &mut $transaction_context,
             Rent::default(),
-            &[],
+            $builtin_programs,
             &sysvar_cache,
             Some(LogCollector::new_ref()),
             compute_budget,
@@ -920,6 +945,37 @@ macro_rules! with_mock_invoke_context {
             Hash::default(),
             0,
             0,
+        );
+    };
+}
+
+#[macro_export]
+macro_rules! with_mock_invoke_context {
+    (
+        $invoke_context:ident,
+        $transaction_context:ident,
+        $transaction_accounts:expr,
+        $builtin_programs:expr
+    ) => {
+        use $crate::with_mock_invoke_context_and_builtin_programs;
+        with_mock_invoke_context_and_builtin_programs!(
+            $invoke_context,
+            $transaction_context,
+            $transaction_accounts,
+            $builtin_programs
+        );
+    };
+
+    ($invoke_context:ident, $transaction_context:ident, $transaction_accounts:expr) => {
+        use $crate::{
+            builtin_program::BuiltinPrograms, with_mock_invoke_context_and_builtin_programs,
+        };
+        let builtin_programs = BuiltinPrograms::default();
+        with_mock_invoke_context_and_builtin_programs!(
+            $invoke_context,
+            $transaction_context,
+            $transaction_accounts,
+            &builtin_programs
         );
     };
 }
@@ -962,12 +1018,13 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
     program_indices.insert(0, transaction_accounts.len() as IndexOfAccount);
     let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
     transaction_accounts.push((*loader_id, processor_account));
-    with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-    let builtin_programs = &[BuiltinProgram {
-        program_id: *loader_id,
-        process_instruction,
-    }];
-    invoke_context.builtin_programs = builtin_programs;
+    let builtin_programs = BuiltinPrograms::new_mock(*loader_id, process_instruction);
+    with_mock_invoke_context!(
+        invoke_context,
+        transaction_context,
+        transaction_accounts,
+        &builtin_programs
+    );
     pre_adjustments(&mut invoke_context);
     let result = invoke_context.process_instruction(
         instruction_data,
@@ -1008,31 +1065,6 @@ mod tests {
         Resize {
             new_len: u64,
         },
-    }
-
-    #[test]
-    fn test_program_entry_debug() {
-        fn mock_process_instruction(
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), Box<dyn std::error::Error>> {
-            Ok(())
-        }
-        fn mock_ix_processor(
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), Box<dyn std::error::Error>> {
-            Ok(())
-        }
-        let builtin_programs = &[
-            BuiltinProgram {
-                program_id: solana_sdk::pubkey::new_rand(),
-                process_instruction: mock_process_instruction,
-            },
-            BuiltinProgram {
-                program_id: solana_sdk::pubkey::new_rand(),
-                process_instruction: mock_ix_processor,
-            },
-        ];
-        assert!(!format!("{builtin_programs:?}").is_empty());
     }
 
     const MOCK_BUILTIN_COMPUTE_UNIT_COST: u64 = 1;
@@ -1240,12 +1272,13 @@ mod tests {
                 is_writable: instruction_account_index < 2,
             })
             .collect::<Vec<_>>();
-        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-        let builtin_programs = &[BuiltinProgram {
-            program_id: callee_program_id,
-            process_instruction,
-        }];
-        invoke_context.builtin_programs = builtin_programs;
+        let builtin_programs = BuiltinPrograms::new_mock(callee_program_id, process_instruction);
+        with_mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            transaction_accounts,
+            &builtin_programs
+        );
 
         // Account modification tests
         let cases = vec![
@@ -1385,12 +1418,13 @@ mod tests {
                 is_writable: false,
             },
         ];
-        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-        let builtin_programs = &[BuiltinProgram {
-            program_id: program_key,
-            process_instruction,
-        }];
-        invoke_context.builtin_programs = builtin_programs;
+        let builtin_programs = BuiltinPrograms::new_mock(program_key, process_instruction);
+        with_mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            transaction_accounts,
+            &builtin_programs
+        );
 
         // Test: Resize the account to *the same size*, so not consuming any additional size; this must succeed
         {

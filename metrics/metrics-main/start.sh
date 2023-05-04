@@ -50,6 +50,7 @@ sudo chmod 0444 certs/*
 sudo chown buildkite-agent:buildkite-agent certs
 
 sudo docker run -it -d \
+  --memory=10g \
   --user root:root \
   --publish 9090:9090 \
   --name=prometheus \
@@ -60,6 +61,7 @@ sudo docker run -it -d \
   $PROMETHEUS_IMAGE
 
 sudo docker run -it -d \
+  --memory=10g \
   --user root:root \
   --publish 9093:9093 \
   --name=alertmanager \
@@ -68,12 +70,14 @@ sudo docker run -it -d \
   $ALERTMANAGER_IMAGE
 
 sudo docker run -it -d \
+  --memory=10g \
   --publish 9094:9094 \
   --name=alertmanager-discord \
   --env DISCORD_WEBHOOK="$DISCORD_WEBHOOK_ALERTMANAGER" \
   $ALERTMANAGER_DISCORD_IMAGE
 
 sudo docker run \
+  --memory=10g \
   --detach \
   --name=grafana \
   --net=influxdb \
@@ -94,6 +98,7 @@ sudo docker run \
 sleep 20s
 
 sudo docker run \
+  --memory=10g \
   --detach \
   --name=chronograf_8889 \
   --env AUTH_DURATION=24h \
@@ -114,6 +119,7 @@ sudo docker run \
   $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086 --influxdb-username="$INFLUXDB_USERNAME" --influxdb-password="$INLUXDB_PASSWORD" --auth-duration="720h" --inactivity-duration="48h"
 
 sudo docker run \
+  --memory=10g \
   --detach \
   --env AUTH_DURATION=24h \
   --env inactivity-duration=48h \
@@ -135,6 +141,7 @@ sudo docker run \
   $CHRONOGRAF_IMAGE --influxdb-url=https://"$HOST":8086 --auth-duration="720h" --inactivity-duration="48h"
 
 sudo docker run \
+  --memory=10g \
   --detach \
   --name=kapacitor \
   --env KAPACITOR_USERNAME="$KAPACITOR_USERNAME" \

@@ -15,7 +15,7 @@ use {
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
     solana_measure::{measure, measure::Measure},
-    solana_metrics::{datapoint_error, inc_new_counter_debug},
+    solana_metrics::datapoint_error,
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
@@ -24,8 +24,8 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
-            Bank, RentDebits, TransactionBalancesSet, TransactionExecutionDetails,
-            TransactionExecutionResult, TransactionResults, VerifyAccountsHashConfig,
+            Bank, TransactionBalancesSet, TransactionExecutionDetails, TransactionExecutionResult,
+            TransactionResults,
         },
         bank_forks::BankForks,
         bank_utils,
@@ -33,6 +33,7 @@ use {
         cost_model::CostModel,
         epoch_accounts_hash::EpochAccountsHash,
         prioritization_fee_cache::PrioritizationFeeCache,
+        rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
         vote_account::VoteAccountsHashMap,
@@ -44,6 +45,7 @@ use {
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
+        saturating_add_assign,
         signature::{Keypair, Signature},
         timing,
         transaction::{
@@ -223,7 +225,6 @@ fn execute_batches_internal(
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<ExecuteBatchesInternalMetrics> {
     assert!(!batches.is_empty());
-    inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
         Mutex::new(HashMap::new());
 
@@ -442,7 +443,7 @@ pub fn process_entries_for_tests(
             })
             .collect();
 
-    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+    let ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
     let result = process_entries(
         bank,
         &mut replay_entries,
@@ -451,7 +452,7 @@ pub fn process_entries_for_tests(
         replay_vote_sender,
         &mut batch_timing,
         None,
-        &_ignored_prioritization_fee_cache,
+        &ignored_prioritization_fee_cache,
     );
 
     debug!("process_entries: {:?}", batch_timing);
@@ -711,7 +712,7 @@ pub(crate) fn process_blockstore_for_bank_0(
         Arc::new(opts.runtime_config.clone()),
         account_paths,
         opts.debug_keys.clone(),
-        Some(&crate::builtins::get(opts.runtime_config.bpf_jit)),
+        None,
         opts.account_indexes.clone(),
         opts.shrink_ratio,
         false,
@@ -743,12 +744,14 @@ pub fn process_blockstore_from_root(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_background_request_sender: &AbsRequestSender,
 ) -> result::Result<(), BlockstoreProcessorError> {
-    // Starting slot must be a root, and thus has no parents
-    assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
-    let bank = bank_forks.read().unwrap().root_bank();
-    assert!(bank.parent().is_none());
+    let (start_slot, start_slot_hash) = {
+        // Starting slot must be a root, and thus has no parents
+        assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
+        let bank = bank_forks.read().unwrap().root_bank();
+        assert!(bank.parent().is_none());
+        (bank.slot(), bank.hash())
+    };
 
-    let start_slot = bank.slot();
     info!("Processing ledger from slot {}...", start_slot);
     let now = Instant::now();
 
@@ -757,16 +760,16 @@ pub fn process_blockstore_from_root(
     if blockstore.is_primary_access() {
         blockstore
             .mark_slots_as_if_rooted_normally_at_startup(
-                vec![(bank.slot(), Some(bank.hash()))],
+                vec![(start_slot, Some(start_slot_hash))],
                 true,
             )
-            .expect("Couldn't mark start_slot as root on startup");
+            .expect("Couldn't mark start_slot as root in startup");
         blockstore
-            .set_and_chain_connected_on_root_and_next_slots(bank.slot())
+            .set_and_chain_connected_on_root_and_next_slots(start_slot)
             .expect("Couldn't mark start_slot as connected during startup")
     } else {
         info!(
-            "Starting slot {} isn't root and won't be updated due to being secondary blockstore access",
+            "Start slot {} isn't a root, and won't be updated due to secondary blockstore access",
             start_slot
         );
     }
@@ -779,11 +782,12 @@ pub fn process_blockstore_from_root(
 
     // Iterate and replay slots from blockstore starting from `start_slot`
     let mut num_slots_processed = 0;
+    let mut num_new_roots_found = 0;
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
         .unwrap_or_else(|_| panic!("Failed to get meta for slot {start_slot}"))
     {
-        num_slots_processed = load_frozen_forks(
+        (num_slots_processed, num_new_roots_found) = load_frozen_forks(
             bank_forks,
             start_slot,
             &start_slot_meta,
@@ -819,6 +823,7 @@ pub fn process_blockstore_from_root(
         ),
         ("slot", bank_forks.read().unwrap().root(), i64),
         ("num_slots_processed", num_slots_processed, i64),
+        ("num_new_roots_found", num_new_roots_found, i64),
         ("forks", bank_forks.read().unwrap().banks().len(), i64),
     );
 
@@ -900,7 +905,7 @@ fn confirm_full_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.run_verification;
-    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+    let ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
 
     confirm_slot(
         blockstore,
@@ -913,7 +918,7 @@ fn confirm_full_slot(
         recyclers,
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
-        &_ignored_prioritization_fee_cache,
+        &ignored_prioritization_fee_cache,
     )?;
 
     timing.accumulate(&confirmation_timing.batch_execute.totals);
@@ -1356,8 +1361,11 @@ fn process_next_slots(
     Ok(())
 }
 
-// Iterate through blockstore processing slots starting from the root slot pointed to by the
-// given `meta` and return a vector of frozen bank forks
+/// Starting with the root slot corresponding to `start_slot_meta`, iteratively
+/// find and process children slots from the blockstore.
+///
+/// Returns a tuple (a, b) where a is the number of slots processed and b is
+/// the number of newly found cluster roots.
 #[allow(clippy::too_many_arguments)]
 fn load_frozen_forks(
     bank_forks: &RwLock<BankForks>,
@@ -1370,13 +1378,15 @@ fn load_frozen_forks(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     timing: &mut ExecuteTimings,
     accounts_background_request_sender: &AbsRequestSender,
-) -> result::Result<u64, BlockstoreProcessorError> {
+) -> result::Result<(u64, usize), BlockstoreProcessorError> {
     let recyclers = VerifyRecyclers::default();
     let mut all_banks = HashMap::new();
     let mut last_status_report = Instant::now();
     let mut pending_slots = vec![];
     // The total number of slots processed
     let mut total_slots_elapsed = 0;
+    // The total number of newly identified root slots
+    let mut total_rooted_slots = 0;
     // The number of slots processed between status report updates
     let mut slots_elapsed = 0;
     let mut txs = 0;
@@ -1430,7 +1440,7 @@ fn load_frozen_forks(
             let mut progress = ConfirmationProgress::new(last_entry_hash);
 
             let mut m = Measure::start("process_single_slot");
-            let bank = bank_forks.write().unwrap().insert(bank);
+            let bank = bank_forks.write().unwrap().insert_from_ledger(bank);
             if process_single_slot(
                 blockstore,
                 &bank,
@@ -1493,7 +1503,7 @@ fn load_frozen_forks(
                                 // our last root; therefore parent should be set
                                 new_root_bank = new_root_bank.parent().unwrap();
                             }
-                            inc_new_counter_info!("load_frozen_forks-cluster-confirmed-root", rooted_slots.len());
+                            total_rooted_slots += rooted_slots.len();
                             if blockstore.is_primary_access() {
                                 blockstore
                                     .mark_slots_as_if_rooted_normally_at_startup(rooted_slots, true)
@@ -1551,7 +1561,7 @@ fn load_frozen_forks(
                 .unwrap_or(false);
             if done_processing {
                 if opts.run_final_accounts_hash_calc {
-                    run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
+                    bank.run_final_hash_calc(on_halt_store_hash_raw_data_for_debug);
                 }
                 break;
             }
@@ -1566,28 +1576,14 @@ fn load_frozen_forks(
             )?;
         }
     } else if on_halt_store_hash_raw_data_for_debug {
-        run_final_hash_calc(
-            &bank_forks.read().unwrap().root_bank(),
-            on_halt_store_hash_raw_data_for_debug,
-        );
+        bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .run_final_hash_calc(on_halt_store_hash_raw_data_for_debug);
     }
 
-    Ok(total_slots_elapsed)
-}
-
-fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
-    bank.force_flush_accounts_cache();
-    // note that this slot may not be a root
-    let _ = bank.verify_accounts_hash(
-        None,
-        VerifyAccountsHashConfig {
-            test_hash_calculation: false,
-            ignore_mismatch: true,
-            require_rooted_bank: false,
-            run_in_background: false,
-            store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
-        },
-    );
+    Ok((total_slots_elapsed, total_rooted_slots))
 }
 
 // `roots` is sorted largest to smallest by root slot
@@ -1819,7 +1815,7 @@ pub mod tests {
         matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::{builtin_program::create_builtin, declare_process_instruction},
         solana_runtime::{
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
@@ -2973,17 +2969,18 @@ pub mod tests {
             ]
         }
 
-        fn mock_processor_ok(
-            invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-            invoke_context.consume_checked(1)?;
+        declare_process_instruction!(mock_processor_ok, 1, |_invoke_context| {
+            // Always succeeds
             Ok(())
-        }
+        });
 
         let mock_program_id = solana_sdk::pubkey::new_rand();
 
         let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.add_builtin("mock_processor", &mock_program_id, mock_processor_ok);
+        bank.add_builtin(
+            mock_program_id,
+            create_builtin("mockup".to_string(), mock_processor_ok),
+        );
 
         let tx = Transaction::new_signed_with_payer(
             &[Instruction::new_with_bincode(
@@ -3004,12 +3001,9 @@ pub mod tests {
         let bankhash_ok = bank.hash();
         assert!(result.is_ok());
 
-        fn mock_processor_err(
-            invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        declare_process_instruction!(mock_processor_err, 1, |invoke_context| {
             let instruction_errors = get_instruction_errors();
 
-            invoke_context.consume_checked(1)?;
             let err = invoke_context
                 .transaction_context
                 .get_current_instruction_context()
@@ -3017,19 +3011,20 @@ pub mod tests {
                 .get_instruction_data()
                 .first()
                 .expect("Failed to get instruction data");
-            Err(Box::new(
-                instruction_errors
-                    .get(*err as usize)
-                    .expect("Invalid error index")
-                    .clone(),
-            ))
-        }
+            Err(instruction_errors
+                .get(*err as usize)
+                .expect("Invalid error index")
+                .clone())
+        });
 
         let mut bankhash_err = None;
 
         (0..get_instruction_errors().len()).for_each(|err| {
             let mut bank = Bank::new_for_tests(&genesis_config);
-            bank.add_builtin("mock_processor", &mock_program_id, mock_processor_err);
+            bank.add_builtin(
+                mock_program_id,
+                create_builtin("mockup".to_string(), mock_processor_err),
+            );
 
             let tx = Transaction::new_signed_with_payer(
                 &[Instruction::new_with_bincode(

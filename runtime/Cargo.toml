@@ -50,6 +50,7 @@ solana-compute-budget-program = { workspace = true }
 solana-config-program = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
+solana-loader-v3-program = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
 solana-perf = { workspace = true }
@@ -57,6 +58,7 @@ solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
+solana-system-program = { workspace = true }
 solana-vote-program = { workspace = true }
 solana-zk-token-proof-program = { workspace = true }
 solana-zk-token-sdk = { workspace = true }

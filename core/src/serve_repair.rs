@@ -59,8 +59,6 @@ use {
     thiserror::Error,
 };
 
-type SlotHash = (Slot, Hash);
-
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 11;
 // Number of slots to cache their respective repair peers and sampling weights.
@@ -73,7 +71,7 @@ pub const MAX_ANCESTOR_BYTES_IN_PACKET: usize =
     4 /*(response version enum discriminator)*/ -
     4 /*slot_hash length*/;
 pub const MAX_ANCESTOR_RESPONSES: usize =
-    MAX_ANCESTOR_BYTES_IN_PACKET / std::mem::size_of::<SlotHash>();
+    MAX_ANCESTOR_BYTES_IN_PACKET / std::mem::size_of::<(Slot, Hash)>();
 /// Number of bytes in the randomly generated token sent with ping messages.
 pub(crate) const REPAIR_PING_TOKEN_SIZE: usize = HASH_BYTES;
 pub const REPAIR_PING_CACHE_CAPACITY: usize = 65536;
@@ -154,7 +152,7 @@ impl AncestorHashesRepairType {
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
 #[frozen_abi(digest = "AKpurCovzn6rsji4aQrP3hUdEHxjtXUfT7AatZXN7Rpz")]
 pub enum AncestorHashesResponse {
-    Hashes(Vec<SlotHash>),
+    Hashes(Vec<(Slot, Hash)>),
     Ping(Ping),
 }
 
@@ -258,6 +256,25 @@ pub enum RepairProtocol {
     },
 }
 
+const REPAIR_REQUEST_PONG_SERIALIZED_BYTES: usize = PUBKEY_BYTES + HASH_BYTES + SIGNATURE_BYTES;
+const REPAIR_REQUEST_MIN_BYTES: usize = REPAIR_REQUEST_PONG_SERIALIZED_BYTES;
+
+fn discard_malformed_repair_requests(
+    batch: &mut PacketBatch,
+    stats: &mut ServeRepairStats,
+) -> usize {
+    let mut well_formed_requests = 0;
+    for packet in batch.iter_mut() {
+        if packet.meta().size < REPAIR_REQUEST_MIN_BYTES {
+            stats.err_malformed += 1;
+            packet.meta_mut().set_discard(true);
+        } else {
+            well_formed_requests += 1;
+        }
+    }
+    well_formed_requests
+}
+
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
 #[frozen_abi(digest = "CkffjyMPCwuJgk9NiCMELXLCecAnTPZqpKEnUCb3VyVf")]
 pub(crate) enum RepairResponse {
@@ -267,13 +284,13 @@ pub(crate) enum RepairResponse {
 impl RepairProtocol {
     fn sender(&self) -> &Pubkey {
         match self {
-            Self::LegacyWindowIndex(ci, _, _) => &ci.id,
-            Self::LegacyHighestWindowIndex(ci, _, _) => &ci.id,
-            Self::LegacyOrphan(ci, _) => &ci.id,
-            Self::LegacyWindowIndexWithNonce(ci, _, _, _) => &ci.id,
-            Self::LegacyHighestWindowIndexWithNonce(ci, _, _, _) => &ci.id,
-            Self::LegacyOrphanWithNonce(ci, _, _) => &ci.id,
-            Self::LegacyAncestorHashes(ci, _, _) => &ci.id,
+            Self::LegacyWindowIndex(ci, _, _) => ci.pubkey(),
+            Self::LegacyHighestWindowIndex(ci, _, _) => ci.pubkey(),
+            Self::LegacyOrphan(ci, _) => ci.pubkey(),
+            Self::LegacyWindowIndexWithNonce(ci, _, _, _) => ci.pubkey(),
+            Self::LegacyHighestWindowIndexWithNonce(ci, _, _, _) => ci.pubkey(),
+            Self::LegacyOrphanWithNonce(ci, _, _) => ci.pubkey(),
+            Self::LegacyAncestorHashes(ci, _, _) => ci.pubkey(),
             Self::Pong(pong) => pong.from(),
             Self::WindowIndex { header, .. } => &header.sender,
             Self::HighestWindowIndex { header, .. } => &header.sender,
@@ -338,17 +355,21 @@ pub(crate) struct RepairPeers {
 
 impl RepairPeers {
     fn new(asof: Instant, peers: &[ContactInfo], weights: &[u64]) -> Result<Self> {
-        if peers.is_empty() {
-            return Err(Error::from(ClusterInfoError::NoPeers));
-        }
         if peers.len() != weights.len() {
             return Err(Error::from(WeightedError::InvalidWeight));
         }
-        let weighted_index = WeightedIndex::new(weights)?;
-        let peers = peers
+        let (peers, weights): (Vec<_>, Vec<u64>) = peers
             .iter()
-            .map(|peer| (peer.id, peer.serve_repair))
-            .collect();
+            .zip(weights)
+            .filter_map(|(peer, &weight)| {
+                let addr = peer.serve_repair().ok()?;
+                Some(((*peer.pubkey(), addr), weight))
+            })
+            .unzip();
+        if peers.is_empty() {
+            return Err(Error::from(ClusterInfoError::NoPeers));
+        }
+        let weighted_index = WeightedIndex::new(weights)?;
         Ok(Self {
             asof,
             peers,
@@ -599,7 +620,12 @@ impl ServeRepair {
             }
             result.ok()
         };
-        reqs_v.iter().flatten().filter_map(decode_packet).collect()
+        reqs_v
+            .iter()
+            .flatten()
+            .filter(|packet| !packet.meta().discard())
+            .filter_map(decode_packet)
+            .collect()
     }
 
     /// Process messages from the network
@@ -633,12 +659,20 @@ impl ServeRepair {
         };
 
         let mut dropped_requests = 0;
-        while let Ok(more) = requests_receiver.try_recv() {
+        let mut well_formed_requests = discard_malformed_repair_requests(&mut reqs_v[0], stats);
+        for mut more in requests_receiver.try_iter() {
             total_requests += more.len();
-            if total_requests > max_buffered_packets {
+            if well_formed_requests > max_buffered_packets {
+                // Already exceeded max. Don't waste time discarding
                 dropped_requests += more.len();
-            } else {
+                continue;
+            }
+            let retained = discard_malformed_repair_requests(&mut more, stats);
+            well_formed_requests += retained;
+            if retained > 0 && well_formed_requests <= max_buffered_packets {
                 reqs_v.push(more);
+            } else {
+                dropped_requests += more.len();
             }
         }
 
@@ -1070,9 +1104,12 @@ impl ServeRepair {
             .unzip();
         let peers = WeightedShuffle::new("repair_request_ancestor_hashes", &weights)
             .shuffle(&mut rand::thread_rng())
-            .take(ANCESTOR_HASH_REPAIR_SAMPLE_SIZE)
             .map(|i| index[i])
-            .map(|i| (repair_peers[i].id, repair_peers[i].serve_repair))
+            .filter_map(|i| {
+                let addr = repair_peers[i].serve_repair().ok()?;
+                Some((*repair_peers[i].pubkey(), addr))
+            })
+            .take(ANCESTOR_HASH_REPAIR_SAMPLE_SIZE)
             .collect();
         Ok(peers)
     }
@@ -1093,7 +1130,7 @@ impl ServeRepair {
             .unzip();
         let k = WeightedIndex::new(weights)?.sample(&mut rand::thread_rng());
         let n = index[k];
-        Ok((repair_peers[n].id, repair_peers[n].serve_repair))
+        Ok((*repair_peers[n].pubkey(), repair_peers[n].serve_repair()?))
     }
 
     pub(crate) fn map_repair_request(
@@ -1393,6 +1430,82 @@ mod tests {
         } else {
             assert!(res.is_err());
         }
+    }
+
+    fn repair_request_header_for_tests() -> RepairRequestHeader {
+        RepairRequestHeader {
+            signature: Signature::default(),
+            sender: Pubkey::default(),
+            recipient: Pubkey::default(),
+            timestamp: timestamp(),
+            nonce: Nonce::default(),
+        }
+    }
+
+    #[test]
+    fn test_check_well_formed_repair_request() {
+        let mut rng = rand::thread_rng();
+        let keypair = Keypair::new();
+        let ping = ping_pong::Ping::<[u8; 32]>::new_rand(&mut rng, &keypair).unwrap();
+        let pong = Pong::new(&ping, &keypair).unwrap();
+        let request = RepairProtocol::Pong(pong);
+        let mut pkt = Packet::from_data(None, request).unwrap();
+        let mut batch = PacketBatch::new(vec![pkt.clone()]);
+        let mut stats = ServeRepairStats::default();
+        let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
+        assert_eq!(num_well_formed, 1);
+        pkt.meta_mut().size = 5;
+        let mut batch = PacketBatch::new(vec![pkt]);
+        let mut stats = ServeRepairStats::default();
+        let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
+        assert_eq!(num_well_formed, 0);
+        assert_eq!(stats.err_malformed, 1);
+
+        let request = RepairProtocol::WindowIndex {
+            header: repair_request_header_for_tests(),
+            slot: 123,
+            shred_index: 456,
+        };
+        let mut pkt = Packet::from_data(None, request).unwrap();
+        let mut batch = PacketBatch::new(vec![pkt.clone()]);
+        let mut stats = ServeRepairStats::default();
+        let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
+        assert_eq!(num_well_formed, 1);
+        pkt.meta_mut().size = 8;
+        let mut batch = PacketBatch::new(vec![pkt]);
+        let mut stats = ServeRepairStats::default();
+        let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
+        assert_eq!(num_well_formed, 0);
+        assert_eq!(stats.err_malformed, 1);
+
+        let request = RepairProtocol::AncestorHashes {
+            header: repair_request_header_for_tests(),
+            slot: 123,
+        };
+        let mut pkt = Packet::from_data(None, request).unwrap();
+        let mut batch = PacketBatch::new(vec![pkt.clone()]);
+        let mut stats = ServeRepairStats::default();
+        let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
+        assert_eq!(num_well_formed, 1);
+        pkt.meta_mut().size = 1;
+        let mut batch = PacketBatch::new(vec![pkt]);
+        let mut stats = ServeRepairStats::default();
+        let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
+        assert_eq!(num_well_formed, 0);
+        assert_eq!(stats.err_malformed, 1);
+
+        let request = RepairProtocol::LegacyOrphan(LegacyContactInfo::default(), 123);
+        let mut pkt = Packet::from_data(None, request).unwrap();
+        let mut batch = PacketBatch::new(vec![pkt.clone()]);
+        let mut stats = ServeRepairStats::default();
+        let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
+        assert_eq!(num_well_formed, 1);
+        pkt.meta_mut().size = 3;
+        let mut batch = PacketBatch::new(vec![pkt]);
+        let mut stats = ServeRepairStats::default();
+        let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
+        assert_eq!(num_well_formed, 0);
+        assert_eq!(stats.err_malformed, 1);
     }
 
     #[test]
@@ -2165,7 +2278,7 @@ mod tests {
         let known_validators = Some(vec![*contact_info2.pubkey()].into_iter().collect());
         let repair_peers = serve_repair.repair_peers(&known_validators, 1);
         assert_eq!(repair_peers.len(), 1);
-        assert_eq!(&repair_peers[0].id, contact_info2.pubkey());
+        assert_eq!(repair_peers[0].pubkey(), contact_info2.pubkey());
         assert!(serve_repair
             .repair_request(
                 &cluster_slots,
@@ -2183,7 +2296,7 @@ mod tests {
         let repair_peers: HashSet<Pubkey> = serve_repair
             .repair_peers(&None, 1)
             .into_iter()
-            .map(|c| c.id)
+            .map(|node| *node.pubkey())
             .collect();
         assert_eq!(repair_peers.len(), 2);
         assert!(repair_peers.contains(contact_info2.pubkey()));
@@ -2261,7 +2374,7 @@ mod tests {
     fn test_verify_ancestor_response() {
         let request_slot = MAX_ANCESTOR_RESPONSES as Slot;
         let repair = AncestorHashesRepairType(request_slot);
-        let mut response: Vec<SlotHash> = (0..request_slot)
+        let mut response: Vec<(Slot, Hash)> = (0..request_slot)
             .map(|slot| (slot, Hash::new_unique()))
             .collect();
         assert!(repair.verify_response(&AncestorHashesResponse::Hashes(response.clone())));

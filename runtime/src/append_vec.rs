@@ -53,13 +53,13 @@ pub fn aligned_stored_size(data_len: usize) -> usize {
 
 pub const MAXIMUM_APPEND_VEC_FILE_SIZE: u64 = 16 * 1024 * 1024 * 1024; // 16 GiB
 
-pub struct AppendVecAccountsIter<'a> {
-    append_vec: &'a AppendVec,
+pub struct AppendVecAccountsIter<'append_vec> {
+    append_vec: &'append_vec AppendVec,
     offset: usize,
 }
 
-impl<'a> AppendVecAccountsIter<'a> {
-    pub fn new(append_vec: &'a AppendVec) -> Self {
+impl<'append_vec> AppendVecAccountsIter<'append_vec> {
+    pub fn new(append_vec: &'append_vec AppendVec) -> Self {
         Self {
             append_vec,
             offset: 0,
@@ -67,8 +67,8 @@ impl<'a> AppendVecAccountsIter<'a> {
     }
 }
 
-impl<'a> Iterator for AppendVecAccountsIter<'a> {
-    type Item = StoredAccountMeta<'a>;
+impl<'append_vec> Iterator for AppendVecAccountsIter<'append_vec> {
+    type Item = StoredAccountMeta<'append_vec>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((account, next_offset)) = self.append_vec.get_account(self.offset) {
@@ -91,17 +91,17 @@ pub enum MatchAccountOwnerError {
 /// References to account data stored elsewhere. Getting an `Account` requires cloning
 /// (see `StoredAccountMeta::clone_account()`).
 #[derive(PartialEq, Eq, Debug)]
-pub struct AppendVecStoredAccountMeta<'a> {
-    pub meta: &'a StoredMeta,
+pub struct AppendVecStoredAccountMeta<'append_vec> {
+    pub meta: &'append_vec StoredMeta,
     /// account data
-    pub account_meta: &'a AccountMeta,
-    pub(crate) data: &'a [u8],
+    pub account_meta: &'append_vec AccountMeta,
+    pub(crate) data: &'append_vec [u8],
     pub(crate) offset: usize,
     pub(crate) stored_size: usize,
-    pub(crate) hash: &'a Hash,
+    pub(crate) hash: &'append_vec Hash,
 }
 
-impl<'a> AppendVecStoredAccountMeta<'a> {
+impl<'append_vec> AppendVecStoredAccountMeta<'append_vec> {
     pub fn clone_account(&self) -> AccountSharedData {
         AccountSharedData::from(Account {
             lamports: self.account_meta.lamports,
@@ -112,11 +112,11 @@ impl<'a> AppendVecStoredAccountMeta<'a> {
         })
     }
 
-    pub fn pubkey(&self) -> &'a Pubkey {
+    pub fn pubkey(&self) -> &'append_vec Pubkey {
         &self.meta.pubkey
     }
 
-    pub fn hash(&self) -> &'a Hash {
+    pub fn hash(&self) -> &'append_vec Hash {
         self.hash
     }
 
@@ -128,7 +128,7 @@ impl<'a> AppendVecStoredAccountMeta<'a> {
         self.offset
     }
 
-    pub fn data(&self) -> &'a [u8] {
+    pub fn data(&self) -> &'append_vec [u8] {
         self.data
     }
 
@@ -144,7 +144,7 @@ impl<'a> AppendVecStoredAccountMeta<'a> {
         self.meta
     }
 
-    pub fn set_meta(&mut self, meta: &'a StoredMeta) {
+    pub fn set_meta(&mut self, meta: &'append_vec StoredMeta) {
         self.meta = meta;
     }
 
@@ -172,14 +172,14 @@ impl<'a> AppendVecStoredAccountMeta<'a> {
     }
 }
 
-impl<'a> ReadableAccount for AppendVecStoredAccountMeta<'a> {
+impl<'append_vec> ReadableAccount for AppendVecStoredAccountMeta<'append_vec> {
     fn lamports(&self) -> u64 {
         self.account_meta.lamports
     }
-    fn data(&self) -> &[u8] {
+    fn data(&self) -> &'append_vec [u8] {
         self.data()
     }
-    fn owner(&self) -> &Pubkey {
+    fn owner(&self) -> &'append_vec Pubkey {
         &self.account_meta.owner
     }
     fn executable(&self) -> bool {
@@ -484,7 +484,7 @@ impl AppendVec {
     /// Return a reference to the type at `offset` if its data doesn't overrun the internal buffer.
     /// Otherwise return None. Also return the offset of the first byte after the requested data
     /// that falls on a 64-byte boundary.
-    fn get_type<'a, T>(&self, offset: usize) -> Option<(&'a T, usize)> {
+    fn get_type<T>(&self, offset: usize) -> Option<(&T, usize)> {
         let (data, next) = self.get_slice(offset, mem::size_of::<T>())?;
         let ptr: *const T = data.as_ptr() as *const T;
         //UNSAFE: The cast is safe because the slice is aligned and fits into the memory
@@ -495,10 +495,10 @@ impl AppendVec {
     /// Return stored account metadata for the account at `offset` if its data doesn't overrun
     /// the internal buffer. Otherwise return None. Also return the offset of the first byte
     /// after the requested data that falls on a 64-byte boundary.
-    pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccountMeta<'a>, usize)> {
-        let (meta, next): (&'a StoredMeta, _) = self.get_type(offset)?;
-        let (account_meta, next): (&'a AccountMeta, _) = self.get_type(next)?;
-        let (hash, next): (&'a Hash, _) = self.get_type(next)?;
+    pub fn get_account(&self, offset: usize) -> Option<(StoredAccountMeta, usize)> {
+        let (meta, next): (&StoredMeta, _) = self.get_type(offset)?;
+        let (account_meta, next): (&AccountMeta, _) = self.get_type(next)?;
+        let (hash, next): (&Hash, _) = self.get_type(next)?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         let stored_size = next - offset;
         Some((
@@ -514,7 +514,7 @@ impl AppendVec {
         ))
     }
 
-    fn get_account_meta<'a>(&self, offset: usize) -> Option<&'a AccountMeta> {
+    fn get_account_meta(&self, offset: usize) -> Option<&AccountMeta> {
         // Skip over StoredMeta data in the account
         let offset = offset.checked_add(mem::size_of::<StoredMeta>())?;
         // u64_align! does an unchecked add for alignment. Check that it won't cause an overflow.
@@ -693,7 +693,7 @@ pub mod tests {
         }
     }
 
-    impl<'a> StoredAccountMeta<'a> {
+    impl StoredAccountMeta<'_> {
         pub(crate) fn ref_executable_byte(&self) -> &u8 {
             match self {
                 Self::AppendVec(av) => av.ref_executable_byte(),
@@ -701,7 +701,7 @@ pub mod tests {
         }
     }
 
-    impl<'a> AppendVecStoredAccountMeta<'a> {
+    impl AppendVecStoredAccountMeta<'_> {
         #[allow(clippy::cast_ref_to_mut)]
         fn set_data_len_unsafe(&self, new_data_len: u64) {
             // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec

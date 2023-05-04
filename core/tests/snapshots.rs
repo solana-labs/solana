@@ -6,7 +6,6 @@ use {
     fs_extra::dir::CopyOptions,
     itertools::Itertools,
     log::{info, trace},
-    snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN,
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier,
         snapshot_packager_service::SnapshotPackagerService,
@@ -32,6 +31,7 @@ use {
         snapshot_utils::{
             self, ArchiveFormat,
             SnapshotVersion::{self, V1_2_0},
+            MAX_BANK_SNAPSHOTS_TO_RETAIN,
         },
         status_cache::MAX_CACHE_ENTRIES,
     },
@@ -71,6 +71,8 @@ struct SnapshotTestConfig {
     full_snapshot_archives_dir: TempDir,
     bank_snapshots_dir: TempDir,
     accounts_dir: PathBuf,
+    // as the underscore prefix indicates, this isn't explictly used; but it's needed to keep
+    // TempDir::drop from running to retain that dir for the duration of test
     _accounts_tmp_dir: TempDir,
 }
 
@@ -82,7 +84,7 @@ impl SnapshotTestConfig {
         full_snapshot_archive_interval_slots: Slot,
         incremental_snapshot_archive_interval_slots: Slot,
     ) -> SnapshotTestConfig {
-        let (_accounts_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
+        let (accounts_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = TempDir::new().unwrap();
         let full_snapshot_archives_dir = TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = TempDir::new().unwrap();
@@ -128,7 +130,7 @@ impl SnapshotTestConfig {
             full_snapshot_archives_dir,
             bank_snapshots_dir,
             accounts_dir,
-            _accounts_tmp_dir,
+            _accounts_tmp_dir: accounts_tmp_dir,
         }
     }
 }
@@ -246,7 +248,6 @@ fn run_bank_forks_snapshot_n<F>(
         AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
-        bank_snapshots_dir,
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
         last_bank.get_snapshot_storages(None),
@@ -259,7 +260,7 @@ fn run_bank_forks_snapshot_n<F>(
     let accounts_hash =
         last_bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        accounts_package.snapshot_links_dir(),
+        accounts_package.bank_snapshot_dir(),
         accounts_package.slot,
         &accounts_hash,
         None,
@@ -409,7 +410,6 @@ fn test_concurrent_snapshot_packaging(
             AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
             &bank,
             &bank_snapshot_info,
-            bank_snapshots_dir,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             snapshot_storages,
@@ -473,7 +473,11 @@ fn test_concurrent_snapshot_packaging(
 
     // Purge all the outdated snapshots, including the ones needed to generate the package
     // currently sitting in the channel
-    snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir, MAX_BANK_SNAPSHOTS_TO_RETAIN);
+    snapshot_utils::purge_old_bank_snapshots(
+        bank_snapshots_dir,
+        MAX_BANK_SNAPSHOTS_TO_RETAIN,
+        None,
+    );
 
     let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(bank_snapshots_dir);
     bank_snapshots.sort_unstable();
@@ -505,8 +509,8 @@ fn test_concurrent_snapshot_packaging(
         snapshot_package_sender.clone(),
         snapshot_package_receiver,
         None,
-        &exit,
-        &cluster_info,
+        exit.clone(),
+        cluster_info,
         snapshot_config.clone(),
         true,
     );
@@ -519,7 +523,7 @@ fn test_concurrent_snapshot_packaging(
                 let accounts_package = real_accounts_package_receiver.try_recv().unwrap();
                 let accounts_hash = AccountsHash(Hash::default());
                 solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                    accounts_package.snapshot_links_dir(),
+                    accounts_package.bank_snapshot_dir(),
                     accounts_package.slot,
                     &accounts_hash,
                     None,
@@ -551,7 +555,7 @@ fn test_concurrent_snapshot_packaging(
 
     // files were saved off before we reserialized the bank in the hacked up accounts_hash_verifier stand-in.
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        saved_snapshots_dir.path(),
+        snapshot_utils::get_bank_snapshot_dir(&saved_snapshots_dir, saved_slot),
         saved_slot,
         &AccountsHash(Hash::default()),
         None,
@@ -560,9 +564,9 @@ fn test_concurrent_snapshot_packaging(
     snapshot_utils::verify_snapshot_archive(
         saved_archive_path.unwrap(),
         saved_snapshots_dir.path(),
-        saved_accounts_dir.path(),
         ArchiveFormat::TarBzip2,
-        snapshot_utils::VerifyBank::NonDeterministic(saved_slot),
+        snapshot_utils::VerifyBank::NonDeterministic,
+        saved_slot,
     );
 }
 
@@ -811,7 +815,6 @@ fn make_full_snapshot_archive(
     snapshot_utils::package_and_archive_full_snapshot(
         bank,
         &bank_snapshot_info,
-        &snapshot_config.bank_snapshots_dir,
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
         bank.get_snapshot_storages(None),
@@ -851,7 +854,6 @@ fn make_incremental_snapshot_archive(
         bank,
         incremental_snapshot_base_slot,
         &bank_snapshot_info,
-        &snapshot_config.bank_snapshots_dir,
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
         storages,
@@ -987,8 +989,8 @@ fn test_snapshots_with_background_services(
         snapshot_package_sender.clone(),
         snapshot_package_receiver,
         None,
-        &exit,
-        &cluster_info,
+        exit.clone(),
+        cluster_info.clone(),
         snapshot_test_config.snapshot_config.clone(),
         false,
     );
@@ -997,16 +999,21 @@ fn test_snapshots_with_background_services(
         accounts_package_sender,
         accounts_package_receiver,
         Some(snapshot_package_sender),
-        &exit,
-        &cluster_info,
+        exit.clone(),
+        cluster_info,
         None,
         false,
         None,
         snapshot_test_config.snapshot_config.clone(),
     );
 
-    let accounts_background_service =
-        AccountsBackgroundService::new(bank_forks.clone(), &exit, abs_request_handler, false, None);
+    let accounts_background_service = AccountsBackgroundService::new(
+        bank_forks.clone(),
+        exit.clone(),
+        abs_request_handler,
+        false,
+        None,
+    );
 
     let mut last_full_snapshot_slot = None;
     let mut last_incremental_snapshot_slot = None;

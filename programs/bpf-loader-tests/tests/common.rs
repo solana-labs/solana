@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 
 use {
-    solana_bpf_loader_program::{process_instruction, upgradeable::id},
+    solana_bpf_loader_program::process_instruction,
     solana_program_test::*,
     solana_sdk::{
         account::AccountSharedData,
         account_utils::StateMut,
-        bpf_loader_upgradeable::UpgradeableLoaderState,
+        bpf_loader_upgradeable::{id, UpgradeableLoaderState},
         instruction::{Instruction, InstructionError},
         pubkey::Pubkey,
         signature::{Keypair, Signer},

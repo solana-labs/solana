@@ -374,6 +374,7 @@ impl RpcSender for MockSender {
                 pubkey: PUBKEY.to_string(),
                 gossip: Some(SocketAddr::from(([10, 239, 6, 48], 8899))),
                 tpu: Some(SocketAddr::from(([10, 239, 6, 48], 8856))),
+                tpu_quic: Some(SocketAddr::from(([10, 239, 6, 48], 8862))),
                 rpc: Some(SocketAddr::from(([10, 239, 6, 48], 8899))),
                 pubsub: Some(SocketAddr::from(([10, 239, 6, 48], 8900))),
                 version: Some("1.0.0 c375ce1f".to_string()),

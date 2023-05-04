@@ -788,11 +788,12 @@ pub fn signer_from_path_with_config(
                 *wallet_manager = maybe_wallet_manager()?;
             }
             if let Some(wallet_manager) = wallet_manager {
+                let confirm_key = matches.try_contains_id("confirm_key").unwrap_or(false);
                 Ok(Box::new(generate_remote_keypair(
                     locator,
                     derivation_path.unwrap_or_default(),
                     wallet_manager,
-                    matches.is_present("confirm_key"),
+                    confirm_key,
                     keypair_name,
                 )?))
             } else {
@@ -915,11 +916,12 @@ pub fn resolve_signer_from_path(
                 *wallet_manager = maybe_wallet_manager()?;
             }
             if let Some(wallet_manager) = wallet_manager {
+                let confirm_key = matches.try_contains_id("confirm_key").unwrap_or(false);
                 let path = generate_remote_keypair(
                     locator,
                     derivation_path.unwrap_or_default(),
                     wallet_manager,
-                    matches.is_present("confirm_key"),
+                    confirm_key,
                     keypair_name,
                 )
                 .map(|keypair| keypair.path)?;

@@ -17,8 +17,8 @@ use {
         clock::{Epoch, Slot},
         pubkey::Pubkey,
         stake::state::{Delegation, StakeActivationStatus},
+        vote::state::VoteStateVersions,
     },
-    solana_vote_program::vote_state::VoteState,
     std::{
         collections::{HashMap, HashSet},
         ops::Add,
@@ -84,7 +84,7 @@ impl StakesCache {
         }
         debug_assert_ne!(account.lamports(), 0u64);
         if solana_vote_program::check_id(owner) {
-            if VoteState::is_correct_size_and_initialized(account.data()) {
+            if VoteStateVersions::is_correct_size_and_initialized(account.data()) {
                 match VoteAccount::try_from(account.to_account_shared_data()) {
                     Ok(vote_account) => {
                         {
@@ -254,7 +254,7 @@ impl Stakes<StakeAccount> {
                 None => continue,
                 Some(account) => account,
             };
-            if VoteState::is_correct_size_and_initialized(account.data())
+            if VoteStateVersions::is_correct_size_and_initialized(account.data())
                 && VoteAccount::try_from(account.clone()).is_ok()
             {
                 error!("vote account not cached: {pubkey}, {account:?}");

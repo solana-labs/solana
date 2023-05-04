@@ -1,6 +1,7 @@
 use {
     crate::{
         accounts_index_storage::{AccountsIndexStorage, Startup},
+        accounts_partition::RentPayingAccountsByPartition,
         ancestors::Ancestors,
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
@@ -8,7 +9,6 @@ use {
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
-        rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
         rolling_bit_field::RollingBitField,
         secondary_index::*,
     },
@@ -3404,10 +3404,10 @@ pub mod tests {
         index.unchecked_scan_accounts(
             "",
             &Ancestors::default(),
-            |pubkey, _index| {
+            |pubkey, index| {
                 if pubkey == &key {
                     found_key = true;
-                    assert_eq!(_index, (&true, 3));
+                    assert_eq!(index, (&true, 3));
                 };
                 num += 1
             },

@@ -184,8 +184,8 @@ impl BackgroundServices {
             snapshot_package_sender.clone(),
             snapshot_package_receiver,
             None,
-            &exit,
-            &cluster_info,
+            exit.clone(),
+            cluster_info.clone(),
             snapshot_config.clone(),
             false,
         );
@@ -195,8 +195,8 @@ impl BackgroundServices {
             accounts_package_sender.clone(),
             accounts_package_receiver,
             Some(snapshot_package_sender),
-            &exit,
-            &cluster_info,
+            exit.clone(),
+            cluster_info,
             None,
             false,
             None,
@@ -217,7 +217,7 @@ impl BackgroundServices {
         };
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks,
-            &exit,
+            exit.clone(),
             AbsRequestHandlers {
                 snapshot_request_handler,
                 pruned_banks_request_handler,

@@ -14,10 +14,7 @@ use {
     },
     crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender},
     itertools::Itertools,
-    solana_gossip::{
-        cluster_info::{ClusterInfo, ClusterInfoError},
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
-    },
+    solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError},
     solana_ledger::{blockstore::Blockstore, shred::Shred},
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_error, inc_new_counter_info},
@@ -412,10 +409,13 @@ pub fn broadcast_shreds(
             let cluster_nodes =
                 cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
             update_peer_stats(&cluster_nodes, last_datapoint_submit);
-            shreds.flat_map(move |shred| {
-                let node = cluster_nodes.get_broadcast_peer(&shred.id())?;
-                ContactInfo::is_valid_address(&node.tvu, socket_addr_space)
-                    .then(|| (shred.payload(), node.tvu))
+            shreds.filter_map(move |shred| {
+                cluster_nodes
+                    .get_broadcast_peer(&shred.id())?
+                    .tvu()
+                    .ok()
+                    .filter(|addr| socket_addr_space.check(addr))
+                    .map(|addr| (shred.payload(), addr))
             })
         })
         .collect();

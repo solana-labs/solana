@@ -197,7 +197,7 @@ fn process_spy_results(
             }
         }
         if let Some(node) = pubkey {
-            if !validators.iter().any(|x| x.id == node) {
+            if !validators.iter().any(|x| x.pubkey() == &node) {
                 eprintln!("Error: Could not find node {node:?}");
                 exit(1);
             }
@@ -292,14 +292,15 @@ fn process_rpc_url(
 
     let rpc_addrs: Vec<_> = validators
         .iter()
-        .filter_map(|contact_info| {
-            if (any || all || Some(contact_info.gossip) == entrypoint_addr)
-                && ContactInfo::is_valid_address(&contact_info.rpc, &socket_addr_space)
-            {
-                return Some(contact_info.rpc);
-            }
-            None
+        .filter(|node| {
+            any || all
+                || node
+                    .gossip()
+                    .map(|addr| Some(addr) == entrypoint_addr)
+                    .unwrap_or_default()
         })
+        .filter_map(|node| node.rpc().ok())
+        .filter(|addr| socket_addr_space.check(addr))
         .collect();
 
     if rpc_addrs.is_empty() {

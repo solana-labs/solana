@@ -33,7 +33,7 @@ impl TpuInfo for ClusterTpuInfo {
             .cluster_info
             .tpu_peers()
             .into_iter()
-            .map(|ci| (ci.id, ci.tpu))
+            .filter_map(|node| Some((*node.pubkey(), node.tpu().ok()?)))
             .collect();
     }
 
@@ -106,7 +106,7 @@ mod test {
                 Some((2, 2)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
-                &Arc::new(blockstore),
+                Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &PohConfig::default(),
                 Arc::new(AtomicBool::default()),

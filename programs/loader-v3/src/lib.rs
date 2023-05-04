@@ -37,7 +37,7 @@ use {
     },
 };
 
-fn get_state(data: &[u8]) -> Result<&LoaderV3State, InstructionError> {
+pub fn get_state(data: &[u8]) -> Result<&LoaderV3State, InstructionError> {
     unsafe {
         let data = data
             .get(0..LoaderV3State::program_data_offset())
@@ -70,7 +70,6 @@ pub fn load_program_from_account(
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     program: &BorrowedAccount,
-    use_jit: bool,
     debugging_features: bool,
 ) -> Result<(Arc<LoadedProgram>, LoadProgramMetrics), InstructionError> {
     let mut load_program_metrics = LoadProgramMetrics {
@@ -118,7 +117,6 @@ pub fn load_program_from_account(
         None,
         programdata,
         program.get_data().len(),
-        use_jit,
         &mut load_program_metrics,
     )
     .map_err(|err| {
@@ -404,7 +402,6 @@ pub fn process_instruction_truncate(
 
 pub fn process_instruction_deploy(
     invoke_context: &mut InvokeContext,
-    use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
@@ -454,8 +451,7 @@ pub fn process_instruction_deploy(
         invoke_context.get_compute_budget(),
         invoke_context.get_log_collector(),
         buffer,
-        use_jit,
-        false,
+        false, /* debugging_features */
     )?;
     load_program_metrics.submit_datapoint(&mut invoke_context.timings);
     if let Some(mut source_program) = source_program {
@@ -538,8 +534,20 @@ pub fn process_instruction_transfer_authority(
 
 pub fn process_instruction(
     invoke_context: &mut InvokeContext,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let use_jit = true;
+    _arg0: u64,
+    _arg1: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _memory_mapping: &mut MemoryMapping,
+    result: &mut ProgramResult,
+) {
+    *result = process_instruction_inner(invoke_context).into();
+}
+
+pub fn process_instruction_inner(
+    invoke_context: &mut InvokeContext,
+) -> Result<u64, Box<dyn std::error::Error>> {
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -559,7 +567,7 @@ pub fn process_instruction(
             LoaderV3Instruction::Truncate { offset } => {
                 process_instruction_truncate(invoke_context, offset)
             }
-            LoaderV3Instruction::Deploy => process_instruction_deploy(invoke_context, use_jit),
+            LoaderV3Instruction::Deploy => process_instruction_deploy(invoke_context),
             LoaderV3Instruction::Retract => process_instruction_retract(invoke_context),
             LoaderV3Instruction::TransferAuthority => {
                 process_instruction_transfer_authority(invoke_context)
@@ -587,8 +595,7 @@ pub fn process_instruction(
             invoke_context.get_compute_budget(),
             invoke_context.get_log_collector(),
             &program,
-            use_jit,
-            false,
+            false, /* debugging_features */
         )?;
         load_program_metrics.submit_datapoint(&mut invoke_context.timings);
         get_or_create_executor_time.stop();
@@ -602,12 +609,13 @@ pub fn process_instruction(
             LoadedProgramType::FailedVerification
             | LoadedProgramType::Closed
             | LoadedProgramType::DelayVisibility => {
-                Err(Box::new(InstructionError::InvalidAccountData))
+                Err(Box::new(InstructionError::InvalidAccountData) as Box<dyn std::error::Error>)
             }
             LoadedProgramType::Typed(executable) => execute(invoke_context, executable),
-            _ => Err(Box::new(InstructionError::IncorrectProgramId)),
+            _ => Err(Box::new(InstructionError::IncorrectProgramId) as Box<dyn std::error::Error>),
         }
     }
+    .map(|_| 0)
 }
 
 #[cfg(test)]
@@ -683,7 +691,7 @@ mod tests {
                 authority_address,
             })
             .unwrap();
-        program_account.data_mut()[loader_v3::LoaderV3State::program_data_offset()..]
+        program_account.data_as_mut_slice()[loader_v3::LoaderV3State::program_data_offset()..]
             .copy_from_slice(&elf_bytes);
         program_account
     }
