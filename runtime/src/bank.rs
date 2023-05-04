@@ -1910,7 +1910,7 @@ impl Bank {
 
             if height >= credit_start && height < credit_end_exclusive {
                 let partition_index = height - credit_start;
-                self.credit_epoch_rewards_in_partition(partition_index);
+                //self.credit_epoch_rewards_in_partition(partition_index);
             }
 
             if height >= credit_end_exclusive && self.epoch_reward_status.is_active() {
@@ -2660,6 +2660,11 @@ impl Bank {
         };
         self.capitalization
             .fetch_add(validator_rewards_paid, Relaxed);
+
+        /// test-code
+        for i in 0..self.get_reward_credit_num_blocks() {
+            self.credit_epoch_rewards_in_partition(i);
+        }
 
         let active_stake = if let Some(stake_history_entry) =
             self.stakes_cache.stakes().history().get(prev_epoch)
