@@ -425,6 +425,15 @@ impl LoadedPrograms {
 
                             if current_slot >= entry.effective_slot {
                                 return Some((key, entry.clone()));
+                            } else {
+                                // Found a program entry on the current fork, but it's not effective
+                                // yet. It indicates that the program has delayed visibility. Return
+                                // the tombstone to reflect that.
+                                let delay_visibility = LoadedProgram::new_tombstone(
+                                    entry.deployment_slot,
+                                    LoadedProgramType::DelayVisibility,
+                                );
+                                return Some((key, Arc::new(delay_visibility)));
                             }
                         }
                     }
@@ -1141,7 +1150,13 @@ mod tests {
         assert!(match_slot(&found, &program2, 11, 16));
 
         // The effective slot of program4 deployed in slot 15 is 19. So it should not be usable in slot 16.
-        assert!(match_slot(&found, &program4, 5, 16));
+        // A delay visibility tombstone should be returned here.
+        let tombstone = found.find(program4).expect("Failed to find the tombstone");
+        assert!(matches!(
+            tombstone.program,
+            LoadedProgramType::DelayVisibility
+        ));
+        assert_eq!(tombstone.deployment_slot, 15);
 
         assert!(missing.contains(&program3));
 
@@ -1201,7 +1216,13 @@ mod tests {
         );
 
         assert!(match_slot(&found, &program1, 0, 11));
-        assert!(match_slot(&found, &program2, 5, 11));
+        // program2 was updated at slot 11, but is not effective till slot 23. The result should contain a tombstone.
+        let tombstone = found.find(program2).expect("Failed to find the tombstone");
+        assert!(matches!(
+            tombstone.program,
+            LoadedProgramType::DelayVisibility
+        ));
+        assert_eq!(tombstone.deployment_slot, 11);
         assert!(match_slot(&found, &program4, 5, 11));
 
         assert!(missing.contains(&program3));
