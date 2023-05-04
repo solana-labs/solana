@@ -1213,7 +1213,7 @@ pub fn add_bank_snapshot(
         // the system may not be booted from the latest snapshot directory, but an older and complete
         // directory.  Then, when adding new snapshots, the newer incomplete snapshot directory could
         // be found.  If so, it should be removed.
-        remove_bank_snapshot(slot, &bank_snapshots_dir)?;
+        purge_bank_snapshot(&bank_snapshot_dir)?;
     } else {
         // Even the snapshot directory is not found, still ensure the account snapshot directory
         // is also clean.  hardlink failure will happen if an old file exists.
@@ -1325,12 +1325,6 @@ fn serialize_status_cache(slot_deltas: &[BankSlotDelta], status_cache_path: &Pat
         serialize_into(stream, slot_deltas)?;
         Ok(())
     })
-}
-
-/// Remove the snapshot directory for this slot
-pub fn remove_bank_snapshot(slot: Slot, bank_snapshots_dir: impl AsRef<Path>) -> Result<()> {
-    let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
-    purge_bank_snapshot(bank_snapshot_dir)
 }
 
 #[derive(Debug, Default)]
@@ -2953,10 +2947,10 @@ pub fn purge_old_bank_snapshots(
             .rev()
             .skip(num_bank_snapshots_to_retain)
             .for_each(|bank_snapshot| {
-                let r = remove_bank_snapshot(bank_snapshot.slot, &bank_snapshots_dir);
+                let r = purge_bank_snapshot(&bank_snapshot.snapshot_dir);
                 if r.is_err() {
                     warn!(
-                        "Couldn't remove bank snapshot at: {}",
+                        "Couldn't purge bank snapshot at: {}",
                         bank_snapshot.snapshot_dir.display()
                     );
                 }
@@ -5138,7 +5132,8 @@ mod tests {
             hardlink_dirs.push(dst_path);
         }
 
-        assert!(remove_bank_snapshot(bank.slot(), bank_snapshots_dir).is_ok());
+        let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, bank.slot());
+        assert!(purge_bank_snapshot(bank_snapshot_dir).is_ok());
 
         // When the bank snapshot is removed, all the snapshot hardlink directories should be removed.
         assert!(hardlink_dirs.iter().all(|dir| fs::metadata(dir).is_err()));
