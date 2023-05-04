@@ -4714,11 +4714,11 @@ impl Bank {
 
         execution_time.stop();
 
-        const EVICT_CACHE_TO_PERCENTAGE: u8 = 90;
+        const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
         self.loaded_programs_cache
             .write()
             .unwrap()
-            .sort_and_evict(Percentage::from(EVICT_CACHE_TO_PERCENTAGE));
+            .sort_and_unload(Percentage::from(SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE));
 
         debug!(
             "check: {}us load: {}us execute: {}us txs_len={}",
