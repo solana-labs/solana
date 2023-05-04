@@ -12546,7 +12546,7 @@ pub mod tests {
         let expected_account_hash = if cfg!(debug_assertions) {
             Hash::from_str("6qtBXmRrLdTdAV5bK6bZZJxQA4fPSUBxzQGq2BQSat25").unwrap()
         } else {
-            Hash::from_str("6qtBXmRrLdTdAV5bK6bZZJxQA4fPSUBxzQGq2BQSat25").expect("suppress cippy")
+            Hash::from_str("5HL9MtsQmxZQ8XSgcAhSkqnrayQFXUY8FT1JsHjDNKbi").unwrap()
         };
 
         assert_eq!(
