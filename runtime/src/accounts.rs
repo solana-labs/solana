@@ -502,9 +502,9 @@ impl Accounts {
             }
 
             // Add loader to chain
-            let program_owner = *program.owner();
+            let owner_id = *program.owner();
             account_indices.insert(0, program_account_index);
-            if bpf_loader_upgradeable::check_id(&program_owner) {
+            if bpf_loader_upgradeable::check_id(&owner_id) {
                 // The upgradeable loader requires the derived ProgramData account
                 if let Ok(UpgradeableLoaderState::Program {
                     programdata_address,
@@ -528,7 +528,7 @@ impl Accounts {
                 }
             }
 
-            program_id = program_owner;
+            program_id = owner_id;
         }
         Ok(account_indices)
     }
