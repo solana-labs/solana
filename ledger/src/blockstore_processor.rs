@@ -15,7 +15,7 @@ use {
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
     solana_measure::{measure, measure::Measure},
-    solana_metrics::{datapoint_error, inc_new_counter_debug},
+    solana_metrics::datapoint_error,
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
@@ -225,7 +225,6 @@ fn execute_batches_internal(
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<ExecuteBatchesInternalMetrics> {
     assert!(!batches.is_empty());
-    inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
         Mutex::new(HashMap::new());
 
@@ -783,11 +782,12 @@ pub fn process_blockstore_from_root(
 
     // Iterate and replay slots from blockstore starting from `start_slot`
     let mut num_slots_processed = 0;
+    let mut num_new_roots_found = 0;
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
         .unwrap_or_else(|_| panic!("Failed to get meta for slot {start_slot}"))
     {
-        num_slots_processed = load_frozen_forks(
+        (num_slots_processed, num_new_roots_found) = load_frozen_forks(
             bank_forks,
             start_slot,
             &start_slot_meta,
@@ -823,6 +823,7 @@ pub fn process_blockstore_from_root(
         ),
         ("slot", bank_forks.read().unwrap().root(), i64),
         ("num_slots_processed", num_slots_processed, i64),
+        ("num_new_roots_found", num_new_roots_found, i64),
         ("forks", bank_forks.read().unwrap().banks().len(), i64),
     );
 
@@ -1360,8 +1361,11 @@ fn process_next_slots(
     Ok(())
 }
 
-// Iterate through blockstore processing slots starting from the root slot pointed to by the
-// given `meta` and return a vector of frozen bank forks
+/// Starting with the root slot corresponding to `start_slot_meta`, iteratively
+/// find and process children slots from the blockstore.
+///
+/// Returns a tuple (a, b) where a is the number of slots processed and b is
+/// the number of newly found cluster roots.
 #[allow(clippy::too_many_arguments)]
 fn load_frozen_forks(
     bank_forks: &RwLock<BankForks>,
@@ -1374,13 +1378,15 @@ fn load_frozen_forks(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     timing: &mut ExecuteTimings,
     accounts_background_request_sender: &AbsRequestSender,
-) -> result::Result<u64, BlockstoreProcessorError> {
+) -> result::Result<(u64, usize), BlockstoreProcessorError> {
     let recyclers = VerifyRecyclers::default();
     let mut all_banks = HashMap::new();
     let mut last_status_report = Instant::now();
     let mut pending_slots = vec![];
     // The total number of slots processed
     let mut total_slots_elapsed = 0;
+    // The total number of newly identified root slots
+    let mut total_rooted_slots = 0;
     // The number of slots processed between status report updates
     let mut slots_elapsed = 0;
     let mut txs = 0;
@@ -1497,7 +1503,7 @@ fn load_frozen_forks(
                                 // our last root; therefore parent should be set
                                 new_root_bank = new_root_bank.parent().unwrap();
                             }
-                            inc_new_counter_info!("load_frozen_forks-cluster-confirmed-root", rooted_slots.len());
+                            total_rooted_slots += rooted_slots.len();
                             if blockstore.is_primary_access() {
                                 blockstore
                                     .mark_slots_as_if_rooted_normally_at_startup(rooted_slots, true)
@@ -1577,7 +1583,7 @@ fn load_frozen_forks(
             .run_final_hash_calc(on_halt_store_hash_raw_data_for_debug);
     }
 
-    Ok(total_slots_elapsed)
+    Ok((total_slots_elapsed, total_rooted_slots))
 }
 
 // `roots` is sorted largest to smallest by root slot
