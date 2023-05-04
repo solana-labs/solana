@@ -539,6 +539,12 @@ impl Accounts {
                     self.accounts_db
                         .load_with_fixed_root(ancestors, &owner_id, load_zero_lamports)
                 {
+                    if !native_loader::check_id(owner_account.owner())
+                        || !owner_account.executable()
+                    {
+                        error_counters.invalid_program_for_execution += 1;
+                        return Err(TransactionError::InvalidProgramForExecution);
+                    }
                     accounts.push((owner_id, owner_account));
                 } else {
                     error_counters.account_not_found += 1;
