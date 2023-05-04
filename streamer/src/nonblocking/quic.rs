@@ -160,7 +160,9 @@ impl Future for ConnectionHandshakeHandler {
                             .push(Box::pin(timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, future)));
                         num_added += 1;
                     } else {
-                        break;
+                        // The stream returning Poll::Ready(None) means
+                        // the channel's closed
+                        return Poll::Ready(());
                     }
                 } else {
                     will_awake = true;
