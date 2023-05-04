@@ -142,7 +142,7 @@ struct LeaderSlotPacketCountMetrics {
 
 impl LeaderSlotPacketCountMetrics {
     fn new() -> Self {
-        Self { ..Self::default() }
+        Self::default()
     }
 
     fn report(&self, id: u32, slot: Slot) {
@@ -330,7 +330,7 @@ pub(crate) struct VotePacketCountMetrics {
 
 impl VotePacketCountMetrics {
     fn new() -> Self {
-        Self { ..Self::default() }
+        Self::default()
     }
 
     fn report(&self, id: u32, slot: Slot) {
