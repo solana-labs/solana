@@ -171,7 +171,7 @@ ctrlc = "3.2.5"
 curve25519-dalek = "3.2.1"
 dashmap = "4.0.2"
 derivation-path = { version = "0.2.0", default-features = false }
-dialoguer = "0.10.2"
+dialoguer = "0.10.4"
 digest = "0.10.1"
 dir-diff = "0.3.2"
 dirs-next = "2.0.0"
