@@ -1675,8 +1675,7 @@ impl Bank {
     }
 
     /// Return the total number of blocks in reward interval (including both calculation and crediting).
-    /// This method is marked 'pub' because it used by bank_server.rs to be exposed as a RPC method.
-    pub fn get_reward_total_num_blocks(&self) -> u64 {
+    fn get_reward_total_num_blocks(&self) -> u64 {
         Self::REWARD_CALCULATION_NUM_BLOCKS + self.get_reward_credit_num_blocks()
     }
 
