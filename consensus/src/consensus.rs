@@ -1491,12 +1491,12 @@ pub mod test {
     use {
         super::*,
         crate::{
-            fork_choice::HeaviestForkFailures, heaviest_subtree_fork_choice::SlotHashKey,
+            heaviest_subtree_fork_choice::SlotHashKey,
             tower_storage::FileTowerStorage,
         },
         itertools::Itertools,
         solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path},
-        solana_runtime::{bank::Bank, vote_account::VoteAccount},
+        solana_runtime::{vote_account::VoteAccount},
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
             clock::Slot,
@@ -1514,7 +1514,6 @@ pub mod test {
             sync::Arc,
         },
         tempfile::TempDir,
-        trees::tr,
     };
 
     fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> VoteAccountsHashMap {
