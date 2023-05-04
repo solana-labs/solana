@@ -3236,7 +3236,7 @@ mod tests {
         ));
         let (node, _, _) = ClusterInfo::gossip_node(
             solana_sdk::pubkey::new_rand(),
-            &"1.1.1.1:1111".parse().unwrap(),
+            &"1.1.1.1:0".parse().unwrap(),
             0,
         );
         assert!(ClusterInfo::is_spy_node(
