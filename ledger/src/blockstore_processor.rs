@@ -1361,8 +1361,11 @@ fn process_next_slots(
     Ok(())
 }
 
-// Iterate through blockstore processing slots starting from the root slot pointed to by the
-// given `meta` and return a vector of frozen bank forks
+/// Starting with the root slot corresponding to `start_slot_meta`, iteratively
+/// find and process children slots from the blockstore.
+///
+/// Returns a tuple (a, b) where a is the number of slots processed and b is
+/// the number of newly found cluster roots.
 #[allow(clippy::too_many_arguments)]
 fn load_frozen_forks(
     bank_forks: &RwLock<BankForks>,
