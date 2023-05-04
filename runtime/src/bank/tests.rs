@@ -96,12 +96,12 @@ use {
         transaction_context::{TransactionAccount, TransactionContext},
     },
     solana_stake_program::stake_state::{self, StakeState},
-    solana_vote_program::vote_transaction,
     solana_vote_program::{
         vote_instruction,
         vote_state::{
             self, BlockTimestamp, Vote, VoteInit, VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY,
         },
+        vote_transaction,
     },
     std::{
         cell::RefCell,

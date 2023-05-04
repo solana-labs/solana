@@ -1670,7 +1670,7 @@ impl Bank {
             };
 
             // Limit the reward credit interval to 5% of the total number of slots in a epoch
-            num_chunks.clamp(1, (self.epoch_schedule.slots_per_epoch as u64 / 20).max(1))
+            num_chunks.clamp(1, (self.epoch_schedule.slots_per_epoch / 20).max(1))
         }
     }
 
@@ -3977,12 +3977,12 @@ impl Bank {
             .get_calculated_epoch_stake_rewards()
             .as_ref()
         {
-            let mut metrics = RewardsStoreMetrics::default();
-
-            metrics.pre_capitalization = self.capitalization();
-
-            metrics.total_stake_accounts_count = stake_rewards.len();
-            metrics.partition_index = partition_index;
+            let mut metrics = RewardsStoreMetrics {
+                pre_capitalization: self.capitalization(),
+                total_stake_accounts_count: stake_rewards.len(),
+                partition_index,
+                ..RewardsStoreMetrics::default()
+            };
 
             let (
                 DistributedRewardsSum {

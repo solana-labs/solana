@@ -164,7 +164,7 @@ pub(crate) fn report_new_bank_metrics(
     );
 }
 
-/// Metrics for partitioned epoch reward
+/// Metrics for partitioned epoch reward store
 #[derive(Debug, Default)]
 pub(crate) struct RewardsStoreMetrics {
     pub(crate) partition_index: u64,
