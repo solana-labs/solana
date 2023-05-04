@@ -116,7 +116,6 @@ impl RpcSender for MockSender {
                 context: RpcResponseContext { slot: 1, api_version: None },
                 value: Value::Number(Number::from(50)),
             })?,
-            "getRewardInterval" => json![150],
             "getRecentBlockhash" => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1, api_version: None },
                 value: (

@@ -3634,31 +3634,6 @@ impl RpcClient {
         self.invoke((self.rpc_client.as_ref()).get_program_accounts_with_config(pubkey, config))
     }
 
-    /// Returns information about the epoch reward interval.
-    ///
-    /// This method uses the configured default [commitment level][cl].
-    ///
-    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
-    ///
-    /// # RPC Reference
-    ///
-    /// This method corresponds directly to the [`getRewardInterval`] RPC method.
-    ///
-    /// [`getRewardInterval`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrewardinterval
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use solana_rpc_client_api::client_error::Error;
-    /// # use solana_rpc_client::rpc_client::RpcClient;
-    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
-    /// let interval = rpc_client.get_reward_interval()?;
-    /// # Ok::<(), Error>(())
-    /// ```
-    pub fn get_reward_interval(&self) -> ClientResult<u64> {
-        self.invoke((self.rpc_client.as_ref()).get_reward_interval())
-    }
-
     /// Returns the stake minimum delegation, in lamports.
     ///
     /// # RPC Reference

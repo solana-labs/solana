@@ -15,6 +15,7 @@ use {
         },
         ancestors::Ancestors,
         bank_client::BankClient,
+        bank_forks::BankForks,
         genesis_utils::{
             self, activate_all_features, activate_feature, bootstrap_validator_stake_lamports,
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
@@ -95,6 +96,7 @@ use {
         transaction_context::{TransactionAccount, TransactionContext},
     },
     solana_stake_program::stake_state::{self, StakeState},
+    solana_vote_program::vote_transaction,
     solana_vote_program::{
         vote_instruction,
         vote_state::{
@@ -13109,7 +13111,7 @@ fn test_reward_interval_cap() {
 
     let bank = Bank::new_for_tests(&genesis_config);
     assert_eq!(bank.get_reward_credit_num_blocks(), 1);
-    assert_eq!(bank.get_reward_interval(), 2);
+    assert_eq!(bank.get_reward_total_num_blocks(), 2);
 }
 
 /// Test get_reward_interval during warm up epoch
@@ -13119,7 +13121,7 @@ fn test_reward_interval_warmup() {
 
     let bank = Bank::new_for_tests(&genesis_config);
     assert_eq!(bank.get_reward_credit_num_blocks(), 1);
-    assert_eq!(bank.get_reward_interval(), 2);
+    assert_eq!(bank.get_reward_total_num_blocks(), 2);
 }
 
 /// Test reward calculation
@@ -13213,6 +13215,55 @@ fn test_reward_calculation() {
         &thread_pool,
         &mut metrics,
     );
+}
 
-    // TODO -assert rewards
+#[test]
+fn test_reward_accounts_lock() {
+    use solana_sdk::transaction::TransactionError::StakeProgramUnavailable;
+
+    let validator_vote_keypairs = ValidatorVoteKeypairs::new_rand();
+    let validator_keypairs = vec![&validator_vote_keypairs];
+    let GenesisConfigInfo { genesis_config, .. } =
+        create_genesis_config_with_vote_accounts(1_000_000_000, &validator_keypairs, vec![100; 1]);
+
+    let node_key = &validator_vote_keypairs.node_keypair;
+    let stake_key = &validator_vote_keypairs.stake_keypair;
+
+    let bank0 = Bank::new_for_tests(&genesis_config);
+    let mut bank_forks = BankForks::new(bank0);
+
+    // Fill bank_forks with banks with votes landing in the next slot
+    // Create enough banks such that vote account will root slots 0 and 1
+    let mut reward_account_lock_hit = false;
+    for x in 0..33 {
+        let previous_bank = bank_forks.get(x).unwrap();
+        let bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), x + 1);
+        let vote = vote_transaction::new_vote_transaction(
+            vec![x],
+            previous_bank.hash(),
+            previous_bank.last_blockhash(),
+            &validator_vote_keypairs.node_keypair,
+            &validator_vote_keypairs.vote_keypair,
+            &validator_vote_keypairs.vote_keypair,
+            None,
+        );
+        bank.process_transaction(&vote).unwrap();
+
+        // Insert a transfer transaction to stake account to violate the
+        // StakeProgramUnavailable at the beginning of epoch 1.
+        if x == 32 {
+            let tx = system_transaction::transfer(
+                node_key,
+                &stake_key.pubkey(),
+                1,
+                bank.last_blockhash(),
+            );
+            // This should result in an error for `StakeProgramUnavailable`
+            let r = bank.process_transaction(&tx);
+            assert!(r == Err(StakeProgramUnavailable));
+            reward_account_lock_hit = true;
+        }
+        bank_forks.insert(bank);
+    }
+    assert!(reward_account_lock_hit);
 }

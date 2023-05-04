@@ -409,15 +409,6 @@ impl Banks for BanksServer {
         let sanitized_message = SanitizedMessage::try_from(message).ok()?;
         bank.get_fee_for_message(&sanitized_message)
     }
-
-    async fn get_reward_interval_with_commitment_and_context(
-        self,
-        _: Context,
-        commitment: CommitmentLevel,
-    ) -> u64 {
-        let bank = self.bank(commitment);
-        bank.get_reward_interval()
-    }
 }
 
 pub async fn start_local_server(

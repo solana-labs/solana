@@ -677,11 +677,6 @@ impl JsonRpcRequestProcessor {
         ))
     }
 
-    pub fn get_reward_interval(&self, config: RpcContextConfig) -> Result<u64> {
-        let bank = self.get_bank_with_config(config)?;
-        Ok(bank.get_reward_interval())
-    }
-
     fn get_fee_calculator_for_blockhash(
         &self,
         blockhash: &Hash,
@@ -2559,13 +2554,6 @@ pub mod rpc_minimal {
             options: Option<RpcLeaderScheduleConfigWrapper>,
             config: Option<RpcLeaderScheduleConfig>,
         ) -> Result<Option<RpcLeaderSchedule>>;
-
-        #[rpc(meta, name = "getRewardInterval")]
-        fn get_reward_interval(
-            &self,
-            meta: Self::Metadata,
-            config: Option<RpcContextConfig>,
-        ) -> Result<u64>;
     }
 
     pub struct MinimalImpl;
@@ -2728,15 +2716,6 @@ pub mod rpc_minimal {
                     }
                     schedule_by_identity
                 }))
-        }
-
-        fn get_reward_interval(
-            &self,
-            meta: Self::Metadata,
-            config: Option<RpcContextConfig>,
-        ) -> Result<u64> {
-            debug!("get_reward_interval rpc request received");
-            meta.get_reward_interval(config.unwrap_or_default())
         }
     }
 }
@@ -5164,61 +5143,6 @@ pub mod tests {
             "featureSet": null,
         }]);
         assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_rpc_get_reward_interval() {
-        let genesis = create_genesis_config(20);
-        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let connection_cache = Arc::new(ConnectionCache::default());
-        let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
-            SocketAddrSpace::Unspecified,
-            connection_cache,
-        );
-
-        let mut io = MetaIoHandler::default();
-        io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
-
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRewardInterval"}"#;
-        let res = io.handle_request_sync(req, meta);
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": 2,
-            "id": 1,
-        });
-        let result = serde_json::from_str::<Value>(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_rpc_get_reward_interval_via_client() {
-        let genesis = create_genesis_config(20);
-        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let connection_cache = Arc::new(ConnectionCache::default());
-        let meta = JsonRpcRequestProcessor::new_from_bank(
-            &bank,
-            SocketAddrSpace::Unspecified,
-            connection_cache,
-        );
-
-        let mut io = MetaIoHandler::default();
-        io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
-
-        async fn use_client(client: rpc_minimal::gen_client::Client) -> u64 {
-            client.get_reward_interval(None).await.unwrap()
-        }
-
-        let fut = async {
-            let (client, server) =
-                local::connect_with_metadata::<rpc_minimal::gen_client::Client, _, _>(&io, meta);
-            let client = use_client(client);
-
-            futures::join!(client, server)
-        };
-        let (response, _) = futures::executor::block_on(fut);
-        assert_eq!(response, 2);
     }
 
     #[test]
