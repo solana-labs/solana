@@ -373,6 +373,7 @@ pub fn initialize_state(
     (bank_forks, progress, heaviest_subtree_fork_choice)
 }
 
+#[cfg(test)]
 pub mod test {
     use {
         super::*,
