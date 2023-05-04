@@ -7,8 +7,8 @@ use {
     itertools::izip,
     log::*,
     solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
+    solana_consensus::tower_storage::FileTowerStorage,
     solana_core::{
-        tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{

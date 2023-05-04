@@ -1,9 +1,8 @@
 use {
     crate::{
-        cluster_info_vote_listener::SlotVoteTracker,
-        cluster_slots::SlotPubkeys,
-        consensus::{Stake, ThresholdDecision, VotedStakes},
-        replay_stage::SUPERMINORITY_THRESHOLD,
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        consensus::{Stake, ThresholdDecision, VotedStakes, SUPERMINORITY_THRESHOLD},
+        vote_stake_tracker::VoteStakeTracker,
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
     solana_program_runtime::{report_execute_timings, timings::ExecuteTimingType},
@@ -168,7 +167,7 @@ pub const RETRANSMIT_BACKOFF_CAP: u32 = 6;
 #[derive(Debug)]
 pub struct RetransmitInfo {
     pub(crate) retry_time: Instant,
-    pub(crate) retry_iteration: u32,
+    pub retry_iteration: u32,
 }
 
 impl RetransmitInfo {
@@ -318,7 +317,7 @@ pub struct PropagatedStats {
     pub is_leader_slot: bool,
     pub prev_leader_slot: Option<Slot>,
     pub slot_vote_tracker: Option<Arc<RwLock<SlotVoteTracker>>>,
-    pub cluster_slot_pubkeys: Option<Arc<RwLock<SlotPubkeys>>>,
+    pub cluster_slot_pubkeys: Option<Arc<RwLock<HashMap</*node:*/ Pubkey, /*stake:*/ u64>>>>,
     pub total_epoch_stake: u64,
 }
 
@@ -525,6 +524,57 @@ impl ProgressMap {
             );
         }
     }
+}
+
+#[derive(Default)]
+pub struct SlotVoteTracker {
+    // Maps pubkeys that have voted for this slot
+    // to whether or not we've seen the vote on gossip.
+    // True if seen on gossip, false if only seen in replay.
+    pub voted: HashMap<Pubkey, bool>,
+    pub optimistic_votes_tracker: HashMap<Hash, VoteStakeTracker>,
+    pub voted_slot_updates: Option<Vec<Pubkey>>,
+    pub gossip_only_stake: u64,
+}
+
+impl SlotVoteTracker {
+    pub fn get_voted_slot_updates(&mut self) -> Option<Vec<Pubkey>> {
+        self.voted_slot_updates.take()
+    }
+
+    pub fn get_or_insert_optimistic_votes_tracker(&mut self, hash: Hash) -> &mut VoteStakeTracker {
+        self.optimistic_votes_tracker.entry(hash).or_default()
+    }
+    pub fn optimistic_votes_tracker(&self, hash: &Hash) -> Option<&VoteStakeTracker> {
+        self.optimistic_votes_tracker.get(hash)
+    }
+}
+
+pub fn initialize_progress_and_fork_choice(
+    root_bank: &Bank,
+    mut frozen_banks: Vec<Arc<Bank>>,
+    my_pubkey: &Pubkey,
+    vote_account: &Pubkey,
+) -> (ProgressMap, HeaviestSubtreeForkChoice) {
+    let mut progress = ProgressMap::default();
+
+    frozen_banks.sort_by_key(|bank| bank.slot());
+
+    // Initialize progress map with any root banks
+    for bank in &frozen_banks {
+        let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
+        progress.insert(
+            bank.slot(),
+            ForkProgress::new_from_bank(bank, my_pubkey, vote_account, prev_leader_slot, 0, 0),
+        );
+    }
+    let root = root_bank.slot();
+    let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_frozen_banks(
+        (root, root_bank.hash()),
+        &frozen_banks,
+    );
+
+    (progress, heaviest_subtree_fork_choice)
 }
 
 #[cfg(test)]

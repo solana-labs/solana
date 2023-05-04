@@ -1,6 +1,8 @@
 use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdate, AncestorHashesReplayUpdateSender},
+    },
+    solana_consensus::{
         fork_choice::ForkChoice,
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     },

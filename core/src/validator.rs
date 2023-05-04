@@ -10,7 +10,6 @@ use {
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
-        consensus::{reconcile_blockstore_roots_with_external_source, ExternalRootSource, Tower},
         ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
@@ -23,7 +22,6 @@ use {
         system_monitor_service::{
             verify_net_stats_access, SystemMonitorService, SystemMonitorStatsReportConfig,
         },
-        tower_storage::TowerStorage,
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE},
         tvu::{Tvu, TvuConfig, TvuSockets},
     },
@@ -31,6 +29,10 @@ use {
     lazy_static::lazy_static,
     rand::{thread_rng, Rng},
     solana_client::connection_cache::ConnectionCache,
+    solana_consensus::{
+        consensus::{reconcile_blockstore_roots_with_external_source, ExternalRootSource, Tower},
+        tower_storage::TowerStorage,
+    },
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::{
         geyser_plugin_service::GeyserPluginService, GeyserPluginManagerRequest,
@@ -274,7 +276,7 @@ impl Default for ValidatorConfig {
             wal_recovery_mode: None,
             run_verification: true,
             require_tower: false,
-            tower_storage: Arc::new(crate::tower_storage::NullTowerStorage::default()),
+            tower_storage: Arc::new(solana_consensus::tower_storage::NullTowerStorage::default()),
             debug_keys: None,
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             contact_save_interval: DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
@@ -1388,7 +1390,7 @@ fn maybe_cluster_restart_with_hard_fork(config: &ValidatorConfig, root_slot: Slo
 }
 
 fn post_process_restored_tower(
-    restored_tower: crate::consensus::Result<Tower>,
+    restored_tower: solana_consensus::consensus::Result<Tower>,
     validator_identity: &Pubkey,
     vote_account: &Pubkey,
     config: &ValidatorConfig,
@@ -1416,7 +1418,7 @@ fn post_process_restored_tower(
             // unconditionally relax tower requirement so that we can always restore tower
             // from root bank.
             should_require_tower = false;
-            return Err(crate::consensus::TowerError::HardFork(
+            return Err(solana_consensus::consensus::TowerError::HardFork(
                 hard_fork_restart_slot,
             ));
         }
@@ -1425,7 +1427,7 @@ fn post_process_restored_tower(
             // unconditionally relax tower requirement so that we can always restore tower
             // from root bank after the warp
             should_require_tower = false;
-            return Err(crate::consensus::TowerError::HardFork(warp_slot));
+            return Err(solana_consensus::consensus::TowerError::HardFork(warp_slot));
         }
 
         tower

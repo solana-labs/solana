@@ -9,9 +9,10 @@ use {
     jsonrpc_server_utils::tokio,
     log::*,
     serde::{de::Deserializer, Deserialize, Serialize},
+    solana_consensus::{consensus::Tower, tower_storage::TowerStorage},
     solana_core::{
-        admin_rpc_post_init::AdminRpcRequestMetadataPostInit, consensus::Tower,
-        tower_storage::TowerStorage, validator::ValidatorStartProgress,
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
+        validator::ValidatorStartProgress,
     },
     solana_geyser_plugin_manager::GeyserPluginManagerRequest,
     solana_gossip::contact_info::ContactInfo,

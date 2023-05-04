@@ -2,7 +2,7 @@ use {
     crate::{
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::{LockoutIntervals, ProgressMap},
+        progress_map::{LockoutIntervals, ProgressMap, initialize_progress_and_fork_choice},
         tower1_14_11::Tower1_14_11,
         tower1_7_14::Tower1_7_14,
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
@@ -40,6 +40,8 @@ use {
     },
     thiserror::Error,
 };
+
+pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
 pub enum ThresholdDecision {
@@ -143,7 +145,7 @@ pub type Stake = u64;
 pub type VotedStakes = HashMap<Slot, Stake>;
 pub type PubkeyVotes = Vec<(Pubkey, Slot)>;
 
-pub(crate) struct ComputedBankState {
+pub struct ComputedBankState {
     pub voted_stakes: VotedStakes,
     pub total_stake: Stake,
     #[allow(dead_code)]
@@ -207,7 +209,7 @@ pub struct Tower {
     pub node_pubkey: Pubkey,
     threshold_depth: usize,
     threshold_size: f64,
-    pub(crate) vote_state: VoteState,
+    pub vote_state: VoteState,
     last_vote: VoteTransaction,
     #[serde(skip)]
     // The blockhash used in the last vote transaction, may or may not equal the
@@ -278,7 +280,7 @@ impl Tower {
     ) -> Self {
         let root_bank = bank_forks.root_bank();
         let (_progress, heaviest_subtree_fork_choice) =
-            crate::replay_stage::ReplayStage::initialize_progress_and_fork_choice(
+            initialize_progress_and_fork_choice(
                 root_bank.deref(),
                 bank_forks.frozen_banks().values().cloned().collect(),
                 node_pubkey,
@@ -296,7 +298,7 @@ impl Tower {
         Self::new(node_pubkey, vote_account, root, &heaviest_bank)
     }
 
-    pub(crate) fn collect_vote_lockouts(
+    pub fn collect_vote_lockouts(
         vote_account_pubkey: &Pubkey,
         bank_slot: Slot,
         vote_accounts: &VoteAccountsHashMap,
@@ -459,7 +461,7 @@ impl Tower {
     }
 
     // Returns true if we have switched the new vote instruction that directly sets vote state
-    pub(crate) fn is_direct_vote_state_update_enabled(bank: &Bank) -> bool {
+    pub fn is_direct_vote_state_update_enabled(bank: &Bank) -> bool {
         bank.feature_set
             .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
     }
@@ -984,7 +986,7 @@ impl Tower {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn check_switch_threshold(
+    pub fn check_switch_threshold(
         &mut self,
         switch_slot: Slot,
         ancestors: &HashMap<Slot, HashSet<u64>>,

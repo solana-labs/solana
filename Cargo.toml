@@ -19,6 +19,7 @@ members = [
     "client",
     "client-test",
     "connection-cache",
+    "consensus",
     "core",
     "dos",
     "download-utils",
@@ -308,6 +309,7 @@ solana-cli-output = { path = "cli-output", version = "=1.16.0" }
 solana-client = { path = "client", version = "=1.16.0" }
 solana-compute-budget-program = { path = "programs/compute-budget", version = "=1.16.0" }
 solana-config-program = { path = "programs/config", version = "=1.16.0" }
+solana-consensus = { path = "consensus", version = "=1.16.0" }
 solana-core = { path = "core", version = "=1.16.0" }
 solana-download-utils = { path = "download-utils", version = "=1.16.0" }
 solana-entry = { path = "entry", version = "=1.16.0" }

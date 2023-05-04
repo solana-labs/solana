@@ -3,14 +3,34 @@ use {
         consensus::{SwitchForkDecision, Tower},
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::ProgressMap,
-        replay_stage::HeaviestForkFailures,
     },
+    solana_poh::poh_recorder::Slot,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     std::{
         collections::{HashMap, HashSet},
         sync::{Arc, RwLock},
     },
 };
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum HeaviestForkFailures {
+    LockedOut(u64),
+    FailedThreshold(
+        Slot,
+        /* Observed stake */ u64,
+        /* Total stake */ u64,
+    ),
+    FailedSwitchThreshold(
+        Slot,
+        /* Observed stake */ u64,
+        /* Total stake */ u64,
+    ),
+    NoPropagatedConfirmation(
+        Slot,
+        /* Observed stake */ u64,
+        /* Total stake */ u64,
+    ),
+}
 
 pub struct SelectVoteAndResetForkResult {
     pub vote_bank: Option<(Arc<Bank>, SwitchForkDecision)>,
