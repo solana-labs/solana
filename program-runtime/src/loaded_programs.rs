@@ -328,6 +328,10 @@ impl LoadedPrograms {
                         Ordering::Relaxed,
                     );
                     second_level.swap_remove(entry_index);
+                } else if existing.is_tombstone() && !entry.is_tombstone() {
+                    // The old entry is tombstone and the new one is not. Let's give the new entry
+                    // a chance.
+                    second_level.swap_remove(entry_index);
                 } else {
                     return (true, existing.clone());
                 }
@@ -807,6 +811,23 @@ mod tests {
                 }
             })
         });
+    }
+
+    #[test]
+    fn test_replace_tombstones() {
+        let mut cache = LoadedPrograms::default();
+        let program1 = Pubkey::new_unique();
+        set_tombstone(
+            &mut cache,
+            program1,
+            10,
+            LoadedProgramType::FailedVerification,
+        );
+
+        let loaded_program = new_test_loaded_program(10, 10);
+        let (existing, program) = cache.replenish(program1, loaded_program.clone());
+        assert!(!existing);
+        assert_eq!(program, loaded_program);
     }
 
     #[test]
