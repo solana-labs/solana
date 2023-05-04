@@ -13043,10 +13043,10 @@ fn test_get_epoch_reward_partition_begin_end() {
     let bank = Bank::new_for_tests(&genesis_config);
 
     let n: u64 = 65312;
-    let range = bank.get_partition_begin_end(0, n);
+    let range = bank.get_partition_range(0, n);
     assert_eq!(range.start, 0);
 
-    let range = bank.get_partition_begin_end(bank.get_reward_credit_num_blocks() - 1, n);
+    let range = bank.get_partition_range(bank.get_reward_credit_num_blocks() - 1, n);
     assert_eq!(range.end, n as usize);
 }
 
