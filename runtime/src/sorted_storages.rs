@@ -191,7 +191,7 @@ impl<'a> SortedStoragesIter<'a> {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use {
         super::*,
         crate::{
@@ -201,6 +201,7 @@ pub mod tests {
         },
         std::sync::Arc,
     };
+
     impl<'a> SortedStorages<'a> {
         pub fn new_debug(
             source: &[(&'a Arc<AccountStorageEntry>, Slot)],
@@ -325,6 +326,81 @@ pub mod tests {
             (2..=4).collect::<Vec<_>>(),
             storages.iter_range(&(..)).map(check).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn test_sorted_storages_new_with_slots() {
+        let store = create_sample_store(1);
+        let start = 33;
+        let end = 44;
+
+        // ┌───────────────────────────────────────┐
+        // │      ■        storages          ■     │
+        // └──────┃──────────────────────────┃─────┘
+        //     min┣ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┃max
+        //        ■                          ■
+        {
+            let min = start + 1;
+            let max = end - 1;
+            let storages = SortedStorages::new_with_slots(
+                [(&store, end), (&store, start)].iter().cloned(),
+                Some(min),
+                Some(max),
+            );
+            assert_eq!(storages.storages.len(), 2);
+            assert_eq!(storages.range, start..end + 1);
+        }
+
+        // ┌───────────────────────────────────────┐
+        // │               storages       ■        │    ■
+        // └──────────────────────────────┃────────┘    ┃
+        //                             min┣ ─ ─ ─ ─ ─ ─ ┫max
+        //                                ■             ■
+        {
+            let min = start + 1;
+            let max = end + 1;
+            let storages = SortedStorages::new_with_slots(
+                [(&store, end), (&store, start)].iter().cloned(),
+                Some(min),
+                Some(max),
+            );
+            assert_eq!(storages.storages.len(), 2);
+            assert_eq!(storages.range, start..max + 1);
+        }
+
+        //        ┌───────────────────────────────────────┐
+        //    ■   │     ■         storages                │
+        //    ┃   └─────┃─────────────────────────────────┘
+        // min┣ ─ ─ ─ ─ ┫max
+        //    ■         ■
+        {
+            let min = start - 1;
+            let max = end - 1;
+            let storages = SortedStorages::new_with_slots(
+                [(&store, end), (&store, start)].iter().cloned(),
+                Some(min),
+                Some(max),
+            );
+            assert_eq!(storages.storages.len(), 2);
+            assert_eq!(storages.range, min..end + 1);
+        }
+
+        //        ┌───────────────────────────────────────┐
+        //    ■   │               storages                │   ■
+        //    ┃   └───────────────────────────────────────┘   ┃
+        // min┣ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┫max
+        //    ■                                               ■
+        {
+            let min = start - 1;
+            let max = end + 1;
+            let storages = SortedStorages::new_with_slots(
+                [(&store, end), (&store, start)].iter().cloned(),
+                Some(min),
+                Some(max),
+            );
+            assert_eq!(storages.storages.len(), 2);
+            assert_eq!(storages.range, min..max + 1);
+        }
     }
 
     #[test]
