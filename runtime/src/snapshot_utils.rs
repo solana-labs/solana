@@ -2942,19 +2942,12 @@ pub fn purge_old_bank_snapshots(
 ) {
     let do_purge = |mut bank_snapshots: Vec<BankSnapshotInfo>| {
         bank_snapshots.sort_unstable();
-        bank_snapshots
-            .into_iter()
-            .rev()
-            .skip(num_bank_snapshots_to_retain)
-            .for_each(|bank_snapshot| {
-                let r = purge_bank_snapshot(&bank_snapshot.snapshot_dir);
-                if r.is_err() {
-                    warn!(
-                        "Couldn't purge bank snapshot at: {}",
-                        bank_snapshot.snapshot_dir.display()
-                    );
-                }
-            })
+        _purge_bank_snapshots(
+            bank_snapshots
+                .iter()
+                .rev()
+                .skip(num_bank_snapshots_to_retain),
+        );
     };
 
     let bank_snapshots = match filter_by_type {
@@ -2963,6 +2956,21 @@ pub fn purge_old_bank_snapshots(
         None => get_bank_snapshots(&bank_snapshots_dir),
     };
     do_purge(bank_snapshots);
+}
+
+/// Purges all `bank_snapshots`
+///
+/// Does not exit early if there is an error while purging a bank snapshot.
+fn _purge_bank_snapshots<'a>(bank_snapshots: impl IntoIterator<Item = &'a BankSnapshotInfo>) {
+    bank_snapshots.into_iter().for_each(|bank_snapshot| {
+        let result = purge_bank_snapshot(&bank_snapshot.snapshot_dir);
+        if result.is_err() {
+            warn!(
+                "Failed to purge bank snapshot: {}",
+                bank_snapshot.snapshot_dir.display()
+            );
+        }
+    });
 }
 
 /// Remove the bank snapshot at this path
