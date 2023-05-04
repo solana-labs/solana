@@ -1,0 +1,81 @@
+[package]
+name = "solana-consensus"
+description = "Solana Consensus"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+base64 = { workspace = true }
+bincode = { workspace = true }
+bs58 = { workspace = true }
+chrono = { workspace = true, features = ["default", "serde"] }
+crossbeam-channel = { workspace = true }
+dashmap = { workspace = true, features = ["rayon", "raw-api"] }
+eager = { workspace = true }
+etcd-client = { workspace = true, features = ["tls"] }
+histogram = { workspace = true }
+itertools = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+lru = { workspace = true }
+min-max-heap = { workspace = true }
+num_enum = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+rayon = { workspace = true }
+rolling-file = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+solana-address-lookup-table-program = { workspace = true }
+solana-bloom = { workspace = true }
+solana-client = { workspace = true }
+solana-entry = { workspace = true }
+solana-frozen-abi = { workspace = true }
+solana-frozen-abi-macro = { workspace = true }
+solana-geyser-plugin-manager = { workspace = true }
+solana-gossip = { workspace = true }
+solana-ledger = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-net-utils = { workspace = true }
+solana-perf = { workspace = true }
+solana-poh = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-rayon-threadlimit = { workspace = true }
+solana-rpc = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-send-transaction-service = { workspace = true }
+solana-streamer = { workspace = true }
+solana-tpu-client = { workspace = true }
+solana-transaction-status = { workspace = true }
+solana-version = { workspace = true }
+solana-vote-program = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
+sys-info = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+trees = { workspace = true }
+
+[dev-dependencies]
+fs_extra = { workspace = true }
+matches = { workspace = true }
+raptorq = { workspace = true }
+serde_json = { workspace = true }
+serial_test = { workspace = true }
+solana-logger = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-stake-program = { workspace = true }
+static_assertions = { workspace = true }
+systemstat = { workspace = true }
+test-case = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
