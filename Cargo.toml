@@ -167,7 +167,7 @@ core_affinity = "0.5.10"
 criterion-stats = "0.3.0"
 crossbeam-channel = "0.5.8"
 csv = "1.2.1"
-ctrlc = "3.2.3"
+ctrlc = "3.2.5"
 curve25519-dalek = "3.2.1"
 dashmap = "4.0.2"
 derivation-path = { version = "0.2.0", default-features = false }
