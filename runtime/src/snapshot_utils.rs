@@ -1160,7 +1160,7 @@ fn hard_link_storages_to_snapshot(
     bank_slot: Slot,
     snapshot_storages: &[Arc<AccountStorageEntry>],
 ) -> Result<()> {
-    let accounts_hardlinks_dir = bank_snapshot_dir.as_ref().join("accounts_hardlinks");
+    let accounts_hardlinks_dir = bank_snapshot_dir.as_ref().join(SNAPSHOT_ACCOUNTS_HARDLINKS);
     fs::create_dir_all(&accounts_hardlinks_dir)?;
 
     let mut account_paths: HashSet<PathBuf> = HashSet::new();
@@ -1981,7 +1981,7 @@ fn build_storage_from_snapshot_dir(
     let snapshot_version_path = bank_snapshot_dir.join("version");
     let (file_sender, file_receiver) = crossbeam_channel::unbounded();
 
-    let accounts_hardlinks = bank_snapshot_dir.join("accounts_hardlinks");
+    let accounts_hardlinks = bank_snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
 
     let account_paths_set: HashSet<_> = HashSet::from_iter(account_paths.iter());
 
@@ -2897,7 +2897,7 @@ pub fn verify_snapshot_archive(
     )
     .unwrap();
 
-    let accounts_hardlinks_dir = snapshot_slot_dir.join("accounts_hardlinks");
+    let accounts_hardlinks_dir = snapshot_slot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
     if accounts_hardlinks_dir.is_dir() {
         // This directory contain symlinks to all <account_path>/snapshot/<slot> directories.
         for entry in fs::read_dir(&accounts_hardlinks_dir).unwrap() {
@@ -5118,8 +5118,8 @@ mod tests {
         )
         .unwrap();
 
-        let accounts_hardlinks_dir =
-            get_bank_snapshot_dir(&bank_snapshots_dir, bank.slot()).join("accounts_hardlinks");
+        let accounts_hardlinks_dir = get_bank_snapshot_dir(&bank_snapshots_dir, bank.slot())
+            .join(SNAPSHOT_ACCOUNTS_HARDLINKS);
         assert!(fs::metadata(&accounts_hardlinks_dir).is_ok());
 
         let mut hardlink_dirs: Vec<PathBuf> = Vec::new();
@@ -5149,7 +5149,7 @@ mod tests {
 
         let bank_snapshots_dir_tmp = tempfile::TempDir::new().unwrap();
         let bank_snapshot_dir = bank_snapshots_dir_tmp.path().join(slot.to_string());
-        let accounts_hardlinks_dir = bank_snapshot_dir.join("accounts_hardlinks");
+        let accounts_hardlinks_dir = bank_snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
         fs::create_dir_all(&accounts_hardlinks_dir).unwrap();
 
         let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
@@ -5269,7 +5269,7 @@ mod tests {
         let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 2, 0);
 
         let snapshot_dir_slot_2 = bank_snapshots_dir.path().join("2");
-        let accounts_link_dir_slot_2 = snapshot_dir_slot_2.join("accounts_hardlinks");
+        let accounts_link_dir_slot_2 = snapshot_dir_slot_2.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
 
         // the symlinks point to the account snapshot hardlink directories <account_path>/snapshot/<slot>/ for slot 2
         // get them via read_link
