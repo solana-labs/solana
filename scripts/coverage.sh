@@ -71,11 +71,11 @@ fi
 #shellcheck source=ci/common/limit-threads.sh
 source ci/common/limit-threads.sh
 
-_ "$cargo" nightly --config "profile.dev.build-override.debug=true" --config "profile.release.build-override.debug=true" test --jobs "$JOBS" --target-dir target/cov --no-run "${packages[@]}"
+_ "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov --no-run "${packages[@]}"
 
 # most verbose log level (trace) is enabled for all solana code to make log!
 # macro code green always
-if RUST_LOG=solana=trace _ ci/intercept.sh "$cargo" nightly --config "profile.dev.build-override.debug=true" --config "profile.release.build-override.debug=true" test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- --nocapture; then
+if RUST_LOG=solana=trace _ ci/intercept.sh "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- --nocapture; then
   test_status=0
 else
   test_status=$?
