@@ -131,7 +131,7 @@ function collect_performance_statistics {
     SELECT ROUND(MEAN("median_sum")) as "mean_tps" FROM (
       SELECT MEDIAN(sum_count) AS "median_sum" FROM (
         SELECT SUM("count") AS "sum_count"
-          FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
+          FROM "'$TESTNET_TAG'"."autogen"."replay_stage-replay_transactions"
           WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND count > 0
           GROUP BY time(1s), host_id)
       GROUP BY time(1s)
@@ -141,7 +141,7 @@ function collect_performance_statistics {
     SELECT MAX("median_sum") as "max_tps" FROM (
       SELECT MEDIAN(sum_count) AS "median_sum" FROM (
         SELECT SUM("count") AS "sum_count"
-          FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
+          FROM "'$TESTNET_TAG'"."autogen"."replay_stage-replay_transactions"
           WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND count > 0
           GROUP BY time(1s), host_id)
       GROUP BY time(1s)
