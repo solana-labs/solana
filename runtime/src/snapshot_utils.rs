@@ -2934,34 +2934,31 @@ pub fn verify_snapshot_archive(
     assert!(!dir_diff::is_different(&storages_to_verify, unpack_account_dir).unwrap());
 }
 
-/// Remove outdated bank snapshots
+/// Purges bank snapshots, retaining the newest `num_bank_snapshots_to_retain`
 pub fn purge_old_bank_snapshots(
     bank_snapshots_dir: impl AsRef<Path>,
     num_bank_snapshots_to_retain: usize,
     filter_by_type: Option<BankSnapshotType>,
 ) {
-    let do_purge = |mut bank_snapshots: Vec<BankSnapshotInfo>| {
-        bank_snapshots.sort_unstable();
-        _purge_bank_snapshots(
-            bank_snapshots
-                .iter()
-                .rev()
-                .skip(num_bank_snapshots_to_retain),
-        );
-    };
-
-    let bank_snapshots = match filter_by_type {
+    let mut bank_snapshots = match filter_by_type {
         Some(BankSnapshotType::Pre) => get_bank_snapshots_pre(&bank_snapshots_dir),
         Some(BankSnapshotType::Post) => get_bank_snapshots_post(&bank_snapshots_dir),
         None => get_bank_snapshots(&bank_snapshots_dir),
     };
-    do_purge(bank_snapshots);
+
+    bank_snapshots.sort_unstable();
+    purge_bank_snapshots(
+        bank_snapshots
+            .iter()
+            .rev()
+            .skip(num_bank_snapshots_to_retain),
+    );
 }
 
 /// Purges all `bank_snapshots`
 ///
 /// Does not exit early if there is an error while purging a bank snapshot.
-fn _purge_bank_snapshots<'a>(bank_snapshots: impl IntoIterator<Item = &'a BankSnapshotInfo>) {
+fn purge_bank_snapshots<'a>(bank_snapshots: impl IntoIterator<Item = &'a BankSnapshotInfo>) {
     for snapshot_dir in bank_snapshots.into_iter().map(|s| &s.snapshot_dir) {
         if purge_bank_snapshot(snapshot_dir).is_err() {
             warn!("Failed to purge bank snapshot: {}", snapshot_dir.display());
