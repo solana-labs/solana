@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 #![feature(test)]
 
 use {
@@ -20,16 +21,17 @@ use {
         poh_service::PohService,
     },
     solana_runtime::bank::Bank,
-    solana_sdk::{signer::Signer, system_transaction, transaction::SanitizedTransaction},
+    solana_sdk::{
+        signature::Keypair, signer::Signer, system_transaction, transaction::SanitizedTransaction,
+    },
     std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc, RwLock,
     },
     tempfile::TempDir,
+    test::Bencher,
 };
 extern crate test;
-
-use {solana_sdk::signature::Keypair, test::Bencher};
 
 fn create_accounts(num: usize) -> Vec<Keypair> {
     (0..num).into_par_iter().map(|_| Keypair::new()).collect()
@@ -153,7 +155,6 @@ fn bench_process_and_record_transactions(bencher: &mut Bencher) {
 
     let mut transaction_iter = transactions.chunks(64);
 
-    println!("beginning bench...");
     bencher.iter(move || {
         consumer.process_and_record_transactions(&bank, transaction_iter.next().unwrap(), 0);
     });
