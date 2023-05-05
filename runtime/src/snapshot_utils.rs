@@ -3829,8 +3829,12 @@ mod tests {
         let min_slot = 123;
         let max_slot = 456;
         common_create_snapshot_archive_files(
-            &full_snapshot_archives_dir.path().join("remote"),
-            &incremental_snapshot_archives_dir.path().join("remote"),
+            &full_snapshot_archives_dir
+                .path()
+                .join(SNAPSHOT_ARCHIVE_DOWNLOAD_DIR),
+            &incremental_snapshot_archives_dir
+                .path()
+                .join(SNAPSHOT_ARCHIVE_DOWNLOAD_DIR),
             min_slot,
             max_slot,
             0,
@@ -3879,8 +3883,12 @@ mod tests {
         let min_incremental_snapshot_slot = 34;
         let max_incremental_snapshot_slot = 45;
         common_create_snapshot_archive_files(
-            &full_snapshot_archives_dir.path().join("remote"),
-            &incremental_snapshot_archives_dir.path().join("remote"),
+            &full_snapshot_archives_dir
+                .path()
+                .join(SNAPSHOT_ARCHIVE_DOWNLOAD_DIR),
+            &incremental_snapshot_archives_dir
+                .path()
+                .join(SNAPSHOT_ARCHIVE_DOWNLOAD_DIR),
             min_full_snapshot_slot,
             max_full_snapshot_slot,
             min_incremental_snapshot_slot,
