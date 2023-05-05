@@ -320,6 +320,10 @@ impl LoadedProgramsForTxBatch {
     pub fn slot(&self) -> Slot {
         self.slot
     }
+
+    pub fn set_slot(&mut self, slot: Slot) {
+        self.slot = slot;
+    }
 }
 
 pub enum LoadedProgramMatchCriteria {

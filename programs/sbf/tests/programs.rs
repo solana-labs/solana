@@ -379,7 +379,10 @@ fn test_program_sbf_loader_deprecated() {
         let bank = Bank::new_for_tests(&genesis_config);
         let program_id = create_program(&bank, &bpf_loader_deprecated::id(), program);
 
-        let bank_client = BankClient::new(bank);
+        let mut bank_client = BankClient::new(bank);
+        bank_client
+            .advance_slot(1, &Pubkey::default())
+            .expect("Failed to advance the slot");
         let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
         let instruction = Instruction::new_with_bytes(program_id, &[1], account_metas);
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
@@ -3908,7 +3911,10 @@ fn test_program_sbf_inner_instruction_alignment_checks() {
 
     // invoke unaligned program, which will call aligned program twice,
     // unaligned should be allowed once invoke completes
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
     let mut instruction = Instruction::new_with_bytes(
         inner_instruction_alignment_check,
         &[0],

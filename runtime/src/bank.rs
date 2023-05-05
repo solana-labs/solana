@@ -4266,7 +4266,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
-        programs_loaded_for_tx_batch: Rc<RefCell<LoadedProgramsForTxBatch>>,
+        programs_loaded_for_tx_batch: Rc<LoadedProgramsForTxBatch>,
     ) -> TransactionExecutionResult {
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
@@ -4622,7 +4622,8 @@ impl Bank {
             &self.blockhash_queue.read().unwrap(),
         );
 
-        let programs_loaded_for_tx_batch = self.replenish_program_cache(&program_accounts_map);
+        let programs_loaded_for_tx_batch =
+            Rc::new(self.replenish_program_cache(&program_accounts_map));
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = self.rc.accounts.load_accounts(
@@ -4640,7 +4641,6 @@ impl Bank {
         );
         load_time.stop();
 
-        let programs_loaded_for_tx_batch = Rc::new(RefCell::new(programs_loaded_for_tx_batch));
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
 

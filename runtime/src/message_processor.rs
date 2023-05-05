@@ -58,7 +58,7 @@ impl MessageProcessor {
         transaction_context: &mut TransactionContext,
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
-        programs_loaded_for_tx_batch: Rc<RefCell<LoadedProgramsForTxBatch>>,
+        programs_loaded_for_tx_batch: Rc<LoadedProgramsForTxBatch>,
         programs_modified_by_tx: Rc<RefCell<LoadedProgramsForTxBatch>>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
@@ -274,8 +274,7 @@ mod tests {
         let mut transaction_context =
             TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let program_indices = vec![vec![2]];
-        let programs_loaded_for_tx_batch =
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default()));
+        let programs_loaded_for_tx_batch = Rc::new(LoadedProgramsForTxBatch::default());
         let account_keys = (0..transaction_context.get_number_of_accounts())
             .map(|index| {
                 *transaction_context
@@ -502,8 +501,7 @@ mod tests {
         let mut transaction_context =
             TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let program_indices = vec![vec![2]];
-        let programs_loaded_for_tx_batch =
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default()));
+        let programs_loaded_for_tx_batch = Rc::new(LoadedProgramsForTxBatch::default());
         let account_metas = vec![
             AccountMeta::new(
                 *transaction_context.get_key_of_account_at_index(0).unwrap(),
@@ -678,7 +676,7 @@ mod tests {
             &mut transaction_context,
             RentCollector::default().rent,
             None,
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            Rc::new(LoadedProgramsForTxBatch::default()),
             Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
