@@ -7,7 +7,7 @@ use {
     solana_clap_utils::{
         hidden_unless_forced,
         input_parsers::pubkeys_of,
-        input_validators::{is_parsable, is_pubkey_or_keypair, is_url},
+        input_validators::{is_parsable, is_pubkey_or_keypair, are_urls},
     },
     solana_cli_output::display::format_labeled_address,
     solana_metrics::{datapoint_error, datapoint_info},
@@ -84,7 +84,7 @@ fn get_config() -> Config {
                 .long("url")
                 .value_name("URL")
                 .takes_value(true)
-                .validator(is_url)
+                .validator(are_urls)
                 .help("JSON RPC URL for the cluster"),
         )
         .arg(
@@ -200,7 +200,7 @@ fn get_config() -> Config {
         name_suffix,
     };
 
-    info!("RPC URL: {}", config.json_rpc_url);
+    info!("RPC URLs: {}", config.json_rpc_url);
     info!(
         "Monitored validators: {:?}",
         config.validator_identity_pubkeys
