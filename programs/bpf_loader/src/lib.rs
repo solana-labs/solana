@@ -553,10 +553,18 @@ fn process_instruction_inner(
     }
 
     let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
+    // First lookup the cache of the programs modified by the current transaction. If not found, lookup
+    // the cache of the cache of the programs that are loaded for the transaction batch.
     let executor = invoke_context
-        .programs_loaded_for_tx_batch
+        .programs_modified_by_tx
         .borrow()
         .find(program_account.get_key())
+        .or_else(|| {
+            invoke_context
+                .programs_loaded_for_tx_batch
+                .borrow()
+                .find(program_account.get_key())
+        })
         .ok_or(InstructionError::InvalidAccountData)?;
 
     if executor.is_tombstone() {

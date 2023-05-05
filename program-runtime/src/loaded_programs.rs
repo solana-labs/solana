@@ -281,6 +281,13 @@ pub struct LoadedProgramsForTxBatch {
 }
 
 impl LoadedProgramsForTxBatch {
+    pub fn new(slot: Slot) -> Self {
+        Self {
+            entries: HashMap::new(),
+            slot,
+        }
+    }
+
     /// Refill the cache with a single entry. It's typically called during transaction loading, and
     /// transaction processing (for program management instructions).
     /// It replaces the existing entry (if any) with the provided entry. The return value contains
@@ -312,23 +319,6 @@ impl LoadedProgramsForTxBatch {
 
     pub fn slot(&self) -> Slot {
         self.slot
-    }
-
-    // Insert/update the entries which are effective for the current slot.
-    // Update only if the new entry is newer than the existing entry in the cache.
-    pub fn filter_and_extend(&mut self, other: &LoadedProgramsForTxBatch) {
-        other.entries.iter().for_each(|(key, updated)| {
-            if updated.effective_slot <= self.slot {
-                self.entries
-                    .entry(*key)
-                    .and_modify(|old| {
-                        if old.deployment_slot < updated.deployment_slot {
-                            *old = updated.clone();
-                        }
-                    })
-                    .or_insert_with(|| updated.clone());
-            }
-        })
     }
 }
 

@@ -2065,8 +2065,10 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
         ],
     );
 
+    // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
+    // after 2 slots. So we need to advance the bank client by 2 slots here.
     let bank = bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(2, &Pubkey::default())
         .expect("Failed to advance slot");
 
     // Prepare redeployment
@@ -2160,8 +2162,10 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
         ],
     );
 
+    // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
+    // after 2 slots. So we need to advance the bank client by 2 slots here.
     let bank = bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(2, &Pubkey::default())
         .expect("Failed to advance slot");
 
     // Prepare undeployment

@@ -4316,7 +4316,8 @@ impl Bank {
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
 
         let mut executed_units = 0u64;
-        let programs_modified_by_tx = Rc::new(RefCell::new(LoadedProgramsForTxBatch::default()));
+        let programs_modified_by_tx =
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::new(self.slot)));
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             &self.builtin_programs,
@@ -4325,7 +4326,7 @@ impl Bank {
             &mut transaction_context,
             self.rent_collector.rent,
             log_collector.clone(),
-            programs_loaded_for_tx_batch.clone(),
+            programs_loaded_for_tx_batch,
             programs_modified_by_tx.clone(),
             self.feature_set.clone(),
             compute_budget,
@@ -4419,19 +4420,6 @@ impl Bank {
         } else {
             None
         };
-
-        let mut store_executors_which_added_to_the_cache_time =
-            Measure::start("store_executors_which_added_to_the_cache_time");
-        if status.is_ok() {
-            programs_loaded_for_tx_batch
-                .borrow_mut()
-                .filter_and_extend(&programs_modified_by_tx.borrow());
-        }
-        store_executors_which_added_to_the_cache_time.stop();
-        saturating_add_assign!(
-            timings.execute_accessories.update_executors_us,
-            store_executors_which_added_to_the_cache_time.as_us()
-        );
 
         TransactionExecutionResult::Executed {
             details: TransactionExecutionDetails {
