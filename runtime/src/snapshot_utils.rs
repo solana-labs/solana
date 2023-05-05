@@ -2962,15 +2962,11 @@ pub fn purge_old_bank_snapshots(
 ///
 /// Does not exit early if there is an error while purging a bank snapshot.
 fn _purge_bank_snapshots<'a>(bank_snapshots: impl IntoIterator<Item = &'a BankSnapshotInfo>) {
-    bank_snapshots.into_iter().for_each(|bank_snapshot| {
-        let result = purge_bank_snapshot(&bank_snapshot.snapshot_dir);
-        if result.is_err() {
-            warn!(
-                "Failed to purge bank snapshot: {}",
-                bank_snapshot.snapshot_dir.display()
-            );
+    for snapshot_dir in bank_snapshots.into_iter().map(|s| &s.snapshot_dir) {
+        if purge_bank_snapshot(snapshot_dir).is_err() {
+            warn!("Failed to purge bank snapshot: {}", snapshot_dir.display());
         }
-    });
+    }
 }
 
 /// Remove the bank snapshot at this path
