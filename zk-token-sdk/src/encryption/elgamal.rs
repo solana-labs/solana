@@ -231,24 +231,6 @@ impl ElGamalKeypair {
     ) -> Result<String, Box<dyn std::error::Error>> {
         self.write_to_file(outfile)
     }
-
-    /// Derive a keypair from an entropy seed.
-    pub fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
-        let secret = ElGamalSecretKey::from_seed(seed)?;
-        let public = ElGamalPubkey::new(&secret);
-        Ok(ElGamalKeypair { public, secret })
-    }
-
-    /// Derive a keypair from a seed phrase and passphrase.
-    pub fn from_seed_phrase_and_passphrase(
-        seed_phrase: &str,
-        passphrase: &str,
-    ) -> Result<Self, Box<dyn error::Error>> {
-        Self::from_seed(&generate_seed_from_seed_phrase_and_passphrase(
-            seed_phrase,
-            passphrase,
-        ))
-    }
 }
 
 impl EncodableKey for ElGamalKeypair {
@@ -261,7 +243,9 @@ impl EncodableKey for ElGamalKeypair {
     }
 
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
-        Self::from_seed(seed)
+        let secret = ElGamalSecretKey::from_seed(seed)?;
+        let public = ElGamalPubkey::new(&secret);
+        Ok(ElGamalKeypair { public, secret })
     }
 
     fn from_seed_and_derivation_path(
@@ -275,7 +259,10 @@ impl EncodableKey for ElGamalKeypair {
         seed_phrase: &str,
         passphrase: &str,
     ) -> Result<Self, Box<dyn error::Error>> {
-        Self::from_seed_phrase_and_passphrase(seed_phrase, passphrase)
+        Self::from_seed(&generate_seed_from_seed_phrase_and_passphrase(
+            seed_phrase,
+            passphrase,
+        ))
     }
 }
 
