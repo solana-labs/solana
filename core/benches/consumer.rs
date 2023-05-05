@@ -5,7 +5,7 @@ use {
     crossbeam_channel::{unbounded, Receiver},
     rayon::{
         iter::IndexedParallelIterator,
-        prelude::{IntoParallelIterator, ParallelIterator},
+        prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     },
     solana_core::{
         banking_stage::{committer::Committer, consumer::Consumer},
@@ -22,7 +22,8 @@ use {
     },
     solana_runtime::bank::Bank,
     solana_sdk::{
-        signature::Keypair, signer::Signer, system_transaction, transaction::SanitizedTransaction,
+        account::Account, signature::Keypair, signer::Signer, stake_history::Epoch, system_program,
+        system_transaction, transaction::SanitizedTransaction,
     },
     std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -37,39 +38,31 @@ fn create_accounts(num: usize) -> Vec<Keypair> {
     (0..num).into_par_iter().map(|_| Keypair::new()).collect()
 }
 
-fn create_funded_accounts(mint_keypair: &Keypair, bank: &Bank, num: usize) -> Vec<Keypair> {
+fn create_funded_accounts(bank: &Bank, num: usize) -> Vec<Keypair> {
     assert!(
         num.is_power_of_two(),
         "must be power of 2 for parallel funding tree"
     );
     let accounts = create_accounts(num);
 
-    // Create a funding tree so we can fund in parallel
-    let mut balance = 5100 * num as u64;
-    bank.transfer(balance, mint_keypair, &accounts[0].pubkey())
-        .unwrap();
-
-    let mut chunk_len = accounts.len();
-    while chunk_len > 0 {
-        (0..num).into_par_iter().step_by(chunk_len).for_each(|i| {
-            let from = &accounts[i];
-            let to = &accounts[i + chunk_len / 2].pubkey();
-            bank.transfer(balance / 2, from, to).unwrap();
-        });
-
-        chunk_len /= 2;
-        balance /= 2;
-    }
+    accounts.par_iter().for_each(|account| {
+        bank.store_account(
+            &account.pubkey(),
+            &Account {
+                lamports: 5100,
+                data: vec![],
+                owner: system_program::id(),
+                executable: false,
+                rent_epoch: Epoch::MAX,
+            },
+        );
+    });
 
     accounts
 }
 
-fn create_transactions(
-    mint_keypair: &Keypair,
-    bank: &Bank,
-    num: usize,
-) -> Vec<SanitizedTransaction> {
-    let funded_accounts = create_funded_accounts(mint_keypair, bank, 2 * num);
+fn create_transactions(bank: &Bank, num: usize) -> Vec<SanitizedTransaction> {
+    let funded_accounts = create_funded_accounts(bank, 2 * num);
     funded_accounts
         .into_par_iter()
         .chunks(2)
@@ -90,7 +83,6 @@ fn create_consumer(poh_recorder: &RwLock<PohRecorder>) -> Consumer {
 }
 
 struct BenchFrame {
-    mint_keypair: Keypair,
     bank: Arc<Bank>,
     _ledger_path: TempDir,
     exit: Arc<AtomicBool>,
@@ -102,9 +94,7 @@ struct BenchFrame {
 fn setup() -> BenchFrame {
     let mint_total = u64::MAX;
     let GenesisConfigInfo {
-        mut genesis_config,
-        mint_keypair,
-        ..
+        mut genesis_config, ..
     } = create_genesis_config(mint_total);
 
     // Set a high ticks_per_slot so we don't run out of ticks
@@ -129,7 +119,6 @@ fn setup() -> BenchFrame {
         create_test_recorder(&bank, blockstore, None, None);
 
     BenchFrame {
-        mint_keypair,
         bank,
         _ledger_path: ledger_path,
         exit,
@@ -142,7 +131,6 @@ fn setup() -> BenchFrame {
 #[bench]
 fn bench_process_and_record_transactions(bencher: &mut Bencher) {
     let BenchFrame {
-        mint_keypair,
         bank,
         _ledger_path,
         exit,
@@ -151,8 +139,7 @@ fn bench_process_and_record_transactions(bencher: &mut Bencher) {
         ..
     } = setup();
     let consumer = create_consumer(&poh_recorder);
-    let transactions = create_transactions(&mint_keypair, &bank, 2_usize.pow(20));
-
+    let transactions = create_transactions(&bank, 2_usize.pow(20));
     let mut transaction_iter = transactions.chunks(64);
 
     bencher.iter(move || {
