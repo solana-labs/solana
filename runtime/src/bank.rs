@@ -4266,7 +4266,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
-        programs_loaded_for_tx_batch: Rc<LoadedProgramsForTxBatch>,
+        programs_loaded_for_tx_batch: Rc<RefCell<LoadedProgramsForTxBatch>>,
     ) -> TransactionExecutionResult {
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
@@ -4622,8 +4622,9 @@ impl Bank {
             &self.blockhash_queue.read().unwrap(),
         );
 
-        let programs_loaded_for_tx_batch =
-            Rc::new(self.replenish_program_cache(&program_accounts_map));
+        let programs_loaded_for_tx_batch = Rc::new(RefCell::new(
+            self.replenish_program_cache(&program_accounts_map),
+        ));
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = self.rc.accounts.load_accounts(
@@ -4637,7 +4638,7 @@ impl Bank {
             &self.fee_structure,
             account_overrides,
             &program_accounts_map,
-            &programs_loaded_for_tx_batch,
+            &programs_loaded_for_tx_batch.borrow(),
         );
         load_time.stop();
 
@@ -4683,7 +4684,7 @@ impl Bank {
                         compute_budget
                     };
 
-                    self.execute_loaded_transaction(
+                    let result = self.execute_loaded_transaction(
                         tx,
                         loaded_transaction,
                         compute_budget,
@@ -4695,7 +4696,26 @@ impl Bank {
                         &mut error_counters,
                         log_messages_bytes_limit,
                         programs_loaded_for_tx_batch.clone(),
-                    )
+                    );
+
+                    if let TransactionExecutionResult::Executed {
+                        details,
+                        programs_modified_by_tx,
+                    } = &result
+                    {
+                        // Update batch specific cache of the loaded programs with the modifications
+                        // made by the transaction, if it executed successfully.
+                        if details.status.is_ok() {
+                            programs_modified_by_tx.borrow().entries.iter().for_each(
+                                |(key, entry)| {
+                                    programs_loaded_for_tx_batch
+                                        .borrow_mut()
+                                        .replenish(*key, entry.clone());
+                                },
+                            )
+                        }
+                    }
+                    result
                 }
             })
             .collect();
