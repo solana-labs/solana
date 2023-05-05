@@ -668,8 +668,8 @@ impl ScanSlotTracker {
 
 #[derive(Copy, Clone)]
 pub enum AccountsIndexScanResult {
-    /// if the entry is not in the in-memory index, do not add it, make no modifications to it
-    None,
+    /// if the entry is not in the in-memory index, do not add it unless the entry becomes dirty
+    OnlyKeepInMemoryIfDirty,
     /// keep the entry in the in-memory index
     KeepInMemory,
     /// reduce refcount by 1
@@ -1411,7 +1411,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                                 true
                             }
                             AccountsIndexScanResult::KeepInMemory => true,
-                            AccountsIndexScanResult::None => false,
+                            AccountsIndexScanResult::OnlyKeepInMemoryIfDirty => false,
                         };
                     }
                     None => {

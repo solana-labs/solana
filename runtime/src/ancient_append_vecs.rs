@@ -347,7 +347,7 @@ impl AccountsDb {
                             if let Some(entry) = entry {
                                 entry.addref();
                             }
-                            AccountsIndexScanResult::None
+                            AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
                         },
                         None,
                         true,
@@ -656,7 +656,7 @@ impl AccountsDb {
                         index -= 1;
                     }
                 }
-                AccountsIndexScanResult::None
+                AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
             },
             None,
             false,
@@ -3093,7 +3093,7 @@ pub mod tests {
                 unrefed_pubkeys.iter(),
                 |k, slot_refs, _entry| {
                     assert_eq!(expected_ref_counts.remove(k).unwrap(), slot_refs.unwrap().1);
-                    AccountsIndexScanResult::None
+                    AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
                 },
                 None,
                 false,
