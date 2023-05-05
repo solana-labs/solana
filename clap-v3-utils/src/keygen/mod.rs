@@ -1,11 +1,14 @@
 use {
     crate::{
-        mnemonic::{language_arg, no_passphrase_arg, word_count_arg},
+        keygen::mnemonic::{language_arg, no_passphrase_arg, word_count_arg},
         ArgConstant,
     },
     clap::{Arg, ArgMatches, Command},
     std::{error, path::Path},
 };
+
+pub mod derivation_path;
+pub mod mnemonic;
 
 pub const NO_OUTFILE_ARG: ArgConstant<'static> = ArgConstant {
     long: "no-outfile",
