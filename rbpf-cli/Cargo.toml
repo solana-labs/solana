@@ -1,6 +1,6 @@
 [package]
 name = "rbpf-cli"
-description = "CLI to test and analyze SBF programs"
+description = "Decommissioned CLI to test and analyze SBF programs"
 keywords = ["SBF", "interpreter", "JIT"]
 publish = false
 version = { workspace = true }
@@ -11,11 +11,3 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-clap = { version = "3.1.5", features = ["cargo"] }
-serde = { workspace = true }
-serde_json = { workspace = true }
-solana-bpf-loader-program = { workspace = true }
-solana-logger = { workspace = true }
-solana-program-runtime = { workspace = true }
-solana-sdk = { workspace = true }
-solana_rbpf = { workspace = true, features = ["debugger"] }
