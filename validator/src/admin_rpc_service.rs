@@ -1176,7 +1176,7 @@ mod tests {
             //               --mint_account1--               mint_account2
 
             if secondary_index_enabled {
-                // ----------- Test for a non-existant key -----------
+                // ----------- Test for a non-existent key -----------
                 let req = format!(
                     r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{non_existent_pubkey}"]}}"#,
                 );
