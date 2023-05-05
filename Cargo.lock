@@ -4175,16 +4175,6 @@ dependencies = [
 [[package]]
 name = "rbpf-cli"
 version = "1.16.0"
-dependencies = [
- "clap 3.2.23",
- "serde",
- "serde_json",
- "solana-bpf-loader-program",
- "solana-logger 1.16.0",
- "solana-program-runtime",
- "solana-sdk 1.16.0",
- "solana_rbpf",
-]
 
 [[package]]
 name = "rcgen"
