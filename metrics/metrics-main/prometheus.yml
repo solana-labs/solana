@@ -42,11 +42,17 @@ scrape_configs:
     static_configs:
             - targets: ['mainnet-watchtower:9100','mainnet-entrypoint:9100','beta-validator-us-ny5:9100','edge-validator-us-sv15:9100','validator-asia-sg1:9100','validator-europe-fr2:9100','validator-us-ny5:9100','validator-us-sv15:9100','warehouse-asia-sg1:9100','warehouse-europe-fr2:9100','warehouse-us-ny5:9100','warehouse-eu-ld7-aws:9100','warehouse-us-da11-aws:9100','warehouse-eu-ld7-azure:9100','warehouse-us-da11-azure:9100']
 
-  - job_name: 'Canaries'
+  - job_name: 'Non-Staked-Canaries'
     scrape_interval: 15s
     scrape_timeout: 14s
     static_configs:
-            - targets: ['edge-validator-us-sv15:9100','beta-validator-us-ny5:9100','canary-am6-1:9100', 'canary-am6-2:9100','canary-da11-1:9100', 'canary-ny5-1:9100', 'canary-ny5-2:9100', 'canary-sg1-1:9100', 'canary-sv15-1:9100']
+            - targets: ['edge-validator-us-sv15:9100','beta-validator-us-ny5:9100','canary-am6-1:9100','canary-am6-2:9100','canary-da11-1:9100','canary-ny5-1:9100','canary-ny5-2:9100','canary-sg1-1:9100','canary-sv15-1:9100','canary-helsinki-1:9100','canary-helsinki-2:9100','canary-sv16-1:9100','canary-am6-3:9100','canary-fr2-1:9100','canary-am6-4:9100','canary-chicago-3:9100','canary-chicago-4:9100','canary-fr2-2:9100','canary-hk2-1:9100','canary-hk2-2:9100','canary-ny5-3:9100','canary-sg1-2:9100','canary-tokyo-2:9100','canary-tokyo-1:9100']
+
+  - job_name: 'Staked-Canaries'
+    scrape_interval: 15s
+    scrape_timeout: 14s
+    static_configs:
+            - targets: ['canary-chicago-1:9100','canary-chicago-2:9100','canary-newyork-1:9100','canary-newyork-2:9100','canary-dallas-1:9100','canary-dallas-2:9100','canary-washington-1:9100']
 
   - job_name: 'Shared-Development'
     scrape_interval: 15s
