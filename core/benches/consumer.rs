@@ -128,8 +128,7 @@ fn setup() -> BenchFrame {
     }
 }
 
-#[bench]
-fn bench_process_and_record_transactions(bencher: &mut Bencher) {
+fn bench_process_and_record_transactions(bencher: &mut Bencher, batch_size: usize) {
     let BenchFrame {
         bank,
         _ledger_path,
@@ -140,7 +139,7 @@ fn bench_process_and_record_transactions(bencher: &mut Bencher) {
     } = setup();
     let consumer = create_consumer(&poh_recorder);
     let transactions = create_transactions(&bank, 2_usize.pow(20));
-    let mut transaction_iter = transactions.chunks(64);
+    let mut transaction_iter = transactions.chunks(batch_size);
 
     bencher.iter(move || {
         consumer.process_and_record_transactions(&bank, transaction_iter.next().unwrap(), 0);
@@ -148,4 +147,19 @@ fn bench_process_and_record_transactions(bencher: &mut Bencher) {
 
     exit.store(true, Ordering::Relaxed);
     poh_service.join().unwrap();
+}
+
+#[bench]
+fn bench_process_and_record_transactions_unbatched(bencher: &mut Bencher) {
+    bench_process_and_record_transactions(bencher, 1);
+}
+
+#[bench]
+fn bench_process_and_record_transactions_half_batch(bencher: &mut Bencher) {
+    bench_process_and_record_transactions(bencher, 32);
+}
+
+#[bench]
+fn bench_process_and_record_transactions_full_batch(bencher: &mut Bencher) {
+    bench_process_and_record_transactions(bencher, 64);
 }
