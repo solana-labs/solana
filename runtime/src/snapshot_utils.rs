@@ -3570,7 +3570,6 @@ mod tests {
 
     #[test]
     fn test_parse_incremental_snapshot_archive_filename() {
-        solana_logger::setup();
         assert_eq!(
             parse_incremental_snapshot_archive_filename(&format!(
                 "incremental-snapshot-42-123-{}.tar.bz2",
@@ -3656,7 +3655,6 @@ mod tests {
 
     #[test]
     fn test_check_are_snapshots_compatible() {
-        solana_logger::setup();
         let slot1: Slot = 1234;
         let slot2: Slot = 5678;
         let slot3: Slot = 999_999;
@@ -3727,7 +3725,6 @@ mod tests {
 
     #[test]
     fn test_get_bank_snapshots() {
-        solana_logger::setup();
         let temp_snapshots_dir = tempfile::TempDir::new().unwrap();
         let min_slot = 10;
         let max_slot = 20;
@@ -3739,7 +3736,6 @@ mod tests {
 
     #[test]
     fn test_get_highest_bank_snapshot_post() {
-        solana_logger::setup();
         let temp_snapshots_dir = tempfile::TempDir::new().unwrap();
         let min_slot = 99;
         let max_slot = 123;
@@ -3803,7 +3799,6 @@ mod tests {
 
     #[test]
     fn test_get_full_snapshot_archives() {
-        solana_logger::setup();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let min_slot = 123;
@@ -3823,7 +3818,6 @@ mod tests {
 
     #[test]
     fn test_get_full_snapshot_archives_remote() {
-        solana_logger::setup();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let min_slot = 123;
@@ -3844,7 +3838,6 @@ mod tests {
 
     #[test]
     fn test_get_incremental_snapshot_archives() {
-        solana_logger::setup();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let min_full_snapshot_slot = 12;
@@ -3871,7 +3864,6 @@ mod tests {
 
     #[test]
     fn test_get_incremental_snapshot_archives_remote() {
-        solana_logger::setup();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let min_full_snapshot_slot = 12;
@@ -3901,7 +3893,6 @@ mod tests {
 
     #[test]
     fn test_get_highest_full_snapshot_archive_slot() {
-        solana_logger::setup();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let min_slot = 123;
@@ -3923,7 +3914,6 @@ mod tests {
 
     #[test]
     fn test_get_highest_incremental_snapshot_slot() {
-        solana_logger::setup();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let min_full_snapshot_slot = 12;
@@ -4084,7 +4074,6 @@ mod tests {
 
     #[test]
     fn test_purge_old_incremental_snapshot_archives() {
-        solana_logger::setup();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let starting_slot = 100_000;
@@ -4251,7 +4240,6 @@ mod tests {
     /// bank possible, so the contents of the snapshot archive will be quite minimal.
     #[test]
     fn test_roundtrip_bank_to_and_from_full_snapshot_simple() {
-        solana_logger::setup();
         let genesis_config = GenesisConfig::default();
         let original_bank = Bank::new_for_tests(&genesis_config);
 
@@ -4306,7 +4294,6 @@ mod tests {
     /// multiple transfers.  So this full snapshot should contain more data.
     #[test]
     fn test_roundtrip_bank_to_and_from_snapshot_complex() {
-        solana_logger::setup();
         let collector = Pubkey::new_unique();
         let key1 = Keypair::new();
         let key2 = Keypair::new();
@@ -4424,7 +4411,6 @@ mod tests {
     /// of the accounts are not modified often, and are captured by the full snapshot.
     #[test]
     fn test_roundtrip_bank_to_and_from_incremental_snapshot() {
-        solana_logger::setup();
         let collector = Pubkey::new_unique();
         let key1 = Keypair::new();
         let key2 = Keypair::new();
@@ -4548,7 +4534,6 @@ mod tests {
     /// Test rebuilding bank from the latest snapshot archives
     #[test]
     fn test_bank_from_latest_snapshot_archives() {
-        solana_logger::setup();
         let collector = Pubkey::new_unique();
         let key1 = Keypair::new();
         let key2 = Keypair::new();
@@ -4691,8 +4676,6 @@ mod tests {
     /// no longer correct!
     #[test]
     fn test_incremental_snapshots_handle_zero_lamport_accounts() {
-        solana_logger::setup();
-
         let collector = Pubkey::new_unique();
         let key1 = Keypair::new();
         let key2 = Keypair::new();
@@ -4882,7 +4865,6 @@ mod tests {
 
     #[test]
     fn test_bank_fields_from_snapshot() {
-        solana_logger::setup();
         let collector = Pubkey::new_unique();
         let key1 = Keypair::new();
 
@@ -5095,7 +5077,6 @@ mod tests {
 
     #[test]
     fn test_bank_snapshot_dir_accounts_hardlinks() {
-        solana_logger::setup();
         let genesis_config = GenesisConfig::default();
         let bank = Bank::new_for_tests(&genesis_config);
 
@@ -5141,8 +5122,6 @@ mod tests {
 
     #[test]
     fn test_get_snapshot_accounts_hardlink_dir() {
-        solana_logger::setup();
-
         let slot: Slot = 1;
 
         let mut account_paths_set: HashSet<PathBuf> = HashSet::new();
@@ -5182,8 +5161,6 @@ mod tests {
 
     #[test]
     fn test_get_highest_bank_snapshot() {
-        solana_logger::setup();
-
         let genesis_config = GenesisConfig::default();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 4, 0);
@@ -5214,8 +5191,6 @@ mod tests {
 
     #[test]
     pub fn test_create_all_accounts_run_and_snapshot_dirs() {
-        solana_logger::setup();
-
         let (_tmp_dirs, account_paths): (Vec<TempDir>, Vec<PathBuf>) = (0..4)
             .map(|_| {
                 let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -5262,8 +5237,6 @@ mod tests {
 
     #[test]
     fn test_clean_orphaned_account_snapshot_dirs() {
-        solana_logger::setup();
-
         let genesis_config = GenesisConfig::default();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 2, 0);
@@ -5474,8 +5447,6 @@ mod tests {
 
     #[test]
     fn test_bank_from_snapshot_dir() {
-        solana_logger::setup();
-
         let genesis_config = GenesisConfig::default();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 3, 0);
@@ -5519,8 +5490,6 @@ mod tests {
 
     #[test]
     fn test_bank_from_latest_snapshot_dir() {
-        solana_logger::setup();
-
         let genesis_config = GenesisConfig::default();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 3, 3);
@@ -5552,8 +5521,6 @@ mod tests {
 
     #[test]
     fn test_purge_old_bank_snapshots() {
-        solana_logger::setup();
-
         let genesis_config = GenesisConfig::default();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 10, 5);
