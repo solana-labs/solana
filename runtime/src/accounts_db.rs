@@ -3301,7 +3301,7 @@ impl AccountsDb {
                                     useful += 1;
                                 }
                                 if useless {
-                                    AccountsIndexScanResult::None
+                                    AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
                                 } else {
                                     AccountsIndexScanResult::KeepInMemory
                                 }
@@ -3798,7 +3798,7 @@ impl AccountsDb {
         self.accounts_index.scan(
             accounts.iter().map(|account| account.pubkey()),
             |pubkey, slots_refs, entry| {
-                let mut result = AccountsIndexScanResult::None;
+                let mut result = AccountsIndexScanResult::OnlyKeepInMemoryIfDirty;
                 if let Some((slot_list, ref_count)) = slots_refs {
                     let stored_account = &accounts[index];
                     let is_alive = slot_list.iter().any(|(slot, _acct_info)| {
