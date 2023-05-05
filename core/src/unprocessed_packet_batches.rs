@@ -2,7 +2,6 @@ use {
     crate::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{Packet, PacketBatch},
-    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
     solana_sdk::{hash::Hash, transaction::Transaction},
     std::{
         cmp::Ordering,
@@ -28,14 +27,7 @@ impl DeserializedPacket {
     }
 
     pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, None)
-    }
-
-    pub fn new_internal(
-        packet: Packet,
-        priority_details: Option<TransactionPriorityDetails>,
-    ) -> Result<Self, DeserializedPacketError> {
-        let immutable_section = ImmutableDeserializedPacket::new(packet, priority_details)?;
+        let immutable_section = ImmutableDeserializedPacket::new(packet)?;
 
         Ok(Self {
             immutable_section: Arc::new(immutable_section),

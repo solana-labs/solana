@@ -46,10 +46,7 @@ pub struct ImmutableDeserializedPacket {
 }
 
 impl ImmutableDeserializedPacket {
-    pub fn new(
-        packet: Packet,
-        priority_details: Option<TransactionPriorityDetails>,
-    ) -> Result<Self, DeserializedPacketError> {
+    pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction = packet.deserialize_slice(..)?;
         let sanitized_transaction = SanitizedVersionedTransaction::try_from(versioned_transaction)?;
         let message_bytes = packet_message(&packet)?;
@@ -57,8 +54,8 @@ impl ImmutableDeserializedPacket {
         let is_simple_vote = packet.meta().is_simple_vote_tx();
 
         // drop transaction if prioritization fails.
-        let mut priority_details = priority_details
-            .or_else(|| sanitized_transaction.get_transaction_priority_details())
+        let mut priority_details = sanitized_transaction
+            .get_transaction_priority_details()
             .ok_or(DeserializedPacketError::PrioritizationFailure)?;
 
         // set priority to zero for vote transactions
@@ -163,7 +160,7 @@ mod tests {
             Hash::new_unique(),
         );
         let packet = Packet::from_data(None, tx).unwrap();
-        let deserialized_packet = ImmutableDeserializedPacket::new(packet, None);
+        let deserialized_packet = ImmutableDeserializedPacket::new(packet);
 
         assert!(matches!(deserialized_packet, Ok(_)));
     }

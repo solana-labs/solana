@@ -1194,9 +1194,9 @@ mod tests {
                 thread_type,
             );
             transaction_storage.insert_batch(vec![
-                ImmutableDeserializedPacket::new(small_transfer.clone(), None)?,
-                ImmutableDeserializedPacket::new(vote.clone(), None)?,
-                ImmutableDeserializedPacket::new(big_transfer.clone(), None)?,
+                ImmutableDeserializedPacket::new(small_transfer.clone())?,
+                ImmutableDeserializedPacket::new(vote.clone())?,
+                ImmutableDeserializedPacket::new(big_transfer.clone())?,
             ]);
             let deserialized_packets = transaction_storage
                 .iter()
@@ -1214,9 +1214,9 @@ mod tests {
                 vote_source,
             );
             transaction_storage.insert_batch(vec![
-                ImmutableDeserializedPacket::new(small_transfer.clone(), None)?,
-                ImmutableDeserializedPacket::new(vote.clone(), None)?,
-                ImmutableDeserializedPacket::new(big_transfer.clone(), None)?,
+                ImmutableDeserializedPacket::new(small_transfer.clone())?,
+                ImmutableDeserializedPacket::new(vote.clone())?,
+                ImmutableDeserializedPacket::new(big_transfer.clone())?,
             ]);
             assert_eq!(1, transaction_storage.len());
         }
