@@ -2955,6 +2955,13 @@ pub fn purge_old_bank_snapshots(
     );
 }
 
+/// Purges bank snapshots that are older than `slot`
+pub fn purge_bank_snapshots_older_than_slot(bank_snapshots_dir: impl AsRef<Path>, slot: Slot) {
+    let mut bank_snapshots = get_bank_snapshots(&bank_snapshots_dir);
+    bank_snapshots.retain(|bank_snapshot| bank_snapshot.slot < slot);
+    purge_bank_snapshots(&bank_snapshots);
+}
+
 /// Purges all `bank_snapshots`
 ///
 /// Does not exit early if there is an error while purging a bank snapshot.
@@ -5551,5 +5558,32 @@ mod tests {
 
         purge_old_bank_snapshots(&bank_snapshots_dir, 0, None);
         assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 0);
+    }
+
+    #[test]
+    fn test_purge_bank_snapshots_older_than_slot() {
+        let genesis_config = GenesisConfig::default();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+
+        // The bank must stay in scope to ensure the temp dirs that it holds are not dropped
+        let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 9, 6);
+        let bank_snapshots_before = get_bank_snapshots(&bank_snapshots_dir);
+
+        purge_bank_snapshots_older_than_slot(&bank_snapshots_dir, 0);
+        let bank_snapshots_after = get_bank_snapshots(&bank_snapshots_dir);
+        assert_eq!(bank_snapshots_before.len(), bank_snapshots_after.len());
+
+        purge_bank_snapshots_older_than_slot(&bank_snapshots_dir, 3);
+        let bank_snapshots_after = get_bank_snapshots(&bank_snapshots_dir);
+        assert_eq!(bank_snapshots_before.len(), bank_snapshots_after.len() + 2);
+
+        purge_bank_snapshots_older_than_slot(&bank_snapshots_dir, 8);
+        let bank_snapshots_after = get_bank_snapshots(&bank_snapshots_dir);
+        assert_eq!(bank_snapshots_before.len(), bank_snapshots_after.len() + 7);
+
+        purge_bank_snapshots_older_than_slot(&bank_snapshots_dir, Slot::MAX);
+        let bank_snapshots_after = get_bank_snapshots(&bank_snapshots_dir);
+        assert_eq!(bank_snapshots_before.len(), bank_snapshots_after.len() + 9);
+        assert!(bank_snapshots_after.is_empty());
     }
 }

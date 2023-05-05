@@ -94,6 +94,15 @@ impl SnapshotPackagerService {
                                 (snapshot_package.slot(), *snapshot_package.hash()),
                             );
                         }
+
+                        // Now that this snapshot package has been archived, it is safe to remove
+                        // all bank snapshots older than this slot.  We want to keep the bank
+                        // snapshot *at this slot* so that it can be used during restarts, when
+                        // booting from local state.
+                        snapshot_utils::purge_bank_snapshots_older_than_slot(
+                            &snapshot_config.bank_snapshots_dir,
+                            snapshot_package.slot(),
+                        );
                     });
 
                     datapoint_info!(
