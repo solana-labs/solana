@@ -464,7 +464,10 @@ pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> (Slot, usize) {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::append_vec::AppendVec};
+    use {
+        super::*,
+        crate::{append_vec::AppendVec, snapshot_utils::SNAPSHOT_VERSION_FILENAME},
+    };
 
     #[test]
     fn test_get_unique_append_vec_id() {
@@ -492,7 +495,7 @@ mod tests {
         assert_eq!(None, get_snapshot_file_kind("file.txt"));
         assert_eq!(
             Some(SnapshotFileKind::Version),
-            get_snapshot_file_kind("version")
+            get_snapshot_file_kind(SNAPSHOT_VERSION_FILENAME)
         );
         assert_eq!(
             Some(SnapshotFileKind::BankFields),
