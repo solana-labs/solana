@@ -15,7 +15,6 @@ use {
         pubkey::Pubkey, saturating_add_assign,
     },
     std::{
-        cmp,
         collections::HashMap,
         fmt::{Debug, Formatter},
         sync::{
@@ -26,7 +25,7 @@ use {
 };
 
 const MAX_LOADED_ENTRY_COUNT: usize = 256;
-const MAX_UNLOADED_ENTRY_COUNT: usize = 1024;
+const DELAY_VISIBILITY_SLOT_OFFSET: Slot = 1;
 
 /// Relationship between two fork IDs
 #[derive(Copy, Clone, PartialEq)]
@@ -233,8 +232,8 @@ impl LoadedProgram {
     }
 
     pub fn new_tombstone(slot: Slot, reason: LoadedProgramType) -> Self {
-        let maybe_expiration_slot =
-            matches!(reason, LoadedProgramType::DelayVisibility).then_some(slot.saturating_add(1));
+        let maybe_expiration_slot = matches!(reason, LoadedProgramType::DelayVisibility)
+            .then_some(slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET));
         let tombstone = Self {
             program: reason,
             account_size: 0,
@@ -329,6 +328,10 @@ impl LoadedPrograms {
                         existing.usage_counter.load(Ordering::Relaxed),
                         Ordering::Relaxed,
                     );
+                    second_level.swap_remove(entry_index);
+                } else if existing.is_tombstone() && !entry.is_tombstone() {
+                    // The old entry is tombstone and the new one is not. Let's give the new entry
+                    // a chance.
                     second_level.swap_remove(entry_index);
                 } else {
                     return (true, existing.clone());
@@ -427,6 +430,18 @@ impl LoadedPrograms {
 
                             if current_slot >= entry.effective_slot {
                                 return Some((key, entry.clone()));
+                            } else if entry.effective_slot.saturating_sub(entry.deployment_slot)
+                                == DELAY_VISIBILITY_SLOT_OFFSET
+                                && current_slot >= entry.deployment_slot
+                            {
+                                // Found a program entry on the current fork, but it's not effective
+                                // yet. It indicates that the program has delayed visibility. Return
+                                // the tombstone to reflect that.
+                                let delay_visibility = LoadedProgram::new_tombstone(
+                                    entry.deployment_slot,
+                                    LoadedProgramType::DelayVisibility,
+                                );
+                                return Some((key, Arc::new(delay_visibility)));
                             }
                         }
                     }
@@ -444,15 +459,9 @@ impl LoadedPrograms {
         )
     }
 
-    /// Evicts programs which were used infrequently
-    pub fn sort_and_evict(&mut self, shrink_to: PercentageInteger) {
-        let mut num_loaded: usize = 0;
-        let mut num_unloaded: usize = 0;
-        // Find eviction candidates and sort by their type and usage counters.
-        // Sorted result will have the following order:
-        //   Loaded entries with ascending order of their usage count
-        //   Unloaded entries with ascending order of their usage count
-        let (ordering, sorted_candidates): (Vec<u32>, Vec<(Pubkey, Arc<LoadedProgram>)>) = self
+    /// Unloads programs which were used infrequently
+    pub fn sort_and_unload(&mut self, shrink_to: PercentageInteger) {
+        let sorted_candidates: Vec<(Pubkey, Arc<LoadedProgram>)> = self
             .entries
             .iter()
             .flat_map(|(id, list)| {
@@ -460,47 +469,23 @@ impl LoadedPrograms {
                     .filter_map(move |program| match program.program {
                         LoadedProgramType::LegacyV0(_)
                         | LoadedProgramType::LegacyV1(_)
-                        | LoadedProgramType::Typed(_) => Some((0, (*id, program.clone()))),
+                        | LoadedProgramType::Typed(_) => Some((*id, program.clone())),
                         #[cfg(test)]
-                        LoadedProgramType::TestLoaded => Some((0, (*id, program.clone()))),
-                        LoadedProgramType::Unloaded => Some((1, (*id, program.clone()))),
-                        LoadedProgramType::FailedVerification
+                        LoadedProgramType::TestLoaded => Some((*id, program.clone())),
+                        LoadedProgramType::Unloaded
+                        | LoadedProgramType::FailedVerification
                         | LoadedProgramType::Closed
                         | LoadedProgramType::DelayVisibility
                         | LoadedProgramType::Builtin(_, _) => None,
                     })
             })
-            .sorted_by_cached_key(|(order, (_id, program))| {
-                (*order, program.usage_counter.load(Ordering::Relaxed))
-            })
-            .unzip();
+            .sorted_by_cached_key(|(_id, program)| program.usage_counter.load(Ordering::Relaxed))
+            .collect();
 
-        for order in ordering {
-            match order {
-                0 => num_loaded = num_loaded.saturating_add(1),
-                1 => num_unloaded = num_unloaded.saturating_add(1),
-                _ => unreachable!(),
-            }
-        }
-
-        let num_to_unload = num_loaded.saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
+        let num_to_unload = sorted_candidates
+            .len()
+            .saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
         self.unload_program_entries(sorted_candidates.iter().take(num_to_unload));
-
-        let num_unloaded_to_evict = num_unloaded
-            .saturating_add(num_to_unload)
-            .saturating_sub(shrink_to.apply_to(MAX_UNLOADED_ENTRY_COUNT));
-        let (newly_unloaded_programs, sorted_candidates) = sorted_candidates.split_at(num_loaded);
-        let num_old_unloaded_to_evict = cmp::min(sorted_candidates.len(), num_unloaded_to_evict);
-        self.remove_program_entries(sorted_candidates.iter().take(num_old_unloaded_to_evict));
-
-        let num_newly_unloaded_to_evict =
-            num_unloaded_to_evict.saturating_sub(sorted_candidates.len());
-        self.remove_program_entries(
-            newly_unloaded_programs
-                .iter()
-                .take(num_newly_unloaded_to_evict),
-        );
-
         self.remove_programs_with_no_entries();
     }
 
@@ -508,20 +493,6 @@ impl LoadedPrograms {
     pub fn remove_programs(&mut self, keys: impl Iterator<Item = Pubkey>) {
         for k in keys {
             self.entries.remove(&k);
-        }
-    }
-
-    fn remove_program_entries<'a>(
-        &mut self,
-        remove: impl Iterator<Item = &'a (Pubkey, Arc<LoadedProgram>)>,
-    ) {
-        for (id, program) in remove {
-            if let Some(entries) = self.entries.get_mut(id) {
-                let index = entries.iter().position(|entry| entry == program);
-                if let Some(index) = index {
-                    entries.swap_remove(index);
-                }
-            }
         }
     }
 
@@ -575,7 +546,7 @@ mod tests {
     use {
         crate::loaded_programs::{
             BlockRelation, ForkGraph, LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType,
-            LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot,
+            LoadedPrograms, LoadedProgramsForTxBatch, WorkingSlot, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         percentage::Percentage,
         solana_rbpf::vm::BuiltInProgram,
@@ -759,9 +730,9 @@ mod tests {
 
         // Evicting to 2% should update cache with
         // * 5 active entries
-        // * 20 unloaded entries
+        // * 33 unloaded entries (3 active programs will get unloaded)
         // * 30 tombstones (tombstones are not evicted)
-        cache.sort_and_evict(Percentage::from(2));
+        cache.sort_and_unload(Percentage::from(2));
         // Check that every program is still in the cache.
         programs.iter().for_each(|entry| {
             assert!(cache.entries.get(&entry.0).is_some());
@@ -799,81 +770,8 @@ mod tests {
         });
 
         assert_eq!(num_loaded, 5);
-        assert_eq!(num_unloaded, 20);
+        assert_eq!(num_unloaded, 33);
         assert_eq!(num_tombstones, 30);
-    }
-
-    #[test]
-    fn test_eviction_unload_underflow() {
-        // Test: Eviction of unloaded programs requires eviction of newly unloaded programs.
-        // 1. Load 26 programs
-        // 2. Insert 1 unloaded program
-        // Eviction will unload 21 programs.
-        // 2 unloaded programs need to be evicted. So 1 old and 1 new unloaded program will be evicted.
-
-        let mut cache = LoadedPrograms::default();
-
-        let program1 = Pubkey::new_unique();
-        let num_total_programs = 26;
-        (0..num_total_programs).for_each(|i| {
-            cache.replenish(
-                program1,
-                new_test_loaded_program_with_usage(i, i + 2, AtomicU64::new(i)),
-            );
-        });
-
-        let program2 = Pubkey::new_unique();
-        insert_unloaded_program(&mut cache, program2, 26);
-
-        let num_loaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::TestLoaded)
-        });
-        let num_unloaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::Unloaded)
-        });
-        let num_tombstones = num_matching_entries(&cache, |program_type| {
-            matches!(
-                program_type,
-                LoadedProgramType::DelayVisibility
-                    | LoadedProgramType::FailedVerification
-                    | LoadedProgramType::Closed
-            )
-        });
-
-        assert_eq!(num_loaded, 26);
-        assert_eq!(num_unloaded, 1);
-        assert_eq!(num_tombstones, 0);
-
-        // Test that program2 exists in the cache. It'll get removed after eviction.
-        assert!(cache.entries.get(&program2).is_some());
-
-        // Evicting to 2% should update cache with
-        // * 5 active entries
-        // * 20 unloaded entries
-        // * 0 tombstones
-        cache.sort_and_evict(Percentage::from(2));
-
-        let num_loaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::TestLoaded)
-        });
-        let num_unloaded = num_matching_entries(&cache, |program_type| {
-            matches!(program_type, LoadedProgramType::Unloaded)
-        });
-        let num_tombstones = num_matching_entries(&cache, |program_type| {
-            matches!(
-                program_type,
-                LoadedProgramType::DelayVisibility
-                    | LoadedProgramType::FailedVerification
-                    | LoadedProgramType::Closed
-            )
-        });
-
-        assert_eq!(num_loaded, 5);
-        assert_eq!(num_unloaded, 20);
-        assert_eq!(num_tombstones, 0);
-
-        // Test that program2 has been removed after eviction.
-        assert!(cache.entries.get(&program2).is_none());
     }
 
     #[test]
@@ -890,7 +788,7 @@ mod tests {
         });
 
         // This will unload the program deployed at slot 0, with usage count = 10
-        cache.sort_and_evict(Percentage::from(2));
+        cache.sort_and_unload(Percentage::from(2));
 
         let num_unloaded = num_matching_entries(&cache, |program_type| {
             matches!(program_type, LoadedProgramType::Unloaded)
@@ -926,6 +824,23 @@ mod tests {
                 }
             })
         });
+    }
+
+    #[test]
+    fn test_replace_tombstones() {
+        let mut cache = LoadedPrograms::default();
+        let program1 = Pubkey::new_unique();
+        set_tombstone(
+            &mut cache,
+            program1,
+            10,
+            LoadedProgramType::FailedVerification,
+        );
+
+        let loaded_program = new_test_loaded_program(10, 10);
+        let (existing, program) = cache.replenish(program1, loaded_program.clone());
+        assert!(!existing);
+        assert_eq!(program, loaded_program);
     }
 
     #[test]
@@ -1198,7 +1113,14 @@ mod tests {
 
         let program2 = Pubkey::new_unique();
         assert!(!cache.replenish(program2, new_test_loaded_program(5, 6)).0);
-        assert!(!cache.replenish(program2, new_test_loaded_program(11, 12)).0);
+        assert!(
+            !cache
+                .replenish(
+                    program2,
+                    new_test_loaded_program(11, 11 + DELAY_VISIBILITY_SLOT_OFFSET)
+                )
+                .0
+        );
 
         let program3 = Pubkey::new_unique();
         assert!(!cache.replenish(program3, new_test_loaded_program(25, 26)).0);
@@ -1207,7 +1129,14 @@ mod tests {
         assert!(!cache.replenish(program4, new_test_loaded_program(0, 1)).0);
         assert!(!cache.replenish(program4, new_test_loaded_program(5, 6)).0);
         // The following is a special case, where effective slot is 3 slots in the future
-        assert!(!cache.replenish(program4, new_test_loaded_program(15, 18)).0);
+        assert!(
+            !cache
+                .replenish(
+                    program4,
+                    new_test_loaded_program(15, 15 + DELAY_VISIBILITY_SLOT_OFFSET)
+                )
+                .0
+        );
 
         // Current fork graph
         //                   0
@@ -1244,7 +1173,7 @@ mod tests {
         assert!(missing.contains(&program3));
 
         // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 16
-        let mut working_slot = TestWorkingSlot::new(16, &[0, 5, 11, 15, 16, 18, 19, 23]);
+        let mut working_slot = TestWorkingSlot::new(15, &[0, 5, 11, 15, 16, 18, 19, 23]);
         let (found, missing) = cache.extract(
             &working_slot,
             vec![
@@ -1256,11 +1185,17 @@ mod tests {
             .into_iter(),
         );
 
-        assert!(match_slot(&found, &program1, 0, 16));
-        assert!(match_slot(&found, &program2, 11, 16));
+        assert!(match_slot(&found, &program1, 0, 15));
+        assert!(match_slot(&found, &program2, 11, 15));
 
         // The effective slot of program4 deployed in slot 15 is 19. So it should not be usable in slot 16.
-        assert!(match_slot(&found, &program4, 5, 16));
+        // A delay visibility tombstone should be returned here.
+        let tombstone = found.find(program4).expect("Failed to find the tombstone");
+        assert!(matches!(
+            tombstone.program,
+            LoadedProgramType::DelayVisibility
+        ));
+        assert_eq!(tombstone.deployment_slot, 15);
 
         assert!(missing.contains(&program3));
 
@@ -1320,7 +1255,13 @@ mod tests {
         );
 
         assert!(match_slot(&found, &program1, 0, 11));
-        assert!(match_slot(&found, &program2, 5, 11));
+        // program2 was updated at slot 11, but is not effective till slot 12. The result should contain a tombstone.
+        let tombstone = found.find(program2).expect("Failed to find the tombstone");
+        assert!(matches!(
+            tombstone.program,
+            LoadedProgramType::DelayVisibility
+        ));
+        assert_eq!(tombstone.deployment_slot, 11);
         assert!(match_slot(&found, &program4, 5, 11));
 
         assert!(missing.contains(&program3));

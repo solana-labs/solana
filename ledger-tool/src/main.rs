@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::{args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*},
+    crate::{args::*, bigtable::*, ledger_path::*, ledger_utils::*, output::*, run::*},
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -106,6 +106,7 @@ mod bigtable;
 mod ledger_path;
 mod ledger_utils;
 mod output;
+mod run;
 
 #[derive(PartialEq, Eq)]
 enum LedgerOutputMethod {
@@ -1285,7 +1286,7 @@ fn main() {
                 .takes_value(true)
                 .possible_values(&["json", "json-compact"])
                 .help("Return information in specified output format, \
-                       currently only available for bigtable subcommands"),
+                       currently only available for bigtable and run subcommands"),
         )
         .arg(
             Arg::with_name("verbose")
@@ -2027,6 +2028,7 @@ fn main() {
                            If no file name is specified, it will print the metadata of all ledger files.")
             )
         )
+        .run_subcommand()
         .get_matches();
 
     info!("{} {}", crate_name!(), solana_version::version!());
@@ -4055,6 +4057,9 @@ fn main() {
                 if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
                     eprintln!("{err}");
                 }
+            }
+            ("run", Some(arg_matches)) => {
+                run(&ledger_path, arg_matches);
             }
             ("", _) => {
                 eprintln!("{}", matches.usage());

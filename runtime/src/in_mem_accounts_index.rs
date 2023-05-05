@@ -260,10 +260,14 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         })
     }
 
+    /// lookup 'pubkey' in disk map.
+    /// If it is found, convert it to a cache entry and return the cache entry.
+    /// Cache entries from this function will always not be dirty.
     fn load_account_entry_from_disk(&self, pubkey: &Pubkey) -> Option<AccountMapEntry<T>> {
         let entry_disk = self.load_from_disk(pubkey)?; // returns None if not on disk
-
-        Some(self.disk_to_cache_entry(entry_disk.0, entry_disk.1))
+        let entry_cache = self.disk_to_cache_entry(entry_disk.0, entry_disk.1);
+        debug_assert!(!entry_cache.dirty());
+        Some(entry_cache)
     }
 
     /// lookup 'pubkey' by only looking in memory. Does not look on disk.
@@ -340,9 +344,12 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 match entry {
                     Entry::Occupied(occupied) => callback(Some(occupied.get())).1,
                     Entry::Vacant(vacant) => {
+                        debug_assert!(!disk_entry.dirty());
                         let (add_to_cache, rt) = callback(Some(&disk_entry));
-
-                        if add_to_cache {
+                        // We are holding a write lock to the in-memory map.
+                        // This pubkey is not in the in-memory map.
+                        // If the entry is now dirty, then it must be put in the cache or the modifications will be lost.
+                        if add_to_cache || disk_entry.dirty() {
                             stats.inc_mem_count(self.bin);
                             vacant.insert(disk_entry);
                         }

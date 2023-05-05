@@ -520,13 +520,6 @@ impl Consumer {
         let (freeze_lock, freeze_lock_us) = measure_us!(bank.freeze_lock());
         execute_and_commit_timings.freeze_lock_us = freeze_lock_us;
 
-        if !executed_transactions.is_empty() {
-            inc_new_counter_info!("banking_stage-record_count", 1);
-            inc_new_counter_info!(
-                "banking_stage-record_transactions",
-                executed_transactions_count
-            );
-        }
         let (record_transactions_summary, record_us) = measure_us!(self
             .transaction_recorder
             .record_transactions(bank.slot(), executed_transactions));
@@ -543,12 +536,6 @@ impl Consumer {
         };
 
         if let Err(recorder_err) = record_transactions_result {
-            inc_new_counter_info!("banking_stage-max_height_reached", 1);
-            inc_new_counter_info!(
-                "banking_stage-max_height_reached_num_to_commit",
-                executed_transactions_count
-            );
-
             retryable_transaction_indexes.extend(execution_results.iter().enumerate().filter_map(
                 |(index, execution_result)| execution_result.was_executed().then_some(index),
             ));

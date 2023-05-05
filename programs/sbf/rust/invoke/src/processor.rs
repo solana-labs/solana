@@ -621,8 +621,7 @@ fn process_instruction(
             msg!("Test writable deescalation writable");
             const NUM_BYTES: usize = 10;
             let mut buffer = [0; NUM_BYTES];
-            buffer
-                .copy_from_slice(&accounts[INVOKED_ARGUMENT_INDEX].data.borrow_mut()[..NUM_BYTES]);
+            buffer.copy_from_slice(&accounts[INVOKED_ARGUMENT_INDEX].data.borrow()[..NUM_BYTES]);
 
             let instruction = create_instruction(
                 *accounts[INVOKED_PROGRAM_INDEX].key,
@@ -633,7 +632,7 @@ fn process_instruction(
 
             assert_eq!(
                 buffer,
-                accounts[INVOKED_ARGUMENT_INDEX].data.borrow_mut()[..NUM_BYTES]
+                accounts[INVOKED_ARGUMENT_INDEX].data.borrow()[..NUM_BYTES]
             );
         }
         TEST_NESTED_INVOKE_TOO_DEEP => {

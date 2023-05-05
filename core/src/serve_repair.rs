@@ -59,8 +59,6 @@ use {
     thiserror::Error,
 };
 
-type SlotHash = (Slot, Hash);
-
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 11;
 // Number of slots to cache their respective repair peers and sampling weights.
@@ -73,7 +71,7 @@ pub const MAX_ANCESTOR_BYTES_IN_PACKET: usize =
     4 /*(response version enum discriminator)*/ -
     4 /*slot_hash length*/;
 pub const MAX_ANCESTOR_RESPONSES: usize =
-    MAX_ANCESTOR_BYTES_IN_PACKET / std::mem::size_of::<SlotHash>();
+    MAX_ANCESTOR_BYTES_IN_PACKET / std::mem::size_of::<(Slot, Hash)>();
 /// Number of bytes in the randomly generated token sent with ping messages.
 pub(crate) const REPAIR_PING_TOKEN_SIZE: usize = HASH_BYTES;
 pub const REPAIR_PING_CACHE_CAPACITY: usize = 65536;
@@ -154,7 +152,7 @@ impl AncestorHashesRepairType {
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
 #[frozen_abi(digest = "AKpurCovzn6rsji4aQrP3hUdEHxjtXUfT7AatZXN7Rpz")]
 pub enum AncestorHashesResponse {
-    Hashes(Vec<SlotHash>),
+    Hashes(Vec<(Slot, Hash)>),
     Ping(Ping),
 }
 
@@ -228,7 +226,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
 #[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
-#[frozen_abi(digest = "3bgE3sYHRqetvpo4fcDL6PTV3z2LMAtY6H8BoLFSjCwf")]
+#[frozen_abi(digest = "6VyBwHjkAMXAN97fdhQgFv6VdPEnfJo9LdUAd2SFtwF3")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
     LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
@@ -1451,7 +1449,7 @@ mod tests {
         let ping = ping_pong::Ping::<[u8; 32]>::new_rand(&mut rng, &keypair).unwrap();
         let pong = Pong::new(&ping, &keypair).unwrap();
         let request = RepairProtocol::Pong(pong);
-        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut pkt = Packet::from_data(None, request).unwrap();
         let mut batch = PacketBatch::new(vec![pkt.clone()]);
         let mut stats = ServeRepairStats::default();
         let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
@@ -1468,7 +1466,7 @@ mod tests {
             slot: 123,
             shred_index: 456,
         };
-        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut pkt = Packet::from_data(None, request).unwrap();
         let mut batch = PacketBatch::new(vec![pkt.clone()]);
         let mut stats = ServeRepairStats::default();
         let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
@@ -1484,7 +1482,7 @@ mod tests {
             header: repair_request_header_for_tests(),
             slot: 123,
         };
-        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut pkt = Packet::from_data(None, request).unwrap();
         let mut batch = PacketBatch::new(vec![pkt.clone()]);
         let mut stats = ServeRepairStats::default();
         let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
@@ -1497,7 +1495,7 @@ mod tests {
         assert_eq!(stats.err_malformed, 1);
 
         let request = RepairProtocol::LegacyOrphan(LegacyContactInfo::default(), 123);
-        let mut pkt = Packet::from_data(None, &request).unwrap();
+        let mut pkt = Packet::from_data(None, request).unwrap();
         let mut batch = PacketBatch::new(vec![pkt.clone()]);
         let mut stats = ServeRepairStats::default();
         let num_well_formed = discard_malformed_repair_requests(&mut batch, &mut stats);
@@ -2376,7 +2374,7 @@ mod tests {
     fn test_verify_ancestor_response() {
         let request_slot = MAX_ANCESTOR_RESPONSES as Slot;
         let repair = AncestorHashesRepairType(request_slot);
-        let mut response: Vec<SlotHash> = (0..request_slot)
+        let mut response: Vec<(Slot, Hash)> = (0..request_slot)
             .map(|slot| (slot, Hash::new_unique()))
             .collect();
         assert!(repair.verify_response(&AncestorHashesResponse::Hashes(response.clone())));

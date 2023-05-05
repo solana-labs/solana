@@ -28,7 +28,7 @@ pub struct TransactionErrorMetrics {
 
 impl TransactionErrorMetrics {
     pub fn new() -> Self {
-        Self { ..Self::default() }
+        Self::default()
     }
 
     pub fn accumulate(&mut self, other: &TransactionErrorMetrics) {

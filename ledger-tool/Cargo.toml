@@ -25,6 +25,7 @@ regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 solana-account-decoder = { workspace = true }
+solana-bpf-loader-program = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-cli-output = { workspace = true }
 solana-core = { workspace = true }
@@ -34,6 +35,7 @@ solana-gossip = { workspace = true }
 solana-ledger = { workspace = true }
 solana-logger = { workspace = true }
 solana-measure = { workspace = true }
+solana-program-runtime = { workspace = true }
 solana-rpc = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
@@ -43,6 +45,7 @@ solana-streamer = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
+solana_rbpf = { workspace = true, features = ["debugger"] }
 tokio = { workspace = true, features = ["full"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
