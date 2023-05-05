@@ -90,7 +90,6 @@ use {
         ThreadPool, ThreadPoolBuilder,
     },
     solana_measure::{measure, measure::Measure, measure_us},
-    solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::perf_libs,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
@@ -3180,7 +3179,11 @@ impl Bank {
                         "Burning {} fee instead of crediting {}",
                         deposit, self.collector_id
                     );
-                    inc_new_counter_error!("bank-burned_fee_lamports", deposit as usize);
+                    datapoint_error!(
+                        "bank-burned_fee",
+                        ("slot", self.slot(), i64),
+                        ("num_lamports", deposit, i64)
+                    );
                     burn += deposit;
                 }
             }
@@ -3674,7 +3677,6 @@ impl Bank {
             "register_tick() working on a bank that is already frozen or is undergoing freezing!"
         );
 
-        inc_new_counter_debug!("bank-register_tick-registered", 1);
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
             self.register_recent_blockhash(hash);
         }
@@ -5345,9 +5347,11 @@ impl Bank {
                             "Rent distribution of {rent_to_be_paid} to {pubkey} results in \
                             invalid RentState: {recipient_post_rent_state:?}"
                         );
-                        inc_new_counter_warn!(
-                            "rent-distribution-rent-paying",
-                            rent_to_be_paid as usize
+                        datapoint_warn!(
+                            "bank-rent_distribution_invalid_state",
+                            ("slot", self.slot(), i64),
+                            ("pubkey", pubkey.to_string(), String),
+                            ("rent_to_be_paid", rent_to_be_paid, i64)
                         );
                     }
                     if distribution.is_err()
@@ -5360,9 +5364,10 @@ impl Bank {
                             "Burned {} rent lamports instead of sending to {}",
                             rent_to_be_paid, pubkey
                         );
-                        inc_new_counter_error!(
-                            "bank-burned_rent_lamports",
-                            rent_to_be_paid as usize
+                        datapoint_error!(
+                            "bank-burned_rent",
+                            ("slot", self.slot(), i64),
+                            ("num_lamports", rent_to_be_paid, i64)
                         );
                     } else {
                         self.store_account(&pubkey, &account);
@@ -5616,15 +5621,26 @@ impl Bank {
                 if rent_collected_info.rent_amount > 0 {
                     if let Some(rent_paying_pubkeys) = rent_paying_pubkeys {
                         if !rent_paying_pubkeys.contains(pubkey) {
-                            // inc counter instead of assert while we verify this is correct
-                            inc_new_counter_info!("unexpected-rent-paying-pubkey", 1);
+                            let partition_from_pubkey = accounts_partition::partition_from_pubkey(
+                                pubkey,
+                                self.epoch_schedule.slots_per_epoch,
+                            );
+                            // Submit datapoint instead of assert while we verify this is correct
+                            datapoint_warn!(
+                                "bank-unexpected_rent_paying_pubkey",
+                                ("slot", self.slot(), i64),
+                                ("pubkey", pubkey.to_string(), String),
+                                ("partition_index", partition_index, i64),
+                                ("partition_from_pubkey", partition_from_pubkey, i64)
+                            );
                             warn!(
-                                "Collecting rent from unexpected pubkey: {}, slot: {}, parent_slot: {:?}, partition_index: {}, partition_from_pubkey: {}",
+                                "Collecting rent from unexpected pubkey: {}, slot: {}, parent_slot: {:?}, \
+                                partition_index: {}, partition_from_pubkey: {}",
                                 pubkey,
                                 self.slot(),
                                 self.parent().map(|bank| bank.slot()),
                                 partition_index,
-                                accounts_partition::partition_from_pubkey(pubkey, self.epoch_schedule.slots_per_epoch),
+                                partition_from_pubkey,
                             );
                         }
                     }
