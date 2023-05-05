@@ -6696,6 +6696,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_cpus",
+ "num_enum 0.6.1",
  "once_cell",
  "ouroboros",
  "percentage",
