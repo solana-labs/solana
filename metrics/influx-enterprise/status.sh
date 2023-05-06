@@ -22,32 +22,24 @@ check_service() {
 
   # Loop through the servers
   for server in "${servers[@]}"; do
-    ssh_success=false
-    ssh_attempts=0
-    while ! $ssh_success && [ $ssh_attempts -lt 3 ]; do
+    local service_not_running=true
+    local retries=3
+    for _ in $(seq 1 $retries); do
       # Check if the service is running
-      if ssh -o StrictHostKeyChecking=no sol@"$server" sudo systemctl is-active "$service" >/dev/null 2>&1; then
-        ssh_success=true
+      if ssh -o StrictHostKeyChecking=no sol@"$server" sudo systemctl is-active "$service" >/dev/null; then
+        # Service is running
+        message="The $service service is running on $server."
+        echo "$message"
+        service_not_running=false
+        break
       else
-        ssh_attempts=$((ssh_attempts + 1))
-        sleep 5
+        # Service is not running, wait for 10 seconds and check again
+        sleep 10
       fi
     done
 
-    if $ssh_success; then
-      # Service is running
-      message="The $service service is running on $server."
-      echo "$message"
-    else
-      # SSH connection failed after retries
-      message="ERROR: Unable to establish SSH connection to $server after 3 retries."
-      echo "$message"
-      curl -H "Content-Type: application/json" -d '{"content":"'"$message"', manual intervention is required."}' "$DISCORD_WEBHOOK"
-      continue
-    fi
-
-    # Service is not running, try to restart it
-    if ! $ssh_success; then
+    if $service_not_running; then
+      # Service is not running, send alert and try to restart it
       message="The $service service is not running on $server. Restarting..."
       echo "$message"
       curl -H "Content-Type: application/json" -d '{"content":"'"$message"'"}' "$DISCORD_WEBHOOK"
