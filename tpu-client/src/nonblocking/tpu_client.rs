@@ -614,16 +614,13 @@ impl LeaderTpuService {
         let t_leader_tpu_service = Some({
             let recent_slots = recent_slots.clone();
             let leader_tpu_cache = leader_tpu_cache.clone();
-            tokio::spawn(async move {
-                Self::run(
-                    rpc_client,
-                    recent_slots,
-                    leader_tpu_cache,
-                    pubsub_client,
-                    exit,
-                )
-                .await
-            })
+            tokio::spawn(Self::run(
+                rpc_client,
+                recent_slots,
+                leader_tpu_cache,
+                pubsub_client,
+                exit,
+            ))
         });
 
         Ok(LeaderTpuService {
