@@ -52,7 +52,7 @@ scrape_configs:
     scrape_interval: 15s
     scrape_timeout: 14s
     static_configs:
-            - targets: ['dev-server-us-da11:9100','dev-server-us-ny5:9100','dev-server-us-sv15:9100','dev-server-eu-am6:9100','dev-server-asia-sg1:9100','dev-server-us-da11-2:9100','dev-server-us-da11-3:9100','dev-server-us-da11-4:9100','dev-server-us-da11-5:9100','dev-server-asia-hk2:9100','dev-server-asia-sg1-2:9100','dev-server-asia-ty11:9100','dev-server-eu-am6-2:9100','dev-server-asia-sg1-2:9100','dev-server-us-sv15-2:9100','dev-server-us-da11-6:9100','dev-server-us-da11-7:9100','dev-server-eu-ld7-1:9100','dev-server-us-da11-8:9100','dev-server-eu-ld7-2:9100']
+            - targets: ['dev-server-us-da11:9100','dev-server-us-ny5:9100','dev-server-us-sv15:9100','dev-server-eu-am6:9100','dev-server-asia-sg1:9100','dev-server-us-da11-2:9100','dev-server-us-da11-3:9100','dev-server-us-da11-4:9100','dev-server-us-da11-5:9100','dev-server-asia-hk2:9100','dev-server-asia-sg1-2:9100','dev-server-eu-am6-2:9100','dev-server-asia-sg1-2:9100','dev-server-us-sv15-2:9100','dev-server-us-da11-6:9100','dev-server-us-da11-7:9100','dev-server-eu-ld7-1:9100','dev-server-us-da11-8:9100','dev-server-eu-ld7-2:9100']
 
   - job_name: 'Development'
     scrape_interval: 15s
