@@ -191,6 +191,23 @@ where
     }
 }
 
+// Gets a string of multiple urls and uses the already defined function to check whether the string
+// is a url
+pub fn are_urls(string: String) -> Result<(), String>
+{
+    let mut split_string = string.split(" ");
+
+    loop {
+        let val = split_string.next();
+
+        if val == None { break; }
+
+        return is_url(val.unwrap());
+    }
+
+    Ok(())
+}
+
 pub fn is_url_or_moniker<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
