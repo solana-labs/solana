@@ -5,6 +5,7 @@
 pub use tokio;
 use {
     async_trait::async_trait,
+    base64::{prelude::BASE64_STANDARD, Engine},
     chrono_humanize::{Accuracy, HumanTime, Tense},
     log::*,
     solana_banks_client::start_client,
@@ -562,7 +563,8 @@ impl ProgramTest {
             address,
             Account {
                 lamports,
-                data: base64::decode(data_base64)
+                data: BASE64_STANDARD
+                    .decode(data_base64)
                     .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,

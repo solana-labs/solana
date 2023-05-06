@@ -9,6 +9,7 @@ use {
         },
         QuietDisplay, VerboseDisplay,
     },
+    base64::{prelude::BASE64_STANDARD, Engine},
     chrono::{Local, TimeZone},
     clap::ArgMatches,
     console::{style, Emoji},
@@ -2400,7 +2401,7 @@ pub fn return_signers_data(tx: &Transaction, config: &ReturnSignersConfig) -> Cl
         });
     let message = if config.dump_transaction_message {
         let message_data = tx.message_data();
-        Some(base64::encode(message_data))
+        Some(BASE64_STANDARD.encode(message_data))
     } else {
         None
     };

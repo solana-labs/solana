@@ -5,6 +5,7 @@ use {
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         parsed_token_accounts::*, rpc_cache::LargestAccountsCache, rpc_health::*,
     },
+    base64::{prelude::BASE64_STANDARD, Engine},
     bincode::{config::Options, serialize},
     crossbeam_channel::{unbounded, Receiver, Sender},
     jsonrpc_core::{futures::future, types::error, BoxFuture, Error, Metadata, Result},
@@ -4484,7 +4485,8 @@ where
                     PACKET_DATA_SIZE,
                 )));
             }
-            base64::decode(encoded)
+            BASE64_STANDARD
+                .decode(encoded)
                 .map_err(|e| Error::invalid_params(format!("invalid base64 encoding: {e:?}")))?
         }
     };
@@ -5537,7 +5539,7 @@ pub mod tests {
             Some(json!([address, {"encoding": "base64"}])),
         );
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
-        let expected = json!([base64::encode(&data), "base64"]);
+        let expected = json!([BASE64_STANDARD.encode(&data), "base64"]);
         assert_eq!(result["value"]["data"], expected);
         assert_eq!(result["value"]["space"], 5);
 
@@ -5546,7 +5548,7 @@ pub mod tests {
             Some(json!([address, {"encoding": "base64", "dataSlice": {"length": 2, "offset": 1}}])),
         );
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
-        let expected = json!([base64::encode(&data[1..3]), "base64"]);
+        let expected = json!([BASE64_STANDARD.encode(&data[1..3]), "base64"]);
         assert_eq!(result["value"]["data"], expected);
         assert_eq!(result["value"]["space"], 5);
 
@@ -5566,7 +5568,7 @@ pub mod tests {
             ),
         );
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
-        let expected = json!([base64::encode(&data[1..3]), "base64"]);
+        let expected = json!([BASE64_STANDARD.encode(&data[1..3]), "base64"]);
         assert_eq!(
             result["value"]["data"], expected,
             "should use data slice if parsing fails"
@@ -5608,7 +5610,7 @@ pub mod tests {
             {
                 "owner": "11111111111111111111111111111111",
                 "lamports": 42,
-                "data": [base64::encode(&data), "base64"],
+                "data": [BASE64_STANDARD.encode(&data), "base64"],
                 "executable": false,
                 "rentEpoch": 0,
                 "space": 5,
@@ -5675,7 +5677,7 @@ pub mod tests {
             {
                 "owner": "11111111111111111111111111111111",
                 "lamports": 42,
-                "data": [base64::encode(&data[1..3]), "base64"],
+                "data": [BASE64_STANDARD.encode(&data[1..3]), "base64"],
                 "executable": false,
                 "rentEpoch": 0,
                 "space": 5,
@@ -8429,7 +8431,7 @@ pub mod tests {
         let ff_tx = vec![0xffu8; PACKET_DATA_SIZE];
         let tx58 = bs58::encode(&ff_tx).into_string();
         assert_eq!(tx58.len(), MAX_BASE58_SIZE);
-        let tx64 = base64::encode(&ff_tx);
+        let tx64 = BASE64_STANDARD.encode(&ff_tx);
         assert_eq!(tx64.len(), MAX_BASE64_SIZE);
     }
 
@@ -8449,7 +8451,7 @@ pub mod tests {
             )
         ));
 
-        let tx64 = base64::encode(&tx_ser);
+        let tx64 = BASE64_STANDARD.encode(&tx_ser);
         let tx64_len = tx64.len();
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
@@ -8470,7 +8472,7 @@ pub mod tests {
             ))
         );
 
-        let tx64 = base64::encode(&tx_ser);
+        let tx64 = BASE64_STANDARD.encode(&tx_ser);
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
@@ -8480,7 +8482,7 @@ pub mod tests {
         );
 
         let tx_ser = vec![0xffu8; PACKET_DATA_SIZE - 2];
-        let mut tx64 = base64::encode(&tx_ser);
+        let mut tx64 = BASE64_STANDARD.encode(&tx_ser);
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx64.clone(), TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
@@ -8606,7 +8608,9 @@ pub mod tests {
 
             let request = create_test_request(
                 "getFeeForMessage",
-                Some(json!([base64::encode(serialize(&legacy_msg).unwrap())])),
+                Some(json!([
+                    BASE64_STANDARD.encode(serialize(&legacy_msg).unwrap())
+                ])),
             );
             let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
             assert_eq!(response.value, TEST_SIGNATURE_FEE);
@@ -8625,7 +8629,7 @@ pub mod tests {
 
             let request = create_test_request(
                 "getFeeForMessage",
-                Some(json!([base64::encode(serialize(&v0_msg).unwrap())])),
+                Some(json!([BASE64_STANDARD.encode(serialize(&v0_msg).unwrap())])),
             );
             let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
             assert_eq!(response.value, TEST_SIGNATURE_FEE);

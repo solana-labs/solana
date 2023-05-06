@@ -1,5 +1,6 @@
 use {
     crate::cli_output::CliSignatureVerificationStatus,
+    base64::{prelude::BASE64_STANDARD, Engine},
     chrono::{DateTime, Local, NaiveDateTime, SecondsFormat, TimeZone, Utc},
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
@@ -602,7 +603,7 @@ fn write_return_data<W: io::Write>(
     if let Some(return_data) = return_data {
         let (data, encoding) = &return_data.data;
         let raw_return_data = match encoding {
-            UiReturnDataEncoding::Base64 => base64::decode(data).map_err(|err| {
+            UiReturnDataEncoding::Base64 => BASE64_STANDARD.decode(data).map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("could not parse data as {encoding:?}: {err:?}"),

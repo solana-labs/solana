@@ -18,6 +18,7 @@ use {
         discrete_log::DiscreteLog,
         pedersen::{Pedersen, PedersenCommitment, PedersenOpening, G, H},
     },
+    base64::{prelude::BASE64_STANDARD, Engine},
     core::ops::{Add, Mul, Sub},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
@@ -329,7 +330,7 @@ impl ElGamalPubkey {
 
 impl fmt::Display for ElGamalPubkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", base64::encode(self.to_bytes()))
+        write!(f, "{}", BASE64_STANDARD.encode(self.to_bytes()))
     }
 }
 
@@ -496,7 +497,7 @@ impl ElGamalCiphertext {
 
 impl fmt::Display for ElGamalCiphertext {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", base64::encode(self.to_bytes()))
+        write!(f, "{}", BASE64_STANDARD.encode(self.to_bytes()))
     }
 }
 
