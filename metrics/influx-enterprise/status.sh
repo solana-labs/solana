@@ -24,7 +24,6 @@ check_service() {
   for server in "${servers[@]}"; do
     local service_not_running=true
     local retries=3
-    
     for _ in $(seq 1 $retries); do
       # Check if the service is running
       if ssh -o StrictHostKeyChecking=no sol@"$server" sudo systemctl is-active "$service" >/dev/null; then
