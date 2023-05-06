@@ -1352,7 +1352,7 @@ version = "3.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbcf33c2a618cbe41ee43ae6e9f2e48368cd9f9db2896f10167d8d762679f639"
 dependencies = [
- "nix 0.26.2",
+ "nix",
  "windows-sys 0.45.0",
 ]
 
@@ -2960,6 +2960,15 @@ dependencies = [
 
 [[package]]
 name = "memoffset"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
+name = "memoffset"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d61c719bcfbcf5d62b3a09efa6088de8c54bc0bfcd3ea7ae39fcc186108b8de1"
@@ -3086,20 +3095,6 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f346ff70e7dbfd675fe90590b92d59ef2de15a8779ae305ebcbfd3f0caf59be4"
-dependencies = [
- "autocfg",
- "bitflags",
- "cfg-if 1.0.0",
- "libc",
- "memoffset 0.6.4",
- "pin-utils",
-]
-
-[[package]]
-name = "nix"
 version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfdda3d196821d6af13126e40375cdf7da646a96114af134d5f417a9a1dc8e1a"
@@ -3107,6 +3102,8 @@ dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
  "libc",
+ "memoffset 0.7.1",
+ "pin-utils",
  "static_assertions",
 ]
 
@@ -5890,7 +5887,7 @@ dependencies = [
  "dirs-next",
  "indicatif",
  "lazy_static",
- "nix 0.25.1",
+ "nix",
  "reqwest",
  "scopeguard",
  "semver 1.0.17",
@@ -6185,7 +6182,7 @@ dependencies = [
  "clap 3.2.23",
  "crossbeam-channel",
  "log",
- "nix 0.25.1",
+ "nix",
  "rand 0.7.3",
  "serde",
  "serde_derive",
@@ -6223,7 +6220,7 @@ dependencies = [
  "libc",
  "log",
  "matches",
- "nix 0.25.1",
+ "nix",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
@@ -6994,7 +6991,7 @@ dependencies = [
  "itertools",
  "libc",
  "log",
- "nix 0.25.1",
+ "nix",
  "pem",
  "percentage",
  "pkcs8",
@@ -7020,7 +7017,7 @@ dependencies = [
  "clap 2.33.3",
  "libc",
  "log",
- "nix 0.25.1",
+ "nix",
  "solana-logger 1.16.0",
  "solana-version",
  "sysctl",
