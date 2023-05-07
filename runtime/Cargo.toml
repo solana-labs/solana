@@ -34,6 +34,7 @@ modular-bitfield = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
 num_cpus = { workspace = true }
+num_enum = { workspace = true }
 once_cell = { workspace = true }
 ouroboros = { workspace = true }
 percentage = { workspace = true }
@@ -61,6 +62,7 @@ solana-system-program = { workspace = true }
 solana-vote-program = { workspace = true }
 solana-zk-token-proof-program = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
+static_assertions = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
 symlink = { workspace = true }
