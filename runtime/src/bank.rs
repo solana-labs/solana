@@ -7471,11 +7471,6 @@ impl Bank {
             .is_active(&feature_set::credits_auto_rewind::id())
     }
 
-    pub fn send_to_tpu_vote_port_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::send_to_tpu_vote_port::id())
-    }
-
     pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {
         self.cost_tracker.read()
     }

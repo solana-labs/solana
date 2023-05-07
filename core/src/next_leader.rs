@@ -7,13 +7,6 @@ use {
     std::{net::SocketAddr, sync::RwLock},
 };
 
-pub(crate) fn next_leader_tpu(
-    cluster_info: &ClusterInfo,
-    poh_recorder: &RwLock<PohRecorder>,
-) -> Option<(Pubkey, SocketAddr)> {
-    next_leader_x(cluster_info, poh_recorder, ContactInfo::tpu)
-}
-
 pub(crate) fn next_leader_tpu_forwards(
     cluster_info: &ClusterInfo,
     poh_recorder: &RwLock<PohRecorder>,
