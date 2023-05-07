@@ -232,13 +232,24 @@ fn get_cluster_info(
     ))
 }
 
+fn get_latency(url: String, timeout: Duration) -> Option<u128> {
+    let rpc_client = RpcClient::new_with_timeout(url, timeout);
+
+    let now = Instant::now();
+
+    rpc_client.get_latest_blockhash().ok()?;
+
+    Some(now.elapsed().as_millis())
+}
+
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("watchtower", /*version:*/ None);
 
     let config = get_config();
 
-    let rpc_client = RpcClient::new_with_timeout(config.json_rpc_url.clone(), config.rpc_timeout);
+    // let rpc_client = RpcClient::new_with_timeout(config.json_rpc_url.clone(), config.rpc_timeout);
+    let mut rpc_client;
     let notifier = Notifier::default();
     let mut last_transaction_count = 0;
     let mut last_recent_blockhash = Hash::default();
@@ -248,6 +259,30 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut incident = Hash::new_unique();
 
     loop {
+        let mut urls_split = config.json_rpc_url.split(" ");
+
+        let mut lowest_latency_url: String = String::new();
+        let mut lowest_latency: u128 = 100000;
+
+        // Make a test request to all the rpcs available
+        // Pick one with lowest latency
+        loop {
+            let val = urls_split.next();
+
+            if val == None { break; }
+
+            let latency = get_latency(val.unwrap().to_string(), config.rpc_timeout).unwrap();
+            if latency < lowest_latency {
+                lowest_latency = latency;
+                lowest_latency_url = val.unwrap().to_string();
+            }
+        }
+
+        info!("Lowest Latency: {} ms", lowest_latency);
+        info!("Lowest Latency URL: {}\n", lowest_latency_url);
+        
+        rpc_client = RpcClient::new_with_timeout(lowest_latency_url.clone(), config.rpc_timeout);
+
         let failure = match get_cluster_info(&config, &rpc_client) {
             Ok((transaction_count, recent_blockhash, vote_accounts, validator_balances)) => {
                 info!("Current transaction count: {}", transaction_count);
