@@ -46,7 +46,13 @@ pub struct ImmutableDeserializedPacket {
 }
 
 impl ImmutableDeserializedPacket {
-    pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
+    pub fn new(
+        packet: Packet,
+        // current working or root bank's feature gate status for supporting rounding
+        // compute-unit-price. This parameter can be removed once the feature is fully adapted in
+        // mainnet-beta.
+        support_round_compute_unit_price: bool,
+    ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction = packet.deserialize_slice(..)?;
         let sanitized_transaction = SanitizedVersionedTransaction::try_from(versioned_transaction)?;
         let message_bytes = packet_message(&packet)?;
@@ -55,7 +61,7 @@ impl ImmutableDeserializedPacket {
 
         // drop transaction if prioritization fails.
         let mut priority_details = sanitized_transaction
-            .get_transaction_priority_details()
+            .get_transaction_priority_details(support_round_compute_unit_price)
             .ok_or(DeserializedPacketError::PrioritizationFailure)?;
 
         // set priority to zero for vote transactions

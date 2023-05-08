@@ -40,11 +40,13 @@ impl PacketDeserializer {
         &self,
         recv_timeout: Duration,
         capacity: usize,
+        support_round_compute_unit_price: bool,
     ) -> Result<ReceivePacketResults, RecvTimeoutError> {
         let (packet_count, packet_batches) = self.receive_until(recv_timeout, capacity)?;
         Ok(Self::deserialize_and_collect_packets(
             packet_count,
             &packet_batches,
+            support_round_compute_unit_price,
         ))
     }
 
@@ -53,6 +55,7 @@ impl PacketDeserializer {
     fn deserialize_and_collect_packets(
         packet_count: usize,
         banking_batches: &[BankingPacketBatch],
+        support_round_compute_unit_price: bool,
     ) -> ReceivePacketResults {
         let mut passed_sigverify_count: usize = 0;
         let mut failed_sigverify_count: usize = 0;
@@ -66,8 +69,11 @@ impl PacketDeserializer {
                 passed_sigverify_count += packet_indexes.len();
                 failed_sigverify_count += packet_batch.len().saturating_sub(packet_indexes.len());
 
-                deserialized_packets
-                    .extend(Self::deserialize_packets(packet_batch, &packet_indexes));
+                deserialized_packets.extend(Self::deserialize_packets(
+                    packet_batch,
+                    &packet_indexes,
+                    support_round_compute_unit_price,
+                ));
             }
 
             if let Some(tracer_packet_stats) = &banking_batch.1 {
@@ -136,9 +142,14 @@ impl PacketDeserializer {
     fn deserialize_packets<'a>(
         packet_batch: &'a PacketBatch,
         packet_indexes: &'a [usize],
+        support_round_compute_unit_price: bool,
     ) -> impl Iterator<Item = ImmutableDeserializedPacket> + 'a {
         packet_indexes.iter().filter_map(move |packet_index| {
-            ImmutableDeserializedPacket::new(packet_batch[*packet_index].clone()).ok()
+            ImmutableDeserializedPacket::new(
+                packet_batch[*packet_index].clone(),
+                support_round_compute_unit_price,
+            )
+            .ok()
         })
     }
 }

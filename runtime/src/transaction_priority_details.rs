@@ -14,10 +14,14 @@ pub struct TransactionPriorityDetails {
 }
 
 pub trait GetTransactionPriorityDetails {
-    fn get_transaction_priority_details(&self) -> Option<TransactionPriorityDetails>;
+    fn get_transaction_priority_details(
+        &self,
+        support_round_compute_unit_price: bool,
+    ) -> Option<TransactionPriorityDetails>;
 
     fn process_compute_budget_instruction<'a>(
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
+        _support_round_compute_unit_price: bool, // a feature gate status will be used by compute_budget.
     ) -> Option<TransactionPriorityDetails> {
         let mut compute_budget = ComputeBudget::default();
         let prioritization_fee_details = compute_budget
@@ -37,14 +41,26 @@ pub trait GetTransactionPriorityDetails {
 }
 
 impl GetTransactionPriorityDetails for SanitizedVersionedTransaction {
-    fn get_transaction_priority_details(&self) -> Option<TransactionPriorityDetails> {
-        Self::process_compute_budget_instruction(self.get_message().program_instructions_iter())
+    fn get_transaction_priority_details(
+        &self,
+        support_round_compute_unit_price: bool,
+    ) -> Option<TransactionPriorityDetails> {
+        Self::process_compute_budget_instruction(
+            self.get_message().program_instructions_iter(),
+            support_round_compute_unit_price,
+        )
     }
 }
 
 impl GetTransactionPriorityDetails for SanitizedTransaction {
-    fn get_transaction_priority_details(&self) -> Option<TransactionPriorityDetails> {
-        Self::process_compute_budget_instruction(self.message().program_instructions_iter())
+    fn get_transaction_priority_details(
+        &self,
+        support_round_compute_unit_price: bool,
+    ) -> Option<TransactionPriorityDetails> {
+        Self::process_compute_budget_instruction(
+            self.message().program_instructions_iter(),
+            support_round_compute_unit_price,
+        )
     }
 }
 

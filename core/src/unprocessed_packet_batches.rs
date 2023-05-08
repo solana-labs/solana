@@ -26,8 +26,12 @@ impl DeserializedPacket {
         }
     }
 
-    pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
-        let immutable_section = ImmutableDeserializedPacket::new(packet)?;
+    pub fn new(
+        packet: Packet,
+        support_round_compute_unit_price: bool,
+    ) -> Result<Self, DeserializedPacketError> {
+        let immutable_section =
+            ImmutableDeserializedPacket::new(packet, support_round_compute_unit_price)?;
 
         Ok(Self {
             immutable_section: Arc::new(immutable_section),
@@ -293,20 +297,26 @@ impl UnprocessedPacketBatches {
 pub fn deserialize_packets<'a>(
     packet_batch: &'a PacketBatch,
     packet_indexes: &'a [usize],
+    support_round_compute_unit_price: bool,
 ) -> impl Iterator<Item = DeserializedPacket> + 'a {
     packet_indexes.iter().filter_map(move |packet_index| {
-        DeserializedPacket::new(packet_batch[*packet_index].clone()).ok()
+        DeserializedPacket::new(
+            packet_batch[*packet_index].clone(),
+            support_round_compute_unit_price,
+        )
+        .ok()
     })
 }
 
 pub fn transactions_to_deserialized_packets(
     transactions: &[Transaction],
+    support_round_compute_unit_price: bool,
 ) -> Result<Vec<DeserializedPacket>, DeserializedPacketError> {
     transactions
         .iter()
         .map(|transaction| {
             let packet = Packet::from_data(None, transaction)?;
-            DeserializedPacket::new(packet)
+            DeserializedPacket::new(packet, support_round_compute_unit_price)
         })
         .collect()
 }

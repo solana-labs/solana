@@ -212,7 +212,9 @@ impl PrioritizationFeeCache {
                         continue;
                     }
 
-                    let priority_details = sanitized_transaction.get_transaction_priority_details();
+                    let support_round_compute_unit_price = false; // TODO read feature status from `bank`
+                    let priority_details = sanitized_transaction
+                        .get_transaction_priority_details(support_round_compute_unit_price);
                     let account_locks = sanitized_transaction
                         .get_account_locks(bank.get_transaction_account_lock_limit());
 

@@ -33,12 +33,19 @@ pub struct LatestValidatorVotePacket {
 }
 
 impl LatestValidatorVotePacket {
-    pub fn new(packet: Packet, vote_source: VoteSource) -> Result<Self, DeserializedPacketError> {
+    pub fn new(
+        packet: Packet,
+        vote_source: VoteSource,
+        support_round_compute_unit_price: bool,
+    ) -> Result<Self, DeserializedPacketError> {
         if !packet.meta().is_simple_vote_tx() {
             return Err(DeserializedPacketError::VoteTransactionError);
         }
 
-        let vote = Arc::new(ImmutableDeserializedPacket::new(packet)?);
+        let vote = Arc::new(ImmutableDeserializedPacket::new(
+            packet,
+            support_round_compute_unit_price,
+        )?);
         Self::new_from_immutable(vote, vote_source)
     }
 

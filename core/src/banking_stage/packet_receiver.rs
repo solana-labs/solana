@@ -10,20 +10,30 @@ use {
     },
     crossbeam_channel::RecvTimeoutError,
     solana_measure::{measure::Measure, measure_us},
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{saturating_add_assign, timing::timestamp},
-    std::{sync::atomic::Ordering, time::Duration},
+    std::{
+        sync::{atomic::Ordering, Arc, RwLock},
+        time::Duration,
+    },
 };
 
 pub struct PacketReceiver {
     id: u32,
     packet_deserializer: PacketDeserializer,
+    bank_forks: Arc<RwLock<BankForks>>,
 }
 
 impl PacketReceiver {
-    pub fn new(id: u32, banking_packet_receiver: BankingPacketReceiver) -> Self {
+    pub fn new(
+        id: u32,
+        banking_packet_receiver: BankingPacketReceiver,
+        bank_forks: Arc<RwLock<BankForks>>,
+    ) -> Self {
         Self {
             id,
             packet_deserializer: PacketDeserializer::new(banking_packet_receiver),
+            bank_forks,
         }
     }
 
@@ -37,11 +47,17 @@ impl PacketReceiver {
     ) -> Result<(), RecvTimeoutError> {
         let (result, recv_time_us) = measure_us!({
             let recv_timeout = Self::get_receive_timeout(unprocessed_transaction_storage);
+
+            // get root bank from bank_forks, use it to get feature_set status
+            let _root_bank = self.bank_forks.read().unwrap().root_bank();
+            let support_round_compute_unit_price = false; // TODO get feature from root_bank
+
             let mut recv_and_buffer_measure = Measure::start("recv_and_buffer");
             self.packet_deserializer
                 .receive_packets(
                     recv_timeout,
                     unprocessed_transaction_storage.max_receive_size(),
+                    support_round_compute_unit_price,
                 )
                 // Consumes results if Ok, otherwise we keep the Err
                 .map(|receive_packet_results| {
