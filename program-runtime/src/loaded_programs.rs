@@ -25,7 +25,7 @@ use {
 };
 
 const MAX_LOADED_ENTRY_COUNT: usize = 256;
-const DELAY_VISIBILITY_SLOT_OFFSET: Slot = 1;
+pub const DELAY_VISIBILITY_SLOT_OFFSET: Slot = 1;
 
 /// Relationship between two fork IDs
 #[derive(Copy, Clone, PartialEq)]
@@ -254,6 +254,12 @@ impl LoadedProgram {
                 | LoadedProgramType::DelayVisibility
         )
     }
+
+    fn is_implicit_delay_visibility_tombstone(&self, slot: Slot) -> bool {
+        self.effective_slot.saturating_sub(self.deployment_slot) == DELAY_VISIBILITY_SLOT_OFFSET
+            && slot >= self.deployment_slot
+            && slot < self.effective_slot
+    }
 }
 
 #[derive(Debug, Default)]
@@ -289,8 +295,20 @@ impl LoadedProgramsForTxBatch {
         (self.entries.insert(key, entry.clone()).is_some(), entry)
     }
 
-    pub fn find(&self, key: Pubkey) -> Option<Arc<LoadedProgram>> {
-        self.entries.get(&key).cloned()
+    pub fn find(&self, key: &Pubkey) -> Option<Arc<LoadedProgram>> {
+        self.entries.get(key).map(|entry| {
+            if entry.is_implicit_delay_visibility_tombstone(self.slot) {
+                // Found a program entry on the current fork, but it's not effective
+                // yet. It indicates that the program has delayed visibility. Return
+                // the tombstone to reflect that.
+                Arc::new(LoadedProgram::new_tombstone(
+                    entry.deployment_slot,
+                    LoadedProgramType::DelayVisibility,
+                ))
+            } else {
+                entry.clone()
+            }
+        })
     }
 
     pub fn slot(&self) -> Slot {
@@ -435,18 +453,17 @@ impl LoadedPrograms {
 
                             if current_slot >= entry.effective_slot {
                                 return Some((key, entry.clone()));
-                            } else if entry.effective_slot.saturating_sub(entry.deployment_slot)
-                                == DELAY_VISIBILITY_SLOT_OFFSET
-                                && current_slot >= entry.deployment_slot
-                            {
+                            } else if entry.is_implicit_delay_visibility_tombstone(current_slot) {
                                 // Found a program entry on the current fork, but it's not effective
                                 // yet. It indicates that the program has delayed visibility. Return
                                 // the tombstone to reflect that.
-                                let delay_visibility = LoadedProgram::new_tombstone(
-                                    entry.deployment_slot,
-                                    LoadedProgramType::DelayVisibility,
-                                );
-                                return Some((key, Arc::new(delay_visibility)));
+                                return Some((
+                                    key,
+                                    Arc::new(LoadedProgram::new_tombstone(
+                                        entry.deployment_slot,
+                                        LoadedProgramType::DelayVisibility,
+                                    )),
+                                ));
                             }
                         }
                     }
@@ -1079,7 +1096,7 @@ mod tests {
     ) -> bool {
         assert_eq!(table.slot, working_slot);
         table
-            .find(*program)
+            .find(program)
             .map(|entry| entry.deployment_slot == deployment_slot)
             .unwrap_or(false)
     }
@@ -1195,7 +1212,7 @@ mod tests {
 
         // The effective slot of program4 deployed in slot 15 is 19. So it should not be usable in slot 16.
         // A delay visibility tombstone should be returned here.
-        let tombstone = found.find(program4).expect("Failed to find the tombstone");
+        let tombstone = found.find(&program4).expect("Failed to find the tombstone");
         assert!(matches!(
             tombstone.program,
             LoadedProgramType::DelayVisibility
@@ -1261,7 +1278,7 @@ mod tests {
 
         assert!(match_slot(&found, &program1, 0, 11));
         // program2 was updated at slot 11, but is not effective till slot 12. The result should contain a tombstone.
-        let tombstone = found.find(program2).expect("Failed to find the tombstone");
+        let tombstone = found.find(&program2).expect("Failed to find the tombstone");
         assert!(matches!(
             tombstone.program,
             LoadedProgramType::DelayVisibility
