@@ -101,12 +101,12 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 //   warning: `#[must_use]` has no effect when applied to a struct field
 #[allow(unused_attributes)]
 // Send + Sync is needed to be a field of Bank
-pub trait InstalledScheduler: Send + Sync + Debug {
+pub trait InstalledScheduler<TI: Send + Sync>: Send + Sync + Debug {
     fn id(&self) -> SchedulerId;
     fn pool(&self) -> InstalledSchedulerPoolArc;
 
     // Calling this is illegal as soon as schedule_termiantion is called on &self.
-    fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize);
+    fn schedule_execution(&self, transaction_with_index: TI);
 
     // This optionally signals scheduling termination request to the scheduler.
     // This is subtle but important, to break circular dependency of Arc<Bank> => Scheduler =>
@@ -130,6 +130,8 @@ pub type SchedulerId = u64;
 
 pub type ResultWithTimings = (Result<()>, ExecuteTimings);
 
+pub type TransactionWithIndex = (SanitizedTransaction, usize);
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum WaitReason {
     // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
@@ -141,7 +143,7 @@ pub enum WaitReason {
     ReinitializedForRecentBlockhash,
 }
 
-pub type InstalledSchedulerBox = Box<dyn InstalledScheduler>;
+pub type InstalledSchedulerBox = Box<dyn InstalledScheduler<TransactionWithIndex>>;
 // somewhat arbitrary new type just to pacify Bank's frozen_abi...
 #[derive(Debug, Default)]
 pub(crate) struct InstalledSchedulerBoxInBank(Option<InstalledSchedulerBox>);
@@ -282,7 +284,7 @@ impl Bank {
         let scheduler = scheduler_guard.0.as_ref().expect("active scheduler");
 
         for (sanitized_transaction, &index) in transactions.iter().zip(transaction_indexes) {
-            scheduler.schedule_execution(sanitized_transaction, index);
+            scheduler.schedule_execution((sanitized_transaction.clone(), index));
         }
     }
 
@@ -382,7 +384,7 @@ mod tests {
 
     fn setup_mocked_scheduler_with_extra(
         wait_reasons: impl Iterator<Item = WaitReason>,
-        f: Option<impl Fn(&mut MockInstalledScheduler)>,
+        f: Option<impl Fn(&mut MockInstalledScheduler<TransactionWithIndex>)>,
     ) -> InstalledSchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
@@ -411,7 +413,7 @@ mod tests {
     ) -> InstalledSchedulerBox {
         setup_mocked_scheduler_with_extra(
             wait_reasons,
-            None::<fn(&mut MockInstalledScheduler) -> ()>,
+            None::<fn(&mut MockInstalledScheduler<TransactionWithIndex>) -> ()>,
         )
     }
 
@@ -487,12 +489,14 @@ mod tests {
         let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
         let mocked_scheduler = setup_mocked_scheduler_with_extra(
             [WaitReason::TerminatedFromBankDrop].into_iter(),
-            Some(|mocked: &mut MockInstalledScheduler| {
-                mocked
-                    .expect_schedule_execution()
-                    .times(1)
-                    .returning(|_, _| ());
-            }),
+            Some(
+                |mocked: &mut MockInstalledScheduler<TransactionWithIndex>| {
+                    mocked
+                        .expect_schedule_execution()
+                        .times(1)
+                        .returning(|(_, _)| ());
+                },
+            ),
         );
 
         bank.install_scheduler(mocked_scheduler);

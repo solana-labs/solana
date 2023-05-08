@@ -4582,7 +4582,7 @@ pub mod tests {
         mocked_scheduler
             .expect_schedule_execution()
             .times(txs.len())
-            .returning(|_, _| ());
+            .returning(|(_, _)| ());
         mocked_scheduler
             .expect_wait_for_termination()
             .times(1)
