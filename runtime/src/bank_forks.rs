@@ -668,6 +668,10 @@ impl ForkGraph for BankForks {
             })
             .unwrap_or(BlockRelation::Unknown)
     }
+
+    fn root(&self) -> Slot {
+        self.root()
+    }
 }
 
 #[cfg(test)]

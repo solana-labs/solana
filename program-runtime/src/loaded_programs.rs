@@ -46,6 +46,9 @@ pub enum BlockRelation {
 pub trait ForkGraph {
     /// Returns the BlockRelation of A to B
     fn relationship(&self, a: Slot, b: Slot) -> BlockRelation;
+
+    /// Returns the current root slot
+    fn root(&self) -> Slot;
 }
 
 /// Provides information about current working slot, and its ancestors
@@ -383,7 +386,10 @@ impl LoadedPrograms {
                     let relation = fork_graph.relationship(entry.deployment_slot, new_root);
                     if entry.deployment_slot >= new_root {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
-                    } else if !first_ancestor_found && matches!(relation, BlockRelation::Ancestor) {
+                    } else if !first_ancestor_found
+                        && (matches!(relation, BlockRelation::Ancestor)
+                            || fork_graph.root() > entry.deployment_slot)
+                    {
                         first_ancestor_found = true;
                         first_ancestor_found
                     } else {
@@ -938,6 +944,10 @@ mod tests {
         fn relationship(&self, _a: Slot, _b: Slot) -> BlockRelation {
             self.relation
         }
+
+        fn root(&self) -> Slot {
+            0
+        }
     }
 
     #[test]
@@ -987,6 +997,7 @@ mod tests {
     #[derive(Default)]
     struct TestForkGraphSpecific {
         forks: Vec<Vec<Slot>>,
+        root: Slot,
     }
 
     impl TestForkGraphSpecific {
@@ -1022,6 +1033,10 @@ mod tests {
                 ControlFlow::Break(relation) => relation,
                 _ => BlockRelation::Unrelated,
             }
+        }
+
+        fn root(&self) -> Slot {
+            self.root
         }
     }
 
