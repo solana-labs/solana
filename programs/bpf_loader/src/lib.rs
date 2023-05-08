@@ -1273,17 +1273,22 @@ fn process_loader_upgradeable_instruction(
                                 instruction_context,
                                 &log_collector,
                             )?;
-                            let clock = invoke_context.get_sysvar_cache().get_clock()?;
-                            invoke_context
-                                .programs_modified_by_tx
-                                .borrow_mut()
-                                .replenish(
-                                    program_key,
-                                    Arc::new(LoadedProgram::new_tombstone(
-                                        clock.slot,
-                                        LoadedProgramType::Closed,
-                                    )),
-                                );
+                            if invoke_context
+                                .feature_set
+                                .is_active(&delay_visibility_of_program_deployment::id())
+                            {
+                                let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                                invoke_context
+                                    .programs_modified_by_tx
+                                    .borrow_mut()
+                                    .replenish(
+                                        program_key,
+                                        Arc::new(LoadedProgram::new_tombstone(
+                                            clock.slot,
+                                            LoadedProgramType::Closed,
+                                        )),
+                                    );
+                            }
                         }
                         _ => {
                             ic_logger_msg!(log_collector, "Invalid Program account");
@@ -1706,7 +1711,7 @@ pub mod test_utils {
                     false,
                 ) {
                     let mut cache = invoke_context.programs_modified_by_tx.borrow_mut();
-                    cache.set_slot(DELAY_VISIBILITY_SLOT_OFFSET);
+                    cache.set_slot_for_tests(DELAY_VISIBILITY_SLOT_OFFSET);
                     cache.replenish(*pubkey, Arc::new(loaded_program));
                 }
             }

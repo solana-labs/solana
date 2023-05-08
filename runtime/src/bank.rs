@@ -4706,13 +4706,9 @@ impl Bank {
                         // Update batch specific cache of the loaded programs with the modifications
                         // made by the transaction, if it executed successfully.
                         if details.status.is_ok() {
-                            programs_modified_by_tx.borrow().entries.iter().for_each(
-                                |(key, entry)| {
-                                    programs_loaded_for_tx_batch
-                                        .borrow_mut()
-                                        .replenish(*key, entry.clone());
-                                },
-                            )
+                            programs_loaded_for_tx_batch
+                                .borrow_mut()
+                                .merge(&programs_modified_by_tx.borrow());
                         }
                     }
                     result
@@ -5204,14 +5200,10 @@ impl Bank {
             } = execution_result
             {
                 if details.status.is_ok() {
-                    let mut cache = self.loaded_programs_cache.write().unwrap();
-                    programs_modified_by_tx
-                        .borrow()
-                        .entries
-                        .iter()
-                        .for_each(|(key, entry)| {
-                            cache.replenish(*key, entry.clone());
-                        })
+                    self.loaded_programs_cache
+                        .write()
+                        .unwrap()
+                        .merge(&programs_modified_by_tx.borrow());
                 }
             }
         }

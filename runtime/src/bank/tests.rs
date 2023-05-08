@@ -7772,7 +7772,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         solana_bpf_loader_program::process_instruction,
         |invoke_context| {
             let mut cache = invoke_context.programs_modified_by_tx.borrow_mut();
-            cache.set_slot(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
+            cache.set_slot_for_tests(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
             cache.replenish(program_keypair.pubkey(), loaded_program.clone());
         },
         |_invoke_context| {},

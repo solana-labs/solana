@@ -276,7 +276,7 @@ pub struct LoadedPrograms {
 pub struct LoadedProgramsForTxBatch {
     /// Pubkey is the address of a program.
     /// LoadedProgram is the corresponding program entry valid for the slot in which a transaction is being executed.
-    pub entries: HashMap<Pubkey, Arc<LoadedProgram>>,
+    entries: HashMap<Pubkey, Arc<LoadedProgram>>,
     slot: Slot,
 }
 
@@ -321,8 +321,14 @@ impl LoadedProgramsForTxBatch {
         self.slot
     }
 
-    pub fn set_slot(&mut self, slot: Slot) {
+    pub fn set_slot_for_tests(&mut self, slot: Slot) {
         self.slot = slot;
+    }
+
+    pub fn merge(&mut self, other: &Self) {
+        other.entries.iter().for_each(|(key, entry)| {
+            self.replenish(*key, entry.clone());
+        })
     }
 }
 
@@ -491,6 +497,12 @@ impl LoadedPrograms {
             },
             missing,
         )
+    }
+
+    pub fn merge(&mut self, tx_batch_cache: &LoadedProgramsForTxBatch) {
+        tx_batch_cache.entries.iter().for_each(|(key, entry)| {
+            self.replenish(*key, entry.clone());
+        })
     }
 
     /// Unloads programs which were used infrequently
