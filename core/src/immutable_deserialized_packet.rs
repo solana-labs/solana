@@ -55,7 +55,7 @@ impl ImmutableDeserializedPacket {
 
         // drop transaction if prioritization fails.
         let mut priority_details = sanitized_transaction
-            .get_transaction_priority_details()
+            .get_transaction_priority_details(packet.meta().round_compute_unit_price())
             .ok_or(DeserializedPacketError::PrioritizationFailure)?;
 
         // set priority to zero for vote transactions
