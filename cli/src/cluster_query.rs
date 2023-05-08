@@ -1007,8 +1007,8 @@ pub fn process_leader_schedule(
 ) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
     let epoch = epoch.unwrap_or(epoch_info.epoch);
-    if epoch > epoch_info.epoch {
-        return Err(format!("Epoch {epoch} is in the future").into());
+    if epoch > (epoch_info.epoch + 1) {
+        return Err(format!("Epoch {epoch} is more than one epoch in the future").into());
     }
 
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
