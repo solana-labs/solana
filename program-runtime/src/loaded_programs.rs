@@ -262,6 +262,8 @@ pub struct LoadedPrograms {
     ///
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
+
+    latest_root: Slot,
 }
 
 #[derive(Debug, Default)]
@@ -378,6 +380,8 @@ impl LoadedPrograms {
 
         self.remove_expired_entries(new_root);
         self.remove_programs_with_no_entries();
+
+        self.latest_root = std::cmp::max(self.latest_root, new_root);
     }
 
     fn matches_loaded_program(
@@ -408,7 +412,8 @@ impl LoadedPrograms {
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
                         let current_slot = working_slot.current_slot();
-                        if current_slot == entry.deployment_slot
+                        if entry.deployment_slot <= self.latest_root
+                            || entry.deployment_slot == current_slot
                             || working_slot.is_ancestor(entry.deployment_slot)
                         {
                             if entry
@@ -1339,8 +1344,8 @@ mod tests {
         //                   |
         //                  23
 
-        // Testing fork 0 - 10 - 12 - 22 (which was pruned) with current slot at 22
-        let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
+        // Testing fork 11 - 15 - 16- 19 - 22 with root at 5 and current slot at 22
+        let working_slot = TestWorkingSlot::new(22, &[5, 11, 15, 16, 19, 22, 23]);
         let (found, missing) = cache.extract(
             &working_slot,
             vec![
@@ -1354,13 +1359,13 @@ mod tests {
 
         // Since the fork was pruned, we should not find the entry deployed at slot 20.
         assert!(match_slot(&found, &program1, 0, 22));
-        assert!(match_slot(&found, &program4, 0, 22));
+        assert!(match_slot(&found, &program2, 11, 22));
+        assert!(match_slot(&found, &program4, 15, 22));
 
-        assert!(missing.contains(&program2));
         assert!(missing.contains(&program3));
 
         // Testing fork 0 - 5 - 11 - 25 - 27 with current slot at 27
-        let working_slot = TestWorkingSlot::new(27, &[0, 5, 11, 25, 27]);
+        let working_slot = TestWorkingSlot::new(27, &[11, 25, 27]);
         let (found, _missing) = cache.extract(
             &working_slot,
             vec![
@@ -1394,8 +1399,8 @@ mod tests {
         //                  |
         //                  23
 
-        // Testing fork 0 - 5 - 11 - 25 - 27 (with root at 15, slot 25, 27 are pruned) with current slot at 27
-        let working_slot = TestWorkingSlot::new(27, &[0, 5, 11, 25, 27]);
+        // Testing fork 16, 19, 23, with root at 15, current slot at 23
+        let working_slot = TestWorkingSlot::new(23, &[16, 19, 23]);
         let (found, missing) = cache.extract(
             &working_slot,
             vec![
@@ -1407,9 +1412,9 @@ mod tests {
             .into_iter(),
         );
 
-        assert!(match_slot(&found, &program1, 0, 27));
-        assert!(match_slot(&found, &program2, 11, 27));
-        assert!(match_slot(&found, &program4, 5, 27));
+        assert!(match_slot(&found, &program1, 0, 23));
+        assert!(match_slot(&found, &program2, 11, 23));
+        assert!(match_slot(&found, &program4, 15, 23));
 
         // program3 was deployed on slot 25, which has been pruned
         assert!(missing.contains(&program3));
