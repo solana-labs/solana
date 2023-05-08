@@ -414,7 +414,6 @@ impl LoadedPrograms {
                         let current_slot = working_slot.current_slot();
                         if entry.deployment_slot <= self.latest_root
                             || entry.deployment_slot == current_slot
-                            || entry.deployment_slot == 0
                             || working_slot.is_ancestor(entry.deployment_slot)
                         {
                             if entry
