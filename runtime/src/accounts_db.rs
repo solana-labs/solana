@@ -2993,16 +2993,14 @@ impl AccountsDb {
         let max_slot_inclusive =
             max_clean_root_inclusive.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
-        // find the oldest non-ancient append vec
+        // find the oldest dirty slot
         // we'll add logging if that append vec cannot be marked dead
-        let mut min_dirty_slot = self.get_accounts_hash_complete_oldest_non_ancient_slot();
+        let mut min_dirty_slot = None::<u64>;
         self.dirty_stores.retain(|slot, store| {
             if *slot > max_slot_inclusive {
                 true
             } else {
-                if *slot < min_dirty_slot {
-                    min_dirty_slot = *slot;
-                }
+                min_dirty_slot = min_dirty_slot.map(|min| min.min(*slot)).or(Some(*slot));
                 dirty_stores.push((*slot, store.clone()));
                 false
             }
@@ -3094,7 +3092,7 @@ impl AccountsDb {
                 });
         }
 
-        (pubkeys, Some(min_dirty_slot))
+        (pubkeys, min_dirty_slot)
     }
 
     /// Call clean_accounts() with the common parameters that tests/benches use.
