@@ -318,7 +318,7 @@ impl LoadedProgramsForTxBatch {
 
 pub enum LoadedProgramMatchCriteria {
     DeployedOnOrAfterSlot(Slot),
-    Closed,
+    Tombstone,
     NoCriteria,
 }
 
@@ -410,9 +410,7 @@ impl LoadedPrograms {
             LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot) => {
                 program.deployment_slot >= *slot
             }
-            LoadedProgramMatchCriteria::Closed => {
-                matches!(program.program, LoadedProgramType::Closed)
-            }
+            LoadedProgramMatchCriteria::Tombstone => program.is_tombstone(),
             LoadedProgramMatchCriteria::NoCriteria => true,
         }
     }
