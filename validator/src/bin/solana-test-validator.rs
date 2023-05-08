@@ -154,6 +154,7 @@ fn main() {
 
     let rpc_port = value_t_or_exit!(matches, "rpc_port", u16);
     let enable_vote_subscription = matches.is_present("rpc_pubsub_enable_vote_subscription");
+    let enable_block_subscription = matches.is_present("rpc_pubsub_enable_block_subscription");
     let faucet_port = value_t_or_exit!(matches, "faucet_port", u16);
     let ticks_per_slot = value_t!(matches, "ticks_per_slot", u64).ok();
     let slots_per_epoch = value_t!(matches, "slots_per_epoch", Slot).ok();
@@ -440,6 +441,7 @@ fn main() {
         )
         .pubsub_config(PubSubConfig {
             enable_vote_subscription,
+            enable_block_subscription,
             ..PubSubConfig::default()
         })
         .rpc_port(rpc_port)
