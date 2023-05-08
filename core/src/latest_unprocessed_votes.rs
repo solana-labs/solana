@@ -358,7 +358,7 @@ mod tests {
             .meta_mut()
             .flags
             .set(PacketFlags::SIMPLE_VOTE_TX, true);
-        LatestValidatorVotePacket::new(packet, vote_source).unwrap()
+        LatestValidatorVotePacket::new(packet, vote_source, false).unwrap()
     }
 
     fn deserialize_packets<'a>(
@@ -367,7 +367,8 @@ mod tests {
         vote_source: VoteSource,
     ) -> impl Iterator<Item = LatestValidatorVotePacket> + 'a {
         packet_indexes.iter().filter_map(move |packet_index| {
-            LatestValidatorVotePacket::new(packet_batch[*packet_index].clone(), vote_source).ok()
+            LatestValidatorVotePacket::new(packet_batch[*packet_index].clone(), vote_source, false)
+                .ok()
         })
     }
 

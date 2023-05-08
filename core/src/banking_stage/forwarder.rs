@@ -356,7 +356,7 @@ mod tests {
             Hash::new_unique(),
         );
         let packet = Packet::from_data(None, tx).unwrap();
-        let deserialized_packet = DeserializedPacket::new(packet).unwrap();
+        let deserialized_packet = DeserializedPacket::new(packet, false).unwrap();
 
         let test_cases = vec![
             ("budget-restricted", DataBudget::restricted(), 0),
@@ -425,14 +425,14 @@ mod tests {
             let transaction = system_transaction::transfer(&keypair, &pubkey, 1, fwd_block_hash);
             let mut packet = Packet::from_data(None, transaction).unwrap();
             packet.meta_mut().flags |= PacketFlags::FORWARDED;
-            DeserializedPacket::new(packet).unwrap()
+            DeserializedPacket::new(packet, false).unwrap()
         };
 
         let normal_block_hash = Hash::new_unique();
         let normal_packet = {
             let transaction = system_transaction::transfer(&keypair, &pubkey, 1, normal_block_hash);
             let packet = Packet::from_data(None, transaction).unwrap();
-            DeserializedPacket::new(packet).unwrap()
+            DeserializedPacket::new(packet, false).unwrap()
         };
 
         let mut unprocessed_packet_batches = UnprocessedTransactionStorage::new_transaction_storage(

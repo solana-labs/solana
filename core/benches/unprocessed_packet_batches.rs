@@ -53,7 +53,7 @@ fn insert_packet_batches(
 
     (0..batch_count).for_each(|_| {
         let (packet_batch, packet_indexes) = build_packet_batch(packet_per_batch_count, None);
-        let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes);
+        let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes, false);
         unprocessed_packet_batches.insert_batch(deserialized_packets);
     });
 }
@@ -129,7 +129,7 @@ fn buffer_iter_desc_and_forward(
         (0..batch_count).for_each(|_| {
             let (packet_batch, packet_indexes) =
                 build_packet_batch(packet_per_batch_count, Some(genesis_config.hash()));
-            let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes);
+            let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes, false);
             unprocessed_packet_batches.insert_batch(deserialized_packets);
         });
     }

@@ -1713,8 +1713,11 @@ mod tests {
             let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+                unprocessed_packet_batches::transactions_to_deserialized_packets(
+                    &transactions,
+                    false,
+                )
+                .unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -1793,8 +1796,11 @@ mod tests {
             let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+                unprocessed_packet_batches::transactions_to_deserialized_packets(
+                    &transactions,
+                    false,
+                )
+                .unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -1846,8 +1852,11 @@ mod tests {
             let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+                unprocessed_packet_batches::transactions_to_deserialized_packets(
+                    &transactions,
+                    false,
+                )
+                .unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let retryable_packet = deserialized_packets[0].clone();
             let mut buffered_packet_batches =

@@ -166,7 +166,7 @@ mod tests {
             Hash::new_unique(),
         );
         let packet = Packet::from_data(None, tx).unwrap();
-        let deserialized_packet = ImmutableDeserializedPacket::new(packet);
+        let deserialized_packet = ImmutableDeserializedPacket::new(packet, false);
 
         assert!(matches!(deserialized_packet, Ok(_)));
     }

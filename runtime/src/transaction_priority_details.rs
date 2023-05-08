@@ -94,7 +94,7 @@ mod tests {
         let sanitized_versioned_transaction =
             SanitizedVersionedTransaction::try_new(versioned_transaction).unwrap();
         assert_eq!(
-            sanitized_versioned_transaction.get_transaction_priority_details(),
+            sanitized_versioned_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: 0,
                 compute_unit_limit:
@@ -107,7 +107,7 @@ mod tests {
         let sanitized_transaction =
             SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
         assert_eq!(
-            sanitized_transaction.get_transaction_priority_details(),
+            sanitized_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: 0,
                 compute_unit_limit:
@@ -134,7 +134,7 @@ mod tests {
         let sanitized_versioned_transaction =
             SanitizedVersionedTransaction::try_new(versioned_transaction).unwrap();
         assert_eq!(
-            sanitized_versioned_transaction.get_transaction_priority_details(),
+            sanitized_versioned_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: 0,
                 compute_unit_limit: requested_cu as u64,
@@ -145,7 +145,7 @@ mod tests {
         let sanitized_transaction =
             SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
         assert_eq!(
-            sanitized_transaction.get_transaction_priority_details(),
+            sanitized_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: 0,
                 compute_unit_limit: requested_cu as u64,
@@ -170,7 +170,7 @@ mod tests {
         let sanitized_versioned_transaction =
             SanitizedVersionedTransaction::try_new(versioned_transaction).unwrap();
         assert_eq!(
-            sanitized_versioned_transaction.get_transaction_priority_details(),
+            sanitized_versioned_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: requested_price,
                 compute_unit_limit:
@@ -183,7 +183,7 @@ mod tests {
         let sanitized_transaction =
             SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
         assert_eq!(
-            sanitized_transaction.get_transaction_priority_details(),
+            sanitized_transaction.get_transaction_priority_details(false),
             Some(TransactionPriorityDetails {
                 priority: requested_price,
                 compute_unit_limit:

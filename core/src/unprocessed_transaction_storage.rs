@@ -1049,7 +1049,7 @@ mod tests {
                 let mut p = Packet::from_data(None, transaction).unwrap();
                 p.meta_mut().port = packets_id as u16;
                 p.meta_mut().set_tracer(true);
-                DeserializedPacket::new(p).unwrap()
+                DeserializedPacket::new(p, false).unwrap()
             })
             .collect_vec();
 
@@ -1194,9 +1194,9 @@ mod tests {
                 thread_type,
             );
             transaction_storage.insert_batch(vec![
-                ImmutableDeserializedPacket::new(small_transfer.clone())?,
-                ImmutableDeserializedPacket::new(vote.clone())?,
-                ImmutableDeserializedPacket::new(big_transfer.clone())?,
+                ImmutableDeserializedPacket::new(small_transfer.clone(), false)?,
+                ImmutableDeserializedPacket::new(vote.clone(), false)?,
+                ImmutableDeserializedPacket::new(big_transfer.clone(), false)?,
             ]);
             let deserialized_packets = transaction_storage
                 .iter()
@@ -1214,9 +1214,9 @@ mod tests {
                 vote_source,
             );
             transaction_storage.insert_batch(vec![
-                ImmutableDeserializedPacket::new(small_transfer.clone())?,
-                ImmutableDeserializedPacket::new(vote.clone())?,
-                ImmutableDeserializedPacket::new(big_transfer.clone())?,
+                ImmutableDeserializedPacket::new(small_transfer.clone(), false)?,
+                ImmutableDeserializedPacket::new(vote.clone(), false)?,
+                ImmutableDeserializedPacket::new(big_transfer.clone(), false)?,
             ]);
             assert_eq!(1, transaction_storage.len());
         }
@@ -1253,7 +1253,7 @@ mod tests {
                 let mut p = Packet::from_data(None, transaction).unwrap();
                 p.meta_mut().port = packets_id as u16;
                 p.meta_mut().set_tracer(true);
-                DeserializedPacket::new(p).unwrap()
+                DeserializedPacket::new(p, false).unwrap()
             })
             .collect_vec();
 

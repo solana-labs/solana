@@ -163,7 +163,7 @@ mod tests {
         let tx_cost = CostModel::calculate_cost(&sanitized_transaction, &FeatureSet::all_enabled());
         let cost = tx_cost.sum();
         let deserialized_packet =
-            DeserializedPacket::new(Packet::from_data(None, transaction).unwrap()).unwrap();
+            DeserializedPacket::new(Packet::from_data(None, transaction).unwrap(), false).unwrap();
 
         // set limit ratio so each batch can only have one test transaction
         let limit_ratio: u32 =

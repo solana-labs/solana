@@ -345,7 +345,7 @@ mod tests {
             Hash::new_unique(),
         );
         let packet = Packet::from_data(None, tx).unwrap();
-        DeserializedPacket::new(packet).unwrap()
+        DeserializedPacket::new(packet, false).unwrap()
     }
 
     fn packet_with_priority_details(priority: u64, compute_unit_limit: u64) -> DeserializedPacket {
@@ -358,7 +358,7 @@ mod tests {
             ],
             Some(&from_account),
         ));
-        DeserializedPacket::new(Packet::from_data(None, tx).unwrap()).unwrap()
+        DeserializedPacket::new(Packet::from_data(None, tx).unwrap(), false).unwrap()
     }
 
     #[test]
@@ -474,7 +474,7 @@ mod tests {
 
         packet_vector
             .into_iter()
-            .map(|p| DeserializedPacket::new(p).unwrap())
+            .map(|p| DeserializedPacket::new(p, false).unwrap())
             .collect()
     }
 
