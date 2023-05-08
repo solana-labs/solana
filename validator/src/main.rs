@@ -466,8 +466,8 @@ pub fn main() {
         ("authorized-voter", Some(authorized_voter_subcommand_matches)) => {
             match authorized_voter_subcommand_matches.subcommand() {
                 ("add", Some(subcommand_matches)) => {
-                    if let Some(authorized_voter_keypair) =
-                        value_t!(subcommand_matches, "authorized_voter_keypair", String).ok()
+                    if let Ok(authorized_voter_keypair) =
+                        value_t!(subcommand_matches, "authorized_voter_keypair", String)
                     {
                         let authorized_voter_keypair = fs::canonicalize(&authorized_voter_keypair)
                             .unwrap_or_else(|err| {
@@ -562,7 +562,7 @@ pub fn main() {
                     return;
                 }
                 ("unload", Some(subcommand_matches)) => {
-                    if let Some(name) = value_t!(subcommand_matches, "name", String).ok() {
+                    if let Ok(name) = value_t!(subcommand_matches, "name", String) {
                         let admin_client = admin_rpc_service::connect(&ledger_path);
                         admin_rpc_service::runtime()
                             .block_on(async {
@@ -577,7 +577,7 @@ pub fn main() {
                     return;
                 }
                 ("load", Some(subcommand_matches)) => {
-                    if let Some(config) = value_t!(subcommand_matches, "config", String).ok() {
+                    if let Ok(config) = value_t!(subcommand_matches, "config", String) {
                         let admin_client = admin_rpc_service::connect(&ledger_path);
                         let name = admin_rpc_service::runtime()
                             .block_on(async {
@@ -592,8 +592,8 @@ pub fn main() {
                     return;
                 }
                 ("reload", Some(subcommand_matches)) => {
-                    if let Some(name) = value_t!(subcommand_matches, "name", String).ok() {
-                        if let Some(config) = value_t!(subcommand_matches, "config", String).ok() {
+                    if let Ok(name) = value_t!(subcommand_matches, "name", String) {
+                        if let Ok(config) = value_t!(subcommand_matches, "config", String) {
                             let admin_client = admin_rpc_service::connect(&ledger_path);
                             admin_rpc_service::runtime()
                                 .block_on(async {
@@ -702,7 +702,7 @@ pub fn main() {
         ("set-identity", Some(subcommand_matches)) => {
             let require_tower = subcommand_matches.is_present("require_tower");
 
-            if let Some(identity_keypair) = value_t!(subcommand_matches, "identity", String).ok() {
+            if let Ok(identity_keypair) = value_t!(subcommand_matches, "identity", String) {
                 let identity_keypair = fs::canonicalize(&identity_keypair).unwrap_or_else(|err| {
                     println!("Unable to access path: {identity_keypair}: {err:?}");
                     exit(1);
@@ -1115,12 +1115,12 @@ pub fn main() {
         started_from_validator: true, // this is the only place this is set
         ..AccountsIndexConfig::default()
     };
-    if let Some(bins) = value_t!(matches, "accounts_index_bins", usize).ok() {
+    if let Ok(bins) = value_t!(matches, "accounts_index_bins", usize) {
         accounts_index_config.bins = Some(bins);
     }
 
     accounts_index_config.index_limit_mb =
-        if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
+        if let Ok(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize) {
             IndexLimitMb::Limit(limit)
         } else if matches.is_present("disable_accounts_disk_index") {
             IndexLimitMb::InMemOnly
