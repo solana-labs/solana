@@ -19,4 +19,7 @@ solana-sdk = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+crossbeam-channel = { workspace = true }
+jemallocator = { workspace = true }
+log = { workspace = true }
 solana-logger = { workspace = true }

@@ -6785,6 +6785,8 @@ name = "solana-scheduler-pool"
 version = "1.16.0"
 dependencies = [
  "assert_matches",
+ "crossbeam-channel",
+ "log",
  "rand 0.7.3",
  "solana-ledger",
  "solana-logger 1.16.0",
@@ -6792,6 +6794,7 @@ dependencies = [
  "solana-runtime",
  "solana-scheduler",
  "solana-sdk 1.16.0",
+ "tikv-jemallocator",
 ]
 
 [[package]]
