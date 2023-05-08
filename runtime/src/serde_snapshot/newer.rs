@@ -294,14 +294,7 @@ impl<'a> TypeContext<'a> for Context {
             stats,
         };
 
-        let historical_roots = serializable_db
-            .accounts_db
-            .accounts_index
-            .roots_tracker
-            .read()
-            .unwrap()
-            .historical_roots
-            .get_all();
+        let historical_roots = Vec::<Slot>::default();
         let historical_roots_with_hash = Vec::<(Slot, Hash)>::default();
 
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
