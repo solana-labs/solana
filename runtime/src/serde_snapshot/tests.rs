@@ -752,35 +752,3 @@ mod test_bank_serialize {
         .serialize(s)
     }
 }
-
-#[test]
-fn test_reconstruct_historical_roots() {
-    {
-        let db = AccountsDb::default_for_tests();
-        let historical_roots = vec![];
-        let historical_roots_with_hash = vec![];
-        reconstruct_historical_roots(&db, historical_roots, historical_roots_with_hash);
-        let roots_tracker = db.accounts_index.roots_tracker.read().unwrap();
-        assert!(roots_tracker.historical_roots.is_empty());
-    }
-
-    {
-        let db = AccountsDb::default_for_tests();
-        let historical_roots = vec![1];
-        let historical_roots_with_hash = vec![(0, Hash::default())];
-        reconstruct_historical_roots(&db, historical_roots, historical_roots_with_hash);
-        let roots_tracker = db.accounts_index.roots_tracker.read().unwrap();
-        assert_eq!(roots_tracker.historical_roots.get_all(), vec![0, 1]);
-    }
-    {
-        let db = AccountsDb::default_for_tests();
-        let historical_roots = vec![2, 1];
-        let historical_roots_with_hash = vec![0, 5]
-            .into_iter()
-            .map(|slot| (slot, Hash::default()))
-            .collect();
-        reconstruct_historical_roots(&db, historical_roots, historical_roots_with_hash);
-        let roots_tracker = db.accounts_index.roots_tracker.read().unwrap();
-        assert_eq!(roots_tracker.historical_roots.get_all(), vec![0, 1, 2, 5]);
-    }
-}

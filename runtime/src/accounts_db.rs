@@ -1811,7 +1811,6 @@ struct FlushStats {
 #[derive(Debug, Default)]
 struct LatestAccountsIndexRootsStats {
     roots_len: AtomicUsize,
-    historical_roots_len: AtomicUsize,
     uncleaned_roots_len: AtomicUsize,
     previous_uncleaned_roots_len: AtomicUsize,
     roots_range: AtomicU64,
@@ -1832,9 +1831,6 @@ impl LatestAccountsIndexRootsStats {
         if let Some(value) = accounts_index_roots_stats.previous_uncleaned_roots_len {
             self.previous_uncleaned_roots_len
                 .store(value, Ordering::Relaxed);
-        }
-        if let Some(value) = accounts_index_roots_stats.historical_roots_len {
-            self.historical_roots_len.store(value, Ordering::Relaxed);
         }
         if let Some(value) = accounts_index_roots_stats.roots_range {
             self.roots_range.store(value, Ordering::Relaxed);
@@ -1863,11 +1859,6 @@ impl LatestAccountsIndexRootsStats {
             (
                 "roots_len",
                 self.roots_len.load(Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "historical_roots_len",
-                self.historical_roots_len.load(Ordering::Relaxed) as i64,
                 i64
             ),
             (
@@ -2931,12 +2922,6 @@ impl AccountsDb {
             *accounts_hash_complete_oldest_non_ancient_slot,
             one_epoch_old_slot,
         );
-
-        let accounts_hash_complete_oldest_non_ancient_slot =
-            *accounts_hash_complete_oldest_non_ancient_slot;
-
-        // now that accounts hash calculation is complete, we can remove old historical roots
-        self.remove_old_historical_roots(accounts_hash_complete_oldest_non_ancient_slot);
     }
 
     /// get the oldest slot that is within one epoch of the highest slot that has been used for hash calculation.
@@ -6888,11 +6873,6 @@ impl AccountsDb {
         );
     }
 
-    /// find slot >= 'slot' which is a root or in 'ancestors'
-    pub fn find_unskipped_slot(&self, slot: Slot, ancestors: Option<&Ancestors>) -> Option<Slot> {
-        self.accounts_index.get_next_original_root(slot, ancestors)
-    }
-
     pub fn checked_iterative_sum_for_capitalization(total_cap: u64, new_cap: u64) -> u64 {
         let new_total = total_cap as u128 + new_cap as u128;
         AccountsHasher::checked_cast_for_capitalization(new_total)
@@ -7725,32 +7705,6 @@ impl AccountsDb {
         self.assert_safe_squashing_accounts_hash(slot, config.epoch_schedule);
         stats.log();
         result
-    }
-
-    /// return alive roots to retain, even though they are ancient
-    fn calc_alive_ancient_historical_roots(&self, min_root: Slot) -> HashSet<Slot> {
-        let mut ancient_alive_roots = HashSet::default();
-        {
-            let all_roots = self.accounts_index.roots_tracker.read().unwrap();
-
-            if let Some(min) = all_roots.historical_roots.min() {
-                for slot in min..min_root {
-                    if all_roots.alive_roots.contains(&slot) {
-                        // there was a storage for this root, so it counts as a root
-                        ancient_alive_roots.insert(slot);
-                    }
-                }
-            }
-        }
-        ancient_alive_roots
-    }
-
-    /// get rid of historical roots that are older than 'min_root'.
-    /// These will be older than an epoch from a current root.
-    fn remove_old_historical_roots(&self, min_root: Slot) {
-        let alive_roots = self.calc_alive_ancient_historical_roots(min_root);
-        self.accounts_index
-            .remove_old_historical_roots(min_root, &alive_roots);
     }
 
     /// Verify accounts hash at startup (or tests)
@@ -16337,25 +16291,6 @@ pub mod tests {
                 should_contain: false,
             });
         }
-    }
-
-    #[test]
-    fn test_calc_alive_ancient_historical_roots() {
-        let db = AccountsDb::new_single_for_tests();
-        let min_root = 0;
-        let result = db.calc_alive_ancient_historical_roots(min_root);
-        assert!(result.is_empty());
-        for extra in 1..3 {
-            let result = db.calc_alive_ancient_historical_roots(extra);
-            assert_eq!(result, HashSet::default(), "extra: {extra}");
-        }
-
-        let extra = 3;
-        let active_root = 2;
-        db.accounts_index.add_root(active_root);
-        let result = db.calc_alive_ancient_historical_roots(extra);
-        let expected_alive_roots = [active_root].into_iter().collect();
-        assert_eq!(result, expected_alive_roots, "extra: {extra}");
     }
 
     impl AccountsDb {
