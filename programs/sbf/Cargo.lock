@@ -1681,9 +1681,9 @@ checksum = "3a471a38ef8ed83cd6e40aa59c1ffe17db6855c18e3604d9c4ed8c08ebc28678"
 
 [[package]]
 name = "futures"
-version = "0.3.24"
+version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f21eda599937fba36daeb58a22e8f5cee2d14c4a17b5b7739c7c8e5e3b8230c"
+checksum = "23342abe12aba583913b2e62f22225ff9c950774065e4bfb61a19cd9770fec40"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -1712,9 +1712,9 @@ checksum = "4bca583b7e26f571124fe5b7561d49cb2868d79116cfa0eefce955557c6fee8c"
 
 [[package]]
 name = "futures-executor"
-version = "0.3.24"
+version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ff63c23854bee61b6e9cd331d523909f238fc7636290b96826e9cfa5faa00ab"
+checksum = "ccecee823288125bd88b4d7f565c9e58e41858e47ab72e8ea2d64e93624386e0"
 dependencies = [
  "futures-core",
  "futures-task",
@@ -1851,7 +1851,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8af59a261bcf42f45d1b261232847b9b850ba0a1419d6100698246fb66e9240"
 dependencies = [
  "arc-swap",
- "futures 0.3.24",
+ "futures 0.3.28",
  "log",
  "reqwest",
  "serde",
@@ -2106,7 +2106,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca815a891b24fdfb243fa3239c86154392b0953ee584aa1a2a1f66d20cbe75cc"
 dependencies = [
  "bytes",
- "futures 0.3.24",
+ "futures 0.3.28",
  "headers",
  "http",
  "hyper",
@@ -2333,7 +2333,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2b99d4207e2a04fb4581746903c2bb7eb376f88de9c699d0f3e10feeac0cd3a"
 dependencies = [
  "derive_more",
- "futures 0.3.24",
+ "futures 0.3.28",
  "jsonrpc-core",
  "jsonrpc-pubsub",
  "jsonrpc-server-utils",
@@ -2351,7 +2351,7 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14f7f76aef2d054868398427f6c54943cf3d1caa9a7ec7d0c38d69df97a965eb"
 dependencies = [
- "futures 0.3.24",
+ "futures 0.3.28",
  "futures-executor",
  "futures-util",
  "log",
@@ -2366,7 +2366,7 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b51da17abecbdab3e3d4f26b01c5ec075e88d3abe3ab3b05dc9aa69392764ec0"
 dependencies = [
- "futures 0.3.24",
+ "futures 0.3.28",
  "jsonrpc-client-transports",
 ]
 
@@ -2388,7 +2388,7 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1dea6e07251d9ce6a552abfb5d7ad6bc290a4596c8dcc3d795fae2bbdc1f3ff"
 dependencies = [
- "futures 0.3.24",
+ "futures 0.3.28",
  "hyper",
  "jsonrpc-core",
  "jsonrpc-server-utils",
@@ -2404,7 +2404,7 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "382bb0206323ca7cda3dcd7e245cea86d37d02457a02a975e3378fb149a48845"
 dependencies = [
- "futures 0.3.24",
+ "futures 0.3.28",
  "jsonrpc-core",
  "jsonrpc-server-utils",
  "log",
@@ -2419,7 +2419,7 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "240f87695e6c6f62fb37f05c02c04953cf68d6408b8c1c89de85c7a0125b1011"
 dependencies = [
- "futures 0.3.24",
+ "futures 0.3.28",
  "jsonrpc-core",
  "lazy_static",
  "log",
@@ -2435,7 +2435,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa4fdea130485b572c39a460d50888beb00afb3e35de23ccd7fad8ff19f0e0d4"
 dependencies = [
  "bytes",
- "futures 0.3.24",
+ "futures 0.3.28",
  "globset",
  "jsonrpc-core",
  "lazy_static",
@@ -3181,7 +3181,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9981e32fb75e004cc148f5fb70342f393830e0a4aa62e3cc93b50976218d42b6"
 dependencies = [
- "futures 0.3.24",
+ "futures 0.3.28",
  "libc",
  "log",
  "rand 0.7.3",
@@ -4487,7 +4487,7 @@ checksum = "41d1c5305e39e09653383c2c7244f2f78b3bcae37cf50c64cb4789c9f5096ec2"
 dependencies = [
  "base64 0.13.1",
  "bytes",
- "futures 0.3.24",
+ "futures 0.3.28",
  "httparse",
  "log",
  "rand 0.8.5",
@@ -4540,7 +4540,7 @@ name = "solana-banks-client"
 version = "1.16.0"
 dependencies = [
  "borsh",
- "futures 0.3.24",
+ "futures 0.3.28",
  "solana-banks-interface",
  "solana-program 1.16.0",
  "solana-sdk 1.16.0",
@@ -4565,7 +4565,7 @@ version = "1.16.0"
 dependencies = [
  "bincode",
  "crossbeam-channel",
- "futures 0.3.24",
+ "futures 0.3.28",
  "solana-banks-interface",
  "solana-client",
  "solana-runtime",
@@ -4706,7 +4706,7 @@ version = "1.16.0"
 dependencies = [
  "async-trait",
  "bincode",
- "futures 0.3.24",
+ "futures 0.3.28",
  "futures-util",
  "indexmap",
  "indicatif",
@@ -5077,7 +5077,7 @@ dependencies = [
  "crossbeam-channel",
  "dashmap",
  "fs_extra",
- "futures 0.3.24",
+ "futures 0.3.28",
  "itertools",
  "lazy_static",
  "libc",
@@ -5433,7 +5433,7 @@ version = "1.16.0"
 dependencies = [
  "async-mutex",
  "async-trait",
- "futures 0.3.24",
+ "futures 0.3.28",
  "itertools",
  "lazy_static",
  "log",
@@ -6204,7 +6204,7 @@ dependencies = [
  "bzip2",
  "enum-iterator",
  "flate2",
- "futures 0.3.24",
+ "futures 0.3.28",
  "goauth",
  "http",
  "hyper",
@@ -6823,7 +6823,7 @@ checksum = "1c38a012bed6fb9681d3bf71ffaa4f88f3b4b9ed3198cda6e4c8462d24d4bb80"
 dependencies = [
  "anyhow",
  "fnv",
- "futures 0.3.24",
+ "futures 0.3.28",
  "humantime",
  "opentelemetry",
  "pin-project",
