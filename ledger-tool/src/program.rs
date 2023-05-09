@@ -131,14 +131,14 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
     bank
 }
 
-pub trait RunSubCommand {
-    fn run_subcommand(self) -> Self;
+pub trait ProgramSubCommand {
+    fn program_subcommand(self) -> Self;
 }
 
-impl RunSubCommand for App<'_, '_> {
-    fn run_subcommand(self) -> Self {
+impl ProgramSubCommand for App<'_, '_> {
+    fn program_subcommand(self) -> Self {
         self.subcommand(
-            SubCommand::with_name("run")
+            SubCommand::with_name("program")
         .about(
             r##"Run to test, debug, and analyze on-chain programs.
 
@@ -311,7 +311,7 @@ fn output_trace(
     }
 }
 
-pub fn run(ledger_path: &Path, matches: &ArgMatches<'_>) {
+pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
     let bank = load_blockstore(ledger_path, matches);
     let loader_id = bpf_loader_upgradeable::id();
     let mut transaction_accounts = Vec::new();
