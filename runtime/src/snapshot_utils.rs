@@ -554,6 +554,46 @@ pub fn clean_orphaned_account_snapshot_dirs(
     Ok(())
 }
 
+/// Purges incomplete bank snapshots
+pub fn purge_incomplete_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) {
+    let Ok(read_dir_iter) = fs::read_dir(&bank_snapshots_dir) else {
+        // If we cannot read the bank snapshots dir, then there's nothing to do
+        return;
+    };
+
+    let is_incomplete = |dir: &PathBuf| !is_bank_snapshot_complete(dir);
+
+    let incomplete_dirs: Vec<_> = read_dir_iter
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .filter(is_incomplete)
+        .collect();
+
+    // attempt to purge all the incomplete directories; do not exit early
+    for incomplete_dir in incomplete_dirs {
+        let result = purge_bank_snapshot(&incomplete_dir);
+        match result {
+            Ok(_) => info!(
+                "Purged incomplete snapshot dir: {}",
+                incomplete_dir.display()
+            ),
+            Err(err) => warn!(
+                "Failed to purge incomplete snapshot dir: {}, {err:?}",
+                incomplete_dir.display()
+            ),
+        }
+    }
+}
+
+/// Is the bank snapshot complete?
+fn is_bank_snapshot_complete(bank_snapshot_dir: impl AsRef<Path>) -> bool {
+    let state_complete_path = bank_snapshot_dir
+        .as_ref()
+        .join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+    state_complete_path.is_file()
+}
+
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
 /// directory won't be cleaned up.  Call this function to clean them up.
 pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
@@ -5282,6 +5322,28 @@ mod tests {
         assert!(hardlink_dirs_slot_2
             .iter()
             .all(|dir| fs::metadata(dir).is_err()));
+    }
+
+    #[test]
+    fn test_purge_incomplete_bank_snapshots() {
+        let genesis_config = GenesisConfig::default();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+        let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 2, 0);
+
+        // remove the "state complete" files so the snapshots will be purged
+        for slot in [1, 2] {
+            let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
+            let state_complete_file = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+            fs::remove_file(state_complete_file).unwrap();
+        }
+
+        purge_incomplete_bank_snapshots(&bank_snapshots_dir);
+
+        // ensure the bank snapshots dirs are gone
+        for slot in [1, 2] {
+            let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
+            assert!(!bank_snapshot_dir.exists());
+        }
     }
 
     /// Test that snapshots with the Incremental Accounts Hash feature enabled can roundtrip.

@@ -192,6 +192,8 @@ pub fn load_bank_forks(
     measure.stop();
     info!("done. {}", measure);
 
+    snapshot_utils::purge_incomplete_bank_snapshots(&bank_snapshots_dir);
+
     info!(
         "Cleaning contents of account snapshot paths: {:?}",
         account_snapshot_paths
