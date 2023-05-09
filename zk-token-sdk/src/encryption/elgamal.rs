@@ -16,6 +16,7 @@
 use {
     crate::encryption::{
         discrete_log::DiscreteLog,
+        errors::ElGamalError,
         pedersen::{Pedersen, PedersenCommitment, PedersenOpening, G, H},
     },
     core::ops::{Add, Mul, Sub},
@@ -26,11 +27,15 @@ use {
     },
     serde::{Deserialize, Serialize},
     solana_sdk::{
+        derivation_path::DerivationPath,
         instruction::Instruction,
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
-        signer::{Signer, SignerError},
+        signer::{
+            keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, Signer,
+            SignerError,
+        },
     },
     std::convert::TryInto,
     subtle::{Choice, ConstantTimeEq},
@@ -41,8 +46,7 @@ use {
     rand::rngs::OsRng,
     sha3::Sha3_512,
     std::{
-        fmt,
-        fs::{self, File, OpenOptions},
+        error, fmt,
         io::{Read, Write},
         path::Path,
     },
@@ -200,7 +204,7 @@ impl ElGamalKeypair {
     }
 
     /// Reads a JSON-encoded keypair from a `Reader` implementor
-    pub fn read_json<R: Read>(reader: &mut R) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn read_json<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
         let bytes: Vec<u8> = serde_json::from_reader(reader)?;
         Self::from_bytes(&bytes).ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::Other, "Invalid ElGamalKeypair").into()
@@ -208,16 +212,12 @@ impl ElGamalKeypair {
     }
 
     /// Reads keypair from a file
-    pub fn read_json_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut file = File::open(path.as_ref())?;
-        Self::read_json(&mut file)
+    pub fn read_json_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn error::Error>> {
+        Self::read_from_file(path)
     }
 
     /// Writes to a `Write` implementer with JSON-encoding
-    pub fn write_json<W: Write>(
-        &self,
-        writer: &mut W,
-    ) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn write_json<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
         let bytes = self.to_bytes();
         let json = serde_json::to_string(&bytes.to_vec())?;
         writer.write_all(&json.clone().into_bytes())?;
@@ -229,29 +229,40 @@ impl ElGamalKeypair {
         &self,
         outfile: F,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let outfile = outfile.as_ref();
+        self.write_to_file(outfile)
+    }
+}
 
-        if let Some(outdir) = outfile.parent() {
-            fs::create_dir_all(outdir)?;
-        }
+impl EncodableKey for ElGamalKeypair {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+        Self::read_json(reader)
+    }
 
-        let mut f = {
-            #[cfg(not(unix))]
-            {
-                OpenOptions::new()
-            }
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                OpenOptions::new().mode(0o600)
-            }
-        }
-        .write(true)
-        .truncate(true)
-        .create(true)
-        .open(outfile)?;
+    fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+        self.write_json(writer)
+    }
 
-        self.write_json(&mut f)
+    fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+        let secret = ElGamalSecretKey::from_seed(seed)?;
+        let public = ElGamalPubkey::new(&secret);
+        Ok(ElGamalKeypair { public, secret })
+    }
+
+    fn from_seed_and_derivation_path(
+        _seed: &[u8],
+        _derivation_path: Option<DerivationPath>,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        Err(ElGamalError::DerivationMethodNotSupported.into())
+    }
+
+    fn from_seed_phrase_and_passphrase(
+        seed_phrase: &str,
+        passphrase: &str,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        Self::from_seed(&generate_seed_from_seed_phrase_and_passphrase(
+            seed_phrase,
+            passphrase,
+        ))
     }
 }
 
@@ -354,6 +365,16 @@ impl ElGamalSecretKey {
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
     pub fn new_rand() -> Self {
         ElGamalSecretKey(Scalar::random(&mut OsRng))
+    }
+
+    /// Derive an ElGamal secret key from an entropy seed.
+    pub fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+        const MINIMUM_SEED_LEN: usize = 32;
+
+        if seed.len() < MINIMUM_SEED_LEN {
+            return Err("Seed is too short".into());
+        }
+        Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(seed)))
     }
 
     pub fn get_scalar(&self) -> &Scalar {
@@ -622,6 +643,7 @@ mod tests {
         super::*,
         crate::encryption::pedersen::Pedersen,
         solana_sdk::{signature::Keypair, signer::null_signer::NullSigner},
+        std::fs::{self, File},
     };
 
     #[test]

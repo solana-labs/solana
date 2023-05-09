@@ -3,6 +3,7 @@
 //! This module is a simple wrapper of the `Aes128GcmSiv` implementation.
 #[cfg(not(target_os = "solana"))]
 use {
+    crate::encryption::errors::AuthenticatedEncryptionError,
     aes_gcm_siv::{
         aead::{Aead, NewAead},
         Aes128GcmSiv,
@@ -11,14 +12,23 @@ use {
 };
 use {
     arrayref::{array_ref, array_refs},
+    sha3::{Digest, Sha3_512},
     solana_sdk::{
+        derivation_path::DerivationPath,
         instruction::Instruction,
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
-        signer::{Signer, SignerError},
+        signer::{
+            keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, Signer,
+            SignerError,
+        },
     },
-    std::{convert::TryInto, fmt},
+    std::{
+        convert::TryInto,
+        error, fmt,
+        io::{Read, Write},
+    },
     subtle::ConstantTimeEq,
     zeroize::Zeroize,
 };
@@ -91,6 +101,51 @@ impl AeKey {
 
     pub fn decrypt(&self, ct: &AeCiphertext) -> Option<u64> {
         AuthenticatedEncryption::decrypt(self, ct)
+    }
+}
+
+impl EncodableKey for AeKey {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+        let bytes: [u8; 16] = serde_json::from_reader(reader)?;
+        Ok(Self(bytes))
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+        let bytes = self.0;
+        let json = serde_json::to_string(&bytes.to_vec())?;
+        writer.write_all(&json.clone().into_bytes())?;
+        Ok(json)
+    }
+
+    fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+        const MINIMUM_SEED_LEN: usize = 16;
+
+        if seed.len() < MINIMUM_SEED_LEN {
+            return Err("Seed is too short".into());
+        }
+
+        let mut hasher = Sha3_512::new();
+        hasher.update(seed);
+        let result = hasher.finalize();
+
+        Ok(Self(result[..16].try_into()?))
+    }
+
+    fn from_seed_and_derivation_path(
+        _seed: &[u8],
+        _derivation_path: Option<DerivationPath>,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        Err(AuthenticatedEncryptionError::DerivationMethodNotSupported.into())
+    }
+
+    fn from_seed_phrase_and_passphrase(
+        seed_phrase: &str,
+        passphrase: &str,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        Self::from_seed(&generate_seed_from_seed_phrase_and_passphrase(
+            seed_phrase,
+            passphrase,
+        ))
     }
 }
 

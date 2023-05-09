@@ -33,6 +33,7 @@ use {
             EncodableKey, Keypair, NullSigner, Presigner, Signature, Signer,
         },
     },
+    solana_zk_token_sdk::encryption::{auth_encryption::AeKey, elgamal::ElGamalKeypair},
     std::{
         cell::RefCell,
         convert::TryFrom,
@@ -1020,6 +1021,103 @@ fn confirm_keypair_pubkey(keypair: &Keypair) {
     }
 }
 
+/// Loads an [ElGamalKeypair] from one of several possible sources.
+///
+/// If `confirm_pubkey` is `true` then after deriving the keypair, the user will
+/// be prompted to confirm that the ElGamal pubkey is as expected.
+///
+/// The way this function interprets its arguments is analogous to that of
+/// [`signer_from_path`].
+///
+/// The bip32 hierarchical derivation of an ElGamal keypair is not currently
+/// supported.
+///
+/// # Examples
+///
+/// ```no_run`
+/// use clap::{Arg, Command};
+/// use solana_clap_v3_utils::keypair::elgamal_keypair_from_path;
+///
+/// let clap_app = Command::new("my-program")
+///     // The argument we'll parse as a signer "path"
+///     .arg(Arg::new("elgamal-keypair")
+///         .required(true)
+///         .help("The default signer"));
+///
+/// let clap_matches = clap_app.get_matches();
+/// let elgamal_keypair_str: String = clap_matches.value_of_t_or_exit("elgamal-keypair");
+///
+/// let elgamal_keypair = elgamal_keypair_from_path(
+///     &clap_matches,
+///     &elgamal_keypair_str,
+///     "elgamal-keypair",
+///     false,
+/// )?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn elgamal_keypair_from_path(
+    matches: &ArgMatches,
+    path: &str,
+    elgamal_keypair_name: &str,
+    confirm_pubkey: bool,
+) -> Result<ElGamalKeypair, Box<dyn error::Error>> {
+    let elgamal_keypair = encodable_key_from_path(matches, path, elgamal_keypair_name)?;
+    if confirm_pubkey {
+        confirm_elgamal_keypair_pubkey(&elgamal_keypair);
+    }
+    Ok(elgamal_keypair)
+}
+
+fn confirm_elgamal_keypair_pubkey(keypair: &ElGamalKeypair) {
+    let elgamal_pubkey = keypair.public;
+    print!("Recovered ElGamal pubkey `{elgamal_pubkey:?}`. Continue? (y/n): ");
+    let _ignored = stdout().flush();
+    let mut input = String::new();
+    stdin().read_line(&mut input).expect("Unexpected input");
+    if input.to_lowercase().trim() != "y" {
+        println!("Exiting");
+        exit(1);
+    }
+}
+
+/// Loads an [AeKey] from one of several possible sources.
+///
+/// The way this function interprets its arguments is analogous to that of
+/// [`signer_from_path`].
+///
+/// The bip32 hierarchical derivation of an authenticated encryption key is not
+/// currently supported.
+///
+/// # Examples
+///
+/// ```no_run`
+/// use clap::{Arg, Command};
+/// use solana_clap_v3_utils::keypair::ae_key_from_path;
+///
+/// let clap_app = Command::new("my-program")
+///     // The argument we'll parse as a signer "path"
+///     .arg(Arg::new("ae-key")
+///         .required(true)
+///         .help("The default signer"));
+///
+/// let clap_matches = clap_app.get_matches();
+/// let ae_key_str: String = clap_matches.value_of_t_or_exit("ae-key");
+///
+/// let ae_key = ae_key_from_path(
+///     &clap_matches,
+///     &ae_key_str,
+///     "ae-key",
+/// )?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn ae_key_from_path(
+    matches: &ArgMatches,
+    path: &str,
+    key_name: &str,
+) -> Result<AeKey, Box<dyn error::Error>> {
+    encodable_key_from_path(matches, path, key_name)
+}
+
 fn encodable_key_from_path<K: EncodableKey>(
     matches: &ArgMatches,
     path: &str,
@@ -1080,6 +1178,40 @@ pub fn keypair_from_seed_phrase(
         confirm_keypair_pubkey(&keypair);
     }
     Ok(keypair)
+}
+
+/// Reads user input from stdin to retrieve a seed phrase and passphrase for ElGamal keypair
+/// derivation.
+///
+/// Optionally skips validation of seed phrase. Optionally confirms recovered public key.
+pub fn elgamal_keypair_from_seed_phrase(
+    elgamal_keypair_name: &str,
+    skip_validation: bool,
+    confirm_pubkey: bool,
+    derivation_path: Option<DerivationPath>,
+    legacy: bool,
+) -> Result<ElGamalKeypair, Box<dyn error::Error>> {
+    let elgamal_keypair: ElGamalKeypair = encodable_key_from_seed_phrase(
+        elgamal_keypair_name,
+        skip_validation,
+        derivation_path,
+        legacy,
+    )?;
+    if confirm_pubkey {
+        confirm_elgamal_keypair_pubkey(&elgamal_keypair);
+    }
+    Ok(elgamal_keypair)
+}
+
+/// Reads user input from stdin to retrieve a seed phrase and passphrase for an authenticated
+/// encryption keypair derivation.
+pub fn ae_key_from_seed_phrase(
+    keypair_name: &str,
+    skip_validation: bool,
+    derivation_path: Option<DerivationPath>,
+    legacy: bool,
+) -> Result<ElGamalKeypair, Box<dyn error::Error>> {
+    encodable_key_from_seed_phrase(keypair_name, skip_validation, derivation_path, legacy)
 }
 
 fn encodable_key_from_seed_phrase<K: EncodableKey>(
