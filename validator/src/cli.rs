@@ -1361,6 +1361,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .possible_values(BlockProductionMethod::cli_names())
                 .help(BlockProductionMethod::cli_message())
         )
+        .arg(
+            Arg::with_name("generate_blocks_with_accounts")
+                .long("generate-blocks-with-accounts")
+                .takes_value(true)
+                .value_name("PATH")
+                .hidden(hidden_unless_forced())
+                .help("generate transactions in banking stage instead of \
+                       receiving transactions over the network")
+        )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
         .subcommand(

@@ -13,7 +13,7 @@ use {
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
         tower_storage::FileTowerStorage,
-        validator::ValidatorConfig,
+        validator::{GeneratorConfig, ValidatorConfig},
     },
     solana_download_utils::download_snapshot_archive,
     solana_gossip::{contact_info::LegacyContactInfo, gossip_service::discover_cluster},
@@ -476,6 +476,64 @@ fn test_mainnet_beta_cluster_type() {
             (program_id, None)
         );
     }
+}
+
+#[test]
+#[serial]
+#[ignore = "only for replay invalidator"]
+fn test_mainnet_beta_cluster_type_generator() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+
+    let num_nodes = 2;
+    let test_duration = Duration::from_secs(30);
+    let num_starting_accounts = 10_000;
+    let lamports_per_account = 1_000_000_000_000;
+
+    // Create a bunch of accounts to use as starting accounts for the generator.
+    let starting_keypairs: Arc<Vec<Keypair>> = Arc::new(
+        iter::repeat_with(Keypair::new)
+            .take(num_starting_accounts)
+            .collect(),
+    );
+    let starting_accounts: Vec<(Pubkey, AccountSharedData)> = starting_keypairs
+        .iter()
+        .map(|k| {
+            (
+                k.pubkey(),
+                AccountSharedData::new(lamports_per_account, 0, &system_program::id()),
+            )
+        })
+        .collect();
+
+    // Create a validator config with a generator account config.
+    let mut validator_config = ValidatorConfig::default_for_test();
+    validator_config.generator_config = Some(GeneratorConfig {
+        accounts_path: "".to_string(),
+        starting_keypairs,
+    });
+
+    // Create a cluster config with the generator validator config.
+    let mut config = ClusterConfig {
+        cluster_type: ClusterType::MainnetBeta,
+        node_stakes: vec![DEFAULT_NODE_STAKE; num_nodes],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
+        validator_configs: make_identical_validator_configs(&validator_config, num_nodes),
+        additional_accounts: starting_accounts,
+        ..ClusterConfig::default()
+    };
+
+    // Create the cluster.
+    let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+    let cluster_nodes = discover_cluster(
+        &cluster.entry_point_info.gossip().unwrap(),
+        num_nodes,
+        SocketAddrSpace::Unspecified,
+    )
+    .unwrap();
+    assert_eq!(cluster_nodes.len(), num_nodes);
+
+    // Let the cluster run for some period of time generating transactions.
+    std::thread::sleep(test_duration);
 }
 
 #[test]
