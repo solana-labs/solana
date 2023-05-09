@@ -54,8 +54,8 @@ impl PacketDeserializer {
         let (packet_count, packet_batches) = self.receive_until(recv_timeout, capacity)?;
 
         // get current root bank to get feature gate status
-        let _root_bank = self.bank_forks.read().unwrap().root_bank();
-        let round_compute_unit_price_enabled = false; // TODO get from root_bank.feature_set
+        let _working_bank = self.bank_forks.read().unwrap().working_bank();
+        let round_compute_unit_price_enabled = false; // TODO get from working_bank.feature_set
 
         Ok(Self::deserialize_and_collect_packets(
             packet_count,
