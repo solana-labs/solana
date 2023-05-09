@@ -1,8 +1,8 @@
 use {
     crate::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     min_max_heap::MinMaxHeap,
-    solana_perf::packet::{Packet, PacketBatch},
-    solana_sdk::{hash::Hash, transaction::Transaction},
+    solana_perf::packet::Packet,
+    solana_sdk::hash::Hash,
     std::{
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
@@ -288,27 +288,6 @@ impl UnprocessedPacketBatches {
                 }
             });
     }
-}
-
-pub fn deserialize_packets<'a>(
-    packet_batch: &'a PacketBatch,
-    packet_indexes: &'a [usize],
-) -> impl Iterator<Item = DeserializedPacket> + 'a {
-    packet_indexes.iter().filter_map(move |packet_index| {
-        DeserializedPacket::new(packet_batch[*packet_index].clone()).ok()
-    })
-}
-
-pub fn transactions_to_deserialized_packets(
-    transactions: &[Transaction],
-) -> Result<Vec<DeserializedPacket>, DeserializedPacketError> {
-    transactions
-        .iter()
-        .map(|transaction| {
-            let packet = Packet::from_data(None, transaction)?;
-            DeserializedPacket::new(packet)
-        })
-        .collect()
 }
 
 #[cfg(test)]

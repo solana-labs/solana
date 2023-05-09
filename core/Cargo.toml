@@ -103,8 +103,5 @@ name = "sigverify_stage"
 [[bench]]
 name = "retransmit_stage"
 
-[[bench]]
-name = "unprocessed_packet_batches"
-
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
