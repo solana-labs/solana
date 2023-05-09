@@ -374,6 +374,7 @@ impl LoadedPrograms {
 
     /// Before rerooting the blockstore this removes all programs of orphan forks
     pub fn prune<F: ForkGraph>(&mut self, fork_graph: &F, new_root: Slot) {
+        let previous_root = self.latest_root;
         self.entries.retain(|_key, second_level| {
             let mut first_ancestor_found = false;
             *second_level = second_level
@@ -383,7 +384,10 @@ impl LoadedPrograms {
                     let relation = fork_graph.relationship(entry.deployment_slot, new_root);
                     if entry.deployment_slot >= new_root {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
-                    } else if !first_ancestor_found && matches!(relation, BlockRelation::Ancestor) {
+                    } else if !first_ancestor_found
+                        && (matches!(relation, BlockRelation::Ancestor)
+                            || entry.deployment_slot < previous_root)
+                    {
                         first_ancestor_found = true;
                         first_ancestor_found
                     } else {
