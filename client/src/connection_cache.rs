@@ -1,3 +1,4 @@
+pub use solana_connection_cache::connection_cache::Protocol;
 use {
     quinn::Endpoint,
     solana_connection_cache::{
@@ -72,6 +73,14 @@ impl ConnectionCache {
         let connection_manager = QuicConnectionManager::new_with_connection_config(config);
         let cache = BackendConnectionCache::new(connection_manager, connection_pool_size).unwrap();
         Self::Quic(Arc::new(cache))
+    }
+
+    #[inline]
+    pub fn protocol(&self) -> Protocol {
+        match self {
+            Self::Quic(_) => Protocol::QUIC,
+            Self::Udp(_) => Protocol::UDP,
+        }
     }
 
     #[deprecated(
@@ -204,7 +213,7 @@ mod tests {
         super::*,
         crate::connection_cache::ConnectionCache,
         crossbeam_channel::unbounded,
-        solana_sdk::{net::DEFAULT_TPU_COALESCE, quic::QUIC_PORT_OFFSET, signature::Keypair},
+        solana_sdk::{net::DEFAULT_TPU_COALESCE, signature::Keypair},
         solana_streamer::{
             nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, quic::StreamStats,
             streamer::StakedNodes,
@@ -236,9 +245,6 @@ mod tests {
 
     #[test]
     fn test_connection_with_specified_client_endpoint() {
-        let port = u16::MAX - QUIC_PORT_OFFSET + 1;
-        assert!(port.checked_add(QUIC_PORT_OFFSET).is_none());
-
         // Start a response receiver:
         let (
             response_recv_socket,
@@ -274,13 +280,13 @@ mod tests {
         let port1 = 9001;
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port1);
         let conn = connection_cache.get_connection(&addr);
-        assert_eq!(conn.server_addr().port(), port1 + QUIC_PORT_OFFSET);
+        assert_eq!(conn.server_addr().port(), port1);
 
         // server port 2:
         let port2 = 9002;
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port2);
         let conn = connection_cache.get_connection(&addr);
-        assert_eq!(conn.server_addr().port(), port2 + QUIC_PORT_OFFSET);
+        assert_eq!(conn.server_addr().port(), port2);
 
         response_recv_exit.store(true, Ordering::Relaxed);
         response_recv_thread.join().unwrap();

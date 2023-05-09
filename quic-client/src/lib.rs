@@ -19,11 +19,11 @@ use {
     solana_connection_cache::{
         connection_cache::{
             BaseClientConnection, ClientError, ConnectionManager, ConnectionPool,
-            ConnectionPoolError, NewConnectionConfig,
+            ConnectionPoolError, NewConnectionConfig, Protocol,
         },
         connection_cache_stats::ConnectionCacheStats,
     },
-    solana_sdk::{pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Keypair},
+    solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
         nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
         streamer::StakedNodes,
@@ -195,6 +195,8 @@ impl ConnectionManager for QuicConnectionManager {
     type ConnectionPool = QuicPool;
     type NewConnectionConfig = QuicConfig;
 
+    const PROTOCOL: Protocol = Protocol::QUIC;
+
     fn new_connection_pool(&self) -> Self::ConnectionPool {
         QuicPool {
             connections: Vec::default(),
@@ -210,10 +212,6 @@ impl ConnectionManager for QuicConnectionManager {
 
     fn new_connection_config(&self) -> QuicConfig {
         QuicConfig::new().unwrap()
-    }
-
-    fn get_port_offset(&self) -> u16 {
-        QUIC_PORT_OFFSET
     }
 }
 

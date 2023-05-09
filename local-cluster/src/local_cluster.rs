@@ -436,7 +436,9 @@ impl LocalCluster {
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
         let (rpc, tpu) = LegacyContactInfo::try_from(&self.entry_point_info)
-            .map(cluster_tests::get_client_facing_addr)
+            .map(|node| {
+                cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
+            })
             .unwrap();
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
 
@@ -531,7 +533,9 @@ impl LocalCluster {
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
         let (rpc, tpu) = LegacyContactInfo::try_from(&self.entry_point_info)
-            .map(cluster_tests::get_client_facing_addr)
+            .map(|node| {
+                cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
+            })
             .unwrap();
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
@@ -786,7 +790,9 @@ impl Cluster for LocalCluster {
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
         self.validators.get(pubkey).map(|f| {
             let (rpc, tpu) = LegacyContactInfo::try_from(&f.info.contact_info)
-                .map(cluster_tests::get_client_facing_addr)
+                .map(|node| {
+                    cluster_tests::get_client_facing_addr(self.connection_cache.protocol(), node)
+                })
                 .unwrap();
             ThinClient::new(rpc, tpu, self.connection_cache.clone())
         })
