@@ -46,9 +46,6 @@ pub enum BlockRelation {
 pub trait ForkGraph {
     /// Returns the BlockRelation of A to B
     fn relationship(&self, a: Slot, b: Slot) -> BlockRelation;
-
-    /// Returns the current root slot
-    fn root(&self) -> Slot;
 }
 
 /// Provides information about current working slot, and its ancestors
@@ -377,6 +374,7 @@ impl LoadedPrograms {
 
     /// Before rerooting the blockstore this removes all programs of orphan forks
     pub fn prune<F: ForkGraph>(&mut self, fork_graph: &F, new_root: Slot) {
+        let previous_root = self.latest_root;
         self.entries.retain(|_key, second_level| {
             let mut first_ancestor_found = false;
             *second_level = second_level
@@ -388,7 +386,7 @@ impl LoadedPrograms {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
                     } else if !first_ancestor_found
                         && (matches!(relation, BlockRelation::Ancestor)
-                            || fork_graph.root() > entry.deployment_slot)
+                            || previous_root > entry.deployment_slot)
                     {
                         first_ancestor_found = true;
                         first_ancestor_found
@@ -944,10 +942,6 @@ mod tests {
         fn relationship(&self, _a: Slot, _b: Slot) -> BlockRelation {
             self.relation
         }
-
-        fn root(&self) -> Slot {
-            0
-        }
     }
 
     #[test]
@@ -997,7 +991,6 @@ mod tests {
     #[derive(Default)]
     struct TestForkGraphSpecific {
         forks: Vec<Vec<Slot>>,
-        root: Slot,
     }
 
     impl TestForkGraphSpecific {
@@ -1033,10 +1026,6 @@ mod tests {
                 ControlFlow::Break(relation) => relation,
                 _ => BlockRelation::Unrelated,
             }
-        }
-
-        fn root(&self) -> Slot {
-            self.root
         }
     }
 
