@@ -200,9 +200,10 @@ pub fn get_client(
     socket_addr_space: &SocketAddrSpace,
     connection_cache: Arc<ConnectionCache>,
 ) -> ThinClient {
+    let protocol = connection_cache.protocol();
     let nodes: Vec<_> = nodes
         .iter()
-        .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
+        .filter_map(|node| node.valid_client_facing_addr(protocol, socket_addr_space))
         .collect();
     let select = thread_rng().gen_range(0, nodes.len());
     let (rpc, tpu) = nodes[select];
@@ -214,13 +215,11 @@ pub fn get_multi_client(
     socket_addr_space: &SocketAddrSpace,
     connection_cache: Arc<ConnectionCache>,
 ) -> (ThinClient, usize) {
-    let addrs: Vec<_> = nodes
+    let protocol = connection_cache.protocol();
+    let (rpc_addrs, tpu_addrs): (Vec<_>, Vec<_>) = nodes
         .iter()
-        .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
-        .collect();
-    let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
-    let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
-
+        .filter_map(|node| node.valid_client_facing_addr(protocol, socket_addr_space))
+        .unzip();
     let num_nodes = tpu_addrs.len();
     (
         ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, connection_cache),

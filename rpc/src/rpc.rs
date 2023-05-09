@@ -355,7 +355,11 @@ impl JsonRpcRequestProcessor {
             );
             ClusterInfo::new(contact_info, keypair, socket_addr_space)
         });
-        let tpu_address = cluster_info.my_contact_info().tpu().unwrap();
+        let tpu_address = match *connection_cache {
+            ConnectionCache::Quic(_) => ContactInfo::tpu_quic,
+            ConnectionCache::Udp(_) => ContactInfo::tpu,
+        }(&cluster_info.my_contact_info())
+        .unwrap();
         let (sender, receiver) = unbounded();
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
