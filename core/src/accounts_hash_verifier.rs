@@ -329,9 +329,18 @@ impl AccountsHashVerifier {
         //
         // If we are *not* generating snapshots, then purge old bank snapshots here.
         if !snapshot_config.should_generate_snapshots() {
-            snapshot_utils::purge_bank_snapshots_older_than_slot(
-                &snapshot_config.bank_snapshots_dir,
-                accounts_package.slot,
+            let (_, purge_bank_snapshots_time_us) =
+                measure_us!(snapshot_utils::purge_bank_snapshots_older_than_slot(
+                    &snapshot_config.bank_snapshots_dir,
+                    accounts_package.slot,
+                ));
+            datapoint_info!(
+                "accounts_hash_verifier",
+                (
+                    "purge_old_snapshots_time_us",
+                    purge_bank_snapshots_time_us,
+                    i64
+                ),
             );
         }
 
