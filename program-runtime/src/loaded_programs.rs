@@ -386,7 +386,7 @@ impl LoadedPrograms {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
                     } else if !first_ancestor_found
                         && (matches!(relation, BlockRelation::Ancestor)
-                            || previous_root > entry.deployment_slot)
+                            || entry.deployment_slot < previous_root)
                     {
                         first_ancestor_found = true;
                         first_ancestor_found
