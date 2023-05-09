@@ -7474,11 +7474,6 @@ impl Bank {
             .is_active(&feature_set::prevent_rent_paying_rent_recipients::id())
     }
 
-    pub fn versioned_tx_message_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::versioned_tx_message_enabled::id())
-    }
-
     pub fn credits_auto_rewind(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::credits_auto_rewind::id())
