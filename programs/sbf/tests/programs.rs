@@ -449,7 +449,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
     // Enable _sol_alloc_free syscall
     bank.deactivate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
     bank.clear_signatures();
-    bank.clear_executors();
+    bank.clear_program_cache();
 
     // Try and finalize the program now that sol_alloc_free is re-enabled
     assert!(bank.process_transaction(&finalize_tx).is_ok());
@@ -467,7 +467,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
     assert!(bank.process_transaction(&invoke_tx).is_ok());
 
     bank.clear_signatures();
-    bank.clear_executors();
+    bank.clear_program_cache();
 
     // invoke should still succeed on execute because the program is already deployed
     assert!(bank.process_transaction(&invoke_tx).is_ok());
