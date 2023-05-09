@@ -133,37 +133,33 @@ fn genesis_builtins() -> Vec<(Pubkey, Arc<LoadedProgram>)> {
                 solana_bpf_loader_program::process_instruction,
             ),
         ),
+        (
+            solana_sdk::compute_budget::id(),
+            create_builtin(
+                "compute_budget_program".to_string(),
+                solana_compute_budget_program::process_instruction,
+            ),
+        ),
+        (
+            solana_address_lookup_table_program::id(),
+            create_builtin(
+                "address_lookup_table_program".to_string(),
+                solana_address_lookup_table_program::processor::process_instruction,
+            ),
+        ),
     ]
 }
 
 /// Dynamic feature transitions for builtin programs
 fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
-    vec![
-        BuiltinFeatureTransition::Add {
-            program_id: solana_sdk::compute_budget::id(),
-            builtin: create_builtin(
-                "compute_budget_program".to_string(),
-                solana_compute_budget_program::process_instruction,
-            ),
-            feature_id: feature_set::add_compute_budget_program::id(),
-        },
-        BuiltinFeatureTransition::Add {
-            program_id: solana_address_lookup_table_program::id(),
-            builtin: create_builtin(
-                "address_lookup_table_program".to_string(),
-                solana_address_lookup_table_program::processor::process_instruction,
-            ),
-            feature_id: feature_set::versioned_tx_message_enabled::id(),
-        },
-        BuiltinFeatureTransition::Add {
-            program_id: solana_zk_token_sdk::zk_token_proof_program::id(),
-            builtin: create_builtin(
-                "zk_token_proof_program".to_string(),
-                solana_zk_token_proof_program::process_instruction,
-            ),
-            feature_id: feature_set::zk_token_sdk_enabled::id(),
-        },
-    ]
+    vec![BuiltinFeatureTransition::Add {
+        program_id: solana_zk_token_sdk::zk_token_proof_program::id(),
+        builtin: create_builtin(
+            "zk_token_proof_program".to_string(),
+            solana_zk_token_proof_program::process_instruction,
+        ),
+        feature_id: feature_set::zk_token_sdk_enabled::id(),
+    }]
 }
 
 pub(crate) fn get() -> Builtins {
