@@ -7414,19 +7414,18 @@ impl Bank {
         debug!("Added program {} under {:?}", name, program_id);
     }
 
-    /// Remove a builtin instruction processor if it already exists
-    pub fn remove_builtin(&mut self, program_id: &Pubkey) {
+    /// Remove a built-in instruction processor
+    pub fn remove_builtin(&mut self, program_id: Pubkey) {
         debug!("Removing program {}", program_id);
         // Don't remove the account since the bank expects the account state to
         // be idempotent
-        if let Some(position) = self
-            .builtin_programs
-            .vec
-            .iter()
-            .position(|entry| entry.0 == *program_id)
-        {
-            self.builtin_programs.vec.remove(position);
-        }
+        self.add_builtin(
+            program_id,
+            Arc::new(LoadedProgram::new_tombstone(
+                self.slot,
+                LoadedProgramType::Closed,
+            )),
+        );
         debug!("Removed program {}", program_id);
     }
 
