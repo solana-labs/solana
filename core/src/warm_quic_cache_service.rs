@@ -4,7 +4,7 @@
 use {
     rand::{thread_rng, Rng},
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::LegacyContactInfo as ContactInfo},
     solana_poh::poh_recorder::PohRecorder,
     std::{
         sync::{
@@ -31,6 +31,7 @@ impl WarmQuicCacheService {
         poh_recorder: Arc<RwLock<PohRecorder>>,
         exit: Arc<AtomicBool>,
     ) -> Self {
+        assert!(matches!(*connection_cache, ConnectionCache::Quic(_)));
         let thread_hdl = Builder::new()
             .name("solWarmQuicSvc".to_string())
             .spawn(move || {
@@ -46,11 +47,11 @@ impl WarmQuicCacheService {
                             .map_or(true, |last_leader| last_leader != leader_pubkey)
                         {
                             maybe_last_leader = Some(leader_pubkey);
-                            if let Some(addr) = cluster_info
-                                .lookup_contact_info(&leader_pubkey, |leader| leader.tpu)
+                            if let Some(Ok(addr)) = cluster_info
+                                .lookup_contact_info(&leader_pubkey, ContactInfo::tpu_quic)
                             {
                                 let conn = connection_cache.get_connection(&addr);
-                                if let Err(err) = conn.send_wire_transaction([0u8]) {
+                                if let Err(err) = conn.send_data(&[0u8]) {
                                     warn!(
                                         "Failed to warmup QUIC connection to the leader {:?}, Error {:?}",
                                         leader_pubkey, err

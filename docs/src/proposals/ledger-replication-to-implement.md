@@ -136,7 +136,7 @@ We have the following constraints:
 
    replicate.
 
-4. The archiver retrives the ledger by asking peer validators and
+4. The archiver retrieves the ledger by asking peer validators and
 
    archivers. See 6.5.
 
@@ -207,7 +207,7 @@ For each turn of the PoRep game, both Validators and Archivers evaluate each sta
 
    The map is updated when a Validator processes an archiver's proofs for a segment.
 
-   The validator provides an RPC interface to access the this map. Using this API, clients
+   The validator provides an RPC interface to access this map. Using this API, clients
 
    can map a segment to an archiver's network address \(correlating it via cluster_info table\).
 
@@ -343,7 +343,7 @@ The storage epoch should be the number of slots which results in around 100GB-1T
 
    creates a challenge transaction and submits it to the current leader. The
 
-   transacation proves the validator incorrectly validated a fake storage proof.
+   transaction proves the validator incorrectly validated a fake storage proof.
 
    The archiver is rewarded and the validator's staking balance is slashed or
 
@@ -351,7 +351,7 @@ The storage epoch should be the number of slots which results in around 100GB-1T
 
 ## Storage proof contract logic
 
-Each archiver and validator will have their own storage account. The validator's account would be separate from their gossip id similiar to their vote account. These should be implemented as two programs one which handles the validator as the keysigner and one for the archiver. In that way when the programs reference other accounts, they can check the program id to ensure it is a validator or archiver account they are referencing.
+Each archiver and validator will have their own storage account. The validator's account would be separate from their gossip id similar to their vote account. These should be implemented as two programs one which handles the validator as the keysigner and one for the archiver. In that way when the programs reference other accounts, they can check the program id to ensure it is a validator or archiver account they are referencing.
 
 ### SubmitMiningProof
 
@@ -364,7 +364,7 @@ SubmitMiningProof {
 keys = [archiver_keypair]
 ```
 
-Archivers create these after mining their stored ledger data for a certain hash value. The slot is the end slot of the segment of ledger they are storing, the sha_state the result of the archiver using the hash function to sample their encrypted ledger segment. The signature is the signature that was created when they signed a PoH value for the current storage epoch. The list of proofs from the current storage epoch should be saved in the account state, and then transfered to a list of proofs for the previous epoch when the epoch passes. In a given storage epoch a given archiver should only submit proofs for one segment.
+Archivers create these after mining their stored ledger data for a certain hash value. The slot is the end slot of the segment of ledger they are storing, the sha_state the result of the archiver using the hash function to sample their encrypted ledger segment. The signature is the signature that was created when they signed a PoH value for the current storage epoch. The list of proofs from the current storage epoch should be saved in the account state, and then transferred to a list of proofs for the previous epoch when the epoch passes. In a given storage epoch a given archiver should only submit proofs for one segment.
 
 The program should have a list of slots which are valid storage mining slots. This list should be maintained by keeping track of slots which are rooted slots in which a significant portion of the network has voted on with a high lockout value, maybe 32-votes old. Every SLOTS_PER_SEGMENT number of slots would be added to this set. The program should check that the slot is in this set. The set can be maintained by receiving a AdvertiseStorageRecentBlockHash and checking with its bank/Tower BFT state.
 
@@ -381,7 +381,7 @@ keys = [validator_keypair, archiver_keypair(s) (unsigned)]
 
 A validator will submit this transaction to indicate that a set of proofs for a given segment are valid/not-valid or skipped where the validator did not look at it. The keypairs for the archivers that it looked at should be referenced in the keys so the program logic can go to those accounts and see that the proofs are generated in the previous epoch. The sampling of the storage proofs should be verified ensuring that the correct proofs are skipped by the validator according to the logic outlined in the validator behavior of sampling.
 
-The included archiver keys will indicate the the storage samples which are being referenced; the length of the proof_mask should be verified against the set of storage proofs in the referenced archiver account\(s\), and should match with the number of proofs submitted in the previous storage epoch in the state of said archiver account.
+The included archiver keys will indicate the storage samples which are being referenced; the length of the proof_mask should be verified against the set of storage proofs in the referenced archiver account\(s\), and should match with the number of proofs submitted in the previous storage epoch in the state of said archiver account.
 
 ### ClaimStorageReward
 

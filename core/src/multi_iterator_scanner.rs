@@ -14,6 +14,7 @@
 //!
 
 /// Output from the element checker used in `MultiIteratorScanner::iterate`.
+#[derive(Debug)]
 pub enum ProcessingDecision {
     /// Should be processed by the scanner.
     Now,
@@ -35,21 +36,28 @@ pub enum ProcessingDecision {
 /// Assume transactions with same letter conflict with each other. A typical priority ordered
 /// buffer might look like:
 ///
-///     // [A, A, B, A, C, D, B, C, D]
+/// ```text
+/// [A, A, B, A, C, D, B, C, D]
+/// ```
 ///
 /// If we want to have batches of size 4, the MultiIteratorScanner will proceed as follows:
 ///
-///     // [A, A, B, A, C, D, B, C, D]
-///     //  ^     ^     ^  ^
+/// ```text
+/// [A, A, B, A, C, D, B, C, D]
+///  ^     ^     ^  ^
 ///
-///     // [A, A, B, A, C, D, B, C, D]
-///     //     ^              ^  ^  ^
+/// [A, A, B, A, C, D, B, C, D]
+///     ^              ^  ^  ^
 ///
-///     // [A, A, B, A, C, D, B, C, D]
-///     //           ^
+/// [A, A, B, A, C, D, B, C, D]
+///           ^
+/// ```
+///
 /// The iterator will iterate with batches:
 ///
-///     // [[A, B, C, D], [A, B, C, D], [A]]
+/// ```text
+/// [[A, B, C, D], [A, B, C, D], [A]]
+/// ```
 ///
 pub struct MultiIteratorScanner<'a, T, U, F>
 where
@@ -72,6 +80,11 @@ where
     current_items: Vec<&'a T>,
     /// Initialized
     initialized: bool,
+}
+
+pub struct PayloadAndAlreadyHandled<U> {
+    pub payload: U,
+    pub already_handled: Vec<bool>,
 }
 
 impl<'a, T, U, F> MultiIteratorScanner<'a, T, U, F>
@@ -106,9 +119,13 @@ where
         self.get_current_items()
     }
 
-    /// Consume the iterator and return the payload.
-    pub fn finalize(self) -> U {
-        self.payload
+    /// Consume the iterator. Return the payload, and a vector of booleans
+    /// indicating which items have been handled.
+    pub fn finalize(self) -> PayloadAndAlreadyHandled<U> {
+        PayloadAndAlreadyHandled {
+            payload: self.payload,
+            already_handled: self.already_handled,
+        }
     }
 
     /// Initialize the `current_positions` vector for the first batch.
@@ -185,7 +202,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use {super::MultiIteratorScanner, crate::multi_iterator_scanner::ProcessingDecision};
+    use super::*;
 
     struct TestScannerPayload {
         locks: Vec<bool>,
@@ -275,8 +292,12 @@ mod tests {
         let expected_batches = vec![vec![&0, &1], vec![&0, &2], vec![&0, &3], vec![&1]];
         assert_eq!(actual_batches, expected_batches);
 
-        let TestScannerPayload { locks } = scanner.finalize();
+        let PayloadAndAlreadyHandled {
+            payload: TestScannerPayload { locks },
+            already_handled,
+        } = scanner.finalize();
         assert_eq!(locks, vec![false; 4]);
+        assert!(already_handled.into_iter().all(|x| x));
     }
 
     #[test]
@@ -318,8 +339,12 @@ mod tests {
         ];
         assert_eq!(actual_batches, expected_batches);
 
-        let TestScannerPayload { locks } = scanner.finalize();
+        let PayloadAndAlreadyHandled {
+            payload: TestScannerPayload { locks },
+            already_handled,
+        } = scanner.finalize();
         assert_eq!(locks, vec![false; 4]);
+        assert!(already_handled.into_iter().all(|x| x));
     }
 
     #[test]
@@ -342,5 +367,31 @@ mod tests {
         //                    ^
         let expected_batches = vec![vec![&0, &1], vec![&2]];
         assert_eq!(actual_batches, expected_batches);
+    }
+
+    #[test]
+    fn test_multi_iterator_scanner_iterate_not_handled() {
+        let slice = [0, 1, 2];
+
+        // 0 and 2 will always be marked as later, and never actually handled
+        let should_process = |item: &i32, _payload: &mut ()| match item {
+            1 => ProcessingDecision::Now,
+            _ => ProcessingDecision::Later,
+        };
+
+        let mut scanner = MultiIteratorScanner::new(&slice, 2, (), should_process);
+        let mut actual_batches = vec![];
+        while let Some((batch, _payload)) = scanner.iterate() {
+            actual_batches.push(batch.to_vec());
+        }
+
+        // Batch 1: [1]
+        let expected_batches = vec![vec![&1]];
+        assert_eq!(actual_batches, expected_batches);
+
+        let PayloadAndAlreadyHandled {
+            already_handled, ..
+        } = scanner.finalize();
+        assert_eq!(already_handled, vec![false, true, false]);
     }
 }

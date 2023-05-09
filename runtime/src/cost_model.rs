@@ -6,15 +6,14 @@
 //!
 
 use {
-    crate::{bank::Bank, block_cost_limits::*},
+    crate::block_cost_limits::*,
     log::*,
     solana_program_runtime::compute_budget::{
         ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
     },
     solana_sdk::{
-        compute_budget,
         feature_set::{
-            cap_transaction_accounts_data_size, remove_deprecated_request_unit_ix,
+            add_set_tx_loaded_accounts_data_size_instruction, remove_deprecated_request_unit_ix,
             use_default_units_in_fee_calculation, FeatureSet,
         },
         instruction::CompiledInstruction,
@@ -75,15 +74,11 @@ impl TransactionCost {
     }
 
     pub fn sum(&self) -> u64 {
-        self.sum_without_bpf()
-            .saturating_add(self.bpf_execution_cost)
-    }
-
-    pub fn sum_without_bpf(&self) -> u64 {
         self.signature_cost
             .saturating_add(self.write_lock_cost)
             .saturating_add(self.data_bytes_cost)
             .saturating_add(self.builtins_execution_cost)
+            .saturating_add(self.bpf_execution_cost)
     }
 }
 
@@ -139,7 +134,7 @@ impl CostModel {
             // to keep the same behavior, look for builtin first
             if let Some(builtin_cost) = BUILT_IN_INSTRUCTION_COSTS.get(program_id) {
                 builtin_costs = builtin_costs.saturating_add(*builtin_cost);
-            } else if !compute_budget::check_id(program_id) {
+            } else {
                 bpf_costs = bpf_costs.saturating_add(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT.into());
             }
             data_bytes_len_total =
@@ -148,12 +143,20 @@ impl CostModel {
 
         // calculate bpf cost based on compute budget instructions
         let mut budget = ComputeBudget::default();
+
+        // Starting from v1.15, cost model uses compute_budget.set_compute_unit_limit to
+        // measure bpf_costs (code below), vs earlier versions that use estimated
+        // bpf instruction costs. The calculated transaction costs are used by leaders
+        // during block packing, different costs for same transaction due to different versions
+        // will not impact consensus. So for v1.15+, should call compute budget with
+        // the feature gate `enable_request_heap_frame_ix` enabled.
+        let enable_request_heap_frame_ix = true;
         let result = budget.process_instructions(
             transaction.message().program_instructions_iter(),
             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-            feature_set.is_active(&cap_transaction_accounts_data_size::id()),
-            Bank::get_loaded_accounts_data_limit_type(feature_set),
+            enable_request_heap_frame_ix,
+            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
         );
 
         // if tx contained user-space instructions and a more accurate estimate available correct it
@@ -391,7 +394,12 @@ mod tests {
             &token_transaction,
             &FeatureSet::all_enabled(),
         );
-        assert_eq!(0, tx_cost.builtins_execution_cost);
+        assert_eq!(
+            *BUILT_IN_INSTRUCTION_COSTS
+                .get(&compute_budget::id())
+                .unwrap(),
+            tx_cost.builtins_execution_cost
+        );
         assert_eq!(12_345, tx_cost.bpf_execution_cost);
         assert_eq!(1, tx_cost.data_bytes_cost);
     }

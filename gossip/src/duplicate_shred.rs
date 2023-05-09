@@ -2,6 +2,7 @@ use {
     crate::crds_value::sanitize_wallclock,
     itertools::Itertools,
     solana_ledger::{
+        blockstore::BlockstoreError,
         blockstore_meta::DuplicateSlotProof,
         shred::{self, Shred, ShredType},
     },
@@ -23,10 +24,6 @@ const DUPLICATE_SHRED_HEADER_SIZE: usize = 63;
 pub(crate) type DuplicateShredIndex = u16;
 pub(crate) const MAX_DUPLICATE_SHREDS: DuplicateShredIndex = 512;
 
-/// Function returning leader at a given slot.
-pub trait LeaderScheduleFn: FnOnce(Slot) -> Option<Pubkey> {}
-impl<F> LeaderScheduleFn for F where F: FnOnce(Slot) -> Option<Pubkey> {}
-
 #[derive(Clone, Debug, PartialEq, Eq, AbiExample, Deserialize, Serialize)]
 pub struct DuplicateShred {
     pub(crate) from: Pubkey,
@@ -41,12 +38,26 @@ pub struct DuplicateShred {
     chunk: Vec<u8>,
 }
 
+impl DuplicateShred {
+    #[inline]
+    pub(crate) fn num_chunks(&self) -> u8 {
+        self.num_chunks
+    }
+
+    #[inline]
+    pub(crate) fn chunk_index(&self) -> u8 {
+        self.chunk_index
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("block store save error")]
+    BlockstoreInsertFailed(#[from] BlockstoreError),
     #[error("data chunk mismatch")]
     DataChunkMismatch,
-    #[error("invalid chunk index")]
-    InvalidChunkIndex,
+    #[error("invalid chunk_index: {chunk_index}, num_chunks: {num_chunks}")]
+    InvalidChunkIndex { chunk_index: u8, num_chunks: u8 },
     #[error("invalid duplicate shreds")]
     InvalidDuplicateShreds,
     #[error("invalid duplicate slot proof")]
@@ -71,18 +82,17 @@ pub enum Error {
     SlotMismatch,
     #[error("type conversion error")]
     TryFromIntError(#[from] TryFromIntError),
-    #[error("unknown slot leader")]
-    UnknownSlotLeader,
+    #[error("unknown slot leader: {0}")]
+    UnknownSlotLeader(Slot),
 }
 
 // Asserts that the two shreds can indicate duplicate proof for
 // the same triplet of (slot, shred-index, and shred-type_), and
 // that they have valid signatures from the slot leader.
-fn check_shreds(
-    leader_schedule: Option<impl LeaderScheduleFn>,
-    shred1: &Shred,
-    shred2: &Shred,
-) -> Result<(), Error> {
+fn check_shreds<F>(leader_schedule: Option<F>, shred1: &Shred, shred2: &Shred) -> Result<(), Error>
+where
+    F: FnOnce(Slot) -> Option<Pubkey>,
+{
     if shred1.slot() != shred2.slot() {
         Err(Error::SlotMismatch)
     } else if shred1.index() != shred2.index() {
@@ -95,7 +105,8 @@ fn check_shreds(
         Err(Error::InvalidDuplicateShreds)
     } else {
         if let Some(leader_schedule) = leader_schedule {
-            let slot_leader = leader_schedule(shred1.slot()).ok_or(Error::UnknownSlotLeader)?;
+            let slot_leader =
+                leader_schedule(shred1.slot()).ok_or(Error::UnknownSlotLeader(shred1.slot()))?;
             if !shred1.verify(&slot_leader) || !shred2.verify(&slot_leader) {
                 return Err(Error::InvalidSignature);
             }
@@ -104,54 +115,17 @@ fn check_shreds(
     }
 }
 
-/// Splits a DuplicateSlotProof into DuplicateShred
-/// chunks with a size limit on each chunk.
-pub fn from_duplicate_slot_proof(
-    proof: &DuplicateSlotProof,
-    self_pubkey: Pubkey, // Pubkey of my node broadcasting crds value.
-    leader_schedule: Option<impl LeaderScheduleFn>,
-    wallclock: u64,
-    max_size: usize, // Maximum serialized size of each DuplicateShred.
-) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
-    if proof.shred1 == proof.shred2 {
-        return Err(Error::InvalidDuplicateSlotProof);
-    }
-    let shred1 = Shred::new_from_serialized_shred(proof.shred1.clone())?;
-    let shred2 = Shred::new_from_serialized_shred(proof.shred2.clone())?;
-    check_shreds(leader_schedule, &shred1, &shred2)?;
-    let (slot, shred_index, shred_type) = (shred1.slot(), shred1.index(), shred1.shred_type());
-    let data = bincode::serialize(proof)?;
-    let chunk_size = if DUPLICATE_SHRED_HEADER_SIZE < max_size {
-        max_size - DUPLICATE_SHRED_HEADER_SIZE
-    } else {
-        return Err(Error::InvalidSizeLimit);
-    };
-    let chunks: Vec<_> = data.chunks(chunk_size).map(Vec::from).collect();
-    let num_chunks = u8::try_from(chunks.len())?;
-    let chunks = chunks
-        .into_iter()
-        .enumerate()
-        .map(move |(i, chunk)| DuplicateShred {
-            from: self_pubkey,
-            wallclock,
-            slot,
-            shred_index,
-            shred_type,
-            num_chunks,
-            chunk_index: i as u8,
-            chunk,
-        });
-    Ok(chunks)
-}
-
-pub(crate) fn from_shred(
+pub(crate) fn from_shred<F>(
     shred: Shred,
     self_pubkey: Pubkey, // Pubkey of my node broadcasting crds value.
     other_payload: Vec<u8>,
-    leader_schedule: Option<impl LeaderScheduleFn>,
+    leader_schedule: Option<F>,
     wallclock: u64,
     max_size: usize, // Maximum serialized size of each DuplicateShred.
-) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
+) -> Result<impl Iterator<Item = DuplicateShred>, Error>
+where
+    F: FnOnce(Slot) -> Option<Pubkey>,
+{
     if shred.payload() == &other_payload {
         return Err(Error::InvalidDuplicateShreds);
     }
@@ -204,7 +178,10 @@ fn check_chunk(
         } else if dup.num_chunks != num_chunks {
             Err(Error::NumChunksMismatch)
         } else if dup.chunk_index >= num_chunks {
-            Err(Error::InvalidChunkIndex)
+            Err(Error::InvalidChunkIndex {
+                chunk_index: dup.chunk_index,
+                num_chunks,
+            })
         } else {
             Ok(())
         }
@@ -212,9 +189,9 @@ fn check_chunk(
 }
 
 /// Reconstructs the duplicate shreds from chunks of DuplicateShred.
-pub fn into_shreds(
+pub(crate) fn into_shreds(
+    slot_leader: &Pubkey,
     chunks: impl IntoIterator<Item = DuplicateShred>,
-    leader: impl LeaderScheduleFn,
 ) -> Result<(Shred, Shred), Error> {
     let mut chunks = chunks.into_iter();
     let DuplicateShred {
@@ -226,7 +203,6 @@ pub fn into_shreds(
         chunk,
         ..
     } = chunks.next().ok_or(Error::InvalidDuplicateShreds)?;
-    let slot_leader = leader(slot).ok_or(Error::UnknownSlotLeader)?;
     let check_chunk = check_chunk(slot, shred_index, shred_type, num_chunks);
     let mut data = HashMap::new();
     data.insert(chunk_index, chunk);
@@ -261,7 +237,7 @@ pub fn into_shreds(
         Err(Error::ShredTypeMismatch)
     } else if shred1.payload() == shred2.payload() {
         Err(Error::InvalidDuplicateShreds)
-    } else if !shred1.verify(&slot_leader) || !shred2.verify(&slot_leader) {
+    } else if !shred1.verify(slot_leader) || !shred2.verify(slot_leader) {
         Err(Error::InvalidSignature)
     } else {
         Ok((shred1, shred2))
@@ -315,7 +291,7 @@ pub(crate) mod tests {
         );
     }
 
-    pub fn new_rand_shred<R: Rng>(
+    pub(crate) fn new_rand_shred<R: Rng>(
         rng: &mut R,
         next_shred_index: u32,
         shredder: &Shredder,
@@ -376,7 +352,7 @@ pub(crate) mod tests {
         .unwrap()
         .collect();
         assert!(chunks.len() > 4);
-        let (shred3, shred4) = into_shreds(chunks, leader_schedule).unwrap();
+        let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks).unwrap();
         assert_eq!(shred1, shred3);
         assert_eq!(shred2, shred4);
     }

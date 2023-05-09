@@ -3,7 +3,7 @@ use {
     crate::cluster_nodes::ClusterNodesCache,
     itertools::Itertools,
     solana_entry::entry::Entry,
-    solana_gossip::contact_info::ContactInfo,
+    solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
     solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
     solana_sdk::{
         hash::Hash,
@@ -305,19 +305,19 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             .iter()
             .filter_map(|shred| {
                 let node = cluster_nodes.get_broadcast_peer(&shred.id())?;
-                if !ContactInfo::is_valid_address(&node.tvu, socket_addr_space) {
+                if !socket_addr_space.check(&node.tvu().ok()?) {
                     return None;
                 }
                 if self
                     .original_last_data_shreds
                     .lock()
                     .unwrap()
-                    .remove(&shred.signature())
+                    .remove(shred.signature())
                 {
-                    if cluster_partition.contains(&node.id) {
+                    if cluster_partition.contains(node.pubkey()) {
                         info!(
                             "skipping node {} for original shred index {}, slot {}",
-                            node.id,
+                            node.pubkey(),
                             shred.index(),
                             shred.slot()
                         );
@@ -327,7 +327,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     .partition_last_data_shreds
                     .lock()
                     .unwrap()
-                    .remove(&shred.signature())
+                    .remove(shred.signature())
                 {
                     // If the shred is part of the partition, broadcast it directly to the
                     // partition node. This is to account for cases when the partition stake
@@ -338,14 +338,15 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                             .iter()
                             .filter_map(|pubkey| {
                                 let tvu = cluster_info
-                                    .lookup_contact_info(pubkey, |contact_info| contact_info.tvu)?;
+                                    .lookup_contact_info(pubkey, ContactInfo::tvu)?
+                                    .ok()?;
                                 Some((shred.payload(), tvu))
                             })
                             .collect(),
                     );
                 }
 
-                Some(vec![(shred.payload(), node.tvu)])
+                Some(vec![(shred.payload(), node.tvu().ok()?)])
             })
             .flatten()
             .collect();

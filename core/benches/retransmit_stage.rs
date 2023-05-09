@@ -28,7 +28,8 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        net::UdpSocket,
+        iter::repeat_with,
+        net::{Ipv4Addr, UdpSocket},
         sync::{
             atomic::{AtomicUsize, Ordering},
             Arc, RwLock,
@@ -47,28 +48,30 @@ use {
 // threads loop indefinitely.
 #[ignore]
 #[bench]
-#[allow(clippy::same_item_push)]
 fn bench_retransmitter(bencher: &mut Bencher) {
     solana_logger::setup();
-    let cluster_info = ClusterInfo::new(
-        Node::new_localhost().info,
-        Arc::new(Keypair::new()),
-        SocketAddrSpace::Unspecified,
-    );
+    let cluster_info = {
+        let keypair = Arc::new(Keypair::new());
+        let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+        ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+    };
     const NUM_PEERS: usize = 4;
-    let mut peer_sockets = Vec::new();
-    for _ in 0..NUM_PEERS {
+    let peer_sockets: Vec<_> = repeat_with(|| {
         let id = Pubkey::new_unique();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
-        contact_info.tvu = socket.local_addr().unwrap();
-        contact_info.tvu.set_ip("127.0.0.1".parse().unwrap());
-        contact_info.tvu_forwards = contact_info.tvu;
-        info!("local: {:?}", contact_info.tvu);
+        let port = socket.local_addr().unwrap().port();
+        contact_info.set_tvu((Ipv4Addr::LOCALHOST, port)).unwrap();
+        contact_info
+            .set_tvu_forwards(contact_info.tvu().unwrap())
+            .unwrap();
+        info!("local: {:?}", contact_info.tvu().unwrap());
         cluster_info.insert_info(contact_info);
         socket.set_nonblocking(true).unwrap();
-        peer_sockets.push(socket);
-    }
+        socket
+    })
+    .take(NUM_PEERS)
+    .collect();
     let peer_sockets = Arc::new(peer_sockets);
     let cluster_info = Arc::new(cluster_info);
 
@@ -85,7 +88,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
 
     let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
-    // To work reliably with higher values, this needs larger udp rmem size
+    // To work reliably with higher values, this needs larger udp mem size
     let entries: Vec<_> = (0..5)
         .map(|_| {
             let keypair0 = Keypair::new();

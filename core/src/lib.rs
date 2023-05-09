@@ -3,14 +3,16 @@
 #![recursion_limit = "2048"]
 //! The `solana` library implements the Solana high-performance blockchain architecture.
 //! It includes a full Rust implementation of the architecture (see
-//! [Validator](server/struct.Validator.html)) as well as hooks to GPU implementations of its most
+//! [Validator](validator/struct.Validator.html)) as well as hooks to GPU implementations of its most
 //! paralellizable components (i.e. [SigVerify](sigverify/index.html)).  It also includes
 //! command-line tools to spin up validators and a Rust library
 //!
 
 pub mod accounts_hash_verifier;
+pub mod admin_rpc_post_init;
 pub mod ancestor_hashes_service;
 pub mod banking_stage;
+pub mod banking_trace;
 pub mod broadcast_stage;
 pub mod cache_block_meta_service;
 pub mod cluster_info_vote_listener;
@@ -25,7 +27,6 @@ pub mod cost_update_service;
 pub mod drop_bank_service;
 pub mod duplicate_repair_status;
 pub mod fetch_stage;
-pub mod find_packet_sender_stake_stage;
 pub mod fork_choice;
 pub mod forward_packet_batches_by_accounts;
 pub mod gen_keys;
@@ -38,10 +39,10 @@ pub mod leader_slot_banking_stage_timing_metrics;
 pub mod ledger_cleanup_service;
 pub mod ledger_metric_report_service;
 pub mod multi_iterator_scanner;
+pub mod next_leader;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
 pub mod packet_deserializer;
-mod packet_hasher;
 pub mod packet_threshold;
 pub mod poh_timing_report_service;
 pub mod poh_timing_reporter;
@@ -69,6 +70,7 @@ pub mod snapshot_packager_service;
 pub mod staked_nodes_updater_service;
 pub mod stats_reporter_service;
 pub mod system_monitor_service;
+mod tower1_14_11;
 mod tower1_7_14;
 pub mod tower_storage;
 pub mod tpu;

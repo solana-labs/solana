@@ -81,7 +81,7 @@ async fn main() {
         .into_iter()
         .collect();
 
-    let faucet_addr = socketaddr!(0, FAUCET_PORT);
+    let faucet_addr = socketaddr!(Ipv4Addr::UNSPECIFIED, FAUCET_PORT);
 
     let faucet = Arc::new(Mutex::new(Faucet::new_with_allowed_ips(
         faucet_keypair,

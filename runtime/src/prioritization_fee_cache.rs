@@ -167,7 +167,7 @@ impl PrioritizationFeeCache {
         let metrics_clone = metrics.clone();
         let service_thread = Some(
             Builder::new()
-                .name("prioritization-fee-cache-servicing-thread".to_string())
+                .name("solPrFeeCachSvc".to_string())
                 .spawn(move || {
                     Self::service_loop(cache_clone, receiver, metrics_clone);
                 })
@@ -198,19 +198,32 @@ impl PrioritizationFeeCache {
         }
     }
 
-    /// Update with a list of transactions' tx_priority_details and tx_account_locks; Only
+    /// Update with a list of non-vote transactions' tx_priority_details and tx_account_locks; Only
     /// transactions have both valid priority_detail and account_locks will be used to update
     /// fee_cache asynchronously.
-    pub fn update<'a>(&self, bank: Arc<Bank>, txs: impl Iterator<Item = &'a SanitizedTransaction>) {
+    pub fn update<'a>(&self, bank: &Bank, txs: impl Iterator<Item = &'a SanitizedTransaction>) {
         let mut successful_transaction_update_count: u64 = 0;
         let (_, send_updates_time) = measure!(
             {
                 for sanitized_transaction in txs {
+                    // Vote transactions are not prioritized, therefore they are excluded from
+                    // updating fee_cache.
+                    if sanitized_transaction.is_simple_vote_transaction() {
+                        continue;
+                    }
+
                     let priority_details = sanitized_transaction.get_transaction_priority_details();
                     let account_locks = sanitized_transaction
                         .get_account_locks(bank.get_transaction_account_lock_limit());
 
                     if priority_details.is_none() || account_locks.is_err() {
+                        continue;
+                    }
+                    let priority_details = priority_details.unwrap();
+
+                    // filter out any transaction that requests zero compute_unit_limit
+                    // since its priority fee amount is not instructive
+                    if priority_details.compute_unit_limit == 0 {
                         continue;
                     }
 
@@ -226,7 +239,7 @@ impl PrioritizationFeeCache {
                     self.sender
                         .send(CacheServiceUpdate::TransactionUpdate {
                             slot: bank.slot(),
-                            transaction_fee: priority_details.unwrap().priority,
+                            transaction_fee: priority_details.priority,
                             writable_accounts,
                         })
                         .unwrap_or_else(|err| {
@@ -414,7 +427,7 @@ mod tests {
         bank: Arc<Bank>,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
     ) {
-        prioritization_fee_cache.update(bank.clone(), txs);
+        prioritization_fee_cache.update(&bank, txs);
 
         let block_fee = PrioritizationFeeCache::get_prioritization_fee(
             prioritization_fee_cache.cache.clone(),

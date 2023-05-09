@@ -19,7 +19,6 @@ vote_account=
 no_restart=0
 gossip_entrypoint=
 ledger_dir=
-maybe_allow_private_addr=
 
 usage() {
   if [[ -n $1 ]]; then
@@ -177,10 +176,6 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --expected-bank-hash ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 == --allow-private-addr ]]; then
-      args+=("$1")
-      maybe_allow_private_addr=$1
-      shift
     elif [[ $1 == --accounts-db-skip-shrink ]]; then
       args+=("$1")
       shift
@@ -265,6 +260,7 @@ default_arg --ledger "$ledger_dir"
 default_arg --log -
 default_arg --full-rpc-api
 default_arg --no-incremental-snapshots
+default_arg --allow-private-addr
 
 if [[ $maybeRequireTower = true ]]; then
   default_arg --require-tower
@@ -335,8 +331,8 @@ setup_validator_accounts() {
   return 0
 }
 
-# shellcheck disable=SC2086 # Don't want to double quote "$maybe_allow_private_addr"
-rpc_url=$($solana_gossip $maybe_allow_private_addr rpc-url --timeout 180 --entrypoint "$gossip_entrypoint")
+# shellcheck disable=SC2086
+rpc_url=$($solana_gossip --allow-private-addr rpc-url --timeout 180 --entrypoint "$gossip_entrypoint")
 
 [[ -r "$identity" ]] || $solana_keygen new --no-passphrase -so "$identity"
 [[ -r "$vote_account" ]] || $solana_keygen new --no-passphrase -so "$vote_account"

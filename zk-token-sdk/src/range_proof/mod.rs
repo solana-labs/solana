@@ -278,7 +278,6 @@ impl RangeProof {
 
         let gs = s.iter().map(|s_i| minus_z - a * s_i);
         let hs = s_inv
-            .clone()
             .zip(util::exp_iter(y.invert()))
             .zip(concat_z_and_2.iter())
             .map(|((s_i_inv, exp_y_inv), z_and_2)| z + exp_y_inv * (zz * z_and_2 - b * s_i_inv));

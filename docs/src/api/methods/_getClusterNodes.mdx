@@ -1,0 +1,71 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getClusterNodes
+
+Returns information about all the nodes participating in the cluster
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+**None**
+
+### Result:
+
+The result field will be an array of JSON objects, each with the following sub fields:
+
+- `pubkey: <string>` - Node public key, as base-58 encoded string
+- `gossip: <string|null>` - Gossip network address for the node
+- `tpu: <string|null>` - TPU network address for the node
+- `rpc: <string|null>` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
+- `version: <string|null>` - The software version of the node, or `null` if the version information is not available
+- `featureSet: <u32|null >` - The unique identifier of the node's feature set
+- `shredVersion: <u16|null>` - The shred version the node has been configured to use
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0", "id": 1,
+    "method": "getClusterNodes"
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "gossip": "10.239.6.48:8001",
+      "pubkey": "9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ",
+      "rpc": "10.239.6.48:8899",
+      "tpu": "10.239.6.48:8856",
+      "version": "1.0.0 c375ce1f"
+    }
+  ],
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

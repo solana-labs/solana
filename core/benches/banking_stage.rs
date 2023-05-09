@@ -10,7 +10,10 @@ use {
     rayon::prelude::*,
     solana_client::connection_cache::ConnectionCache,
     solana_core::{
-        banking_stage::{BankingStage, BankingStageStats},
+        banking_stage::{
+            committer::Committer, consumer::Consumer, BankingStage, BankingStageStats,
+        },
+        banking_trace::{BankingPacketBatch, BankingTracer},
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         qos_service::QosService,
         unprocessed_packet_batches::*,
@@ -26,7 +29,9 @@ use {
     },
     solana_perf::{packet::to_packet_batches, test_tx::test_tx},
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_runtime::{
+        bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
+    },
     solana_sdk::{
         genesis_config::GenesisConfig,
         hash::Hash,
@@ -42,6 +47,7 @@ use {
         vote_state::VoteStateUpdate, vote_transaction::new_vote_state_update_transaction,
     },
     std::{
+        iter::repeat_with,
         sync::{atomic::Ordering, Arc, RwLock},
         time::{Duration, Instant},
     },
@@ -75,9 +81,9 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, _signal_receiver) =
-            create_test_recorder(&bank, &blockstore, None, None);
+            create_test_recorder(&bank, blockstore, None, None);
 
-        let recorder = poh_recorder.read().unwrap().recorder();
+        let recorder = poh_recorder.read().unwrap().new_recorder();
         let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
 
         let tx = test_tx();
@@ -89,20 +95,16 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             ThreadType::Transactions,
         );
         let (s, _r) = unbounded();
+        let committer = Committer::new(None, s, Arc::new(PrioritizationFeeCache::new(0u64)));
+        let consumer = Consumer::new(committer, recorder, QosService::new(1), None);
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
-            BankingStage::consume_buffered_packets(
+            consumer.consume_buffered_packets(
                 &bank_start,
                 &mut transaction_buffer,
-                &None,
-                &s,
-                None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
-                &recorder,
-                &QosService::new(1),
                 &mut LeaderSlotMetricsTracker::new(0),
-                None,
             );
         });
 
@@ -128,17 +130,17 @@ fn make_accounts_txs(txes: usize, mint_keypair: &Keypair, hash: Hash) -> Vec<Tra
         .collect()
 }
 
-#[allow(clippy::same_item_push)]
 fn make_programs_txs(txes: usize, hash: Hash) -> Vec<Transaction> {
     let progs = 4;
     (0..txes)
         .map(|_| {
-            let mut instructions = vec![];
             let from_key = Keypair::new();
-            for _ in 1..progs {
+            let instructions: Vec<_> = repeat_with(|| {
                 let to_key = pubkey::new_rand();
-                instructions.push(system_instruction::transfer(&from_key.pubkey(), &to_key, 1));
-            }
+                system_instruction::transfer(&from_key.pubkey(), &to_key, 1)
+            })
+            .take(progs)
+            .collect();
             let message = Message::new(&instructions, Some(&from_key.pubkey()));
             Transaction::new(&[&from_key], message, hash)
         })
@@ -196,9 +198,11 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     // during the benchmark
     genesis_config.ticks_per_slot = 10_000;
 
-    let (verified_sender, verified_receiver) = unbounded();
-    let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-    let (vote_sender, vote_receiver) = unbounded();
+    let banking_tracer = BankingTracer::new_disabled();
+    let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
+    let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
+    let (gossip_vote_sender, gossip_vote_receiver) = banking_tracer.create_channel_gossip_vote();
+
     let mut bank = Bank::new_for_benches(&genesis_config);
     // Allow arbitrary transaction processing time for the purposes of this bench
     bank.ns_per_slot = u128::MAX;
@@ -255,7 +259,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         let mut packet_batches = to_packet_batches(&vote_txs, PACKETS_PER_BATCH);
         for batch in packet_batches.iter_mut() {
             for packet in batch.iter_mut() {
-                packet.meta.set_simple_vote(true);
+                packet.meta_mut().set_simple_vote(true);
             }
         }
         packet_batches
@@ -267,27 +271,27 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(&bank, &blockstore, None, None);
-        let cluster_info = ClusterInfo::new(
-            Node::new_localhost().info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+            create_test_recorder(&bank, blockstore, None, None);
+        let cluster_info = {
+            let keypair = Arc::new(Keypair::new());
+            let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+        };
         let cluster_info = Arc::new(cluster_info);
         let (s, _r) = unbounded();
         let _banking_stage = BankingStage::new(
             &cluster_info,
             &poh_recorder,
-            verified_receiver,
+            non_vote_receiver,
             tpu_vote_receiver,
-            vote_receiver,
+            gossip_vote_receiver,
             None,
             s,
             None,
             Arc::new(ConnectionCache::default()),
             bank_forks,
+            &Arc::new(PrioritizationFeeCache::new(0u64)),
         );
-        poh_recorder.write().unwrap().set_bank(&bank, false);
 
         let chunk_len = verified.len() / CHUNKS;
         let mut start = 0;
@@ -302,10 +306,16 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             let mut sent = 0;
             if let Some(vote_packets) = &vote_packets {
                 tpu_vote_sender
-                    .send((vote_packets[start..start + chunk_len].to_vec(), None))
+                    .send(BankingPacketBatch::new((
+                        vote_packets[start..start + chunk_len].to_vec(),
+                        None,
+                    )))
                     .unwrap();
-                vote_sender
-                    .send((vote_packets[start..start + chunk_len].to_vec(), None))
+                gossip_vote_sender
+                    .send(BankingPacketBatch::new((
+                        vote_packets[start..start + chunk_len].to_vec(),
+                        None,
+                    )))
                     .unwrap();
             }
             for v in verified[start..start + chunk_len].chunks(chunk_len / num_threads) {
@@ -319,7 +329,9 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                 for xv in v {
                     sent += xv.len();
                 }
-                verified_sender.send((v.to_vec(), None)).unwrap();
+                non_vote_sender
+                    .send(BankingPacketBatch::new((v.to_vec(), None)))
+                    .unwrap();
             }
 
             check_txs(&signal_receiver2, txes / CHUNKS);
@@ -400,7 +412,6 @@ fn simulate_process_entries(
     process_entries_for_tests(&bank, vec![entry], randomize_txs, None, None).unwrap();
 }
 
-#[allow(clippy::same_item_push)]
 fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
     // entropy multiplier should be big enough to provide sufficient entropy
     // but small enough to not take too much time while executing the test.
@@ -416,13 +427,8 @@ fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
         ..
     } = create_genesis_config((num_accounts + 1) as u64 * initial_lamports);
 
-    let mut keypairs: Vec<Keypair> = vec![];
+    let keypairs: Vec<Keypair> = repeat_with(Keypair::new).take(num_accounts).collect();
     let tx_vector: Vec<VersionedTransaction> = Vec::with_capacity(num_accounts / 2);
-
-    for _ in 0..num_accounts {
-        let keypair = Keypair::new();
-        keypairs.push(keypair);
-    }
 
     bencher.iter(|| {
         simulate_process_entries(

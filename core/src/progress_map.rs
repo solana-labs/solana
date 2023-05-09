@@ -2,7 +2,7 @@ use {
     crate::{
         cluster_info_vote_listener::SlotVoteTracker,
         cluster_slots::SlotPubkeys,
-        consensus::{Stake, VotedStakes},
+        consensus::{Stake, ThresholdDecision, VotedStakes},
         replay_stage::SUPERMINORITY_THRESHOLD,
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
@@ -64,8 +64,9 @@ impl ReplaySlotStats {
                     self.transaction_verify_elapsed as i64,
                     i64
                 ),
+                ("confirmation_time_us", self.confirmation_elapsed as i64, i64),
                 ("replay_time", self.replay_elapsed as i64, i64),
-                ("execute_batches_us", self.execute_batches_us as i64, i64),
+                ("execute_batches_us", self.batch_execute.wall_clock_us as i64, i64),
                 (
                     "replay_total_elapsed",
                     self.started.elapsed().as_micros() as i64,
@@ -77,14 +78,15 @@ impl ReplaySlotStats {
                 ("total_shreds", num_shreds as i64, i64),
                 // Everything inside the `eager!` block will be eagerly expanded before
                 // evaluation of the rest of the surrounding macro.
-                eager!{report_execute_timings!(self.execute_timings)}
+                eager!{report_execute_timings!(self.batch_execute.totals)}
             );
         };
 
-        self.end_to_end_execute_timings.report_stats(slot);
+        self.batch_execute.slowest_thread.report_stats(slot);
 
         let mut per_pubkey_timings: Vec<_> = self
-            .execute_timings
+            .batch_execute
+            .totals
             .details
             .per_program_timings
             .iter()
@@ -163,26 +165,22 @@ impl ValidatorStakeInfo {
 pub const RETRANSMIT_BASE_DELAY_MS: u64 = 5_000;
 pub const RETRANSMIT_BACKOFF_CAP: u32 = 6;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RetransmitInfo {
-    pub retry_time: Option<Instant>,
-    pub retry_iteration: u32,
+    pub(crate) retry_time: Instant,
+    pub(crate) retry_iteration: u32,
 }
 
 impl RetransmitInfo {
     pub fn reached_retransmit_threshold(&self) -> bool {
         let backoff = std::cmp::min(self.retry_iteration, RETRANSMIT_BACKOFF_CAP);
         let backoff_duration_ms = (1_u64 << backoff) * RETRANSMIT_BASE_DELAY_MS;
-        self.retry_time
-            .map(|time| time.elapsed().as_millis() > backoff_duration_ms.into())
-            .unwrap_or(true)
+        self.retry_time.elapsed().as_millis() > u128::from(backoff_duration_ms)
     }
 
     pub fn increment_retry_iteration(&mut self) {
-        if self.retry_time.is_some() {
-            self.retry_iteration += 1;
-        }
-        self.retry_time = Some(Instant::now());
+        self.retry_iteration = self.retry_iteration.saturating_add(1);
+        self.retry_time = Instant::now();
     }
 }
 
@@ -250,7 +248,10 @@ impl ForkProgress {
                 total_epoch_stake,
                 ..PropagatedStats::default()
             },
-            retransmit_info: RetransmitInfo::default(),
+            retransmit_info: RetransmitInfo {
+                retry_time: Instant::now(),
+                retry_iteration: 0u32,
+            },
         }
     }
 
@@ -298,7 +299,7 @@ pub struct ForkStats {
     pub has_voted: bool,
     pub is_recent: bool,
     pub is_empty: bool,
-    pub vote_threshold: bool,
+    pub vote_threshold: ThresholdDecision,
     pub is_locked_out: bool,
     pub voted_stakes: VotedStakes,
     pub is_supermajority_confirmed: bool,
@@ -399,7 +400,7 @@ impl ProgressMap {
 
     pub fn get_propagated_stats_must_exist(&self, slot: Slot) -> &PropagatedStats {
         self.get_propagated_stats(slot)
-            .unwrap_or_else(|| panic!("slot={} must exist in ProgressMap", slot))
+            .unwrap_or_else(|| panic!("slot={slot} must exist in ProgressMap"))
     }
 
     pub fn get_fork_stats(&self, slot: Slot) -> Option<&ForkStats> {

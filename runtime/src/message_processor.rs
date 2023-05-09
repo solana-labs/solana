@@ -2,9 +2,10 @@ use {
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_program_runtime::{
+        builtin_program::BuiltinPrograms,
         compute_budget::ComputeBudget,
         executor_cache::TransactionExecutorCache,
-        invoke_context::{BuiltinProgram, InvokeContext},
+        invoke_context::InvokeContext,
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
@@ -21,7 +22,7 @@ use {
         transaction::TransactionError,
         transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
     },
-    std::{borrow::Cow, cell::RefCell, rc::Rc, sync::Arc},
+    std::{cell::RefCell, rc::Rc, sync::Arc},
 };
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -51,7 +52,7 @@ impl MessageProcessor {
     /// The accounts are committed back to the bank only if every instruction succeeds.
     #[allow(clippy::too_many_arguments)]
     pub fn process_message(
-        builtin_programs: &[BuiltinProgram],
+        builtin_programs: &BuiltinPrograms,
         message: &SanitizedMessage,
         program_indices: &[Vec<IndexOfAccount>],
         transaction_context: &mut TransactionContext,
@@ -71,7 +72,7 @@ impl MessageProcessor {
             transaction_context,
             rent,
             builtin_programs,
-            Cow::Borrowed(sysvar_cache),
+            sysvar_cache,
             log_collector,
             compute_budget,
             tx_executor_cache,
@@ -188,6 +189,7 @@ mod tests {
     use {
         super::*,
         crate::rent_collector::RentCollector,
+        solana_program_runtime::declare_process_instruction,
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
             instruction::{AccountMeta, Instruction, InstructionError},
@@ -217,10 +219,7 @@ mod tests {
             ChangeData { data: u8 },
         }
 
-        fn mock_system_process_instruction(
-            _first_instruction_account: IndexOfAccount,
-            invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
+        declare_process_instruction!(process_instruction, 1, |invoke_context| {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let instruction_data = instruction_context.get_instruction_data();
@@ -246,17 +245,15 @@ mod tests {
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
-        }
+        });
 
         let writable_pubkey = Pubkey::new_unique();
         let readonly_pubkey = Pubkey::new_unique();
         let mock_system_program_id = Pubkey::new_unique();
 
         let rent_collector = RentCollector::default();
-        let builtin_programs = &[BuiltinProgram {
-            program_id: mock_system_program_id,
-            process_instruction: mock_system_process_instruction,
-        }];
+        let builtin_programs =
+            BuiltinPrograms::new_mock(mock_system_program_id, process_instruction);
 
         let accounts = vec![
             (
@@ -305,7 +302,7 @@ mod tests {
             )));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -355,7 +352,7 @@ mod tests {
                 ]),
             )));
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -395,7 +392,7 @@ mod tests {
                 ]),
             )));
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -429,10 +426,7 @@ mod tests {
             DoWork { lamports: u64, data: u8 },
         }
 
-        fn mock_system_process_instruction(
-            _first_instruction_account: IndexOfAccount,
-            invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
+        declare_process_instruction!(process_instruction, 1, |invoke_context| {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let instruction_data = instruction_context.get_instruction_data();
@@ -479,14 +473,11 @@ mod tests {
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
-        }
+        });
 
-        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        let mock_program_id = Pubkey::from([2u8; 32]);
         let rent_collector = RentCollector::default();
-        let builtin_programs = &[BuiltinProgram {
-            program_id: mock_program_id,
-            process_instruction: mock_system_process_instruction,
-        }];
+        let builtin_programs = BuiltinPrograms::new_mock(mock_program_id, process_instruction);
 
         let accounts = vec![
             (
@@ -532,7 +523,7 @@ mod tests {
         )));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -566,7 +557,7 @@ mod tests {
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         )));
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -597,7 +588,7 @@ mod tests {
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         )));
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &program_indices,
             &mut transaction_context,
@@ -643,16 +634,10 @@ mod tests {
     #[test]
     fn test_precompile() {
         let mock_program_id = Pubkey::new_unique();
-        fn mock_process_instruction(
-            _first_instruction_account: IndexOfAccount,
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
+        declare_process_instruction!(process_instruction, 1, |_invoke_context| {
             Err(InstructionError::Custom(0xbabb1e))
-        }
-        let builtin_programs = &[BuiltinProgram {
-            program_id: mock_program_id,
-            process_instruction: mock_process_instruction,
-        }];
+        });
+        let builtin_programs = BuiltinPrograms::new_mock(mock_program_id, process_instruction);
 
         let mut secp256k1_account = AccountSharedData::new(1, 0, &native_loader::id());
         secp256k1_account.set_executable(true);
@@ -677,7 +662,7 @@ mod tests {
         )));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
-            builtin_programs,
+            &builtin_programs,
             &message,
             &[vec![0], vec![1]],
             &mut transaction_context,

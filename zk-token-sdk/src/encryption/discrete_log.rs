@@ -131,7 +131,6 @@ impl DiscreteLog {
     pub fn decode_u32(self) -> Option<u64> {
         let mut starting_point = self.target;
         let handles = (0..self.num_threads)
-            .into_iter()
             .map(|i| {
                 let ristretto_iterator = RistrettoIterator::new(
                     (starting_point, i as u64),
@@ -260,10 +259,7 @@ mod tests {
 
         assert_eq!(amount, decoded.unwrap());
 
-        println!(
-            "single thread discrete log computation secs: {:?} sec",
-            computation_secs
-        );
+        println!("single thread discrete log computation secs: {computation_secs:?} sec");
     }
 
     #[test]
@@ -281,10 +277,7 @@ mod tests {
 
         assert_eq!(amount, decoded.unwrap());
 
-        println!(
-            "4 thread discrete log computation: {:?} sec",
-            computation_secs
-        );
+        println!("4 thread discrete log computation: {computation_secs:?} sec");
 
         // amount 0
         let amount: u64 = 0;

@@ -1,5 +1,4 @@
 #![allow(clippy::integer_arithmetic)]
-
 use {
     clap::value_t,
     log::*,
@@ -19,18 +18,101 @@ use {
     solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client},
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
-        commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor, pubkey::Pubkey,
+        commitment_config::CommitmentConfig,
+        fee_calculator::FeeRateGovernor,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
         system_program,
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     std::{
-        collections::HashMap, fs::File, io::prelude::*, net::SocketAddr, path::Path, process::exit,
-        sync::Arc,
+        collections::HashMap,
+        fs::File,
+        io::prelude::*,
+        net::{IpAddr, SocketAddr},
+        path::Path,
+        process::exit,
+        sync::{Arc, RwLock},
     },
 };
 
 /// Number of signatures for all transactions in ~1 week at ~100K TPS
 pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;
+
+/// Request information about node's stake
+/// If fail to get requested information, return error
+/// Otherwise return stake of the node
+/// along with total activated stake of the network
+fn find_node_activated_stake(
+    rpc_client: Arc<RpcClient>,
+    node_id: Pubkey,
+) -> Result<(u64, u64), ()> {
+    let vote_accounts = rpc_client.get_vote_accounts();
+    if let Err(error) = vote_accounts {
+        error!("Failed to get vote accounts, error: {}", error);
+        return Err(());
+    }
+
+    let vote_accounts = vote_accounts.unwrap();
+
+    let total_active_stake: u64 = vote_accounts
+        .current
+        .iter()
+        .map(|vote_account| vote_account.activated_stake)
+        .sum();
+
+    let node_id_as_str = node_id.to_string();
+    let find_result = vote_accounts
+        .current
+        .iter()
+        .find(|&vote_account| vote_account.node_pubkey == node_id_as_str);
+    match find_result {
+        Some(value) => Ok((value.activated_stake, total_active_stake)),
+        None => {
+            error!("Failed to find stake for requested node");
+            Err(())
+        }
+    }
+}
+
+fn create_connection_cache(
+    json_rpc_url: &str,
+    tpu_connection_pool_size: usize,
+    use_quic: bool,
+    bind_address: IpAddr,
+    client_node_id: Option<&Keypair>,
+) -> ConnectionCache {
+    if !use_quic {
+        return ConnectionCache::with_udp(tpu_connection_pool_size);
+    }
+    if client_node_id.is_none() {
+        return ConnectionCache::new(tpu_connection_pool_size);
+    }
+
+    let rpc_client = Arc::new(RpcClient::new_with_commitment(
+        json_rpc_url.to_string(),
+        CommitmentConfig::confirmed(),
+    ));
+
+    let client_node_id = client_node_id.unwrap();
+    let (stake, total_stake) =
+        find_node_activated_stake(rpc_client, client_node_id.pubkey()).unwrap_or_default();
+    info!("Stake for specified client_node_id: {stake}, total stake: {total_stake}");
+    let stakes = HashMap::from([
+        (client_node_id.pubkey(), stake),
+        (Pubkey::new_unique(), total_stake - stake),
+    ]);
+    let staked_nodes = Arc::new(RwLock::new(StakedNodes::new(
+        Arc::new(stakes),
+        HashMap::<Pubkey, u64>::default(), // overrides
+    )));
+    ConnectionCache::new_with_client_options(
+        tpu_connection_pool_size,
+        None,
+        Some((client_node_id, bind_address)),
+        Some((&staked_nodes, &client_node_id.pubkey())),
+    )
+}
 
 #[allow(clippy::too_many_arguments)]
 fn create_client(
@@ -39,11 +121,10 @@ fn create_client(
     json_rpc_url: &str,
     websocket_url: &str,
     multi_client: bool,
-    use_quic: bool,
-    tpu_connection_pool_size: usize,
     rpc_tpu_sockets: Option<(SocketAddr, SocketAddr)>,
     num_nodes: usize,
     target_node: Option<Pubkey>,
+    connection_cache: ConnectionCache,
 ) -> Arc<dyn BenchTpsClient + Send + Sync> {
     match external_client_type {
         ExternalClientType::RpcClient => Arc::new(RpcClient::new_with_commitment(
@@ -51,18 +132,14 @@ fn create_client(
             CommitmentConfig::confirmed(),
         )),
         ExternalClientType::ThinClient => {
-            let connection_cache = match use_quic {
-                true => Arc::new(ConnectionCache::new(tpu_connection_pool_size)),
-                false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
-            };
-
+            let connection_cache = Arc::new(connection_cache);
             if let Some((rpc, tpu)) = rpc_tpu_sockets {
                 Arc::new(ThinClient::new(rpc, tpu, connection_cache))
             } else {
                 let nodes =
                     discover_cluster(entrypoint_addr, num_nodes, SocketAddrSpace::Unspecified)
                         .unwrap_or_else(|err| {
-                            eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
+                            eprintln!("Failed to discover {num_nodes} nodes: {err:?}");
                             exit(1);
                         });
                 if multi_client {
@@ -70,8 +147,7 @@ fn create_client(
                         get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
                     if nodes.len() < num_clients {
                         eprintln!(
-                            "Error: Insufficient nodes discovered.  Expecting {} or more",
-                            num_nodes
+                            "Error: Insufficient nodes discovered.  Expecting {num_nodes} or more"
                         );
                         exit(1);
                     }
@@ -80,7 +156,7 @@ fn create_client(
                     info!("Searching for target_node: {:?}", target_node);
                     let mut target_client = None;
                     for node in nodes {
-                        if node.id == target_node {
+                        if node.pubkey() == &target_node {
                             target_client = Some(get_client(
                                 &[node],
                                 &SocketAddrSpace::Unspecified,
@@ -90,7 +166,7 @@ fn create_client(
                         }
                     }
                     Arc::new(target_client.unwrap_or_else(|| {
-                        eprintln!("Target node {} not found", target_node);
+                        eprintln!("Target node {target_node} not found");
                         exit(1);
                     }))
                 } else {
@@ -107,23 +183,32 @@ fn create_client(
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
-            let connection_cache = match use_quic {
-                true => ConnectionCache::new(tpu_connection_pool_size),
-                false => ConnectionCache::with_udp(tpu_connection_pool_size),
-            };
-
-            Arc::new(
-                TpuClient::new_with_connection_cache(
-                    rpc_client,
-                    websocket_url,
-                    TpuClientConfig::default(),
-                    Arc::new(connection_cache),
-                )
-                .unwrap_or_else(|err| {
-                    eprintln!("Could not create TpuClient {:?}", err);
-                    exit(1);
-                }),
-            )
+            match connection_cache {
+                ConnectionCache::Udp(cache) => Arc::new(
+                    TpuClient::new_with_connection_cache(
+                        rpc_client,
+                        websocket_url,
+                        TpuClientConfig::default(),
+                        cache,
+                    )
+                    .unwrap_or_else(|err| {
+                        eprintln!("Could not create TpuClient {err:?}");
+                        exit(1);
+                    }),
+                ),
+                ConnectionCache::Quic(cache) => Arc::new(
+                    TpuClient::new_with_connection_cache(
+                        rpc_client,
+                        websocket_url,
+                        TpuClientConfig::default(),
+                        cache,
+                    )
+                    .unwrap_or_else(|err| {
+                        eprintln!("Could not create TpuClient {err:?}");
+                        exit(1);
+                    }),
+                ),
+            }
         }
     }
 }
@@ -133,7 +218,13 @@ fn main() {
     solana_metrics::set_panic_hook("bench-tps", /*version:*/ None);
 
     let matches = cli::build_args(solana_version::version!()).get_matches();
-    let cli_config = cli::extract_args(&matches);
+    let cli_config = match cli::parse_args(&matches) {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("{error}");
+            exit(1);
+        }
+    };
 
     let cli::Config {
         entrypoint_addr,
@@ -156,6 +247,8 @@ fn main() {
         use_randomized_compute_unit_price,
         use_durable_nonce,
         instruction_padding_config,
+        bind_address,
+        client_node_id,
         ..
     } = &cli_config;
 
@@ -198,14 +291,14 @@ fn main() {
     let rpc_tpu_sockets: Option<(SocketAddr, SocketAddr)> =
         if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
             let rpc = rpc_addr.parse().unwrap_or_else(|e| {
-                eprintln!("RPC address should parse as socketaddr {:?}", e);
+                eprintln!("RPC address should parse as socketaddr {e:?}");
                 exit(1);
             });
             let tpu = value_t!(matches, "tpu_addr", String)
                 .unwrap()
                 .parse()
                 .unwrap_or_else(|e| {
-                    eprintln!("TPU address should parse to a socket: {:?}", e);
+                    eprintln!("TPU address should parse to a socket: {e:?}");
                     exit(1);
                 });
             Some((rpc, tpu))
@@ -213,17 +306,23 @@ fn main() {
             None
         };
 
+    let connection_cache = create_connection_cache(
+        json_rpc_url,
+        *tpu_connection_pool_size,
+        *use_quic,
+        *bind_address,
+        client_node_id.as_ref(),
+    );
     let client = create_client(
         external_client_type,
         entrypoint_addr,
         json_rpc_url,
         websocket_url,
         *multi_client,
-        *use_quic,
-        *tpu_connection_pool_size,
         rpc_tpu_sockets,
         *num_nodes,
         *target_node,
+        connection_cache,
     );
     if let Some(instruction_padding_config) = instruction_padding_config {
         info!(

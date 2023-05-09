@@ -26,7 +26,6 @@ use {
 struct AuthenticatedEncryption;
 impl AuthenticatedEncryption {
     #[cfg(not(target_os = "solana"))]
-    #[allow(clippy::new_ret_no_self)]
     fn keygen<T: RngCore + CryptoRng>(rng: &mut T) -> AeKey {
         AeKey(rng.gen::<[u8; 16]>())
     }

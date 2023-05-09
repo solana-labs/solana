@@ -142,8 +142,8 @@ pub fn print_token_balances(
         let delta_string =
             real_number_string(recipient_token.amount - expected, spl_token_args.decimals);
         (
-            style(format!("{:>24}", actual_ui_amount)),
-            format!("{:>24}", delta_string),
+            style(format!("{actual_ui_amount:>24}")),
+            format!("{delta_string:>24}"),
         )
     } else {
         (

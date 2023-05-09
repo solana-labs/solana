@@ -20,6 +20,7 @@ use {
     solana_ledger::{
         blockstore::{Blockstore, SignatureInfosForAddress},
         blockstore_db::BlockstoreError,
+        blockstore_meta::{PerfSample, PerfSampleV1, PerfSampleV2},
         get_tmp_ledger_path,
         leader_schedule_cache::LeaderScheduleCache,
     },
@@ -114,14 +115,6 @@ type RpcCustomResult<T> = std::result::Result<T, RpcCustomError>;
 pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10); // 50kB
 pub const PERFORMANCE_SAMPLES_LIMIT: usize = 720;
 
-fn rpc_account_index_from_account_index(account_index: &AccountIndex) -> RpcAccountIndex {
-    match account_index {
-        AccountIndex::ProgramId => RpcAccountIndex::ProgramId,
-        AccountIndex::SplTokenOwner => RpcAccountIndex::SplTokenOwner,
-        AccountIndex::SplTokenMint => RpcAccountIndex::SplTokenMint,
-    }
-}
-
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     RpcResponse {
         context: RpcResponseContext::new(bank.slot()),
@@ -205,6 +198,7 @@ pub struct JsonRpcRequestProcessor {
     max_slots: Arc<MaxSlots>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     max_complete_transaction_status_slot: Arc<AtomicU64>,
+    max_complete_rewards_slot: Arc<AtomicU64>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
@@ -311,6 +305,7 @@ impl JsonRpcRequestProcessor {
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_rewards_slot: Arc<AtomicU64>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> (Self, Receiver<TransactionInfo>) {
         let (sender, receiver) = unbounded();
@@ -332,6 +327,7 @@ impl JsonRpcRequestProcessor {
                 max_slots,
                 leader_schedule_cache,
                 max_complete_transaction_status_slot,
+                max_complete_rewards_slot,
                 prioritization_fee_cache,
             },
             receiver,
@@ -351,12 +347,19 @@ impl JsonRpcRequestProcessor {
         )));
         let blockstore = Arc::new(Blockstore::open(&get_tmp_ledger_path!()).unwrap());
         let exit = Arc::new(AtomicBool::new(false));
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::default(),
-            Arc::new(Keypair::new()),
-            socket_addr_space,
-        ));
-        let tpu_address = cluster_info.my_contact_info().tpu;
+        let cluster_info = Arc::new({
+            let keypair = Arc::new(Keypair::new());
+            let contact_info = ContactInfo::new_localhost(
+                &keypair.pubkey(),
+                solana_sdk::timing::timestamp(), // wallclock
+            );
+            ClusterInfo::new(contact_info, keypair, socket_addr_space)
+        });
+        let tpu_address = match *connection_cache {
+            ConnectionCache::Quic(_) => ContactInfo::tpu_quic,
+            ConnectionCache::Udp(_) => ContactInfo::tpu,
+        }(&cluster_info.my_contact_info())
+        .unwrap();
         let (sender, receiver) = unbounded();
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
@@ -366,6 +369,7 @@ impl JsonRpcRequestProcessor {
             &connection_cache,
             1000,
             1,
+            exit.clone(),
         );
 
         Self {
@@ -397,6 +401,7 @@ impl JsonRpcRequestProcessor {
             max_slots: Arc::new(MaxSlots::default()),
             leader_schedule_cache: Arc::new(LeaderScheduleCache::new_from_bank(bank)),
             max_complete_transaction_status_slot: Arc::new(AtomicU64::default()),
+            max_complete_rewards_slot: Arc::new(AtomicU64::default()),
             prioritization_fee_cache: Arc::new(PrioritizationFeeCache::default()),
         }
     }
@@ -502,51 +507,6 @@ impl JsonRpcRequestProcessor {
             true => OptionalContext::Context(new_response(&bank, accounts)),
             false => OptionalContext::NoContext(accounts),
         })
-    }
-
-    pub fn get_secondary_index_key_size(
-        &self,
-        index_key: &Pubkey,
-        config: Option<RpcContextConfig>,
-    ) -> Result<RpcResponse<HashMap<RpcAccountIndex, usize>>> {
-        // Acquire the bank
-        let bank = self.get_bank_with_config(config.unwrap_or_default())?;
-
-        // Exit if secondary indexes are not enabled
-        if self.config.account_indexes.is_empty() {
-            debug!("get_secondary_index_key_size: secondary index not enabled.");
-            return Ok(new_response(&bank, HashMap::new()));
-        };
-
-        // Make sure the requested key is not explicitly excluded
-        if !self.config.account_indexes.include_key(index_key) {
-            return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
-                index_key: index_key.to_string(),
-            }
-            .into());
-        }
-
-        // Grab a ref to the AccountsIndex for this Bank
-        let accounts_index = &bank.accounts().accounts_db.accounts_index;
-
-        // Find the size of the key in every index where it exists
-        let found_sizes = self
-            .config
-            .account_indexes
-            .indexes
-            .iter()
-            .filter_map(|index| {
-                accounts_index
-                    .get_index_key_size(index, index_key)
-                    .map(|size| (rpc_account_index_from_account_index(index), size))
-            })
-            .collect::<HashMap<_, _>>();
-
-        // Note: Will return an empty HashMap if no keys are found.
-        if found_sizes.is_empty() {
-            debug!("get_secondary_index_key_size: key not found in the secondary index.");
-        }
-        Ok(new_response(&bank, found_sizes))
     }
 
     pub async fn get_inflation_reward(
@@ -820,8 +780,7 @@ impl JsonRpcRequestProcessor {
                 );
             } else {
                 return Err(Error::invalid_params(format!(
-                    "Invalid slot range: leader schedule for epoch {} is unavailable",
-                    epoch
+                    "Invalid slot range: leader schedule for epoch {epoch} is unavailable"
                 )));
             }
 
@@ -985,9 +944,9 @@ impl JsonRpcRequestProcessor {
                 }
 
                 let vote_state = account.vote_state();
-                let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
+                let vote_state = vote_state.unwrap_or(&default_vote_state);
                 let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
-                    vote.slot
+                    vote.slot()
                 } else {
                     0
                 };
@@ -1095,11 +1054,12 @@ impl JsonRpcRequestProcessor {
         Ok(())
     }
 
-    fn check_status_is_complete(&self, slot: Slot) -> Result<()> {
+    fn check_blockstore_writes_complete(&self, slot: Slot) -> Result<()> {
         if slot
             > self
                 .max_complete_transaction_status_slot
                 .load(Ordering::SeqCst)
+            || slot > self.max_complete_rewards_slot.load(Ordering::SeqCst)
         {
             Err(RpcCustomError::BlockStatusNotAvailableYet { slot }.into())
         } else {
@@ -1133,7 +1093,7 @@ impl JsonRpcRequestProcessor {
                     .unwrap()
                     .highest_confirmed_root()
             {
-                self.check_status_is_complete(slot)?;
+                self.check_blockstore_writes_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
                 let encode_block = |confirmed_block: ConfirmedBlock| -> Result<UiConfirmedBlock> {
@@ -1164,7 +1124,7 @@ impl JsonRpcRequestProcessor {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
                 if confirmed_bank.status_cache_ancestors().contains(&slot) {
-                    self.check_status_is_complete(slot)?;
+                    self.check_blockstore_writes_complete(slot)?;
                     let result = self.blockstore.get_complete_block(slot, true);
                     return result
                         .ok()
@@ -1226,8 +1186,7 @@ impl JsonRpcRequestProcessor {
         }
         if end_slot - start_slot > MAX_GET_CONFIRMED_BLOCKS_RANGE {
             return Err(Error::invalid_params(format!(
-                "Slot range too large; max {}",
-                MAX_GET_CONFIRMED_BLOCKS_RANGE
+                "Slot range too large; max {MAX_GET_CONFIRMED_BLOCKS_RANGE}"
             )));
         }
 
@@ -1293,8 +1252,7 @@ impl JsonRpcRequestProcessor {
 
         if limit > MAX_GET_CONFIRMED_BLOCKS_RANGE as usize {
             return Err(Error::invalid_params(format!(
-                "Limit too large; max {}",
-                MAX_GET_CONFIRMED_BLOCKS_RANGE
+                "Limit too large; max {MAX_GET_CONFIRMED_BLOCKS_RANGE}"
             )));
         }
 
@@ -1642,7 +1600,7 @@ impl JsonRpcRequestProcessor {
             } = self
                 .blockstore
                 .get_confirmed_signatures_for_address2(address, highest_slot, before, until, limit)
-                .map_err(|err| Error::invalid_params(format!("{}", err)))?;
+                .map_err(|err| Error::invalid_params(format!("{err}")))?;
 
             let map_results = |results: Vec<ConfirmedTransactionStatusWithSignature>| {
                 results
@@ -1763,14 +1721,12 @@ impl JsonRpcRequestProcessor {
         let epoch = config.epoch.unwrap_or_else(|| bank.epoch());
         if bank.epoch().saturating_sub(epoch) > solana_sdk::stake_history::MAX_ENTRIES as u64 {
             return Err(Error::invalid_params(format!(
-                "Invalid param: epoch {:?} is too far in the past",
-                epoch
+                "Invalid param: epoch {epoch:?} is too far in the past"
             )));
         }
         if epoch > bank.epoch() {
             return Err(Error::invalid_params(format!(
-                "Invalid param: epoch {:?} has not yet started",
-                epoch
+                "Invalid param: epoch {epoch:?} has not yet started"
             )));
         }
 
@@ -2226,16 +2182,9 @@ impl JsonRpcRequestProcessor {
 fn optimize_filters(filters: &mut [RpcFilterType]) {
     filters.iter_mut().for_each(|filter_type| {
         if let RpcFilterType::Memcmp(compare) = filter_type {
-            use MemcmpEncodedBytes::*;
-            match &compare.bytes {
-                #[allow(deprecated)]
-                Binary(bytes) | Base58(bytes) => {
-                    compare.bytes = Bytes(bs58::decode(bytes).into_vec().unwrap());
-                }
-                Base64(bytes) => {
-                    compare.bytes = Bytes(base64::decode(bytes).unwrap());
-                }
-                _ => {}
+            if let Err(err) = compare.convert_to_raw_bytes() {
+                // All filters should have been previously verified
+                warn!("Invalid filter: bytes could not be decoded, {err}");
             }
         }
     })
@@ -2260,25 +2209,25 @@ fn verify_transaction(
 fn verify_filter(input: &RpcFilterType) -> Result<()> {
     input
         .verify()
-        .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
+        .map_err(|e| Error::invalid_params(format!("Invalid param: {e:?}")))
 }
 
-fn verify_pubkey(input: &str) -> Result<Pubkey> {
+pub fn verify_pubkey(input: &str) -> Result<Pubkey> {
     input
         .parse()
-        .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
+        .map_err(|e| Error::invalid_params(format!("Invalid param: {e:?}")))
 }
 
 fn verify_hash(input: &str) -> Result<Hash> {
     input
         .parse()
-        .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
+        .map_err(|e| Error::invalid_params(format!("Invalid param: {e:?}")))
 }
 
 fn verify_signature(input: &str) -> Result<Signature> {
     input
         .parse()
-        .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
+        .map_err(|e| Error::invalid_params(format!("Invalid param: {e:?}")))
 }
 
 fn verify_token_account_filter(
@@ -2311,8 +2260,7 @@ fn verify_and_parse_signatures_for_address_params(
 
     if limit == 0 || limit > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT {
         return Err(Error::invalid_params(format!(
-            "Invalid limit; max {}",
-            MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT
+            "Invalid limit; max {MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT}"
         )));
     }
     Ok((address, before, until, limit))
@@ -2357,7 +2305,7 @@ fn encode_account<T: ReadableAccount>(
     if (encoding == UiAccountEncoding::Binary || encoding == UiAccountEncoding::Base58)
         && account.data().len() > MAX_BASE58_BYTES
     {
-        let message = format!("Encoded binary (base 58) data should be less than {} bytes, please use Base64 encoding.", MAX_BASE58_BYTES);
+        let message = format!("Encoded binary (base 58) data should be less than {MAX_BASE58_BYTES} bytes, please use Base64 encoding.");
         Err(error::Error {
             code: error::ErrorCode::InvalidRequest,
             message,
@@ -2387,6 +2335,7 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
     for filter in filters {
         match filter {
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
@@ -2394,13 +2343,14 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
             }) if *offset == account_packed_len && *program_id == inline_spl_token_2022::id() => {
                 memcmp_filter = Some(bytes)
             }
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
                 ..
             }) if *offset == SPL_TOKEN_ACCOUNT_OWNER_OFFSET => {
                 if bytes.len() == PUBKEY_BYTES {
-                    owner_key = Some(Pubkey::new(bytes));
+                    owner_key = Pubkey::try_from(&bytes[..]).ok();
                 } else {
                     incorrect_owner_len = Some(bytes.len());
                 }
@@ -2443,6 +2393,7 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
     for filter in filters {
         match filter {
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
@@ -2450,13 +2401,14 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
             }) if *offset == account_packed_len && *program_id == inline_spl_token_2022::id() => {
                 memcmp_filter = Some(bytes)
             }
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
                 ..
             }) if *offset == SPL_TOKEN_ACCOUNT_MINT_OFFSET => {
                 if bytes.len() == PUBKEY_BYTES {
-                    mint = Some(Pubkey::new(bytes));
+                    mint = Pubkey::try_from(&bytes[..]).ok();
                 } else {
                     incorrect_mint_len = Some(bytes.len());
                 }
@@ -2887,8 +2839,7 @@ pub mod rpc_bank {
             let limit = limit as usize;
             if limit > MAX_GET_SLOT_LEADERS {
                 return Err(Error::invalid_params(format!(
-                    "Invalid limit; max {}",
-                    MAX_GET_SLOT_LEADERS
+                    "Invalid limit; max {MAX_GET_SLOT_LEADERS}"
                 )));
             }
 
@@ -2924,8 +2875,7 @@ pub mod rpc_bank {
                     let last_slot = range.last_slot.unwrap_or_else(|| bank.slot());
                     if last_slot < first_slot {
                         return Err(Error::invalid_params(format!(
-                            "lastSlot, {}, cannot be less than firstSlot, {}",
-                            last_slot, first_slot
+                            "lastSlot, {last_slot}, cannot be less than firstSlot, {first_slot}"
                         )));
                     }
                     (first_slot, last_slot)
@@ -3082,8 +3032,7 @@ pub mod rpc_accounts {
                 .unwrap_or(MAX_MULTIPLE_ACCOUNTS);
             if pubkey_strs.len() > max_multiple_accounts {
                 return Err(Error::invalid_params(format!(
-                    "Too many inputs provided; max {}",
-                    max_multiple_accounts
+                    "Too many inputs provided; max {max_multiple_accounts}"
                 )));
             }
             let pubkeys = pubkey_strs
@@ -3160,16 +3109,6 @@ pub mod rpc_accounts_scan {
             config: Option<RpcProgramAccountsConfig>,
         ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>>;
 
-        // This method does not itself do an accounts scan, but returns data only relevant to nodes
-        // that do support accounts-scan RPC apis
-        #[rpc(meta, name = "getSecondaryIndexKeySize")]
-        fn get_secondary_index_key_size(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcContextConfig>,
-        ) -> Result<RpcResponse<HashMap<RpcAccountIndex, usize>>>;
-
         #[rpc(meta, name = "getLargestAccounts")]
         fn get_largest_accounts(
             &self,
@@ -3241,28 +3180,13 @@ pub mod rpc_accounts_scan {
             };
             if filters.len() > MAX_GET_PROGRAM_ACCOUNT_FILTERS {
                 return Err(Error::invalid_params(format!(
-                    "Too many filters provided; max {}",
-                    MAX_GET_PROGRAM_ACCOUNT_FILTERS
+                    "Too many filters provided; max {MAX_GET_PROGRAM_ACCOUNT_FILTERS}"
                 )));
             }
             for filter in &filters {
                 verify_filter(filter)?;
             }
             meta.get_program_accounts(&program_id, config, filters, with_context)
-        }
-
-        fn get_secondary_index_key_size(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcContextConfig>,
-        ) -> Result<RpcResponse<HashMap<RpcAccountIndex, usize>>> {
-            debug!(
-                "get_secondary_index_key_size rpc request received: {:?}",
-                pubkey_str
-            );
-            let index_key = verify_pubkey(&pubkey_str)?;
-            meta.get_secondary_index_key_size(&index_key, config)
         }
 
         fn get_largest_accounts(
@@ -3507,8 +3431,7 @@ pub mod rpc_full {
 
             if limit > PERFORMANCE_SAMPLES_LIMIT {
                 return Err(Error::invalid_params(format!(
-                    "Invalid limit; max {}",
-                    PERFORMANCE_SAMPLES_LIMIT
+                    "Invalid limit; max {PERFORMANCE_SAMPLES_LIMIT}"
                 )));
             }
 
@@ -3519,13 +3442,8 @@ pub mod rpc_full {
                     warn!("get_recent_performance_samples failed: {:?}", err);
                     Error::invalid_request()
                 })?
-                .iter()
-                .map(|(slot, sample)| RpcPerfSample {
-                    slot: *slot,
-                    num_transactions: sample.num_transactions,
-                    num_slots: sample.num_slots,
-                    sample_period_secs: sample.sample_period_secs,
-                })
+                .into_iter()
+                .map(|(slot, sample)| rpc_perf_sample_from_perf_sample(slot, sample))
                 .collect())
         }
 
@@ -3533,33 +3451,43 @@ pub mod rpc_full {
             debug!("get_cluster_nodes rpc request received");
             let cluster_info = &meta.cluster_info;
             let socket_addr_space = cluster_info.socket_addr_space();
-            let valid_address_or_none = |addr: &SocketAddr| -> Option<SocketAddr> {
-                if ContactInfo::is_valid_address(addr, socket_addr_space) {
-                    Some(*addr)
-                } else {
-                    None
-                }
-            };
             let my_shred_version = cluster_info.my_shred_version();
             Ok(cluster_info
                 .all_peers()
                 .iter()
                 .filter_map(|(contact_info, _)| {
-                    if my_shred_version == contact_info.shred_version
-                        && ContactInfo::is_valid_address(&contact_info.gossip, socket_addr_space)
+                    if my_shred_version == contact_info.shred_version()
+                        && contact_info
+                            .gossip()
+                            .map(|addr| socket_addr_space.check(&addr))
+                            .unwrap_or_default()
                     {
                         let (version, feature_set) = if let Some(version) =
-                            cluster_info.get_node_version(&contact_info.id)
+                            cluster_info.get_node_version(contact_info.pubkey())
                         {
                             (Some(version.to_string()), Some(version.feature_set))
                         } else {
                             (None, None)
                         };
                         Some(RpcContactInfo {
-                            pubkey: contact_info.id.to_string(),
-                            gossip: Some(contact_info.gossip),
-                            tpu: valid_address_or_none(&contact_info.tpu),
-                            rpc: valid_address_or_none(&contact_info.rpc),
+                            pubkey: contact_info.pubkey().to_string(),
+                            gossip: contact_info.gossip().ok(),
+                            tpu: contact_info
+                                .tpu()
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            tpu_quic: contact_info
+                                .tpu_quic()
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            rpc: contact_info
+                                .rpc()
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            pubsub: contact_info
+                                .rpc_pubsub()
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
                             version,
                             feature_set,
                             shred_version: Some(my_shred_version),
@@ -3583,8 +3511,7 @@ pub mod rpc_full {
             );
             if signature_strs.len() > MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS {
                 return Box::pin(future::err(Error::invalid_params(format!(
-                    "Too many inputs provided; max {}",
-                    MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS
+                    "Too many inputs provided; max {MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS}"
                 ))));
             }
             let mut signatures: Vec<Signature> = vec![];
@@ -3685,8 +3612,7 @@ pub mod rpc_full {
             let tx_encoding = encoding.unwrap_or(UiTransactionEncoding::Base58);
             let binary_encoding = tx_encoding.into_binary_encoding().ok_or_else(|| {
                 Error::invalid_params(format!(
-                    "unsupported encoding: {}. Supported encodings: base58, base64",
-                    tx_encoding
+                    "unsupported encoding: {tx_encoding}. Supported encodings: base58, base64"
                 ))
             })?;
             let (wire_transaction, unsanitized_tx) =
@@ -3756,7 +3682,7 @@ pub mod rpc_full {
                         }
                     }
                     return Err(RpcCustomError::SendTransactionPreflightFailure {
-                        message: format!("Transaction simulation failed: {}", err),
+                        message: format!("Transaction simulation failed: {err}"),
                         result: RpcSimulateTransactionResult {
                             err: Some(err),
                             logs: Some(logs),
@@ -3797,8 +3723,7 @@ pub mod rpc_full {
             let tx_encoding = encoding.unwrap_or(UiTransactionEncoding::Base58);
             let binary_encoding = tx_encoding.into_binary_encoding().ok_or_else(|| {
                 Error::invalid_params(format!(
-                    "unsupported encoding: {}. Supported encodings: base58, base64",
-                    tx_encoding
+                    "unsupported encoding: {tx_encoding}. Supported encodings: base58, base64"
                 ))
             })?;
             let (_, mut unsanitized_tx) =
@@ -3846,8 +3771,7 @@ pub mod rpc_full {
 
                 if config_accounts.addresses.len() > number_of_accounts {
                     return Err(Error::invalid_params(format!(
-                        "Too many accounts provided; max {}",
-                        number_of_accounts
+                        "Too many accounts provided; max {number_of_accounts}"
                     )));
                 }
 
@@ -4038,8 +3962,8 @@ pub mod rpc_full {
             blockhash: String,
             config: Option<RpcContextConfig>,
         ) -> Result<RpcResponse<bool>> {
-            let blockhash = Hash::from_str(&blockhash)
-                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
+            let blockhash =
+                Hash::from_str(&blockhash).map_err(|e| Error::invalid_params(format!("{e:?}")))?;
             meta.is_blockhash_valid(&blockhash, config.unwrap_or_default())
         }
 
@@ -4057,11 +3981,11 @@ pub mod rpc_full {
             let bank = &*meta.get_bank_with_config(config.unwrap_or_default())?;
             let sanitized_versioned_message = SanitizedVersionedMessage::try_from(message)
                 .map_err(|err| {
-                    Error::invalid_params(format!("invalid transaction message: {}", err))
+                    Error::invalid_params(format!("invalid transaction message: {err}"))
                 })?;
             let sanitized_message = SanitizedMessage::try_new(sanitized_versioned_message, bank)
                 .map_err(|err| {
-                    Error::invalid_params(format!("invalid transaction message: {}", err))
+                    Error::invalid_params(format!("invalid transaction message: {err}"))
                 })?;
             let fee = bank.get_fee_for_message(&sanitized_message);
             Ok(new_response(bank, fee))
@@ -4088,8 +4012,7 @@ pub mod rpc_full {
             );
             if pubkey_strs.len() > MAX_TX_ACCOUNT_LOCKS {
                 return Err(Error::invalid_params(format!(
-                    "Too many inputs provided; max {}",
-                    MAX_TX_ACCOUNT_LOCKS
+                    "Too many inputs provided; max {MAX_TX_ACCOUNT_LOCKS}"
                 )));
             }
             let pubkeys = pubkey_strs
@@ -4098,6 +4021,34 @@ pub mod rpc_full {
                 .collect::<Result<Vec<_>>>()?;
             meta.get_recent_prioritization_fees(pubkeys)
         }
+    }
+}
+
+fn rpc_perf_sample_from_perf_sample(slot: u64, sample: PerfSample) -> RpcPerfSample {
+    match sample {
+        PerfSample::V1(PerfSampleV1 {
+            num_transactions,
+            num_slots,
+            sample_period_secs,
+        }) => RpcPerfSample {
+            slot,
+            num_transactions,
+            num_non_vote_transactions: None,
+            num_slots,
+            sample_period_secs,
+        },
+        PerfSample::V2(PerfSampleV2 {
+            num_transactions,
+            num_non_vote_transactions,
+            num_slots,
+            sample_period_secs,
+        }) => RpcPerfSample {
+            slot,
+            num_transactions,
+            num_non_vote_transactions: Some(num_non_vote_transactions),
+            num_slots,
+            sample_period_secs,
+        },
     }
 }
 
@@ -4170,8 +4121,8 @@ pub mod rpc_deprecated_v1_9 {
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<Option<RpcFeeCalculator>>> {
             debug!("get_fee_calculator_for_blockhash rpc request received");
-            let blockhash = Hash::from_str(&blockhash)
-                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
+            let blockhash =
+                Hash::from_str(&blockhash).map_err(|e| Error::invalid_params(format!("{e:?}")))?;
             meta.get_fee_calculator_for_blockhash(&blockhash, commitment)
         }
 
@@ -4480,14 +4431,12 @@ pub mod rpc_obsolete_v1_7 {
             let pubkey = verify_pubkey(&pubkey_str)?;
             if end_slot < start_slot {
                 return Err(Error::invalid_params(format!(
-                    "start_slot {} must be less than or equal to end_slot {}",
-                    start_slot, end_slot
+                    "start_slot {start_slot} must be less than or equal to end_slot {end_slot}"
                 )));
             }
             if end_slot - start_slot > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE {
                 return Err(Error::invalid_params(format!(
-                    "Slot range too large; max {}",
-                    MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE
+                    "Slot range too large; max {MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE}"
                 )));
             }
             Ok(meta
@@ -4522,7 +4471,7 @@ where
             }
             bs58::decode(encoded)
                 .into_vec()
-                .map_err(|e| Error::invalid_params(format!("invalid base58 encoding: {:?}", e)))?
+                .map_err(|e| Error::invalid_params(format!("invalid base58 encoding: {e:?}")))?
         }
         TransactionBinaryEncoding::Base64 => {
             inc_new_counter_info!("rpc-base64_encoded_tx", 1);
@@ -4536,7 +4485,7 @@ where
                 )));
             }
             base64::decode(encoded)
-                .map_err(|e| Error::invalid_params(format!("invalid base64 encoding: {:?}", e)))?
+                .map_err(|e| Error::invalid_params(format!("invalid base64 encoding: {e:?}")))?
         }
     };
     if wire_output.len() > PACKET_DATA_SIZE {
@@ -4573,10 +4522,10 @@ fn sanitize_transaction(
         address_loader,
         true, // require_static_program_ids
     )
-    .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
+    .map_err(|err| Error::invalid_params(format!("invalid transaction: {err}")))
 }
 
-pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>> {
+pub fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>> {
     let mut validator_exit = Exit::default();
     let exit_ = exit.clone();
     validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
@@ -4686,12 +4635,11 @@ pub mod tests {
         jsonrpc_core::{futures, ErrorCode, MetaIoHandler, Output, Response, Value},
         jsonrpc_core_client::transports::local,
         serde::de::DeserializeOwned,
-        solana_account_decoder::parse_token::spl_token_pubkey,
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::next_versioned_entry,
-        solana_gossip::{contact_info::ContactInfo, socketaddr},
+        solana_gossip::socketaddr,
         solana_ledger::{
-            blockstore_meta::PerfSample,
+            blockstore_meta::PerfSampleV2,
             blockstore_processor::fill_blockstore_slot_with_ticks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
         },
@@ -4746,12 +4694,21 @@ pub mod tests {
             solana_program::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
             state::{AccountState as TokenAccountState, Mint},
         },
-        std::{borrow::Cow, collections::HashMap},
+        std::{borrow::Cow, collections::HashMap, net::Ipv4Addr},
     };
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000_000;
     const TEST_SIGNATURE_FEE: u64 = 5_000;
     const TEST_SLOTS_PER_EPOCH: u64 = DELINQUENT_VALIDATOR_SLOT_DISTANCE + 1;
+
+    pub(crate) fn new_test_cluster_info() -> ClusterInfo {
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(
+            &keypair.pubkey(),
+            solana_sdk::timing::timestamp(), // wallclock
+        );
+        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+    }
 
     fn create_test_request(method: &str, params: Option<serde_json::Value>) -> serde_json::Value {
         json!({
@@ -4767,7 +4724,7 @@ pub mod tests {
             match output {
                 Output::Success(success) => serde_json::from_value(success.result).unwrap(),
                 Output::Failure(failure) => {
-                    panic!("Expected success but received: {:?}", failure);
+                    panic!("Expected success but received: {failure:?}");
                 }
             }
         } else {
@@ -4779,7 +4736,7 @@ pub mod tests {
         if let Response::Single(output) = response {
             match output {
                 Output::Success(success) => {
-                    panic!("Expected failure but received: {:?}", success);
+                    panic!("Expected failure but received: {success:?}");
                 }
                 Output::Failure(failure) => (failure.error.code.code(), failure.error.message),
             }
@@ -4813,33 +4770,26 @@ pub mod tests {
             let (bank_forks, mint_keypair, leader_vote_keypair) =
                 new_bank_forks_with_config(BankTestConfig {
                     secondary_indexes: config.account_indexes.clone(),
-                    accounts_db_caching_enabled: true,
                 });
 
             let ledger_path = get_tmp_ledger_path!();
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
             let bank = bank_forks.read().unwrap().working_bank();
 
-            let identity = Pubkey::new_unique();
             let leader_pubkey = *bank.collector_id();
             let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
             let exit = Arc::new(AtomicBool::new(false));
             let validator_exit = create_validator_exit(&exit);
-            let cluster_info = Arc::new(ClusterInfo::new(
-                ContactInfo {
-                    id: identity,
-                    ..ContactInfo::default()
-                },
-                Arc::new(Keypair::new()),
-                SocketAddrSpace::Unspecified,
-            ));
-            cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
+            let cluster_info = Arc::new(new_test_cluster_info());
+            let identity = cluster_info.id();
+            cluster_info.insert_info(ContactInfo::new_with_socketaddr(
                 &leader_pubkey,
-                &socketaddr!("127.0.0.1:1234"),
+                &socketaddr!(Ipv4Addr::LOCALHOST, 1234),
             ));
             let max_slots = Arc::new(MaxSlots::default());
             // note that this means that slot 0 will always be considered complete
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(0));
+            let max_complete_rewards_slot = Arc::new(AtomicU64::new(0));
 
             let meta = JsonRpcRequestProcessor::new(
                 config,
@@ -4857,6 +4807,7 @@ pub mod tests {
                 max_slots.clone(),
                 Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 max_complete_transaction_status_slot.clone(),
+                max_complete_rewards_slot,
                 Arc::new(PrioritizationFeeCache::default()),
             )
             .0;
@@ -5082,7 +5033,7 @@ pub mod tests {
                 .into_iter()
                 .map(|tx| SanitizedTransaction::try_from_legacy_transaction(tx).unwrap())
                 .collect();
-            prioritization_fee_cache.update(bank, transactions.iter());
+            prioritization_fee_cache.update(&bank, transactions.iter());
         }
 
         fn get_prioritization_fee_cache(&self) -> &PrioritizationFeeCache {
@@ -5135,8 +5086,7 @@ pub mod tests {
         io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
-            mint_pubkey
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{mint_pubkey}"]}}"#
         );
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
@@ -5192,11 +5142,23 @@ pub mod tests {
         let request = create_test_request("getClusterNodes", None);
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
         let expected = json!([{
+            "pubkey": rpc.identity.to_string(),
+            "gossip": "127.0.0.1:8000",
+            "shredVersion": 0u16,
+            "tpu": "127.0.0.1:8003",
+            "tpuQuic": "127.0.0.1:8009",
+            "rpc": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT),
+            "pubsub": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT),
+            "version": null,
+            "featureSet": null,
+        }, {
             "pubkey": rpc.leader_pubkey().to_string(),
             "gossip": "127.0.0.1:1235",
             "shredVersion": 0u16,
             "tpu": "127.0.0.1:1234",
+            "tpuQuic": "127.0.0.1:1240",
             "rpc": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT),
+            "pubsub": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT),
             "version": null,
             "featureSet": null,
         }]);
@@ -5210,13 +5172,15 @@ pub mod tests {
         let slot = 0;
         let num_slots = 1;
         let num_transactions = 4;
+        let num_non_vote_transactions = 1;
         let sample_period_secs = 60;
         rpc.blockstore
             .write_perf_sample(
                 slot,
-                &PerfSample {
+                &PerfSampleV2 {
                     num_slots,
                     num_transactions,
+                    num_non_vote_transactions,
                     sample_period_secs,
                 },
             )
@@ -5228,6 +5192,7 @@ pub mod tests {
             "slot": slot,
             "numSlots": num_slots,
             "numTransactions": num_transactions,
+            "numNonVoteTransactions": num_non_vote_transactions,
             "samplePeriodSecs": sample_period_secs,
         }]);
         assert_eq!(result, expected);
@@ -5935,7 +5900,7 @@ pub mod tests {
                             "executable": false,
                             "owner": "11111111111111111111111111111111",
                             "lamports": rent_exempt_amount,
-                            "rentEpoch": 0,
+                            "rentEpoch": u64::MAX,
                             "space": 0,
                         }
                     ],
@@ -5945,7 +5910,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -5962,7 +5927,7 @@ pub mod tests {
                  "id":1,
                  "method":"simulateTransaction",
                  "params":[
-                   "{}",
+                   "{tx_serialized_encoded}",
                    {{
                      "sigVerify": true,
                      "accounts": {{
@@ -5976,7 +5941,6 @@ pub mod tests {
                    }}
                  ]
             }}"#,
-            tx_serialized_encoded,
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = json!({
@@ -5995,8 +5959,7 @@ pub mod tests {
 
         // Bad signature with sigVerify=true
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"sigVerify": true}}]}}"#,
-            tx_badsig_serialized_encoded,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{tx_badsig_serialized_encoded}", {{"sigVerify": true}}]}}"#,
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = json!({
@@ -6016,8 +5979,7 @@ pub mod tests {
 
         // Bad signature with sigVerify=false
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"sigVerify": false}}]}}"#,
-            tx_serialized_encoded,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{tx_serialized_encoded}", {{"sigVerify": false}}]}}"#,
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = json!({
@@ -6032,7 +5994,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -6045,8 +6007,7 @@ pub mod tests {
 
         // Bad signature with default sigVerify setting (false)
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}"]}}"#,
-            tx_serialized_encoded,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{tx_serialized_encoded}"]}}"#,
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = json!({
@@ -6061,7 +6022,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -6098,8 +6059,7 @@ pub mod tests {
 
         // Bad recent blockhash with replaceRecentBlockhash=false
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"replaceRecentBlockhash": false}}]}}"#,
-            tx_invalid_recent_blockhash,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{tx_invalid_recent_blockhash}", {{"replaceRecentBlockhash": false}}]}}"#,
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = json!({
@@ -6111,7 +6071,7 @@ pub mod tests {
                     "accounts":null,
                     "logs":[],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":0,
                 }
             },
             "id":1
@@ -6125,8 +6085,7 @@ pub mod tests {
 
         // Bad recent blockhash with replaceRecentBlockhash=true
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"replaceRecentBlockhash": true}}]}}"#,
-            tx_invalid_recent_blockhash,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{tx_invalid_recent_blockhash}", {{"replaceRecentBlockhash": true}}]}}"#,
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = json!({
@@ -6141,7 +6100,7 @@ pub mod tests {
                         "Program 11111111111111111111111111111111 success"
                     ],
                     "returnData":null,
-                    "unitsConsumed":0
+                    "unitsConsumed":150,
                 }
             },
             "id": 1,
@@ -6174,8 +6133,7 @@ pub mod tests {
         assert!(!bank.is_frozen());
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"sigVerify": true}}]}}"#,
-            tx_serialized_encoded,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{tx_serialized_encoded}", {{"sigVerify": true}}]}}"#,
         );
 
         // should panic because `bank` is not frozen
@@ -6332,8 +6290,7 @@ pub mod tests {
         };
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getFeeCalculatorForBlockhash","params":["{:?}"]}}"#,
-            recent_blockhash
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getFeeCalculatorForBlockhash","params":["{recent_blockhash:?}"]}}"#
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = json!({
@@ -6407,8 +6364,7 @@ pub mod tests {
         // Expect internal error because no faucet is available
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"requestAirdrop","params":["{}", 50]}}"#,
-            bob_pubkey
+            r#"{{"jsonrpc":"2.0","id":1,"method":"requestAirdrop","params":["{bob_pubkey}", 50]}}"#
         );
         let res = io.handle_request_sync(&req, meta);
         let expected =
@@ -6456,12 +6412,15 @@ pub mod tests {
 
         let mut io = MetaIoHandler::default();
         io.extend_with(rpc_full::FullImpl.to_delegate());
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
-        let tpu_address = cluster_info.my_contact_info().tpu;
+        let cluster_info = Arc::new({
+            let keypair = Arc::new(Keypair::new());
+            let contact_info = ContactInfo::new_with_socketaddr(
+                &keypair.pubkey(),
+                &socketaddr!(Ipv4Addr::LOCALHOST, 1234),
+            );
+            ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+        });
+        let tpu_address = cluster_info.my_contact_info().tpu().unwrap();
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             None,
@@ -6478,6 +6437,7 @@ pub mod tests {
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
+            Arc::new(AtomicU64::default()),
             Arc::new(PrioritizationFeeCache::default()),
         );
         let connection_cache = Arc::new(ConnectionCache::default());
@@ -6489,6 +6449,7 @@ pub mod tests {
             &connection_cache,
             1000,
             1,
+            exit,
         );
 
         let mut bad_transaction = system_transaction::transfer(
@@ -6594,22 +6555,16 @@ pub mod tests {
 
     #[test]
     fn test_rpc_verify_filter() {
-        #[allow(deprecated)]
-        let filter = RpcFilterType::Memcmp(Memcmp {
-            offset: 0,
-            bytes: MemcmpEncodedBytes::Base58(
-                "13LeFbG6m2EP1fqCj9k66fcXsoTHMMtgr7c78AivUrYD".to_string(),
-            ),
-            encoding: None,
-        });
+        let filter = RpcFilterType::Memcmp(Memcmp::new(
+            0,                                                                                      // offset
+            MemcmpEncodedBytes::Base58("13LeFbG6m2EP1fqCj9k66fcXsoTHMMtgr7c78AivUrYD".to_string()), // encoded bytes
+        ));
         assert_eq!(verify_filter(&filter), Ok(()));
         // Invalid base-58
-        #[allow(deprecated)]
-        let filter = RpcFilterType::Memcmp(Memcmp {
-            offset: 0,
-            bytes: MemcmpEncodedBytes::Base58("III".to_string()),
-            encoding: None,
-        });
+        let filter = RpcFilterType::Memcmp(Memcmp::new(
+            0,                                             // offset
+            MemcmpEncodedBytes::Base58("III".to_string()), // encoded bytes
+        ));
         assert!(verify_filter(&filter).is_err());
     }
 
@@ -6733,12 +6688,8 @@ pub mod tests {
             CommitmentSlots::new_from_slot(bank_forks.read().unwrap().highest_slot()),
         )));
 
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::default(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
-        let tpu_address = cluster_info.my_contact_info().tpu;
+        let cluster_info = Arc::new(new_test_cluster_info());
+        let tpu_address = cluster_info.my_contact_info().tpu().unwrap();
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             None,
@@ -6755,6 +6706,7 @@ pub mod tests {
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
+            Arc::new(AtomicU64::default()),
             Arc::new(PrioritizationFeeCache::default()),
         );
         let connection_cache = Arc::new(ConnectionCache::default());
@@ -6766,6 +6718,7 @@ pub mod tests {
             &connection_cache,
             1000,
             1,
+            exit,
         );
         assert_eq!(
             request_processor.get_block_commitment(0),
@@ -7459,334 +7412,17 @@ pub mod tests {
     }
 
     #[test]
-    fn test_secondary_index_key_sizes() {
-        for secondary_index_enabled in [true, false] {
-            let account_indexes = if secondary_index_enabled {
-                AccountSecondaryIndexes {
-                    keys: None,
-                    indexes: HashSet::from([
-                        AccountIndex::ProgramId,
-                        AccountIndex::SplTokenMint,
-                        AccountIndex::SplTokenOwner,
-                    ]),
-                }
-            } else {
-                AccountSecondaryIndexes::default()
-            };
-
-            // RPC & Bank Setup
-            let rpc = RpcHandler::start_with_config(JsonRpcConfig {
-                enable_rpc_transaction_history: true,
-                account_indexes,
-                ..JsonRpcConfig::default()
-            });
-
-            let bank = rpc.working_bank();
-            let RpcHandler { io, meta, .. } = rpc;
-
-            // Pubkeys
-            let token_account1_pubkey = Pubkey::new_unique();
-            let token_account2_pubkey = Pubkey::new_unique();
-            let token_account3_pubkey = Pubkey::new_unique();
-            let mint1_pubkey = Pubkey::new_unique();
-            let mint2_pubkey = Pubkey::new_unique();
-            let wallet1_pubkey = Pubkey::new_unique();
-            let wallet2_pubkey = Pubkey::new_unique();
-            let non_existent_pubkey = Pubkey::new_unique();
-            let delegate = spl_token_pubkey(&Pubkey::new_unique());
-
-            let mut num_default_spl_token_program_accounts = 0;
-            let mut num_default_system_program_accounts = 0;
-
-            if !secondary_index_enabled {
-                // Test first with no accounts added & no secondary indexes enabled:
-                let req = format!(
-                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
-                    token_account1_pubkey,
-                );
-                let res = io.handle_request_sync(&req, meta.clone());
-                let result: Value = serde_json::from_str(&res.expect("actual response"))
-                    .expect("actual response deserialization");
-                let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
-                assert!(sizes.is_empty());
-            } else {
-                // Count SPL Token Program Default Accounts
-                let req = format!(
-                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
-                    inline_spl_token::id(),
-                );
-                let res = io.handle_request_sync(&req, meta.clone());
-                let result: Value = serde_json::from_str(&res.expect("actual response"))
-                    .expect("actual response deserialization");
-                let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
-                assert_eq!(sizes.len(), 1);
-                num_default_spl_token_program_accounts =
-                    *sizes.get(&RpcAccountIndex::ProgramId).unwrap();
-                // Count System Program Default Accounts
-                let req = format!(
-                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
-                    system_program::id(),
-                );
-                let res = io.handle_request_sync(&req, meta.clone());
-                let result: Value = serde_json::from_str(&res.expect("actual response"))
-                    .expect("actual response deserialization");
-                let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
-                assert_eq!(sizes.len(), 1);
-                num_default_system_program_accounts =
-                    *sizes.get(&RpcAccountIndex::ProgramId).unwrap();
-            }
-
-            // Add 2 basic wallet accounts
-            let wallet1_account = AccountSharedData::from(Account {
-                lamports: 11111111,
-                owner: system_program::id(),
-                ..Account::default()
-            });
-            bank.store_account(&wallet1_pubkey, &wallet1_account);
-            let wallet2_account = AccountSharedData::from(Account {
-                lamports: 11111111,
-                owner: system_program::id(),
-                ..Account::default()
-            });
-            bank.store_account(&wallet2_pubkey, &wallet2_account);
-
-            // Add a token account
-            let mut account1_data = vec![0; TokenAccount::get_packed_len()];
-            let token_account1 = TokenAccount {
-                mint: spl_token_pubkey(&mint1_pubkey),
-                owner: spl_token_pubkey(&wallet1_pubkey),
-                delegate: COption::Some(delegate),
-                amount: 420,
-                state: TokenAccountState::Initialized,
-                is_native: COption::None,
-                delegated_amount: 30,
-                close_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
-            };
-            TokenAccount::pack(token_account1, &mut account1_data).unwrap();
-            let token_account1 = AccountSharedData::from(Account {
-                lamports: 111,
-                data: account1_data.to_vec(),
-                owner: inline_spl_token::id(),
-                ..Account::default()
-            });
-            bank.store_account(&token_account1_pubkey, &token_account1);
-
-            // Add the mint
-            let mut mint1_data = vec![0; Mint::get_packed_len()];
-            let mint1_state = Mint {
-                mint_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
-                supply: 500,
-                decimals: 2,
-                is_initialized: true,
-                freeze_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
-            };
-            Mint::pack(mint1_state, &mut mint1_data).unwrap();
-            let mint_account1 = AccountSharedData::from(Account {
-                lamports: 222,
-                data: mint1_data.to_vec(),
-                owner: inline_spl_token::id(),
-                ..Account::default()
-            });
-            bank.store_account(&mint1_pubkey, &mint_account1);
-
-            // Add another token account with the different owner, but same delegate, and mint
-            let mut account2_data = vec![0; TokenAccount::get_packed_len()];
-            let token_account2 = TokenAccount {
-                mint: spl_token_pubkey(&mint1_pubkey),
-                owner: spl_token_pubkey(&wallet2_pubkey),
-                delegate: COption::Some(delegate),
-                amount: 420,
-                state: TokenAccountState::Initialized,
-                is_native: COption::None,
-                delegated_amount: 30,
-                close_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
-            };
-            TokenAccount::pack(token_account2, &mut account2_data).unwrap();
-            let token_account2 = AccountSharedData::from(Account {
-                lamports: 333,
-                data: account2_data.to_vec(),
-                owner: inline_spl_token::id(),
-                ..Account::default()
-            });
-            bank.store_account(&token_account2_pubkey, &token_account2);
-
-            // Add another token account with the same owner and delegate but different mint
-            let mut account3_data = vec![0; TokenAccount::get_packed_len()];
-            let token_account3 = TokenAccount {
-                mint: spl_token_pubkey(&mint2_pubkey),
-                owner: spl_token_pubkey(&wallet2_pubkey),
-                delegate: COption::Some(delegate),
-                amount: 42,
-                state: TokenAccountState::Initialized,
-                is_native: COption::None,
-                delegated_amount: 30,
-                close_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
-            };
-            TokenAccount::pack(token_account3, &mut account3_data).unwrap();
-            let token_account3 = AccountSharedData::from(Account {
-                lamports: 444,
-                data: account3_data.to_vec(),
-                owner: inline_spl_token::id(),
-                ..Account::default()
-            });
-            bank.store_account(&token_account3_pubkey, &token_account3);
-
-            // Add the new mint
-            let mut mint2_data = vec![0; Mint::get_packed_len()];
-            let mint2_state = Mint {
-                mint_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
-                supply: 200,
-                decimals: 3,
-                is_initialized: true,
-                freeze_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
-            };
-            Mint::pack(mint2_state, &mut mint2_data).unwrap();
-            let mint_account2 = AccountSharedData::from(Account {
-                lamports: 555,
-                data: mint2_data.to_vec(),
-                owner: inline_spl_token::id(),
-                ..Account::default()
-            });
-            bank.store_account(&mint2_pubkey, &mint_account2);
-
-            // Accounts should now look like the following:
-            //
-            //                   -----system_program------
-            //                  /                         \
-            //                 /-(owns)                    \-(owns)
-            //                /                             \
-            //             wallet1                   ---wallet2---
-            //               /                      /             \
-            //              /-(SPL::owns)          /-(SPL::owns)   \-(SPL::owns)
-            //             /                      /                 \
-            //      token_account1         token_account2       token_account3
-            //            \                     /                   /
-            //             \-(SPL::mint)       /-(SPL::mint)       /-(SPL::mint)
-            //              \                 /                   /
-            //               --mint_account1--               mint_account2
-
-            if secondary_index_enabled {
-                // ----------- Test for a non-existant key -----------
-                let req = format!(
-                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
-                    non_existent_pubkey,
-                );
-                let res = io.handle_request_sync(&req, meta.clone());
-                let result: Value = serde_json::from_str(&res.expect("actual response"))
-                    .expect("actual response deserialization");
-                let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
-                assert!(sizes.is_empty());
-                // --------------- Test Queries ---------------
-                // 1) Wallet1 - Owns 1 SPL Token
-                let req = format!(
-                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
-                    wallet1_pubkey,
-                );
-                let res = io.handle_request_sync(&req, meta.clone());
-                let result: Value = serde_json::from_str(&res.expect("actual response"))
-                    .expect("actual response deserialization");
-                let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
-                assert_eq!(sizes.len(), 1);
-                assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenOwner).unwrap(), 1);
-                // 2) Wallet2 - Owns 2 SPL Tokens
-                let req = format!(
-                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
-                    wallet2_pubkey,
-                );
-                let res = io.handle_request_sync(&req, meta.clone());
-                let result: Value = serde_json::from_str(&res.expect("actual response"))
-                    .expect("actual response deserialization");
-                let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
-                assert_eq!(sizes.len(), 1);
-                assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenOwner).unwrap(), 2);
-                // 3) Mint1 - Is in 2 SPL Accounts
-                let req = format!(
-                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
-                    mint1_pubkey,
-                );
-                let res = io.handle_request_sync(&req, meta.clone());
-                let result: Value = serde_json::from_str(&res.expect("actual response"))
-                    .expect("actual response deserialization");
-                let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
-                assert_eq!(sizes.len(), 1);
-                assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenMint).unwrap(), 2);
-                // 4) Mint2 - Is in 1 SPL Account
-                let req = format!(
-                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
-                    mint2_pubkey,
-                );
-                let res = io.handle_request_sync(&req, meta.clone());
-                let result: Value = serde_json::from_str(&res.expect("actual response"))
-                    .expect("actual response deserialization");
-                let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
-                assert_eq!(sizes.len(), 1);
-                assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenMint).unwrap(), 1);
-                // 5) SPL Token Program Owns 6 Accounts - 1 Default, 5 created above.
-                let req = format!(
-                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
-                    inline_spl_token::id(),
-                );
-                let res = io.handle_request_sync(&req, meta.clone());
-                let result: Value = serde_json::from_str(&res.expect("actual response"))
-                    .expect("actual response deserialization");
-                let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
-                assert_eq!(sizes.len(), 1);
-                assert_eq!(
-                    *sizes.get(&RpcAccountIndex::ProgramId).unwrap(),
-                    (num_default_spl_token_program_accounts + 5)
-                );
-                // 5) System Program Owns 4 Accounts + 2 Default, 2 created above.
-                let req = format!(
-                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
-                    system_program::id(),
-                );
-                let res = io.handle_request_sync(&req, meta.clone());
-                let result: Value = serde_json::from_str(&res.expect("actual response"))
-                    .expect("actual response deserialization");
-                let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
-                assert_eq!(sizes.len(), 1);
-                assert_eq!(
-                    *sizes.get(&RpcAccountIndex::ProgramId).unwrap(),
-                    (num_default_system_program_accounts + 2)
-                );
-            } else {
-                // ------------ Secondary Indexes Disabled ------------
-                let req = format!(
-                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
-                    token_account2_pubkey,
-                );
-                let res = io.handle_request_sync(&req, meta.clone());
-                let result: Value = serde_json::from_str(&res.expect("actual response"))
-                    .expect("actual response deserialization");
-                let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
-                assert!(sizes.is_empty());
-            }
-        }
-    }
-
-    #[test]
     fn test_token_rpcs() {
         for program_id in solana_account_decoder::parse_token::spl_token_ids() {
             let rpc = RpcHandler::start();
             let bank = rpc.working_bank();
             let RpcHandler { io, meta, .. } = rpc;
-            let mint = SplTokenPubkey::new(&[2; 32]);
-            let owner = SplTokenPubkey::new(&[3; 32]);
-            let delegate = SplTokenPubkey::new(&[4; 32]);
+            let mint = SplTokenPubkey::new_from_array([2; 32]);
+            let owner = SplTokenPubkey::new_from_array([3; 32]);
+            let delegate = SplTokenPubkey::new_from_array([4; 32]);
             let token_account_pubkey = solana_sdk::pubkey::new_rand();
             let token_with_different_mint_pubkey = solana_sdk::pubkey::new_rand();
-            let new_mint = SplTokenPubkey::new(&[5; 32]);
+            let new_mint = SplTokenPubkey::new_from_array([5; 32]);
             if program_id == inline_spl_token_2022::id() {
                 // Add the token account
                 let account_base = TokenAccount {
@@ -7947,8 +7583,7 @@ pub mod tests {
             }
 
             let req = format!(
-                r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}"]}}"#,
-                token_account_pubkey,
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{token_account_pubkey}"]}}"#,
             );
             let res = io.handle_request_sync(&req, meta.clone());
             let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -7973,8 +7608,7 @@ pub mod tests {
 
             // Test get token supply, pulls supply from mint
             let req = format!(
-                r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{}"]}}"#,
-                mint,
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{mint}"]}}"#,
             );
             let res = io.handle_request_sync(&req, meta.clone());
             let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -8003,9 +7637,8 @@ pub mod tests {
                     "jsonrpc":"2.0",
                     "id":1,
                     "method":"getTokenAccountsByOwner",
-                    "params":["{}", {{"programId": "{}"}}, {{"encoding":"base64"}}]
+                    "params":["{owner}", {{"programId": "{program_id}"}}, {{"encoding":"base64"}}]
                 }}"#,
-                owner, program_id,
             );
             let res = io.handle_request_sync(&req, meta.clone());
             let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -8020,9 +7653,8 @@ pub mod tests {
                     "jsonrpc":"2.0",
                     "id":1,
                     "method":"getTokenAccountsByOwner",
-                    "params":["{}", {{"programId": "{}"}}, {{"encoding": "jsonParsed"}}]
+                    "params":["{owner}", {{"programId": "{program_id}"}}, {{"encoding": "jsonParsed"}}]
                 }}"#,
-                owner, program_id,
             );
             let res = io.handle_request_sync(&req, meta.clone());
             let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -8037,9 +7669,8 @@ pub mod tests {
                     "jsonrpc":"2.0",
                     "id":1,
                     "method":"getProgramAccounts",
-                    "params":["{}", {{"encoding": "jsonParsed"}}]
+                    "params":["{program_id}", {{"encoding": "jsonParsed"}}]
                 }}"#,
-                program_id,
             );
             let res = io.handle_request_sync(&req, meta.clone());
             let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -8058,9 +7689,8 @@ pub mod tests {
                 r#"{{
                     "jsonrpc":"2.0",
                     "id":1,"method":"getTokenAccountsByOwner",
-                    "params":["{}", {{"mint": "{}"}}, {{"encoding":"base64"}}]
+                    "params":["{owner}", {{"mint": "{mint}"}}, {{"encoding":"base64"}}]
                 }}"#,
-                owner, mint,
             );
             let res = io.handle_request_sync(&req, meta.clone());
             let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -8123,9 +7753,8 @@ pub mod tests {
                     "jsonrpc":"2.0",
                     "id":1,
                     "method":"getTokenAccountsByDelegate",
-                    "params":["{}", {{"programId": "{}"}}, {{"encoding":"base64"}}]
+                    "params":["{delegate}", {{"programId": "{program_id}"}}, {{"encoding":"base64"}}]
                 }}"#,
-                delegate, program_id,
             );
             let res = io.handle_request_sync(&req, meta.clone());
             let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -8140,9 +7769,8 @@ pub mod tests {
                     "jsonrpc":"2.0",
                     "id":1,"method":
                     "getTokenAccountsByDelegate",
-                    "params":["{}", {{"mint": "{}"}}, {{"encoding":"base64"}}]
+                    "params":["{delegate}", {{"mint": "{mint}"}}, {{"encoding":"base64"}}]
                 }}"#,
-                delegate, mint,
             );
             let res = io.handle_request_sync(&req, meta.clone());
             let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -8242,8 +7870,7 @@ pub mod tests {
 
             // Test largest token accounts
             let req = format!(
-                r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenLargestAccounts","params":["{}"]}}"#,
-                new_mint,
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenLargestAccounts","params":["{new_mint}"]}}"#,
             );
             let res = io.handle_request_sync(&req, meta);
             let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -8283,9 +7910,9 @@ pub mod tests {
             let bank = rpc.working_bank();
             let RpcHandler { io, meta, .. } = rpc;
 
-            let mint = SplTokenPubkey::new(&[2; 32]);
-            let owner = SplTokenPubkey::new(&[3; 32]);
-            let delegate = SplTokenPubkey::new(&[4; 32]);
+            let mint = SplTokenPubkey::new_from_array([2; 32]);
+            let owner = SplTokenPubkey::new_from_array([3; 32]);
+            let delegate = SplTokenPubkey::new_from_array([4; 32]);
             let token_account_pubkey = solana_sdk::pubkey::new_rand();
             let (program_name, account_size, mint_size) = if program_id
                 == inline_spl_token_2022::id()
@@ -8400,8 +8027,7 @@ pub mod tests {
             };
 
             let req = format!(
-                r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding": "jsonParsed"}}]}}"#,
-                token_account_pubkey,
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{token_account_pubkey}", {{"encoding": "jsonParsed"}}]}}"#,
             );
             let res = io.handle_request_sync(&req, meta.clone());
             let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -8456,8 +8082,7 @@ pub mod tests {
 
             // Test Mint
             let req = format!(
-                r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding": "jsonParsed"}}]}}"#,
-                mint,
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{mint}", {{"encoding": "jsonParsed"}}]}}"#,
             );
             let res = io.handle_request_sync(&req, meta);
             let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -8659,11 +8284,7 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::default(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100);
         let bank = Bank::new_for_tests(&genesis_config);
 
@@ -8682,9 +8303,11 @@ pub mod tests {
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let mut pending_optimistically_confirmed_banks = HashSet::new();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
-            max_complete_transaction_status_slot,
+            max_complete_transaction_status_slot.clone(),
+            max_complete_rewards_slot.clone(),
             bank_forks.clone(),
             block_commitment_cache.clone(),
             optimistically_confirmed_bank.clone(),
@@ -8705,7 +8328,8 @@ pub mod tests {
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
-            Arc::new(AtomicU64::default()),
+            max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             Arc::new(PrioritizationFeeCache::default()),
         );
 
@@ -8720,6 +8344,7 @@ pub mod tests {
         let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
         assert_eq!(slot, 0);
         let mut highest_confirmed_slot: Slot = 0;
+        let mut highest_root_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
 
         OptimisticallyConfirmedBankTracker::process_notification(
@@ -8730,6 +8355,7 @@ pub mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
         let req =
@@ -8748,6 +8374,7 @@ pub mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
         let req =
@@ -8766,6 +8393,7 @@ pub mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
         let req =
@@ -8785,6 +8413,7 @@ pub mod tests {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &mut highest_root_slot,
             &None,
         );
         let req =
@@ -8816,8 +8445,7 @@ pub mod tests {
             decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "base58 encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
-                tx58_len, MAX_BASE58_SIZE, PACKET_DATA_SIZE,
+                "base58 encoded solana_sdk::transaction::Transaction too large: {tx58_len} bytes (max: encoded/raw {MAX_BASE58_SIZE}/{PACKET_DATA_SIZE})",
             )
         ));
 
@@ -8827,8 +8455,7 @@ pub mod tests {
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "base64 encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
-                tx64_len, MAX_BASE64_SIZE, PACKET_DATA_SIZE,
+                "base64 encoded solana_sdk::transaction::Transaction too large: {tx64_len} bytes (max: encoded/raw {MAX_BASE64_SIZE}/{PACKET_DATA_SIZE})",
             )
         ));
 
@@ -8839,8 +8466,7 @@ pub mod tests {
             decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "decoded solana_sdk::transaction::Transaction too large: {} bytes (max: {} bytes)",
-                too_big, PACKET_DATA_SIZE
+                "decoded solana_sdk::transaction::Transaction too large: {too_big} bytes (max: {PACKET_DATA_SIZE} bytes)"
             ))
         );
 
@@ -8849,8 +8475,7 @@ pub mod tests {
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "decoded solana_sdk::transaction::Transaction too large: {} bytes (max: {} bytes)",
-                too_big, PACKET_DATA_SIZE
+                "decoded solana_sdk::transaction::Transaction too large: {too_big} bytes (max: {PACKET_DATA_SIZE} bytes)"
             ))
         );
 

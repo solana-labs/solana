@@ -30,18 +30,23 @@ fn rerun_if_changed(files: &[&str], directories: &[&str], excludes: &[&str]) {
 
     for file in all_files {
         if !Path::new(&file).is_file() {
-            panic!("{} is not a file", file);
+            panic!("{file} is not a file");
         }
-        println!("cargo:rerun-if-changed={}", file);
+        println!("cargo:rerun-if-changed={file}");
     }
 }
 
 fn main() {
+    if env::var("CARGO_FEATURE_DUMMY_FOR_CI_CHECK").is_ok() {
+        println!("cargo:warning=(not a warning) Compiling with host toolchain for CI...");
+        return;
+    }
+
     let sbf_c = env::var("CARGO_FEATURE_SBF_C").is_ok();
     if sbf_c {
         let install_dir = "OUT_DIR=../target/".to_string() + &env::var("PROFILE").unwrap() + "/sbf";
 
-        println!("cargo:warning=(not a warning) Building C-based SBF programs");
+        println!("cargo:warning=(not a warning) Building C-based on-chain programs");
         assert!(Command::new("make")
             .current_dir("c")
             .arg("programs")
@@ -61,6 +66,7 @@ fn main() {
             "128bit",
             "alloc",
             "alt_bn128",
+            "big_mod_exp",
             "call_depth",
             "caller_access",
             "curve25519",
@@ -104,14 +110,11 @@ fn main() {
             "upgraded",
         ];
         for program in rust_programs.iter() {
-            println!(
-                "cargo:warning=(not a warning) Building Rust-based SBF programs: solana_sbf_rust_{}",
-                program
-            );
+            println!("cargo:warning=(not a warning) Building Rust-based on-chain programs: solana_sbf_rust_{program}");
             assert!(Command::new("../../cargo-build-sbf")
                 .args([
                     "--manifest-path",
-                    &format!("rust/{}/Cargo.toml", program),
+                    &format!("rust/{program}/Cargo.toml"),
                     "--sbf-out-dir",
                     &install_dir
                 ])

@@ -194,7 +194,7 @@ pub struct TestBroadcastReceiver {
 impl TestBroadcastReceiver {
     pub fn recv(&mut self) -> String {
         match self.recv_timeout(std::time::Duration::from_secs(10)) {
-            Err(err) => panic!("broadcast receiver error: {}", err),
+            Err(err) => panic!("broadcast receiver error: {err}"),
             Ok(str) => str,
         }
     }
@@ -398,9 +398,10 @@ mod tests {
 
     #[test]
     fn test_pubsub_new() {
-        let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+        let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
         let exit = Arc::new(AtomicBool::new(false));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -409,6 +410,7 @@ mod tests {
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
             optimistically_confirmed_bank,

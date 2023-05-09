@@ -439,7 +439,7 @@ mod tests {
             let shared_batch_id = current_batch_id.clone();
             let shared_finished_count = finished_batch_count.clone();
             let insert_thread = Builder::new()
-                .name(format!("insert_shreds-{}", i))
+                .name(format!("insert_shreds-{i}"))
                 .spawn(move || {
                     let start = Instant::now();
                     let mut now = Instant::now();

@@ -1,15 +1,16 @@
 use {
     crate::{
+        account_storage::meta::StoredMetaWriteVersion,
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo, SnapshotStorage,
+            AtomicAppendVecId, BankHashStats, IndexGenerationInfo,
         },
+        accounts_file::AccountsFile,
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        append_vec::{AppendVec, StoredMetaWriteVersion},
-        bank::{Bank, BankFieldsToDeserialize, BankIncrementalSnapshotPersistence, BankRc},
+        bank::{Bank, BankFieldsToDeserialize, BankRc},
         blockhash_queue::BlockhashQueue,
         builtins::Builtins,
         epoch_accounts_hash::EpochAccountsHash,
@@ -52,12 +53,16 @@ use {
 mod newer;
 mod storage;
 mod tests;
+mod types;
 mod utils;
 
-pub(crate) use storage::SerializedAppendVecId;
 // a number of test cases in accounts_db use this
 #[cfg(test)]
 pub(crate) use tests::reconstruct_accounts_db_via_serialization;
+pub(crate) use {
+    storage::SerializedAppendVecId,
+    types::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
+};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
@@ -80,11 +85,55 @@ pub struct AccountsDbFields<T>(
     Vec<(Slot, Hash)>,
 );
 
+/// Incremental snapshots only calculate their accounts hash based on the
+/// account changes WITHIN the incremental slot range. So, we need to keep track
+/// of the full snapshot expected accounts hash results. We also need to keep
+/// track of the hash and capitalization specific to the incremental snapshot
+/// slot range. The capitalization we calculate for the incremental slot will
+/// NOT be consistent with the bank's capitalization. It is not feasible to
+/// calculate a capitalization delta that is correct given just incremental
+/// slots account data and the full snapshot's capitalization.
+#[derive(Serialize, Deserialize, AbiExample, Clone, Debug, Default, PartialEq, Eq)]
+pub struct BankIncrementalSnapshotPersistence {
+    /// slot of full snapshot
+    pub full_slot: Slot,
+    /// accounts hash from the full snapshot
+    pub full_hash: SerdeAccountsHash,
+    /// capitalization from the full snapshot
+    pub full_capitalization: u64,
+    /// hash of the accounts in the incremental snapshot slot range, including zero-lamport accounts
+    pub incremental_hash: SerdeIncrementalAccountsHash,
+    /// capitalization of the accounts in the incremental snapshot slot range
+    pub incremental_capitalization: u64,
+}
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
+struct BankHashInfo {
+    accounts_delta_hash: SerdeAccountsDeltaHash,
+    accounts_hash: SerdeAccountsHash,
+    stats: BankHashStats,
+}
+
 /// Helper type to wrap BufReader streams when deserializing and reconstructing from either just a
 /// full snapshot, or both a full and incremental snapshot
 pub struct SnapshotStreams<'a, R> {
     pub full_snapshot_stream: &'a mut BufReader<R>,
     pub incremental_snapshot_stream: Option<&'a mut BufReader<R>>,
+}
+
+/// Helper type to wrap BankFields when reconstructing Bank from either just a full
+/// snapshot, or both a full and incremental snapshot
+#[derive(Debug)]
+pub struct SnapshotBankFields {
+    full: BankFieldsToDeserialize,
+    incremental: Option<BankFieldsToDeserialize>,
+}
+
+impl SnapshotBankFields {
+    /// Collapse the SnapshotBankFields into a single (the latest) BankFieldsToDeserialize.
+    pub fn collapse_into(self) -> BankFieldsToDeserialize {
+        self.incremental.unwrap_or(self.full)
+    }
 }
 
 /// Helper type to wrap AccountsDbFields when reconstructing AccountsDb from either just a full
@@ -264,40 +313,35 @@ pub(crate) fn fields_from_stream<R: Read>(
     }
 }
 
-pub(crate) fn fields_from_streams<R: Read>(
+pub(crate) fn fields_from_streams(
     serde_style: SerdeStyle,
-    snapshot_streams: &mut SnapshotStreams<R>,
+    snapshot_streams: &mut SnapshotStreams<impl Read>,
 ) -> std::result::Result<
     (
-        BankFieldsToDeserialize,
+        SnapshotBankFields,
         SnapshotAccountsDbFields<SerializableAccountStorageEntry>,
     ),
     Error,
 > {
     let (full_snapshot_bank_fields, full_snapshot_accounts_db_fields) =
         fields_from_stream(serde_style, snapshot_streams.full_snapshot_stream)?;
-    let incremental_fields = snapshot_streams
-        .incremental_snapshot_stream
-        .as_mut()
-        .map(|stream| fields_from_stream(serde_style, stream))
-        .transpose()?;
-
-    // Option::unzip() not stabilized yet
     let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
-        if let Some((bank_fields, accounts_fields)) = incremental_fields {
-            (Some(bank_fields), Some(accounts_fields))
-        } else {
-            (None, None)
-        };
+        snapshot_streams
+            .incremental_snapshot_stream
+            .as_mut()
+            .map(|stream| fields_from_stream(serde_style, stream))
+            .transpose()?
+            .unzip();
 
+    let snapshot_bank_fields = SnapshotBankFields {
+        full: full_snapshot_bank_fields,
+        incremental: incremental_snapshot_bank_fields,
+    };
     let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
         full_snapshot_accounts_db_fields,
         incremental_snapshot_accounts_db_fields,
     };
-    Ok((
-        incremental_snapshot_bank_fields.unwrap_or(full_snapshot_bank_fields),
-        snapshot_accounts_db_fields,
-    ))
+    Ok((snapshot_bank_fields, snapshot_accounts_db_fields))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -311,7 +355,6 @@ pub(crate) fn bank_from_streams<R>(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
-    caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
@@ -333,7 +376,6 @@ where
         debug_keys,
         additional_builtins,
         account_secondary_indexes,
-        caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
@@ -347,7 +389,7 @@ pub(crate) fn bank_to_stream<W>(
     serde_style: SerdeStyle,
     stream: &mut BufWriter<W>,
     bank: &Bank,
-    snapshot_storages: &[SnapshotStorage],
+    snapshot_storages: &[Vec<Arc<AccountStorageEntry>>],
 ) -> Result<(), Error>
 where
     W: Write,
@@ -369,7 +411,7 @@ pub(crate) fn bank_to_stream_no_extra_fields<W>(
     serde_style: SerdeStyle,
     stream: &mut BufWriter<W>,
     bank: &Bank,
-    snapshot_storages: &[SnapshotStorage],
+    snapshot_storages: &[Vec<Arc<AccountStorageEntry>>],
 ) -> Result<(), Error>
 where
     W: Write,
@@ -413,15 +455,15 @@ where
 /// write serialized bank to post file
 /// return true if pre file found
 pub fn reserialize_bank_with_new_accounts_hash(
-    bank_snapshots_dir: impl AsRef<Path>,
+    bank_snapshot_dir: impl AsRef<Path>,
     slot: Slot,
     accounts_hash: &AccountsHash,
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> bool {
-    let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
-    let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
-    let mut bank_pre = bank_post.clone();
-    bank_pre.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+    let bank_post = bank_snapshot_dir
+        .as_ref()
+        .join(snapshot_utils::get_snapshot_file_name(slot));
+    let bank_pre = bank_post.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     let mut found = false;
     {
@@ -447,7 +489,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
 
 struct SerializableBankAndStorage<'a, C> {
     bank: &'a Bank,
-    snapshot_storages: &'a [SnapshotStorage],
+    snapshot_storages: &'a [Vec<Arc<AccountStorageEntry>>],
     phantom: std::marker::PhantomData<C>,
 }
 
@@ -463,7 +505,7 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorage<'a, C> {
 #[cfg(test)]
 struct SerializableBankAndStorageNoExtra<'a, C> {
     bank: &'a Bank,
-    snapshot_storages: &'a [SnapshotStorage],
+    snapshot_storages: &'a [Vec<Arc<AccountStorageEntry>>],
     phantom: std::marker::PhantomData<C>,
 }
 
@@ -496,7 +538,7 @@ impl<'a, C> From<SerializableBankAndStorageNoExtra<'a, C>> for SerializableBankA
 struct SerializableAccountsDb<'a, C> {
     accounts_db: &'a AccountsDb,
     slot: Slot,
-    account_storage_entries: &'a [SnapshotStorage],
+    account_storage_entries: &'a [Vec<Arc<AccountStorageEntry>>],
     phantom: std::marker::PhantomData<C>,
 }
 
@@ -514,7 +556,7 @@ impl<'a, C> solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccou
 
 #[allow(clippy::too_many_arguments)]
 fn reconstruct_bank_from_fields<E>(
-    bank_fields: BankFieldsToDeserialize,
+    bank_fields: SnapshotBankFields,
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
@@ -523,7 +565,6 @@ fn reconstruct_bank_from_fields<E>(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
-    caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
@@ -534,13 +575,20 @@ fn reconstruct_bank_from_fields<E>(
 where
     E: SerializableStorage + std::marker::Sync,
 {
+    let capitalizations = (
+        bank_fields.full.capitalization,
+        bank_fields
+            .incremental
+            .as_ref()
+            .map(|bank_fields| bank_fields.capitalization),
+    );
+    let bank_fields = bank_fields.collapse_into();
     let (accounts_db, reconstructed_accounts_db_info) = reconstruct_accountsdb_from_fields(
         snapshot_accounts_db_fields,
         account_paths,
         storage_and_next_append_vec_id,
         genesis_config,
         account_secondary_indexes,
-        caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
@@ -548,6 +596,8 @@ where
         accounts_update_notifier,
         exit,
         bank_fields.epoch_accounts_hash,
+        capitalizations,
+        bank_fields.incremental_snapshot_persistence.as_ref(),
     )?;
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
@@ -571,17 +621,17 @@ where
     Ok(bank)
 }
 
-fn reconstruct_single_storage(
+pub(crate) fn reconstruct_single_storage(
     slot: &Slot,
     append_vec_path: &Path,
     current_len: usize,
     append_vec_id: AppendVecId,
 ) -> io::Result<Arc<AccountStorageEntry>> {
-    let (accounts, num_accounts) = AppendVec::new_from_file(append_vec_path, current_len)?;
+    let (accounts_file, num_accounts) = AccountsFile::new_from_file(append_vec_path, current_len)?;
     Ok(Arc::new(AccountStorageEntry::new_existing(
         *slot,
         append_vec_id,
-        accounts,
+        accounts_file,
         num_accounts,
     )))
 }
@@ -597,7 +647,7 @@ fn remap_append_vec_file(
     // due to full snapshots and incremental snapshots generated from different nodes
     let (remapped_append_vec_id, remapped_append_vec_path) = loop {
         let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::AcqRel);
-        let remapped_file_name = AppendVec::file_name(slot, remapped_append_vec_id);
+        let remapped_file_name = AccountsFile::file_name(slot, remapped_append_vec_id);
         let remapped_append_vec_path = append_vec_path.parent().unwrap().join(remapped_file_name);
 
         // Break out of the loop in the following situations:
@@ -662,7 +712,6 @@ fn reconstruct_accountsdb_from_fields<E>(
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     genesis_config: &GenesisConfig,
     account_secondary_indexes: AccountSecondaryIndexes,
-    caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
@@ -670,6 +719,8 @@ fn reconstruct_accountsdb_from_fields<E>(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
     epoch_accounts_hash: Option<Hash>,
+    capitalizations: (u64, Option<u64>),
+    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> Result<(AccountsDb, ReconstructedAccountsDbInfo), Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -678,7 +729,6 @@ where
         account_paths.to_vec(),
         &genesis_config.cluster_type,
         account_secondary_indexes,
-        caching_enabled,
         shrink_ratio,
         accounts_db_config,
         accounts_update_notifier,
@@ -691,13 +741,85 @@ where
             .set_valid(EpochAccountsHash::new(epoch_accounts_hash), 0);
     }
 
+    // Store the accounts hash & capitalization, from the full snapshot, in the new AccountsDb
+    {
+        let AccountsDbFields(_, _, slot, bank_hash_info, _, _) =
+            &snapshot_accounts_db_fields.full_snapshot_accounts_db_fields;
+        let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+            *slot,
+            bank_hash_info.accounts_hash.clone(),
+            capitalizations.0,
+        );
+        assert!(
+            old_accounts_hash.is_none(),
+            "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+        );
+    }
+
+    // Store the accounts hash & capitalization, from the incremental snapshot, in the new AccountsDb
+    {
+        if let Some(AccountsDbFields(_, _, slot, bank_hash_info, _, _)) =
+            snapshot_accounts_db_fields
+                .incremental_snapshot_accounts_db_fields
+                .as_ref()
+        {
+            if let Some(incremental_snapshot_persistence) = incremental_snapshot_persistence {
+                // Use the presence of a BankIncrementalSnapshotPersistence to indicate the
+                // Incremental Accounts Hash feature is enabled, and use its accounts hashes
+                // instead of `BankHashInfo`'s.
+                let AccountsDbFields(_, _, full_slot, full_bank_hash_info, _, _) =
+                    &snapshot_accounts_db_fields.full_snapshot_accounts_db_fields;
+                let full_accounts_hash = &full_bank_hash_info.accounts_hash;
+                assert_eq!(
+                    incremental_snapshot_persistence.full_slot, *full_slot,
+                    "The incremental snapshot's base slot ({}) must match the full snapshot's slot ({full_slot})!",
+                    incremental_snapshot_persistence.full_slot,
+                );
+                assert_eq!(
+                    &incremental_snapshot_persistence.full_hash, full_accounts_hash,
+                    "The incremental snapshot's base accounts hash ({}) must match the full snapshot's accounts hash ({})!",
+                    &incremental_snapshot_persistence.full_hash.0, full_accounts_hash.0,
+                );
+                assert_eq!(
+                    incremental_snapshot_persistence.full_capitalization, capitalizations.0,
+                    "The incremental snapshot's base capitalization ({}) must match the full snapshot's capitalization ({})!",
+                    incremental_snapshot_persistence.full_capitalization, capitalizations.0,
+                );
+                let old_incremental_accounts_hash = accounts_db
+                    .set_incremental_accounts_hash_from_snapshot(
+                        *slot,
+                        incremental_snapshot_persistence.incremental_hash.clone(),
+                        incremental_snapshot_persistence.incremental_capitalization,
+                    );
+                assert!(
+                    old_incremental_accounts_hash.is_none(),
+                    "There should not already be an IncrementalAccountsHash at slot {slot}: {old_incremental_accounts_hash:?}",
+                );
+            } else {
+                // ..and without a BankIncrementalSnapshotPersistence then the Incremental Accounts
+                // Hash feature is disabled; the accounts hash in `BankHashInfo` is valid.
+                let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+                    *slot,
+                    bank_hash_info.accounts_hash.clone(),
+                    capitalizations
+                        .1
+                        .expect("capitalization from incremental snapshot"),
+                );
+                assert!(
+                    old_accounts_hash.is_none(),
+                    "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+                );
+            };
+        }
+    }
+
     let AccountsDbFields(
         _snapshot_storages,
         snapshot_version,
         snapshot_slot,
         snapshot_bank_hash_info,
-        snapshot_historical_roots,
-        snapshot_historical_roots_with_hash,
+        _snapshot_historical_roots,
+        _snapshot_historical_roots_with_hash,
     ) = snapshot_accounts_db_fields.collapse_into()?;
 
     // Ensure all account paths exist
@@ -706,21 +828,11 @@ where
             .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
     }
 
-    reconstruct_historical_roots(
-        &accounts_db,
-        snapshot_historical_roots,
-        snapshot_historical_roots_with_hash,
-    );
-
     let StorageAndNextAppendVecId {
         storage,
         next_append_vec_id,
     } = storage_and_next_append_vec_id;
 
-    // discard any slots with no storage entries
-    // this can happen if a non-root slot was serialized
-    // but non-root stores should not be included in the snapshot
-    storage.retain(|_slot, stores| !stores.read().unwrap().is_empty());
     assert!(
         !storage.is_empty(),
         "At least one storage entry must exist from deserializing stream"
@@ -730,17 +842,25 @@ where
     let max_append_vec_id = next_append_vec_id - 1;
     assert!(
         max_append_vec_id <= AppendVecId::MAX / 2,
-        "Storage id {} larger than allowed max",
-        max_append_vec_id
+        "Storage id {max_append_vec_id} larger than allowed max"
     );
 
     // Process deserialized data, set necessary fields in self
-    accounts_db
-        .bank_hashes
-        .write()
-        .unwrap()
-        .insert(snapshot_slot, snapshot_bank_hash_info);
-    accounts_db.storage.map.extend(storage.into_iter());
+    let old_accounts_delta_hash = accounts_db.set_accounts_delta_hash_from_snapshot(
+        snapshot_slot,
+        snapshot_bank_hash_info.accounts_delta_hash,
+    );
+    assert!(
+        old_accounts_delta_hash.is_none(),
+        "There should not already be an AccountsDeltaHash at slot {snapshot_slot}: {old_accounts_delta_hash:?}",
+        );
+    let old_stats = accounts_db
+        .update_bank_hash_stats_from_snapshot(snapshot_slot, snapshot_bank_hash_info.stats);
+    assert!(
+        old_stats.is_none(),
+        "There should not already be a BankHashStats at slot {snapshot_slot}: {old_stats:?}",
+    );
+    accounts_db.storage.initialize(storage);
     accounts_db
         .next_id
         .store(next_append_vec_id, Ordering::Release);
@@ -773,11 +893,7 @@ where
         .set(rent_paying_accounts_by_partition)
         .unwrap();
 
-    accounts_db.maybe_add_filler_accounts(
-        &genesis_config.epoch_schedule,
-        &genesis_config.rent,
-        snapshot_slot,
-    );
+    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule, snapshot_slot);
 
     handle.join().unwrap();
     measure_notify.stop();
@@ -791,26 +907,4 @@ where
         Arc::try_unwrap(accounts_db).unwrap(),
         ReconstructedAccountsDbInfo { accounts_data_len },
     ))
-}
-
-/// populate 'historical_roots' from 'snapshot_historical_roots' and 'snapshot_historical_roots_with_hash'
-fn reconstruct_historical_roots(
-    accounts_db: &AccountsDb,
-    mut snapshot_historical_roots: Vec<Slot>,
-    snapshot_historical_roots_with_hash: Vec<(Slot, Hash)>,
-) {
-    // inflate 'historical_roots'
-    // inserting into 'historical_roots' needs to be in order
-    // combine the slots into 1 vec, then sort
-    // dups are ok
-    snapshot_historical_roots.extend(
-        snapshot_historical_roots_with_hash
-            .into_iter()
-            .map(|(root, _)| root),
-    );
-    snapshot_historical_roots.sort_unstable();
-    let mut roots_tracker = accounts_db.accounts_index.roots_tracker.write().unwrap();
-    snapshot_historical_roots.into_iter().for_each(|root| {
-        roots_tracker.historical_roots.insert(root);
-    });
 }

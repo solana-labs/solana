@@ -31,7 +31,7 @@ pub(in crate::parse_token) fn parse_memo_transfer_instruction(
         "multisigOwner",
     );
     Ok(ParsedInstructionEnum {
-        instruction_type: format!("{}RequiredMemoTransfers", instruction_type_str),
+        instruction_type: format!("{instruction_type_str}RequiredMemoTransfers"),
         info: value,
     })
 }

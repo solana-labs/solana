@@ -74,11 +74,6 @@ Follow the wallet's instructions for selecting a validator.  You can get
 information about potentially performant validators from the links below.
 The Solana Foundation does not recommend any particular validator.
 
-The Mainnet Beta validators introduce themselves and their services on this
-Solana Forum thread:
-
-- https://forums.solana.com/t/validator-information-thread
-
 The site solanabeach.io is built and maintained by one of our validators,
 Staking Facilities. It provides a some high-level graphical information about
 the network as a whole, as well as a list of each validator and some recent

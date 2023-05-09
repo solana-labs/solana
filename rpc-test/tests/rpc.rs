@@ -7,7 +7,7 @@ use {
     serde_json::{json, Value},
     solana_account_decoder::UiAccount,
     solana_client::{
-        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+        connection_cache::ConnectionCache,
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_pubsub_client::nonblocking::pubsub_client::PubsubClient,
@@ -29,6 +29,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_tpu_client::tpu_client::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     solana_transaction_status::TransactionStatus,
     std::{
         collections::HashSet,
@@ -296,9 +297,9 @@ fn test_rpc_subscriptions() {
             let status_sender = status_sender.clone();
             let signature_subscription_ready_clone = signature_subscription_ready_clone.clone();
             tokio::spawn({
-                let _pubsub_client = Arc::clone(&pubsub_client);
+                let pubsub_client = Arc::clone(&pubsub_client);
                 async move {
-                    let (mut sig_notifications, sig_unsubscribe) = _pubsub_client
+                    let (mut sig_notifications, sig_unsubscribe) = pubsub_client
                         .signature_subscribe(
                             &signature,
                             Some(RpcSignatureSubscribeConfig {
@@ -323,9 +324,9 @@ fn test_rpc_subscriptions() {
             let account_sender = account_sender.clone();
             let account_subscription_ready_clone = account_subscription_ready_clone.clone();
             tokio::spawn({
-                let _pubsub_client = Arc::clone(&pubsub_client);
+                let pubsub_client = Arc::clone(&pubsub_client);
                 async move {
-                    let (mut account_notifications, account_unsubscribe) = _pubsub_client
+                    let (mut account_notifications, account_unsubscribe) = pubsub_client
                         .account_subscribe(
                             &pubkey,
                             Some(RpcAccountInfoConfig {
@@ -460,22 +461,31 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
         CommitmentConfig::processed(),
     ));
     let connection_cache = match tpu_use_quic {
-        true => Arc::new(ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE)),
-        false => Arc::new(ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE)),
+        true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+        false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
     };
-    let tpu_client = TpuClient::new_with_connection_cache(
-        rpc_client.clone(),
-        &test_validator.rpc_pubsub_url(),
-        TpuClientConfig::default(),
-        connection_cache,
-    )
-    .unwrap();
-
     let recent_blockhash = rpc_client.get_latest_blockhash().unwrap();
     let tx =
         system_transaction::transfer(&mint_keypair, &Pubkey::new_unique(), 42, recent_blockhash);
-    assert!(tpu_client.send_transaction(&tx));
-
+    let success = match connection_cache {
+        ConnectionCache::Quic(cache) => TpuClient::new_with_connection_cache(
+            rpc_client.clone(),
+            &test_validator.rpc_pubsub_url(),
+            TpuClientConfig::default(),
+            cache,
+        )
+        .unwrap()
+        .send_transaction(&tx),
+        ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(
+            rpc_client.clone(),
+            &test_validator.rpc_pubsub_url(),
+            TpuClientConfig::default(),
+            cache,
+        )
+        .unwrap()
+        .send_transaction(&tx),
+    };
+    assert!(success);
     let timeout = Duration::from_secs(5);
     let now = Instant::now();
     let signatures = vec![tx.signatures[0]];

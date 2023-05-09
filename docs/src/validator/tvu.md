@@ -2,6 +2,10 @@
 title: TVU
 ---
 
+TVU (Transaction Validation Unit) is the logic of the validator
+responsible for validating and propogating blocks and processing
+those blocks' transactions through the runtime.
+
 ![TVU Block Diagram](/img/tvu.svg)
 
 ## Retransmit Stage

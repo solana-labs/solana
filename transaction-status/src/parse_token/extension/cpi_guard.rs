@@ -31,7 +31,7 @@ pub(in crate::parse_token) fn parse_cpi_guard_instruction(
         "multisigOwner",
     );
     Ok(ParsedInstructionEnum {
-        instruction_type: format!("{}CpiGuard", instruction_type_str),
+        instruction_type: format!("{instruction_type_str}CpiGuard"),
         info: value,
     })
 }

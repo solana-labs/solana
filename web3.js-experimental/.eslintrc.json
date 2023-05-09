@@ -1,3 +1,0 @@
-{
-    "extends": ["@solana/eslint-config-solana", "@solana/eslint-config-solana/jest"]
-}

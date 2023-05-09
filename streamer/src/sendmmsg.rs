@@ -29,7 +29,7 @@ pub enum SendPktsError {
 
 impl From<SendPktsError> for TransportError {
     fn from(err: SendPktsError) -> Self {
-        Self::Custom(format!("{:?}", err))
+        Self::Custom(format!("{err:?}"))
     }
 }
 

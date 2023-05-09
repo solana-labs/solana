@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 CI_BUILD_START=$(date +%s)
 export CI_BUILD_START
 
@@ -9,7 +11,7 @@ source ci/env.sh
 #
 (
   containers=$(docker ps -q)
-  if [[ $(hostname) != metrics-solana-com && -n $containers ]]; then
+  if [[ $(hostname) != metrics-main && $(hostname) != metrics-internal && -n $containers ]]; then
     echo "+++ Killing stale docker containers"
     docker ps
 

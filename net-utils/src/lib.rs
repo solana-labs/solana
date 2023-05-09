@@ -76,16 +76,14 @@ fn ip_echo_server_request(
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         format!(
-                            "Invalid gossip entrypoint. {} looks to be an HTTP port: {}",
-                            ip_echo_server_addr, http_response
+                            "Invalid gossip entrypoint. {ip_echo_server_addr} looks to be an HTTP port: {http_response}"
                         ),
                     ));
                 }
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     format!(
-                        "Invalid gossip entrypoint. {} provided an invalid response header: '{}'",
-                        ip_echo_server_addr, response_header
+                        "Invalid gossip entrypoint. {ip_echo_server_addr} provided an invalid response header: '{response_header}'"
                     ),
                 ));
             }
@@ -93,7 +91,7 @@ fn ip_echo_server_request(
             bincode::deserialize(&data[HEADER_LENGTH..]).map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("Failed to deserialize: {:?}", err),
+                    format!("Failed to deserialize: {err:?}"),
                 )
             })
         })
@@ -145,7 +143,7 @@ fn do_verify_reachable_ports(
         let (sender, receiver) = unbounded();
         let listening_addr = tcp_listener.local_addr().unwrap();
         let thread_handle = std::thread::Builder::new()
-            .name(format!("solVrfyTcp{:05}", port))
+            .name(format!("solVrfyTcp{port:05}"))
             .spawn(move || {
                 debug!("Waiting for incoming connection on tcp/{}", port);
                 match tcp_listener.incoming().next() {
@@ -165,7 +163,7 @@ fn do_verify_reachable_ports(
                     "Received no response at tcp/{}, check your port configuration: {}",
                     port, err
                 );
-                // Ugh, std rustc doesn't provide acceptng with timeout or restoring original
+                // Ugh, std rustc doesn't provide accepting with timeout or restoring original
                 // nonblocking-status of sockets because of lack of getter, only the setter...
                 // So, to close the thread cleanly, just connect from here.
                 // ref: https://github.com/rust-lang/rust/issues/31615
@@ -227,7 +225,7 @@ fn do_verify_reachable_ports(
                     let reachable_ports = reachable_ports.clone();
 
                     std::thread::Builder::new()
-                        .name(format!("solVrfyUdp{:05}", port))
+                        .name(format!("solVrfyUdp{port:05}"))
                         .spawn(move || {
                             let start = Instant::now();
 
@@ -345,9 +343,9 @@ pub fn parse_port_range(port_range: &str) -> Option<PortRange> {
 pub fn parse_host(host: &str) -> Result<IpAddr, String> {
     // First, check if the host syntax is valid. This check is needed because addresses
     // such as `("localhost:1234", 0)` will resolve to IPs on some networks.
-    let parsed_url = Url::parse(&format!("http://{}", host)).map_err(|e| e.to_string())?;
+    let parsed_url = Url::parse(&format!("http://{host}")).map_err(|e| e.to_string())?;
     if parsed_url.port().is_some() {
-        return Err(format!("Expected port in URL: {}", host));
+        return Err(format!("Expected port in URL: {host}"));
     }
 
     // Next, check to see if it resolves to an IP address
@@ -357,7 +355,7 @@ pub fn parse_host(host: &str) -> Result<IpAddr, String> {
         .map(|socket_address| socket_address.ip())
         .collect();
     if ips.is_empty() {
-        Err(format!("Unable to resolve host: {}", host))
+        Err(format!("Unable to resolve host: {host}"))
     } else {
         Ok(ips[0])
     }
@@ -370,10 +368,10 @@ pub fn is_host(string: String) -> Result<(), String> {
 pub fn parse_host_port(host_port: &str) -> Result<SocketAddr, String> {
     let addrs: Vec<_> = host_port
         .to_socket_addrs()
-        .map_err(|err| format!("Unable to resolve host {}: {}", host_port, err))?
+        .map_err(|err| format!("Unable to resolve host {host_port}: {err}"))?
         .collect();
     if addrs.is_empty() {
-        Err(format!("Unable to resolve host: {}", host_port))
+        Err(format!("Unable to resolve host: {host_port}"))
     } else {
         Ok(addrs[0])
     }
@@ -424,7 +422,7 @@ pub fn bind_common_in_range(
 
     Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("No available TCP/UDP ports in {:?}", range),
+        format!("No available TCP/UDP ports in {range:?}"),
     ))
 }
 
@@ -442,7 +440,7 @@ pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpS
 
     Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("No available UDP ports in {:?}", range),
+        format!("No available UDP ports in {range:?}"),
     ))
 }
 
@@ -453,7 +451,7 @@ pub fn bind_with_any_port(ip_addr: IpAddr) -> io::Result<UdpSocket> {
         Ok(_) => Result::Ok(sock.into()),
         Err(err) => Err(io::Error::new(
             io::ErrorKind::Other,
-            format!("No available UDP port: {}", err),
+            format!("No available UDP port: {err}"),
         )),
     }
 }
@@ -680,9 +678,9 @@ mod tests {
 
     #[test]
     fn test_bind() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         assert_eq!(bind_in_range(ip_addr, (2000, 2001)).unwrap().0, 2000);
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let x = bind_to(ip_addr, 2002, true).unwrap();
         let y = bind_to(ip_addr, 2002, true).unwrap();
         assert_eq!(
@@ -700,7 +698,7 @@ mod tests {
 
     #[test]
     fn test_bind_with_any_port() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let x = bind_with_any_port(ip_addr).unwrap();
         let y = bind_with_any_port(ip_addr).unwrap();
         assert_ne!(
@@ -711,14 +709,14 @@ mod tests {
 
     #[test]
     fn test_bind_in_range_nil() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         bind_in_range(ip_addr, (2000, 2000)).unwrap_err();
         bind_in_range(ip_addr, (2000, 1999)).unwrap_err();
     }
 
     #[test]
     fn test_find_available_port_in_range() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         assert_eq!(
             find_available_port_in_range(ip_addr, (3000, 3001)).unwrap(),
             3000
@@ -732,7 +730,7 @@ mod tests {
 
     #[test]
     fn test_bind_common_in_range() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (port, _sockets) = bind_common_in_range(ip_addr, (3100, 3150)).unwrap();
         assert!((3100..3150).contains(&port));
 
@@ -742,7 +740,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_none() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
@@ -760,7 +758,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_reachable() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
         let (client_port, (client_udp_socket, client_tcp_listener)) =
@@ -784,7 +782,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_tcp_unreachable() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, _server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
@@ -807,7 +805,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_udp_unreachable() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, _server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
@@ -830,7 +828,7 @@ mod tests {
     #[test]
     fn test_bind_two_in_range_with_offset() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let offset = 6;
         if let Ok(((port1, _), (port2, _))) =
             bind_two_in_range_with_offset(ip_addr, (1024, 65535), offset)

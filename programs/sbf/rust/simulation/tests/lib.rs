@@ -13,7 +13,7 @@ use {
 };
 
 #[tokio::test]
-async fn no_panic() {
+async fn no_panic_banks_client() {
     let program_id = Pubkey::new_unique();
     let program_test = ProgramTest::new(
         "solana_sbf_rust_simulation",

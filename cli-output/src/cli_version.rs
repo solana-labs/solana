@@ -18,7 +18,7 @@ impl fmt::Display for CliVersion {
             None => "unknown".to_string(),
             Some(version) => version.to_string(),
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

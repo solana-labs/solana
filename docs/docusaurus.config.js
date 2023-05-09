@@ -45,6 +45,9 @@ module.exports = {
     },
   },
   themeConfig: {
+    prism: {
+      additionalLanguages: ["rust"],
+    },
     navbar: {
       logo: {
         alt: "Solana Logo",
@@ -89,7 +92,6 @@ module.exports = {
             {
               href: "https://spl.solana.com",
               label: "Solana Program Library »",
-              position: "left",
             },
           ],
         },
@@ -98,7 +100,7 @@ module.exports = {
           position: "right",
         },
         {
-          href: "https://discordapp.com/invite/pquxPsq",
+          href: "https://solana.com/discord",
           // label: "Discord",
           className: "header-link-icon header-discord-link",
           "aria-label": "Solana Discord",
@@ -115,7 +117,8 @@ module.exports = {
     },
     algolia: {
       // This API key is "search-only" and safe to be published
-      apiKey: "d58e0d68c875346d52645d68b13f3ac0",
+      apiKey: "011e01358301f5023b02da5db6af7f4d",
+      appId: "FQ12ISJR4B",
       indexName: "solana",
       contextualSearch: true,
     },
@@ -160,15 +163,15 @@ module.exports = {
             },
             {
               label: "Discord »",
-              href: "https://discordapp.com/invite/pquxPsq",
+              href: "https://solana.com/discord",
             },
             {
               label: "Twitter »",
               href: "https://twitter.com/solana",
             },
             {
-              label: "Forums »",
-              href: "https://forums.solana.com",
+              label: "Forum »",
+              href: "https://forum.solana.com",
             },
           ],
         },
@@ -199,6 +202,7 @@ module.exports = {
       {
         docs: {
           path: "src",
+          breadcrumbs: false,
           routeBasePath: "/",
           sidebarPath: require.resolve("./sidebars.js"),
           remarkPlugins: [math],
@@ -206,6 +210,12 @@ module.exports = {
         },
         theme: {
           customCss: require.resolve("./src/css/custom.css"),
+        },
+        // Google Analytics are only active in prod
+        gtag: {
+          // this GA code is safe to be published
+          trackingID: "G-94WS0LRZRS",
+          anonymizeIP: true,
         },
       },
     ],

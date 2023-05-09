@@ -1,3 +1,5 @@
+//! Definitions of commitment levels.
+
 #![allow(deprecated)]
 #![cfg(feature = "full")]
 
@@ -230,7 +232,7 @@ impl std::fmt::Display for CommitmentLevel {
             CommitmentLevel::Confirmed => "confirmed",
             CommitmentLevel::Finalized => "finalized",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

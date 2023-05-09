@@ -25,7 +25,6 @@ pub struct TransactionStatusService {
 }
 
 impl TransactionStatusService {
-    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         write_transaction_status_receiver: Receiver<TransactionStatusMessage>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
@@ -228,7 +227,10 @@ pub(crate) mod tests {
         dashmap::DashMap,
         solana_account_decoder::parse_token::token_amount_to_ui_amount,
         solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
-        solana_runtime::bank::{Bank, NonceFull, NoncePartial, RentDebits, TransactionBalancesSet},
+        solana_runtime::{
+            bank::{Bank, NonceFull, NoncePartial, TransactionBalancesSet},
+            rent_debits::RentDebits,
+        },
         solana_sdk::{
             account_utils::StateMut,
             clock::Slot,
@@ -357,7 +359,7 @@ pub(crate) mod tests {
 
         let mut nonce_account = nonce_account::create_account(1).into_inner();
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]));
-        let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), durable_nonce, 42);
+        let data = nonce::state::Data::new(Pubkey::from([1u8; 32]), durable_nonce, 42);
         nonce_account
             .set_state(&nonce::state::Versions::new(nonce::State::Initialized(
                 data,

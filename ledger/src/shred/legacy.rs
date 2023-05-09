@@ -15,7 +15,8 @@ use {
 
 // All payload including any zero paddings are signed.
 // Code and data shreds have the same payload size.
-pub(super) const SIGNED_MESSAGE_RANGE: Range<usize> = SIZE_OF_SIGNATURE..ShredData::SIZE_OF_PAYLOAD;
+pub(super) const SIGNED_MESSAGE_OFFSETS: Range<usize> =
+    SIZE_OF_SIGNATURE..ShredData::SIZE_OF_PAYLOAD;
 const_assert_eq!(ShredData::SIZE_OF_PAYLOAD, ShredCode::SIZE_OF_PAYLOAD);
 const_assert_eq!(ShredData::SIZE_OF_PAYLOAD, 1228);
 const_assert_eq!(ShredData::CAPACITY, 1051);
@@ -47,7 +48,9 @@ pub struct ShredCode {
     payload: Vec<u8>,
 }
 
-impl Shred for ShredData {
+impl<'a> Shred<'a> for ShredData {
+    type SignedData = &'a [u8];
+
     impl_shred_common!();
     // Legacy data shreds are always zero padded and
     // the same size as coding shreds.
@@ -108,13 +111,15 @@ impl Shred for ShredData {
         shred_data::sanitize(self)
     }
 
-    fn signed_message(&self) -> &[u8] {
+    fn signed_data(&'a self) -> Result<Self::SignedData, Error> {
         debug_assert_eq!(self.payload.len(), Self::SIZE_OF_PAYLOAD);
-        &self.payload[SIZE_OF_SIGNATURE..]
+        Ok(&self.payload[SIZE_OF_SIGNATURE..])
     }
 }
 
-impl Shred for ShredCode {
+impl<'a> Shred<'a> for ShredCode {
+    type SignedData = &'a [u8];
+
     impl_shred_common!();
     const SIZE_OF_PAYLOAD: usize = shred_code::ShredCode::SIZE_OF_PAYLOAD;
     const SIZE_OF_HEADERS: usize = SIZE_OF_CODING_SHRED_HEADERS;
@@ -170,9 +175,9 @@ impl Shred for ShredCode {
         shred_code::sanitize(self)
     }
 
-    fn signed_message(&self) -> &[u8] {
+    fn signed_data(&'a self) -> Result<Self::SignedData, Error> {
         debug_assert_eq!(self.payload.len(), Self::SIZE_OF_PAYLOAD);
-        &self.payload[SIZE_OF_SIGNATURE..]
+        Ok(&self.payload[SIZE_OF_SIGNATURE..])
     }
 }
 
@@ -437,7 +442,7 @@ mod test {
             shred.common_header.index = MAX_CODE_SHREDS_PER_SLOT as u32;
             assert_matches!(
                 shred.sanitize(),
-                Err(Error::InvalidShredIndex(ShredType::Code, 557_056))
+                Err(Error::InvalidShredIndex(ShredType::Code, 32_768))
             );
         }
         // pos >= num_coding is invalid.

@@ -27,11 +27,11 @@ fn load_credentials(filepath: Option<String>) -> Result<Credentials, String> {
         })?,
     };
     Credentials::from_file(&path)
-        .map_err(|err| format!("Failed to read GCP credentials from {}: {}", path, err))
+        .map_err(|err| format!("Failed to read GCP credentials from {path}: {err}"))
 }
 
 fn load_stringified_credentials(credential: String) -> Result<Credentials, String> {
-    Credentials::from_str(&credential).map_err(|err| format!("{}", err))
+    Credentials::from_str(&credential).map_err(|err| format!("{err}"))
 }
 
 #[derive(Clone)]
@@ -50,7 +50,7 @@ impl AccessToken {
         };
 
         if let Err(err) = credentials.rsa_key() {
-            Err(format!("Invalid rsa key: {}", err))
+            Err(format!("Invalid rsa key: {err}"))
         } else {
             let token = Arc::new(RwLock::new(Self::get_token(&credentials, &scope).await?));
             let access_token = Self {
@@ -84,7 +84,7 @@ impl AccessToken {
 
         let token = goauth::get_token(&jwt, credentials)
             .await
-            .map_err(|err| format!("Failed to refresh access token: {}", err))?;
+            .map_err(|err| format!("Failed to refresh access token: {err}"))?;
 
         info!("Token expires in {} seconds", token.expires_in());
         Ok((token, Instant::now()))

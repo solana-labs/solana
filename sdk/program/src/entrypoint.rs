@@ -1,4 +1,4 @@
-//! The Rust-based BPF program entry point supported by the latest BPF loader.
+//! The Rust-based BPF program entrypoint supported by the latest BPF loader.
 //!
 //! For more information see the [`bpf_loader`] module.
 //!
@@ -39,7 +39,7 @@ pub const HEAP_LENGTH: usize = 32 * 1024;
 /// Value used to indicate that a serialized account is not a duplicate
 pub const NON_DUP_MARKER: u8 = u8::MAX;
 
-/// Declare the program entry point and set up global handlers.
+/// Declare the program entrypoint and set up global handlers.
 ///
 /// This macro emits the common boilerplate necessary to begin program
 /// execution, calling a provided function to process the program instruction
@@ -91,7 +91,7 @@ pub const NON_DUP_MARKER: u8 = u8::MAX;
 ///
 /// # Examples
 ///
-/// Defining an entry point and making it conditional on the `no-entrypoint`
+/// Defining an entrypoint and making it conditional on the `no-entrypoint`
 /// feature. Although the `entrypoint` module is written inline in this example,
 /// it is common to put it into its own file.
 ///

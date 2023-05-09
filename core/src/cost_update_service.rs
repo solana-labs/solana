@@ -20,7 +20,6 @@ pub struct CostUpdateService {
 }
 
 impl CostUpdateService {
-    #[allow(clippy::new_ret_no_self)]
     pub fn new(blockstore: Arc<Blockstore>, cost_update_receiver: CostUpdateReceiver) -> Self {
         let thread_hdl = Builder::new()
             .name("solCostUpdtSvc".to_string())

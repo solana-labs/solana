@@ -4,7 +4,7 @@ use {
     crate::{cuda_runtime::PinnedVec, recycler::Recycler},
     bincode::config::Options,
     rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator},
-    serde::{de::DeserializeOwned, Serialize},
+    serde::{de::DeserializeOwned, Deserialize, Serialize},
     std::{
         io::Read,
         net::SocketAddr,
@@ -18,7 +18,7 @@ pub const NUM_PACKETS: usize = 1024 * 8;
 pub const PACKETS_PER_BATCH: usize = 64;
 pub const NUM_RCVMMSGS: usize = 64;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct PacketBatch {
     packets: PinnedVec<Packet>,
 }
@@ -33,7 +33,7 @@ impl PacketBatch {
 
     pub fn with_capacity(capacity: usize) -> Self {
         let packets = PinnedVec::with_capacity(capacity);
-        PacketBatch { packets }
+        Self { packets }
     }
 
     pub fn new_pinned_with_capacity(capacity: usize) -> Self {
@@ -49,7 +49,7 @@ impl PacketBatch {
     ) -> Self {
         let mut packets = recycler.allocate(name);
         packets.reserve(capacity);
-        PacketBatch { packets }
+        Self { packets }
     }
 
     pub fn new_with_recycler(
@@ -59,7 +59,7 @@ impl PacketBatch {
     ) -> Self {
         let mut packets = recycler.allocate(name);
         packets.reserve_and_pin(capacity);
-        PacketBatch { packets }
+        Self { packets }
     }
 
     pub fn new_with_recycler_data(
@@ -77,8 +77,7 @@ impl PacketBatch {
         name: &'static str,
         dests_and_data: &[(SocketAddr, T)],
     ) -> Self {
-        let mut batch =
-            PacketBatch::new_unpinned_with_recycler(recycler, dests_and_data.len(), name);
+        let mut batch = Self::new_unpinned_with_recycler(recycler, dests_and_data.len(), name);
         batch
             .packets
             .resize(dests_and_data.len(), Packet::default());
@@ -122,7 +121,7 @@ impl PacketBatch {
 
     pub fn set_addr(&mut self, addr: &SocketAddr) {
         for p in self.iter_mut() {
-            p.meta.set_socket_addr(addr);
+            p.meta_mut().set_socket_addr(addr);
         }
     }
 
@@ -225,7 +224,7 @@ pub fn to_packet_batches<T: Serialize>(items: &[T], chunk_size: usize) -> Vec<Pa
 }
 
 #[cfg(test)]
-pub fn to_packet_batches_for_tests<T: Serialize>(items: &[T]) -> Vec<PacketBatch> {
+fn to_packet_batches_for_tests<T: Serialize>(items: &[T]) -> Vec<PacketBatch> {
     to_packet_batches(items, NUM_PACKETS)
 }
 

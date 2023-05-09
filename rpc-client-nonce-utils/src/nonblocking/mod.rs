@@ -61,11 +61,11 @@ pub async fn get_account_with_commitment(
     rpc_client
         .get_account_with_commitment(nonce_pubkey, commitment)
         .await
-        .map_err(|e| Error::Client(format!("{}", e)))
+        .map_err(|e| Error::Client(format!("{e}")))
         .and_then(|result| {
             result
                 .value
-                .ok_or_else(|| Error::Client(format!("AccountNotFound: pubkey={}", nonce_pubkey)))
+                .ok_or_else(|| Error::Client(format!("AccountNotFound: pubkey={nonce_pubkey}")))
         })
         .and_then(|a| account_identity_ok(&a).map(|()| a))
 }

@@ -43,8 +43,8 @@ pub fn find_and_send_votes(
         sanitized_txs
             .iter()
             .zip(execution_results.iter())
-            .for_each(|(tx, _result)| {
-                if tx.is_simple_vote_transaction() {
+            .for_each(|(tx, result)| {
+                if tx.is_simple_vote_transaction() && result.was_executed_successfully() {
                     if let Some(parsed_vote) = vote_parser::parse_sanitized_vote_transaction(tx) {
                         if parsed_vote.1.last_voted_slot().is_some() {
                             let _ = vote_sender.send(parsed_vote);

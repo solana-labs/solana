@@ -1,3 +1,5 @@
+//! The compute budget native program.
+
 #![cfg(feature = "full")]
 
 use {
@@ -39,8 +41,8 @@ pub enum ComputeBudgetInstruction {
     /// Set a compute unit price in "micro-lamports" to pay a higher transaction
     /// fee for higher transaction prioritization.
     SetComputeUnitPrice(u64),
-    /// Set a specific transaction-wide account data size limit, in bytes, is allowed to allocate.
-    SetAccountsDataSizeLimit(u32),
+    /// Set a specific transaction-wide account data size limit, in bytes, is allowed to load.
+    SetLoadedAccountsDataSizeLimit(u32),
 }
 
 impl ComputeBudgetInstruction {
@@ -59,15 +61,15 @@ impl ComputeBudgetInstruction {
         Instruction::new_with_borsh(id(), &Self::SetComputeUnitPrice(micro_lamports), vec![])
     }
 
-    /// Create a `ComputeBudgetInstruction::SetAccountsDataSizeLimit` `Instruction`
-    pub fn set_accounts_data_size_limit(bytes: u32) -> Instruction {
-        Instruction::new_with_borsh(id(), &Self::SetAccountsDataSizeLimit(bytes), vec![])
-    }
-
     /// Serialize Instruction using borsh, this is only used in runtime::cost_model::tests but compilation
     /// can't be restricted as it's used across packages
     // #[cfg(test)]
     pub fn pack(self) -> Result<Vec<u8>, std::io::Error> {
         self.try_to_vec()
+    }
+
+    /// Create a `ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit` `Instruction`
+    pub fn set_loaded_accounts_data_size_limit(bytes: u32) -> Instruction {
+        Instruction::new_with_borsh(id(), &Self::SetLoadedAccountsDataSizeLimit(bytes), vec![])
     }
 }

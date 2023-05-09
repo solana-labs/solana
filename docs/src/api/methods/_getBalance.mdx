@@ -1,0 +1,78 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getBalance
+
+Returns the balance of the account of provided Pubkey
+
+<DocSideBySide>
+
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"string"} required={true}>
+  Pubkey of account to query, as base-58 encoded string
+</Parameter>
+
+<Parameter type={"object"} optional={true}>
+
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  href="/api/http#configuring-state-commitment"
+></Field>
+
+<Field name="minContextSlot" type="number" optional={true}>
+  The minimum slot that the request can be evaluated at
+</Field>
+
+</Parameter>
+
+### Result:
+
+`RpcResponse<u64>` - RpcResponse JSON object with `value` field set to the balance
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0", "id": 1,
+    "method": "getBalance",
+    "params": [
+      "83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"
+    ]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": { "context": { "slot": 1 }, "value": 0 },
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

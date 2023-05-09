@@ -4,7 +4,7 @@ use {
         inflation::*, nonce::*, program::*, stake::*, validator_info::*, vote::*, wallet::*,
     },
     clap::{App, AppSettings, Arg, ArgGroup, SubCommand},
-    solana_clap_utils::{self, input_validators::*, keypair::*},
+    solana_clap_utils::{self, hidden_unless_forced, input_validators::*, keypair::*},
     solana_cli_config::CONFIG_FILE,
 };
 
@@ -91,6 +91,13 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                 .help("Use QUIC when sending transactions."),
         )
         .arg(
+            Arg::with_name("use_udp")
+                .long("use-udp")
+                .global(true)
+                .conflicts_with("use_quic")
+                .help("Use UDP when sending transactions."),
+        )
+        .arg(
             Arg::with_name("no_address_labels")
                 .long("no-address-labels")
                 .global(true)
@@ -118,7 +125,7 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                 .takes_value(true)
                 .default_value(DEFAULT_RPC_TIMEOUT_SECONDS)
                 .global(true)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Timeout value for RPC requests"),
         )
         .arg(
@@ -128,7 +135,7 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                 .takes_value(true)
                 .default_value(DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS)
                 .global(true)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Timeout value for initial transaction status"),
         )
         .cluster_query_subcommands()

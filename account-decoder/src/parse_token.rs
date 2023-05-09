@@ -282,11 +282,9 @@ pub struct UiMultisig {
 }
 
 pub fn get_token_account_mint(data: &[u8]) -> Option<Pubkey> {
-    if Account::valid_account_data(data) {
-        Some(Pubkey::new(&data[0..32]))
-    } else {
-        None
-    }
+    Account::valid_account_data(data)
+        .then(|| Pubkey::try_from(data.get(..32)?).ok())
+        .flatten()
 }
 
 #[cfg(test)]
@@ -305,8 +303,8 @@ mod test {
 
     #[test]
     fn test_parse_token() {
-        let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
-        let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
+        let mint_pubkey = SplTokenPubkey::new_from_array([2; 32]);
+        let owner_pubkey = SplTokenPubkey::new_from_array([3; 32]);
         let mut account_data = vec![0; Account::get_packed_len()];
         let mut account = Account::unpack_unchecked(&account_data).unwrap();
         account.mint = mint_pubkey;
@@ -360,9 +358,9 @@ mod test {
             }),
         );
 
-        let signer1 = SplTokenPubkey::new(&[1; 32]);
-        let signer2 = SplTokenPubkey::new(&[2; 32]);
-        let signer3 = SplTokenPubkey::new(&[3; 32]);
+        let signer1 = SplTokenPubkey::new_from_array([1; 32]);
+        let signer2 = SplTokenPubkey::new_from_array([2; 32]);
+        let signer3 = SplTokenPubkey::new_from_array([3; 32]);
         let mut multisig_data = vec![0; Multisig::get_packed_len()];
         let mut signers = [SplTokenPubkey::default(); 11];
         signers[0] = signer1;
@@ -395,14 +393,14 @@ mod test {
 
     #[test]
     fn test_get_token_account_mint() {
-        let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
+        let mint_pubkey = SplTokenPubkey::new_from_array([2; 32]);
         let mut account_data = vec![0; Account::get_packed_len()];
         let mut account = Account::unpack_unchecked(&account_data).unwrap();
         account.mint = mint_pubkey;
         account.state = AccountState::Initialized;
         Account::pack(account, &mut account_data).unwrap();
 
-        let expected_mint_pubkey = Pubkey::new(&[2; 32]);
+        let expected_mint_pubkey = Pubkey::from([2; 32]);
         assert_eq!(
             get_token_account_mint(&account_data),
             Some(expected_mint_pubkey)
@@ -497,8 +495,8 @@ mod test {
 
     #[test]
     fn test_parse_token_account_with_extensions() {
-        let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
-        let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
+        let mint_pubkey = SplTokenPubkey::new_from_array([2; 32]);
+        let owner_pubkey = SplTokenPubkey::new_from_array([3; 32]);
 
         let account_base = Account {
             mint: mint_pubkey,
@@ -588,7 +586,7 @@ mod test {
 
     #[test]
     fn test_parse_token_mint_with_extensions() {
-        let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
+        let owner_pubkey = SplTokenPubkey::new_from_array([3; 32]);
         let mint_size =
             ExtensionType::get_account_len::<Mint>(&[ExtensionType::MintCloseAuthority]);
         let mint_base = Mint {

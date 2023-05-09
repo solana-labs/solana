@@ -7,30 +7,6 @@ on:
     branches:  [master]
 
 jobs:
-  Export_Github_Repositories:
-    runs-on: ubuntu-latest
-    env: 
-       VERCEL_TOKEN: ${{secrets.VERCEL_TOKEN}}
-       GITHUB_TOKEN: ${{secrets.PAT_ANM}} 
-       COMMIT_RANGE: ${{ github.event.before}}...${{ github.event.after}}
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 2
-
-      - run: echo "COMMIT_DIFF_RANGE=$(echo $COMMIT_RANGE)" >> $GITHUB_ENV
-#       - run: echo "$COMMIT_DIFF_RANGE"
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          GITHUB_TOKEN: ${{secrets.PAT_ANM}}
-        if: ${{ github.event_name == 'push' && 'cron'&& github.ref == 'refs/heads/master'}}
-        
-      - name: cmd
-        run : |
-            .travis/export-github-repo.sh web3.js/ solana-web3.js
-            
   macos-artifacts:
     needs: [Export_Github_Repositories]
     strategy:

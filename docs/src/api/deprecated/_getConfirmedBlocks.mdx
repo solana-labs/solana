@@ -1,0 +1,71 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getConfirmedBlocks
+
+:::warning DEPRECATED
+This method is expected to be removed in solana-core v2.0
+**Please use [getBlocks](#getblocks) instead**
+:::
+
+Returns a list of confirmed blocks between two slots
+
+<DocSideBySide>
+
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"u64"} required={true}>
+  start_slot, as u64 integer
+</Parameter>
+
+<Parameter type={"object"} optional={true}>
+
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  href="/api/http#configuring-state-commitment"
+></Field>
+
+</Parameter>
+
+### Result:
+
+The result field will be an array of u64 integers listing confirmed blocks
+between `start_slot` and either `end_slot` - if provided, or latest confirmed block,
+inclusive. Max range allowed is 500,000 slots.
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5, 10]}
+'
+```
+
+### Response:
+
+```json
+{ "jsonrpc": "2.0", "result": [5, 6, 7, 8, 9, 10], "id": 1 }
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

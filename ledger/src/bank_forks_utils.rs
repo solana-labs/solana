@@ -97,7 +97,6 @@ pub fn load_bank_forks(
             "Initializing bank snapshot path: {}",
             snapshot_config.bank_snapshots_dir.display()
         );
-        let _ = fs::remove_dir_all(&snapshot_config.bank_snapshots_dir);
         fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
             .expect("Couldn't create snapshot directory");
 
@@ -199,6 +198,12 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
+    // Given that we are going to boot from an archive, the accountvecs held in the snapshot dirs for fast-boot should
+    // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
+    // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
+    // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
+    snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
+
     let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
@@ -208,11 +213,8 @@ fn bank_forks_from_snapshot(
             genesis_config,
             &process_options.runtime_config,
             process_options.debug_keys.clone(),
-            Some(&crate::builtins::get(
-                process_options.runtime_config.bpf_jit,
-            )),
+            None,
             process_options.account_indexes.clone(),
-            process_options.accounts_db_caching_enabled,
             process_options.limit_load_slot_count_from_snapshot,
             process_options.shrink_ratio,
             process_options.accounts_db_test_hash_calculation,
@@ -228,21 +230,16 @@ fn bank_forks_from_snapshot(
         deserialized_bank.set_shrink_paths(shrink_paths);
     }
 
-    let full_snapshot_hash = FullSnapshotHash {
-        hash: (
-            full_snapshot_archive_info.slot(),
-            full_snapshot_archive_info.hash().0,
-        ),
-    };
+    let full_snapshot_hash = FullSnapshotHash((
+        full_snapshot_archive_info.slot(),
+        *full_snapshot_archive_info.hash(),
+    ));
     let starting_incremental_snapshot_hash =
         incremental_snapshot_archive_info.map(|incremental_snapshot_archive_info| {
-            IncrementalSnapshotHash {
-                base: full_snapshot_hash.hash,
-                hash: (
-                    incremental_snapshot_archive_info.slot(),
-                    incremental_snapshot_archive_info.hash().0,
-                ),
-            }
+            IncrementalSnapshotHash((
+                incremental_snapshot_archive_info.slot(),
+                *incremental_snapshot_archive_info.hash(),
+            ))
         });
     let starting_snapshot_hashes = StartingSnapshotHashes {
         full: full_snapshot_hash,

@@ -1,3 +1,5 @@
+//! Serde helpers.
+
 use serde::{Deserialize, Deserializer};
 
 /// This helper function enables successful deserialization of versioned structs; new structs may

@@ -1,4 +1,4 @@
-//! Off-Chain Message container for storing non-transaction messages.
+//! Off-chain message container for storing non-transaction messages.
 
 #![cfg(feature = "full")]
 

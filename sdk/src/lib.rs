@@ -1,3 +1,34 @@
+//! The Solana host and client SDK.
+//!
+//! This is the base library for all off-chain programs that interact with
+//! Solana or otherwise operate on Solana data structures. On-chain programs
+//! instead use the [`solana-program`] crate, the modules of which are
+//! re-exported by this crate, like the relationship between the Rust
+//! `core` and `std` crates. As much of the functionality of this crate is
+//! provided by `solana-program`, see that crate's documentation for an
+//! overview.
+//!
+//! [`solana-program`]: https://docs.rs/solana-program
+//!
+//! Many of the modules in this crate are primarily of use to the Solana runtime
+//! itself. Additional crates provide capabilities built on `solana-sdk`, and
+//! many programs will need to link to those crates as well, particularly for
+//! clients communicating with Solana nodes over RPC.
+//!
+//! Such crates include:
+//!
+//! - [`solana-client`] - For interacting with a Solana node via the [JSON-RPC API][json].
+//! - [`solana-cli-config`] - Loading and saving the Solana CLI configuration file.
+//! - [`solana-clap-utils`] - Routines for setting up the CLI using [`clap`], as
+//!   used by the Solana CLI. Includes functions for loading all types of
+//!   signers supported by the CLI.
+//!
+//! [`solana-client`]: https://docs.rs/solana-client
+//! [`solana-cli-config`]: https://docs.rs/solana-cli-config
+//! [`solana-clap-utils`]: https://docs.rs/solana-clap-utils
+//! [json]: https://docs.solana.com/developing/clients/jsonrpc-api
+//! [`clap`]: https://docs.rs/clap
+
 #![allow(incomplete_features)]
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
 #![cfg_attr(RUSTC_NEEDS_PROC_MACRO_HYGIENE, feature(proc_macro_hygiene))]
@@ -12,20 +43,20 @@ pub use signer::signers;
 #[cfg(not(target_os = "solana"))]
 pub use solana_program::program_stubs;
 pub use solana_program::{
-    account_info, address_lookup_table_account, alt_bn128, blake3, borsh, bpf_loader,
+    account_info, address_lookup_table_account, alt_bn128, big_mod_exp, blake3, borsh, bpf_loader,
     bpf_loader_deprecated, bpf_loader_upgradeable, clock, config, custom_heap_default,
     custom_panic_default, debug_account_data, declare_deprecated_sysvar_id, declare_sysvar_id,
     decode_error, ed25519_program, epoch_schedule, fee_calculator, impl_sysvar_get, incinerator,
-    instruction, keccak, lamports, loader_instruction, loader_upgradeable_instruction, message,
-    msg, native_token, nonce, program, program_error, program_memory, program_option, program_pack,
-    rent, sanitize, sdk_ids, secp256k1_program, secp256k1_recover, serialize_utils, short_vec,
-    slot_hashes, slot_history, stake, stake_history, syscalls, system_instruction, system_program,
-    sysvar, unchecked_div_by_const, vote, wasm_bindgen,
+    instruction, keccak, lamports, loader_instruction, loader_upgradeable_instruction, loader_v3,
+    loader_v3_instruction, message, msg, native_token, nonce, program, program_error,
+    program_memory, program_option, program_pack, rent, sanitize, sdk_ids, secp256k1_program,
+    secp256k1_recover, serde_varint, serialize_utils, short_vec, slot_hashes, slot_history,
+    stable_layout, stake, stake_history, syscalls, system_instruction, system_program, sysvar,
+    unchecked_div_by_const, vote, wasm_bindgen,
 };
 
 pub mod account;
 pub mod account_utils;
-pub mod builtins;
 pub mod client;
 pub mod commitment_config;
 pub mod compute_budget;
@@ -46,6 +77,7 @@ pub mod hash;
 pub mod inflation;
 pub mod log;
 pub mod native_loader;
+pub mod net;
 pub mod nonce_account;
 pub mod offchain_message;
 pub mod packet;
@@ -68,9 +100,9 @@ pub mod transaction_context;
 pub mod transport;
 pub mod wasm;
 
-/// Same as `declare_id` except report that this id has been deprecated
+/// Same as `declare_id` except report that this id has been deprecated.
 pub use solana_sdk_macro::declare_deprecated_id;
-/// Convenience macro to declare a static public key and functions to interact with it
+/// Convenience macro to declare a static public key and functions to interact with it.
 ///
 /// Input: a single literal base58 string representation of a program's id
 ///
@@ -92,7 +124,7 @@ pub use solana_sdk_macro::declare_deprecated_id;
 /// assert_eq!(id(), my_id);
 /// ```
 pub use solana_sdk_macro::declare_id;
-/// Convenience macro to define a static public key
+/// Convenience macro to define a static public key.
 ///
 /// Input: a single literal base58 string representation of a Pubkey
 ///
@@ -108,6 +140,7 @@ pub use solana_sdk_macro::declare_id;
 /// assert_eq!(ID, my_id);
 /// ```
 pub use solana_sdk_macro::pubkey;
+/// Convenience macro to define multiple static public keys.
 pub use solana_sdk_macro::pubkeys;
 #[rustversion::since(1.46.0)]
 pub use solana_sdk_macro::respan;

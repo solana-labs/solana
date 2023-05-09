@@ -29,9 +29,8 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::{
-            generate_seed_from_seed_phrase_and_passphrase, keypair_from_seed,
-            keypair_from_seed_and_derivation_path, keypair_from_seed_phrase_and_passphrase,
-            read_keypair, read_keypair_file, Keypair, NullSigner, Presigner, Signature, Signer,
+            generate_seed_from_seed_phrase_and_passphrase, read_keypair, read_keypair_file,
+            EncodableKey, Keypair, NullSigner, Presigner, Signature, Signer,
         },
     },
     std::{
@@ -423,7 +422,7 @@ impl AsRef<str> for SignerSourceKind {
 impl std::fmt::Debug for SignerSourceKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s: &str = self.as_ref();
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -775,7 +774,7 @@ pub fn signer_from_path_with_config(
         SignerSourceKind::Filepath(path) => match read_keypair_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("could not read keypair file \"{}\". Run \"solana-keygen new\" to create a keypair file: {}", path, e),
+                format!("could not read keypair file \"{path}\". Run \"solana-keygen new\" to create a keypair file: {e}"),
             )
             .into()),
             Ok(file) => Ok(Box::new(file)),
@@ -789,11 +788,12 @@ pub fn signer_from_path_with_config(
                 *wallet_manager = maybe_wallet_manager()?;
             }
             if let Some(wallet_manager) = wallet_manager {
+                let confirm_key = matches.try_contains_id("confirm_key").unwrap_or(false);
                 Ok(Box::new(generate_remote_keypair(
                     locator,
                     derivation_path.unwrap_or_default(),
                     wallet_manager,
-                    matches.is_present("confirm_key"),
+                    confirm_key,
                     keypair_name,
                 )?))
             } else {
@@ -811,7 +811,7 @@ pub fn signer_from_path_with_config(
             } else {
                 Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    format!("missing signature for supplied pubkey: {}", pubkey),
+                    format!("missing signature for supplied pubkey: {pubkey}"),
                 )
                 .into())
             }
@@ -898,9 +898,8 @@ pub fn resolve_signer_from_path(
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!(
-                    "could not read keypair file \"{}\". \
-                    Run \"solana-keygen new\" to create a keypair file: {}",
-                    path, e
+                    "could not read keypair file \"{path}\". \
+                    Run \"solana-keygen new\" to create a keypair file: {e}"
                 ),
             )
             .into()),
@@ -917,11 +916,12 @@ pub fn resolve_signer_from_path(
                 *wallet_manager = maybe_wallet_manager()?;
             }
             if let Some(wallet_manager) = wallet_manager {
+                let confirm_key = matches.try_contains_id("confirm_key").unwrap_or(false);
                 let path = generate_remote_keypair(
                     locator,
                     derivation_path.unwrap_or_default(),
                     wallet_manager,
-                    matches.is_present("confirm_key"),
+                    confirm_key,
                     keypair_name,
                 )
                 .map(|keypair| keypair.path)?;
@@ -1001,6 +1001,30 @@ pub fn keypair_from_path(
     keypair_name: &str,
     confirm_pubkey: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
+    let keypair = encodable_key_from_path(matches, path, keypair_name)?;
+    if confirm_pubkey {
+        confirm_keypair_pubkey(&keypair);
+    }
+    Ok(keypair)
+}
+
+fn confirm_keypair_pubkey(keypair: &Keypair) {
+    let pubkey = keypair.pubkey();
+    print!("Recovered pubkey `{pubkey:?}`. Continue? (y/n): ");
+    let _ignored = stdout().flush();
+    let mut input = String::new();
+    stdin().read_line(&mut input).expect("Unexpected input");
+    if input.to_lowercase().trim() != "y" {
+        println!("Exiting");
+        exit(1);
+    }
+}
+
+fn encodable_key_from_path<K: EncodableKey>(
+    matches: &ArgMatches,
+    path: &str,
+    keypair_name: &str,
+) -> Result<K, Box<dyn error::Error>> {
     let SignerSource {
         kind,
         derivation_path,
@@ -1009,21 +1033,19 @@ pub fn keypair_from_path(
     match kind {
         SignerSourceKind::Prompt => {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-            Ok(keypair_from_seed_phrase(
+            Ok(encodable_key_from_seed_phrase(
                 keypair_name,
                 skip_validation,
-                confirm_pubkey,
                 derivation_path,
                 legacy,
             )?)
         }
-        SignerSourceKind::Filepath(path) => match read_keypair_file(&path) {
+        SignerSourceKind::Filepath(path) => match K::read_from_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!(
-                    "could not read keypair file \"{}\". \
-                    Run \"solana-keygen new\" to create a keypair file: {}",
-                    path, e
+                    "could not read keypair file \"{path}\". \
+                    Run \"solana-keygen new\" to create a keypair file: {e}"
                 ),
             )
             .into()),
@@ -1031,14 +1053,11 @@ pub fn keypair_from_path(
         },
         SignerSourceKind::Stdin => {
             let mut stdin = std::io::stdin();
-            Ok(read_keypair(&mut stdin)?)
+            Ok(K::read(&mut stdin)?)
         }
         _ => Err(std::io::Error::new(
             std::io::ErrorKind::Other,
-            format!(
-                "signer of type `{:?}` does not support Keypair output",
-                kind
-            ),
+            format!("signer of type `{kind:?}` does not support Keypair output"),
         )
         .into()),
     }
@@ -1055,20 +1074,33 @@ pub fn keypair_from_seed_phrase(
     derivation_path: Option<DerivationPath>,
     legacy: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
-    let seed_phrase = prompt_password(format!("[{}] seed phrase: ", keypair_name))?;
+    let keypair: Keypair =
+        encodable_key_from_seed_phrase(keypair_name, skip_validation, derivation_path, legacy)?;
+    if confirm_pubkey {
+        confirm_keypair_pubkey(&keypair);
+    }
+    Ok(keypair)
+}
+
+fn encodable_key_from_seed_phrase<K: EncodableKey>(
+    key_name: &str,
+    skip_validation: bool,
+    derivation_path: Option<DerivationPath>,
+    legacy: bool,
+) -> Result<K, Box<dyn error::Error>> {
+    let seed_phrase = prompt_password(format!("[{key_name}] seed phrase: "))?;
     let seed_phrase = seed_phrase.trim();
     let passphrase_prompt = format!(
-        "[{}] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue: ",
-        keypair_name,
+        "[{key_name}] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue: ",
     );
 
-    let keypair = if skip_validation {
+    let key = if skip_validation {
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         if legacy {
-            keypair_from_seed_phrase_and_passphrase(seed_phrase, &passphrase)?
+            K::from_seed_phrase_and_passphrase(seed_phrase, &passphrase)?
         } else {
             let seed = generate_seed_from_seed_phrase_and_passphrase(seed_phrase, &passphrase);
-            keypair_from_seed_and_derivation_path(&seed, derivation_path)?
+            K::from_seed_and_derivation_path(&seed, derivation_path)?
         }
     } else {
         let sanitized = sanitize_seed_phrase(seed_phrase);
@@ -1093,25 +1125,12 @@ pub fn keypair_from_seed_phrase(
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         let seed = Seed::new(&mnemonic, &passphrase);
         if legacy {
-            keypair_from_seed(seed.as_bytes())?
+            K::from_seed(seed.as_bytes())?
         } else {
-            keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?
+            K::from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?
         }
     };
-
-    if confirm_pubkey {
-        let pubkey = keypair.pubkey();
-        print!("Recovered pubkey `{:?}`. Continue? (y/n): ", pubkey);
-        let _ignored = stdout().flush();
-        let mut input = String::new();
-        stdin().read_line(&mut input).expect("Unexpected input");
-        if input.to_lowercase().trim() != "y" {
-            println!("Exiting");
-            exit(1);
-        }
-    }
-
-    Ok(keypair)
+    Ok(key)
 }
 
 fn sanitize_seed_phrase(seed_phrase: &str) -> String {
@@ -1275,14 +1294,14 @@ mod tests {
             }
         ));
         assert!(
-            matches!(parse_signer_source(format!("file:{}", absolute_path_str)).unwrap(), SignerSource {
+            matches!(parse_signer_source(format!("file:{absolute_path_str}")).unwrap(), SignerSource {
                 kind: SignerSourceKind::Filepath(p),
                 derivation_path: None,
                 legacy: false,
             } if p == absolute_path_str)
         );
         assert!(
-            matches!(parse_signer_source(format!("file:{}", relative_path_str)).unwrap(), SignerSource {
+            matches!(parse_signer_source(format!("file:{relative_path_str}")).unwrap(), SignerSource {
                 kind: SignerSourceKind::Filepath(p),
                 derivation_path: None,
                 legacy: false,

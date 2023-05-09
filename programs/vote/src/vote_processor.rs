@@ -1,20 +1,19 @@
 //! Vote program processor
 
 use {
-    crate::vote_state,
+    crate::{vote_error::VoteError, vote_state},
     log::*,
     solana_program::vote::{instruction::VoteInstruction, program::id, state::VoteAuthorize},
     solana_program_runtime::{
-        invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
+        declare_process_instruction, invoke_context::InvokeContext,
+        sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        transaction_context::{
-            BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
-        },
+        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
     },
     std::collections::HashSet,
 };
@@ -57,10 +56,9 @@ fn process_authorize_with_seed_instruction(
     )
 }
 
-pub fn process_instruction(
-    _first_instruction_account: IndexOfAccount,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+// Citing `runtime/src/block_cost_limit.rs`, vote has statically defined 2100
+// units; can consume based on instructions in the future like `bpf_loader` does.
+declare_process_instruction!(process_instruction, 2100, |invoke_context| {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
@@ -81,7 +79,13 @@ pub fn process_instruction(
             }
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-            vote_state::initialize_account(&mut me, &vote_init, &signers, &clock)
+            vote_state::initialize_account(
+                &mut me,
+                &vote_init,
+                &signers,
+                &clock,
+                &invoke_context.feature_set,
+            )
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
             let clock =
@@ -132,10 +136,30 @@ pub fn process_instruction(
             let node_pubkey = transaction_context.get_key_of_account_at_index(
                 instruction_context.get_index_of_instruction_account_in_transaction(1)?,
             )?;
-            vote_state::update_validator_identity(&mut me, node_pubkey, &signers)
+            vote_state::update_validator_identity(
+                &mut me,
+                node_pubkey,
+                &signers,
+                &invoke_context.feature_set,
+            )
         }
         VoteInstruction::UpdateCommission(commission) => {
-            vote_state::update_commission(&mut me, commission, &signers)
+            if invoke_context.feature_set.is_active(
+                &feature_set::commission_updates_only_allowed_in_first_half_of_epoch::id(),
+            ) {
+                let sysvar_cache = invoke_context.get_sysvar_cache();
+                let epoch_schedule = sysvar_cache.get_epoch_schedule()?;
+                let clock = sysvar_cache.get_clock()?;
+                if !vote_state::is_commission_update_allowed(clock.slot, &epoch_schedule) {
+                    return Err(VoteError::CommissionUpdateTooLate.into());
+                }
+            }
+            vote_state::update_commission(
+                &mut me,
+                commission,
+                &signers,
+                &invoke_context.feature_set,
+            )
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             let slot_hashes =
@@ -220,6 +244,7 @@ pub fn process_instruction(
                 &signers,
                 &rent_sysvar,
                 clock_if_feature_active.as_deref(),
+                &invoke_context.feature_set,
             )
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
@@ -249,7 +274,7 @@ pub fn process_instruction(
             }
         }
     }
-}
+});
 
 #[cfg(test)]
 mod tests {
@@ -258,9 +283,9 @@ mod tests {
         crate::{
             vote_error::VoteError,
             vote_instruction::{
-                authorize, authorize_checked, create_account, update_commission,
+                authorize, authorize_checked, create_account_with_config, update_commission,
                 update_validator_identity, update_vote_state, update_vote_state_switch, vote,
-                vote_switch, withdraw, VoteInstruction,
+                vote_switch, withdraw, CreateVoteAccountConfig, VoteInstruction,
             },
             vote_state::{
                 self, Lockout, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
@@ -276,7 +301,10 @@ mod tests {
             hash::Hash,
             instruction::{AccountMeta, Instruction},
             pubkey::Pubkey,
-            sysvar::{self, clock::Clock, rent::Rent, slot_hashes::SlotHashes},
+            sysvar::{
+                self, clock::Clock, epoch_schedule::EpochSchedule, rent::Rent,
+                slot_hashes::SlotHashes,
+            },
         },
         std::{collections::HashSet, str::FromStr},
     };
@@ -308,10 +336,10 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            None,
             expected_result,
             super::process_instruction,
+            |_invoke_context| {},
+            |_invoke_context| {},
         )
     }
 
@@ -327,10 +355,12 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
-            None,
-            Some(std::sync::Arc::new(FeatureSet::default())),
             expected_result,
             super::process_instruction,
+            |invoke_context| {
+                invoke_context.feature_set = std::sync::Arc::new(FeatureSet::default());
+            },
+            |_invoke_context| {},
         )
     }
 
@@ -344,6 +374,7 @@ mod tests {
             .map(|meta| meta.pubkey)
             .collect();
         pubkeys.insert(sysvar::clock::id());
+        pubkeys.insert(sysvar::epoch_schedule::id());
         pubkeys.insert(sysvar::rent::id());
         pubkeys.insert(sysvar::slot_hashes::id());
         let transaction_accounts: Vec<_> = pubkeys
@@ -353,6 +384,10 @@ mod tests {
                     *pubkey,
                     if sysvar::clock::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&Clock::default())
+                    } else if sysvar::epoch_schedule::check_id(pubkey) {
+                        account::create_account_shared_data_for_test(
+                            &EpochSchedule::without_warmup(),
+                        )
                     } else if sysvar::slot_hashes::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&SlotHashes::default())
                     } else if sysvar::rent::check_id(pubkey) {
@@ -465,10 +500,10 @@ mod tests {
         vote_state.authorized_withdrawer = vote_pubkey;
         vote_state.epoch_credits = Vec::new();
 
-        let mut current_epoch_credits = 0;
+        let mut current_epoch_credits: u64 = 0;
         let mut previous_epoch_credits = 0;
         for (epoch, credits) in credits_to_append.iter().enumerate() {
-            current_epoch_credits += credits;
+            current_epoch_credits = current_epoch_credits.saturating_add(*credits);
             vote_state.epoch_credits.push((
                 u64::try_from(epoch).unwrap(),
                 current_epoch_credits,
@@ -667,6 +702,15 @@ mod tests {
         let transaction_accounts = vec![
             (vote_pubkey, vote_account),
             (authorized_withdrawer, AccountSharedData::default()),
+            // Add the sysvar accounts so they're in the cache for mock processing
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&Clock::default()),
+            ),
+            (
+                sysvar::epoch_schedule::id(),
+                account::create_account_shared_data_for_test(&EpochSchedule::without_warmup()),
+            ),
         ];
         let mut instruction_accounts = vec![
             AccountMeta {
@@ -771,7 +815,9 @@ mod tests {
             .convert_to_current();
         assert_eq!(
             vote_state.votes,
-            vec![Lockout::new(*vote.slots.last().unwrap())]
+            vec![vote_state::LandedVote::from(Lockout::new(
+                *vote.slots.last().unwrap()
+            ))]
         );
         assert_eq!(vote_state.credits(), 0);
 
@@ -1750,14 +1796,112 @@ mod tests {
     }
 
     #[test]
+    fn test_create_account_vote_state_1_14_11() {
+        let node_pubkey = Pubkey::new_unique();
+        let vote_pubkey = Pubkey::new_unique();
+        let instructions = create_account_with_config(
+            &node_pubkey,
+            &vote_pubkey,
+            &VoteInit {
+                node_pubkey,
+                authorized_voter: vote_pubkey,
+                authorized_withdrawer: vote_pubkey,
+                commission: 0,
+            },
+            101,
+            CreateVoteAccountConfig::default(),
+        );
+        // grab the `space` value from SystemInstruction::CreateAccount by directly indexing, for
+        // expediency
+        let space = usize::from_le_bytes(instructions[0].data[12..20].try_into().unwrap());
+        assert_eq!(space, vote_state::VoteState1_14_11::size_of());
+        let empty_vote_account = AccountSharedData::new(101, space, &id());
+
+        let transaction_accounts = vec![
+            (vote_pubkey, empty_vote_account),
+            (node_pubkey, AccountSharedData::default()),
+            (sysvar::clock::id(), create_default_clock_account()),
+            (sysvar::rent::id(), create_default_rent_account()),
+        ];
+
+        // should succeed when vote_state_add_vote_latency is disabled
+        process_instruction_disabled_features(
+            &instructions[1].data,
+            transaction_accounts.clone(),
+            instructions[1].accounts.clone(),
+            Ok(()),
+        );
+
+        // should fail, if vote_state_add_vote_latency is enabled
+        process_instruction(
+            &instructions[1].data,
+            transaction_accounts,
+            instructions[1].accounts.clone(),
+            Err(InstructionError::InvalidAccountData),
+        );
+    }
+
+    #[test]
+    fn test_create_account_vote_state_current() {
+        let node_pubkey = Pubkey::new_unique();
+        let vote_pubkey = Pubkey::new_unique();
+        let instructions = create_account_with_config(
+            &node_pubkey,
+            &vote_pubkey,
+            &VoteInit {
+                node_pubkey,
+                authorized_voter: vote_pubkey,
+                authorized_withdrawer: vote_pubkey,
+                commission: 0,
+            },
+            101,
+            CreateVoteAccountConfig {
+                space: vote_state::VoteState::size_of() as u64,
+                ..CreateVoteAccountConfig::default()
+            },
+        );
+        // grab the `space` value from SystemInstruction::CreateAccount by directly indexing, for
+        // expediency
+        let space = usize::from_le_bytes(instructions[0].data[12..20].try_into().unwrap());
+        assert_eq!(space, vote_state::VoteState::size_of());
+        let empty_vote_account = AccountSharedData::new(101, space, &id());
+
+        let transaction_accounts = vec![
+            (vote_pubkey, empty_vote_account),
+            (node_pubkey, AccountSharedData::default()),
+            (sysvar::clock::id(), create_default_clock_account()),
+            (sysvar::rent::id(), create_default_rent_account()),
+        ];
+
+        // should fail, if vote_state_add_vote_latency is disabled
+        process_instruction_disabled_features(
+            &instructions[1].data,
+            transaction_accounts.clone(),
+            instructions[1].accounts.clone(),
+            Err(InstructionError::InvalidAccountData),
+        );
+
+        // succeeds, since vote_state_add_vote_latency is enabled
+        process_instruction(
+            &instructions[1].data,
+            transaction_accounts,
+            instructions[1].accounts.clone(),
+            Ok(()),
+        );
+    }
+
+    #[test]
     fn test_vote_process_instruction() {
         solana_logger::setup();
-        let instructions = create_account(
+        let instructions = create_account_with_config(
             &Pubkey::new_unique(),
             &Pubkey::new_unique(),
             &VoteInit::default(),
             101,
+            CreateVoteAccountConfig::default(),
         );
+        // this case fails regardless of CreateVoteAccountConfig::space, because
+        // process_instruction_as_one_arg passes a default (empty) account
         process_instruction_as_one_arg(&instructions[1], Err(InstructionError::InvalidAccountData));
         process_instruction_as_one_arg(
             &vote(

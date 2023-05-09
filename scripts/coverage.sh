@@ -68,18 +68,14 @@ if [[ -n $CI || -z $1 ]]; then
     $(git grep -l "proc-macro.*true" :**/Cargo.toml | sed 's|Cargo.toml|src/lib.rs|')
 fi
 
-# limit jobs to 4gb/thread
-if [[ -f "/proc/meminfo" ]]; then
-  JOBS=$(grep MemTotal /proc/meminfo | awk '{printf "%.0f", ($2 / (4 * 1024 * 1024))}')
-else
-  JOBS=$(sysctl hw.memsize | awk '{printf "%.0f", ($2 / (4 * 1024**3))}')
-fi
+#shellcheck source=ci/common/limit-threads.sh
+source ci/common/limit-threads.sh
 
-NPROC=$(nproc)
-JOBS=$((JOBS>NPROC ? NPROC : JOBS))
+_ "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov --no-run "${packages[@]}"
 
-RUST_LOG=solana=trace _ "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov --no-run "${packages[@]}"
-if RUST_LOG=solana=trace _ "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- --nocapture 2> >(tee target/cov/coverage-stderr.log >&2); then
+# most verbose log level (trace) is enabled for all solana code to make log!
+# macro code green always
+if RUST_LOG=solana=trace _ ci/intercept.sh "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- --nocapture; then
   test_status=0
 else
   test_status=$?

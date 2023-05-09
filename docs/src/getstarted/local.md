@@ -1,7 +1,16 @@
 ---
 title: "Local Development Quickstart"
 description: "This quickstart guide will demonstrate how to quickly install and setup your local Solana development environment."
-keywords: "rust, cargo, toml, program, tutorial, intro to solana development, blockchain developer, blockchain tutorial, web3 developer"
+keywords:
+  - rust
+  - cargo
+  - toml
+  - program
+  - tutorial
+  - intro to solana development
+  - blockchain developer
+  - blockchain tutorial
+  - web3 developer
 ---
 
 This quickstart guide will demonstrate how to quickly install and setup your local development environment, getting you ready to start developing and deploying Solana programs to the blockchain.
@@ -59,7 +68,7 @@ By default, the `solana-keygen` command will create a new file system wallet loc
 > **NOTE:**
 > If you already have a file system wallet saved at the default location, this command will **NOT** override it (unless you explicitly force override using the `--force` flag).
 
-#### Set your new wallet as default
+### Set your new wallet as default
 
 With your new file system wallet created, you must tell the Solana CLI to use this wallet to deploy and take ownership of your on chain program:
 

@@ -24,7 +24,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
     const NUM_FORKS: u64 = 16;
 
     let mut reclaims = vec![];
-    let index = AccountsIndex::<AccountInfo>::new(
+    let index = AccountsIndex::<AccountInfo, AccountInfo>::new(
         Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
         &Arc::default(),
     );
@@ -60,7 +60,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
             );
             reclaims.clear();
         }
-        index.add_root(root, false);
+        index.add_root(root);
         root += 1;
         fork += 1;
     });

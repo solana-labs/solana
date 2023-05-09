@@ -332,6 +332,7 @@ impl SendTransactionService {
         connection_cache: &Arc<ConnectionCache>,
         retry_rate_ms: u64,
         leader_forward_count: u64,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         let config = Config {
             retry_rate_ms,
@@ -345,6 +346,7 @@ impl SendTransactionService {
             receiver,
             connection_cache,
             config,
+            exit,
         )
     }
 
@@ -355,6 +357,7 @@ impl SendTransactionService {
         receiver: Receiver<TransactionInfo>,
         connection_cache: &Arc<ConnectionCache>,
         config: Config,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         let stats_report = Arc::new(SendTransactionServiceStatsReport::default());
 
@@ -362,7 +365,6 @@ impl SendTransactionService {
 
         let leader_info_provider = Arc::new(Mutex::new(CurrentLeaderInfo::new(leader_info)));
 
-        let exit = Arc::new(AtomicBool::new(false));
         let receive_txn_thread = Self::receive_txn_thread(
             tpu_address,
             receiver,
@@ -706,7 +708,7 @@ impl SendTransactionService {
         connection_cache: &Arc<ConnectionCache>,
     ) -> Result<(), TransportError> {
         let conn = connection_cache.get_connection(tpu_address);
-        conn.send_wire_transaction_async(wire_transaction.to_vec())
+        conn.send_data_async(wire_transaction.to_vec())
     }
 
     fn send_transactions_with_metrics(
@@ -716,7 +718,7 @@ impl SendTransactionService {
     ) -> Result<(), TransportError> {
         let wire_transactions = wire_transactions.iter().map(|t| t.to_vec()).collect();
         let conn = connection_cache.get_connection(tpu_address);
-        conn.send_wire_transaction_batch_async(wire_transactions)
+        conn.send_data_batch_async(wire_transactions)
     }
 
     fn send_transactions(
@@ -776,7 +778,7 @@ mod test {
     use {
         super::*,
         crate::tpu_info::NullTpuInfo,
-        crossbeam_channel::unbounded,
+        crossbeam_channel::{bounded, unbounded},
         solana_sdk::{
             account::AccountSharedData,
             genesis_config::create_genesis_config,
@@ -796,7 +798,7 @@ mod test {
         let (sender, receiver) = unbounded();
 
         let connection_cache = Arc::new(ConnectionCache::default());
-        let send_tranaction_service = SendTransactionService::new::<NullTpuInfo>(
+        let send_transaction_service = SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,
             None,
@@ -804,10 +806,53 @@ mod test {
             &connection_cache,
             1000,
             1,
+            Arc::new(AtomicBool::new(false)),
         );
 
         drop(sender);
-        send_tranaction_service.join().unwrap();
+        send_transaction_service.join().unwrap();
+    }
+
+    #[test]
+    fn validator_exit() {
+        let tpu_address = "127.0.0.1:0".parse().unwrap();
+        let bank = Bank::default_for_tests();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let (sender, receiver) = bounded(0);
+
+        let dummy_tx_info = || TransactionInfo {
+            signature: Signature::default(),
+            wire_transaction: vec![0; 128],
+            last_valid_block_height: 0,
+            durable_nonce_info: None,
+            max_retries: None,
+            retries: 0,
+            last_sent_time: None,
+        };
+
+        let exit = Arc::new(AtomicBool::new(false));
+        let connection_cache = Arc::new(ConnectionCache::default());
+        let _send_transaction_service = SendTransactionService::new::<NullTpuInfo>(
+            tpu_address,
+            &bank_forks,
+            None,
+            receiver,
+            &connection_cache,
+            1000,
+            1,
+            exit.clone(),
+        );
+
+        sender.send(dummy_tx_info()).unwrap();
+
+        thread::spawn(move || {
+            exit.store(true, Ordering::Relaxed);
+        });
+
+        let mut option = Ok(());
+        while option.is_ok() {
+            option = sender.send(dummy_tx_info());
+        }
     }
 
     #[test]

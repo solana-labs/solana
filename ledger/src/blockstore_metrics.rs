@@ -240,7 +240,7 @@ pub struct BlockstoreRocksDbColumnFamilyMetrics {
 
 impl BlockstoreRocksDbColumnFamilyMetrics {
     /// Report metrics with the specified metric name and column family tag.
-    /// The metric name and the column family tag is embeded in the parameter
+    /// The metric name and the column family tag is embedded in the parameter
     /// `metric_name_and_cf_tag` with the following format.
     ///
     /// For example, "blockstore_rocksdb_cfs,cf_name=shred_data".

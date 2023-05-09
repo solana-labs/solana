@@ -5,7 +5,7 @@ use {
         derivation_path::DerivationPath,
         pubkey::Pubkey,
         signature::Signature,
-        signer::{Signer, SignerError},
+        signer::{EncodableKey, Signer, SignerError},
     },
     ed25519_dalek::Signer as DalekSigner,
     ed25519_dalek_bip32::Error as Bip32Error,
@@ -13,7 +13,6 @@ use {
     rand::{rngs::OsRng, CryptoRng, RngCore},
     std::{
         error,
-        fs::{self, File, OpenOptions},
         io::{Read, Write},
         path::Path,
     },
@@ -70,7 +69,7 @@ impl Keypair {
     /// Note that the `Clone` trait is intentionally unimplemented because making a
     /// second copy of sensitive secret keys in memory is usually a bad idea.
     ///
-    /// Only use this in tests or when strictly required. Consider using Arc<Keypair>
+    /// Only use this in tests or when strictly required. Consider using [`std::sync::Arc<Keypair>`]
     /// instead.
     pub fn insecure_clone(&self) -> Self {
         Self(ed25519_dalek::Keypair {
@@ -82,8 +81,9 @@ impl Keypair {
 }
 
 impl Signer for Keypair {
+    #[inline]
     fn pubkey(&self) -> Pubkey {
-        Pubkey::new(self.0.public.as_ref())
+        Pubkey::from(self.0.public.to_bytes())
     }
 
     fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
@@ -112,6 +112,34 @@ where
     }
 }
 
+impl EncodableKey for Keypair {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+        read_keypair(reader)
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+        write_keypair(self, writer)
+    }
+
+    fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+        keypair_from_seed(seed)
+    }
+
+    fn from_seed_and_derivation_path(
+        seed: &[u8],
+        derivation_path: Option<DerivationPath>,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        keypair_from_seed_and_derivation_path(seed, derivation_path)
+    }
+
+    fn from_seed_phrase_and_passphrase(
+        seed_phrase: &str,
+        passphrase: &str,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        keypair_from_seed_phrase_and_passphrase(seed_phrase, passphrase)
+    }
+}
+
 /// Reads a JSON-encoded `Keypair` from a `Reader` implementor
 pub fn read_keypair<R: Read>(reader: &mut R) -> Result<Keypair, Box<dyn error::Error>> {
     let bytes: Vec<u8> = serde_json::from_reader(reader)?;
@@ -122,8 +150,7 @@ pub fn read_keypair<R: Read>(reader: &mut R) -> Result<Keypair, Box<dyn error::E
 
 /// Reads a `Keypair` from a file
 pub fn read_keypair_file<F: AsRef<Path>>(path: F) -> Result<Keypair, Box<dyn error::Error>> {
-    let mut file = File::open(path.as_ref())?;
-    read_keypair(&mut file)
+    Keypair::read_from_file(path)
 }
 
 /// Writes a `Keypair` to a `Write` implementor with JSON-encoding
@@ -142,29 +169,7 @@ pub fn write_keypair_file<F: AsRef<Path>>(
     keypair: &Keypair,
     outfile: F,
 ) -> Result<String, Box<dyn error::Error>> {
-    let outfile = outfile.as_ref();
-
-    if let Some(outdir) = outfile.parent() {
-        fs::create_dir_all(outdir)?;
-    }
-
-    let mut f = {
-        #[cfg(not(unix))]
-        {
-            OpenOptions::new()
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            OpenOptions::new().mode(0o600)
-        }
-    }
-    .write(true)
-    .truncate(true)
-    .create(true)
-    .open(outfile)?;
-
-    write_keypair(keypair, &mut f)
+    keypair.write_to_file(outfile)
 }
 
 /// Constructs a `Keypair` from caller-provided seed entropy
@@ -210,7 +215,7 @@ pub fn generate_seed_from_seed_phrase_and_passphrase(
     const PBKDF2_ROUNDS: u32 = 2048;
     const PBKDF2_BYTES: usize = 64;
 
-    let salt = format!("mnemonic{}", passphrase);
+    let salt = format!("mnemonic{passphrase}");
 
     let mut seed = vec![0u8; PBKDF2_BYTES];
     pbkdf2::pbkdf2::<Hmac<sha2::Sha512>>(
@@ -237,7 +242,10 @@ mod tests {
     use {
         super::*,
         bip39::{Language, Mnemonic, MnemonicType, Seed},
-        std::mem,
+        std::{
+            fs::{self, File},
+            mem,
+        },
     };
 
     fn tmp_file_path(name: &str) -> String {

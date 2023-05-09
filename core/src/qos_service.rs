@@ -4,13 +4,12 @@
 //!
 
 use {
-    crate::banking_stage::{BatchedTransactionDetails, CommitTransactionDetails},
+    crate::banking_stage::{committer::CommitTransactionDetails, BatchedTransactionDetails},
     crossbeam_channel::{unbounded, Receiver, Sender},
     solana_measure::measure::Measure,
     solana_runtime::{
         bank::Bank,
         cost_model::{CostModel, TransactionCost},
-        cost_tracker::CostTrackerError,
     },
     solana_sdk::{
         clock::Slot,
@@ -29,14 +28,14 @@ use {
 };
 
 pub enum QosMetrics {
-    BlockBatchUpdate { bank: Arc<Bank> },
+    BlockBatchUpdate { slot: Slot },
 }
 
 // QosService is local to each banking thread, each instance of QosService provides services to
 // one banking thread.
-// It hosts a private thread for async metrics reporting, tagged with banking thredas ID. Banking
-// threda calls `report_metrics(&bank)` at end of `process_and_record_tramsaction()`, or any time
-// it wants, QosService sends `&bank` to reporting thread via channel, signalling stats to be
+// It hosts a private thread for async metrics reporting, tagged with banking threads ID. Banking
+// thread calls `report_metrics(slot)` at end of `process_and_record_tramsaction()`, or any time
+// it wants, QosService sends `slot` to reporting thread via channel, signalling stats to be
 // reported if new bank slot has changed.
 //
 pub struct QosService {
@@ -166,23 +165,7 @@ impl QosService {
                 },
                 Err(e) => {
                     debug!("slot {:?}, transaction {:?}, cost {:?}, not fit into current block, '{:?}'", bank.slot(), tx, cost, e);
-                    match e {
-                        CostTrackerError::WouldExceedBlockMaxLimit => {
-                            Err(TransactionError::WouldExceedMaxBlockCostLimit)
-                        }
-                        CostTrackerError::WouldExceedVoteMaxLimit => {
-                            Err(TransactionError::WouldExceedMaxVoteCostLimit)
-                        }
-                        CostTrackerError::WouldExceedAccountMaxLimit => {
-                            Err(TransactionError::WouldExceedMaxAccountCostLimit)
-                        }
-                        CostTrackerError::WouldExceedAccountDataBlockLimit => {
-                            Err(TransactionError::WouldExceedAccountDataBlockLimit)
-                        }
-                        CostTrackerError::WouldExceedAccountDataTotalLimit => {
-                            Err(TransactionError::WouldExceedAccountDataTotalLimit)
-                        }
-                    }
+                    Err(TransactionError::from(e))
                 }
             })
             .collect();
@@ -261,9 +244,9 @@ impl QosService {
     }
 
     // metrics are reported by bank slot
-    pub fn report_metrics(&self, bank: Arc<Bank>) {
+    pub fn report_metrics(&self, slot: Slot) {
         self.report_sender
-            .send(QosMetrics::BlockBatchUpdate { bank })
+            .send(QosMetrics::BlockBatchUpdate { slot })
             .unwrap_or_else(|err| warn!("qos service report metrics failed: {:?}", err));
     }
 
@@ -444,8 +427,8 @@ impl QosService {
         while running_flag.load(Ordering::Relaxed) {
             for qos_metrics in report_receiver.try_iter() {
                 match qos_metrics {
-                    QosMetrics::BlockBatchUpdate { bank } => {
-                        metrics.report(bank.slot());
+                    QosMetrics::BlockBatchUpdate { slot: bank_slot } => {
+                        metrics.report(bank_slot);
                     }
                 }
             }

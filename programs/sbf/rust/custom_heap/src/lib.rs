@@ -1,5 +1,7 @@
 //! Example Rust-based SBF that tests out using a custom heap
 
+#![allow(clippy::integer_arithmetic)]
+
 use {
     solana_program::{
         account_info::AccountInfo,
@@ -22,7 +24,7 @@ struct BumpAllocator;
 unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if layout.size() == usize::MAX - 0x42 {
+        if layout.size() == isize::MAX as usize - 0x42 {
             // Return test value
             0x42 as *mut u8
         } else {
@@ -62,7 +64,7 @@ pub fn process_instruction(
 ) -> ProgramResult {
     msg!("Custom heap");
     unsafe {
-        let layout = Layout::from_size_align(usize::MAX - 0x42, align_of::<u8>()).unwrap();
+        let layout = Layout::from_size_align(isize::MAX as usize - 0x42, align_of::<u8>()).unwrap();
         let ptr = alloc(layout);
         assert_eq!(ptr as u64, 0x42);
     }

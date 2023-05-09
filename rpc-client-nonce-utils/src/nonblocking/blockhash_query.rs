@@ -97,7 +97,7 @@ impl BlockhashQuery {
                     .is_blockhash_valid(rpc_client, hash, commitment)
                     .await?
                 {
-                    return Err(format!("Hash has expired {:?}", hash).into());
+                    return Err(format!("Hash has expired {hash:?}").into());
                 }
                 Ok(*hash)
             }
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn test_blockhash_query_new_ok() {
         let blockhash = hash(&[1u8]);
-        let nonce_pubkey = Pubkey::new(&[1u8; 32]);
+        let nonce_pubkey = Pubkey::from([1u8; 32]);
 
         assert_eq!(
             BlockhashQuery::new(Some(blockhash), true, None),
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_blockhash_query_new_nonce_fail() {
-        let nonce_pubkey = Pubkey::new(&[1u8; 32]);
+        let nonce_pubkey = Pubkey::from([1u8; 32]);
         BlockhashQuery::new(None, true, Some(nonce_pubkey));
     }
 
@@ -219,7 +219,7 @@ mod tests {
             BlockhashQuery::Rpc(blockhash_query::Source::Cluster),
         );
 
-        let nonce_pubkey = Pubkey::new(&[1u8; 32]);
+        let nonce_pubkey = Pubkey::from([1u8; 32]);
         let nonce_string = nonce_pubkey.to_string();
         let matches = test_commands.clone().get_matches_from(vec![
             "blockhash_query_test",
@@ -259,9 +259,7 @@ mod tests {
             // are broken, so unset the requires() to recreate that condition
             .arg(sign_only_arg().requires(""));
 
-        let matches = test_commands
-            .clone()
-            .get_matches_from(vec!["blockhash_query_test", "--sign-only"]);
+        let matches = test_commands.get_matches_from(vec!["blockhash_query_test", "--sign-only"]);
         BlockhashQuery::new_from_matches(&matches);
     }
 
@@ -273,10 +271,10 @@ mod tests {
             // We can really only hit this case if the arg requirements
             // are broken, so unset the requires() to recreate that condition
             .arg(sign_only_arg().requires(""));
-        let nonce_pubkey = Pubkey::new(&[1u8; 32]);
+        let nonce_pubkey = Pubkey::from([1u8; 32]);
         let nonce_string = nonce_pubkey.to_string();
 
-        let matches = test_commands.clone().get_matches_from(vec![
+        let matches = test_commands.get_matches_from(vec![
             "blockhash_query_test",
             "--sign-only",
             "--nonce",
@@ -365,7 +363,7 @@ mod tests {
         let nonce_blockhash = *durable_nonce.as_hash();
         let nonce_fee_calc = FeeCalculator::new(4242);
         let data = nonce::state::Data {
-            authority: Pubkey::new(&[3u8; 32]),
+            authority: Pubkey::from([3u8; 32]),
             durable_nonce,
             fee_calculator: nonce_fee_calc,
         };
@@ -376,7 +374,7 @@ mod tests {
             &system_program::id(),
         )
         .unwrap();
-        let nonce_pubkey = Pubkey::new(&[4u8; 32]);
+        let nonce_pubkey = Pubkey::from([4u8; 32]);
         let rpc_nonce_account = UiAccount::encode(
             &nonce_pubkey,
             &nonce_account,

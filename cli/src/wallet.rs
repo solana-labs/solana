@@ -10,9 +10,11 @@ use {
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     },
     clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand},
+    hex::FromHex,
     solana_clap_utils::{
         compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         fee_payer::*,
+        hidden_unless_forced,
         input_parsers::*,
         input_validators::*,
         keypair::{DefaultSigner, SignerIndex},
@@ -22,8 +24,9 @@ use {
     },
     solana_cli_output::{
         display::{build_balance_message, BuildBalanceMessageConfig},
-        return_signers_with_config, CliAccount, CliBalance, CliSignatureVerificationStatus,
-        CliTransaction, CliTransactionConfirmation, OutputFormat, ReturnSignersConfig,
+        return_signers_with_config, CliAccount, CliBalance, CliFindProgramDerivedAddress,
+        CliSignatureVerificationStatus, CliTransaction, CliTransactionConfirmation, OutputFormat,
+        ReturnSignersConfig,
     },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
@@ -44,7 +47,7 @@ use {
         EncodableWithMeta, EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction,
         TransactionBinaryEncoding, UiTransactionEncoding,
     },
-    std::{fmt::Write as FmtWrite, fs::File, io::Write, sync::Arc},
+    std::{fmt::Write as FmtWrite, fs::File, io::Write, str::FromStr, sync::Arc},
 };
 
 pub trait WalletSubCommands {
@@ -149,7 +152,10 @@ impl WalletSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("create-address-with-seed")
-                .about("Generate a derived account address with a seed")
+                .about(
+                    "Generate a derived account address with a seed. \
+                    For program derived addresses (PDAs), use the find-program-derived-address command instead"
+                )
                 .arg(
                     Arg::with_name("seed")
                         .index(1)
@@ -178,6 +184,37 @@ impl WalletSubCommands for App<'_, '_> {
                         "From (base) key, [default: cli config keypair]. "),
                 ),
         )
+            .subcommand(
+                SubCommand::with_name("find-program-derived-address")
+                    .about("Generate a program derived account address with a seed")
+                    .arg(
+                        Arg::with_name("program_id")
+                                .index(1)
+                                .value_name("PROGRAM_ID")
+                                .takes_value(true)
+                                .required(true)
+                                .help(
+                                    "The program_id that the address will ultimately be used for, \n\
+                                    or one of NONCE, STAKE, and VOTE keywords",
+                                ),
+                        )
+                    .arg(
+                        Arg::with_name("seeds")
+                            .min_values(0)
+                            .value_name("SEED")
+                            .takes_value(true)
+                            .validator(is_structured_seed)
+                            .help(
+                                "The seeds. \n\
+                                Each one must match the pattern PREFIX:VALUE. \n\
+                                PREFIX can be one of [string, pubkey, hex, u8] \n\
+                                or matches the pattern [u,i][16,32,64,128][le,be] (for example u64le) for number values \n\
+                                [u,i] - represents whether the number is unsigned or signed, \n\
+                                [16,32,64,128] - represents the bit length, and \n\
+                                [le,be] - represents the byte order - little endian or big endian"
+                            ),
+                    ),
+            )
         .subcommand(
             SubCommand::with_name("decode-transaction")
                 .about("Decode a serialized transaction")
@@ -252,7 +289,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .value_name("SEED_STRING")
                         .requires("derived_address_program_id")
                         .validator(is_derived_address_seed)
-                        .hidden(true)
+                        .hidden(hidden_unless_forced())
                 )
                 .arg(
                     Arg::with_name("derived_address_program_id")
@@ -260,7 +297,7 @@ impl WalletSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .value_name("PROGRAM_ID")
                         .requires("derived_address_seed")
-                        .hidden(true)
+                        .hidden(hidden_unless_forced())
                 )
                 .arg(
                     Arg::with_name("allow_unfunded_recipient")
@@ -456,6 +493,52 @@ pub fn parse_create_address_with_seed(
     })
 }
 
+pub fn parse_find_program_derived_address(
+    matches: &ArgMatches<'_>,
+) -> Result<CliCommandInfo, CliError> {
+    let program_id = resolve_derived_address_program_id(matches, "program_id")
+        .ok_or_else(|| CliError::BadParameter("PROGRAM_ID".to_string()))?;
+    let seeds = matches
+        .values_of("seeds")
+        .map(|seeds| {
+            seeds
+                .map(|value| {
+                    let (prefix, value) = value.split_once(':').unwrap();
+                    match prefix {
+                        "pubkey" => Pubkey::from_str(value).unwrap().to_bytes().to_vec(),
+                        "string" => value.as_bytes().to_vec(),
+                        "hex" => Vec::<u8>::from_hex(value).unwrap(),
+                        "u8" => u8::from_str(value).unwrap().to_le_bytes().to_vec(),
+                        "u16le" => u16::from_str(value).unwrap().to_le_bytes().to_vec(),
+                        "u32le" => u32::from_str(value).unwrap().to_le_bytes().to_vec(),
+                        "u64le" => u64::from_str(value).unwrap().to_le_bytes().to_vec(),
+                        "u128le" => u128::from_str(value).unwrap().to_le_bytes().to_vec(),
+                        "i16le" => i16::from_str(value).unwrap().to_le_bytes().to_vec(),
+                        "i32le" => i32::from_str(value).unwrap().to_le_bytes().to_vec(),
+                        "i64le" => i64::from_str(value).unwrap().to_le_bytes().to_vec(),
+                        "i128le" => i128::from_str(value).unwrap().to_le_bytes().to_vec(),
+                        "u16be" => u16::from_str(value).unwrap().to_be_bytes().to_vec(),
+                        "u32be" => u32::from_str(value).unwrap().to_be_bytes().to_vec(),
+                        "u64be" => u64::from_str(value).unwrap().to_be_bytes().to_vec(),
+                        "u128be" => u128::from_str(value).unwrap().to_be_bytes().to_vec(),
+                        "i16be" => i16::from_str(value).unwrap().to_be_bytes().to_vec(),
+                        "i32be" => i32::from_str(value).unwrap().to_be_bytes().to_vec(),
+                        "i64be" => i64::from_str(value).unwrap().to_be_bytes().to_vec(),
+                        "i128be" => i128::from_str(value).unwrap().to_be_bytes().to_vec(),
+                        // Must be unreachable due to arg validator
+                        _ => unreachable!("parse_find_program_derived_address: {prefix}:{value}"),
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    Ok(CliCommandInfo {
+        command: CliCommand::FindProgramDerivedAddress { seeds, program_id },
+        signers: vec![],
+    })
+}
+
 pub fn parse_transfer(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
@@ -579,7 +662,7 @@ pub fn process_show_account(
                 let mut f = File::create(output_file)?;
                 f.write_all(account_string.as_bytes())?;
                 writeln!(&mut account_string)?;
-                writeln!(&mut account_string, "Wrote account to {}", output_file)?;
+                writeln!(&mut account_string, "Wrote account to {output_file}")?;
             }
         }
         OutputFormat::Display | OutputFormat::DisplayVerbose => {
@@ -587,7 +670,7 @@ pub fn process_show_account(
                 let mut f = File::create(output_file)?;
                 f.write_all(&data)?;
                 writeln!(&mut account_string)?;
-                writeln!(&mut account_string, "Wrote account data to {}", output_file)?;
+                writeln!(&mut account_string, "Wrote account data to {output_file}")?;
             } else if !data.is_empty() {
                 use pretty_hex::*;
                 writeln!(&mut account_string, "{:?}", data.hex_dump())?;
@@ -620,13 +703,13 @@ pub fn process_airdrop(
     let result = request_and_confirm_airdrop(rpc_client, config, &pubkey, lamports);
     if let Ok(signature) = result {
         let signature_cli_message = log_instruction_custom_error::<SystemError>(result, config)?;
-        println!("{}", signature_cli_message);
+        println!("{signature_cli_message}");
 
         let current_balance = rpc_client.get_balance(&pubkey)?;
 
         if current_balance < pre_balance.saturating_add(lamports) {
             println!("Balance unchanged");
-            println!("Run `solana confirm -v {:?}` for more info", signature);
+            println!("Run `solana confirm -v {signature:?}` for more info");
             Ok("".to_string())
         } else {
             Ok(build_balance_message(current_balance, false, true))
@@ -701,7 +784,7 @@ pub fn process_confirm(
                             });
                         }
                         Err(err) => {
-                            get_transaction_error = Some(format!("{:?}", err));
+                            get_transaction_error = Some(format!("{err:?}"));
                         }
                     }
                 }
@@ -721,7 +804,7 @@ pub fn process_confirm(
             };
             Ok(config.output_format.formatted_string(&cli_transaction))
         }
-        Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {}", err)).into()),
+        Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {err}")).into()),
     }
 }
 
@@ -758,6 +841,23 @@ pub fn process_create_address_with_seed(
     Ok(address.to_string())
 }
 
+pub fn process_find_program_derived_address(
+    config: &CliConfig,
+    seeds: &Vec<Vec<u8>>,
+    program_id: &Pubkey,
+) -> ProcessResult {
+    if config.verbose {
+        println!("Seeds: {seeds:?}");
+    }
+    let seeds_slice = seeds.iter().map(|x| &x[..]).collect::<Vec<_>>();
+    let (address, bump_seed) = Pubkey::find_program_address(&seeds_slice[..], program_id);
+    let result = CliFindProgramDerivedAddress {
+        address: address.to_string(),
+        bump_seed,
+    };
+    Ok(config.output_format.formatted_string(&result))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn process_transfer(
     rpc_client: &RpcClient,
@@ -789,10 +889,9 @@ pub fn process_transfer(
             .value;
         if recipient_balance == 0 {
             return Err(format!(
-                "The recipient address ({}) is not funded. \
+                "The recipient address ({to}) is not funded. \
                                 Add `--allow-unfunded-recipient` to complete the transfer \
-                               ",
-                to
+                               "
             )
             .into());
         }

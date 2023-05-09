@@ -1,5 +1,6 @@
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
+    itertools::Itertools,
     solana_perf::packet::PacketBatch,
     solana_runtime::{
         bank::Bank,
@@ -59,9 +60,14 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
 
         // TODO: my_leader_bank.vote_accounts() may not contain zero-staked validators
         // in this epoch, but those validators may have stake warming up in the next epoch
-        let vote_account_keys: Vec<Pubkey> =
-            my_leader_bank.vote_accounts().keys().copied().collect();
-
+        // Sort by stake weight so heavier validators' votes are sent first
+        let vote_account_keys: Vec<Pubkey> = my_leader_bank
+            .vote_accounts()
+            .iter()
+            .map(|(pubkey, &(stake, _))| (pubkey, stake))
+            .sorted_unstable_by_key(|&(_, stake)| std::cmp::Reverse(stake))
+            .map(|(&pubkey, _)| pubkey)
+            .collect();
         Self {
             my_leader_bank,
             slot_hashes,
@@ -107,7 +113,6 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         use SingleValidatorVotes::*;
-        // TODO: Maybe prioritize by stake weight
         while !self.vote_account_keys.is_empty() {
             let vote_account_key = self.vote_account_keys.pop().unwrap();
             // Get all the gossip votes we've queued up for this validator
@@ -487,7 +492,7 @@ mod tests {
     fn test_verified_vote_packets_validator_gossip_votes_iterator_correct_fork() {
         let (s, r) = unbounded();
         let num_validators = 2;
-        let vote_simulator = VoteSimulator::new(2);
+        let vote_simulator = VoteSimulator::new(num_validators);
         let mut my_leader_bank = vote_simulator.bank_forks.read().unwrap().root_bank();
 
         // Create a set of valid ancestor hashes for this fork
@@ -526,11 +531,9 @@ mod tests {
             .receive_and_process_vote_packets(&r, true, None)
             .unwrap();
 
-        // Check we get two batches, one for each validator. Each batch
-        // should only contain a packets structure with the specific number
-        // of packets associated with that batch
-        assert_eq!(verified_vote_packets.0.len(), 2);
-        // Every validator should have `slot_hashes.slot_hashes().len()` votes
+        // One batch of vote packets per validator
+        assert_eq!(verified_vote_packets.0.len(), num_validators);
+        // Each validator should have one vote per slot
         assert!(verified_vote_packets
             .0
             .values()
@@ -544,8 +547,7 @@ mod tests {
         );
 
         // Get and verify batches
-        let num_expected_batches = 2;
-        for _ in 0..num_expected_batches {
+        for _ in 0..num_validators {
             let validator_batch: Vec<PacketBatch> = gossip_votes_iterator.next().unwrap();
             assert_eq!(validator_batch.len(), slot_hashes.slot_hashes().len());
             let expected_len = validator_batch[0].len();
@@ -713,11 +715,9 @@ mod tests {
         // Now send some new votes
         for i in 101..201 {
             let slots = std::iter::zip((i - 30)..(i + 1), (1..32).rev())
-                .map(|(slot, confirmation_count)| Lockout {
-                    slot,
-                    confirmation_count,
+                .map(|(slot, confirmation_count)| {
+                    Lockout::new_with_confirmation_count(slot, confirmation_count)
                 })
-                .into_iter()
                 .collect::<VecDeque<Lockout>>();
             let vote = VoteTransaction::from(VoteStateUpdate::new(
                 slots,

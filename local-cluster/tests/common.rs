@@ -21,7 +21,9 @@ use {
         validator_configs::*,
     },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_runtime::snapshot_config::SnapshotConfig,
+    solana_runtime::{
+        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
+    },
     solana_sdk::{
         account::AccountSharedData,
         clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -34,6 +36,7 @@ use {
     std::{
         collections::HashSet,
         fs, iter,
+        num::NonZeroUsize,
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -63,7 +66,7 @@ pub fn restore_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
         if tower_err.is_file_missing() {
             return None;
         } else {
-            panic!("tower restore failed...: {:?}", tower_err);
+            panic!("tower restore failed...: {tower_err:?}");
         }
     }
     // actually saved tower must have at least one vote.
@@ -98,7 +101,7 @@ pub fn open_blockstore(ledger_path: &Path) -> Blockstore {
             },
         )
         .unwrap_or_else(|e| {
-            panic!("Failed to open ledger at {:?}, err: {}", ledger_path, e);
+            panic!("Failed to open ledger at {ledger_path:?}, err: {e}");
         })
     })
 }
@@ -320,6 +323,7 @@ pub fn run_cluster_partition<C>(
         skip_warmup_slots: true,
         additional_accounts,
         ticks_per_slot: ticks_per_slot.unwrap_or(DEFAULT_TICKS_PER_SLOT),
+        tpu_connection_pool_size: 2,
         ..ClusterConfig::default()
     };
 
@@ -340,7 +344,7 @@ pub fn run_cluster_partition<C>(
     );
 
     let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip,
+        &cluster.entry_point_info.gossip().unwrap(),
         num_nodes,
         SocketAddrSpace::Unspecified,
     )
@@ -349,7 +353,7 @@ pub fn run_cluster_partition<C>(
     // Check epochs have correct number of slots
     info!("PARTITION_TEST sleeping until partition starting condition",);
     for node in &cluster_nodes {
-        let node_client = RpcClient::new_socket(node.rpc);
+        let node_client = RpcClient::new_socket(node.rpc().unwrap());
         let epoch_info = node_client.get_epoch_info().unwrap();
         assert_eq!(epoch_info.slots_in_epoch, slots_per_epoch);
     }
@@ -388,22 +392,34 @@ pub fn test_faulty_node(
 ) -> (LocalCluster, Vec<Arc<Keypair>>) {
     solana_logger::setup_with_default("solana_local_cluster=info");
     let num_nodes = node_stakes.len();
+    let mut validator_keys = Vec::with_capacity(num_nodes);
+    validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
+    assert_eq!(node_stakes.len(), num_nodes);
+    assert_eq!(validator_keys.len(), num_nodes);
+
+    // Use a fixed leader schedule so that only the faulty node gets leader slots.
+    let validator_to_slots = vec![(
+        validator_keys[0].0.as_ref().pubkey(),
+        solana_sdk::clock::DEFAULT_DEV_SLOTS_PER_EPOCH as usize,
+    )];
+    let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
+    let fixed_leader_schedule = Some(FixedSchedule {
+        leader_schedule: Arc::new(leader_schedule),
+    });
 
     let error_validator_config = ValidatorConfig {
         broadcast_stage_type: faulty_node_type,
+        fixed_leader_schedule: fixed_leader_schedule.clone(),
         ..ValidatorConfig::default_for_test()
     };
     let mut validator_configs = Vec::with_capacity(num_nodes);
 
     // First validator is the bootstrap leader with the malicious broadcast logic.
     validator_configs.push(error_validator_config);
-    validator_configs.resize_with(num_nodes, ValidatorConfig::default_for_test);
-
-    let mut validator_keys = Vec::with_capacity(num_nodes);
-    validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
-
-    assert_eq!(node_stakes.len(), num_nodes);
-    assert_eq!(validator_keys.len(), num_nodes);
+    validator_configs.resize_with(num_nodes, || ValidatorConfig {
+        fixed_leader_schedule: fixed_leader_schedule.clone(),
+        ..ValidatorConfig::default_for_test()
+    });
 
     let mut cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -435,7 +451,7 @@ pub fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<Pa
         .collect();
     let account_storage_paths: Vec<_> = account_storage_dirs
         .iter()
-        .map(|a| a.path().to_path_buf())
+        .map(|a| create_accounts_run_and_snapshot_dirs(a.path()).unwrap().0)
         .collect();
     (account_storage_dirs, account_storage_paths)
 }
@@ -483,8 +499,8 @@ impl SnapshotValidatorConfig {
                 .path()
                 .to_path_buf(),
             bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
-            maximum_full_snapshot_archives_to_retain: usize::MAX,
-            maximum_incremental_snapshot_archives_to_retain: usize::MAX,
+            maximum_full_snapshot_archives_to_retain: NonZeroUsize::new(usize::MAX).unwrap(),
+            maximum_incremental_snapshot_archives_to_retain: NonZeroUsize::new(usize::MAX).unwrap(),
             ..SnapshotConfig::default()
         };
 
@@ -494,7 +510,7 @@ impl SnapshotValidatorConfig {
 
         // Create the validator config
         let validator_config = ValidatorConfig {
-            snapshot_config: Some(snapshot_config),
+            snapshot_config,
             account_paths: account_storage_paths,
             accounts_hash_interval_slots,
             ..ValidatorConfig::default_for_test()

@@ -1,5 +1,7 @@
 //! Example Rust-based SBF program that tests duplicate accounts passed via accounts
 
+#![allow(clippy::integer_arithmetic)]
+
 extern crate solana_program;
 use solana_program::{
     account_info::AccountInfo,

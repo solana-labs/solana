@@ -13,6 +13,7 @@ use {
         fs::{self, File},
         io::{self, Read},
         net::SocketAddr,
+        num::NonZeroUsize,
         path::{Path, PathBuf},
         time::{Duration, Instant},
     },
@@ -69,7 +70,7 @@ pub fn download_file<'a, 'b>(
     progress_notify_callback: &'a mut DownloadProgressCallbackOption<'b>,
 ) -> Result<(), String> {
     if destination_file.is_file() {
-        return Err(format!("{:?} already exists", destination_file));
+        return Err(format!("{destination_file:?} already exists"));
     }
     let download_start = Instant::now();
 
@@ -88,7 +89,7 @@ pub fn download_file<'a, 'b>(
 
     let progress_bar = new_spinner_progress_bar();
     if use_progress_bar {
-        progress_bar.set_message(format!("{}Downloading {}...", TRUCK, url));
+        progress_bar.set_message(format!("{TRUCK}Downloading {url}..."));
     }
 
     let response = reqwest::blocking::Client::new()
@@ -119,7 +120,7 @@ pub fn download_file<'a, 'b>(
                 .expect("ProgresStyle::template direct input to be correct")
                 .progress_chars("=> "),
         );
-        progress_bar.set_message(format!("{}Downloading~ {}", TRUCK, url));
+        progress_bar.set_message(format!("{TRUCK}Downloading~ {url}"));
     } else {
         info!("Downloading {} bytes from {}", download_size, url);
     }
@@ -212,7 +213,7 @@ pub fn download_file<'a, 'b>(
 
     File::create(&temp_destination_file)
         .and_then(|mut file| std::io::copy(&mut source, &mut file))
-        .map_err(|err| format!("Unable to write {:?}: {:?}", temp_destination_file, err))?;
+        .map_err(|err| format!("Unable to write {temp_destination_file:?}: {err:?}"))?;
 
     source.progress_bar.finish_and_clear();
     info!(
@@ -227,7 +228,7 @@ pub fn download_file<'a, 'b>(
     );
 
     std::fs::rename(temp_destination_file, destination_file)
-        .map_err(|err| format!("Unable to rename: {:?}", err))?;
+        .map_err(|err| format!("Unable to rename: {err:?}"))?;
 
     Ok(())
 }
@@ -243,7 +244,7 @@ pub fn download_genesis_if_missing(
 
         let _ignored = fs::remove_dir_all(&tmp_genesis_path);
         download_file(
-            &format!("http://{}/{}", rpc_addr, DEFAULT_GENESIS_ARCHIVE),
+            &format!("http://{rpc_addr}/{DEFAULT_GENESIS_ARCHIVE}"),
             &tmp_genesis_package,
             use_progress_bar,
             &mut None,
@@ -257,16 +258,16 @@ pub fn download_genesis_if_missing(
 
 /// Download a snapshot archive from `rpc_addr`.  Use `snapshot_type` to specify downloading either
 /// a full snapshot or an incremental snapshot.
-pub fn download_snapshot_archive<'a, 'b>(
+pub fn download_snapshot_archive(
     rpc_addr: &SocketAddr,
     full_snapshot_archives_dir: &Path,
     incremental_snapshot_archives_dir: &Path,
     desired_snapshot_hash: (Slot, SnapshotHash),
     snapshot_type: SnapshotType,
-    maximum_full_snapshot_archives_to_retain: usize,
-    maximum_incremental_snapshot_archives_to_retain: usize,
+    maximum_full_snapshot_archives_to_retain: NonZeroUsize,
+    maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
     use_progress_bar: bool,
-    progress_notify_callback: &'a mut DownloadProgressCallbackOption<'b>,
+    progress_notify_callback: &mut DownloadProgressCallbackOption<'_>,
 ) -> Result<(), String> {
     snapshot_utils::purge_old_snapshot_archives(
         full_snapshot_archives_dir,

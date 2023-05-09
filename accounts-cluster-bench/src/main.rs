@@ -5,18 +5,20 @@ use {
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_account_decoder::parse_token::spl_token_pubkey,
-    solana_clap_utils::input_parsers::pubkey_of,
+    solana_clap_utils::{
+        hidden_unless_forced, input_parsers::pubkey_of, input_validators::is_url_or_moniker,
+    },
+    solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_client::transaction_executor::TransactionExecutor,
-    solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT},
     solana_gossip::gossip_service::discover,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::inline_spl_token,
     solana_sdk::{
         commitment_config::CommitmentConfig,
+        hash::Hash,
         instruction::{AccountMeta, Instruction},
         message::Message,
         pubkey::Pubkey,
-        rpc_port::DEFAULT_RPC_PORT,
         signature::{read_keypair_file, Keypair, Signer},
         system_instruction, system_program,
         transaction::Transaction,
@@ -25,7 +27,6 @@ use {
     solana_transaction_status::parse_token::spl_token_instruction,
     std::{
         cmp::min,
-        net::SocketAddr,
         process::exit,
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -36,12 +37,53 @@ use {
     },
 };
 
-pub fn airdrop_lamports(
-    client: &RpcClient,
-    faucet_addr: &SocketAddr,
-    id: &Keypair,
-    desired_balance: u64,
-) -> bool {
+pub const MAX_RPC_CALL_RETRIES: usize = 5;
+
+pub fn poll_get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
+    let mut num_retries = MAX_RPC_CALL_RETRIES;
+    loop {
+        let response = client.get_latest_blockhash();
+        if let Ok(blockhash) = response {
+            return Some(blockhash);
+        } else {
+            num_retries -= 1;
+            warn!(
+                "get_latest_blockhash failure: {:?}. remaining retries {}",
+                response, num_retries
+            );
+        }
+        if num_retries == 0 {
+            panic!("failed to get_latest_blockhash(), rpc node down?")
+        }
+        sleep(Duration::from_millis(100));
+    }
+}
+
+pub fn poll_get_fee_for_message(client: &RpcClient, message: &mut Message) -> (Option<u64>, Hash) {
+    let mut num_retries = MAX_RPC_CALL_RETRIES;
+    loop {
+        let response = client.get_fee_for_message(message);
+
+        if let Ok(fee) = response {
+            return (Some(fee), message.recent_blockhash);
+        } else {
+            num_retries -= 1;
+            warn!(
+                "get_fee_for_message failure: {:?}. remaining retries {}",
+                response, num_retries
+            );
+
+            let blockhash = poll_get_latest_blockhash(client).expect("blockhash");
+            message.recent_blockhash = blockhash;
+        }
+        if num_retries == 0 {
+            panic!("failed to get_fee_for_message(), rpc node down?")
+        }
+        sleep(Duration::from_millis(100));
+    }
+}
+
+fn airdrop_lamports(client: &RpcClient, id: &Keypair, desired_balance: u64) -> bool {
     let starting_balance = client.get_balance(&id.pubkey()).unwrap_or(0);
     info!("starting balance {}", starting_balance);
 
@@ -50,39 +92,22 @@ pub fn airdrop_lamports(
         info!(
             "Airdropping {:?} lamports from {} for {}",
             airdrop_amount,
-            faucet_addr,
+            client.url(),
             id.pubkey(),
         );
 
         let blockhash = client.get_latest_blockhash().unwrap();
-        match request_airdrop_transaction(faucet_addr, &id.pubkey(), airdrop_amount, blockhash) {
-            Ok(transaction) => {
-                let mut tries = 0;
-                loop {
-                    tries += 1;
-                    let result = client.send_and_confirm_transaction(&transaction);
-
-                    if result.is_ok() {
-                        break;
-                    }
-                    if tries >= 5 {
-                        panic!(
-                            "Error requesting airdrop: to addr: {:?} amount: {} {:?}",
-                            faucet_addr, airdrop_amount, result
-                        )
-                    }
-                }
-            }
-            Err(err) => {
-                panic!(
-                    "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
-                    err, faucet_addr, airdrop_amount
-                );
-            }
-        };
+        if let Err(err) =
+            client.request_airdrop_with_blockhash(&id.pubkey(), airdrop_amount, &blockhash)
+        {
+            panic!(
+                "Error requesting airdrop: {err:?} to addr: {0:?} amount: {airdrop_amount}",
+                id.pubkey()
+            );
+        }
 
         let current_balance = client.get_balance(&id.pubkey()).unwrap_or_else(|e| {
-            panic!("airdrop error {}", e);
+            panic!("airdrop error {e}");
         });
         info!("current balance {}...", current_balance);
 
@@ -116,7 +141,6 @@ fn make_create_message(
     let space = maybe_space.unwrap_or_else(|| thread_rng().gen_range(0, 1000));
 
     let instructions: Vec<_> = (0..num_instructions)
-        .into_iter()
         .flat_map(|_| {
             let program_id = if mint.is_some() {
                 inline_spl_token::id()
@@ -164,7 +188,6 @@ fn make_close_message(
     spl_token: bool,
 ) -> Message {
     let instructions: Vec<_> = (0..num_instructions)
-        .into_iter()
         .filter_map(|_| {
             let program_id = if spl_token {
                 inline_spl_token::id()
@@ -208,8 +231,7 @@ fn make_close_message(
 
 #[allow(clippy::too_many_arguments)]
 fn run_accounts_bench(
-    entrypoint_addr: SocketAddr,
-    faucet_addr: SocketAddr,
+    client: Arc<RpcClient>,
     payer_keypairs: &[&Keypair],
     iterations: usize,
     maybe_space: Option<u64>,
@@ -221,15 +243,12 @@ fn run_accounts_bench(
     reclaim_accounts: bool,
 ) {
     assert!(num_instructions > 0);
-    let client =
-        RpcClient::new_socket_with_commitment(entrypoint_addr, CommitmentConfig::confirmed());
-
-    info!("Targeting {}", entrypoint_addr);
+    info!("Targeting {}", client.url());
 
     let mut latest_blockhash = Instant::now();
     let mut last_log = Instant::now();
     let mut count = 0;
-    let mut blockhash = client.get_latest_blockhash().expect("blockhash");
+    let mut blockhash = poll_get_latest_blockhash(&client).expect("blockhash");
     let mut tx_sent_count = 0;
     let mut total_accounts_created = 0;
     let mut total_accounts_closed = 0;
@@ -255,7 +274,7 @@ fn run_accounts_bench(
 
     info!("Starting balance(s): {:?}", balances);
 
-    let executor = TransactionExecutor::new(entrypoint_addr);
+    let executor = TransactionExecutor::new_with_rpc_client(client.clone());
 
     // Create and close messages both require 2 signatures, fake a 2 signature message to calculate fees
     let mut message = Message::new(
@@ -276,14 +295,13 @@ fn run_accounts_bench(
 
     loop {
         if latest_blockhash.elapsed().as_millis() > 10_000 {
-            blockhash = client.get_latest_blockhash().expect("blockhash");
+            blockhash = poll_get_latest_blockhash(&client).expect("blockhash");
             latest_blockhash = Instant::now();
         }
 
         message.recent_blockhash = blockhash;
-        let fee = client
-            .get_fee_for_message(&message)
-            .expect("get_fee_for_message");
+        let (fee, blockhash) = poll_get_fee_for_message(&client, &mut message);
+        let fee = fee.expect("get_fee_for_message");
         let lamports = min_balance + fee;
 
         for (i, balance) in balances.iter_mut().enumerate() {
@@ -297,12 +315,7 @@ fn run_accounts_bench(
                         "Balance {} is less than needed: {}, doing airdrop...",
                         balance, lamports
                     );
-                    if !airdrop_lamports(
-                        &client,
-                        &faucet_addr,
-                        payer_keypairs[i],
-                        lamports * 100_000,
-                    ) {
+                    if !airdrop_lamports(&client, payer_keypairs[i], lamports * 100_000) {
                         warn!("failed airdrop, exiting");
                         return;
                     }
@@ -398,19 +411,18 @@ fn run_accounts_bench(
     executor.close();
 
     if reclaim_accounts {
-        let executor = TransactionExecutor::new(entrypoint_addr);
+        let executor = TransactionExecutor::new_with_rpc_client(client.clone());
         loop {
             let max_closed_seed = seed_tracker.max_closed.load(Ordering::Relaxed);
             let max_created_seed = seed_tracker.max_created.load(Ordering::Relaxed);
 
             if latest_blockhash.elapsed().as_millis() > 10_000 {
-                blockhash = client.get_latest_blockhash().expect("blockhash");
+                blockhash = poll_get_latest_blockhash(&client).expect("blockhash");
                 latest_blockhash = Instant::now();
             }
             message.recent_blockhash = blockhash;
-            let fee = client
-                .get_fee_for_message(&message)
-                .expect("get_fee_for_message");
+            let (fee, blockhash) = poll_get_fee_for_message(&client, &mut message);
+            let fee = fee.expect("get_fee_for_message");
 
             let sigs_len = executor.num_outstanding();
             if sigs_len < batch_size && max_closed_seed < max_created_seed {
@@ -480,11 +492,38 @@ fn main() {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
+        .arg({
+            let arg = Arg::with_name("config_file")
+                .short("C")
+                .long("config")
+                .value_name("FILEPATH")
+                .takes_value(true)
+                .help("Configuration file to use");
+            if let Some(ref config_file) = *CONFIG_FILE {
+                arg.default_value(config_file)
+            } else {
+                arg
+            }
+        })
+        .arg(
+            Arg::with_name("json_rpc_url")
+                .short("u")
+                .long("url")
+                .value_name("URL_OR_MONIKER")
+                .takes_value(true)
+                .validator(is_url_or_moniker)
+                .conflicts_with("entrypoint")
+                .help(
+                    "URL for Solana's JSON RPC or moniker (or their first letter): \
+                       [mainnet-beta, testnet, devnet, localhost]",
+                ),
+        )
         .arg(
             Arg::with_name("entrypoint")
                 .long("entrypoint")
                 .takes_value(true)
                 .value_name("HOST:PORT")
+                .conflicts_with("json_rpc_url")
                 .help("RPC entrypoint address. Usually <ip>:8899"),
         )
         .arg(
@@ -492,6 +531,7 @@ fn main() {
                 .long("faucet")
                 .takes_value(true)
                 .value_name("HOST:PORT")
+                .hidden(hidden_unless_forced())
                 .help("Faucet entrypoint address. Usually <ip>:9900"),
         )
         .arg(
@@ -571,22 +611,6 @@ fn main() {
 
     let skip_gossip = !matches.is_present("check_gossip");
 
-    let port = if skip_gossip { DEFAULT_RPC_PORT } else { 8001 };
-    let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], port));
-    if let Some(addr) = matches.value_of("entrypoint") {
-        entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
-            exit(1)
-        });
-    }
-    let mut faucet_addr = SocketAddr::from(([127, 0, 0, 1], FAUCET_PORT));
-    if let Some(addr) = matches.value_of("faucet_addr") {
-        faucet_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
-            exit(1)
-        });
-    }
-
     let space = value_t!(matches, "space", u64).ok();
     let lamports = value_t!(matches, "lamports", u64).ok();
     let batch_size = value_t!(matches, "batch_size", usize).unwrap_or(4);
@@ -594,7 +618,7 @@ fn main() {
     let iterations = value_t!(matches, "iterations", usize).unwrap_or(10);
     let num_instructions = value_t!(matches, "num_instructions", usize).unwrap_or(1);
     if num_instructions == 0 || num_instructions > 500 {
-        eprintln!("bad num_instructions: {}", num_instructions);
+        eprintln!("bad num_instructions: {num_instructions}");
         exit(1);
     }
 
@@ -604,7 +628,7 @@ fn main() {
         .iter()
         .map(|keypair_string| {
             read_keypair_file(keypair_string)
-                .unwrap_or_else(|_| panic!("bad keypair {:?}", keypair_string))
+                .unwrap_or_else(|_| panic!("bad keypair {keypair_string:?}"))
         })
         .collect();
     let mut payer_keypair_refs: Vec<&Keypair> = vec![];
@@ -612,34 +636,59 @@ fn main() {
         payer_keypair_refs.push(keypair);
     }
 
-    let rpc_addr = if !skip_gossip {
-        info!("Finding cluster entry: {:?}", entrypoint_addr);
-        let (gossip_nodes, _validators) = discover(
-            None, // keypair
-            Some(&entrypoint_addr),
-            None,                    // num_nodes
-            Duration::from_secs(60), // timeout
-            None,                    // find_node_by_pubkey
-            Some(&entrypoint_addr),  // find_node_by_gossip_addr
-            None,                    // my_gossip_addr
-            0,                       // my_shred_version
-            SocketAddrSpace::Unspecified,
-        )
-        .unwrap_or_else(|err| {
-            eprintln!("Failed to discover {} node: {:?}", entrypoint_addr, err);
-            exit(1);
+    let client = if let Some(addr) = matches.value_of("entrypoint") {
+        let entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
+            eprintln!("failed to parse entrypoint address: {e}");
+            exit(1)
         });
 
-        info!("done found {} nodes", gossip_nodes.len());
-        gossip_nodes[0].rpc
+        let rpc_addr = if !skip_gossip {
+            info!("Finding cluster entry: {:?}", entrypoint_addr);
+            let (gossip_nodes, _validators) = discover(
+                None, // keypair
+                Some(&entrypoint_addr),
+                None,                    // num_nodes
+                Duration::from_secs(60), // timeout
+                None,                    // find_node_by_pubkey
+                Some(&entrypoint_addr),  // find_node_by_gossip_addr
+                None,                    // my_gossip_addr
+                0,                       // my_shred_version
+                SocketAddrSpace::Unspecified,
+            )
+            .unwrap_or_else(|err| {
+                eprintln!("Failed to discover {entrypoint_addr} node: {err:?}");
+                exit(1);
+            });
+
+            info!("done found {} nodes", gossip_nodes.len());
+            gossip_nodes[0].rpc().unwrap()
+        } else {
+            info!("Using {:?} as the RPC address", entrypoint_addr);
+            entrypoint_addr
+        };
+
+        Arc::new(RpcClient::new_socket_with_commitment(
+            rpc_addr,
+            CommitmentConfig::confirmed(),
+        ))
     } else {
-        info!("Using {:?} as the RPC address", entrypoint_addr);
-        entrypoint_addr
+        let config = if let Some(config_file) = matches.value_of("config_file") {
+            solana_cli_config::Config::load(config_file).unwrap_or_default()
+        } else {
+            solana_cli_config::Config::default()
+        };
+        let (_, json_rpc_url) = ConfigInput::compute_json_rpc_url_setting(
+            matches.value_of("json_rpc_url").unwrap_or(""),
+            &config.json_rpc_url,
+        );
+        Arc::new(RpcClient::new_with_commitment(
+            json_rpc_url,
+            CommitmentConfig::confirmed(),
+        ))
     };
 
     run_accounts_bench(
-        rpc_addr,
-        faucet_addr,
+        client,
         &payer_keypair_refs,
         iterations,
         space,
@@ -684,7 +733,6 @@ pub mod test {
             ..ClusterConfig::default()
         };
 
-        let faucet_addr = SocketAddr::from(([127, 0, 0, 1], 9900));
         let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
         let iterations = 10;
         let maybe_space = None;
@@ -693,9 +741,13 @@ pub mod test {
         let maybe_lamports = None;
         let num_instructions = 2;
         let mut start = Measure::start("total accounts run");
+        let rpc_addr = cluster.entry_point_info.rpc().unwrap();
+        let client = Arc::new(RpcClient::new_socket_with_commitment(
+            rpc_addr,
+            CommitmentConfig::confirmed(),
+        ));
         run_accounts_bench(
-            cluster.entry_point_info.rpc,
-            faucet_addr,
+            client,
             &[&cluster.funding_keypair],
             iterations,
             maybe_space,
@@ -722,8 +774,10 @@ pub mod test {
             Some(faucet_addr),
             SocketAddrSpace::Unspecified,
         );
-        let rpc_client =
-            RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+        let rpc_client = Arc::new(RpcClient::new_with_commitment(
+            test_validator.rpc_url(),
+            CommitmentConfig::processed(),
+        ));
 
         // Created funder
         let funder = Keypair::new();
@@ -791,12 +845,7 @@ pub mod test {
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         run_accounts_bench(
-            test_validator
-                .rpc_url()
-                .replace("http://", "")
-                .parse()
-                .unwrap(),
-            faucet_addr,
+            rpc_client,
             &[&keypair0, &keypair1, &keypair2],
             iterations,
             Some(account_len as u64),

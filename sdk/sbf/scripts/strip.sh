@@ -20,4 +20,4 @@ out_dir=$(dirname "$so_stripped")
 if [[ ! -d $out_dir ]]; then
   mkdir -p "$out_dir"
 fi
-"$sbf_sdk"/dependencies/sbf-tools/llvm/bin/llvm-objcopy --strip-all "$so" "$so_stripped"
+"$sbf_sdk"/dependencies/platform-tools/llvm/bin/llvm-objcopy --strip-all "$so" "$so_stripped"

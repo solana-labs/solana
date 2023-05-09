@@ -3,6 +3,7 @@
 
 use {
     crate::{
+        banking_trace::BankingTracer,
         broadcast_stage::RetransmitSlotsSender,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
@@ -30,14 +31,17 @@ use {
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{
+        cluster_info::ClusterInfo, duplicate_shred_handler::DuplicateShredHandler,
+        duplicate_shred_listener::DuplicateShredListener,
+    },
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
-        max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSender,
+        max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSenderConfig,
         rpc_subscriptions::RpcSubscriptions,
     },
     solana_runtime::{
@@ -66,6 +70,7 @@ pub struct Tvu {
     voting_service: VotingService,
     warm_quic_cache_service: Option<WarmQuicCacheService>,
     drop_bank_service: DropBankService,
+    duplicate_shred_listener: DuplicateShredListener,
 }
 
 pub struct TvuSockets {
@@ -80,7 +85,10 @@ pub struct TvuSockets {
 pub struct TvuConfig {
     pub max_ledger_shreds: Option<u64>,
     pub shred_version: u16,
+    // Validators from which repairs are requested
     pub repair_validators: Option<HashSet<Pubkey>>,
+    // Validators which should be given priority when serving repairs
+    pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
     pub wait_for_vote_to_start_leader: bool,
     pub replay_slots_concurrently: bool,
 }
@@ -92,7 +100,7 @@ impl Tvu {
     /// * `cluster_info` - The cluster_info state.
     /// * `sockets` - fetch, repair, and retransmit sockets
     /// * `blockstore` - the ledger itself
-    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         vote_account: &Pubkey,
         authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
@@ -118,7 +126,7 @@ impl Tvu {
         verified_vote_receiver: VerifiedVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
         completed_data_sets_sender: CompletedDataSetsSender,
-        bank_notification_sender: Option<BankNotificationSender>,
+        bank_notification_sender: Option<BankNotificationSenderConfig>,
         gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
@@ -128,6 +136,7 @@ impl Tvu {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: &Arc<ConnectionCache>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        banking_tracer: Arc<BankingTracer>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -152,19 +161,19 @@ impl Tvu {
             tvu_config.shred_version,
             bank_forks.clone(),
             cluster_info.clone(),
+            turbine_disabled,
             exit,
         );
 
         let (verified_sender, verified_receiver) = unbounded();
         let (retransmit_sender, retransmit_receiver) = unbounded();
         let shred_sigverify = sigverify_shreds::spawn_shred_sigverify(
-            cluster_info.id(),
+            cluster_info.clone(),
             bank_forks.clone(),
             leader_schedule_cache.clone(),
             fetch_receiver,
             retransmit_sender.clone(),
             verified_sender,
-            turbine_disabled,
         );
 
         let retransmit_stage = RetransmitStage::new(
@@ -182,6 +191,7 @@ impl Tvu {
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
             unbounded();
+        let (dumped_slots_sender, dumped_slots_receiver) = unbounded();
         let window_service = {
             let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
             let repair_info = RepairInfo {
@@ -189,6 +199,7 @@ impl Tvu {
                 epoch_schedule,
                 duplicate_slots_reset_sender,
                 repair_validators: tvu_config.repair_validators,
+                repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
             };
@@ -205,6 +216,7 @@ impl Tvu {
                 completed_data_sets_sender,
                 duplicate_slots_sender,
                 ancestor_hashes_replay_update_receiver,
+                dumped_slots_receiver,
             )
         };
 
@@ -245,7 +257,6 @@ impl Tvu {
             cluster_info.clone(),
             poh_recorder.clone(),
             tower_storage,
-            bank_forks.clone(),
         );
 
         let warm_quic_cache_service = if connection_cache.use_quic() {
@@ -288,6 +299,8 @@ impl Tvu {
             block_metadata_notifier,
             log_messages_bytes_limit,
             prioritization_fee_cache.clone(),
+            dumped_slots_sender,
+            banking_tracer,
         )?;
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -298,6 +311,16 @@ impl Tvu {
                 exit,
             )
         });
+
+        let duplicate_shred_listener = DuplicateShredListener::new(
+            exit.clone(),
+            cluster_info.clone(),
+            DuplicateShredHandler::new(
+                blockstore,
+                leader_schedule_cache.clone(),
+                bank_forks.clone(),
+            ),
+        );
 
         Ok(Tvu {
             fetch_stage,
@@ -311,6 +334,7 @@ impl Tvu {
             voting_service,
             warm_quic_cache_service,
             drop_bank_service,
+            duplicate_shred_listener,
         })
     }
 
@@ -330,6 +354,7 @@ impl Tvu {
             warmup_service.join()?;
         }
         self.drop_bank_service.join()?;
+        self.duplicate_shred_listener.join()?;
         Ok(())
     }
 }
@@ -387,7 +412,7 @@ pub mod tests {
         let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(&bank, &blockstore, None, None);
+            create_test_recorder(&bank, blockstore.clone(), None, None);
         let vote_keypair = Keypair::new();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
@@ -399,7 +424,8 @@ pub mod tests {
         let (_, gossip_confirmed_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
-        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -419,6 +445,7 @@ pub mod tests {
             &Arc::new(RpcSubscriptions::new_for_tests(
                 &exit,
                 max_complete_transaction_status_slot,
+                max_complete_rewards_slot,
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
@@ -448,7 +475,8 @@ pub mod tests {
             AbsRequestSender::default(),
             None,
             &Arc::new(ConnectionCache::default()),
-            &_ignored_prioritization_fee_cache,
+            &ignored_prioritization_fee_cache,
+            BankingTracer::new_disabled(),
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);

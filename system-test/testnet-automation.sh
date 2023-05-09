@@ -41,8 +41,9 @@ $*"
   ) || echo "Error from packet loss analysis"
 
   execution_step "Deleting Testnet"
-  "${REPO_ROOT}"/net/"${CLOUD_PROVIDER}".sh delete -p "${TESTNET_TAG}"
-
+  if test -f "${REPO_ROOT}"/net/"${CLOUD_PROVIDER}".sh; then
+    "${REPO_ROOT}"/net/"${CLOUD_PROVIDER}".sh delete -p "${TESTNET_TAG}"
+  fi
 }
 trap 'cleanup_testnet $BASH_COMMAND' EXIT
 
@@ -98,6 +99,8 @@ function launch_testnet() {
         -p "$TESTNET_TAG" $maybePublicIpAddresses --dedicated \
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
+    bare)
+      ;;
     *)
       echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"
       ;;
@@ -136,11 +139,6 @@ function launch_testnet() {
     maybeAsyncNodeInit="--async-node-init"
   fi
 
-  declare maybeAllowPrivateAddr
-  if [[ "$ALLOW_PRIVATE_ADDR" = "true" ]]; then
-    maybeAllowPrivateAddr="--allow-private-addr"
-  fi
-
   declare maybeExtraPrimordialStakes
   if [[ -n "$EXTRA_PRIMORDIAL_STAKES" ]]; then
     maybeExtraPrimordialStakes="--extra-primordial-stakes $EXTRA_PRIMORDIAL_STAKES"
@@ -151,7 +149,7 @@ function launch_testnet() {
   "${REPO_ROOT}"/net/net.sh start $version_args \
     -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
     --gpu-mode $startGpuMode $maybeWarpSlot $maybeAsyncNodeInit \
-    $maybeExtraPrimordialStakes $maybeAllowPrivateAddr
+    $maybeExtraPrimordialStakes
 
   if [[ -n "$WAIT_FOR_EQUAL_STAKE" ]]; then
     wait_for_equal_stake

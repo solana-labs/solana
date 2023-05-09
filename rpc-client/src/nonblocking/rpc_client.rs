@@ -452,9 +452,9 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use std::net::SocketAddr;
+    /// # use std::net::{Ipv4Addr, SocketAddr};
     /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 8899));
     /// let client = RpcClient::new_socket(addr);
     /// ```
     pub fn new_socket(addr: SocketAddr) -> Self {
@@ -471,10 +471,10 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use std::net::SocketAddr;
+    /// # use std::net::{Ipv4Addr, SocketAddr};
     /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
-    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 8899));
     /// let commitment_config = CommitmentConfig::processed();
     /// let client = RpcClient::new_socket_with_commitment(
     ///     addr,
@@ -497,10 +497,10 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use std::net::SocketAddr;
+    /// # use std::net::{Ipv4Addr, SocketAddr};
     /// # use std::time::Duration;
     /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 8899));
     /// let timeout = Duration::from_secs(1);
     /// let client = RpcClient::new_socket_with_timeout(addr, timeout);
     /// ```
@@ -514,6 +514,12 @@ impl RpcClient {
         self.sender.url()
     }
 
+    pub async fn set_node_version(&self, version: semver::Version) -> Result<(), ()> {
+        let mut w_node_version = self.node_version.write().await;
+        *w_node_version = Some(version);
+        Ok(())
+    }
+
     async fn get_node_version(&self) -> Result<semver::Version, RpcError> {
         let r_node_version = self.node_version.read().await;
         if let Some(version) = &*r_node_version {
@@ -522,10 +528,10 @@ impl RpcClient {
             drop(r_node_version);
             let mut w_node_version = self.node_version.write().await;
             let node_version = self.get_version().await.map_err(|e| {
-                RpcError::RpcRequestError(format!("cluster version query failed: {}", e))
+                RpcError::RpcRequestError(format!("cluster version query failed: {e}"))
             })?;
             let node_version = semver::Version::parse(&node_version.solana_core).map_err(|e| {
-                RpcError::RpcRequestError(format!("failed to parse cluster version: {}", e))
+                RpcError::RpcRequestError(format!("failed to parse cluster version: {e}"))
             })?;
             *w_node_version = Some(node_version.clone());
             Ok(node_version)
@@ -1150,8 +1156,7 @@ impl RpcClient {
         let progress_bar = spinner::new_progress_bar();
 
         progress_bar.set_message(format!(
-            "[{}/{}] Finalizing transaction {}",
-            confirmations, desired_confirmations, signature,
+            "[{confirmations}/{desired_confirmations}] Finalizing transaction {signature}",
         ));
 
         let now = Instant::now();
@@ -1464,7 +1469,7 @@ impl RpcClient {
     ///
     /// If the transaction has been processed with the default commitment level,
     /// and the transaction succeeded, this method returns `Ok(Some(Ok(())))`.
-    /// If the transaction has peen processed with the default commitment level,
+    /// If the transaction has been processed with the default commitment level,
     /// and the transaction failed, this method returns `Ok(Some(Err(_)))`,
     /// where the interior error is type [`TransactionError`].
     ///
@@ -1684,7 +1689,7 @@ impl RpcClient {
     ///
     /// If the transaction has been processed with the given commitment level,
     /// and the transaction succeeded, this method returns `Ok(Some(Ok(())))`.
-    /// If the transaction has peen processed with the given commitment level,
+    /// If the transaction has been processed with the given commitment level,
     /// and the transaction failed, this method returns `Ok(Some(Err(_)))`,
     /// where the interior error is type [`TransactionError`].
     ///
@@ -1760,7 +1765,7 @@ impl RpcClient {
     ///
     /// If the transaction has been processed with the given commitment level,
     /// and the transaction succeeded, this method returns `Ok(Some(Ok(())))`.
-    /// If the transaction has peen processed with the given commitment level,
+    /// If the transaction has been processed with the given commitment level,
     /// and the transaction failed, this method returns `Ok(Some(Err(_)))`,
     /// where the interior error is type [`TransactionError`].
     ///
@@ -1986,11 +1991,8 @@ impl RpcClient {
                     .iter()
                     .map(|slot_leader| {
                         Pubkey::from_str(slot_leader).map_err(|err| {
-                            ClientErrorKind::Custom(format!(
-                                "pubkey deserialization failed: {}",
-                                err
-                            ))
-                            .into()
+                            ClientErrorKind::Custom(format!("pubkey deserialization failed: {err}"))
+                                .into()
                         })
                     })
                     .collect()
@@ -3289,7 +3291,7 @@ impl RpcClient {
         response
             .map(|result_json: Value| {
                 if result_json.is_null() {
-                    return Err(RpcError::ForUser(format!("Block Not Found: slot={}", slot)).into());
+                    return Err(RpcError::ForUser(format!("Block Not Found: slot={slot}")).into());
                 }
                 let result = serde_json::from_value(result_json)
                     .map_err(|err| ClientError::new_with_request(err.into(), request))?;
@@ -3539,6 +3541,49 @@ impl RpcClient {
             .await
     }
 
+    /// Returns a list of minimum prioritization fees from recent blocks.
+    /// Takes an optional vector of addresses; if any addresses are provided, the response will
+    /// reflect the minimum prioritization fee to land a transaction locking all of the provided
+    /// accounts as writable.
+    ///
+    /// Currently, a node's prioritization-fee cache stores data from up to 150 blocks.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`getRecentPrioritizationFees`] RPC method.
+    ///
+    /// [`getRecentPrioritizationFees`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrecentprioritizationfees
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_rpc_client_api::client_error::Error;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_sdk::signature::{Keypair, Signer};
+    /// # futures::executor::block_on(async {
+    /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// #     let alice = Keypair::new();
+    /// #     let bob = Keypair::new();
+    /// let addresses = vec![alice.pubkey(), bob.pubkey()];
+    /// let prioritization_fees = rpc_client.get_recent_prioritization_fees(
+    ///     &addresses,
+    /// ).await?;
+    /// #     Ok::<(), Error>(())
+    /// # })?;
+    /// # Ok::<(), Error>(())
+    /// ```
+    pub async fn get_recent_prioritization_fees(
+        &self,
+        addresses: &[Pubkey],
+    ) -> ClientResult<Vec<RpcPrioritizationFee>> {
+        let addresses: Vec<_> = addresses
+            .iter()
+            .map(|address| address.to_string())
+            .collect();
+        self.send(RpcRequest::GetRecentPrioritizationFees, json!([addresses]))
+            .await
+    }
+
     /// Returns the identity pubkey for the current node.
     ///
     /// # RPC Reference
@@ -3785,7 +3830,7 @@ impl RpcClient {
         self.get_account_with_commitment(pubkey, self.commitment())
             .await?
             .value
-            .ok_or_else(|| RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into())
+            .ok_or_else(|| RpcError::ForUser(format!("AccountNotFound: pubkey={pubkey}")).into())
     }
 
     /// Returns all information associated with the account of the provided pubkey.
@@ -3908,7 +3953,7 @@ impl RpcClient {
             .map(|result_json: Value| {
                 if result_json.is_null() {
                     return Err(
-                        RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into(),
+                        RpcError::ForUser(format!("AccountNotFound: pubkey={pubkey}")).into(),
                     );
                 }
                 let Response {
@@ -3925,8 +3970,7 @@ impl RpcClient {
             })
             .map_err(|err| {
                 Into::<ClientError>::into(RpcError::ForUser(format!(
-                    "AccountNotFound: pubkey={}: {}",
-                    pubkey, err
+                    "AccountNotFound: pubkey={pubkey}: {err}"
                 )))
             })?
     }
@@ -4377,11 +4421,10 @@ impl RpcClient {
     /// #         AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
     /// #         AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
     /// #         AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-    /// let memcmp = RpcFilterType::Memcmp(Memcmp {
-    ///     offset: 0,
-    ///     bytes: MemcmpEncodedBytes::Base64(base64_bytes.to_string()),
-    ///     encoding: None,
-    /// });
+    /// let memcmp = RpcFilterType::Memcmp(Memcmp::new(
+    ///     0,                                                    // offset
+    ///     MemcmpEncodedBytes::Base64(base64_bytes.to_string()), // encoded bytes
+    /// ));
     /// let config = RpcProgramAccountsConfig {
     ///     filters: Some(vec![
     ///         RpcFilterType::DataSize(128),
@@ -4780,7 +4823,7 @@ impl RpcClient {
             .map(|result_json: Value| {
                 if result_json.is_null() {
                     return Err(
-                        RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into(),
+                        RpcError::ForUser(format!("AccountNotFound: pubkey={pubkey}")).into(),
                     );
                 }
                 let Response {
@@ -4802,16 +4845,14 @@ impl RpcClient {
                         }
                     }
                     Err(Into::<ClientError>::into(RpcError::ForUser(format!(
-                        "Account could not be parsed as token account: pubkey={}",
-                        pubkey
+                        "Account could not be parsed as token account: pubkey={pubkey}"
                     ))))
                 };
                 response?
             })
             .map_err(|err| {
                 Into::<ClientError>::into(RpcError::ForUser(format!(
-                    "AccountNotFound: pubkey={}: {}",
-                    pubkey, err
+                    "AccountNotFound: pubkey={pubkey}: {err}"
                 )))
             })?
     }
@@ -5017,7 +5058,7 @@ impl RpcClient {
         .await
         .and_then(|signature: String| {
             Signature::from_str(&signature).map_err(|err| {
-                ClientErrorKind::Custom(format!("signature deserialization failed: {}", err)).into()
+                ClientErrorKind::Custom(format!("signature deserialization failed: {err}")).into()
             })
         })
         .map_err(|_| {
@@ -5343,14 +5384,13 @@ where
     T: serde::ser::Serialize,
 {
     let serialized = serialize(input)
-        .map_err(|e| ClientErrorKind::Custom(format!("Serialization failed: {}", e)))?;
+        .map_err(|e| ClientErrorKind::Custom(format!("Serialization failed: {e}")))?;
     let encoded = match encoding {
         UiTransactionEncoding::Base58 => bs58::encode(serialized).into_string(),
         UiTransactionEncoding::Base64 => base64::encode(serialized),
         _ => {
             return Err(ClientErrorKind::Custom(format!(
-                "unsupported encoding: {}. Supported encodings: base58, base64",
-                encoding
+                "unsupported encoding: {encoding}. Supported encodings: base58, base64"
             ))
             .into())
         }
@@ -5360,9 +5400,9 @@ where
 
 pub(crate) fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
     if tls {
-        format!("https://{}", rpc_addr)
+        format!("https://{rpc_addr}")
     } else {
-        format!("http://{}", rpc_addr)
+        format!("http://{rpc_addr}")
     }
 }
 

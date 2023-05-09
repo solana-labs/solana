@@ -39,7 +39,7 @@ DEFINE_NxM_BENCH!(dim_32x64, 32, 64);
 /// Benchmark insert with Hashmap as baseline for N threads inserting M keys each
 fn do_bench_insert_baseline_hashmap(bencher: &mut Bencher, n: usize, m: usize) {
     let index = RwLock::new(HashMap::new());
-    (0..n).into_iter().into_par_iter().for_each(|i| {
+    (0..n).into_par_iter().for_each(|i| {
         let key = Pubkey::new_unique();
         index
             .write()
@@ -47,7 +47,7 @@ fn do_bench_insert_baseline_hashmap(bencher: &mut Bencher, n: usize, m: usize) {
             .insert(key, vec![(i, IndexValue::default())]);
     });
     bencher.iter(|| {
-        (0..n).into_iter().into_par_iter().for_each(|_| {
+        (0..n).into_par_iter().for_each(|_| {
             for j in 0..m {
                 let key = Pubkey::new_unique();
                 index
@@ -62,12 +62,12 @@ fn do_bench_insert_baseline_hashmap(bencher: &mut Bencher, n: usize, m: usize) {
 /// Benchmark insert with BucketMap with N buckets for N threads inserting M keys each
 fn do_bench_insert_bucket_map(bencher: &mut Bencher, n: usize, m: usize) {
     let index = BucketMap::new(BucketMapConfig::new(n));
-    (0..n).into_iter().into_par_iter().for_each(|i| {
+    (0..n).into_par_iter().for_each(|i| {
         let key = Pubkey::new_unique();
         index.update(&key, |_| Some((vec![(i, IndexValue::default())], 0)));
     });
     bencher.iter(|| {
-        (0..n).into_iter().into_par_iter().for_each(|_| {
+        (0..n).into_par_iter().for_each(|_| {
             for j in 0..m {
                 let key = Pubkey::new_unique();
                 index.update(&key, |_| Some((vec![(j, IndexValue::default())], 0)));

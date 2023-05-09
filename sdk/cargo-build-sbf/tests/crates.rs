@@ -1,11 +1,15 @@
 use {
     predicates::prelude::*,
-    std::{env, fs},
+    std::{
+        env, fs,
+        sync::atomic::{AtomicBool, Ordering},
+    },
 };
 
 #[macro_use]
 extern crate serial_test;
 
+static SBF_TOOLS_INSTALL: AtomicBool = AtomicBool::new(true);
 fn run_cargo_build(crate_name: &str, extra_args: &[&str], fail: bool) {
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let toml = cwd
@@ -15,6 +19,9 @@ fn run_cargo_build(crate_name: &str, extra_args: &[&str], fail: bool) {
         .join("Cargo.toml");
     let toml = format!("{}", toml.display());
     let mut args = vec!["-v", "--sbf-sdk", "../sbf", "--manifest-path", &toml];
+    if SBF_TOOLS_INSTALL.fetch_and(false, Ordering::SeqCst) {
+        args.push("--force-tools-install");
+    }
     for arg in extra_args {
         args.push(arg);
     }
@@ -22,6 +29,9 @@ fn run_cargo_build(crate_name: &str, extra_args: &[&str], fail: bool) {
     args.push("-vv");
     let mut cmd = assert_cmd::Command::cargo_bin("cargo-build-sbf").unwrap();
     let assert = cmd.env("RUST_LOG", "debug").args(&args).assert();
+    let output = assert.get_output();
+    eprintln!("Test stdout\n{}\n", String::from_utf8_lossy(&output.stdout));
+    eprintln!("Test stderr\n{}\n", String::from_utf8_lossy(&output.stderr));
     if fail {
         assert.failure();
     } else {
@@ -115,7 +125,7 @@ fn test_sbfv2() {
         .join("sdk")
         .join("sbf")
         .join("dependencies")
-        .join("sbf-tools")
+        .join("platform-tools")
         .join("llvm")
         .join("bin")
         .join("llvm-readelf");

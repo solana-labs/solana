@@ -6,4 +6,4 @@ export CI_LOCAL_RUN=true
 
 set -ex
 
-scripts/build-downstream-projects.sh
+ci/downstream-projects/run-all.sh

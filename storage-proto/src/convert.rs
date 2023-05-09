@@ -304,7 +304,7 @@ impl From<generated::Message> for VersionedMessage {
         let account_keys = value
             .account_keys
             .into_iter()
-            .map(|key| Pubkey::new(&key))
+            .map(|key| Pubkey::try_from(key).unwrap())
             .collect();
         let recent_blockhash = Hash::new(&value.recent_blockhash);
         let instructions = value.instructions.into_iter().map(|ix| ix.into()).collect();
@@ -496,12 +496,20 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
         let loaded_addresses = LoadedAddresses {
             writable: loaded_writable_addresses
                 .into_iter()
-                .map(|key| Pubkey::new(&key))
-                .collect(),
+                .map(Pubkey::try_from)
+                .collect::<Result<_, _>>()
+                .map_err(|err| {
+                    let err = format!("Invalid writable address: {err:?}");
+                    Self::Error::new(bincode::ErrorKind::Custom(err))
+                })?,
             readonly: loaded_readonly_addresses
                 .into_iter()
-                .map(|key| Pubkey::new(&key))
-                .collect(),
+                .map(Pubkey::try_from)
+                .collect::<Result<_, _>>()
+                .map_err(|err| {
+                    let err = format!("Invalid readonly address: {err:?}");
+                    Self::Error::new(bincode::ErrorKind::Custom(err))
+                })?,
         };
         let return_data = if return_data_none {
             None
@@ -602,7 +610,7 @@ impl From<MessageAddressTableLookup> for generated::MessageAddressTableLookup {
 impl From<generated::MessageAddressTableLookup> for MessageAddressTableLookup {
     fn from(value: generated::MessageAddressTableLookup) -> Self {
         Self {
-            account_key: Pubkey::new(&value.account_key),
+            account_key: Pubkey::try_from(value.account_key).unwrap(),
             writable_indexes: value.writable_indexes,
             readonly_indexes: value.readonly_indexes,
         }
@@ -621,7 +629,7 @@ impl From<TransactionReturnData> for generated::ReturnData {
 impl From<generated::ReturnData> for TransactionReturnData {
     fn from(value: generated::ReturnData) -> Self {
         Self {
-            program_id: Pubkey::new(&value.program_id),
+            program_id: Pubkey::try_from(value.program_id).unwrap(),
             data: value.data,
         }
     }
@@ -737,6 +745,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     50 => InstructionError::MaxAccountsDataAllocationsExceeded,
                     51 => InstructionError::MaxAccountsExceeded,
                     52 => InstructionError::MaxInstructionTraceLengthExceeded,
+                    53 => InstructionError::BuiltinProgramsMustConsumeComputeUnits,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -1066,6 +1075,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             InstructionError::MaxInstructionTraceLengthExceeded => {
                                 tx_by_addr::InstructionErrorType::MaxInstructionTraceLengthExceeded
+                            }
+                            InstructionError::BuiltinProgramsMustConsumeComputeUnits => {
+                                tx_by_addr::InstructionErrorType::BuiltinProgramsMustConsumeComputeUnits
                             }
                         } as i32,
                         custom: match instruction_error {
@@ -1794,7 +1806,7 @@ mod test {
                     let transaction_error: TransactionError = tx_by_addr_error
                         .clone()
                         .try_into()
-                        .unwrap_or_else(|_| panic!("{:?} conversion implemented?", error));
+                        .unwrap_or_else(|_| panic!("{error:?} conversion implemented?"));
                     assert_eq!(tx_by_addr_error, transaction_error.into());
                 }
                 tx_by_addr::TransactionErrorType::InstructionError => {
@@ -1809,10 +1821,10 @@ mod test {
                                 }),
                                 transaction_details: None,
                             };
-                            let transaction_error: TransactionError =
-                                tx_by_addr_error.clone().try_into().unwrap_or_else(|_| {
-                                    panic!("{:?} conversion implemented?", ix_error)
-                                });
+                            let transaction_error: TransactionError = tx_by_addr_error
+                                .clone()
+                                .try_into()
+                                .unwrap_or_else(|_| panic!("{ix_error:?} conversion implemented?"));
                             assert_eq!(tx_by_addr_error, transaction_error.into());
                         } else {
                             let tx_by_addr_error = tx_by_addr::TransactionError {
@@ -1841,7 +1853,7 @@ mod test {
                     let transaction_error: TransactionError = tx_by_addr_error
                         .clone()
                         .try_into()
-                        .unwrap_or_else(|_| panic!("{:?} conversion implemented?", error));
+                        .unwrap_or_else(|_| panic!("{error:?} conversion implemented?"));
                     assert_eq!(tx_by_addr_error, transaction_error.into());
                 }
             }

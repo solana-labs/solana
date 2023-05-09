@@ -20,7 +20,7 @@ use {
     },
     regex::Regex,
     solana_client::connection_cache::ConnectionCache,
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
         bigtable_upload::ConfirmedBlockUploadConfig,
         bigtable_upload_service::BigTableUploadService, blockstore::Blockstore,
@@ -122,6 +122,10 @@ impl RpcRequestMiddleware {
             .unwrap()
     }
 
+    fn strip_leading_slash(path: &str) -> Option<&str> {
+        path.strip_prefix('/')
+    }
+
     fn is_file_get_path(&self, path: &str) -> bool {
         if path == DEFAULT_GENESIS_DOWNLOAD_PATH {
             return true;
@@ -131,12 +135,9 @@ impl RpcRequestMiddleware {
             return false;
         }
 
-        let starting_character = '/';
-        if !path.starts_with(starting_character) {
+        let Some(path) = Self::strip_leading_slash(path) else {
             return false;
-        }
-
-        let path = path.trim_start_matches(starting_character);
+        };
 
         self.full_snapshot_archive_path_regex.is_match(path)
             || self.incremental_snapshot_archive_path_regex.is_match(path)
@@ -189,8 +190,8 @@ impl RpcRequestMiddleware {
     }
 
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
-        let stem = path.split_at(1).1; // Drop leading '/' from path
         let filename = {
+            let stem = Self::strip_leading_slash(path).expect("path already verified");
             match path {
                 DEFAULT_GENESIS_DOWNLOAD_PATH => {
                     inc_new_counter_info!("rpc-get_genesis", 1);
@@ -356,7 +357,8 @@ impl JsonRpcService {
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         connection_cache: Arc<ConnectionCache>,
-        current_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_transaction_status_slot: Arc<AtomicU64>,
+        max_complete_rewards_slot: Arc<AtomicU64>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Result<Self, String> {
         info!("rpc bound to {:?}", rpc_addr);
@@ -376,7 +378,11 @@ impl JsonRpcService {
             LARGEST_ACCOUNTS_CACHE_DURATION,
         )));
 
-        let tpu_address = cluster_info.my_contact_info().tpu;
+        let tpu_address = match *connection_cache {
+            ConnectionCache::Quic(_) => ContactInfo::tpu_quic,
+            ConnectionCache::Udp(_) => ContactInfo::tpu,
+        }(&cluster_info.my_contact_info())
+        .map_err(|err| format!("{err}"))?;
 
         // sadly, some parts of our current rpc implemention block the jsonrpc's
         // _socket-listening_ event loop for too long, due to (blocking) long IO or intesive CPU,
@@ -424,7 +430,8 @@ impl JsonRpcService {
                                 bigtable_ledger_storage.clone(),
                                 blockstore.clone(),
                                 block_commitment_cache.clone(),
-                                current_transaction_status_slot.clone(),
+                                max_complete_transaction_status_slot.clone(),
+                                max_complete_rewards_slot.clone(),
                                 ConfirmedBlockUploadConfig::default(),
                                 exit_bigtable_ledger_upload_service.clone(),
                             )))
@@ -465,10 +472,12 @@ impl JsonRpcService {
             largest_accounts_cache,
             max_slots,
             leader_schedule_cache,
-            current_transaction_status_slot,
+            max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             prioritization_fee_cache,
         );
 
+        let exit = Arc::new(AtomicBool::new(false));
         let leader_info =
             poh_recorder.map(|recorder| ClusterTpuInfo::new(cluster_info.clone(), recorder));
         let _send_transaction_service = Arc::new(SendTransactionService::new_with_config(
@@ -478,6 +487,7 @@ impl JsonRpcService {
             receiver,
             &connection_cache,
             send_transaction_service_config,
+            exit.clone(),
         ));
 
         #[cfg(test)]
@@ -549,7 +559,10 @@ impl JsonRpcService {
         validator_exit
             .write()
             .unwrap()
-            .register_exit(Box::new(move || close_handle_.close()));
+            .register_exit(Box::new(move || {
+                close_handle_.close();
+                exit.store(true, Ordering::Relaxed);
+            }));
         Ok(Self {
             thread_hdl,
             #[cfg(test)]
@@ -573,11 +586,10 @@ impl JsonRpcService {
 mod tests {
     use {
         super::*,
-        crate::rpc::create_validator_exit,
+        crate::rpc::{create_validator_exit, tests::new_test_cluster_info},
         solana_gossip::{
-            contact_info::ContactInfo,
             crds::GossipRoute,
-            crds_value::{CrdsData, CrdsValue, SnapshotHashes},
+            crds_value::{AccountsHashes, CrdsData, CrdsValue},
         },
         solana_ledger::{
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -588,9 +600,7 @@ mod tests {
         solana_sdk::{
             genesis_config::{ClusterType, DEFAULT_GENESIS_ARCHIVE},
             signature::Signer,
-            signer::keypair::Keypair,
         },
-        solana_streamer::socket::SocketAddrSpace,
         std::{
             io::Write,
             net::{IpAddr, Ipv4Addr},
@@ -608,12 +618,8 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let bank = Bank::new_for_tests(&genesis_config);
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::default(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let cluster_info = Arc::new(new_test_cluster_info());
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let rpc_addr = SocketAddr::new(
             ip_addr,
             solana_net_utils::find_available_port_in_range(ip_addr, (10000, 65535)).unwrap(),
@@ -649,6 +655,7 @@ mod tests {
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
             connection_cache,
+            Arc::new(AtomicU64::default()),
             Arc::new(AtomicU64::default()),
             Arc::new(PrioritizationFeeCache::default()),
         )
@@ -689,6 +696,35 @@ mod tests {
     }
 
     #[test]
+    fn test_strip_prefix() {
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("/"), Some(""));
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("//"), Some("/"));
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("/abc"),
+            Some("abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("//abc"),
+            Some("/abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("/./abc"),
+            Some("./abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("/../abc"),
+            Some("../abc")
+        );
+
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash(""), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("./"), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("../"), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("."), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash(".."), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("abc"), None);
+    }
+
+    #[test]
     fn test_is_file_get_path() {
         let bank_forks = create_bank_forks();
         let rrm = RpcRequestMiddleware::new(
@@ -706,6 +742,8 @@ mod tests {
 
         assert!(rrm.is_file_get_path(DEFAULT_GENESIS_DOWNLOAD_PATH));
         assert!(!rrm.is_file_get_path(DEFAULT_GENESIS_ARCHIVE));
+        assert!(!rrm.is_file_get_path("//genesis.tar.bz2"));
+        assert!(!rrm.is_file_get_path("/../genesis.tar.bz2"));
 
         assert!(!rrm.is_file_get_path("/snapshot.tar.bz2")); // This is a redirect
 
@@ -755,8 +793,34 @@ mod tests {
             .is_file_get_path("../../../test/incremental-snapshot-123-456-xxx.tar"));
 
         assert!(!rrm.is_file_get_path("/"));
+        assert!(!rrm.is_file_get_path("//"));
+        assert!(!rrm.is_file_get_path("/."));
+        assert!(!rrm.is_file_get_path("/./"));
+        assert!(!rrm.is_file_get_path("/.."));
+        assert!(!rrm.is_file_get_path("/../"));
+        assert!(!rrm.is_file_get_path("."));
+        assert!(!rrm.is_file_get_path("./"));
+        assert!(!rrm.is_file_get_path(".//"));
         assert!(!rrm.is_file_get_path(".."));
+        assert!(!rrm.is_file_get_path("../"));
+        assert!(!rrm.is_file_get_path("..//"));
         assert!(!rrm.is_file_get_path("🎣"));
+
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("//snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("/./snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("/../snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "//incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "/./incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "/../incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
     }
 
     #[test]
@@ -833,11 +897,7 @@ mod tests {
 
     #[test]
     fn test_health_check_with_known_validators() {
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::default(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let health_check_slot_distance = 123;
         let override_health_check = Arc::new(AtomicBool::new(false));
         let startup_verification_complete = Arc::new(AtomicBool::new(true));
@@ -877,7 +937,7 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
                     known_validators[0],
                     vec![
                         (1, Hash::default()),
@@ -898,7 +958,7 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
                     known_validators[1],
                     vec![(1000 + health_check_slot_distance - 1, Hash::default())],
                 ))),
@@ -915,7 +975,7 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes::new(
                     known_validators[2],
                     vec![(1000 + health_check_slot_distance, Hash::default())],
                 ))),

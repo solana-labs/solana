@@ -27,9 +27,9 @@ pub fn get_append_vec_path(path: &str) -> TempFile {
         .sample_iter(&Alphanumeric)
         .take(30)
         .collect();
-    let dir = format!("{}/{}", out_dir, rand_string);
+    let dir = format!("{out_dir}/{rand_string}");
     let mut buf = PathBuf::new();
-    buf.push(&format!("{}/{}", dir, path));
+    buf.push(format!("{dir}/{path}"));
     std::fs::create_dir_all(dir).expect("Create directory failed");
     TempFile { path: buf }
 }
@@ -39,7 +39,7 @@ pub fn create_test_account(sample: usize) -> (StoredMeta, AccountSharedData) {
     let mut account = AccountSharedData::new(sample as u64, 0, &Pubkey::default());
     account.set_data((0..data_len).map(|_| data_len as u8).collect());
     let stored_meta = StoredMeta {
-        write_version: 0,
+        write_version_obsolete: 0,
         pubkey: Pubkey::default(),
         data_len: data_len as u64,
     };

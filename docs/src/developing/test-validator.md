@@ -140,15 +140,15 @@ JSON RPC URL: http://127.0.0.1:8899
 ```
 
 - The network address of the [Gossip](/validator/gossip#gossip-overview),
-  [Transaction Processing Unit](/validator/tpu) and [JSON RPC](clients/jsonrpc-api#json-rpc-api-reference)
+  [Transaction Processing Unit](/validator/tpu) and [JSON RPC](../api/http#json-rpc-api-reference)
   service, respectively
 
 ```
 ⠈ 00:36:02 | Processed Slot: 5142 | Confirmed Slot: 5142 | Finalized Slot: 5110 | Snapshot Slot: 5100 | Transactions: 5142 | ◎499.974295000
 ```
 
-- Session running time, current slot of the the three block
-  [commitment levels](clients/jsonrpc-api#configuring-state-commitment),
+- Session running time, current slot of the three block
+  [commitment levels](../api/http#configuring-state-commitment),
   slot height of the last snapshot, transaction count,
   [voting authority](/running-validator/vote-accounts#vote-authority) balance
 

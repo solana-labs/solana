@@ -44,7 +44,7 @@ The policy is as follows:
 ## Balancing the balances
 
 Before and after each instruction, the sum of all account balances must stay the same.
-E.g. if one account's balance is increased, another's must be decreased by the same ammount.
+E.g. if one account's balance is increased, another's must be decreased by the same amount.
 Because the runtime can not see changes to accounts which were not passed to it,
 all accounts for which the balances were modified must be passed,
 even if they are not needed in the called instruction.
@@ -61,7 +61,7 @@ As the transaction is processed compute units are consumed by its
 instruction's programs performing operations such as executing SBF instructions,
 calling syscalls, etc... When the transaction consumes its entire budget, or
 exceeds a bound such as attempting a call stack that is too deep, or loaded
-account data exceeds limit, the runtime halts the transaction processing and
+account data size exceeds limit, the runtime halts the transaction processing and
 returns an error.
 
 The following operations incur a compute cost:
@@ -116,54 +116,33 @@ for more information.
 
 ### Prioritization fees
 
-A transaction may set the maximum number of compute units it is allowed to
-consume and the compute unit price by including a `SetComputeUnitLimit` and a
-`SetComputeUnitPrice`
-[Compute budget instructions](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L22)
-respectively.
+As part of the Compute Budget, the runtime supports transactions including an
+**optional** fee to prioritize itself against others known as a
+[prioritization fee](./../../transaction_fees.md#prioritization-fee).
 
-If no `SetComputeUnitLimit` is provided the limit will be calculated as the
-product of the number of instructions in the transaction (excluding the [Compute
-budget instructions](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L22)) and the default per-instruction units, which is currently 200k.
+This _prioritization fee_ is calculated by multiplying the number
+of _compute units_ by the _compute unit price_ (measured in micro-lamports).
+These values may be set via the Compute Budget instructions `SetComputeUnitLimit`
+and `SetComputeUnitPrice` once per transaction.
 
-> **NOTE:** A transaction's [prioritization fee](./../../terminology.md#prioritization-fee) is calculated by multiplying the
-> number of _compute units_ by the _compute unit price_ (measured in micro-lamports)
-> set by the transaction via compute budget instructions.
-
-Transactions should request the minimum amount of compute units required for execution to minimize
-fees. Also note that fees are not adjusted when the number of requested compute
-units exceeds the number of compute units actually consumed by an executed
-transaction.
-
-Compute Budget instructions don't require any accounts and don't consume any
-compute units to process. Transactions can only contain one of each type of
-compute budget instruction, duplicate types will result in an error.
-
-The `ComputeBudgetInstruction::set_compute_unit_limit` and
-`ComputeBudgetInstruction::set_compute_unit_price` functions can be used to
-create these instructions:
-
-```rust
-let instruction = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
-```
-
-```rust
-let instruction = ComputeBudgetInstruction::set_compute_unit_price(1);
-```
+:::info
+You can learn more of the specifics of _how_ and _when_ to set a prioritization fee
+on the [transaction fees](./../../transaction_fees.md#prioritization-fee) page.
+:::
 
 ### Accounts data size limit
 
 A transaction should request the maximum bytes of accounts data it is
-allowed to load by including a `SetAccountsDataSizeLimit` instruction, requested
-limit is capped by `get_max_loaded_accounts_data_limit()`. If no
-`SetAccountsDataSizeLimit` is provided, the transaction is defaulted to
-have limit of `get_default_loaded_accounts_data_limit()`.
+allowed to load by including a `SetLoadedAccountsDataSizeLimit` instruction, requested
+limit is capped by `MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`. If no
+`SetLoadedAccountsDataSizeLimit` is provided, the transaction is defaulted to
+have limit of `MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`.
 
-The `ComputeBudgetInstruction::set_accounts_data_size_limit` function can be used
+The `ComputeBudgetInstruction::set_loaded_accounts_data_size_limit` function can be used
 to create this instruction:
 
 ```rust
-let instruction = ComputeBudgetInstruction::set_accounts_data_size_limit(100_000);
+let instruction = ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(100_000);
 ```
 
 ## New Features

@@ -8,7 +8,7 @@ use {
         cluster_nodes::{make_test_cluster, new_cluster_nodes, ClusterNodes},
         retransmit_stage::RetransmitStage,
     },
-    solana_gossip::contact_info::ContactInfo,
+    solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
     solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         shred::{Shred, ShredFlags},
@@ -63,7 +63,7 @@ fn get_retransmit_peers_deterministic_wrapper(b: &mut Bencher, unstaked_ratio: O
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new_for_benches(&genesis_config);
     let (nodes, cluster_nodes) = make_cluster_nodes(&mut rng, unstaked_ratio);
-    let slot_leader = nodes[1..].choose(&mut rng).unwrap().id;
+    let slot_leader = *nodes[1..].choose(&mut rng).unwrap().pubkey();
     let slot = rand::random::<u64>();
     b.iter(|| {
         get_retransmit_peers_deterministic(

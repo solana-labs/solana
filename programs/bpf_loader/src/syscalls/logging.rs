@@ -11,7 +11,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         let cost = invoke_context
             .get_compute_budget()
             .syscall_base_cost
@@ -24,6 +24,9 @@ declare_syscall!(
             len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
+            invoke_context
+                .feature_set
+                .is_active(&stop_truncating_strings_in_syscalls::id()),
             &mut |string: &str| {
                 stable_log::program_log(&invoke_context.get_log_collector(), string);
                 Ok(0)
@@ -44,16 +47,13 @@ declare_syscall!(
         arg4: u64,
         arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         let cost = invoke_context.get_compute_budget().log_64_units;
         consume_compute_meter(invoke_context, cost)?;
 
         stable_log::program_log(
             &invoke_context.get_log_collector(),
-            &format!(
-                "{:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
-                arg1, arg2, arg3, arg4, arg5
-            ),
+            &format!("{arg1:#x}, {arg2:#x}, {arg3:#x}, {arg4:#x}, {arg5:#x}"),
         );
         Ok(0)
     }
@@ -70,7 +70,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         let cost = invoke_context.get_compute_budget().syscall_base_cost;
         consume_compute_meter(invoke_context, cost)?;
 
@@ -94,7 +94,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
         consume_compute_meter(invoke_context, cost)?;
 
@@ -119,7 +119,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
+    ) -> Result<u64, Error> {
         let budget = invoke_context.get_compute_budget();
 
         consume_compute_meter(invoke_context, budget.syscall_base_cost)?;

@@ -1,16 +1,18 @@
+//! Solana account addresses.
+
 pub use solana_program::pubkey::*;
 
 /// New random Pubkey for tests and benchmarks.
 #[cfg(feature = "full")]
 pub fn new_rand() -> Pubkey {
-    Pubkey::new(&rand::random::<[u8; PUBKEY_BYTES]>())
+    Pubkey::from(rand::random::<[u8; PUBKEY_BYTES]>())
 }
 
 #[cfg(feature = "full")]
 pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write;
 
-    let printable = format!("{}", pubkey);
+    let printable = format!("{pubkey}");
     let serialized = serde_json::to_string(&printable)?;
 
     if let Some(outdir) = std::path::Path::new(&outfile).parent() {

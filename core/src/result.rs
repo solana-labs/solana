@@ -1,7 +1,8 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
 use {
-    solana_gossip::{cluster_info, gossip_error::GossipError},
+    crate::serve_repair::RepairVerifyError,
+    solana_gossip::{cluster_info, contact_info, gossip_error::GossipError},
     solana_ledger::blockstore,
     thiserror::Error,
 };
@@ -14,6 +15,8 @@ pub enum Error {
     ClusterInfo(#[from] cluster_info::ClusterInfoError),
     #[error(transparent)]
     Gossip(#[from] GossipError),
+    #[error(transparent)]
+    InvalidContactInfo(#[from] contact_info::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error("ReadyTimeout")]
@@ -30,6 +33,8 @@ pub enum Error {
     Serialize(#[from] std::boxed::Box<bincode::ErrorKind>),
     #[error(transparent)]
     WeightedIndex(#[from] rand::distributions::weighted::WeightedError),
+    #[error(transparent)]
+    RepairVerify(#[from] RepairVerifyError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

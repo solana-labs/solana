@@ -132,7 +132,7 @@ fn test_multi_fec_block_different_size_coding() {
         let recovered_data = Shredder::try_recovery(all_shreds, &reed_solomon_cache).unwrap();
         // Necessary in order to ensure the last shred in the slot
         // is part of the recovered set, and that the below `index`
-        // calcuation in the loop is correct
+        // calculation in the loop is correct
         assert!(fec_data_shreds.len() % 2 == 0);
         for (i, recovered_shred) in recovered_data.into_iter().enumerate() {
             let index = first_data_index + (i * 2) + 1;

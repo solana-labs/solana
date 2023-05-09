@@ -1,6 +1,7 @@
 //! Example Rust-based SBF sanity program that prints out the parameters passed to it
 
 #![allow(unreachable_code)]
+#![allow(clippy::integer_arithmetic)]
 
 extern crate solana_program;
 use solana_program::{

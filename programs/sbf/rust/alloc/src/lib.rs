@@ -1,5 +1,7 @@
 //! Example Rust-based SBF program that test dynamic memory allocation
 
+#![allow(clippy::integer_arithmetic)]
+
 #[macro_use]
 extern crate alloc;
 use {
@@ -11,17 +13,6 @@ use {
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
-    unsafe {
-        // Confirm large allocation fails
-
-        let layout = Layout::from_size_align(std::usize::MAX, mem::align_of::<u8>()).unwrap();
-        let ptr = alloc::alloc::alloc(layout);
-        if !ptr.is_null() {
-            msg!("Error: Alloc of very larger buffer should fail");
-            panic!();
-        }
-    }
-
     unsafe {
         // Test modest allocation and de-allocation
 
@@ -48,7 +39,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
             *ptr.add(i) = i as u8;
         }
         for i in 0..ITERS {
-            assert_eq!(*ptr.add(i as usize), i as u8);
+            assert_eq!(*ptr.add(i), i as u8);
         }
         sol_log_64(0x3, 0, 0, 0, u64::from(*ptr.add(42)));
         assert_eq!(*ptr.add(42), 42);

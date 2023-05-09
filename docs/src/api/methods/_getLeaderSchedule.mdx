@@ -1,0 +1,96 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getLeaderSchedule
+
+Returns the leader schedule for an epoch
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"u64"} optional={true}>
+Fetch the leader schedule for the epoch that corresponds to the provided slot.
+
+<li>If unspecified, the leader schedule for the current epoch is fetched</li>
+
+</Parameter>
+
+<Parameter type={"object"} optional={true}>
+
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  href="/api/http#configuring-state-commitment"
+></Field>
+
+<Field name="identity" type="string" optional={true}>
+  Only return results for this validator identity (base-58 encoded)
+</Field>
+
+</Parameter>
+
+### Result:
+
+Returns a result with one of the two following values:
+
+- `<null>` - if requested epoch is not found, or
+- `<object>` - the result field will be a dictionary of validator identities,
+  as base-58 encoded strings, and their corresponding leader slot indices as values
+  (indices are relative to the first slot in the requested epoch)
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getLeaderSchedule",
+    "params": [
+      null,
+      {
+        "identity": "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"
+      }
+    ]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F": [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+      39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
+      57, 58, 59, 60, 61, 62, 63
+    ]
+  },
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

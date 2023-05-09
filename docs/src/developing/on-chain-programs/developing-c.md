@@ -56,10 +56,9 @@ information on how to write a test case.
 ## Program Entrypoint
 
 Programs export a known entrypoint symbol which the Solana runtime looks up and
-calls when invoking a program. Solana supports multiple [versions of the SBF
-loader](overview.md#versions) and the entrypoints may vary between them.
+calls when invoking a program. Solana supports multiple versions of the SBF loader and the entrypoints may vary between them.
 Programs must be written for and deployed to the same loader. For more details
-see the [overview](overview#loaders).
+see the [FAQ section on Loaders](./faq.md#loaders).
 
 Currently there are two supported loaders [SBF
 Loader](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17)
@@ -104,7 +103,7 @@ their own deserialization function they need to ensure that any modifications
 the program wishes to commit must be written back into the input byte array.
 
 Details on how the loader serializes the program inputs can be found in the
-[Input Parameter Serialization](overview.md#input-parameter-serialization) docs.
+[Input Parameter Serialization](./faq.md#input-parameter-serialization) docs.
 
 ## Data Types
 

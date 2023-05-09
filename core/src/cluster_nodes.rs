@@ -5,11 +5,11 @@ use {
     rand::{seq::SliceRandom, Rng, SeedableRng},
     rand_chacha::ChaChaRng,
     solana_gossip::{
-        cluster_info::{compute_retransmit_peers, ClusterInfo},
-        contact_info::ContactInfo,
+        cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
         crds::GossipRoute,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         crds_value::{CrdsData, CrdsValue},
+        legacy_contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
         weighted_shuffle::WeightedShuffle,
     },
     solana_ledger::shred::ShredId,
@@ -17,8 +17,9 @@ use {
     solana_sdk::{
         clock::{Epoch, Slot},
         feature_set,
+        native_token::LAMPORTS_PER_SOL,
         pubkey::Pubkey,
-        signature::Keypair,
+        signature::{Keypair, Signer},
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -33,7 +34,16 @@ use {
         sync::{Arc, Mutex},
         time::{Duration, Instant},
     },
+    thiserror::Error,
 };
+
+pub(crate) const MAX_NUM_TURBINE_HOPS: usize = 4;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Loopback from slot leader: {leader}, shred: {shred:?}")]
+    Loopback { leader: Pubkey, shred: ShredId },
+}
 
 #[allow(clippy::large_enum_variant)]
 enum NodeId {
@@ -83,7 +93,7 @@ impl Node {
     fn pubkey(&self) -> Pubkey {
         match &self.node {
             NodeId::Pubkey(pubkey) => *pubkey,
-            NodeId::ContactInfo(node) => node.id,
+            NodeId::ContactInfo(node) => *node.pubkey(),
         }
     }
 
@@ -98,32 +108,42 @@ impl Node {
 
 impl<T> ClusterNodes<T> {
     pub(crate) fn submit_metrics(&self, name: &'static str, now: u64) {
+        let mut epoch_stakes = 0;
         let mut num_nodes_dead = 0;
         let mut num_nodes_staked = 0;
         let mut num_nodes_stale = 0;
+        let mut stake_dead = 0;
+        let mut stake_stale = 0;
         for node in &self.nodes {
+            epoch_stakes += node.stake;
             if node.stake != 0u64 {
                 num_nodes_staked += 1;
             }
-            match node.contact_info() {
+            match node.contact_info().map(ContactInfo::wallclock) {
                 None => {
                     num_nodes_dead += 1;
+                    stake_dead += node.stake;
                 }
-                Some(node) => {
-                    let age = now.saturating_sub(node.wallclock);
+                Some(wallclock) => {
+                    let age = now.saturating_sub(wallclock);
                     if age > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
                         num_nodes_stale += 1;
+                        stake_stale += node.stake;
                     }
                 }
             }
         }
         num_nodes_stale += num_nodes_dead;
+        stake_stale += stake_dead;
         datapoint_info!(
             name,
+            ("epoch_stakes", epoch_stakes / LAMPORTS_PER_SOL, i64),
             ("num_nodes", self.nodes.len(), i64),
             ("num_nodes_dead", num_nodes_dead, i64),
             ("num_nodes_staked", num_nodes_staked, i64),
             ("num_nodes_stale", num_nodes_stale, i64),
+            ("stake_dead", stake_dead / LAMPORTS_PER_SOL, i64),
+            ("stake_stale", stake_stale / LAMPORTS_PER_SOL, i64),
         );
     }
 }
@@ -148,49 +168,52 @@ impl ClusterNodes<RetransmitStage> {
         shred: &ShredId,
         root_bank: &Bank,
         fanout: usize,
-    ) -> (/*root_distance:*/ usize, Vec<SocketAddr>) {
+    ) -> Result<(/*root_distance:*/ usize, Vec<SocketAddr>), Error> {
         let RetransmitPeers {
             root_distance,
             neighbors,
             children,
             addrs,
             frwds,
-        } = self.get_retransmit_peers(slot_leader, shred, root_bank, fanout);
+        } = self.get_retransmit_peers(slot_leader, shred, root_bank, fanout)?;
         if neighbors.is_empty() {
-            let peers = children
-                .into_iter()
-                .filter_map(Node::contact_info)
-                .filter(|node| addrs.get(&node.tvu) == Some(&node.id))
-                .map(|node| node.tvu)
-                .collect();
-            return (root_distance, peers);
+            let peers = children.into_iter().filter_map(|node| {
+                node.contact_info()?
+                    .tvu()
+                    .ok()
+                    .filter(|addr| addrs.get(addr) == Some(&node.pubkey()))
+            });
+            return Ok((root_distance, peers.collect()));
         }
         // If the node is on the critical path (i.e. the first node in each
         // neighborhood), it should send the packet to tvu socket of its
         // children and also tvu_forward socket of its neighbors. Otherwise it
         // should only forward to tvu_forwards socket of its children.
         if neighbors[0].pubkey() != self.pubkey {
-            let peers = children
-                .into_iter()
-                .filter_map(Node::contact_info)
-                .filter(|node| frwds.get(&node.tvu_forwards) == Some(&node.id))
-                .map(|node| node.tvu_forwards);
-            return (root_distance, peers.collect());
+            let peers = children.into_iter().filter_map(|node| {
+                node.contact_info()?
+                    .tvu_forwards()
+                    .ok()
+                    .filter(|addr| frwds.get(addr) == Some(&node.pubkey()))
+            });
+            return Ok((root_distance, peers.collect()));
         }
         // First neighbor is this node itself, so skip it.
         let peers = neighbors[1..]
             .iter()
-            .filter_map(|node| node.contact_info())
-            .filter(|node| frwds.get(&node.tvu_forwards) == Some(&node.id))
-            .map(|node| node.tvu_forwards)
-            .chain(
-                children
-                    .into_iter()
-                    .filter_map(Node::contact_info)
-                    .filter(|node| addrs.get(&node.tvu) == Some(&node.id))
-                    .map(|node| node.tvu),
-            );
-        (root_distance, peers.collect())
+            .filter_map(|node| {
+                node.contact_info()?
+                    .tvu_forwards()
+                    .ok()
+                    .filter(|addr| frwds.get(addr) == Some(&node.pubkey()))
+            })
+            .chain(children.into_iter().filter_map(|node| {
+                node.contact_info()?
+                    .tvu()
+                    .ok()
+                    .filter(|addr| addrs.get(addr) == Some(&node.pubkey()))
+            }));
+        Ok((root_distance, peers.collect()))
     }
 
     pub fn get_retransmit_peers(
@@ -199,15 +222,19 @@ impl ClusterNodes<RetransmitStage> {
         shred: &ShredId,
         root_bank: &Bank,
         fanout: usize,
-    ) -> RetransmitPeers {
+    ) -> Result<RetransmitPeers, Error> {
         let shred_seed = shred.seed(slot_leader);
         let mut weighted_shuffle = self.weighted_shuffle.clone();
         // Exclude slot leader from list of nodes.
         if slot_leader == &self.pubkey {
-            error!("retransmit from slot leader: {}", slot_leader);
-        } else if let Some(index) = self.index.get(slot_leader) {
+            return Err(Error::Loopback {
+                leader: *slot_leader,
+                shred: *shred,
+            });
+        }
+        if let Some(index) = self.index.get(slot_leader) {
             weighted_shuffle.remove_index(*index);
-        };
+        }
         let mut addrs = HashMap::<SocketAddr, Pubkey>::with_capacity(self.nodes.len());
         let mut frwds = HashMap::<SocketAddr, Pubkey>::with_capacity(self.nodes.len());
         let mut rng = ChaChaRng::from_seed(shred_seed);
@@ -217,9 +244,13 @@ impl ClusterNodes<RetransmitStage> {
             .map(|index| &self.nodes[index])
             .inspect(|node| {
                 if let Some(node) = node.contact_info() {
-                    addrs.entry(node.tvu).or_insert(node.id);
+                    if let Ok(addr) = node.tvu() {
+                        addrs.entry(addr).or_insert(*node.pubkey());
+                    }
                     if !drop_redundant_turbine_path {
-                        frwds.entry(node.tvu_forwards).or_insert(node.id);
+                        if let Ok(addr) = node.tvu_forwards() {
+                            frwds.entry(addr).or_insert(*node.pubkey());
+                        }
                     }
                 }
             })
@@ -233,36 +264,40 @@ impl ClusterNodes<RetransmitStage> {
                 0
             } else if self_index <= fanout {
                 1
-            } else {
+            } else if self_index <= fanout.saturating_add(1).saturating_mul(fanout) {
                 2
+            } else {
+                3 // If changed, update MAX_NUM_TURBINE_HOPS.
             };
             let peers = get_retransmit_peers(fanout, self_index, &nodes);
-            return RetransmitPeers {
+            return Ok(RetransmitPeers {
                 root_distance,
                 neighbors: Vec::default(),
                 children: peers.collect(),
                 addrs,
                 frwds,
-            };
+            });
         }
         let root_distance = if self_index == 0 {
             0
         } else if self_index < fanout {
             1
-        } else {
+        } else if self_index < fanout.saturating_add(1).saturating_mul(fanout) {
             2
+        } else {
+            3 // If changed, update MAX_NUM_TURBINE_HOPS.
         };
         let (neighbors, children) = compute_retransmit_peers(fanout, self_index, &nodes);
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
         debug_assert_eq!(neighbors[self_index % fanout].pubkey(), self.pubkey);
-        RetransmitPeers {
+        Ok(RetransmitPeers {
             root_distance,
             neighbors,
             children,
             addrs,
             frwds,
-        }
+        })
     }
 }
 
@@ -288,7 +323,7 @@ pub fn new_cluster_nodes<T: 'static>(
         nodes,
         index,
         weighted_shuffle,
-        _phantom: PhantomData::default(),
+        _phantom: PhantomData,
     }
 }
 
@@ -299,12 +334,14 @@ fn get_nodes(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Vec<N
     // The local node itself.
     std::iter::once({
         let stake = stakes.get(&self_pubkey).copied().unwrap_or_default();
-        let node = NodeId::from(cluster_info.my_contact_info());
+        let node = LegacyContactInfo::try_from(&cluster_info.my_contact_info())
+            .map(NodeId::from)
+            .expect("Operator must spin up node with valid contact-info");
         Node { node, stake }
     })
     // All known tvu-peers from gossip.
     .chain(cluster_info.tvu_peers().into_iter().map(|node| {
-        let stake = stakes.get(&node.id).copied().unwrap_or_default();
+        let stake = stakes.get(node.pubkey()).copied().unwrap_or_default();
         let node = NodeId::from(node);
         Node { node, stake }
     }))
@@ -441,11 +478,17 @@ pub fn make_test_cluster<R: Rng>(
     HashMap<Pubkey, u64>, // stakes
     ClusterInfo,
 ) {
+    use solana_gossip::contact_info::ContactInfo;
     let (unstaked_numerator, unstaked_denominator) = unstaked_ratio.unwrap_or((1, 7));
-    let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(rng, None))
-        .take(num_nodes)
-        .collect();
+    let mut nodes: Vec<_> = repeat_with(|| {
+        let pubkey = solana_sdk::pubkey::new_rand();
+        ContactInfo::new_localhost(&pubkey, /*wallclock:*/ timestamp())
+    })
+    .take(num_nodes)
+    .collect();
     nodes.shuffle(rng);
+    let keypair = Arc::new(Keypair::new());
+    nodes[0].set_pubkey(keypair.pubkey());
     let this_node = nodes[0].clone();
     let mut stakes: HashMap<Pubkey, u64> = nodes
         .iter()
@@ -453,23 +496,24 @@ pub fn make_test_cluster<R: Rng>(
             if rng.gen_ratio(unstaked_numerator, unstaked_denominator) {
                 None // No stake for some of the nodes.
             } else {
-                Some((node.id, rng.gen_range(0, 20)))
+                Some((*node.pubkey(), rng.gen_range(0, 20)))
             }
         })
         .collect();
     // Add some staked nodes with no contact-info.
     stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0, 20))).take(100));
-    let cluster_info = ClusterInfo::new(
-        this_node,
-        Arc::new(Keypair::new()),
-        SocketAddrSpace::Unspecified,
-    );
+    let cluster_info = ClusterInfo::new(this_node, keypair, SocketAddrSpace::Unspecified);
+    let nodes: Vec<_> = nodes
+        .iter()
+        .map(LegacyContactInfo::try_from)
+        .collect::<Result<_, _>>()
+        .unwrap();
     {
         let now = timestamp();
         let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
         // First node is pushed to crds table by ClusterInfo constructor.
         for node in nodes.iter().skip(1) {
-            let node = CrdsData::ContactInfo(node.clone());
+            let node = CrdsData::LegacyContactInfo(node.clone());
             let node = CrdsValue::new_unsigned(node);
             assert_eq!(
                 gossip_crds.insert(node, now, GossipRoute::LocalMessage),
@@ -480,11 +524,52 @@ pub fn make_test_cluster<R: Rng>(
     (nodes, stakes, cluster_info)
 }
 
+pub(crate) fn get_data_plane_fanout(shred_slot: Slot, root_bank: &Bank) -> usize {
+    if enable_turbine_fanout_experiments(shred_slot, root_bank) {
+        // Allocate ~2% of slots to turbine fanout experiments.
+        match shred_slot % 359 {
+            11 => 64,
+            61 => 768,
+            111 => 128,
+            161 => 640,
+            211 => 256,
+            261 => 512,
+            311 => 384,
+            _ => DATA_PLANE_FANOUT,
+        }
+    } else {
+        DATA_PLANE_FANOUT
+    }
+}
+
 fn drop_redundant_turbine_path(shred_slot: Slot, root_bank: &Bank) -> bool {
-    let feature_slot = root_bank
-        .feature_set
-        .activated_slot(&feature_set::drop_redundant_turbine_path::id());
-    match feature_slot {
+    check_feature_activation(
+        &feature_set::drop_redundant_turbine_path::id(),
+        shred_slot,
+        root_bank,
+    )
+}
+
+fn enable_turbine_fanout_experiments(shred_slot: Slot, root_bank: &Bank) -> bool {
+    check_feature_activation(
+        &feature_set::enable_turbine_fanout_experiments::id(),
+        shred_slot,
+        root_bank,
+    ) && !check_feature_activation(
+        &feature_set::disable_turbine_fanout_experiments::id(),
+        shred_slot,
+        root_bank,
+    )
+}
+
+// Returns true if the feature is effective for the shred slot.
+#[must_use]
+pub(crate) fn check_feature_activation(
+    feature: &Pubkey,
+    shred_slot: Slot,
+    root_bank: &Bank,
+) -> bool {
+    match root_bank.feature_set.activated_slot(feature) {
         None => false,
         Some(feature_slot) => {
             let epoch_schedule = root_bank.epoch_schedule();
@@ -518,7 +603,13 @@ mod tests {
                 .map(|node| (node.pubkey(), node))
                 .collect();
             for node in &nodes {
-                assert_eq!(cluster_nodes[&node.id].contact_info().unwrap().id, node.id);
+                assert_eq!(
+                    cluster_nodes[node.pubkey()]
+                        .contact_info()
+                        .unwrap()
+                        .pubkey(),
+                    node.pubkey()
+                );
             }
             for (pubkey, stake) in &stakes {
                 if *stake > 0 {
@@ -548,7 +639,13 @@ mod tests {
                 .map(|node| (node.pubkey(), node))
                 .collect();
             for node in &nodes {
-                assert_eq!(cluster_nodes[&node.id].contact_info().unwrap().id, node.id);
+                assert_eq!(
+                    cluster_nodes[node.pubkey()]
+                        .contact_info()
+                        .unwrap()
+                        .pubkey(),
+                    node.pubkey()
+                );
             }
             for (pubkey, stake) in &stakes {
                 if *stake > 0 {

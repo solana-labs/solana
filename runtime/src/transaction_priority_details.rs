@@ -1,5 +1,5 @@
 use {
-    solana_program_runtime::compute_budget::{self, ComputeBudget},
+    solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
         instruction::CompiledInstruction,
         pubkey::Pubkey,
@@ -25,9 +25,8 @@ pub trait GetTransactionPriorityDetails {
                 instructions,
                 true,  // use default units per instruction
                 false, // stop supporting prioritization by request_units_deprecated instruction
-                false, //transaction priority doesn't care about accounts data size limit,
-                compute_budget::LoadedAccountsDataLimitType::V0, // transaction priority doesn't
-                       // care about accounts data size limit.
+                true,  // enable request heap frame instruction
+                true,  // enable support set accounts data size instruction
             )
             .ok()?;
         Some(TransactionPriorityDetails {

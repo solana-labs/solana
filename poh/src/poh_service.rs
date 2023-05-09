@@ -96,7 +96,7 @@ impl PohTiming {
 impl PohService {
     pub fn new(
         poh_recorder: Arc<RwLock<PohRecorder>>,
-        poh_config: &Arc<PohConfig>,
+        poh_config: &PohConfig,
         poh_exit: &Arc<AtomicBool>,
         ticks_per_slot: u64,
         pinned_cpu_core: usize,
@@ -111,14 +111,14 @@ impl PohService {
                 solana_sys_tuner::request_realtime_poh();
                 if poh_config.hashes_per_tick.is_none() {
                     if poh_config.target_tick_count.is_none() {
-                        Self::sleepy_tick_producer(
+                        Self::low_power_tick_producer(
                             poh_recorder,
                             &poh_config,
                             &poh_exit_,
                             record_receiver,
                         );
                     } else {
-                        Self::short_lived_sleepy_tick_producer(
+                        Self::short_lived_low_power_tick_producer(
                             poh_recorder,
                             &poh_config,
                             &poh_exit_,
@@ -162,7 +162,7 @@ impl PohService {
         target_tick_duration_ns.saturating_sub(adjustment_per_tick)
     }
 
-    fn sleepy_tick_producer(
+    fn low_power_tick_producer(
         poh_recorder: Arc<RwLock<PohRecorder>>,
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,
@@ -206,7 +206,7 @@ impl PohService {
         }
     }
 
-    fn short_lived_sleepy_tick_producer(
+    fn short_lived_low_power_tick_producer(
         poh_recorder: Arc<RwLock<PohRecorder>>,
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,
@@ -414,11 +414,11 @@ mod tests {
             let default_target_tick_duration =
                 timing::duration_as_us(&PohConfig::default().target_tick_duration);
             let target_tick_duration = Duration::from_micros(default_target_tick_duration);
-            let poh_config = Arc::new(PohConfig {
+            let poh_config = PohConfig {
                 hashes_per_tick: Some(clock::DEFAULT_HASHES_PER_TICK),
                 target_tick_duration,
                 target_tick_count: None,
-            });
+            };
             let exit = Arc::new(AtomicBool::new(false));
 
             let ticks_per_slot = bank.ticks_per_slot();
@@ -431,7 +431,7 @@ mod tests {
                 Some((4, 4)),
                 ticks_per_slot,
                 &Pubkey::default(),
-                &blockstore,
+                blockstore,
                 &leader_schedule_cache,
                 &poh_config,
                 exit.clone(),

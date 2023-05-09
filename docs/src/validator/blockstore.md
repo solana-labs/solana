@@ -62,9 +62,11 @@ Repair requests for recent shreds are served out of RAM or recent files and out 
 
 ## Blockstore APIs
 
-The Blockstore offers a subscription based API that ReplayStage uses to ask for entries it's interested in. The entries will be sent on a channel exposed by the Blockstore. These subscription API's are as follows: 1. `fn get_slots_since(slot_indexes: &[u64]) -> Vec<SlotMeta>`: Returns new slots connecting to any element of the list `slot_indexes`.
+The Blockstore offers a subscription based API that ReplayStage uses to ask for entries it's interested in. These subscription API's are as follows:
 
-1. `fn get_slot_entries(slot_index: u64, entry_start_index: usize, max_entries: Option<u64>) -> Vec<Entry>`: Returns the entry vector for the slot starting with `entry_start_index`, capping the result at `max` if `max_entries == Some(max)`, otherwise, no upper limit on the length of the return vector is imposed.
+1. `fn get_slots_since(slots: &[u64]) -> Result<HashMap<u64, Vec<u64>>>`: Returns slots that are connected to any of the elements of `slots`. This method enables the discovery of new children slots.
+
+2. `fn get_slot_entries(slot: Slot, shred_start_index: u64) -> Result<Vec<Entry>>`: For the specified `slot`, return a vector of the available, contiguous entries starting from `shred_start_index`. Shreds are fragments of serialized entries so the conversion from entry index to shred index is not one-to-one. However, there is a similar function `get_slot_entries_with_shred_info()` that returns the number of shreds that comprise the returned entry vector. This allows a caller to track progress through the slot.
 
 Note: Cumulatively, this means that the replay stage will now have to know when a slot is finished, and subscribe to the next slot it's interested in to get the next set of entries. Previously, the burden of chaining slots fell on the Blockstore.
 
@@ -72,17 +74,14 @@ Note: Cumulatively, this means that the replay stage will now have to know when 
 
 The bank exposes to replay stage:
 
-1. `prev_hash`: which PoH chain it's working on as indicated by the hash of the last
+1. `prev_hash`: which PoH chain it's working on as indicated by the hash of the last entry it processed
 
-   entry it processed
+2. `tick_height`: the ticks in the PoH chain currently being verified by this bank
 
-2. `tick_height`: the ticks in the PoH chain currently being verified by this
-
-   bank
-
-3. `votes`: a stack of records that contain: 1. `prev_hashes`: what anything after this vote must chain to in PoH 2. `tick_height`: the tick height at which this vote was cast 3. `lockout period`: how long a chain must be observed to be in the ledger to
-
-   be able to be chained below this vote
+3. `votes`: a stack of records that contains:
+    * `prev_hashes`: what anything after this vote must chain to in PoH
+    * `tick_height`: the tick height at which this vote was cast
+    * `lockout period`: how long a chain must be observed to be in the ledger to be able to be chained below this vote
 
 Replay stage uses Blockstore APIs to find the longest chain of entries it can hang off a previous vote. If that chain of entries does not hang off the latest vote, the replay stage rolls back the bank to that vote and replays the chain from there.
 

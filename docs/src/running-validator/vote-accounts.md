@@ -106,8 +106,8 @@ The authorized withdrawer is also required to sign any transaction to change
 a vote account's [commission](#commission), and to change the validator
 identity on a vote account.
 
-Because theft of a authorized withdrawer keypair can give complete control over
-the operation of a validator to an attacker, is is advised to keep the withdraw
+Because theft of an authorized withdrawer keypair can give complete control over
+the operation of a validator to an attacker, it is advised to keep the withdraw
 authority keypair in an offline/cold wallet in a secure location.  The withdraw
 authority keypair is not needed during operation of a validator and should not
 stored on the validator itself.
@@ -152,7 +152,7 @@ creating an account with `--commission 10` will set a 10% commission.
 
 ## Key Rotation
 
-Rotating the vote account authority keys require special handling when dealing
+Rotating the vote account authority keys requires special handling when dealing
 with a live validator.
 
 Note that vote account key rotation has no effect on the stake accounts that
@@ -163,7 +163,7 @@ without any impact to staking rewards.
 ### Vote Account Validator Identity
 
 You will need access to the _authorized withdrawer_ keypair for the vote account to
-change the validator identity. The follow steps assume that
+change the validator identity. The following steps assume that
 `~/authorized_withdrawer.json` is that keypair.
 
 1. Create the new validator identity keypair, `solana-keygen new -o ~/new-validator-keypair.json`.
@@ -230,7 +230,7 @@ then a two-stage signing process using a [Durable Nonce](../offline-signing/dura
 3. When the `solana vote-authorize-...-checked` command successfully executes, it will output transaction signatures that Entity B must share with Entity A
 4. Entity A then runs a similar `solana vote-authorize-voter-checked` or `solana vote-authorize-withdrawer-checked` command with the following changes:
   - the `--sign-only` argument is removed, and replaced with a `--signer` argument for each of the signatures provided by Entity B
-  - the address of Entity A's existing authority is replaced with the corresponding keypair, and the the keypair for Entity B's new authority is replaced with the correponding address
+  - the address of Entity A's existing authority is replaced with the corresponding keypair, and the keypair for Entity B's new authority is replaced with the corresponding address
 
 On success the authority is now changed without Entity A or B having to reveal keypairs to the other even though both entities signed the transaction.
 

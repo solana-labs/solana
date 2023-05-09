@@ -1,6 +1,6 @@
 //! Test mem functions
 
-#[cfg(not(feature = "no-entrypoint"))]
+#[cfg(any(not(feature = "no-entrypoint"), feature = "test-bpf"))]
 pub mod entrypoint;
 
 pub trait MemOps {

@@ -3,13 +3,18 @@ name: release-artifacts-auto
 on:
   push:
     branches:
-      - master
+      # - master
       - v[0-9]+.[0-9]+
     tags:
       - v[0-9]+.[0-9]+.[0-9]+
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   release-artifacts:
+    if: github.repository == 'solana-labs/solana'
     uses: ./.github/workflows/release-artifacts.yml
     with:
       commit: ${{ github.sha }}

@@ -1,0 +1,67 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getBlockTime
+
+Returns the estimated production time of a block.
+
+:::info
+Each validator reports their UTC time to the ledger on a regular interval by
+intermittently adding a timestamp to a Vote for a particular block. A requested
+block's time is calculated from the stake-weighted mean of the Vote timestamps
+in a set of recent blocks recorded on the ledger.
+:::
+
+<DocSideBySide>
+
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"u64"} required={true}>
+  block number, identified by Slot
+</Parameter>
+
+### Result:
+
+- `<i64>` - estimated production time, as Unix timestamp (seconds since the Unix epoch)
+- `<null>` - timestamp is not available for this block
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc":"2.0", "id":1,
+    "method": "getBlockTime",
+    "params":[5]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": 1574721591,
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

@@ -216,7 +216,7 @@ mod tests {
     //        print(
     //            "\n\"{}\", // {:?}",
     //            hex,
-    //            Pubkey::new(&hex::decode(hex).unwrap())
+    //            Pubkey::try_from(&hex::decode(hex).unwrap()).unwrap()
     //        );
     //    });
     //    println();

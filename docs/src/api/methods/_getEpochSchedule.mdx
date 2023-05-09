@@ -1,0 +1,67 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getEpochSchedule
+
+Returns the epoch schedule information from this cluster's genesis config
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+**None**
+
+### Result:
+
+The result field will be an object with the following fields:
+
+- `slotsPerEpoch: <u64>` - the maximum number of slots in each epoch
+- `leaderScheduleSlotOffset: <u64>` - the number of slots before beginning of an epoch to calculate a leader schedule for that epoch
+- `warmup: <bool>` - whether epochs start short and grow
+- `firstNormalEpoch: <u64>` - first normal-length epoch, log2(slotsPerEpoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
+- `firstNormalSlot: <u64>` - MINIMUM_SLOTS_PER_EPOCH \* (2.pow(firstNormalEpoch) - 1)
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc":"2.0","id":1,
+    "method":"getEpochSchedule"
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "firstNormalEpoch": 8,
+    "firstNormalSlot": 8160,
+    "leaderScheduleSlotOffset": 8192,
+    "slotsPerEpoch": 8192,
+    "warmup": true
+  },
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

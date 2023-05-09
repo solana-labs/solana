@@ -1,6 +1,7 @@
 use {
     crate::{
         consensus::{Result, Tower, TowerError, TowerVersions},
+        tower1_14_11::Tower1_14_11,
         tower1_7_14::SavedTower1_7_14,
     },
     solana_sdk::{
@@ -36,7 +37,7 @@ impl SavedTowerVersions {
                 if !t.signature.verify(node_pubkey.as_ref(), &t.data) {
                     return Err(TowerError::InvalidSignature);
                 }
-                bincode::deserialize(&t.data).map(TowerVersions::Current)
+                bincode::deserialize(&t.data).map(TowerVersions::V1_14_11)
             }
         };
         tv.map_err(|e| e.into()).and_then(|tv: TowerVersions| {
@@ -94,7 +95,10 @@ impl SavedTower {
             )));
         }
 
-        let data = bincode::serialize(tower)?;
+        // SavedTower always stores its data in 1_14_11 format
+        let tower: Tower1_14_11 = tower.clone().into();
+
+        let data = bincode::serialize(&tower)?;
         let signature = keypair.sign_message(&data);
         Ok(Self {
             signature,
@@ -138,13 +142,13 @@ impl FileTowerStorage {
     // Old filename for towers pre 1.9 (VoteStateUpdate)
     pub fn old_filename(&self, node_pubkey: &Pubkey) -> PathBuf {
         self.tower_path
-            .join(format!("tower-{}", node_pubkey))
+            .join(format!("tower-{node_pubkey}"))
             .with_extension("bin")
     }
 
     pub fn filename(&self, node_pubkey: &Pubkey) -> PathBuf {
         self.tower_path
-            .join(format!("tower-1_9-{}", node_pubkey))
+            .join(format!("tower-1_9-{node_pubkey}"))
             .with_extension("bin")
     }
 
@@ -237,25 +241,22 @@ impl EtcdTowerStorage {
             .unwrap();
 
         let client = runtime
-            .block_on(async {
-                etcd_client::Client::connect(
-                    endpoints,
-                    tls_config.map(|tls_config| {
-                        etcd_client::ConnectOptions::default().with_tls(
-                            etcd_client::TlsOptions::new()
-                                .domain_name(tls_config.domain_name)
-                                .ca_certificate(etcd_client::Certificate::from_pem(
-                                    tls_config.ca_certificate,
-                                ))
-                                .identity(etcd_client::Identity::from_pem(
-                                    tls_config.identity_certificate,
-                                    tls_config.identity_private_key,
-                                )),
-                        )
-                    }),
-                )
-                .await
-            })
+            .block_on(etcd_client::Client::connect(
+                endpoints,
+                tls_config.map(|tls_config| {
+                    etcd_client::ConnectOptions::default().with_tls(
+                        etcd_client::TlsOptions::new()
+                            .domain_name(tls_config.domain_name)
+                            .ca_certificate(etcd_client::Certificate::from_pem(
+                                tls_config.ca_certificate,
+                            ))
+                            .identity(etcd_client::Identity::from_pem(
+                                tls_config.identity_certificate,
+                                tls_config.identity_private_key,
+                            )),
+                    )
+                }),
+            ))
             .map_err(Self::etdc_to_tower_error)?;
 
         Ok(Self {
@@ -266,8 +267,8 @@ impl EtcdTowerStorage {
     }
 
     fn get_keys(node_pubkey: &Pubkey) -> (String, String) {
-        let instance_key = format!("{}/instance", node_pubkey);
-        let tower_key = format!("{}/tower", node_pubkey);
+        let instance_key = format!("{node_pubkey}/instance");
+        let tower_key = format!("{node_pubkey}/tower");
         (instance_key, tower_key)
     }
 
@@ -311,7 +312,7 @@ impl TowerStorage for EtcdTowerStorage {
         if !response.succeeded() {
             return Err(TowerError::IoError(io::Error::new(
                 io::ErrorKind::Other,
-                format!("Lost etcd instance lock for {}", node_pubkey),
+                format!("Lost etcd instance lock for {node_pubkey}"),
             )));
         }
 
@@ -376,7 +377,8 @@ pub mod test {
         },
         solana_sdk::{hash::Hash, signature::Keypair},
         solana_vote_program::vote_state::{
-            BlockTimestamp, Lockout, Vote, VoteState, VoteTransaction, MAX_LOCKOUT_HISTORY,
+            BlockTimestamp, LandedVote, Vote, VoteState, VoteState1_14_11, VoteTransaction,
+            MAX_LOCKOUT_HISTORY,
         },
         tempfile::TempDir,
     };
@@ -389,7 +391,7 @@ pub mod test {
         let mut vote_state = VoteState::default();
         vote_state
             .votes
-            .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
+            .resize(MAX_LOCKOUT_HISTORY, LandedVote::default());
         vote_state.root_slot = Some(1);
 
         let vote = Vote::new(vec![1, 2, 3, 4], Hash::default());
@@ -399,7 +401,7 @@ pub mod test {
             node_pubkey,
             threshold_depth: 10,
             threshold_size: 0.9,
-            vote_state,
+            vote_state: VoteState1_14_11::from(vote_state),
             last_vote: vote.clone(),
             last_timestamp: BlockTimestamp::default(),
             last_vote_tx_blockhash: Hash::default(),

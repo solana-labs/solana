@@ -3,14 +3,19 @@
 use {
     super::*,
     crate::{
-        accounts::{test_utils::create_test_accounts, Accounts},
-        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
-        accounts_hash::AccountsHash,
-        append_vec::AppendVec,
-        bank::{bank_test_config_caching_enabled, Bank, Rewrites},
+        account_storage::{AccountStorageMap, AccountStorageReference},
+        accounts::Accounts,
+        accounts_db::{
+            get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
+        },
+        accounts_file::AccountsFile,
+        accounts_hash::{AccountsDeltaHash, AccountsHash},
+        bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
         genesis_utils::{self, activate_all_features, activate_feature},
-        snapshot_utils::ArchiveFormat,
+        snapshot_utils::{
+            create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
+        },
         status_cache::StatusCache,
     },
     bincode::serialize_into,
@@ -20,11 +25,14 @@ use {
         clock::Slot,
         feature_set::{self, disable_fee_calculator},
         genesis_config::{create_genesis_config, ClusterType},
+        hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
     std::{
         io::{BufReader, Cursor},
+        num::NonZeroUsize,
+        ops::RangeFull,
         path::Path,
         sync::{Arc, RwLock},
     },
@@ -36,37 +44,34 @@ fn copy_append_vecs<P: AsRef<Path>>(
     accounts_db: &AccountsDb,
     output_dir: P,
 ) -> std::io::Result<StorageAndNextAppendVecId> {
-    let storage_entries = accounts_db
-        .get_snapshot_storages(Slot::max_value(), None, None)
-        .0;
+    let storage_entries = accounts_db.get_snapshot_storages(RangeFull).0;
     let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
     let mut next_append_vec_id = 0;
-    for storage_entry in storage_entries.into_iter().flatten() {
+    for storage_entry in storage_entries.into_iter() {
         // Copy file to new directory
         let storage_path = storage_entry.get_path();
-        let file_name = AppendVec::file_name(storage_entry.slot(), storage_entry.append_vec_id());
+        let file_name =
+            AccountsFile::file_name(storage_entry.slot(), storage_entry.append_vec_id());
         let output_path = output_dir.as_ref().join(file_name);
         std::fs::copy(storage_path, &output_path)?;
 
         // Read new file into append-vec and build new entry
-        let (append_vec, num_accounts) =
-            AppendVec::new_from_file(output_path, storage_entry.accounts.len())?;
+        let (accounts_file, num_accounts) =
+            AccountsFile::new_from_file(output_path, storage_entry.accounts.len())?;
         let new_storage_entry = AccountStorageEntry::new_existing(
             storage_entry.slot(),
             storage_entry.append_vec_id(),
-            append_vec,
+            accounts_file,
             num_accounts,
         );
         next_append_vec_id = next_append_vec_id.max(new_storage_entry.append_vec_id());
-        storage
-            .entry(new_storage_entry.slot())
-            .or_default()
-            .write()
-            .unwrap()
-            .insert(
-                new_storage_entry.append_vec_id(),
-                Arc::new(new_storage_entry),
-            );
+        storage.insert(
+            new_storage_entry.slot(),
+            AccountStorageReference {
+                id: new_storage_entry.append_vec_id(),
+                storage: Arc::new(new_storage_entry),
+            },
+        );
     }
 
     Ok(StorageAndNextAppendVecId {
@@ -112,13 +117,14 @@ where
             ..GenesisConfig::default()
         },
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
         &Arc::default(),
+        None,
+        (u64::default(), None),
         None,
     )
     .map(|(accounts_db, _)| accounts_db)
@@ -147,7 +153,7 @@ fn accountsdb_to_stream<W>(
     stream: &mut W,
     accounts_db: &AccountsDb,
     slot: Slot,
-    account_storage_entries: &[SnapshotStorage],
+    account_storage_entries: &[Vec<Arc<AccountStorageEntry>>],
 ) -> Result<(), Error>
 where
     W: Write,
@@ -172,22 +178,27 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         paths,
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
 
+    let slot = 0;
     let mut pubkeys: Vec<Pubkey> = vec![];
-    create_test_accounts(&accounts, &mut pubkeys, 100, 0);
+    create_test_accounts(&accounts, &mut pubkeys, 100, slot);
     check_accounts(&accounts, &pubkeys, 100);
-    accounts.add_root(0);
+    accounts.add_root(slot);
+    let accounts_delta_hash = accounts.accounts_db.calculate_accounts_delta_hash(slot);
+    let accounts_hash = AccountsHash(Hash::new_unique());
+    accounts
+        .accounts_db
+        .set_accounts_hash_for_tests(slot, accounts_hash);
 
     let mut writer = Cursor::new(vec![]);
     accountsdb_to_stream(
         serde_style,
         &mut writer,
         &accounts.accounts_db,
-        0,
-        &accounts.accounts_db.get_snapshot_storages(0, None, None).0,
+        slot,
+        &get_storages_to_serialize(&accounts.accounts_db.get_snapshot_storages(..=slot).0),
     )
     .unwrap();
 
@@ -210,14 +221,10 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         .unwrap(),
     );
     check_accounts(&daccounts, &pubkeys, 100);
-    assert_eq!(
-        accounts
-            .bank_hash_info_at(0, &Rewrites::default())
-            .accounts_delta_hash,
-        daccounts
-            .bank_hash_info_at(0, &Rewrites::default())
-            .accounts_delta_hash
-    );
+    let daccounts_delta_hash = daccounts.accounts_db.calculate_accounts_delta_hash(slot);
+    assert_eq!(accounts_delta_hash, daccounts_delta_hash);
+    let daccounts_hash = daccounts.accounts_db.get_accounts_hash(slot).unwrap().0;
+    assert_eq!(accounts_hash, daccounts_hash);
 }
 
 fn test_bank_serialize_style(
@@ -261,6 +268,10 @@ fn test_bank_serialize_style(
     bank2.freeze();
     bank2.squash();
     bank2.force_flush_accounts_cache();
+    bank2
+        .accounts()
+        .accounts_db
+        .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[0; 32])));
 
     let snapshot_storages = bank2.get_snapshot_storages(None);
     let mut buf = vec![];
@@ -285,45 +296,41 @@ fn test_bank_serialize_style(
         serde_style,
         &mut std::io::BufWriter::new(&mut writer),
         &bank2,
-        &snapshot_storages,
+        &get_storages_to_serialize(&snapshot_storages),
     )
     .unwrap();
 
-    let accounts_hash = if update_accounts_hash {
-        let accounts_hash = AccountsHash(Hash::new(&[1; 32]));
+    if update_accounts_hash {
         bank2
             .accounts()
             .accounts_db
-            .set_accounts_hash(bank2.slot(), accounts_hash);
-        accounts_hash
-    } else {
-        bank2.get_accounts_hash()
-    };
+            .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[1; 32])));
+    }
+    let accounts_hash = bank2.get_accounts_hash().unwrap();
 
     let slot = bank2.slot();
     let incremental =
         incremental_snapshot_persistence.then(|| BankIncrementalSnapshotPersistence {
             full_slot: slot + 1,
-            full_hash: Hash::new(&[1; 32]),
+            full_hash: SerdeAccountsHash(Hash::new(&[1; 32])),
             full_capitalization: 31,
-            incremental_hash: Hash::new(&[2; 32]),
+            incremental_hash: SerdeIncrementalAccountsHash(Hash::new(&[2; 32])),
             incremental_capitalization: 32,
         });
 
     if reserialize_accounts_hash || incremental_snapshot_persistence {
         let temp_dir = TempDir::new().unwrap();
-        let slot_dir = temp_dir.path().join(slot.to_string());
+        let slot_dir = snapshot_utils::get_bank_snapshot_dir(&temp_dir, slot);
         let post_path = slot_dir.join(slot.to_string());
-        let mut pre_path = post_path.clone();
-        pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+        let pre_path = post_path.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
         std::fs::create_dir(&slot_dir).unwrap();
         {
-            let mut f = std::fs::File::create(&pre_path).unwrap();
+            let mut f = std::fs::File::create(pre_path).unwrap();
             f.write_all(&buf).unwrap();
         }
 
         assert!(reserialize_bank_with_new_accounts_hash(
-            temp_dir.path(),
+            slot_dir,
             slot,
             &accounts_hash,
             incremental.as_ref(),
@@ -398,7 +405,6 @@ fn test_bank_serialize_style(
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -411,7 +417,7 @@ fn test_bank_serialize_style(
     assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
     assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
     assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
-    assert_eq!(dbank.get_accounts_hash(), accounts_hash);
+    assert_eq!(dbank.get_accounts_hash(), Some(accounts_hash));
     assert!(bank2 == dbank);
     assert_eq!(dbank.incremental_snapshot_persistence, incremental);
     assert_eq!(dbank.get_epoch_accounts_hash_to_serialize().map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()), expected_epoch_accounts_hash,
@@ -430,13 +436,13 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     slot: Slot,
 ) -> AccountsDb {
     let mut writer = Cursor::new(vec![]);
-    let snapshot_storages = accounts.get_snapshot_storages(slot, None, None).0;
+    let snapshot_storages = accounts.get_snapshot_storages(..=slot).0;
     accountsdb_to_stream(
         SerdeStyle::Newer,
         &mut writer,
         accounts,
         slot,
-        &snapshot_storages,
+        &get_storages_to_serialize(&snapshot_storages),
     )
     .unwrap();
 
@@ -508,12 +514,21 @@ fn test_extra_fields_eof() {
 
     let bank0 = Arc::new(Bank::new_for_tests_with_config(
         &genesis_config,
-        bank_test_config_caching_enabled(),
+        BankTestConfig::default(),
     ));
     bank0.squash();
     let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
 
     add_root_and_flush_write_cache(&bank0);
+    bank.rc
+        .accounts
+        .accounts_db
+        .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+    bank.rc
+        .accounts
+        .accounts_db
+        .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
@@ -521,11 +536,12 @@ fn test_extra_fields_eof() {
     let snapshot_storages = bank.get_snapshot_storages(None);
     let mut buf = vec![];
     let mut writer = Cursor::new(&mut buf);
+
     crate::serde_snapshot::bank_to_stream(
         SerdeStyle::Newer,
         &mut std::io::BufWriter::new(&mut writer),
         &bank,
-        &snapshot_storages,
+        &get_storages_to_serialize(&snapshot_storages),
     )
     .unwrap();
 
@@ -550,7 +566,6 @@ fn test_extra_fields_eof() {
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -582,7 +597,7 @@ fn test_extra_fields_full_snapshot_archive() {
     // Set extra field
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
-    let accounts_dir = TempDir::new().unwrap();
+    let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
     let bank_snapshots_dir = TempDir::new().unwrap();
     let full_snapshot_archives_dir = TempDir::new().unwrap();
     let incremental_snapshot_archives_dir = TempDir::new().unwrap();
@@ -595,14 +610,14 @@ fn test_extra_fields_full_snapshot_archive() {
         full_snapshot_archives_dir.path(),
         incremental_snapshot_archives_dir.path(),
         ArchiveFormat::TarBzip2,
-        1,
-        0,
+        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
     )
     .unwrap();
 
     // Deserialize
     let (dbank, _) = snapshot_utils::bank_from_snapshot_archives(
-        &[PathBuf::from(accounts_dir.path())],
+        &[accounts_dir],
         bank_snapshots_dir.path(),
         &snapshot_archive_info,
         None,
@@ -611,7 +626,6 @@ fn test_extra_fields_full_snapshot_archive() {
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -637,11 +651,19 @@ fn test_blank_extra_fields() {
 
     let bank0 = Arc::new(Bank::new_for_tests_with_config(
         &genesis_config,
-        bank_test_config_caching_enabled(),
+        BankTestConfig::default(),
     ));
     bank0.squash();
     let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
     add_root_and_flush_write_cache(&bank0);
+    bank.rc
+        .accounts
+        .accounts_db
+        .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+    bank.rc
+        .accounts
+        .accounts_db
+        .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
 
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -650,11 +672,12 @@ fn test_blank_extra_fields() {
     let snapshot_storages = bank.get_snapshot_storages(None);
     let mut buf = vec![];
     let mut writer = Cursor::new(&mut buf);
+
     crate::serde_snapshot::bank_to_stream_no_extra_fields(
         SerdeStyle::Newer,
         &mut std::io::BufWriter::new(&mut writer),
         &bank,
-        &snapshot_storages,
+        &get_storages_to_serialize(&snapshot_storages),
     )
     .unwrap();
 
@@ -679,7 +702,6 @@ fn test_blank_extra_fields() {
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -699,7 +721,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "464v92sAyLDZWCXjH6cuQfgrSNuB3PY8cmoVu2dciXvV")]
+    #[frozen_abi(digest = "GbEcrk8sgqbQ5kJ8mAaHTh2REmHyESQ6GXnGWxkGbxDe")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]
@@ -710,52 +732,23 @@ mod test_bank_serialize {
     where
         S: serde::Serializer,
     {
-        let snapshot_storages = bank
-            .rc
+        bank.rc
             .accounts
             .accounts_db
-            .get_snapshot_storages(0, None, None)
-            .0;
+            .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+        bank.rc
+            .accounts
+            .accounts_db
+            .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
+        let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(..=0).0;
         // ensure there is a single snapshot storage example for ABI digesting
         assert_eq!(snapshot_storages.len(), 1);
 
         (SerializableBankAndStorage::<newer::Context> {
             bank,
-            snapshot_storages: &snapshot_storages,
+            snapshot_storages: &get_storages_to_serialize(&snapshot_storages),
             phantom: std::marker::PhantomData::default(),
         })
         .serialize(s)
-    }
-}
-
-#[test]
-fn test_reconstruct_historical_roots() {
-    {
-        let db = AccountsDb::default_for_tests();
-        let historical_roots = vec![];
-        let historical_roots_with_hash = vec![];
-        reconstruct_historical_roots(&db, historical_roots, historical_roots_with_hash);
-        let roots_tracker = db.accounts_index.roots_tracker.read().unwrap();
-        assert!(roots_tracker.historical_roots.is_empty());
-    }
-
-    {
-        let db = AccountsDb::default_for_tests();
-        let historical_roots = vec![1];
-        let historical_roots_with_hash = vec![(0, Hash::default())];
-        reconstruct_historical_roots(&db, historical_roots, historical_roots_with_hash);
-        let roots_tracker = db.accounts_index.roots_tracker.read().unwrap();
-        assert_eq!(roots_tracker.historical_roots.get_all(), vec![0, 1]);
-    }
-    {
-        let db = AccountsDb::default_for_tests();
-        let historical_roots = vec![2, 1];
-        let historical_roots_with_hash = vec![0, 5]
-            .into_iter()
-            .map(|slot| (slot, Hash::default()))
-            .collect();
-        reconstruct_historical_roots(&db, historical_roots, historical_roots_with_hash);
-        let roots_tracker = db.accounts_index.roots_tracker.read().unwrap();
-        assert_eq!(roots_tracker.historical_roots.get_all(), vec![0, 1, 2, 5]);
     }
 }

@@ -1,21 +1,17 @@
 use {
-    crate::{
-        shred::{
-            common::dispatch,
-            legacy, merkle,
-            traits::{Shred, ShredCode as ShredCodeTrait},
-            CodingShredHeader, Error, ShredCommonHeader, ShredType, DATA_SHREDS_PER_FEC_BLOCK,
-            MAX_DATA_SHREDS_PER_SLOT, SIZE_OF_NONCE,
-        },
-        shredder::ERASURE_BATCH_SIZE,
+    crate::shred::{
+        common::dispatch,
+        legacy, merkle,
+        traits::{Shred, ShredCode as ShredCodeTrait},
+        CodingShredHeader, Error, ShredCommonHeader, ShredType, SignedData,
+        DATA_SHREDS_PER_FEC_BLOCK, MAX_DATA_SHREDS_PER_SLOT, SIZE_OF_NONCE,
     },
     solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, signature::Signature},
     static_assertions::const_assert_eq,
 };
 
-const_assert_eq!(MAX_CODE_SHREDS_PER_SLOT, 32_768 * 17);
-pub(crate) const MAX_CODE_SHREDS_PER_SLOT: usize =
-    MAX_DATA_SHREDS_PER_SLOT * (ERASURE_BATCH_SIZE[1] - 1);
+const_assert_eq!(MAX_CODE_SHREDS_PER_SLOT, 32_768);
+pub const MAX_CODE_SHREDS_PER_SLOT: usize = MAX_DATA_SHREDS_PER_SLOT;
 
 const_assert_eq!(ShredCode::SIZE_OF_PAYLOAD, 1228);
 
@@ -39,11 +35,17 @@ impl ShredCode {
     dispatch!(pub(super) fn payload(&self) -> &Vec<u8>);
     dispatch!(pub(super) fn sanitize(&self) -> Result<(), Error>);
     dispatch!(pub(super) fn set_signature(&mut self, signature: Signature));
-    dispatch!(pub(super) fn signed_message(&self) -> &[u8]);
 
     // Only for tests.
     dispatch!(pub(super) fn set_index(&mut self, index: u32));
     dispatch!(pub(super) fn set_slot(&mut self, slot: Slot));
+
+    pub(super) fn signed_data(&self) -> Result<SignedData, Error> {
+        match self {
+            Self::Legacy(shred) => Ok(SignedData::Chunk(shred.signed_data()?)),
+            Self::Merkle(shred) => Ok(SignedData::MerkleRoot(shred.signed_data()?)),
+        }
+    }
 
     pub(super) fn new_from_parity_shard(
         slot: Slot,
@@ -79,8 +81,15 @@ impl ShredCode {
     pub(super) fn erasure_mismatch(&self, other: &ShredCode) -> bool {
         match (self, other) {
             (Self::Legacy(shred), Self::Legacy(other)) => erasure_mismatch(shred, other),
-            (Self::Merkle(shred), Self::Merkle(other)) => shred.erasure_mismatch(other),
-            _ => true,
+            (Self::Legacy(_), Self::Merkle(_)) => true,
+            (Self::Merkle(_), Self::Legacy(_)) => true,
+            (Self::Merkle(shred), Self::Merkle(other)) => {
+                // Merkle shreds within the same erasure batch have the same
+                // merkle root. The root of the merkle tree is signed. So
+                // either the signatures match or one fails sigverify.
+                erasure_mismatch(shred, other)
+                    || shred.common_header().signature != other.common_header().signature
+            }
         }
     }
 }

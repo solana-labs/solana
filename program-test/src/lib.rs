@@ -11,14 +11,15 @@ use {
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
     solana_program_runtime::{
-        compute_budget::ComputeBudget, ic_msg, invoke_context::ProcessInstructionWithContext,
-        stable_log, timings::ExecuteTimings,
+        builtin_program::{create_builtin, BuiltinPrograms, ProcessInstructionWithContext},
+        compute_budget::ComputeBudget,
+        ic_msg, stable_log,
+        timings::ExecuteTimings,
     },
     solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestType},
         bank::Bank,
         bank_forks::BankForks,
-        builtins::Builtin,
         commitment::BlockCommitmentCache,
         epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
@@ -40,6 +41,7 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
+        stable_layout::stable_instruction::StableInstruction,
         sysvar::{Sysvar, SysvarId},
     },
     solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
@@ -70,9 +72,6 @@ pub use {
 
 pub mod programs;
 
-#[macro_use]
-extern crate solana_bpf_loader_program;
-
 /// Errors from the program test environment
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProgramTestError {
@@ -98,9 +97,8 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
 
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
-    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     set_invoke_context(invoke_context);
 
     let transaction_context = &invoke_context.transaction_context;
@@ -125,7 +123,8 @@ pub fn builtin_process_instruction(
         invoke_context
             .transaction_context
             .get_current_instruction_context()?,
-        true,
+        true, // should_cap_ix_accounts
+        true, // copy_account_data // There is no VM so direct mapping can not be implemented here
     )?;
 
     // Deserialize data back into instruction params
@@ -134,8 +133,8 @@ pub fn builtin_process_instruction(
 
     // Execute the program
     process_instruction(program_id, &account_infos, instruction_data).map_err(|err| {
-        let err = u64::from(err);
-        stable_log::program_failure(&log_collector, program_id, &err.into());
+        let err: Box<dyn std::error::Error> = Box::new(InstructionError::from(u64::from(err)));
+        stable_log::program_failure(&log_collector, program_id, err.as_ref());
         err
     })?;
     stable_log::program_success(&log_collector, program_id);
@@ -181,13 +180,10 @@ pub fn builtin_process_instruction(
 macro_rules! processor {
     ($process_instruction:expr) => {
         Some(
-            |first_instruction_account: $crate::IndexOfAccount,
-             invoke_context: &mut solana_program_test::InvokeContext| {
-                $crate::builtin_process_instruction(
-                    $process_instruction,
-                    first_instruction_account,
-                    invoke_context,
-                )
+            |invoke_context, _arg0, _arg1, _arg2, _arg3, _arg4, _memory_mapping, result| {
+                *result = $crate::builtin_process_instruction($process_instruction, invoke_context)
+                    .map(|_| 0)
+                    .into();
             },
         )
     };
@@ -227,6 +223,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         account_infos: &[AccountInfo],
         signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
+        let instruction = StableInstruction::from(instruction.clone());
         let invoke_context = get_invoke_context();
         let log_collector = invoke_context.get_log_collector();
         let transaction_context = &invoke_context.transaction_context;
@@ -249,7 +246,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .collect::<Vec<_>>();
 
         let (instruction_accounts, program_indices) = invoke_context
-            .prepare_instruction(instruction, &signers)
+            .prepare_instruction(&instruction, &signers)
             .unwrap();
 
         // Copy caller's account_info modifications into invoke_context accounts
@@ -289,7 +286,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                     .set_data_from_slice(&account_info_data)
                     .unwrap(),
                 Err(err) if borrowed_account.get_data() != *account_info_data => {
-                    panic!("{:?}", err);
+                    panic!("{err:?}");
                 }
                 _ => {}
             }
@@ -438,10 +435,9 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
 
 pub struct ProgramTest {
     accounts: Vec<(Pubkey, AccountSharedData)>,
-    builtins: Vec<Builtin>,
+    builtin_programs: BuiltinPrograms,
     compute_max_units: Option<u64>,
     prefer_bpf: bool,
-    use_bpf_jit: bool,
     deactivate_feature_set: HashSet<Pubkey>,
     transaction_account_lock_limit: Option<usize>,
 }
@@ -469,13 +465,17 @@ impl Default for ProgramTest {
         let prefer_bpf =
             std::env::var("BPF_OUT_DIR").is_ok() || std::env::var("SBF_OUT_DIR").is_ok();
 
+        // deactivate feature `native_program_consume_cu` to continue support existing mock/test
+        // programs that do not consume units.
+        let deactivate_feature_set =
+            HashSet::from([solana_sdk::feature_set::native_programs_consume_cu::id()]);
+
         Self {
             accounts: vec![],
-            builtins: vec![],
+            builtin_programs: BuiltinPrograms::default(),
             compute_max_units: None,
             prefer_bpf,
-            use_bpf_jit: false,
-            deactivate_feature_set: HashSet::default(),
+            deactivate_feature_set,
             transaction_account_lock_limit: None,
         }
     }
@@ -521,11 +521,6 @@ impl ProgramTest {
         self.compute_max_units = Some(bpf_compute_max_units);
     }
 
-    /// Execute the SBF program with JIT if true, interpreted if false
-    pub fn use_bpf_jit(&mut self, use_bpf_jit: bool) {
-        self.use_bpf_jit = use_bpf_jit;
-    }
-
     /// Add an account to the test environment
     pub fn add_account(&mut self, address: Pubkey, account: Account) {
         self.accounts
@@ -545,7 +540,7 @@ impl ProgramTest {
             Account {
                 lamports,
                 data: read_file(find_file(filename).unwrap_or_else(|| {
-                    panic!("Unable to locate {}", filename);
+                    panic!("Unable to locate {filename}");
                 })),
                 owner,
                 executable: false,
@@ -568,7 +563,7 @@ impl ProgramTest {
             Account {
                 lamports,
                 data: base64::decode(data_base64)
-                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
+                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -616,19 +611,13 @@ impl ProgramTest {
             this.add_account(
                 program_id,
                 Account {
-                    lamports: Rent::default().minimum_balance(data.len()).min(1),
+                    lamports: Rent::default().minimum_balance(data.len()).max(1),
                     data,
                     owner: solana_sdk::bpf_loader::id(),
                     executable: true,
                     rent_epoch: 0,
                 },
             );
-        };
-
-        let add_native = |this: &mut ProgramTest, process_fn: ProcessInstructionWithContext| {
-            info!("\"{}\" program loaded as native code", program_name);
-            this.builtins
-                .push(Builtin::new(program_name, program_id, process_fn));
         };
 
         let warn_invalid_program_name = || {
@@ -666,7 +655,7 @@ impl ProgramTest {
             }
         };
 
-        let program_file = find_file(&format!("{}.so", program_name));
+        let program_file = find_file(&format!("{program_name}.so"));
         match (self.prefer_bpf, program_file, process_instruction) {
             // If SBF is preferred (i.e., `test-sbf` is invoked) and a BPF shared object exists,
             // use that as the program data.
@@ -676,23 +665,19 @@ impl ProgramTest {
             // processor function as is.
             //
             // TODO: figure out why tests hang if a processor panics when running native code.
-            (false, _, Some(process)) => add_native(self, process),
+            (false, _, Some(process)) => {
+                self.add_builtin_program(program_name, program_id, process)
+            }
 
             // Invalid: `test-sbf` invocation with no matching SBF shared object.
             (true, None, _) => {
                 warn_invalid_program_name();
-                panic!(
-                    "Program file data not available for {} ({})",
-                    program_name, program_id
-                );
+                panic!("Program file data not available for {program_name} ({program_id})");
             }
 
             // Invalid: regular `test` invocation without a processor.
             (false, _, None) => {
-                panic!(
-                    "Program processor not available for {} ({})",
-                    program_name, program_id
-                );
+                panic!("Program processor not available for {program_name} ({program_id})");
             }
         }
     }
@@ -707,8 +692,10 @@ impl ProgramTest {
         process_instruction: ProcessInstructionWithContext,
     ) {
         info!("\"{}\" builtin program", program_name);
-        self.builtins
-            .push(Builtin::new(program_name, program_id, process_instruction));
+        self.builtin_programs.vec.push((
+            program_id,
+            create_builtin(program_name.to_string(), process_instruction),
+        ));
     }
 
     /// Deactivate a runtime feature.
@@ -788,7 +775,6 @@ impl ProgramTest {
         let mut bank = Bank::new_with_runtime_config_for_tests(
             &genesis_config,
             Arc::new(RuntimeConfig {
-                bpf_jit: self.use_bpf_jit,
                 compute_budget: self.compute_max_units.map(|max_units| ComputeBudget {
                     compute_unit_limit: max_units,
                     ..ComputeBudget::default()
@@ -798,33 +784,14 @@ impl ProgramTest {
             }),
         );
 
-        // Add loaders
-        macro_rules! add_builtin {
-            ($b:expr) => {
-                bank.add_builtin(&$b.0, &$b.1, $b.2)
-            };
-        }
-        add_builtin!(solana_bpf_loader_deprecated_program!());
-        if self.use_bpf_jit {
-            add_builtin!(solana_bpf_loader_program_with_jit!());
-            add_builtin!(solana_bpf_loader_upgradeable_program_with_jit!());
-        } else {
-            add_builtin!(solana_bpf_loader_program!());
-            add_builtin!(solana_bpf_loader_upgradeable_program!());
-        }
-
         // Add commonly-used SPL programs as a convenience to the user
         for (program_id, account) in programs::spl_programs(&Rent::default()).iter() {
             bank.store_account(program_id, account);
         }
 
         // User-supplied additional builtins
-        for builtin in self.builtins.iter() {
-            bank.add_builtin(
-                &builtin.name,
-                &builtin.id,
-                builtin.process_instruction_with_context,
-            );
+        for (program_id, builtin) in self.builtin_programs.vec.iter() {
+            bank.add_builtin(*program_id, builtin.clone());
         }
 
         for (address, account) in self.accounts.iter() {
@@ -874,7 +841,7 @@ impl ProgramTest {
         .await;
         let banks_client = start_client(transport)
             .await
-            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {err}"));
 
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
@@ -908,7 +875,7 @@ impl ProgramTest {
         .await;
         let banks_client = start_client(transport)
             .await
-            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {err}"));
 
         ProgramTestContext::new(
             bank_forks,
@@ -1131,6 +1098,8 @@ impl ProgramTestContext {
                 &bank,
                 &Pubkey::default(),
                 pre_warp_slot,
+                // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
+                solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
             ))
         };
 

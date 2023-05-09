@@ -107,9 +107,9 @@ fn process_rewards(
         .get_inflation_reward(addresses, rewards_epoch)
         .map_err(|err| {
             if let Some(epoch) = rewards_epoch {
-                format!("Rewards not available for epoch {}", epoch)
+                format!("Rewards not available for epoch {epoch}")
             } else {
-                format!("Rewards not available {}", err)
+                format!("Rewards not available {err}")
             }
         })?;
     let epoch_schedule = rpc_client.get_epoch_schedule()?;

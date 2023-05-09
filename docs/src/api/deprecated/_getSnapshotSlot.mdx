@@ -1,0 +1,64 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getSnapshotSlot
+
+:::warning DEPRECATED
+This method is expected to be removed in solana-core v2.0
+**Please use [getHighestSnapshotSlot](#gethighestsnapshotslot) instead**
+:::
+
+Returns the highest slot that the node has a snapshot for
+
+<DocSideBySide>
+
+<CodeParams>
+
+### Parameters:
+
+**None**
+
+### Result:
+
+`<u64>` - Snapshot slot
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getSnapshotSlot"}
+'
+```
+
+### Response:
+
+```json
+{ "jsonrpc": "2.0", "result": 100, "id": 1 }
+```
+
+Result when the node has no snapshot:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": { "code": -32008, "message": "No snapshot" },
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

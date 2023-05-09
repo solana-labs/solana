@@ -27,7 +27,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        net::SocketAddr,
+        net::{Ipv4Addr, SocketAddr},
         process::exit,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -69,22 +69,20 @@ pub fn airdrop_lamports(
                     }
                     if tries >= 5 {
                         panic!(
-                            "Error requesting airdrop: to addr: {:?} amount: {} {:?}",
-                            faucet_addr, airdrop_amount, result
+                            "Error requesting airdrop: to addr: {faucet_addr:?} amount: {airdrop_amount} {result:?}"
                         )
                     }
                 }
             }
             Err(err) => {
                 panic!(
-                    "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
-                    err, faucet_addr, airdrop_amount
+                    "Error requesting airdrop: {err:?} to addr: {faucet_addr:?} amount: {airdrop_amount}"
                 );
             }
         };
 
         let current_balance = client.get_balance(&id.pubkey()).unwrap_or_else(|e| {
-            panic!("airdrop error {}", e);
+            panic!("airdrop error {e}");
         });
         info!("current balance {}...", current_balance);
 
@@ -127,7 +125,6 @@ fn make_dos_message(
     account_metas: &[AccountMeta],
 ) -> Message {
     let instructions: Vec<_> = (0..num_instructions)
-        .into_iter()
         .map(|_| {
             let data = [num_program_iterations, thread_rng().gen_range(0, 255)];
             Instruction::new_with_bytes(program_id, &data, account_metas.to_vec())
@@ -541,17 +538,17 @@ fn main() {
     let just_calculate_fees = matches.is_present("just_calculate_fees");
 
     let port = if skip_gossip { DEFAULT_RPC_PORT } else { 8001 };
-    let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let mut entrypoint_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     if let Some(addr) = matches.value_of("entrypoint") {
         entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
+            eprintln!("failed to parse entrypoint address: {e}");
             exit(1)
         });
     }
-    let mut faucet_addr = SocketAddr::from(([127, 0, 0, 1], FAUCET_PORT));
+    let mut faucet_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, FAUCET_PORT));
     if let Some(addr) = matches.value_of("faucet_addr") {
         faucet_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
+            eprintln!("failed to parse entrypoint address: {e}");
             exit(1)
         });
     }
@@ -563,7 +560,7 @@ fn main() {
     let num_program_iterations = value_t!(matches, "num_program_iterations", usize).unwrap_or(10);
     let num_instructions = value_t!(matches, "num_instructions", usize).unwrap_or(1);
     if num_instructions == 0 || num_instructions > 500 {
-        eprintln!("bad num_instructions: {}", num_instructions);
+        eprintln!("bad num_instructions: {num_instructions}");
         exit(1);
     }
     let batch_sleep_ms = value_t!(matches, "batch_sleep_ms", u64).unwrap_or(500);
@@ -574,7 +571,7 @@ fn main() {
         .iter()
         .map(|keypair_string| {
             read_keypair_file(keypair_string)
-                .unwrap_or_else(|_| panic!("bad keypair {:?}", keypair_string))
+                .unwrap_or_else(|_| panic!("bad keypair {keypair_string:?}"))
         })
         .collect();
 
@@ -582,7 +579,7 @@ fn main() {
         .iter()
         .map(|keypair_string| {
             read_keypair_file(keypair_string)
-                .unwrap_or_else(|_| panic!("bad keypair {:?}", keypair_string))
+                .unwrap_or_else(|_| panic!("bad keypair {keypair_string:?}"))
         })
         .collect();
 
@@ -604,12 +601,12 @@ fn main() {
             SocketAddrSpace::Unspecified,
         )
         .unwrap_or_else(|err| {
-            eprintln!("Failed to discover {} node: {:?}", entrypoint_addr, err);
+            eprintln!("Failed to discover {entrypoint_addr} node: {err:?}");
             exit(1);
         });
 
         info!("done found {} nodes", gossip_nodes.len());
-        gossip_nodes[0].rpc
+        gossip_nodes[0].rpc().unwrap()
     } else {
         info!("Using {:?} as the RPC address", entrypoint_addr);
         entrypoint_addr
@@ -656,7 +653,6 @@ pub mod test {
         let num_accounts = 17;
 
         let account_metas: Vec<_> = (0..num_accounts)
-            .into_iter()
             .map(|_| AccountMeta::new(Pubkey::new_unique(), false))
             .collect();
         let num_program_iterations = 10;
@@ -690,7 +686,7 @@ pub mod test {
             ..ClusterConfig::default()
         };
 
-        let faucet_addr = SocketAddr::from(([127, 0, 0, 1], 9900));
+        let faucet_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 9900));
         let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
         let program_keypair = Keypair::new();
@@ -707,14 +703,11 @@ pub mod test {
         let num_instructions = 70;
         let num_program_iterations = 10;
         let num_accounts = 7;
-        let account_keypairs: Vec<_> = (0..num_accounts)
-            .into_iter()
-            .map(|_| Keypair::new())
-            .collect();
+        let account_keypairs: Vec<_> = (0..num_accounts).map(|_| Keypair::new()).collect();
         let account_keypair_refs: Vec<_> = account_keypairs.iter().collect();
         let mut start = Measure::start("total accounts run");
         run_transactions_dos(
-            cluster.entry_point_info.rpc,
+            cluster.entry_point_info.rpc().unwrap(),
             faucet_addr,
             &[&cluster.funding_keypair],
             iterations,

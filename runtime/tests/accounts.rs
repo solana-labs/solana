@@ -38,7 +38,7 @@ fn test_shrink_and_clean() {
             if exit_for_shrink.load(Ordering::Relaxed) {
                 break;
             }
-            accounts_for_shrink.process_stale_slot_v1();
+            accounts_for_shrink.shrink_all_slots(false, None);
         });
 
         let mut alive_accounts = vec![];
@@ -58,9 +58,18 @@ fn test_shrink_and_clean() {
 
             for (pubkey, account) in alive_accounts.iter_mut() {
                 account.checked_sub_lamports(1).unwrap();
-                accounts.store_uncached(current_slot, &[(pubkey, account)]);
+
+                accounts.store_cached(
+                    (
+                        current_slot,
+                        &[(&*pubkey, &*account)][..],
+                        INCLUDE_SLOT_IN_HASH_TESTS,
+                    ),
+                    None,
+                );
             }
             accounts.add_root(current_slot);
+            accounts.flush_accounts_cache(true, Some(current_slot));
         }
 
         // let's dance.
@@ -81,8 +90,6 @@ fn test_bad_bank_hash() {
     let db = AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development);
 
     let some_slot: Slot = 0;
-    let ancestors = Ancestors::from(vec![some_slot]);
-
     let max_accounts = 200;
     let mut accounts_keys: Vec<_> = (0..max_accounts)
         .into_par_iter()
@@ -98,12 +105,15 @@ fn test_bad_bank_hash() {
     let mut existing = HashSet::new();
     let mut last_print = Instant::now();
     for i in 0..5_000 {
+        let some_slot = some_slot + i;
+        let ancestors = Ancestors::from(vec![some_slot]);
+
         if last_print.elapsed().as_millis() > 5000 {
             info!("i: {}", i);
             last_print = Instant::now();
         }
         let num_accounts = thread_rng().gen_range(0, 100);
-        (0..num_accounts).into_iter().for_each(|_| {
+        (0..num_accounts).for_each(|_| {
             let mut idx;
             loop {
                 idx = thread_rng().gen_range(0, max_accounts);
@@ -122,14 +132,23 @@ fn test_bad_bank_hash() {
             .iter()
             .map(|idx| (&accounts_keys[*idx].0, &accounts_keys[*idx].1))
             .collect();
-        db.store_uncached(some_slot, &account_refs);
-
-        for (key, account) in &account_refs {
-            assert_eq!(
-                db.load_account_hash(&ancestors, key, None, LoadHint::Unspecified)
-                    .unwrap(),
-                AccountsDb::hash_account(some_slot, *account, key, INCLUDE_SLOT_IN_HASH_TESTS)
-            );
+        db.store_cached(
+            (some_slot, &account_refs[..], INCLUDE_SLOT_IN_HASH_TESTS),
+            None,
+        );
+        for pass in 0..2 {
+            for (key, account) in &account_refs {
+                assert_eq!(
+                    db.load_account_hash(&ancestors, key, Some(some_slot), LoadHint::Unspecified)
+                        .unwrap(),
+                    AccountsDb::hash_account(some_slot, *account, key, INCLUDE_SLOT_IN_HASH_TESTS)
+                );
+            }
+            if pass == 0 {
+                // flush the write cache so we're reading from append vecs on the next iteration
+                db.add_root(some_slot);
+                db.flush_accounts_cache(true, Some(some_slot));
+            }
         }
         existing.clear();
     }

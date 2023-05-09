@@ -5,12 +5,13 @@ use {
     std::time::{Duration, Instant},
 };
 
+const LOW_POWER_MODE: u64 = std::u64::MAX;
+
 pub struct Poh {
     pub hash: Hash,
     num_hashes: u64,
     hashes_per_tick: u64,
     remaining_hashes: u64,
-    ticks_per_slot: u64,
     tick_number: u64,
     slot_start_time: Instant,
 }
@@ -23,16 +24,11 @@ pub struct PohEntry {
 
 impl Poh {
     pub fn new(hash: Hash, hashes_per_tick: Option<u64>) -> Self {
-        Self::new_with_slot_info(hash, hashes_per_tick, 0, 0)
+        Self::new_with_slot_info(hash, hashes_per_tick, 0)
     }
 
-    pub fn new_with_slot_info(
-        hash: Hash,
-        hashes_per_tick: Option<u64>,
-        ticks_per_slot: u64,
-        tick_number: u64,
-    ) -> Self {
-        let hashes_per_tick = hashes_per_tick.unwrap_or(std::u64::MAX);
+    pub fn new_with_slot_info(hash: Hash, hashes_per_tick: Option<u64>, tick_number: u64) -> Self {
+        let hashes_per_tick = hashes_per_tick.unwrap_or(LOW_POWER_MODE);
         assert!(hashes_per_tick > 1);
         let now = Instant::now();
         Poh {
@@ -40,7 +36,6 @@ impl Poh {
             num_hashes: 0,
             hashes_per_tick,
             remaining_hashes: hashes_per_tick,
-            ticks_per_slot,
             tick_number,
             slot_start_time: now,
         }
@@ -49,7 +44,11 @@ impl Poh {
     pub fn reset(&mut self, hash: Hash, hashes_per_tick: Option<u64>) {
         // retains ticks_per_slot: this cannot change without restarting the validator
         let tick_number = 0;
-        *self = Poh::new_with_slot_info(hash, hashes_per_tick, self.ticks_per_slot, tick_number);
+        *self = Poh::new_with_slot_info(hash, hashes_per_tick, tick_number);
+    }
+
+    pub fn hashes_per_tick(&self) -> u64 {
+        self.hashes_per_tick
     }
 
     pub fn target_poh_time(&self, target_ns_per_tick: u64) -> Instant {
@@ -93,9 +92,9 @@ impl Poh {
         self.num_hashes += 1;
         self.remaining_hashes -= 1;
 
-        // If the hashes_per_tick is variable (std::u64::MAX) then always generate a tick.
+        // If we are in low power mode then always generate a tick.
         // Otherwise only tick if there are no remaining hashes
-        if self.hashes_per_tick < std::u64::MAX && self.remaining_hashes != 0 {
+        if self.hashes_per_tick != LOW_POWER_MODE && self.remaining_hashes != 0 {
             return None;
         }
 
@@ -121,8 +120,8 @@ pub fn compute_hash_time_ns(hashes_sample_size: u64) -> u64 {
 }
 
 pub fn compute_hashes_per_tick(duration: Duration, hashes_sample_size: u64) -> u64 {
-    let elapsed = compute_hash_time_ns(hashes_sample_size) / (1000 * 1000);
-    duration.as_millis() as u64 * hashes_sample_size / elapsed
+    let elapsed_ms = compute_hash_time_ns(hashes_sample_size) / (1000 * 1000);
+    duration.as_millis() as u64 * hashes_sample_size / elapsed_ms
 }
 
 #[cfg(test)]

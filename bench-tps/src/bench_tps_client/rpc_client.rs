@@ -95,7 +95,7 @@ impl BenchTpsClient for RpcClient {
             .map_err(|err| err.into())
             .and_then(|account| {
                 account.ok_or_else(|| {
-                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={}", pubkey))
+                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={pubkey}"))
                 })
             })
     }

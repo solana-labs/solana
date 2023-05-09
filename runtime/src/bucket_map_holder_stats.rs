@@ -1,5 +1,8 @@
 use {
-    crate::{accounts_index::IndexValue, bucket_map_holder::BucketMapHolder},
+    crate::{
+        accounts_index::{DiskIndexValue, IndexValue},
+        bucket_map_holder::BucketMapHolder,
+    },
     solana_sdk::timing::AtomicInterval,
     std::{
         fmt::Debug,
@@ -11,9 +14,15 @@ use {
 const STATS_INTERVAL_MS: u64 = 10_000;
 
 #[derive(Debug, Default)]
+pub struct BucketMapHeldInMemStats {
+    pub ref_count: AtomicU64,
+    pub slot_list_len: AtomicU64,
+    pub slot_list_cached: AtomicU64,
+}
+
+#[derive(Debug, Default)]
 pub struct BucketMapHolderStats {
-    pub held_in_mem_slot_list_len: AtomicU64,
-    pub held_in_mem_slot_list_cached: AtomicU64,
+    pub held_in_mem: BucketMapHeldInMemStats,
     pub get_mem_us: AtomicU64,
     pub gets_from_mem: AtomicU64,
     pub get_missing_us: AtomicU64,
@@ -32,6 +41,7 @@ pub struct BucketMapHolderStats {
     pub failed_to_evict: AtomicU64,
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
+    pub buckets_scanned: AtomicU64,
     pub inserts: AtomicU64,
     count: AtomicUsize,
     pub bg_waiting_us: AtomicU64,
@@ -59,10 +69,7 @@ impl BucketMapHolderStats {
     pub fn new(bins: usize) -> BucketMapHolderStats {
         BucketMapHolderStats {
             bins: bins as u64,
-            per_bucket_count: (0..bins)
-                .into_iter()
-                .map(|_| AtomicUsize::default())
-                .collect(),
+            per_bucket_count: (0..bins).map(|_| AtomicUsize::default()).collect(),
             ..BucketMapHolderStats::default()
         }
     }
@@ -101,7 +108,11 @@ impl BucketMapHolderStats {
         per_bucket.map(|stat| stat.fetch_sub(count, Ordering::Relaxed));
     }
 
-    fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>, elapsed_ms: u64) -> u64 {
+    fn ms_per_age<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
+        &self,
+        storage: &BucketMapHolder<T, U>,
+        elapsed_ms: u64,
+    ) -> u64 {
         let age_now = storage.current_age();
         let ages_flushed = storage.count_buckets_flushed() as u64;
         let last_age = self.last_age.swap(age_now, Ordering::Relaxed) as u64;
@@ -169,12 +180,16 @@ impl BucketMapHolderStats {
     /// The result is also an estimate because 'held_in_mem' is based on a stat that is swapped out when stats are reported.
     pub fn get_remaining_items_to_flush_estimate(&self) -> usize {
         let in_mem = self.count_in_mem.load(Ordering::Relaxed) as u64;
-        let held_in_mem = self.held_in_mem_slot_list_cached.load(Ordering::Relaxed)
-            + self.held_in_mem_slot_list_len.load(Ordering::Relaxed);
+        let held_in_mem = self.held_in_mem.slot_list_cached.load(Ordering::Relaxed)
+            + self.held_in_mem.slot_list_len.load(Ordering::Relaxed)
+            + self.held_in_mem.ref_count.load(Ordering::Relaxed);
         in_mem.saturating_sub(held_in_mem) as usize
     }
 
-    pub fn report_stats<T: IndexValue>(&self, storage: &BucketMapHolder<T>) {
+    pub fn report_stats<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
+        &self,
+        storage: &BucketMapHolder<T, U>,
+    ) {
         let elapsed_ms = self.last_time.elapsed_ms();
         if elapsed_ms < STATS_INTERVAL_MS {
             return;
@@ -195,7 +210,6 @@ impl BucketMapHolderStats {
         let disk_per_bucket_counts = disk
             .map(|disk| {
                 (0..self.bins)
-                    .into_iter()
                     .map(|i| disk.get_bucket_from_index(i as usize).bucket_len() as usize)
                     .collect::<Vec<_>>()
             })
@@ -252,13 +266,18 @@ impl BucketMapHolderStats {
                     f64
                 ),
                 (
-                    "held_in_mem_slot_list_len",
-                    self.held_in_mem_slot_list_len.swap(0, Ordering::Relaxed),
+                    "slot_list_len",
+                    self.held_in_mem.slot_list_len.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
-                    "held_in_mem_slot_list_cached",
-                    self.held_in_mem_slot_list_cached.swap(0, Ordering::Relaxed),
+                    "ref_count",
+                    self.held_in_mem.ref_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "slot_list_cached",
+                    self.held_in_mem.slot_list_cached.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 ("min_in_bin_mem", in_mem_stats.0, i64),
@@ -355,6 +374,11 @@ impl BucketMapHolderStats {
                 ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
                 ("ms_per_age", ms_per_age, i64),
                 (
+                    "buckets_scanned",
+                    self.buckets_scanned.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
                     "flush_scan_us",
                     self.flush_scan_us.swap(0, Ordering::Relaxed),
                     i64
@@ -381,14 +405,15 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
+                    "disk_index_failed_resizes",
+                    disk.map(|disk| disk.stats.index.failed_resizes.swap(0, Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
                     "disk_index_max_size",
-                    disk.map(|disk| {
-                        let mut lock = disk.stats.index.max_size.lock().unwrap();
-                        let value = *lock;
-                        *lock = 0;
-                        value
-                    })
-                    .unwrap_or_default(),
+                    disk.map(|disk| { disk.stats.index.max_size.swap(0, Ordering::Relaxed) })
+                        .unwrap_or_default(),
                     i64
                 ),
                 (
@@ -410,11 +435,29 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
-                    "disk_index_find_entry_mut_us",
+                    "disk_index_index_file_size",
+                    disk.map(|disk| disk.stats.index.total_file_size.load(Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
+                    "disk_index_data_file_size",
+                    disk.map(|disk| disk.stats.data.total_file_size.load(Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
+                    "disk_index_data_file_count",
+                    disk.map(|disk| disk.stats.data.file_count.load(Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
+                    "disk_index_find_index_entry_mut_us",
                     disk.map(|disk| disk
                         .stats
                         .index
-                        .find_entry_mut_us
+                        .find_index_entry_mut_us
                         .swap(0, Ordering::Relaxed))
                         .unwrap_or_default(),
                     i64
@@ -433,13 +476,8 @@ impl BucketMapHolderStats {
                 ),
                 (
                     "disk_data_max_size",
-                    disk.map(|disk| {
-                        let mut lock = disk.stats.data.max_size.lock().unwrap();
-                        let value = *lock;
-                        *lock = 0;
-                        value
-                    })
-                    .unwrap_or_default(),
+                    disk.map(|disk| { disk.stats.data.max_size.swap(0, Ordering::Relaxed) })
+                        .unwrap_or_default(),
                     i64
                 ),
                 (

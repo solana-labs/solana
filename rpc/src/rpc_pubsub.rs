@@ -1,5 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
-
+#[cfg(test)]
+use crate::{rpc_pubsub_service, rpc_subscriptions::RpcSubscriptions};
 use {
     crate::{
         rpc::check_is_at_least_confirmed,
@@ -400,12 +401,20 @@ impl RpcSolPubSubImpl {
             })
         }
     }
+
+    #[cfg(test)]
+    pub fn block_until_processed(&self, rpc_subscriptions: &Arc<RpcSubscriptions>) {
+        let (rpc, mut receiver) = rpc_pubsub_service::test_connection(rpc_subscriptions);
+        rpc.slot_subscribe().unwrap();
+        rpc_subscriptions.notify_slot(1, 0, 0);
+        receiver.recv();
+    }
 }
 
 fn param<T: FromStr>(param_str: &str, thing: &str) -> Result<T> {
     param_str.parse::<T>().map_err(|_e| Error {
         code: ErrorCode::InvalidParams,
-        message: format!("Invalid Request: Invalid {} provided", thing),
+        message: format!("Invalid Request: Invalid {thing} provided"),
         data: None,
     })
 }
@@ -676,9 +685,11 @@ mod tests {
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &Arc::new(AtomicBool::new(false)),
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
@@ -805,8 +816,10 @@ mod tests {
 
         let mut io = IoHandler::<()>::default();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks,
         ));
         let (rpc, _receiver) = rpc_pubsub_service::test_connection(&subscriptions);
@@ -862,9 +875,11 @@ mod tests {
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &Arc::new(AtomicBool::new(false)),
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
                 1, 1,
@@ -886,12 +901,7 @@ mod tests {
             }),
         )
         .unwrap();
-
-        // Make sure the subscription is processed before continuing.
-        let (rpc2, mut receiver2) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
-        rpc2.slot_subscribe().unwrap();
-        rpc_subscriptions.notify_slot(1, 0, 0);
-        receiver2.recv();
+        rpc.block_until_processed(&rpc_subscriptions);
 
         let balance = {
             let bank = bank_forks.read().unwrap().working_bank();
@@ -933,7 +943,7 @@ mod tests {
                        "lamports": balance,
                        "data": [base64::encode(expected_data), encoding],
                        "executable": false,
-                       "rentEpoch": 0,
+                       "rentEpoch": u64::MAX,
                        "space": expected_data.len(),
                    },
                },
@@ -993,9 +1003,11 @@ mod tests {
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &Arc::new(AtomicBool::new(false)),
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
                 1, 1,
@@ -1015,12 +1027,7 @@ mod tests {
             }),
         )
         .unwrap();
-
-        // Make sure the subscription is processed before continuing.
-        let (rpc2, mut receiver2) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
-        rpc2.slot_subscribe().unwrap();
-        rpc_subscriptions.notify_slot(1, 0, 0);
-        receiver2.recv();
+        rpc.block_until_processed(&rpc_subscriptions);
 
         let ixs = system_instruction::create_nonce_account(
             &alice.pubkey(),
@@ -1059,7 +1066,7 @@ mod tests {
                        "lamports": 100,
                        "data": expected_data,
                        "executable": false,
-                       "rentEpoch": 0,
+                       "rentEpoch": u64::MAX,
                        "space": account.data().len(),
                    },
                },
@@ -1086,8 +1093,10 @@ mod tests {
 
         let mut io = IoHandler::<()>::default();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks,
         ));
         let (rpc, _receiver) = rpc_pubsub_service::test_connection(&subscriptions);
@@ -1095,8 +1104,7 @@ mod tests {
         io.extend_with(rpc.to_delegate());
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"accountSubscribe","params":["{}"]}}"#,
-            bob_pubkey
+            r#"{{"jsonrpc":"2.0","id":1,"method":"accountSubscribe","params":["{bob_pubkey}"]}}"#
         );
         let _res = io.handle_request_sync(&req);
 
@@ -1134,9 +1142,11 @@ mod tests {
 
         let exit = Arc::new(AtomicBool::new(false));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
@@ -1188,9 +1198,11 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests()));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks.clone(),
             block_commitment_cache,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
@@ -1240,7 +1252,7 @@ mod tests {
                        "lamports": 100,
                        "data": "",
                        "executable": false,
-                       "rentEpoch": 0,
+                       "rentEpoch": u64::MAX,
                        "space": 0,
                    },
                },
@@ -1261,8 +1273,10 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks,
         ));
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
@@ -1280,8 +1294,7 @@ mod tests {
         let expected_res_str = serde_json::to_string(&expected_res).unwrap();
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
-            expected_res_str
+            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{expected_res_str},"subscription":0}}}}"#
         );
         assert_eq!(expected, response);
     }
@@ -1293,8 +1306,10 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks,
         ));
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
@@ -1310,8 +1325,7 @@ mod tests {
         let expected_res_str = serde_json::to_string(&expected_res).unwrap();
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
-            expected_res_str
+            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{expected_res_str},"subscription":0}}}}"#
         );
         assert_eq!(expected, response);
 
@@ -1339,9 +1353,11 @@ mod tests {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks,
             block_commitment_cache,
             optimistically_confirmed_bank,
@@ -1375,8 +1391,10 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks,
         ));
         let (rpc, _receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
@@ -1392,8 +1410,10 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let max_complete_rewards_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(
             max_complete_transaction_status_slot,
+            max_complete_rewards_slot,
             bank_forks,
         ));
         let (rpc, _receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);

@@ -149,3 +149,9 @@ software releases.
 
 If a new attack vector is discovered in existing code, the above processes may be
 circumvented in order to rapidly deploy a fix, depending on the severity of the issue.
+
+#### CLI Tooling Output
+
+CLI tooling json output (`output --json`) compatibility will be preserved; however, output directed
+for a human reader is subject to change. This includes output as well as potential help, warning, or
+error messages.

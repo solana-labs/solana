@@ -33,7 +33,7 @@ impl TpuInfo for ClusterTpuInfo {
             .cluster_info
             .tpu_peers()
             .into_iter()
-            .map(|ci| (ci.id, ci.tpu))
+            .filter_map(|node| Some((*node.pubkey(), node.tpu().ok()?)))
             .collect();
     }
 
@@ -75,7 +75,7 @@ mod test {
             timing::timestamp,
         },
         solana_streamer::socket::SocketAddrSpace,
-        std::sync::atomic::AtomicBool,
+        std::{net::Ipv4Addr, sync::atomic::AtomicBool},
     };
 
     #[test]
@@ -106,9 +106,9 @@ mod test {
                 Some((2, 2)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
-                &Arc::new(blockstore),
+                Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -119,9 +119,9 @@ mod test {
                 SocketAddrSpace::Unspecified,
             ));
 
-            let validator0_socket = SocketAddr::from(([127, 0, 0, 1], 1111));
-            let validator1_socket = SocketAddr::from(([127, 0, 0, 1], 2222));
-            let validator2_socket = SocketAddr::from(([127, 0, 0, 1], 3333));
+            let validator0_socket = SocketAddr::from((Ipv4Addr::LOCALHOST, 1111));
+            let validator1_socket = SocketAddr::from((Ipv4Addr::LOCALHOST, 2222));
+            let validator2_socket = SocketAddr::from((Ipv4Addr::LOCALHOST, 3333));
             let recent_peers: HashMap<_, _> = vec![
                 (
                     validator_vote_keypairs0.node_keypair.pubkey(),

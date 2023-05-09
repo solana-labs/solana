@@ -95,7 +95,7 @@ impl DuplicateSlotRepairStatus {
 }
 
 #[derive(Default, Clone)]
-pub struct DeadSlotAncestorRequestStatus {
+pub struct AncestorRequestStatus {
     // The mismatched slot that was the subject of the AncestorHashes(requested_mismatched_slot)
     // repair request. All responses to this request should be for ancestors of this slot.
     requested_mismatched_slot: Slot,
@@ -115,16 +115,16 @@ pub struct DeadSlotAncestorRequestStatus {
     ancestor_request_responses: HashMap<Vec<(Slot, Hash)>, Vec<SocketAddr>>,
 }
 
-impl DeadSlotAncestorRequestStatus {
+impl AncestorRequestStatus {
     pub fn new(
         sampled_validators: impl Iterator<Item = SocketAddr>,
         requested_mismatched_slot: Slot,
     ) -> Self {
-        DeadSlotAncestorRequestStatus {
+        AncestorRequestStatus {
             requested_mismatched_slot,
             start_ts: timestamp(),
             sampled_validators: sampled_validators.map(|p| (p, false)).collect(),
-            ..DeadSlotAncestorRequestStatus::default()
+            ..AncestorRequestStatus::default()
         }
     }
 
@@ -365,7 +365,7 @@ pub mod tests {
         correct_ancestors_response: Vec<(Slot, Hash)>,
         _blockstore_temp_dir: TempDir,
         blockstore: Blockstore,
-        status: DeadSlotAncestorRequestStatus,
+        status: AncestorRequestStatus,
     }
 
     fn create_rand_socket_addr() -> SocketAddr {
@@ -380,8 +380,7 @@ pub mod tests {
             .take(ANCESTOR_HASH_REPAIR_SAMPLE_SIZE)
             .collect();
 
-        let status =
-            DeadSlotAncestorRequestStatus::new(sampled_addresses.iter().cloned(), request_slot);
+        let status = AncestorRequestStatus::new(sampled_addresses.iter().cloned(), request_slot);
         let blockstore_temp_dir = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(blockstore_temp_dir.path()).unwrap();
 
@@ -695,7 +694,7 @@ pub mod tests {
                     test_setup.correct_ancestors_response
                 );
             }
-            x => panic!("Incorrect decision {:?}", x),
+            x => panic!("Incorrect decision {x:?}"),
         };
     }
 
@@ -748,7 +747,7 @@ pub mod tests {
                 {
                     repair_status
                 }
-                x => panic!("Incorrect decision {:?}", x),
+                x => panic!("Incorrect decision {x:?}"),
             };
 
         // Expect to find everything after 92 in the `correct_ancestors_to_repair`.
@@ -783,7 +782,7 @@ pub mod tests {
                     test_setup.correct_ancestors_response
                 );
             }
-            x => panic!("Incorrect decision {:?}", x),
+            x => panic!("Incorrect decision {x:?}"),
         };
     }
 
@@ -829,7 +828,7 @@ pub mod tests {
                     expected_mismatched_slots
                 );
             }
-            x => panic!("Incorrect decision {:?}", x),
+            x => panic!("Incorrect decision {x:?}"),
         };
     }
 

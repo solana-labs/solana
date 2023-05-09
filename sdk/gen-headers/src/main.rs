@@ -86,43 +86,41 @@ fn transform(inc: &PathBuf) {
         let func = &caps[2].to_string();
         let args = &caps[3].to_string();
         let warn = format!("/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE {} AND RUN `cargo run --bin gen-headers` */", inc.display());
-        let ifndef = format!("#ifndef SOL_SBFV2\n{} {}({});", ty, func, args);
+        let ifndef = format!("#ifndef SOL_SBFV2\n{ty} {func}({args});");
         let hash = sys_hash(func);
-        let typedef_statement = format!("typedef {}(*{}_pointer_type)({});", ty, func, args);
+        let typedef_statement = format!("typedef {ty}(*{func}_pointer_type)({args});");
         let mut arg = 0;
         let mut arg_list = "".to_string();
         if !args.is_empty() {
             arg_list = comm_re
                 .replace_all(args, |_caps: &Captures| {
                     arg += 1;
-                    format!(" arg{},", arg)
+                    format!(" arg{arg},")
                 })
                 .to_string();
             arg += 1;
-            arg_list = format!("{} arg{}", arg_list, arg);
+            arg_list = format!("{arg_list} arg{arg}");
         }
-        let function_signature = format!("static {} {}({})", ty, func, arg_list);
+        let function_signature = format!("static {ty} {func}({arg_list})");
         let pointer_assignment = format!(
-            "{}_pointer_type {}_pointer = ({}_pointer_type) {};",
-            func, func, func, hash
+            "{func}_pointer_type {func}_pointer = ({func}_pointer_type) {hash};"
         );
         if !args.is_empty() {
             arg_list = "arg1".to_string();
             for a in 2..arg + 1 {
-                arg_list = format!("{}, arg{}", arg_list, a);
+                arg_list = format!("{arg_list}, arg{a}");
             }
         }
         let return_statement = if ty == "void" {
-            format!("{}_pointer({});", func, arg_list)
+            format!("{func}_pointer({arg_list});")
         } else {
-            format!("return {}_pointer({});", func, arg_list)
+            format!("return {func}_pointer({arg_list});")
         };
         format!(
-            "{}\n{}\n#else\n{}\n{} {{\n  {}\n  {}\n}}\n#endif",
-            warn, ifndef, typedef_statement, function_signature, pointer_assignment, return_statement,
+            "{warn}\n{ifndef}\n#else\n{typedef_statement}\n{function_signature} {{\n  {pointer_assignment}\n  {return_statement}\n}}\n#endif",
         )
     });
-    write!(output_writer, "{}", output_content).unwrap();
+    write!(output_writer, "{output_content}").unwrap();
 }
 
 const fn sys_hash(name: &str) -> usize {

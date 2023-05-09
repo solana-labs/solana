@@ -24,9 +24,10 @@ struct Config<'a> {
     cargo_args: Option<Vec<&'a str>>,
     sbf_out_dir: Option<PathBuf>,
     sbf_sdk: PathBuf,
-    sbf_tools_version: &'a str,
+    platform_tools_version: &'a str,
     dump: bool,
     features: Vec<String>,
+    force_tools_install: bool,
     generate_child_script_on_failure: bool,
     no_default_features: bool,
     offline: bool,
@@ -50,9 +51,10 @@ impl Default for Config<'_> {
                 .join("sdk")
                 .join("sbf"),
             sbf_out_dir: None,
-            sbf_tools_version: "(unknown)",
+            platform_tools_version: "(unknown)",
             dump: false,
             features: vec![],
+            force_tools_install: false,
             generate_child_script_on_failure: false,
             no_default_features: false,
             offline: false,
@@ -61,7 +63,7 @@ impl Default for Config<'_> {
             verbose: false,
             workspace: false,
             jobs: None,
-            arch: "sbf",
+            arch: "sbfv1",
         }
     }
 }
@@ -100,7 +102,7 @@ where
         let file = File::create(&script_name).unwrap();
         let mut out = BufWriter::new(file);
         for (key, value) in env::vars() {
-            writeln!(out, "{}=\"{}\" \\", key, value).unwrap();
+            writeln!(out, "{key}=\"{value}\" \\").unwrap();
         }
         write!(out, "{}", program.display()).unwrap();
         for arg in args.iter() {
@@ -122,6 +124,97 @@ where
         .collect::<String>()
 }
 
+pub fn is_version_string(arg: &str) -> Result<(), String> {
+    let semver_re = Regex::new(r"^v[0-9]+\.[0-9]+(\.[0-9]+)?").unwrap();
+    if semver_re.is_match(arg) {
+        return Ok(());
+    }
+    Err("a version string starts with 'v' and contains major and minor version numbers separated by a dot, e.g. v1.32".to_string())
+}
+
+fn find_installed_platform_tools() -> Vec<String> {
+    let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
+        error!("Can't get home directory path: {}", err);
+        exit(1);
+    }));
+    let solana = home_dir.join(".cache").join("solana");
+    let package = "platform-tools";
+    std::fs::read_dir(solana)
+        .unwrap()
+        .filter_map(|e| match e {
+            Err(_) => None,
+            Ok(e) => {
+                if e.path().join(package).is_dir() {
+                    Some(e.path().file_name().unwrap().to_string_lossy().to_string())
+                } else {
+                    None
+                }
+            }
+        })
+        .collect::<Vec<_>>()
+}
+
+fn get_latest_platform_tools_version() -> Result<String, String> {
+    let url = "https://github.com/solana-labs/platform-tools/releases/latest";
+    let resp = reqwest::blocking::get(url).map_err(|err| format!("Failed to GET {url}: {err}"))?;
+    let path = std::path::Path::new(resp.url().path());
+    let version = path.file_name().unwrap().to_string_lossy().to_string();
+    Ok(version)
+}
+
+fn normalize_version(version: String) -> String {
+    let dots = version.as_bytes().iter().fold(
+        0,
+        |n: u32, c| if *c == b'.' { n.saturating_add(1) } else { n },
+    );
+    if dots == 1 {
+        format!("{version}.0")
+    } else {
+        version
+    }
+}
+
+fn validate_platform_tools_version(requested_version: &str, builtin_version: String) -> String {
+    let normalized_requested = normalize_version(requested_version.to_string());
+    let requested_semver = semver::Version::parse(&normalized_requested[1..]).unwrap();
+    let installed_versions = find_installed_platform_tools();
+    for v in installed_versions {
+        if requested_semver <= semver::Version::parse(&normalize_version(v)[1..]).unwrap() {
+            return requested_version.to_string();
+        }
+    }
+    let latest_version = get_latest_platform_tools_version().unwrap_or_else(|err| {
+        debug!(
+            "Can't get the latest version of platform-tools: {}. Using built-in version {}.",
+            err, &builtin_version,
+        );
+        builtin_version.clone()
+    });
+    let normalized_latest = normalize_version(latest_version.clone());
+    let latest_semver = semver::Version::parse(&normalized_latest[1..]).unwrap();
+    if requested_semver <= latest_semver {
+        requested_version.to_string()
+    } else {
+        warn!(
+            "Version {} is not valid, latest version is {}. Using the built-in version {}",
+            requested_version, latest_version, &builtin_version,
+        );
+        builtin_version
+    }
+}
+
+fn make_platform_tools_path_for_version(package: &str, version: &str) -> PathBuf {
+    let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
+        error!("Can't get home directory path: {}", err);
+        exit(1);
+    }));
+    home_dir
+        .join(".cache")
+        .join("solana")
+        .join(version)
+        .join(package)
+}
+
 // Check whether a package is installed and install it if missing.
 fn install_if_missing(
     config: &Config,
@@ -130,6 +223,18 @@ fn install_if_missing(
     download_file_name: &str,
     target_path: &Path,
 ) -> Result<(), String> {
+    if config.force_tools_install {
+        if target_path.is_dir() {
+            debug!("Remove directory {:?}", target_path);
+            fs::remove_dir_all(target_path).map_err(|err| err.to_string())?;
+        }
+        let source_base = config.sbf_sdk.join("dependencies");
+        if source_base.exists() {
+            let source_path = source_base.join(package);
+            debug!("Remove file {:?}", source_path);
+            fs::remove_file(source_path).map_err(|err| err.to_string())?;
+        }
+    }
     // Check whether the target path is an empty directory. This can
     // happen if package download failed on previous run of
     // cargo-build-sbf.  Remove the target_path directory in this
@@ -141,6 +246,7 @@ fn install_if_missing(
             .next()
             .is_none()
     {
+        debug!("Remove directory {:?}", target_path);
         fs::remove_dir(target_path).map_err(|err| err.to_string())?;
     }
 
@@ -153,12 +259,13 @@ fn install_if_missing(
             .unwrap_or(false)
     {
         if target_path.exists() {
+            debug!("Remove file {:?}", target_path);
             fs::remove_file(target_path).map_err(|err| err.to_string())?;
         }
         fs::create_dir_all(target_path).map_err(|err| err.to_string())?;
         let mut url = String::from(url);
         url.push('/');
-        url.push_str(config.sbf_tools_version);
+        url.push_str(config.platform_tools_version);
         url.push('/');
         url.push_str(download_file_name);
         let download_file_path = target_path.join(download_file_name);
@@ -263,7 +370,7 @@ fn postprocess_dump(program_dump: &Path) {
         if head_re.is_match(line) {
             let captures = head_re.captures(line).unwrap();
             pc = u64::from_str_radix(&captures[1], 16).unwrap();
-            writeln!(out, "{}", line).unwrap();
+            writeln!(out, "{line}").unwrap();
             continue;
         }
         if insn_re.is_match(line) {
@@ -286,11 +393,11 @@ fn postprocess_dump(program_dump: &Path) {
                 if a2n.contains_key(&address) {
                     writeln!(out, "{} ; {}", line, a2n[&address]).unwrap();
                 } else {
-                    writeln!(out, "{}", line).unwrap();
+                    writeln!(out, "{line}").unwrap();
                 }
             }
         } else {
-            writeln!(out, "{}", line).unwrap();
+            writeln!(out, "{line}").unwrap();
         }
         pc = pc.checked_add(step).unwrap();
     }
@@ -317,11 +424,7 @@ fn check_undefined_symbols(config: &Config, program: &Path) {
     let readelf = config
         .sbf_sdk
         .join("dependencies")
-        .join(if config.arch == "bpf" {
-            "bpf-tools"
-        } else {
-            "sbf-tools"
-        })
+        .join("platform-tools")
         .join("llvm")
         .join("bin")
         .join("llvm-readelf");
@@ -355,16 +458,12 @@ fn check_undefined_symbols(config: &Config, program: &Path) {
     }
 }
 
-// check whether custom SBF toolchain is linked, and link it if it is not.
-fn link_sbf_toolchain(config: &Config) {
+// check whether custom solana toolchain is linked, and link it if it is not.
+fn link_solana_toolchain(config: &Config) {
     let toolchain_path = config
         .sbf_sdk
         .join("dependencies")
-        .join(if config.arch == "bpf" {
-            "bpf-tools"
-        } else {
-            "sbf-tools"
-        })
+        .join("platform-tools")
         .join("rust");
     let rustup = PathBuf::from("rustup");
     let rustup_args = vec!["toolchain", "list", "-v"];
@@ -378,16 +477,12 @@ fn link_sbf_toolchain(config: &Config) {
     }
     let mut do_link = true;
     for line in rustup_output.lines() {
-        if line.starts_with(if config.arch == "bpf" { "bpf" } else { "sbf" }) {
+        if line.starts_with("solana") {
             let mut it = line.split_whitespace();
             let _ = it.next();
             let path = it.next();
             if path.unwrap() != toolchain_path.to_str().unwrap() {
-                let rustup_args = vec![
-                    "toolchain",
-                    "uninstall",
-                    if config.arch == "bpf" { "bpf" } else { "sbf" },
-                ];
+                let rustup_args = vec!["toolchain", "uninstall", "solana"];
                 let output = spawn(
                     &rustup,
                     rustup_args,
@@ -406,7 +501,7 @@ fn link_sbf_toolchain(config: &Config) {
         let rustup_args = vec![
             "toolchain",
             "link",
-            if config.arch == "bpf" { "bpf" } else { "sbf" },
+            "solana",
             toolchain_path.to_str().unwrap(),
         ];
         let output = spawn(
@@ -420,7 +515,11 @@ fn link_sbf_toolchain(config: &Config) {
     }
 }
 
-fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_metadata::Package) {
+fn build_solana_package(
+    config: &Config,
+    target_directory: &Path,
+    package: &cargo_metadata::Package,
+) {
     let program_name = {
         let cdylib_targets = package
             .targets
@@ -465,13 +564,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         .cloned()
         .unwrap_or_else(|| target_directory.join("deploy"));
 
-    let target_build_directory = target_directory
-        .join(if config.arch == "bpf" {
-            "bpfel-unknown-unknown"
-        } else {
-            "sbf-solana-solana"
-        })
-        .join("release");
+    let target_build_directory = target_directory.join("sbf-solana-solana").join("release");
 
     env::set_current_dir(root_package_dir).unwrap_or_else(|err| {
         error!(
@@ -481,7 +574,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         exit(1);
     });
 
-    info!("SBF SDK: {}", config.sbf_sdk.display());
+    info!("Solana SDK: {}", config.sbf_sdk.display());
     if config.no_default_features {
         info!("No default features");
     }
@@ -491,43 +584,25 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if legacy_program_feature_present {
         info!("Legacy program feature detected");
     }
-    let sbf_tools_download_file_name = if cfg!(target_os = "windows") {
-        if config.arch == "bpf" {
-            "solana-bpf-tools-windows.tar.bz2"
-        } else {
-            "solana-sbf-tools-windows.tar.bz2"
-        }
+    let arch = if cfg!(target_arch = "aarch64") {
+        "aarch64"
+    } else {
+        "x86_64"
+    };
+    let platform_tools_download_file_name = if cfg!(target_os = "windows") {
+        format!("platform-tools-windows-{arch}.tar.bz2")
     } else if cfg!(target_os = "macos") {
-        if config.arch == "bpf" {
-            "solana-bpf-tools-osx.tar.bz2"
-        } else {
-            "solana-sbf-tools-osx.tar.bz2"
-        }
-    } else if config.arch == "bpf" {
-        "solana-bpf-tools-linux.tar.bz2"
+        format!("platform-tools-osx-{arch}.tar.bz2")
     } else {
-        "solana-sbf-tools-linux.tar.bz2"
+        format!("platform-tools-linux-{arch}.tar.bz2")
     };
-
-    let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
-        error!("Can't get home directory path: {}", err);
-        exit(1);
-    }));
-    let package = if config.arch == "bpf" {
-        "bpf-tools"
-    } else {
-        "sbf-tools"
-    };
-    let target_path = home_dir
-        .join(".cache")
-        .join("solana")
-        .join(config.sbf_tools_version)
-        .join(package);
+    let package = "platform-tools";
+    let target_path = make_platform_tools_path_for_version(package, config.platform_tools_version);
     install_if_missing(
         config,
         package,
-        "https://github.com/solana-labs/sbf-tools/releases/download",
-        sbf_tools_download_file_name,
+        "https://github.com/solana-labs/platform-tools/releases/download",
+        platform_tools_download_file_name.as_str(),
         &target_path,
     )
     .unwrap_or_else(|err| {
@@ -542,19 +617,15 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
             );
             exit(1);
         });
-        error!("Failed to install sbf-tools: {}", err);
+        error!("Failed to install platform-tools: {}", err);
         exit(1);
     });
-    link_sbf_toolchain(config);
+    link_solana_toolchain(config);
 
     let llvm_bin = config
         .sbf_sdk
         .join("dependencies")
-        .join(if config.arch == "bpf" {
-            "bpf-tools"
-        } else {
-            "sbf-tools"
-        })
+        .join("platform-tools")
         .join("llvm")
         .join("bin");
     env::set_var("CC", llvm_bin.join("clang"));
@@ -564,19 +635,15 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
     // RUSTC variable overrides cargo +<toolchain> mechanism of
     // selecting the rust compiler and makes cargo run a rust compiler
-    // other than the one linked in BPF toolchain. We have to prevent
+    // other than the one linked in Solana toolchain. We have to prevent
     // this by removing RUSTC from the child process environment.
     if env::var("RUSTC").is_ok() {
         warn!(
-            "Removed RUSTC from cargo environment, because it overrides +sbf cargo command line option."
+            "Removed RUSTC from cargo environment, because it overrides +solana cargo command line option."
         );
         env::remove_var("RUSTC")
     }
-    let cargo_target = if config.arch == "bpf" {
-        "CARGO_TARGET_BPFEL_UNKNOWN_UNKNOWN_RUSTFLAGS"
-    } else {
-        "CARGO_TARGET_SBF_SOLANA_SOLANA_RUSTFLAGS"
-    };
+    let cargo_target = "CARGO_TARGET_SBF_SOLANA_SOLANA_RUSTFLAGS";
     let rustflags = env::var("RUSTFLAGS").ok().unwrap_or_default();
     if env::var("RUSTFLAGS").is_ok() {
         warn!(
@@ -588,7 +655,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     let target_rustflags = env::var(cargo_target).ok();
     let mut target_rustflags = Cow::Borrowed(target_rustflags.as_deref().unwrap_or_default());
     target_rustflags = Cow::Owned(format!("{} {}", &rustflags, &target_rustflags));
-    if config.remap_cwd {
+    if config.remap_cwd && !config.debug {
         target_rustflags = Cow::Owned(format!("{} -Zremap-cwd-prefix=", &target_rustflags));
     }
     if config.debug {
@@ -611,15 +678,11 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![
-        if config.arch == "bpf" { "+bpf" } else { "+sbf" },
+        "+solana",
         "build",
         "--release",
         "--target",
-        if config.arch == "bpf" {
-            "bpfel-unknown-unknown"
-        } else {
-            "sbf-solana-solana"
-        },
+        "sbf-solana-solana",
     ];
     if config.arch == "sbfv2" {
         cargo_build_args.push("-Zbuild-std=std,panic_abort");
@@ -659,11 +722,11 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     }
 
     if let Some(program_name) = program_name {
-        let program_unstripped_so = target_build_directory.join(format!("{}.so", program_name));
-        let program_dump = sbf_out_dir.join(format!("{}-dump.txt", program_name));
-        let program_so = sbf_out_dir.join(format!("{}.so", program_name));
-        let program_debug = sbf_out_dir.join(format!("{}.debug", program_name));
-        let program_keypair = sbf_out_dir.join(format!("{}-keypair.json", program_name));
+        let program_unstripped_so = target_build_directory.join(format!("{program_name}.so"));
+        let program_dump = sbf_out_dir.join(format!("{program_name}-dump.txt"));
+        let program_so = sbf_out_dir.join(format!("{program_name}.so"));
+        let program_debug = sbf_out_dir.join(format!("{program_name}.debug"));
+        let program_keypair = sbf_out_dir.join(format!("{program_name}-keypair.json"));
 
         fn file_older_or_missing(prerequisite_file: &Path, target_file: &Path) -> bool {
             let prerequisite_metadata = fs::metadata(prerequisite_file).unwrap_or_else(|err| {
@@ -773,7 +836,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     }
 }
 
-fn build_sbf(config: Config, manifest_path: Option<PathBuf>) {
+fn build_solana(config: Config, manifest_path: Option<PathBuf>) {
     let mut metadata_command = cargo_metadata::MetadataCommand::new();
     if let Some(manifest_path) = manifest_path {
         metadata_command.manifest_path(manifest_path);
@@ -789,7 +852,7 @@ fn build_sbf(config: Config, manifest_path: Option<PathBuf>) {
 
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
-            build_sbf_package(&config, metadata.target_directory.as_ref(), root_package);
+            build_solana_package(&config, metadata.target_directory.as_ref(), root_package);
             return;
         }
     }
@@ -810,7 +873,7 @@ fn build_sbf(config: Config, manifest_path: Option<PathBuf>) {
         .collect::<Vec<_>>();
 
     for package in all_sbf_packages {
-        build_sbf_package(&config, metadata.target_directory.as_ref(), package);
+        build_solana_package(&config, metadata.target_directory.as_ref(), package);
     }
 }
 
@@ -829,9 +892,13 @@ fn main() {
     }
 
     // The following line is scanned by CI configuration script to
-    // separate cargo caches according to the version of sbf-tools.
-    let sbf_tools_version = "v1.31";
-    let version = format!("{}\nsbf-tools {}", crate_version!(), sbf_tools_version);
+    // separate cargo caches according to the version of platform-tools.
+    let platform_tools_version = String::from("v1.37");
+    let version = format!(
+        "{}\nplatform-tools {}",
+        crate_version!(),
+        platform_tools_version,
+    );
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())
         .version(version.as_str())
@@ -887,6 +954,12 @@ fn main() {
                 .help("Space-separated list of features to activate"),
         )
         .arg(
+            Arg::new("force_tools_install")
+                .long("force-tools-install")
+                .takes_value(false)
+                .help("Download and install platform-tools even when existing tools are located"),
+        )
+        .arg(
             Arg::new("generate_child_script_on_failure")
                 .long("generate-child-script-on-failure")
                 .takes_value(false)
@@ -912,6 +985,16 @@ fn main() {
                 .help("Run without accessing the network"),
         )
         .arg(
+            Arg::new("tools_version")
+                .long("tools-version")
+                .value_name("STRING")
+                .takes_value(true)
+                .validator(is_version_string)
+                .help(
+                    "platform-tools version to use or to install, a version string, e.g. \"v1.32\"",
+                ),
+        )
+        .arg(
             Arg::new("verbose")
                 .short('v')
                 .long("verbose")
@@ -923,7 +1006,7 @@ fn main() {
                 .long("workspace")
                 .takes_value(false)
                 .alias("all")
-                .help("Build all SBF packages in the workspace"),
+                .help("Build all Solana packages in the workspace"),
         )
         .arg(
             Arg::new("jobs")
@@ -937,22 +1020,27 @@ fn main() {
         .arg(
             Arg::new("arch")
                 .long("arch")
-                .possible_values(["bpf", "sbf", "sbfv2"])
-                .default_value("sbf")
-                .help("Build for the given SBF version"),
+                .possible_values(["sbfv1", "sbfv2"])
+                .default_value("sbfv1")
+                .help("Build for the given target architecture"),
         )
         .get_matches_from(args);
 
     let sbf_sdk: PathBuf = matches.value_of_t_or_exit("sbf_sdk");
     let sbf_out_dir: Option<PathBuf> = matches.value_of_t("sbf_out_dir").ok();
 
+    let platform_tools_version = if let Some(tools_version) = matches.value_of("tools_version") {
+        validate_platform_tools_version(tools_version, platform_tools_version)
+    } else {
+        platform_tools_version
+    };
     let config = Config {
         cargo_args: matches
             .values_of("cargo_args")
             .map(|vals| vals.collect::<Vec<_>>()),
         sbf_sdk: fs::canonicalize(&sbf_sdk).unwrap_or_else(|err| {
             error!(
-                "SBF SDK path does not exist: {}: {}",
+                "Solana SDK path does not exist: {}: {}",
                 sbf_sdk.display(),
                 err
             );
@@ -967,9 +1055,10 @@ fn main() {
                     .join(sbf_out_dir)
             }
         }),
-        sbf_tools_version,
+        platform_tools_version: platform_tools_version.as_str(),
         dump: matches.is_present("dump"),
         features: matches.values_of_t("features").ok().unwrap_or_default(),
+        force_tools_install: matches.is_present("force_tools_install"),
         generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         no_default_features: matches.is_present("no_default_features"),
         remap_cwd: !matches.is_present("remap_cwd"),
@@ -985,5 +1074,5 @@ fn main() {
         debug!("{:?}", config);
         debug!("manifest_path: {:?}", manifest_path);
     }
-    build_sbf(config, manifest_path);
+    build_solana(config, manifest_path);
 }

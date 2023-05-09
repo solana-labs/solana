@@ -12,6 +12,9 @@
 /static/img/*.png
 vercel.json
 
+# use npm and package-lock.json
+yarn.lock
+
 # Misc
 .DS_Store
 .env

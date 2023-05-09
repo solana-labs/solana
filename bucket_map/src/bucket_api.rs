@@ -16,7 +16,7 @@ use {
 
 type LockedBucket<T> = RwLock<Option<Bucket<T>>>;
 
-pub struct BucketApi<T: Clone + Copy> {
+pub struct BucketApi<T: Clone + Copy + 'static> {
     drives: Arc<Vec<PathBuf>>,
     max_search: MaxSearch,
     pub stats: Arc<BucketMapStats>,
@@ -98,18 +98,6 @@ impl<T: Clone + Copy> BucketApi<T> {
         bucket
     }
 
-    pub fn addref(&self, key: &Pubkey) -> Option<RefCount> {
-        self.get_write_bucket()
-            .as_mut()
-            .and_then(|bucket| bucket.addref(key))
-    }
-
-    pub fn unref(&self, key: &Pubkey) -> Option<RefCount> {
-        self.get_write_bucket()
-            .as_mut()
-            .and_then(|bucket| bucket.unref(key))
-    }
-
     pub fn insert(&self, pubkey: &Pubkey, value: (&[T], RefCount)) {
         let mut bucket = self.get_write_bucket();
         bucket.as_mut().unwrap().insert(pubkey, value)
@@ -121,6 +109,27 @@ impl<T: Clone + Copy> BucketApi<T> {
         if let Some(bucket) = self.bucket.read().unwrap().as_ref() {
             bucket.grow(err)
         }
+    }
+
+    /// caller can specify that the index needs to hold approximately `count` entries soon.
+    /// This gives a hint to the resizing algorithm and prevents repeated incremental resizes.
+    pub fn set_anticipated_count(&self, count: u64) {
+        let mut bucket = self.get_write_bucket();
+        bucket.as_mut().unwrap().set_anticipated_count(count);
+    }
+
+    /// batch insert of `items`. Assumption is a single slot list element and ref_count == 1.
+    /// For any pubkeys that already exist, the failed insertion data and the existing data are returned.
+    pub fn batch_insert_non_duplicates(
+        &self,
+        items: impl Iterator<Item = (Pubkey, T)>,
+        count: usize,
+    ) -> Vec<(Pubkey, T, T)> {
+        let mut bucket = self.get_write_bucket();
+        bucket
+            .as_mut()
+            .unwrap()
+            .batch_insert_non_duplicates(items, count)
     }
 
     pub fn update<F>(&self, key: &Pubkey, updatefn: F)
@@ -137,6 +146,9 @@ impl<T: Clone + Copy> BucketApi<T> {
         value: (&[T], RefCount),
     ) -> Result<(), BucketMapError> {
         let mut bucket = self.get_write_bucket();
-        bucket.as_mut().unwrap().try_write(pubkey, value.0, value.1)
+        bucket
+            .as_mut()
+            .unwrap()
+            .try_write(pubkey, value.0.iter(), value.0.len(), value.1)
     }
 }

@@ -1,7 +1,3 @@
-use {
-    crate::zk_token_elgamal::pod,
-    bytemuck::{Pod, Zeroable},
-};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -10,12 +6,18 @@ use {
             pedersen::PedersenOpening,
         },
         errors::ProofError,
-        instruction::Verifiable,
         sigma_proofs::equality_proof::CtxtCtxtEqualityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
     std::convert::TryInto,
+};
+use {
+    crate::{
+        instruction::{ProofType, ZkProofData},
+        zk_token_elgamal::pod,
+    },
+    bytemuck::{Pod, Zeroable},
 };
 
 /// This struct includes the cryptographic proof *and* the account data information needed to verify
@@ -28,15 +30,21 @@ use {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct WithdrawWithheldTokensData {
-    pub withdraw_withheld_authority_pubkey: pod::ElGamalPubkey,
-
-    pub destination_pubkey: pod::ElGamalPubkey,
-
-    pub withdraw_withheld_authority_ciphertext: pod::ElGamalCiphertext,
-
-    pub destination_ciphertext: pod::ElGamalCiphertext,
+    pub context: WithdrawWithheldTokensProofContext,
 
     pub proof: WithdrawWithheldTokensProof,
+}
+
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct WithdrawWithheldTokensProofContext {
+    pub withdraw_withheld_authority_pubkey: pod::ElGamalPubkey, // 32 bytes
+
+    pub destination_pubkey: pod::ElGamalPubkey, // 32 bytes
+
+    pub withdraw_withheld_authority_ciphertext: pod::ElGamalCiphertext, // 64 bytes
+
+    pub destination_ciphertext: pod::ElGamalCiphertext, // 64 bytes
 }
 
 #[cfg(not(target_os = "solana"))]
@@ -58,6 +66,13 @@ impl WithdrawWithheldTokensData {
             pod::ElGamalCiphertext(withdraw_withheld_authority_ciphertext.to_bytes());
         let pod_destination_ciphertext = pod::ElGamalCiphertext(destination_ciphertext.to_bytes());
 
+        let context = WithdrawWithheldTokensProofContext {
+            withdraw_withheld_authority_pubkey: pod_withdraw_withheld_authority_pubkey,
+            destination_pubkey: pod_destination_pubkey,
+            withdraw_withheld_authority_ciphertext: pod_withdraw_withheld_authority_ciphertext,
+            destination_ciphertext: pod_destination_ciphertext,
+        };
+
         let mut transcript = WithdrawWithheldTokensProof::transcript_new(
             &pod_withdraw_withheld_authority_pubkey,
             &pod_destination_pubkey,
@@ -74,32 +89,34 @@ impl WithdrawWithheldTokensData {
             &mut transcript,
         );
 
-        Ok(Self {
-            withdraw_withheld_authority_pubkey: pod_withdraw_withheld_authority_pubkey,
-            destination_pubkey: pod_destination_pubkey,
-            withdraw_withheld_authority_ciphertext: pod_withdraw_withheld_authority_ciphertext,
-            destination_ciphertext: pod_destination_ciphertext,
-            proof,
-        })
+        Ok(Self { context, proof })
     }
 }
 
-#[cfg(not(target_os = "solana"))]
-impl Verifiable for WithdrawWithheldTokensData {
-    fn verify(&self) -> Result<(), ProofError> {
+impl ZkProofData<WithdrawWithheldTokensProofContext> for WithdrawWithheldTokensData {
+    const PROOF_TYPE: ProofType = ProofType::WithdrawWithheldTokens;
+
+    fn context_data(&self) -> &WithdrawWithheldTokensProofContext {
+        &self.context
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    fn verify_proof(&self) -> Result<(), ProofError> {
         let mut transcript = WithdrawWithheldTokensProof::transcript_new(
-            &self.withdraw_withheld_authority_pubkey,
-            &self.destination_pubkey,
-            &self.withdraw_withheld_authority_ciphertext,
-            &self.destination_ciphertext,
+            &self.context.withdraw_withheld_authority_pubkey,
+            &self.context.destination_pubkey,
+            &self.context.withdraw_withheld_authority_ciphertext,
+            &self.context.destination_ciphertext,
         );
 
         let withdraw_withheld_authority_pubkey =
-            self.withdraw_withheld_authority_pubkey.try_into()?;
-        let destination_pubkey = self.destination_pubkey.try_into()?;
-        let withdraw_withheld_authority_ciphertext =
-            self.withdraw_withheld_authority_ciphertext.try_into()?;
-        let destination_ciphertext = self.destination_ciphertext.try_into()?;
+            self.context.withdraw_withheld_authority_pubkey.try_into()?;
+        let destination_pubkey = self.context.destination_pubkey.try_into()?;
+        let withdraw_withheld_authority_ciphertext = self
+            .context
+            .withdraw_withheld_authority_ciphertext
+            .try_into()?;
+        let destination_ciphertext = self.context.destination_ciphertext.try_into()?;
 
         self.proof.verify(
             &withdraw_withheld_authority_pubkey,
@@ -210,7 +227,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(withdraw_withheld_tokens_data.verify().is_ok());
+        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
 
         let amount: u64 = 55;
         let withdraw_withheld_authority_ciphertext =
@@ -224,7 +241,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(withdraw_withheld_tokens_data.verify().is_ok());
+        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
 
         let amount = u64::max_value();
         let withdraw_withheld_authority_ciphertext =
@@ -238,6 +255,6 @@ mod test {
         )
         .unwrap();
 
-        assert!(withdraw_withheld_tokens_data.verify().is_ok());
+        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
     }
 }

@@ -201,7 +201,7 @@ source ~/.zshrc
 ```
 
 If you would prefer not to disable zsh's special handling of the question mark
-character, you can disable it explictly with a backslash in your keypair URLs.
+character, you can disable it explicitly with a backslash in your keypair URLs.
 For example:
 
 ```bash

@@ -1,0 +1,31 @@
+[package]
+name = "solana-connection-cache"
+description = "Solana Connection Cache"
+documentation = "https://docs.rs/solana-connection-cache"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+bincode = { workspace = true }
+futures-util = { workspace = true }
+indexmap = { workspace = true }
+indicatif = { workspace = true, optional = true }
+log = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+rcgen = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-sdk = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+rand_chacha = { workspace = true }
+solana-logger = { workspace = true }
+solana-net-utils = { workspace = true }

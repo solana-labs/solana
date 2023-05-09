@@ -31,7 +31,7 @@ use {
         stake::{instruction::LockupArgs, state::Lockup},
         transaction::{TransactionError, VersionedTransaction},
     },
-    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
+    solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
     solana_vote_program::vote_state::VoteAuthorize,
     std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration},
     thiserror::Error,
@@ -58,6 +58,10 @@ pub enum CliCommand {
     Inflation(InflationCliCommand),
     Fees {
         blockhash: Option<Hash>,
+    },
+    FindProgramDerivedAddress {
+        seeds: Vec<Vec<u8>>,
+        program_id: Pubkey,
     },
     FirstAvailableBlock,
     GetBlock {
@@ -214,7 +218,7 @@ pub enum CliCommand {
         nonce_authority: SignerIndex,
         memo: Option<String>,
         fee_payer: SignerIndex,
-        redelegation_stake_account_pubkey: Option<Pubkey>,
+        redelegation_stake_account: Option<SignerIndex>,
         compute_unit_price: Option<u64>,
     },
     SplitStake {
@@ -802,6 +806,9 @@ pub fn parse_command(
         ("create-address-with-seed", Some(matches)) => {
             parse_create_address_with_seed(matches, default_signer, wallet_manager)
         }
+        ("find-program-derived-address", Some(matches)) => {
+            parse_find_program_derived_address(matches)
+        }
         ("decode-transaction", Some(matches)) => parse_decode_transaction(matches),
         ("resolve-signer", Some(matches)) => {
             let signer_path = resolve_signer(matches, "signer", wallet_manager)?;
@@ -838,7 +845,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         if config.keypair_path.starts_with("usb://") {
             let pubkey = config
                 .pubkey()
-                .map(|pubkey| format!("{:?}", pubkey))
+                .map(|pubkey| format!("{pubkey:?}"))
                 .unwrap_or_else(|_| "Unavailable".to_string());
             println_name_value("Pubkey:", &pubkey);
         }
@@ -887,6 +894,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Fees { ref blockhash } => process_fees(&rpc_client, config, blockhash.as_ref()),
         CliCommand::Feature(feature_subcommand) => {
             process_feature_subcommand(&rpc_client, config, feature_subcommand)
+        }
+        CliCommand::FindProgramDerivedAddress { seeds, program_id } => {
+            process_find_program_derived_address(config, seeds, program_id)
         }
         CliCommand::FirstAvailableBlock => process_first_available_block(&rpc_client),
         CliCommand::GetBlock { slot } => process_get_block(&rpc_client, config, *slot),
@@ -1172,7 +1182,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_authority,
             memo,
             fee_payer,
-            redelegation_stake_account_pubkey,
+            redelegation_stake_account,
             compute_unit_price,
         } => process_delegate_stake(
             &rpc_client,
@@ -1188,7 +1198,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_authority,
             memo.as_ref(),
             *fee_payer,
-            redelegation_stake_account_pubkey.as_ref(),
+            *redelegation_stake_account,
             compute_unit_price.as_ref(),
         ),
         CliCommand::SplitStake {
@@ -1817,7 +1827,7 @@ mod tests {
         let test_commands = get_clap_app("test", "desc", "version");
 
         let pubkey = solana_sdk::pubkey::new_rand();
-        let pubkey_string = format!("{}", pubkey);
+        let pubkey_string = format!("{pubkey}");
 
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
@@ -1889,7 +1899,7 @@ mod tests {
 
         // Test Confirm Subcommand
         let signature = Signature::new(&[1; 64]);
-        let signature_string = format!("{:?}", signature);
+        let signature_string = format!("{signature:?}");
         let test_confirm =
             test_commands
                 .clone()
@@ -2520,7 +2530,7 @@ mod tests {
 
         //Test Transfer Subcommand, submit offline `from`
         let from_sig = from_keypair.sign_message(&[0u8]);
-        let from_signer = format!("{}={}", from_pubkey, from_sig);
+        let from_signer = format!("{from_pubkey}={from_sig}");
         let test_transfer = test_commands.clone().get_matches_from(vec![
             "test",
             "transfer",
@@ -2563,7 +2573,7 @@ mod tests {
         );
 
         //Test Transfer Subcommand, with nonce
-        let nonce_address = Pubkey::new(&[1u8; 32]);
+        let nonce_address = Pubkey::from([1u8; 32]);
         let nonce_address_string = nonce_address.to_string();
         let nonce_authority = keypair_from_seed(&[2u8; 32]).unwrap();
         let nonce_authority_file = make_tmp_path("nonce_authority_file");

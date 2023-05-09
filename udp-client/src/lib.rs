@@ -5,45 +5,31 @@ pub mod udp_client;
 
 use {
     crate::{
-        nonblocking::udp_client::UdpTpuConnection as NonblockingUdpTpuConnection,
-        udp_client::UdpTpuConnection as BlockingUdpTpuConnection,
+        nonblocking::udp_client::UdpClientConnection as NonblockingUdpConnection,
+        udp_client::UdpClientConnection as BlockingUdpConnection,
     },
-    solana_tpu_client::{
-        connection_cache_stats::ConnectionCacheStats,
-        tpu_connection_cache::{
-            BaseTpuConnection, ConnectionPool, ConnectionPoolError, NewTpuConfig,
+    solana_connection_cache::{
+        connection_cache::{
+            BaseClientConnection, ClientError, ConnectionManager, ConnectionPool,
+            ConnectionPoolError, NewConnectionConfig, Protocol,
         },
+        connection_cache_stats::ConnectionCacheStats,
     },
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::Arc,
     },
-    thiserror::Error,
 };
-
-#[derive(Error, Debug)]
-pub enum UdpClientError {
-    #[error("IO error: {0:?}")]
-    IoError(#[from] std::io::Error),
-}
 
 pub struct UdpPool {
     connections: Vec<Arc<Udp>>,
 }
 impl ConnectionPool for UdpPool {
-    type PoolTpuConnection = Udp;
-    type TpuConfig = UdpConfig;
+    type BaseClientConnection = Udp;
+    type NewConnectionConfig = UdpConfig;
 
-    fn new_with_connection(config: &Self::TpuConfig, addr: &SocketAddr) -> Self {
-        let mut pool = Self {
-            connections: vec![],
-        };
-        pool.add_connection(config, addr);
-        pool
-    }
-
-    fn add_connection(&mut self, config: &Self::TpuConfig, addr: &SocketAddr) {
-        let connection = Arc::new(self.create_pool_entry(config, addr));
+    fn add_connection(&mut self, config: &Self::NewConnectionConfig, addr: &SocketAddr) {
+        let connection = self.create_pool_entry(config, addr);
         self.connections.push(connection);
     }
 
@@ -51,7 +37,7 @@ impl ConnectionPool for UdpPool {
         self.connections.len()
     }
 
-    fn get(&self, index: usize) -> Result<Arc<Self::PoolTpuConnection>, ConnectionPoolError> {
+    fn get(&self, index: usize) -> Result<Arc<Self::BaseClientConnection>, ConnectionPoolError> {
         self.connections
             .get(index)
             .cloned()
@@ -60,47 +46,68 @@ impl ConnectionPool for UdpPool {
 
     fn create_pool_entry(
         &self,
-        config: &Self::TpuConfig,
+        config: &Self::NewConnectionConfig,
         _addr: &SocketAddr,
-    ) -> Self::PoolTpuConnection {
-        Udp(config.tpu_udp_socket.clone())
+    ) -> Arc<Self::BaseClientConnection> {
+        Arc::new(Udp(config.udp_socket.clone()))
     }
 }
 
 pub struct UdpConfig {
-    tpu_udp_socket: Arc<UdpSocket>,
+    udp_socket: Arc<UdpSocket>,
 }
 
-impl NewTpuConfig for UdpConfig {
-    type ClientError = UdpClientError;
-
-    fn new() -> Result<Self, UdpClientError> {
-        let socket = solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
-            .map_err(Into::<UdpClientError>::into)?;
+impl NewConnectionConfig for UdpConfig {
+    fn new() -> Result<Self, ClientError> {
+        let socket = solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
+            .map_err(Into::<ClientError>::into)?;
         Ok(Self {
-            tpu_udp_socket: Arc::new(socket),
+            udp_socket: Arc::new(socket),
         })
     }
 }
 
 pub struct Udp(Arc<UdpSocket>);
-impl BaseTpuConnection for Udp {
-    type BlockingConnectionType = BlockingUdpTpuConnection;
-    type NonblockingConnectionType = NonblockingUdpTpuConnection;
+impl BaseClientConnection for Udp {
+    type BlockingClientConnection = BlockingUdpConnection;
+    type NonblockingClientConnection = NonblockingUdpConnection;
 
     fn new_blocking_connection(
         &self,
         addr: SocketAddr,
         _stats: Arc<ConnectionCacheStats>,
-    ) -> BlockingUdpTpuConnection {
-        BlockingUdpTpuConnection::new_from_addr(self.0.clone(), addr)
+    ) -> Arc<Self::BlockingClientConnection> {
+        Arc::new(BlockingUdpConnection::new_from_addr(self.0.clone(), addr))
     }
 
     fn new_nonblocking_connection(
         &self,
         addr: SocketAddr,
         _stats: Arc<ConnectionCacheStats>,
-    ) -> NonblockingUdpTpuConnection {
-        NonblockingUdpTpuConnection::new_from_addr(self.0.try_clone().unwrap(), addr)
+    ) -> Arc<Self::NonblockingClientConnection> {
+        Arc::new(NonblockingUdpConnection::new_from_addr(
+            self.0.try_clone().unwrap(),
+            addr,
+        ))
+    }
+}
+
+#[derive(Default)]
+pub struct UdpConnectionManager {}
+
+impl ConnectionManager for UdpConnectionManager {
+    type ConnectionPool = UdpPool;
+    type NewConnectionConfig = UdpConfig;
+
+    const PROTOCOL: Protocol = Protocol::UDP;
+
+    fn new_connection_pool(&self) -> Self::ConnectionPool {
+        UdpPool {
+            connections: Vec::default(),
+        }
+    }
+
+    fn new_connection_config(&self) -> Self::NewConnectionConfig {
+        UdpConfig::new().unwrap()
     }
 }

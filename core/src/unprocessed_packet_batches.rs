@@ -2,7 +2,6 @@ use {
     crate::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{Packet, PacketBatch},
-    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
     solana_sdk::{hash::Hash, transaction::Transaction},
     std::{
         cmp::Ordering,
@@ -28,22 +27,7 @@ impl DeserializedPacket {
     }
 
     pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, None)
-    }
-
-    #[cfg(test)]
-    pub fn new_with_priority_details(
-        packet: Packet,
-        priority_details: TransactionPriorityDetails,
-    ) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, Some(priority_details))
-    }
-
-    pub fn new_internal(
-        packet: Packet,
-        priority_details: Option<TransactionPriorityDetails>,
-    ) -> Result<Self, DeserializedPacketError> {
-        let immutable_section = ImmutableDeserializedPacket::new(packet, priority_details)?;
+        let immutable_section = ImmutableDeserializedPacket::new(packet)?;
 
         Ok(Self {
             immutable_section: Arc::new(immutable_section),
@@ -126,7 +110,7 @@ impl UnprocessedPacketBatches {
                 if dropped_packet
                     .immutable_section()
                     .original_packet()
-                    .meta
+                    .meta()
                     .is_tracer_packet()
                 {
                     num_dropped_tracer_packets += 1;
@@ -333,8 +317,10 @@ mod tests {
         super::*,
         solana_perf::packet::PacketFlags,
         solana_sdk::{
+            compute_budget::ComputeBudgetInstruction,
+            message::Message,
             signature::{Keypair, Signer},
-            system_transaction,
+            system_instruction, system_transaction,
             transaction::{SimpleAddressLoader, Transaction},
         },
         solana_vote_program::vote_transaction,
@@ -353,21 +339,16 @@ mod tests {
     }
 
     fn packet_with_priority_details(priority: u64, compute_unit_limit: u64) -> DeserializedPacket {
-        let tx = system_transaction::transfer(
-            &Keypair::new(),
-            &solana_sdk::pubkey::new_rand(),
-            1,
-            Hash::new_unique(),
-        );
-        let packet = Packet::from_data(None, tx).unwrap();
-        DeserializedPacket::new_with_priority_details(
-            packet,
-            TransactionPriorityDetails {
-                priority,
-                compute_unit_limit,
-            },
-        )
-        .unwrap()
+        let from_account = solana_sdk::pubkey::new_rand();
+        let tx = Transaction::new_unsigned(Message::new(
+            &[
+                ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit as u32),
+                ComputeBudgetInstruction::set_compute_unit_price(priority),
+                system_instruction::transfer(&from_account, &solana_sdk::pubkey::new_rand(), 1),
+            ],
+            Some(&from_account),
+        ));
+        DeserializedPacket::new(Packet::from_data(None, tx).unwrap()).unwrap()
     }
 
     #[test]
@@ -478,7 +459,7 @@ mod tests {
             packet_vector.push(Packet::from_data(None, tx).unwrap());
         }
         for index in vote_indexes.iter() {
-            packet_vector[*index].meta.flags |= PacketFlags::SIMPLE_VOTE_TX;
+            packet_vector[*index].meta_mut().flags |= PacketFlags::SIMPLE_VOTE_TX;
         }
 
         packet_vector

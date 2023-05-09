@@ -1,7 +1,7 @@
 //! The `gossip_service` module implements the network control plane.
 
 use {
-    crate::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    crate::{cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo},
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
     solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
@@ -55,7 +55,7 @@ impl GossipService {
             request_sender,
             Recycler::default(),
             Arc::new(StreamerReceiveStats::new("gossip_receiver")),
-            1,
+            Duration::from_millis(1), // coalesce
             false,
             None,
         );
@@ -200,9 +200,10 @@ pub fn get_client(
     socket_addr_space: &SocketAddrSpace,
     connection_cache: Arc<ConnectionCache>,
 ) -> ThinClient {
+    let protocol = connection_cache.protocol();
     let nodes: Vec<_> = nodes
         .iter()
-        .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
+        .filter_map(|node| node.valid_client_facing_addr(protocol, socket_addr_space))
         .collect();
     let select = thread_rng().gen_range(0, nodes.len());
     let (rpc, tpu) = nodes[select];
@@ -214,13 +215,11 @@ pub fn get_multi_client(
     socket_addr_space: &SocketAddrSpace,
     connection_cache: Arc<ConnectionCache>,
 ) -> (ThinClient, usize) {
-    let addrs: Vec<_> = nodes
+    let protocol = connection_cache.protocol();
+    let (rpc_addrs, tpu_addrs): (Vec<_>, Vec<_>) = nodes
         .iter()
-        .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
-        .collect();
-    let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
-    let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
-
+        .filter_map(|node| node.valid_client_facing_addr(protocol, socket_addr_space))
+        .unzip();
     let num_nodes = tpu_addrs.len();
     (
         ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, connection_cache),
@@ -254,13 +253,15 @@ fn spy(
         tvu_peers = spy_ref.all_tvu_peers();
 
         let found_node_by_pubkey = if let Some(pubkey) = find_node_by_pubkey {
-            all_peers.iter().any(|x| x.id == pubkey)
+            all_peers.iter().any(|node| node.pubkey() == &pubkey)
         } else {
             false
         };
 
         let found_node_by_gossip_addr = if let Some(gossip_addr) = find_node_by_gossip_addr {
-            all_peers.iter().any(|x| x.gossip == *gossip_addr)
+            all_peers
+                .iter()
+                .any(|node| node.gossip().ok() == Some(*gossip_addr))
         } else {
             false
         };
@@ -331,7 +332,10 @@ pub fn make_gossip_node(
 mod tests {
     use {
         super::*,
-        crate::cluster_info::{ClusterInfo, Node},
+        crate::{
+            cluster_info::{ClusterInfo, Node},
+            contact_info::ContactInfo,
+        },
         std::sync::{atomic::AtomicBool, Arc},
     };
 
@@ -422,7 +426,7 @@ mod tests {
             None,
             TIMEOUT,
             None,
-            Some(&peer0_info.gossip),
+            Some(&peer0_info.gossip().unwrap()),
         );
         assert!(met_criteria);
 

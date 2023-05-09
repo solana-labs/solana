@@ -52,7 +52,7 @@ maintainer to review.
 
 Add only code to the codebase that is ready to be deployed. If you are building
 a large library, consider developing it in a separate git repository. When it
-is ready to be integrated, the Solana maintainers will work with you to decide
+is ready to be integrated, the Solana Labs Maintainers will work with you to decide
 on a path forward. Smaller libraries may be copied in whereas very large ones
 may be pulled in with a package manager.
 
@@ -147,6 +147,7 @@ generous (and not expected) to rebase or reword commits such that each change
 matches the logical flow in your PR description.
 
 ### The PR / Issue Labels
+
 Labels make it easier to manage and track PRs / issues.  Below some common labels
 that we use in Solana.  For the complete list of labels, please refer to the
 [label page](https://github.com/solana-labs/solana/issues/labels):
@@ -194,6 +195,38 @@ a commit.  After a reviewer adds feedback, they won't be checking on the status
 of that feedback after every new commit. Instead, directly mention the reviewer
 when you feel your PR is ready for another pass.
 
+### Is your PR easy to say "yes" to?
+
+PRs that are easier to review are more likely to be reviewed. Strive to make
+your PR easy to say "yes" to.
+
+Non-exhaustive list of things that make it *harder* to review:
+
+* Additional changes that are orthogonal to the problem statement and proposed
+  changes. Instead move those changes to a different PR.
+* Renaming variables/functions/types unnecessarily and/or without explanation.
+* Not following established conventions in the function/module/crate/repo.
+* Changing whitespace: moving code and/or reformatting code. Make such changes
+  in a separate PR.
+* Force-pushing the branch unnecessarily; this makes it harder to track any
+  previous comments on specific lines of code, and also harder to track changes
+  already reviewed from previous commits.
+  * When force-pushing is required—for example to handle a merge conflict—and
+    no new changes have been made since the previous review, indicating as such
+    is beneficial.
+ * Not responding to comments from previous rounds of review. Follow the
+   guidance in [How to manage review feedback?](#how-to-manage-review-feedback).
+
+Non-exhaustive list of things that make it *easier* to review:
+
+* Adding tests for all new/changed behavior.
+* Including in the PR's description any non-automated testing that was
+  performed.
+* Including relevant results for changes that target performance improvements.
+
+Note that these lists are *independent* of how simple/complicated the actual
+*code* changes are.
+
 ## Draft Pull Requests
 
 If you want early feedback on your PR, use GitHub's "Draft Pull Request"
@@ -207,6 +240,41 @@ approvals when you click "Ready for Review", so a review that meant "I approve
 of the direction" suddenly has the appearance of "I approve of these changes."
 Instead, add a comment that mentions the usernames that you would like a review
 from. Ask explicitly what you would like feedback on.
+
+## Crate Creation
+
+If your PR includes a new crate, you must publish its v0.0.1 version
+before the PR can be merged.  Here are the steps:
+
+* Create a sub-directory for your new crate.
+* Under the newly-created directory, create a Cargo.toml file.  Below is an
+  example template:
+
+```
+[package]
+name = "solana-<PACKAGE_NAME>"
+version = "0.0.1"
+description = "<DESCRIPTION>"
+authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-<PACKAGE_NAME>"
+license = "Apache-2.0"
+edition = "2021"
+```
+
+* Submit the PR for initial review.  You should see the crate-check CI
+  job fails because the newly created crate is not yet published.
+
+* Once all review feedback has been addressed, publish v0.0.1 of the crate
+  under your personal crates.io account, and then transfer the crate ownership
+  to solana-grimes.
+  https://crates.io/policies#package-ownership
+
+* After successful publication, update the PR by replacing the v0.0.1 version
+  number with the correct version.  At this time you should see the crate-check
+  CI job passes, and your published crate should be available under
+  https://crates.io/crates/.
 
 ## Rust coding conventions
 

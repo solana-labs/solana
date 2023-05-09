@@ -266,15 +266,9 @@ impl<T: Default + Serialize> TypeErasedExample<T> for Placeholder {
         let normalized_type_name = normalize_type_name(original_type_name);
 
         if normalized_type_name.starts_with("solana") {
-            panic!(
-                "derive or implement AbiExample/AbiEnumVisitor for {}",
-                original_type_name
-            );
+            panic!("derive or implement AbiExample/AbiEnumVisitor for {original_type_name}");
         } else {
-            panic!(
-                "new unrecognized type for ABI digest!: {}",
-                original_type_name
-            )
+            panic!("new unrecognized type for ABI digest!: {original_type_name}")
         }
     }
 }
@@ -466,7 +460,13 @@ impl AbiExample for std::path::PathBuf {
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 impl AbiExample for SocketAddr {
     fn example() -> Self {
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0)
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0)
+    }
+}
+
+impl AbiExample for IpAddr {
+    fn example() -> Self {
+        IpAddr::V4(Ipv4Addr::UNSPECIFIED)
     }
 }
 

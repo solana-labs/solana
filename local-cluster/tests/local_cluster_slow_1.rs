@@ -13,14 +13,11 @@ use {
         replay_stage::DUPLICATE_THRESHOLD,
         validator::ValidatorConfig,
     },
-    solana_gossip::{
-        crds::Cursor,
-        gossip_service::{self, discover_cluster},
-    },
+    solana_gossip::gossip_service::discover_cluster,
     solana_ledger::ancestor_iterator::AncestorIterator,
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
-        cluster_tests,
+        cluster_tests::{self},
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
@@ -37,10 +34,6 @@ use {
     std::{
         collections::{BTreeSet, HashSet},
         path::Path,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc,
-        },
         thread::sleep,
         time::Duration,
     },
@@ -455,133 +448,93 @@ fn test_duplicate_shreds_broadcast_leader() {
     let our_info = cluster.exit_node(&our_id);
     let node_keypair = our_info.info.keypair;
     let vote_keypair = our_info.info.voting_keypair;
-    let bad_leader_id = cluster.entry_point_info.id;
+    let bad_leader_id = *cluster.entry_point_info.pubkey();
     let bad_leader_ledger_path = cluster.validators[&bad_leader_id].info.ledger_path.clone();
     info!("our node id: {}", node_keypair.pubkey());
 
-    // 3) Start up a spy to listen for votes
-    let exit = Arc::new(AtomicBool::new(false));
-    let (gossip_service, _tcp_listener, cluster_info) = gossip_service::make_gossip_node(
-        // Need to use our validator's keypair to gossip EpochSlots and votes for our
-        // node later.
-        node_keypair.insecure_clone(),
-        Some(&cluster.entry_point_info.gossip),
-        &exit,
-        None,
-        0,
-        false,
-        SocketAddrSpace::Unspecified,
-    );
-
-    let t_voter = {
-        let exit = exit.clone();
-        std::thread::spawn(move || {
-            let mut cursor = Cursor::default();
+    // 3) Start up a gossip instance to listen for and push votes
+    let voter_thread_sleep_ms = 100;
+    let gossip_voter = cluster_tests::start_gossip_voter(
+        &cluster.entry_point_info.gossip().unwrap(),
+        &node_keypair,
+        move |(label, leader_vote_tx)| {
+            // Filter out votes not from the bad leader
+            if label.pubkey() == bad_leader_id {
+                let vote = vote_parser::parse_vote_transaction(&leader_vote_tx)
+                    .map(|(_, vote, ..)| vote)
+                    .unwrap();
+                // Filter out empty votes
+                if !vote.is_empty() {
+                    Some((vote, leader_vote_tx))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        },
+        {
+            let node_keypair = node_keypair.insecure_clone();
+            let vote_keypair = vote_keypair.insecure_clone();
             let mut max_vote_slot = 0;
             let mut gossip_vote_index = 0;
-            loop {
-                if exit.load(Ordering::Relaxed) {
-                    return;
+            move |latest_vote_slot, leader_vote_tx, parsed_vote, cluster_info| {
+                info!("received vote for {}", latest_vote_slot);
+                // Add to EpochSlots. Mark all slots frozen between slot..=max_vote_slot.
+                if latest_vote_slot > max_vote_slot {
+                    let new_epoch_slots: Vec<Slot> =
+                        (max_vote_slot + 1..latest_vote_slot + 1).collect();
+                    info!(
+                        "Simulating epoch slots from our node: {:?}",
+                        new_epoch_slots
+                    );
+                    cluster_info.push_epoch_slots(&new_epoch_slots);
+                    max_vote_slot = latest_vote_slot;
                 }
 
-                let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
-                let mut parsed_vote_iter: Vec<_> = labels
-                    .into_iter()
-                    .zip(votes.into_iter())
-                    .filter_map(|(label, leader_vote_tx)| {
-                        // Filter out votes not from the bad leader
-                        if label.pubkey() == bad_leader_id {
-                            let vote = vote_parser::parse_vote_transaction(&leader_vote_tx)
-                                .map(|(_, vote, ..)| vote)
-                                .unwrap();
-                            // Filter out empty votes
-                            if !vote.is_empty() {
-                                Some((vote, leader_vote_tx))
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
+                // Only vote on even slots. Note this may violate lockouts if the
+                // validator started voting on a different fork before we could exit
+                // it above.
+                let vote_hash = parsed_vote.hash();
+                if latest_vote_slot % 2 == 0 {
+                    info!(
+                        "Simulating vote from our node on slot {}, hash {}",
+                        latest_vote_slot, vote_hash
+                    );
 
-                parsed_vote_iter.sort_by(|(vote, _), (vote2, _)| {
-                    vote.last_voted_slot()
-                        .unwrap()
-                        .cmp(&vote2.last_voted_slot().unwrap())
-                });
-
-                for (parsed_vote, leader_vote_tx) in &parsed_vote_iter {
-                    if let Some(latest_vote_slot) = parsed_vote.last_voted_slot() {
-                        info!("received vote for {}", latest_vote_slot);
-                        // Add to EpochSlots. Mark all slots frozen between slot..=max_vote_slot.
-                        if latest_vote_slot > max_vote_slot {
-                            let new_epoch_slots: Vec<Slot> =
-                                (max_vote_slot + 1..latest_vote_slot + 1).collect();
-                            info!(
-                                "Simulating epoch slots from our node: {:?}",
-                                new_epoch_slots
-                            );
-                            cluster_info.push_epoch_slots(&new_epoch_slots);
-                            max_vote_slot = latest_vote_slot;
-                        }
-
-                        // Only vote on even slots. Note this may violate lockouts if the
-                        // validator started voting on a different fork before we could exit
-                        // it above.
-                        let vote_hash = parsed_vote.hash();
-                        if latest_vote_slot % 2 == 0 {
-                            info!(
-                                "Simulating vote from our node on slot {}, hash {}",
-                                latest_vote_slot, vote_hash
-                            );
-
-                            // Add all recent vote slots on this fork to allow cluster to pass
-                            // vote threshold checks in replay. Note this will instantly force a
-                            // root by this validator, but we're not concerned with lockout violations
-                            // by this validator so it's fine.
-                            let leader_blockstore = open_blockstore(&bad_leader_ledger_path);
-                            let mut vote_slots: Vec<(Slot, u32)> = AncestorIterator::new_inclusive(
-                                latest_vote_slot,
-                                &leader_blockstore,
-                            )
+                    // Add all recent vote slots on this fork to allow cluster to pass
+                    // vote threshold checks in replay. Note this will instantly force a
+                    // root by this validator, but we're not concerned with lockout violations
+                    // by this validator so it's fine.
+                    let leader_blockstore = open_blockstore(&bad_leader_ledger_path);
+                    let mut vote_slots: Vec<(Slot, u32)> =
+                        AncestorIterator::new_inclusive(latest_vote_slot, &leader_blockstore)
                             .take(MAX_LOCKOUT_HISTORY)
                             .zip(1..)
                             .collect();
-                            vote_slots.reverse();
-                            let mut vote = VoteStateUpdate::from(vote_slots);
-                            let root = AncestorIterator::new_inclusive(
-                                latest_vote_slot,
-                                &leader_blockstore,
-                            )
+                    vote_slots.reverse();
+                    let mut vote = VoteStateUpdate::from(vote_slots);
+                    let root =
+                        AncestorIterator::new_inclusive(latest_vote_slot, &leader_blockstore)
                             .nth(MAX_LOCKOUT_HISTORY);
-                            vote.root = root;
-                            vote.hash = vote_hash;
-                            let vote_tx =
-                                vote_transaction::new_compact_vote_state_update_transaction(
-                                    vote,
-                                    leader_vote_tx.message.recent_blockhash,
-                                    &node_keypair,
-                                    &vote_keypair,
-                                    &vote_keypair,
-                                    None,
-                                );
-                            gossip_vote_index += 1;
-                            gossip_vote_index %= MAX_LOCKOUT_HISTORY;
-                            cluster_info.push_vote_at_index(vote_tx, gossip_vote_index as u8)
-                        }
-                    }
-                    // Give vote some time to propagate
-                    sleep(Duration::from_millis(100));
-                }
-
-                if parsed_vote_iter.is_empty() {
-                    sleep(Duration::from_millis(100));
+                    vote.root = root;
+                    vote.hash = vote_hash;
+                    let vote_tx = vote_transaction::new_compact_vote_state_update_transaction(
+                        vote,
+                        leader_vote_tx.message.recent_blockhash,
+                        &node_keypair,
+                        &vote_keypair,
+                        &vote_keypair,
+                        None,
+                    );
+                    gossip_vote_index += 1;
+                    gossip_vote_index %= MAX_LOCKOUT_HISTORY;
+                    cluster_info.push_vote_at_index(vote_tx, gossip_vote_index as u8)
                 }
             }
-        })
-    };
+        },
+        voter_thread_sleep_ms as u64,
+    );
 
     // 4) Check that the cluster is making progress
     cluster.check_for_new_roots(
@@ -591,9 +544,7 @@ fn test_duplicate_shreds_broadcast_leader() {
     );
 
     // Clean up threads
-    exit.store(true, Ordering::Relaxed);
-    t_voter.join().unwrap();
-    gossip_service.join().unwrap();
+    gossip_voter.close();
 }
 
 #[test]
@@ -770,7 +721,8 @@ fn test_switch_threshold_uses_gossip_votes() {
             cluster
                 .get_contact_info(&context.heaviest_validator_key)
                 .unwrap()
-                .gossip,
+                .gossip()
+                .unwrap(),
             &SocketAddrSpace::Unspecified,
         )
         .unwrap();
@@ -847,7 +799,7 @@ fn test_listener_startup() {
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
     let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip,
+        &cluster.entry_point_info.gossip().unwrap(),
         4,
         SocketAddrSpace::Unspecified,
     )

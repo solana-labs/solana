@@ -5,6 +5,7 @@ pub mod transfer_with_fee;
 pub mod withdraw;
 pub mod withdraw_withheld;
 
+use num_derive::{FromPrimitive, ToPrimitive};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -17,14 +18,35 @@ use {
     curve25519_dalek::scalar::Scalar,
 };
 pub use {
-    close_account::CloseAccountData, pubkey_validity::PubkeyValidityData, transfer::TransferData,
-    transfer_with_fee::TransferWithFeeData, withdraw::WithdrawData,
-    withdraw_withheld::WithdrawWithheldTokensData,
+    bytemuck::Pod,
+    close_account::{CloseAccountData, CloseAccountProofContext},
+    pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
+    transfer::{TransferData, TransferProofContext},
+    transfer_with_fee::{FeeParameters, TransferWithFeeData, TransferWithFeeProofContext},
+    withdraw::{WithdrawData, WithdrawProofContext},
+    withdraw_withheld::{WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext},
 };
 
-#[cfg(not(target_os = "solana"))]
-pub trait Verifiable {
-    fn verify(&self) -> Result<(), ProofError>;
+#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ProofType {
+    /// Empty proof type used to distinguish if a proof context account is initialized
+    Uninitialized,
+    CloseAccount,
+    Withdraw,
+    WithdrawWithheldTokens,
+    Transfer,
+    TransferWithFee,
+    PubkeyValidity,
+}
+
+pub trait ZkProofData<T: Pod> {
+    const PROOF_TYPE: ProofType;
+
+    fn context_data(&self) -> &T;
+
+    #[cfg(not(target_os = "solana"))]
+    fn verify_proof(&self) -> Result<(), ProofError>;
 }
 
 #[cfg(not(target_os = "solana"))]

@@ -73,7 +73,7 @@ impl LocalCluster {
     ) -> NextSnapshotResult {
         // Get slot after which this was generated
         let client = self
-            .get_validator_client(&self.entry_point_info.id)
+            .get_validator_client(self.entry_point_info.pubkey())
             .unwrap();
         let last_slot = client
             .get_slot_with_commitment(CommitmentConfig::processed())
@@ -118,9 +118,7 @@ impl LocalCluster {
             if let Some(max_wait_duration) = max_wait_duration {
                 assert!(
                     timer.elapsed() < max_wait_duration,
-                    "Waiting for next {:?} snapshot exceeded the {:?} maximum wait duration!",
-                    next_snapshot_type,
-                    max_wait_duration,
+                    "Waiting for next {next_snapshot_type:?} snapshot exceeded the {max_wait_duration:?} maximum wait duration!",
                 );
             }
             sleep(Duration::from_secs(5));

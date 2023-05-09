@@ -14,6 +14,7 @@ use {
     solana_clap_utils::{
         compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
+        hidden_unless_forced,
         input_parsers::*,
         input_validators::*,
         keypair::{DefaultSigner, SignerIndex},
@@ -267,7 +268,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("force")
                         .long("force")
                         .takes_value(false)
-                        .hidden(true) // Don't document this argument to discourage its use
+                        .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
                         .help("Override vote account sanity checks (use carefully!)")
                 )
                 .arg(
@@ -298,7 +299,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("force")
                         .long("force")
                         .takes_value(false)
-                        .hidden(true) // Don't document this argument to discourage its use
+                        .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
                         .help("Override vote account sanity checks (use carefully!)")
                 )
                 .arg(
@@ -391,6 +392,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .validator(is_valid_signer)
+                        .required_unless("new_withdraw_authority")
                         .help("New authorized staker")
                 )
                 .arg(
@@ -399,6 +401,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .validator(is_valid_signer)
+                        .required_unless("new_stake_authority")
                         .help("New authorized withdrawer")
                 )
                 .arg(stake_authority_arg())
@@ -686,7 +689,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("num-rewards-epochs")
                         .takes_value(true)
                         .value_name("NUM")
-                        .validator(|s| is_within_range(s, 1, 10))
+                        .validator(|s| is_within_range(s, 1..=10))
                         .default_value_if("with_rewards", None, "1")
                         .requires("with_rewards")
                         .help("Display rewards for NUM recent epochs, max 10 [default: latest epoch only]"),
@@ -828,9 +831,12 @@ pub fn parse_stake_delegate_stake(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
 
-    let mut bulk_signers = vec![stake_authority, fee_payer, redelegation_stake_account];
+    let mut bulk_signers = vec![stake_authority, fee_payer];
     if nonce_account.is_some() {
         bulk_signers.push(nonce_authority);
+    }
+    if redelegation_stake_account.is_some() {
+        bulk_signers.push(redelegation_stake_account);
     }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
@@ -849,7 +855,8 @@ pub fn parse_stake_delegate_stake(
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
-            redelegation_stake_account_pubkey,
+            redelegation_stake_account: redelegation_stake_account_pubkey
+                .and_then(|_| signer_info.index_of(redelegation_stake_account_pubkey)),
             compute_unit_price,
         },
         signers: signer_info.signers,
@@ -943,6 +950,11 @@ pub fn parse_stake_authorize(
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
     let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
+    if new_authorizations.is_empty() {
+        return Err(CliError::BadParameter(
+            "New authorization list must include at least one authority".to_string(),
+        ));
+    }
     let new_authorizations = new_authorizations
         .into_iter()
         .map(
@@ -1400,12 +1412,9 @@ pub fn process_create_stake_account(
     if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&stake_account_address) {
             let err_msg = if stake_account.owner == stake::program::id() {
-                format!("Stake account {} already exists", stake_account_address)
+                format!("Stake account {stake_account_address} already exists")
             } else {
-                format!(
-                    "Account {} already exists and is not a stake account",
-                    stake_account_address
-                )
+                format!("Account {stake_account_address} already exists and is not a stake account")
             };
             return Err(CliError::BadParameter(err_msg).into());
         }
@@ -1415,8 +1424,7 @@ pub fn process_create_stake_account(
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
-                "need at least {} lamports for stake account to be rent exempt, provided lamports: {}",
-                minimum_balance, lamports
+                "need at least {minimum_balance} lamports for stake account to be rent exempt, provided lamports: {lamports}"
             ))
             .into());
         }
@@ -1506,8 +1514,7 @@ pub fn process_stake_authorize(
                 }
             } else {
                 return Err(CliError::RpcRequestError(format!(
-                    "{:?} is not an Initialized or Delegated stake account",
-                    stake_account_pubkey,
+                    "{stake_account_pubkey:?} is not an Initialized or Delegated stake account",
                 ))
                 .into());
             }
@@ -1614,8 +1621,7 @@ pub fn process_deactivate_stake_account(
         let stake_account = rpc_client.get_account(&stake_account_address)?;
         if stake_account.owner != stake::program::id() {
             return Err(CliError::BadParameter(format!(
-                "{} is not a stake account",
-                stake_account_address,
+                "{stake_account_address} is not a stake account",
             ))
             .into());
         }
@@ -1625,16 +1631,14 @@ pub fn process_deactivate_stake_account(
                 StakeState::Stake(_, stake) => stake.delegation.voter_pubkey,
                 _ => {
                     return Err(CliError::BadParameter(format!(
-                        "{} is not a delegated stake account",
-                        stake_account_address,
+                        "{stake_account_address} is not a delegated stake account",
                     ))
                     .into())
                 }
             },
             Err(err) => {
                 return Err(CliError::RpcRequestError(format!(
-                    "Account data could not be deserialized to stake state: {}",
-                    err
+                    "Account data could not be deserialized to stake state: {err}"
                 ))
                 .into())
             }
@@ -1879,14 +1883,10 @@ pub fn process_split_stake(
     if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&split_stake_account_address) {
             let err_msg = if stake_account.owner == stake::program::id() {
-                format!(
-                    "Stake account {} already exists",
-                    split_stake_account_address
-                )
+                format!("Stake account {split_stake_account_address} already exists")
             } else {
                 format!(
-                    "Account {} already exists and is not a stake account",
-                    split_stake_account_address
+                    "Account {split_stake_account_address} already exists and is not a stake account"
                 )
             };
             return Err(CliError::BadParameter(err_msg).into());
@@ -1897,8 +1897,7 @@ pub fn process_split_stake(
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
-                "need at least {} lamports for stake account to be rent exempt, provided lamports: {}",
-                minimum_balance, lamports
+                "need at least {minimum_balance} lamports for stake account to be rent exempt, provided lamports: {lamports}"
             ))
             .into());
         }
@@ -2016,8 +2015,7 @@ pub fn process_merge_stake(
             if let Ok(stake_account) = rpc_client.get_account(stake_account_address) {
                 if stake_account.owner != stake::program::id() {
                     return Err(CliError::BadParameter(format!(
-                        "Account {} is not a stake account",
-                        stake_account_address
+                        "Account {stake_account_address} is not a stake account"
                     ))
                     .into());
                 }
@@ -2126,8 +2124,7 @@ pub fn process_stake_set_lockup(
             }
         } else {
             return Err(CliError::RpcRequestError(format!(
-                "{:?} is not an Initialized or Delegated stake account",
-                stake_account_pubkey,
+                "{stake_account_pubkey:?} is not an Initialized or Delegated stake account",
             ))
             .into());
         }
@@ -2287,19 +2284,17 @@ fn get_stake_account_state(
         .get_account_with_commitment(stake_account_pubkey, commitment_config)?
         .value
         .ok_or_else(|| {
-            CliError::RpcRequestError(format!("{:?} account does not exist", stake_account_pubkey))
+            CliError::RpcRequestError(format!("{stake_account_pubkey:?} account does not exist"))
         })?;
     if stake_account.owner != stake::program::id() {
         return Err(CliError::RpcRequestError(format!(
-            "{:?} is not a stake account",
-            stake_account_pubkey,
+            "{stake_account_pubkey:?} is not a stake account",
         ))
         .into());
     }
     stake_account.state().map_err(|err| {
         CliError::RpcRequestError(format!(
-            "Account data could not be deserialized to stake state: {}",
-            err
+            "Account data could not be deserialized to stake state: {err}"
         ))
         .into()
     })
@@ -2311,8 +2306,7 @@ pub(crate) fn check_current_authority(
 ) -> Result<(), CliError> {
     if !permitted_authorities.contains(provided_current_authority) {
         Err(CliError::RpcRequestError(format!(
-            "Invalid authority provided: {:?}, expected {:?}",
-            provided_current_authority, permitted_authorities
+            "Invalid authority provided: {provided_current_authority:?}, expected {permitted_authorities:?}"
         )))
     } else {
         Ok(())
@@ -2363,6 +2357,7 @@ pub fn make_cli_reward(
             percent_change: rate_change * 100.0,
             apr: Some(apr * 100.0),
             commission: reward.commission,
+            block_time: epoch_end_time,
         })
     } else {
         None
@@ -2396,7 +2391,7 @@ pub(crate) fn fetch_epoch_rewards(
         if let Ok(rewards) = rpc_client.get_inflation_reward(&[*address], Some(rewards_epoch)) {
             process_reward(&rewards[0])?;
         } else {
-            eprintln!("Rewards not available for epoch {}", rewards_epoch);
+            eprintln!("Rewards not available for epoch {rewards_epoch}");
         }
         num_epochs = num_epochs.saturating_sub(1);
     }
@@ -2414,8 +2409,7 @@ pub fn process_show_stake_account(
     let stake_account = rpc_client.get_account(stake_account_address)?;
     if stake_account.owner != stake::program::id() {
         return Err(CliError::RpcRequestError(format!(
-            "{:?} is not a stake account",
-            stake_account_address,
+            "{stake_account_address:?} is not a stake account",
         ))
         .into());
     }
@@ -2443,7 +2437,7 @@ pub fn process_show_stake_account(
                     match fetch_epoch_rewards(rpc_client, stake_account_address, num_epochs) {
                         Ok(rewards) => Some(rewards),
                         Err(error) => {
-                            eprintln!("Failed to fetch epoch rewards: {:?}", error);
+                            eprintln!("Failed to fetch epoch rewards: {error:?}");
                             None
                         }
                     }
@@ -2453,8 +2447,7 @@ pub fn process_show_stake_account(
             Ok(config.output_format.formatted_string(&state))
         }
         Err(err) => Err(CliError::RpcRequestError(format!(
-            "Account data could not be deserialized to stake state: {}",
-            err
+            "Account data could not be deserialized to stake state: {err}"
         ))
         .into()),
     }
@@ -2508,25 +2501,26 @@ pub fn process_delegate_stake(
     nonce_authority: SignerIndex,
     memo: Option<&String>,
     fee_payer: SignerIndex,
-    redelegation_stake_account_pubkey: Option<&Pubkey>,
+    redelegation_stake_account: Option<SignerIndex>,
     compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.signers[0].pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
-    if let Some(redelegation_stake_account_pubkey) = &redelegation_stake_account_pubkey {
+    let redelegation_stake_account = redelegation_stake_account.map(|index| config.signers[index]);
+    if let Some(redelegation_stake_account) = &redelegation_stake_account {
         check_unique_pubkeys(
             (stake_account_pubkey, "stake_account_pubkey".to_string()),
             (
-                redelegation_stake_account_pubkey,
+                &redelegation_stake_account.pubkey(),
                 "redelegation_stake_account".to_string(),
             ),
         )?;
         check_unique_pubkeys(
             (&config.signers[0].pubkey(), "cli keypair".to_string()),
             (
-                redelegation_stake_account_pubkey,
+                &redelegation_stake_account.pubkey(),
                 "redelegation_stake_account".to_string(),
             ),
         )?;
@@ -2540,8 +2534,7 @@ pub fn process_delegate_stake(
             .get_account(vote_account_pubkey)
             .map_err(|err| {
                 CliError::RpcRequestError(format!(
-                    "Vote account not found: {}. error: {}",
-                    vote_account_pubkey, err,
+                    "Vote account not found: {vote_account_pubkey}. error: {err}",
                 ))
             })?
             .data;
@@ -2563,8 +2556,7 @@ pub fn process_delegate_stake(
                 if root_slot < min_root_slot {
                     Err(CliError::DynamicProgramError(format!(
                         "Unable to delegate.  Vote account appears delinquent \
-                                 because its current root slot, {}, is less than {}",
-                        root_slot, min_root_slot
+                                 because its current root slot, {root_slot}, is less than {min_root_slot}"
                     )))
                 } else {
                     Ok(())
@@ -2576,19 +2568,19 @@ pub fn process_delegate_stake(
             if !force {
                 sanity_check_result?;
             } else {
-                println!("--force supplied, ignoring: {}", err);
+                println!("--force supplied, ignoring: {err}");
             }
         }
     }
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
-    let ixs = if let Some(redelegation_stake_account_pubkey) = &redelegation_stake_account_pubkey {
+    let ixs = if let Some(redelegation_stake_account) = &redelegation_stake_account {
         stake_instruction::redelegate(
             stake_account_pubkey,
             &stake_authority.pubkey(),
             vote_account_pubkey,
-            redelegation_stake_account_pubkey,
+            &redelegation_stake_account.pubkey(),
         )
     } else {
         vec![stake_instruction::delegate_stake(
@@ -2708,9 +2700,9 @@ mod tests {
 
         // stake-authorize subcommand
         let stake_account_string = stake_account_pubkey.to_string();
-        let new_stake_authority = Pubkey::new(&[1u8; 32]);
+        let new_stake_authority = Pubkey::from([1u8; 32]);
         let new_stake_string = new_stake_authority.to_string();
-        let new_withdraw_authority = Pubkey::new(&[2u8; 32]);
+        let new_withdraw_authority = Pubkey::from([2u8; 32]);
         let new_withdraw_string = new_withdraw_authority.to_string();
         let test_stake_authorize = test_commands.clone().get_matches_from(vec![
             "test",
@@ -3469,7 +3461,7 @@ mod tests {
 
         // Test Authorize Subcommand w/ sign-only
         let blockhash = Hash::default();
-        let blockhash_string = format!("{}", blockhash);
+        let blockhash_string = format!("{blockhash}");
         let test_authorize = test_commands.clone().get_matches_from(vec![
             "test",
             "stake-authorize",
@@ -3559,7 +3551,7 @@ mod tests {
         let pubkey2 = keypair2.pubkey();
         let sig2 = keypair.sign_message(&[0u8]);
         let signer2 = format!("{}={}", keypair2.pubkey(), sig2);
-        let nonce_account = Pubkey::new(&[1u8; 32]);
+        let nonce_account = Pubkey::from([1u8; 32]);
         let test_authorize = test_commands.clone().get_matches_from(vec![
             "test",
             "stake-authorize",
@@ -3744,7 +3736,7 @@ mod tests {
         );
         // Test Authorize Subcommand w/ absentee fee-payer
         let sig = fee_payer_keypair.sign_message(&[0u8]);
-        let signer = format!("{}={}", fee_payer_string, sig);
+        let signer = format!("{fee_payer_string}={sig}");
         let test_authorize = test_commands.clone().get_matches_from(vec![
             "test",
             "stake-authorize",
@@ -3792,9 +3784,9 @@ mod tests {
 
         // Test CreateStakeAccount SubCommand
         let custodian = solana_sdk::pubkey::new_rand();
-        let custodian_string = format!("{}", custodian);
+        let custodian_string = format!("{custodian}");
         let authorized = solana_sdk::pubkey::new_rand();
-        let authorized_string = format!("{}", authorized);
+        let authorized_string = format!("{authorized}");
         let test_create_stake_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-stake-account",
@@ -3936,13 +3928,13 @@ mod tests {
         assert!(parse_command(&test_create_stake_account, &default_signer, &mut None).is_err());
 
         // CreateStakeAccount offline and nonce
-        let nonce_account = Pubkey::new(&[1u8; 32]);
+        let nonce_account = Pubkey::from([1u8; 32]);
         let nonce_account_string = nonce_account.to_string();
         let offline = keypair_from_seed(&[2u8; 32]).unwrap();
         let offline_pubkey = offline.pubkey();
         let offline_string = offline_pubkey.to_string();
         let offline_sig = offline.sign_message(&[3u8]);
-        let offline_signer = format!("{}={}", offline_pubkey, offline_sig);
+        let offline_signer = format!("{offline_pubkey}={offline_sig}");
         let nonce_hash = Hash::new(&[4u8; 32]);
         let nonce_hash_string = nonce_hash.to_string();
         let test_create_stake_account2 = test_commands.clone().get_matches_from(vec![
@@ -4019,7 +4011,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
-                    redelegation_stake_account_pubkey: None,
+                    redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -4052,7 +4044,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
-                    redelegation_stake_account_pubkey: None,
+                    redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
                 signers: vec![
@@ -4087,7 +4079,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
-                    redelegation_stake_account_pubkey: None,
+                    redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -4096,7 +4088,7 @@ mod tests {
 
         // Test Delegate Subcommand w/ Blockhash
         let blockhash = Hash::default();
-        let blockhash_string = format!("{}", blockhash);
+        let blockhash_string = format!("{blockhash}");
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "delegate-stake",
@@ -4123,7 +4115,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
-                    redelegation_stake_account_pubkey: None,
+                    redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -4154,7 +4146,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
-                    redelegation_stake_account_pubkey: None,
+                    redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -4164,7 +4156,7 @@ mod tests {
         // Test Delegate Subcommand w/ absent fee payer
         let key1 = solana_sdk::pubkey::new_rand();
         let sig1 = Keypair::new().sign_message(&[0u8]);
-        let signer1 = format!("{}={}", key1, sig1);
+        let signer1 = format!("{key1}={sig1}");
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "delegate-stake",
@@ -4195,7 +4187,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 1,
-                    redelegation_stake_account_pubkey: None,
+                    redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
                 signers: vec![
@@ -4208,7 +4200,7 @@ mod tests {
         // Test Delegate Subcommand w/ absent fee payer and absent nonce authority
         let key2 = solana_sdk::pubkey::new_rand();
         let sig2 = Keypair::new().sign_message(&[0u8]);
-        let signer2 = format!("{}={}", key2, sig2);
+        let signer2 = format!("{key2}={sig2}");
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "delegate-stake",
@@ -4245,7 +4237,7 @@ mod tests {
                     nonce_authority: 2,
                     memo: None,
                     fee_payer: 1,
-                    redelegation_stake_account_pubkey: None,
+                    redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
                 signers: vec![
@@ -4283,7 +4275,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 1,
-                    redelegation_stake_account_pubkey: None,
+                    redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
                 signers: vec![
@@ -4303,7 +4295,6 @@ mod tests {
             redelegation_stake_account_tmp_file.as_file_mut(),
         )
         .unwrap();
-        let redelegation_stake_account_pubkey = redelegation_stake_account_keypair.pubkey();
 
         let test_redelegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
@@ -4327,7 +4318,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
-                    redelegation_stake_account_pubkey: Some(redelegation_stake_account_pubkey),
+                    redelegation_stake_account: Some(1),
                     compute_unit_price: None,
                 },
                 signers: vec![
@@ -4624,7 +4615,7 @@ mod tests {
 
         // Test Deactivate Subcommand w/ Blockhash
         let blockhash = Hash::default();
-        let blockhash_string = format!("{}", blockhash);
+        let blockhash_string = format!("{blockhash}");
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "deactivate-stake",
@@ -4688,7 +4679,7 @@ mod tests {
         // Test Deactivate Subcommand w/ absent fee payer
         let key1 = solana_sdk::pubkey::new_rand();
         let sig1 = Keypair::new().sign_message(&[0u8]);
-        let signer1 = format!("{}={}", key1, sig1);
+        let signer1 = format!("{key1}={sig1}");
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "deactivate-stake",
@@ -4730,7 +4721,7 @@ mod tests {
         // Test Deactivate Subcommand w/ absent fee payer and nonce authority
         let key2 = solana_sdk::pubkey::new_rand();
         let sig2 = Keypair::new().sign_message(&[0u8]);
-        let signer2 = format!("{}={}", key2, sig2);
+        let signer2 = format!("{key2}={sig2}");
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "deactivate-stake",
@@ -4851,18 +4842,18 @@ mod tests {
         );
 
         // Split stake offline nonced submission
-        let nonce_account = Pubkey::new(&[1u8; 32]);
+        let nonce_account = Pubkey::from([1u8; 32]);
         let nonce_account_string = nonce_account.to_string();
         let nonce_auth = keypair_from_seed(&[2u8; 32]).unwrap();
         let nonce_auth_pubkey = nonce_auth.pubkey();
         let nonce_auth_string = nonce_auth_pubkey.to_string();
         let nonce_sig = nonce_auth.sign_message(&[0u8]);
-        let nonce_signer = format!("{}={}", nonce_auth_pubkey, nonce_sig);
+        let nonce_signer = format!("{nonce_auth_pubkey}={nonce_sig}");
         let stake_auth = keypair_from_seed(&[3u8; 32]).unwrap();
         let stake_auth_pubkey = stake_auth.pubkey();
         let stake_auth_string = stake_auth_pubkey.to_string();
         let stake_sig = stake_auth.sign_message(&[0u8]);
-        let stake_signer = format!("{}={}", stake_auth_pubkey, stake_sig);
+        let stake_signer = format!("{stake_auth_pubkey}={stake_sig}");
         let nonce_hash = Hash::new(&[4u8; 32]);
         let nonce_hash_string = nonce_hash.to_string();
 

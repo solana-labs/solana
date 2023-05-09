@@ -1,0 +1,28 @@
+[package]
+name = "solana-loader-v3-program"
+description = "Solana Loader v3"
+publish = false
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+log = { workspace = true }
+rand = { workspace = true }
+solana-measure = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana_rbpf = { workspace = true }
+
+[dev-dependencies]
+bincode = { workspace = true }
+
+[lib]
+crate-type = ["lib"]
+name = "solana_loader_v3_program"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

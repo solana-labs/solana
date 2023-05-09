@@ -8,8 +8,11 @@ use {
     rand::Rng,
     rayon::iter::{IntoParallelRefIterator, ParallelIterator},
     solana_runtime::{
-        accounts::{test_utils::create_test_accounts, AccountAddressFilter, Accounts},
-        accounts_db::AccountShrinkThreshold,
+        accounts::{AccountAddressFilter, Accounts},
+        accounts_db::{
+            test_utils::create_test_accounts, AccountShrinkThreshold,
+            VerifyAccountsHashAndLamportsConfig,
+        },
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
         bank::*,
@@ -86,7 +89,6 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
         vec![PathBuf::from("bench_accounts_hash_internal")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -97,18 +99,22 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let (_, total_lamports) = accounts
         .accounts_db
         .update_accounts_hash_for_tests(0, &ancestors, false, false);
-    let test_hash_calculation = false;
+    accounts.add_root(slot);
+    accounts.accounts_db.flush_accounts_cache(true, Some(slot));
     bencher.iter(|| {
-        assert!(accounts.verify_bank_hash_and_lamports(
+        assert!(accounts.verify_accounts_hash_and_lamports(
             0,
-            &ancestors,
             total_lamports,
-            test_hash_calculation,
-            &EpochSchedule::default(),
-            &RentCollector::default(),
-            false,
-            false,
-            false,
+            None,
+            VerifyAccountsHashAndLamportsConfig {
+                ancestors: &ancestors,
+                test_hash_calculation: false,
+                epoch_schedule: &EpochSchedule::default(),
+                rent_collector: &RentCollector::default(),
+                ignore_mismatch: false,
+                store_detailed_debug_info: false,
+                use_bg_thread_pool: false,
+            }
         ))
     });
 }
@@ -120,7 +126,6 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
         vec![PathBuf::from("update_accounts_hash")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -140,13 +145,12 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
         vec![PathBuf::from("accounts_delta_hash")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100_000, 0);
     bencher.iter(|| {
-        accounts.accounts_db.get_accounts_delta_hash(0);
+        accounts.accounts_db.calculate_accounts_delta_hash(0);
     });
 }
 
@@ -157,7 +161,6 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
         vec![PathBuf::from("accounts_delete_deps")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
     let mut old_pubkey = Pubkey::default();
@@ -190,7 +193,6 @@ fn store_accounts_with_possible_contention<F: 'static>(
         ],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     ));
     let num_keys = 1000;
@@ -327,7 +329,6 @@ fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (AccountSharedD
         ],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     ));
 
@@ -382,7 +383,6 @@ fn bench_load_largest_accounts(b: &mut Bencher) {
         Vec::new(),
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
     let mut rng = rand::thread_rng();

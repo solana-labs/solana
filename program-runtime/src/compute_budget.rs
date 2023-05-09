@@ -10,36 +10,13 @@ use {
     },
 };
 
+/// The total accounts data a transaction can load is limited to 64MiB to not break
+/// anyone in Mainnet-beta today. It can be set by set_loaded_accounts_data_size_limit instruction
+pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: usize = 64 * 1024 * 1024;
+
 pub const DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT: u32 = 200_000;
 pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
 const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
-
-/// To change `default` and/or `max` values for `accounts_data_size_limit` in the future,
-/// add new enum type here, link to feature gate, and implement the enum in
-/// `get_default_loaded_accounts_data_limit()` and/or `get_max_loaded_accounts_data_limit()`.
-#[derive(Debug)]
-pub enum LoadedAccountsDataLimitType {
-    V0,
-    // add future versions here
-}
-
-/// Get default value of `ComputeBudget::accounts_data_size_limit` if not set specifically. It
-/// sets to 10MB initially, may be changed with feature gate.
-const DEFAULT_LOADED_ACCOUNTS_DATA_LIMIT: u32 = 10 * 1024 * 1024;
-pub fn get_default_loaded_accounts_data_limit(limit_type: &LoadedAccountsDataLimitType) -> u32 {
-    match limit_type {
-        LoadedAccountsDataLimitType::V0 => DEFAULT_LOADED_ACCOUNTS_DATA_LIMIT,
-    }
-}
-/// Get max value of `ComputeBudget::accounts_data_size_limit`, it caps value user
-/// sets via `ComputeBudgetInstruction::set_compute_unit_limit`. It is set to 100MB
-/// initially, can be changed with feature gate.
-const MAX_LOADED_ACCOUNTS_DATA_LIMIT: u32 = 100 * 1024 * 1024;
-pub fn get_max_loaded_accounts_data_limit(limit_type: &LoadedAccountsDataLimitType) -> u32 {
-    match limit_type {
-        LoadedAccountsDataLimitType::V0 => MAX_LOADED_ACCOUNTS_DATA_LIMIT,
-    }
-}
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
@@ -55,8 +32,6 @@ pub struct ComputeBudget {
     /// allowed to consume. Compute units are consumed by program execution,
     /// resources they use, etc...
     pub compute_unit_limit: u64,
-    /// Maximum accounts data size, in bytes, that a transaction is allowed to load
-    pub accounts_data_size_limit: u64,
     /// Number of compute units consumed by a log_u64 call
     pub log_64_units: u64,
     /// Number of compute units consumed by a create_program_address call
@@ -136,6 +111,11 @@ pub struct ComputeBudget {
     /// + alt_bn128_pairing_one_pair_cost_other * (num_elems - 1)
     pub alt_bn128_pairing_one_pair_cost_first: u64,
     pub alt_bn128_pairing_one_pair_cost_other: u64,
+    /// Big integer modular exponentiation cost
+    pub big_modular_exponentiation_cost: u64,
+    /// Maximum accounts data size, in bytes, that a transaction is allowed to load; The
+    /// value is capped by MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES to prevent overuse of memory.
+    pub loaded_accounts_data_size_limit: usize,
 }
 
 impl Default for ComputeBudget {
@@ -148,7 +128,6 @@ impl ComputeBudget {
     pub fn new(compute_unit_limit: u64) -> Self {
         ComputeBudget {
             compute_unit_limit,
-            accounts_data_size_limit: DEFAULT_LOADED_ACCOUNTS_DATA_LIMIT as u64,
             log_64_units: 100,
             create_program_address_units: 1500,
             invoke_units: 1000,
@@ -165,18 +144,18 @@ impl ComputeBudget {
             sysvar_base_cost: 100,
             secp256k1_recover_cost: 25_000,
             syscall_base_cost: 100,
-            curve25519_edwards_validate_point_cost: 111,
-            curve25519_edwards_add_cost: 331,
-            curve25519_edwards_subtract_cost: 329,
-            curve25519_edwards_multiply_cost: 1_753,
-            curve25519_edwards_msm_base_cost: 1_870,
-            curve25519_edwards_msm_incremental_cost: 670,
-            curve25519_ristretto_validate_point_cost: 117,
-            curve25519_ristretto_add_cost: 367,
-            curve25519_ristretto_subtract_cost: 366,
-            curve25519_ristretto_multiply_cost: 1_804,
-            curve25519_ristretto_msm_base_cost: 1_870,
-            curve25519_ristretto_msm_incremental_cost: 670,
+            curve25519_edwards_validate_point_cost: 159,
+            curve25519_edwards_add_cost: 473,
+            curve25519_edwards_subtract_cost: 475,
+            curve25519_edwards_multiply_cost: 2_177,
+            curve25519_edwards_msm_base_cost: 2_273,
+            curve25519_edwards_msm_incremental_cost: 758,
+            curve25519_ristretto_validate_point_cost: 169,
+            curve25519_ristretto_add_cost: 521,
+            curve25519_ristretto_subtract_cost: 519,
+            curve25519_ristretto_multiply_cost: 2_208,
+            curve25519_ristretto_msm_base_cost: 2303,
+            curve25519_ristretto_msm_incremental_cost: 788,
             heap_size: None,
             heap_cost: 8,
             mem_op_base_cost: 10,
@@ -184,6 +163,8 @@ impl ComputeBudget {
             alt_bn128_multiplication_cost: 3_840,
             alt_bn128_pairing_one_pair_cost_first: 36_364,
             alt_bn128_pairing_one_pair_cost_other: 12_121,
+            big_modular_exponentiation_cost: 33,
+            loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
         }
     }
 
@@ -192,14 +173,14 @@ impl ComputeBudget {
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         default_units_per_instruction: bool,
         support_request_units_deprecated: bool,
-        cap_transaction_accounts_data_size: bool,
-        loaded_accounts_data_limit_type: LoadedAccountsDataLimitType,
+        enable_request_heap_frame_ix: bool,
+        support_set_loaded_accounts_data_size_limit_ix: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
         let mut num_non_compute_budget_instructions: usize = 0;
         let mut updated_compute_unit_limit = None;
         let mut requested_heap_size = None;
         let mut prioritization_fee = None;
-        let mut updated_accounts_data_size_limit = None;
+        let mut updated_loaded_accounts_data_size_limit = None;
 
         for (i, (program_id, instruction)) in instructions.enumerate() {
             if compute_budget::check_id(program_id) {
@@ -243,13 +224,13 @@ impl ComputeBudget {
                         prioritization_fee =
                             Some(PrioritizationFeeType::ComputeUnitPrice(micro_lamports));
                     }
-                    Ok(ComputeBudgetInstruction::SetAccountsDataSizeLimit(bytes))
-                        if cap_transaction_accounts_data_size =>
+                    Ok(ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit(bytes))
+                        if support_set_loaded_accounts_data_size_limit_ix =>
                     {
-                        if updated_accounts_data_size_limit.is_some() {
+                        if updated_loaded_accounts_data_size_limit.is_some() {
                             return Err(duplicate_instruction_error);
                         }
-                        updated_accounts_data_size_limit = Some(bytes);
+                        updated_loaded_accounts_data_size_limit = Some(bytes as usize);
                     }
                     _ => return Err(invalid_instruction_data_error),
                 }
@@ -261,7 +242,8 @@ impl ComputeBudget {
         }
 
         if let Some((bytes, i)) = requested_heap_size {
-            if bytes > MAX_HEAP_FRAME_BYTES
+            if !enable_request_heap_frame_ix
+                || bytes > MAX_HEAP_FRAME_BYTES
                 || bytes < MIN_HEAP_FRAME_BYTES as u32
                 || bytes % 1024 != 0
             {
@@ -286,13 +268,9 @@ impl ComputeBudget {
         .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
         .min(MAX_COMPUTE_UNIT_LIMIT) as u64;
 
-        self.accounts_data_size_limit = updated_accounts_data_size_limit
-            .unwrap_or_else(|| {
-                get_default_loaded_accounts_data_limit(&loaded_accounts_data_limit_type)
-            })
-            .min(get_max_loaded_accounts_data_limit(
-                &loaded_accounts_data_limit_type,
-            )) as u64;
+        self.loaded_accounts_data_size_limit = updated_loaded_accounts_data_size_limit
+            .unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
+            .min(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES);
 
         Ok(prioritization_fee
             .map(|fee_type| PrioritizationFeeDetails::new(fee_type, self.compute_unit_limit))
@@ -316,7 +294,7 @@ mod tests {
     };
 
     macro_rules! test {
-        ( $instructions: expr, $expected_result: expr, $expected_budget: expr  ) => {
+        ( $instructions: expr, $expected_result: expr, $expected_budget: expr, $enable_request_heap_frame_ix: expr, $support_set_loaded_accounts_data_size_limit_ix: expr ) => {
             let payer_keypair = Keypair::new();
             let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
                 &[&payer_keypair],
@@ -328,14 +306,20 @@ mod tests {
                 tx.message().program_instructions_iter(),
                 true,
                 false, /*not support request_units_deprecated*/
-                true,  /*supports cap transaction accounts data size feature*/
-                LoadedAccountsDataLimitType::V0,
+                $enable_request_heap_frame_ix,
+                $support_set_loaded_accounts_data_size_limit_ix,
             );
             assert_eq!($expected_result, result);
             assert_eq!(compute_budget, $expected_budget);
         };
         ( $instructions: expr, $expected_result: expr, $expected_budget: expr) => {
-            test!($instructions, $expected_result, $expected_budget);
+            test!(
+                $instructions,
+                $expected_result,
+                $expected_budget,
+                true,
+                false
+            );
         };
     }
 
@@ -597,82 +581,258 @@ mod tests {
     }
 
     #[test]
-    fn test_process_accounts_data_size_limit_instruction() {
+    fn test_process_instructions_disable_request_heap_frame() {
+        // assert empty message results default compute budget and fee
         test!(
             &[],
             Ok(PrioritizationFeeDetails::default()),
             ComputeBudget {
                 compute_unit_limit: 0,
                 ..ComputeBudget::default()
-            }
-        );
-        test!(
-            &[
-                ComputeBudgetInstruction::set_accounts_data_size_limit(1),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-            ],
-            Ok(PrioritizationFeeDetails::default()),
-            ComputeBudget {
-                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                accounts_data_size_limit: 1,
-                ..ComputeBudget::default()
-            }
-        );
-        test!(
-            &[
-                ComputeBudgetInstruction::set_accounts_data_size_limit(
-                    get_max_loaded_accounts_data_limit(&LoadedAccountsDataLimitType::V0) + 1
-                ),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-            ],
-            Ok(PrioritizationFeeDetails::default()),
-            ComputeBudget {
-                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                accounts_data_size_limit: get_max_loaded_accounts_data_limit(
-                    &LoadedAccountsDataLimitType::V0
-                ) as u64,
-                ..ComputeBudget::default()
-            }
-        );
-        test!(
-            &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                ComputeBudgetInstruction::set_accounts_data_size_limit(
-                    get_max_loaded_accounts_data_limit(&LoadedAccountsDataLimitType::V0)
-                ),
-            ],
-            Ok(PrioritizationFeeDetails::default()),
-            ComputeBudget {
-                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                accounts_data_size_limit: get_max_loaded_accounts_data_limit(
-                    &LoadedAccountsDataLimitType::V0
-                ) as u64,
-                ..ComputeBudget::default()
-            }
-        );
-        test!(
-            &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                ComputeBudgetInstruction::set_accounts_data_size_limit(1),
-            ],
-            Ok(PrioritizationFeeDetails::default()),
-            ComputeBudget {
-                compute_unit_limit: 3 * DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                accounts_data_size_limit: 1,
-                ..ComputeBudget::default()
-            }
+            },
+            false,
+            false
         );
 
+        // assert requesting heap frame when feature is disable will result instruction error
+        test!(
+            &[
+                ComputeBudgetInstruction::request_heap_frame(40 * 1024),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+            ],
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidInstructionData
+            )),
+            ComputeBudget::default(),
+            false,
+            false
+        );
         test!(
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                ComputeBudgetInstruction::set_accounts_data_size_limit(1),
-                ComputeBudgetInstruction::set_accounts_data_size_limit(1),
+                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
             ],
-            Err(TransactionError::DuplicateInstruction(2)),
-            ComputeBudget::default()
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::InvalidInstructionData,
+            )),
+            ComputeBudget::default(),
+            false,
+            false
         );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
+                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
+                ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
+            ],
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::InvalidInstructionData,
+            )),
+            ComputeBudget::default(),
+            false,
+            false
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ComputeBudgetInstruction::set_compute_unit_limit(1),
+                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
+                ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
+            ],
+            Err(TransactionError::InstructionError(
+                2,
+                InstructionError::InvalidInstructionData,
+            )),
+            ComputeBudget::default(),
+            false,
+            false
+        );
+
+        // assert normal results when not requesting heap frame when the feature is disabled
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+            ],
+            Ok(PrioritizationFeeDetails::default()),
+            ComputeBudget {
+                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 7,
+                ..ComputeBudget::default()
+            },
+            false,
+            false
+        );
+    }
+
+    #[test]
+    fn test_process_loaded_accounts_data_size_limit_instruction() {
+        let enable_request_heap_frame_ix: bool = true;
+
+        // Assert for empty instructions, change value of support_set_loaded_accounts_data_size_limit_ix
+        // will not change results, which should all be default
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            test!(
+                &[],
+                Ok(PrioritizationFeeDetails::default()),
+                ComputeBudget {
+                    compute_unit_limit: 0,
+                    ..ComputeBudget::default()
+                },
+                enable_request_heap_frame_ix,
+                support_set_loaded_accounts_data_size_limit_ix
+            );
+        }
+
+        // Assert when set_loaded_accounts_data_size_limit presents,
+        // if support_set_loaded_accounts_data_size_limit_ix then
+        //     budget is set with data_size
+        // else
+        //     return InstructionError
+        let data_size: usize = 1;
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            let (expected_result, expected_budget) =
+                if support_set_loaded_accounts_data_size_limit_ix {
+                    (
+                        Ok(PrioritizationFeeDetails::default()),
+                        ComputeBudget {
+                            compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                            loaded_accounts_data_size_limit: data_size,
+                            ..ComputeBudget::default()
+                        },
+                    )
+                } else {
+                    (
+                        Err(TransactionError::InstructionError(
+                            0,
+                            InstructionError::InvalidInstructionData,
+                        )),
+                        ComputeBudget::default(),
+                    )
+                };
+
+            test!(
+                &[
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size as u32),
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ],
+                expected_result,
+                expected_budget,
+                enable_request_heap_frame_ix,
+                support_set_loaded_accounts_data_size_limit_ix
+            );
+        }
+
+        // Assert when set_loaded_accounts_data_size_limit presents, with greater than max value
+        // if support_set_loaded_accounts_data_size_limit_ix then
+        //     budget is set to max data size
+        // else
+        //     return InstructionError
+        let data_size: usize = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES + 1;
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            let (expected_result, expected_budget) =
+                if support_set_loaded_accounts_data_size_limit_ix {
+                    (
+                        Ok(PrioritizationFeeDetails::default()),
+                        ComputeBudget {
+                            compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                            loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+                            ..ComputeBudget::default()
+                        },
+                    )
+                } else {
+                    (
+                        Err(TransactionError::InstructionError(
+                            0,
+                            InstructionError::InvalidInstructionData,
+                        )),
+                        ComputeBudget::default(),
+                    )
+                };
+
+            test!(
+                &[
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size as u32),
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ],
+                expected_result,
+                expected_budget,
+                enable_request_heap_frame_ix,
+                support_set_loaded_accounts_data_size_limit_ix
+            );
+        }
+
+        // Assert when set_loaded_accounts_data_size_limit is not presented
+        // if support_set_loaded_accounts_data_size_limit_ix then
+        //     budget is set to default data size
+        // else
+        //     return
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            let (expected_result, expected_budget) = (
+                Ok(PrioritizationFeeDetails::default()),
+                ComputeBudget {
+                    compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                    loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+                    ..ComputeBudget::default()
+                },
+            );
+
+            test!(
+                &[Instruction::new_with_bincode(
+                    Pubkey::new_unique(),
+                    &0_u8,
+                    vec![]
+                ),],
+                expected_result,
+                expected_budget,
+                enable_request_heap_frame_ix,
+                support_set_loaded_accounts_data_size_limit_ix
+            );
+        }
+
+        // Assert when set_loaded_accounts_data_size_limit presents more than once,
+        // if support_set_loaded_accounts_data_size_limit_ix then
+        //     return DuplicateInstruction
+        // else
+        //     return InstructionError
+        let data_size: usize = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES;
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            let (expected_result, expected_budget) =
+                if support_set_loaded_accounts_data_size_limit_ix {
+                    (
+                        Err(TransactionError::DuplicateInstruction(2)),
+                        ComputeBudget::default(),
+                    )
+                } else {
+                    (
+                        Err(TransactionError::InstructionError(
+                            1,
+                            InstructionError::InvalidInstructionData,
+                        )),
+                        ComputeBudget::default(),
+                    )
+                };
+
+            test!(
+                &[
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size as u32),
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size as u32),
+                ],
+                expected_result,
+                expected_budget,
+                enable_request_heap_frame_ix,
+                support_set_loaded_accounts_data_size_limit_ix
+            );
+        }
     }
 }

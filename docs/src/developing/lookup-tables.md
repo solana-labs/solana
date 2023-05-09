@@ -1,18 +1,17 @@
 ---
 title: Address Lookup Tables
 description: ""
-keywords: ""
 ---
 
 Address Lookup Tables, commonly referred to as "_lookup tables_" or "_ALTs_" for short, allow developers to create a collection of related addresses to efficiently load more addresses in a single transaction.
 
-Since each transaction on the Solana blockchain requires a listing of every address that is interacted with as part of the transaction, this listing would be effectively be capped at 32 address per transaction. With the help of [Address Lookup Tables](./lookup-tables.md), a transaction would be now be able to raise that limit to 256 addresses per transaction.
+Since each transaction on the Solana blockchain requires a listing of every address that is interacted with as part of the transaction, this listing would effectively be capped at 32 addresses per transaction. With the help of [Address Lookup Tables](./lookup-tables.md), a transaction would now be able to raise that limit to 256 addresses per transaction.
 
 ## Compressing on chain addresses
 
-After all the desired address have been stored on chain in an Address Lookup Table, each address can be referenced inside a transaction by its 1-byte index within the table (instead of their full 32-byte address). This lookup method effectively "_compresses_" a 32-byte address into a 1-byte index value.
+After all the desired addresses have been stored on chain in an Address Lookup Table, each address can be referenced inside a transaction by its 1-byte index within the table (instead of their full 32-byte address). This lookup method effectively "_compresses_" a 32-byte address into a 1-byte index value.
 
-This "_compression_" enables storing up to 256 address in a single lookup table for use inside any given transaction.
+This "_compression_" enables storing up to 256 addresses in a single lookup table for use inside any given transaction.
 
 ## Versioned Transactions
 
@@ -52,7 +51,7 @@ console.log("lookup table address:", lookupTableAddress.toBase58());
 
 ## Add addresses to a lookup table
 
-Adding addresses to a lookup table is known as "_extending_". Using the the `@solana/web3.js` library, you can create a new _extend_ instruction using the [`extendLookupTable`](https://solana-labs.github.io/solana-web3.js/classes/AddressLookupTableProgram.html#extendLookupTable) method:
+Adding addresses to a lookup table is known as "_extending_". Using the `@solana/web3.js` library, you can create a new _extend_ instruction using the [`extendLookupTable`](https://solana-labs.github.io/solana-web3.js/classes/AddressLookupTableProgram.html#extendLookupTable) method:
 
 ```js
 // add addresses to the `lookupTableAddress` table via an `extend` instruction
@@ -72,9 +71,9 @@ const extendInstruction = web3.AddressLookupTableProgram.extendLookupTable({
 ```
 
 > NOTE:
-> Due to the same memory limits of `legacy` transactions, any transaction used to _extend_ an Address Lookup Table is also limited in how many addresses can be added at a time. Because of this, you will need to use multiple transactions to _extend_ any table with more addresses (~20) that can fit withing a single transaction's memory limits.
+> Due to the same memory limits of `legacy` transactions, any transaction used to _extend_ an Address Lookup Table is also limited in how many addresses can be added at a time. Because of this, you will need to use multiple transactions to _extend_ any table with more addresses (~20) that can fit within a single transaction's memory limits.
 
-Once these address have been inserted into the table, and stored on chain, you will be able to utilize the Address Lookup Table in future transactions. Enabling up to 256 address in those future transactions.
+Once these addresses have been inserted into the table, and stored on chain, you will be able to utilize the Address Lookup Table in future transactions. Enabling up to 256 addresses in those future transactions.
 
 ## Fetch an Address Lookup Table
 
@@ -97,7 +96,7 @@ console.log("Table address from cluster:", lookupTableAccount.key.toBase58());
 Our `lookupTableAccount` variable will now be a `AddressLookupTableAccount` object which we can parse to read the listing of all the addresses stored on chain in the lookup table:
 
 ```js
-// loop through and parse all the address stored in the table
+// loop through and parse all the addresses stored in the table
 for (let i = 0; i < lookupTableAccount.state.addresses.length; i++) {
   const address = lookupTableAccount.state.addresses[i];
   console.log(i, address.toBase58());
@@ -116,7 +115,7 @@ Just like older `legacy` transactions, you can create all the [instructions](./.
 ```js
 // Assumptions:
 // - `arrayOfInstructions` has been created as an `array` of `TransactionInstruction`
-// - we are are using the `lookupTableAccount` obtained above
+// - we are using the `lookupTableAccount` obtained above
 
 // construct a v0 compatible transaction `Message`
 const messageV0 = new web3.TransactionMessage({

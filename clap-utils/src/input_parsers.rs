@@ -219,21 +219,18 @@ mod tests {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
 
-        format!("{}/tmp/{}-{}", out_dir, name, pubkey)
+        format!("{out_dir}/tmp/{name}-{pubkey}")
     }
 
     #[test]
     fn test_values_of() {
-        let matches =
-            app()
-                .clone()
-                .get_matches_from(vec!["test", "--multiple", "50", "--multiple", "39"]);
+        let matches = app().get_matches_from(vec!["test", "--multiple", "50", "--multiple", "39"]);
         assert_eq!(values_of(&matches, "multiple"), Some(vec![50, 39]));
         assert_eq!(values_of::<u64>(&matches, "single"), None);
 
         let pubkey0 = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
-        let matches = app().clone().get_matches_from(vec![
+        let matches = app().get_matches_from(vec![
             "test",
             "--multiple",
             &pubkey0.to_string(),
@@ -248,16 +245,12 @@ mod tests {
 
     #[test]
     fn test_value_of() {
-        let matches = app()
-            .clone()
-            .get_matches_from(vec!["test", "--single", "50"]);
+        let matches = app().get_matches_from(vec!["test", "--single", "50"]);
         assert_eq!(value_of(&matches, "single"), Some(50));
         assert_eq!(value_of::<u64>(&matches, "multiple"), None);
 
         let pubkey = solana_sdk::pubkey::new_rand();
-        let matches = app()
-            .clone()
-            .get_matches_from(vec!["test", "--single", &pubkey.to_string()]);
+        let matches = app().get_matches_from(vec!["test", "--single", &pubkey.to_string()]);
         assert_eq!(value_of(&matches, "single"), Some(pubkey));
     }
 
@@ -267,19 +260,14 @@ mod tests {
         let outfile = tmp_file_path("test_keypair_of.json", &keypair.pubkey());
         let _ = write_keypair_file(&keypair, &outfile).unwrap();
 
-        let matches = app()
-            .clone()
-            .get_matches_from(vec!["test", "--single", &outfile]);
+        let matches = app().get_matches_from(vec!["test", "--single", &outfile]);
         assert_eq!(
             keypair_of(&matches, "single").unwrap().pubkey(),
             keypair.pubkey()
         );
         assert!(keypair_of(&matches, "multiple").is_none());
 
-        let matches =
-            app()
-                .clone()
-                .get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
+        let matches = app().get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
         assert!(keypair_of(&matches, "single").is_none());
 
         fs::remove_file(&outfile).unwrap();
@@ -291,22 +279,15 @@ mod tests {
         let outfile = tmp_file_path("test_pubkey_of.json", &keypair.pubkey());
         let _ = write_keypair_file(&keypair, &outfile).unwrap();
 
-        let matches = app()
-            .clone()
-            .get_matches_from(vec!["test", "--single", &outfile]);
+        let matches = app().get_matches_from(vec!["test", "--single", &outfile]);
         assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
         assert_eq!(pubkey_of(&matches, "multiple"), None);
 
         let matches =
-            app()
-                .clone()
-                .get_matches_from(vec!["test", "--single", &keypair.pubkey().to_string()]);
+            app().get_matches_from(vec!["test", "--single", &keypair.pubkey().to_string()]);
         assert_eq!(pubkey_of(&matches, "single"), Some(keypair.pubkey()));
 
-        let matches =
-            app()
-                .clone()
-                .get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
+        let matches = app().get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
         assert_eq!(pubkey_of(&matches, "single"), None);
 
         fs::remove_file(&outfile).unwrap();
@@ -318,7 +299,7 @@ mod tests {
         let outfile = tmp_file_path("test_pubkeys_of.json", &keypair.pubkey());
         let _ = write_keypair_file(&keypair, &outfile).unwrap();
 
-        let matches = app().clone().get_matches_from(vec![
+        let matches = app().get_matches_from(vec![
             "test",
             "--multiple",
             &keypair.pubkey().to_string(),
@@ -338,15 +319,10 @@ mod tests {
         let key2 = solana_sdk::pubkey::new_rand();
         let sig1 = Keypair::new().sign_message(&[0u8]);
         let sig2 = Keypair::new().sign_message(&[1u8]);
-        let signer1 = format!("{}={}", key1, sig1);
-        let signer2 = format!("{}={}", key2, sig2);
-        let matches = app().clone().get_matches_from(vec![
-            "test",
-            "--multiple",
-            &signer1,
-            "--multiple",
-            &signer2,
-        ]);
+        let signer1 = format!("{key1}={sig1}");
+        let signer2 = format!("{key2}={sig2}");
+        let matches =
+            app().get_matches_from(vec!["test", "--multiple", &signer1, "--multiple", &signer2]);
         assert_eq!(
             pubkeys_sigs_of(&matches, "multiple"),
             Some(vec![(key1, sig1), (key2, sig2)])
@@ -355,19 +331,13 @@ mod tests {
 
     #[test]
     fn test_lamports_of_sol() {
-        let matches = app()
-            .clone()
-            .get_matches_from(vec!["test", "--single", "50"]);
+        let matches = app().get_matches_from(vec!["test", "--single", "50"]);
         assert_eq!(lamports_of_sol(&matches, "single"), Some(50_000_000_000));
         assert_eq!(lamports_of_sol(&matches, "multiple"), None);
-        let matches = app()
-            .clone()
-            .get_matches_from(vec!["test", "--single", "1.5"]);
+        let matches = app().get_matches_from(vec!["test", "--single", "1.5"]);
         assert_eq!(lamports_of_sol(&matches, "single"), Some(1_500_000_000));
         assert_eq!(lamports_of_sol(&matches, "multiple"), None);
-        let matches = app()
-            .clone()
-            .get_matches_from(vec!["test", "--single", "0.03"]);
+        let matches = app().get_matches_from(vec!["test", "--single", "0.03"]);
         assert_eq!(lamports_of_sol(&matches, "single"), Some(30_000_000));
     }
 }

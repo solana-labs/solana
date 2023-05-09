@@ -10,11 +10,18 @@ if [[ -z $cargo ]]; then
   exit 1
 fi
 
-set -ex
+fmt_dirs=(
+  .
+  programs/sbf
+  sdk/cargo-build-sbf/tests/crates/fail
+  sdk/cargo-build-sbf/tests/crates/noop
+  storage-bigtable/build-proto
+)
 
-"$cargo" nightly fmt --all
-(cd programs/sbf && "$cargo" nightly fmt --all)
-(cd sdk/cargo-build-sbf/tests/crates/fail && "$cargo" nightly fmt --all)
-(cd sdk/cargo-build-sbf/tests/crates/noop && "$cargo" nightly fmt --all)
-(cd storage-bigtable/build-proto && "$cargo" nightly fmt --all)
-(cd web3.js/test/fixtures/noop-program && "$cargo" nightly fmt --all)
+for fmt_dir in "${fmt_dirs[@]}"; do
+  (
+    manifest_path="$(readlink -f "$here"/../"$fmt_dir"/Cargo.toml)"
+    set -ex
+    "$cargo" nightly fmt --all --manifest-path "$manifest_path"
+  )
+done

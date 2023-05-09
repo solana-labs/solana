@@ -42,7 +42,7 @@ fn process_instruction(
     msg!(&format!("id: {}", instruction.program_id));
 
     msg!(&format!("data[0]: {}", instruction.data[0]));
-    msg!(&format!("index: {}", current_instruction));
+    msg!(&format!("index: {current_instruction}"));
 
     if instruction_data.len() == 2 {
         // CPI ourself with the same arguments to confirm the instructions sysvar reports the same

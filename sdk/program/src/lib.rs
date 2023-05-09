@@ -478,6 +478,7 @@ pub mod account_info;
 pub mod address_lookup_table_account;
 pub mod alt_bn128;
 pub(crate) mod atomic_u64;
+pub mod big_mod_exp;
 pub mod blake3;
 pub mod borsh;
 pub mod bpf_loader;
@@ -499,6 +500,8 @@ pub mod keccak;
 pub mod lamports;
 pub mod loader_instruction;
 pub mod loader_upgradeable_instruction;
+pub mod loader_v3;
+pub mod loader_v3_instruction;
 pub mod log;
 pub mod message;
 pub mod native_token;
@@ -520,6 +523,7 @@ pub mod serialize_utils;
 pub mod short_vec;
 pub mod slot_hashes;
 pub mod slot_history;
+pub mod stable_layout;
 pub mod stake;
 pub mod stake_history;
 pub mod syscalls;
@@ -546,7 +550,7 @@ pub mod config {
     }
 }
 
-/// A vector of Solana SDK IDs
+/// A vector of Solana SDK IDs.
 pub mod sdk_ids {
     use {
         crate::{
