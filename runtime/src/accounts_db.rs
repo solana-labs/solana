@@ -2909,12 +2909,16 @@ impl AccountsDb {
     /// get the oldest slot that is within one epoch of the highest known root.
     /// The slot will have been offset by `self.ancient_append_vec_offset`
     fn get_oldest_non_ancient_slot(&self, epoch_schedule: &EpochSchedule) -> Slot {
-        let mut result = self.accounts_index.max_root_inclusive();
-        result = Self::apply_offset_to_slot(result, -(epoch_schedule.slots_per_epoch as i64));
+        let max_root_inclusive = self.accounts_index.max_root_inclusive();
+        let mut result = max_root_inclusive;
         if let Some(offset) = self.ancient_append_vec_offset {
             result = Self::apply_offset_to_slot(result, offset);
         }
-        result.saturating_add(1)
+        result = Self::apply_offset_to_slot(
+            result,
+            -((epoch_schedule.slots_per_epoch as i64).saturating_sub(1)),
+        );
+        result.min(max_root_inclusive)
     }
 
     /// hash calc is completed as of 'slot'
@@ -17076,6 +17080,91 @@ pub mod tests {
     }
 
     #[test]
+    fn test_sweep_get_oldest_non_ancient_slot_max() {
+        let epoch_schedule = EpochSchedule::default();
+        // way into future
+        for ancient_append_vec_offset in [
+            epoch_schedule.slots_per_epoch,
+            epoch_schedule.slots_per_epoch + 1,
+            epoch_schedule.slots_per_epoch * 2,
+        ] {
+            let db = AccountsDb::new_with_config(
+                Vec::new(),
+                &ClusterType::Development,
+                AccountSecondaryIndexes::default(),
+                AccountShrinkThreshold::default(),
+                Some(AccountsDbConfig {
+                    ancient_append_vec_offset: Some(ancient_append_vec_offset as i64),
+                    ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+                }),
+                None,
+                &Arc::default(),
+            );
+            // before any roots are added, we expect the oldest non-ancient slot to be 0
+            assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
+            for max_root_inclusive in [
+                0,
+                epoch_schedule.slots_per_epoch,
+                epoch_schedule.slots_per_epoch * 2,
+                epoch_schedule.slots_per_epoch * 10,
+            ] {
+                db.add_root(max_root_inclusive);
+                // oldest non-ancient will never exceed max_root_inclusive, even if the offset is so large it would mathematically move ancient PAST the newest root
+                assert_eq!(
+                    max_root_inclusive,
+                    db.get_oldest_non_ancient_slot(&epoch_schedule)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_sweep_get_oldest_non_ancient_slot() {
+        let epoch_schedule = EpochSchedule::default();
+        let ancient_append_vec_offset = 50_000;
+        let db = AccountsDb::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+            Some(AccountsDbConfig {
+                ancient_append_vec_offset: Some(ancient_append_vec_offset),
+                ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+            }),
+            None,
+            &Arc::default(),
+        );
+        // before any roots are added, we expect the oldest non-ancient slot to be 0
+        assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
+        // adding roots until slots_per_epoch +/- ancient_append_vec_offset should still saturate to 0 as oldest non ancient slot
+        let max_root_inclusive = AccountsDb::apply_offset_to_slot(0, ancient_append_vec_offset - 1);
+        db.add_root(max_root_inclusive);
+        // oldest non-ancient will never exceed max_root_inclusive
+        assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
+        for offset in 0..3u64 {
+            let max_root_inclusive = ancient_append_vec_offset as u64 + offset;
+            db.add_root(max_root_inclusive);
+            assert_eq!(
+                0,
+                db.get_oldest_non_ancient_slot(&epoch_schedule),
+                "offset: {offset}"
+            );
+        }
+        for offset in 0..3u64 {
+            let max_root_inclusive = AccountsDb::apply_offset_to_slot(
+                epoch_schedule.slots_per_epoch - 1,
+                -ancient_append_vec_offset,
+            ) + offset;
+            db.add_root(max_root_inclusive);
+            assert_eq!(
+                offset,
+                db.get_oldest_non_ancient_slot(&epoch_schedule),
+                "offset: {offset}, max_root_inclusive: {max_root_inclusive}"
+            );
+        }
+    }
+
+    #[test]
     fn test_sweep_get_accounts_hash_complete_oldest_non_ancient_slot() {
         // note that this test has to worry about saturation at 0 as we subtract `slots_per_epoch` and `ancient_append_vec_offset`
         let epoch_schedule = EpochSchedule::default();
@@ -17100,6 +17189,9 @@ pub mod tests {
                     None,
                     &Arc::default(),
                 );
+                // before any roots are added, we expect the oldest non-ancient slot to be 0
+                assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
+
                 let ancient_append_vec_offset = db.ancient_append_vec_offset.unwrap();
                 // check the default value
                 assert_eq!(
@@ -17132,11 +17224,10 @@ pub mod tests {
                     let expected_oldest_non_ancient_slot = AccountsDb::apply_offset_to_slot(
                         AccountsDb::apply_offset_to_slot(
                             completed_slot,
-                            -(epoch_schedule.slots_per_epoch as i64),
+                            -((epoch_schedule.slots_per_epoch as i64).saturating_sub(1)),
                         ),
                         ancient_append_vec_offset,
-                    )
-                    .saturating_add(1);
+                    );
                     assert_eq!(
                         expected_oldest_non_ancient_slot,
                         db.get_oldest_non_ancient_slot(&epoch_schedule)
