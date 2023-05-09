@@ -324,6 +324,7 @@ pub enum TransactionExecutionResult {
     Executed {
         details: TransactionExecutionDetails,
         programs_modified_by_tx: Rc<RefCell<LoadedProgramsForTxBatch>>,
+        programs_updated_only_for_global_cache: Rc<RefCell<LoadedProgramsForTxBatch>>,
     },
     NotExecuted(TransactionError),
 }
@@ -4318,6 +4319,8 @@ impl Bank {
         let mut executed_units = 0u64;
         let programs_modified_by_tx =
             Rc::new(RefCell::new(LoadedProgramsForTxBatch::new(self.slot)));
+        let programs_updated_only_for_global_cache =
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::new(self.slot)));
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             &self.builtin_programs,
@@ -4328,6 +4331,7 @@ impl Bank {
             log_collector.clone(),
             programs_loaded_for_tx_batch,
             programs_modified_by_tx.clone(),
+            programs_updated_only_for_global_cache.clone(),
             self.feature_set.clone(),
             compute_budget,
             timings,
@@ -4432,6 +4436,7 @@ impl Bank {
                 accounts_data_len_delta,
             },
             programs_modified_by_tx,
+            programs_updated_only_for_global_cache,
         }
     }
 
@@ -4701,6 +4706,7 @@ impl Bank {
                     if let TransactionExecutionResult::Executed {
                         details,
                         programs_modified_by_tx,
+                        programs_updated_only_for_global_cache: _,
                     } = &result
                     {
                         // Update batch specific cache of the loaded programs with the modifications
@@ -4711,6 +4717,7 @@ impl Bank {
                                 .merge(&programs_modified_by_tx.borrow());
                         }
                     }
+
                     result
                 }
             })
@@ -5197,13 +5204,13 @@ impl Bank {
             if let TransactionExecutionResult::Executed {
                 details,
                 programs_modified_by_tx,
+                programs_updated_only_for_global_cache,
             } = execution_result
             {
                 if details.status.is_ok() {
-                    self.loaded_programs_cache
-                        .write()
-                        .unwrap()
-                        .merge(&programs_modified_by_tx.borrow());
+                    let mut cache = self.loaded_programs_cache.write().unwrap();
+                    cache.merge(&programs_modified_by_tx.borrow());
+                    cache.merge(&programs_updated_only_for_global_cache.borrow());
                 }
             }
         }

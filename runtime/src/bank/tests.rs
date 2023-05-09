@@ -177,6 +177,9 @@ fn new_execution_result(
             accounts_data_len_delta: 0,
         },
         programs_modified_by_tx: Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+        programs_updated_only_for_global_cache: Rc::new(RefCell::new(
+            LoadedProgramsForTxBatch::default(),
+        )),
     }
 }
 
