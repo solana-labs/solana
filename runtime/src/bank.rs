@@ -4461,7 +4461,7 @@ impl Bank {
                         (
                             *pubkey,
                             self.program_modification_slot(pubkey)
-                                .map_or(LoadedProgramMatchCriteria::Closed, |slot| {
+                                .map_or(LoadedProgramMatchCriteria::Tombstone, |slot| {
                                     LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(slot)
                                 }),
                         )
