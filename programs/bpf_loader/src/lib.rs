@@ -10,7 +10,9 @@ use {
         compute_budget::ComputeBudget,
         ic_logger_msg, ic_msg,
         invoke_context::{BpfAllocator, InvokeContext, SyscallContext},
-        loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
+        loaded_programs::{
+            LoadProgramMetrics, LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET,
+        },
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,
@@ -91,7 +93,7 @@ pub fn load_program_from_bytes(
     register_syscalls_time.stop();
     load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
     let effective_slot = if feature_set.is_active(&delay_visibility_of_program_deployment::id()) {
-        deployment_slot.saturating_add(1)
+        deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET)
     } else {
         deployment_slot
     };
@@ -190,12 +192,27 @@ pub fn load_program_from_account(
     Ok((loaded_program, Some(load_program_metrics)))
 }
 
+fn find_program_in_cache(
+    invoke_context: &InvokeContext,
+    pubkey: &Pubkey,
+) -> Option<Arc<LoadedProgram>> {
+    // First lookup the cache of the programs modified by the current transaction. If not found, lookup
+    // the cache of the cache of the programs that are loaded for the transaction batch.
+    invoke_context
+        .programs_modified_by_tx
+        .borrow()
+        .find(pubkey)
+        .or_else(|| {
+            invoke_context
+                .programs_loaded_for_tx_batch
+                .borrow()
+                .find(pubkey)
+        })
+}
+
 macro_rules! deploy_program {
     ($invoke_context:expr, $program_id:expr, $loader_key:expr,
      $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
-        let delay_visibility_of_program_deployment = $invoke_context
-            .feature_set
-            .is_active(&delay_visibility_of_program_deployment::id());
         let mut load_program_metrics = LoadProgramMetrics::default();
         let executor = load_program_from_bytes(
             &$invoke_context.feature_set,
@@ -209,20 +226,14 @@ macro_rules! deploy_program {
             true, /* reject_deployment_of_broken_elfs */
             false, /* debugging_features */
         )?;
-        if let Some(old_entry) = $invoke_context.tx_executor_cache.borrow().get(&$program_id) {
+        if let Some(old_entry) = find_program_in_cache($invoke_context, &$program_id) {
             let usage_counter = old_entry.usage_counter.load(Ordering::Relaxed);
             executor.usage_counter.store(usage_counter, Ordering::Relaxed);
         }
         $drop
         load_program_metrics.program_id = $program_id.to_string();
         load_program_metrics.submit_datapoint(&mut $invoke_context.timings);
-        $invoke_context.tx_executor_cache.borrow_mut().set(
-            $program_id,
-            Arc::new(executor),
-            true,
-            delay_visibility_of_program_deployment,
-            $slot,
-        );
+        $invoke_context.programs_modified_by_tx.borrow_mut().replenish($program_id, Arc::new(executor));
     }};
 }
 
@@ -562,10 +573,7 @@ fn process_instruction_inner(
     }
 
     let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-    let executor = invoke_context
-        .tx_executor_cache
-        .borrow()
-        .get(program_account.get_key())
+    let executor = find_program_in_cache(invoke_context, program_account.get_key())
         .ok_or(InstructionError::InvalidAccountData)?;
 
     if executor.is_tombstone() {
@@ -1265,15 +1273,32 @@ fn process_loader_upgradeable_instruction(
                                 instruction_context,
                                 &log_collector,
                             )?;
+                            let clock = invoke_context.get_sysvar_cache().get_clock()?;
                             if invoke_context
                                 .feature_set
                                 .is_active(&delay_visibility_of_program_deployment::id())
                             {
-                                let clock = invoke_context.get_sysvar_cache().get_clock()?;
                                 invoke_context
-                                    .tx_executor_cache
+                                    .programs_modified_by_tx
                                     .borrow_mut()
-                                    .set_tombstone(program_key, clock.slot);
+                                    .replenish(
+                                        program_key,
+                                        Arc::new(LoadedProgram::new_tombstone(
+                                            clock.slot,
+                                            LoadedProgramType::Closed,
+                                        )),
+                                    );
+                            } else {
+                                invoke_context
+                                    .programs_updated_only_for_global_cache
+                                    .borrow_mut()
+                                    .replenish(
+                                        program_key,
+                                        Arc::new(LoadedProgram::new_tombstone(
+                                            clock.slot,
+                                            LoadedProgramType::Closed,
+                                        )),
+                                    );
                             }
                         }
                         _ => {
@@ -1661,7 +1686,10 @@ fn execute<'a, 'b: 'a>(
 }
 
 pub mod test_utils {
-    use {super::*, solana_sdk::account::ReadableAccount};
+    use {
+        super::*, solana_program_runtime::loaded_programs::DELAY_VISIBILITY_SLOT_OFFSET,
+        solana_sdk::account::ReadableAccount,
+    };
 
     pub fn load_all_invoked_programs(invoke_context: &mut InvokeContext) {
         let num_accounts = invoke_context.transaction_context.get_number_of_accounts();
@@ -1693,8 +1721,9 @@ pub mod test_utils {
                     true,
                     false,
                 ) {
-                    let mut cache = invoke_context.tx_executor_cache.borrow_mut();
-                    cache.set(*pubkey, Arc::new(loaded_program), true, false, 0)
+                    let mut cache = invoke_context.programs_modified_by_tx.borrow_mut();
+                    cache.set_slot_for_tests(DELAY_VISIBILITY_SLOT_OFFSET);
+                    cache.replenish(*pubkey, Arc::new(loaded_program));
                 }
             }
         }
@@ -4096,13 +4125,10 @@ mod tests {
             maybe_expiration_slot: None,
             usage_counter: AtomicU64::new(100),
         };
-        invoke_context.tx_executor_cache.borrow_mut().set(
-            program_id,
-            Arc::new(program),
-            false,
-            false,
-            0,
-        );
+        invoke_context
+            .programs_modified_by_tx
+            .borrow_mut()
+            .replenish(program_id, Arc::new(program));
 
         assert!(matches!(
             deploy_test_program(&mut invoke_context, program_id,),
@@ -4110,9 +4136,9 @@ mod tests {
         ));
 
         let updated_program = invoke_context
-            .tx_executor_cache
+            .programs_modified_by_tx
             .borrow()
-            .get(&program_id)
+            .find(&program_id)
             .expect("Didn't find upgraded program in the cache");
 
         assert_eq!(updated_program.deployment_slot, 2);
@@ -4132,13 +4158,10 @@ mod tests {
             maybe_expiration_slot: None,
             usage_counter: AtomicU64::new(100),
         };
-        invoke_context.tx_executor_cache.borrow_mut().set(
-            program_id,
-            Arc::new(program),
-            false,
-            false,
-            0,
-        );
+        invoke_context
+            .programs_modified_by_tx
+            .borrow_mut()
+            .replenish(program_id, Arc::new(program));
 
         let program_id2 = Pubkey::new_unique();
         assert!(matches!(
@@ -4147,9 +4170,9 @@ mod tests {
         ));
 
         let program2 = invoke_context
-            .tx_executor_cache
+            .programs_modified_by_tx
             .borrow()
-            .get(&program_id2)
+            .find(&program_id2)
             .expect("Didn't find upgraded program in the cache");
 
         assert_eq!(program2.deployment_slot, 2);

@@ -15,7 +15,9 @@ use {
     },
     solana_program_runtime::{
         invoke_context::InvokeContext,
-        loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
+        loaded_programs::{
+            LoadProgramMetrics, LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET,
+        },
         with_mock_invoke_context,
     },
     solana_rbpf::{
@@ -416,6 +418,9 @@ pub fn run(ledger_path: &Path, matches: &ArgMatches<'_>) {
         bank.get_builtin_programs()
     );
 
+    // Adding `DELAY_VISIBILITY_SLOT_OFFSET` to slots to accommodate for delay visibility of the program
+    let mut loaded_programs =
+        LoadedProgramsForTxBatch::new(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
     for key in cached_account_keys {
         let program = bank.load_program(&key, true).unwrap_or_else(|err| {
             // Create a tombstone for the program in the cache
@@ -426,11 +431,9 @@ pub fn run(ledger_path: &Path, matches: &ArgMatches<'_>) {
             ))
         });
         debug!("Loaded program {}", key);
-        invoke_context
-            .tx_executor_cache
-            .borrow_mut()
-            .set(key, program, false, false, 0);
+        loaded_programs.replenish(key, program);
     }
+    invoke_context.programs_loaded_for_tx_batch = Rc::new(RefCell::new(loaded_programs));
 
     invoke_context
         .transaction_context

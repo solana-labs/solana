@@ -38,7 +38,7 @@ use {
         declare_process_instruction,
         executor_cache::TransactionExecutorCache,
         invoke_context::mock_process_instruction,
-        loaded_programs::{LoadedProgram, LoadedProgramType},
+        loaded_programs::{LoadedProgram, LoadedProgramType, DELAY_VISIBILITY_SLOT_OFFSET},
         prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         timings::ExecuteTimings,
     },
@@ -176,7 +176,10 @@ fn new_execution_result(
             executed_units: 0,
             accounts_data_len_delta: 0,
         },
-        tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
+        programs_modified_by_tx: Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+        programs_updated_only_for_global_cache: Rc::new(RefCell::new(
+            LoadedProgramsForTxBatch::default(),
+        )),
     }
 }
 
@@ -7771,14 +7774,9 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         Ok(()),
         solana_bpf_loader_program::process_instruction,
         |invoke_context| {
-            let mut cache = invoke_context.tx_executor_cache.borrow_mut();
-            cache.set(
-                program_keypair.pubkey(),
-                loaded_program.clone(),
-                true,
-                false,
-                0,
-            );
+            let mut cache = invoke_context.programs_modified_by_tx.borrow_mut();
+            cache.set_slot_for_tests(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
+            cache.replenish(program_keypair.pubkey(), loaded_program.clone());
         },
         |_invoke_context| {},
     );
@@ -11506,7 +11504,7 @@ fn test_rent_state_list_len() {
         &FeeStructure::default(),
         None,
         &HashMap::new(),
-        &HashMap::new(),
+        &LoadedProgramsForTxBatch::default(),
     );
 
     let compute_budget = bank.runtime_config.compute_budget.unwrap_or_else(|| {

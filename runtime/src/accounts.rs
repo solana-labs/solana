@@ -26,7 +26,7 @@ use {
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget},
-        loaded_programs::{LoadedProgram, LoadedProgramType},
+        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -337,7 +337,7 @@ impl Accounts {
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
         program_accounts: &HashMap<Pubkey, &Pubkey>,
-        loaded_programs: &HashMap<Pubkey, Arc<LoadedProgram>>,
+        loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Result<LoadedTransaction> {
         // NOTE: this check will never fail because `tx` is sanitized
         if tx.signatures().is_empty() && fee != 0 {
@@ -390,7 +390,7 @@ impl Accounts {
                         (account_override.data().len(), account_override.clone(), 0)
                     } else if let Some(program) = (!instruction_account && !message.is_writable(i))
                         .then_some(())
-                        .and_then(|_| loaded_programs.get(key))
+                        .and_then(|_| loaded_programs.find(key))
                     {
                         // This condition block does special handling for accounts that are passed
                         // as instruction account to any of the instructions in the transaction.
@@ -401,7 +401,7 @@ impl Accounts {
                         Self::account_shared_data_from_program(
                             key,
                             feature_set,
-                            program,
+                            program.as_ref(),
                             program_accounts,
                         )
                         .map(|program_account| (program.account_size, program_account, 0))?
@@ -695,7 +695,7 @@ impl Accounts {
         fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
         program_accounts: &HashMap<Pubkey, &Pubkey>,
-        loaded_programs: &HashMap<Pubkey, Arc<LoadedProgram>>,
+        loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
@@ -1470,9 +1470,8 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::{
-            executor_cache::TransactionExecutorCache,
-            prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+        solana_program_runtime::prioritization_fee::{
+            PrioritizationFeeDetails, PrioritizationFeeType,
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
@@ -1525,7 +1524,10 @@ mod tests {
                 executed_units: 0,
                 accounts_data_len_delta: 0,
             },
-            tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
+            programs_modified_by_tx: Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            programs_updated_only_for_global_cache: Rc::new(RefCell::new(
+                LoadedProgramsForTxBatch::default(),
+            )),
         }
     }
 
@@ -1563,7 +1565,7 @@ mod tests {
             fee_structure,
             None,
             &HashMap::new(),
-            &HashMap::new(),
+            &LoadedProgramsForTxBatch::default(),
         )
     }
 
@@ -3367,7 +3369,7 @@ mod tests {
             &FeeStructure::default(),
             account_overrides,
             &HashMap::new(),
-            &HashMap::new(),
+            &LoadedProgramsForTxBatch::default(),
         )
     }
 

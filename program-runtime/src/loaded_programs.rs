@@ -281,9 +281,16 @@ pub struct LoadedProgramsForTxBatch {
 }
 
 impl LoadedProgramsForTxBatch {
+    pub fn new(slot: Slot) -> Self {
+        Self {
+            entries: HashMap::new(),
+            slot,
+        }
+    }
+
     /// Refill the cache with a single entry. It's typically called during transaction loading, and
     /// transaction processing (for program management instructions).
-    /// The replaces the existing entry (if any) with the provided entry. The return value contains
+    /// It replaces the existing entry (if any) with the provided entry. The return value contains
     /// `true` if an entry existed.
     /// The function also returns the newly inserted value.
     pub fn replenish(
@@ -291,7 +298,6 @@ impl LoadedProgramsForTxBatch {
         key: Pubkey,
         entry: Arc<LoadedProgram>,
     ) -> (bool, Arc<LoadedProgram>) {
-        debug_assert!(entry.effective_slot <= self.slot);
         (self.entries.insert(key, entry.clone()).is_some(), entry)
     }
 
@@ -313,6 +319,16 @@ impl LoadedProgramsForTxBatch {
 
     pub fn slot(&self) -> Slot {
         self.slot
+    }
+
+    pub fn set_slot_for_tests(&mut self, slot: Slot) {
+        self.slot = slot;
+    }
+
+    pub fn merge(&mut self, other: &Self) {
+        other.entries.iter().for_each(|(key, entry)| {
+            self.replenish(*key, entry.clone());
+        })
     }
 }
 
@@ -453,6 +469,12 @@ impl LoadedPrograms {
                                 return None;
                             }
 
+                            if matches!(entry.program, LoadedProgramType::Unloaded) {
+                                // The program was unloaded. Consider it as missing, so it can be reloaded.
+                                missing.push(key);
+                                return None;
+                            }
+
                             if current_slot >= entry.effective_slot {
                                 return Some((key, entry.clone()));
                             } else if entry.is_implicit_delay_visibility_tombstone(current_slot) {
@@ -481,6 +503,12 @@ impl LoadedPrograms {
             },
             missing,
         )
+    }
+
+    pub fn merge(&mut self, tx_batch_cache: &LoadedProgramsForTxBatch) {
+        tx_batch_cache.entries.iter().for_each(|(key, entry)| {
+            self.replenish(*key, entry.clone());
+        })
     }
 
     /// Unloads programs which were used infrequently
