@@ -469,6 +469,12 @@ impl LoadedPrograms {
                                 return None;
                             }
 
+                            if matches!(entry.program, LoadedProgramType::Unloaded) {
+                                // The program was unloaded. Consider it as missing, so it can be reloaded.
+                                missing.push(key);
+                                return None;
+                            }
+
                             if current_slot >= entry.effective_slot {
                                 return Some((key, entry.clone()));
                             } else if entry.is_implicit_delay_visibility_tombstone(current_slot) {
