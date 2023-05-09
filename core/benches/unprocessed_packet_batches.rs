@@ -11,7 +11,7 @@ use {
             ThreadType, UnprocessedTransactionStorage, UNPROCESSED_BUFFER_STEP_SIZE,
         },
     },
-    solana_perf::packet::{Packet, PacketBatch},
+    solana_perf::packet::Packet,
     solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
@@ -25,23 +25,19 @@ use {
 fn build_packet_batch(
     packet_per_batch_count: usize,
     recent_blockhash: Option<Hash>,
-) -> (PacketBatch, Vec<usize>) {
-    let packet_batch = PacketBatch::new(
-        (0..packet_per_batch_count)
-            .map(|_| {
-                let tx = system_transaction::transfer(
-                    &Keypair::new(),
-                    &solana_sdk::pubkey::new_rand(),
-                    1,
-                    recent_blockhash.unwrap_or_else(Hash::new_unique),
-                );
-                Packet::from_data(None, tx).unwrap()
-            })
-            .collect(),
-    );
-    let packet_indexes: Vec<usize> = (0..packet_per_batch_count).collect();
-
-    (packet_batch, packet_indexes)
+) -> Vec<DeserializedPacket> {
+    (0..packet_per_batch_count)
+        .filter_map(|_| {
+            let tx = system_transaction::transfer(
+                &Keypair::new(),
+                &solana_sdk::pubkey::new_rand(),
+                1,
+                recent_blockhash.unwrap_or_else(Hash::new_unique),
+            );
+            let packet = Packet::from_data(None, tx).unwrap();
+            DeserializedPacket::new(packet).ok()
+        })
+        .collect()
 }
 
 fn insert_packet_batches(
@@ -52,30 +48,8 @@ fn insert_packet_batches(
     let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(buffer_max_size);
 
     (0..batch_count).for_each(|_| {
-        let (packet_batch, packet_indexes) = build_packet_batch(packet_per_batch_count, None);
-        let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes);
-        unprocessed_packet_batches.insert_batch(deserialized_packets);
-    });
-}
-
-#[bench]
-#[allow(clippy::unit_arg)]
-fn bench_packet_clone(bencher: &mut Bencher) {
-    let batch_count = 1000;
-    let packet_per_batch_count = UNPROCESSED_BUFFER_STEP_SIZE;
-
-    let packet_batches: Vec<PacketBatch> = (0..batch_count)
-        .map(|_| build_packet_batch(packet_per_batch_count, None).0)
-        .collect();
-
-    bencher.iter(|| {
-        test::black_box(packet_batches.iter().for_each(|packet_batch| {
-            let mut outer_packet = Packet::default();
-
-            packet_batch.iter().for_each(|packet| {
-                outer_packet = packet.clone();
-            });
-        }));
+        unprocessed_packet_batches
+            .insert_batch(build_packet_batch(packet_per_batch_count, None).into_iter());
     });
 }
 
@@ -127,10 +101,9 @@ fn buffer_iter_desc_and_forward(
     // fill buffer
     {
         (0..batch_count).for_each(|_| {
-            let (packet_batch, packet_indexes) =
-                build_packet_batch(packet_per_batch_count, Some(genesis_config.hash()));
-            let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes);
-            unprocessed_packet_batches.insert_batch(deserialized_packets);
+            unprocessed_packet_batches.insert_batch(
+                build_packet_batch(packet_per_batch_count, Some(genesis_config.hash())).into_iter(),
+            );
         });
     }
 
