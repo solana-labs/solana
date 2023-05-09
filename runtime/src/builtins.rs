@@ -168,21 +168,3 @@ pub(crate) fn get() -> Builtins {
         feature_transitions: builtin_feature_transitions(),
     }
 }
-
-/// Returns the addresses of all builtin programs.
-pub fn get_pubkeys() -> Vec<Pubkey> {
-    let builtins = get();
-
-    let mut pubkeys = Vec::new();
-    pubkeys.extend(
-        builtins
-            .genesis_builtins
-            .iter()
-            .map(|(program_id, _builtin)| program_id),
-    );
-    pubkeys.extend(builtins.feature_transitions.iter().filter_map(|f| match f {
-        BuiltinFeatureTransition::Add { program_id, .. } => Some(program_id),
-        BuiltinFeatureTransition::RemoveOrRetain { .. } => None,
-    }));
-    pubkeys
-}
