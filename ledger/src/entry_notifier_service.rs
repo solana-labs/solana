@@ -1,6 +1,6 @@
 use {
     crate::entry_notifier_interface::EntryNotifierLock,
-    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     solana_entry::entry::EntrySummary,
     solana_sdk::clock::Slot,
     std::{
@@ -23,16 +23,14 @@ pub type EntryNotifierSender = Sender<EntryNotification>;
 pub type EntryNotifierReceiver = Receiver<EntryNotification>;
 
 pub struct EntryNotifierService {
+    sender: EntryNotifierSender,
     thread_hdl: JoinHandle<()>,
 }
 
 impl EntryNotifierService {
-    pub fn new(
-        entry_notification_receiver: EntryNotifierReceiver,
-        entry_notifier: EntryNotifierLock,
-        exit: &Arc<AtomicBool>,
-    ) -> Self {
+    pub fn new(entry_notifier: EntryNotifierLock, exit: &Arc<AtomicBool>) -> Self {
         let exit = exit.clone();
+        let (entry_notification_sender, entry_notification_receiver) = unbounded();
         let thread_hdl = Builder::new()
             .name("solEntryNotif".to_string())
             .spawn(move || loop {
@@ -47,7 +45,10 @@ impl EntryNotifierService {
                 }
             })
             .unwrap();
-        Self { thread_hdl }
+        Self {
+            sender: entry_notification_sender,
+            thread_hdl,
+        }
     }
 
     fn notify_entry(
@@ -61,6 +62,14 @@ impl EntryNotifierService {
             .unwrap()
             .notify_entry(slot, index, &entry);
         Ok(())
+    }
+
+    pub fn sender(&self) -> &EntryNotifierSender {
+        &self.sender
+    }
+
+    pub fn sender_cloned(&self) -> EntryNotifierSender {
+        self.sender.clone()
     }
 
     pub fn join(self) -> thread::Result<()> {

@@ -640,7 +640,6 @@ impl Validator {
             blockstore_process_options,
             blockstore_root_scan,
             pruned_banks_receiver,
-            entry_notification_sender,
             entry_notifier_service,
         ) = load_blockstore(
             config,
@@ -764,6 +763,9 @@ impl Validator {
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
+        let entry_notification_sender = entry_notifier_service
+            .as_ref()
+            .map(|service| service.sender());
         let mut process_blockstore = ProcessBlockStore::new(
             &id,
             vote_account,
@@ -775,7 +777,7 @@ impl Validator {
             &blockstore_process_options,
             transaction_status_sender.as_ref(),
             cache_block_meta_sender.clone(),
-            entry_notification_sender.as_ref(),
+            entry_notification_sender,
             blockstore_root_scan,
             accounts_background_request_sender.clone(),
             config,
@@ -1088,6 +1090,9 @@ impl Validator {
             info!("Disabled banking tracer");
         }
 
+        let entry_notification_sender = entry_notifier_service
+            .as_ref()
+            .map(|service| service.sender_cloned());
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -1156,7 +1161,7 @@ impl Validator {
             },
             &rpc_subscriptions,
             transaction_status_sender,
-            entry_notification_sender.clone(),
+            entry_notification_sender,
             &blockstore,
             &config.broadcast_stage_type,
             &exit,
@@ -1527,7 +1532,6 @@ fn load_blockstore(
         blockstore_processor::ProcessOptions,
         BlockstoreRootScan,
         DroppedSlotsReceiver,
-        Option<EntryNotifierSender>,
         Option<EntryNotifierService>,
     ),
     String,
@@ -1606,8 +1610,8 @@ fn load_blockstore(
             TransactionHistoryServices::default()
         };
 
-    let (entry_notification_sender, entry_notifier_service) =
-        initialize_entry_notifier_service(entry_notifier, exit).unzip();
+    let entry_notifier_service =
+        entry_notifier.map(|entry_notifier| EntryNotifierService::new(entry_notifier, exit));
 
     let (bank_forks, mut leader_schedule_cache, starting_snapshot_hashes) =
         bank_forks_utils::load_bank_forks(
@@ -1620,7 +1624,9 @@ fn load_blockstore(
             transaction_history_services
                 .cache_block_meta_sender
                 .as_ref(),
-            entry_notification_sender.as_ref(),
+            entry_notifier_service
+                .as_ref()
+                .map(|service| service.sender()),
             accounts_update_notifier,
             exit,
         );
@@ -1673,7 +1679,6 @@ fn load_blockstore(
         process_options,
         blockstore_root_scan,
         pruned_banks_receiver,
-        entry_notification_sender,
         entry_notifier_service,
     ))
 }
@@ -2029,18 +2034,6 @@ fn initialize_rpc_transaction_history_services(
         cache_block_meta_sender,
         cache_block_meta_service,
     }
-}
-
-fn initialize_entry_notifier_service(
-    entry_notifier: Option<EntryNotifierLock>,
-    exit: &Arc<AtomicBool>,
-) -> Option<(EntryNotifierSender, EntryNotifierService)> {
-    entry_notifier.map(|entry_notifier| {
-        let (entry_notification_sender, entry_notification_receiver) = unbounded();
-        let entry_notifier_service =
-            EntryNotifierService::new(entry_notification_receiver, entry_notifier, exit);
-        (entry_notification_sender, entry_notifier_service)
-    })
 }
 
 #[derive(Debug, PartialEq, Eq)]
