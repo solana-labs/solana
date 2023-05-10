@@ -255,6 +255,17 @@ impl LoadedProgram {
         )
     }
 
+    fn is_loaded(&self) -> bool {
+        match self.program {
+            LoadedProgramType::LegacyV0(_)
+            | LoadedProgramType::LegacyV1(_)
+            | LoadedProgramType::Typed(_) => true,
+            #[cfg(test)]
+            LoadedProgramType::TestLoaded => true,
+            _ => false,
+        }
+    }
+
     fn is_implicit_delay_visibility_tombstone(&self, slot: Slot) -> bool {
         self.effective_slot.saturating_sub(self.deployment_slot) == DELAY_VISIBILITY_SLOT_OFFSET
             && slot >= self.deployment_slot
@@ -557,6 +568,21 @@ impl LoadedPrograms {
                     .unwrap_or(true)
             });
         }
+    }
+
+    fn unload_program(&mut self, id: &Pubkey) {
+        if let Some(entries) = self.entries.get_mut(id) {
+            entries.iter_mut().for_each(|entry| {
+                if entry.is_loaded() {
+                    *entry = Arc::new(entry.to_unloaded());
+                }
+            });
+        }
+    }
+
+    pub fn unload_all_programs(&mut self) {
+        let keys = self.entries.keys().copied().collect::<Vec<Pubkey>>();
+        keys.iter().for_each(|key| self.unload_program(key));
     }
 
     fn unload_program_entries<'a>(

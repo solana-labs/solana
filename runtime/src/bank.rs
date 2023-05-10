@@ -33,8 +33,6 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-#[cfg(test)]
-use solana_program_runtime::executor_cache::TransactionExecutorCache;
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
@@ -97,7 +95,6 @@ use {
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         builtin_program::BuiltinPrograms,
         compute_budget::{self, ComputeBudget},
-        executor_cache::{BankExecutorCache, MAX_CACHED_EXECUTORS},
         loaded_programs::{
             LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, LoadedPrograms,
             LoadedProgramsForTxBatch, WorkingSlot,
@@ -784,7 +781,6 @@ impl PartialEq for Bank {
             cluster_type: _,
             lazy_rent_collection: _,
             rewards_pool_pubkeys: _,
-            executor_cache: _,
             transaction_debug_keys: _,
             transaction_log_collector_config: _,
             transaction_log_collector: _,
@@ -1016,9 +1012,6 @@ pub struct Bank {
 
     // this is temporary field only to remove rewards_pool entirely
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
-
-    /// Cached executors
-    executor_cache: RwLock<BankExecutorCache>,
 
     transaction_debug_keys: Option<Arc<HashSet<Pubkey>>>,
 
@@ -1269,7 +1262,6 @@ impl Bank {
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
             rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
-            executor_cache: RwLock::<BankExecutorCache>::default(),
             transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
             transaction_log_collector_config: Arc::<RwLock<TransactionLogCollectorConfig>>::default(
             ),
@@ -1483,14 +1475,6 @@ impl Bank {
         let (rewards_pool_pubkeys, rewards_pool_pubkeys_time_us) =
             measure_us!(parent.rewards_pool_pubkeys.clone());
 
-        let (executor_cache, executor_cache_time_us) = measure_us!({
-            let parent_bank_executors = parent.executor_cache.read().unwrap();
-            RwLock::new(BankExecutorCache::new_from_parent_bank_executors(
-                &parent_bank_executors,
-                epoch,
-            ))
-        });
-
         let (transaction_debug_keys, transaction_debug_keys_time_us) =
             measure_us!(parent.transaction_debug_keys.clone());
 
@@ -1554,7 +1538,6 @@ impl Bank {
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
             rewards_pool_pubkeys,
-            executor_cache,
             transaction_debug_keys,
             transaction_log_collector_config,
             transaction_log_collector: Arc::new(RwLock::new(TransactionLogCollector::default())),
@@ -1633,7 +1616,7 @@ impl Bank {
                 epoch_stakes_time_us,
                 builtin_programs_time_us,
                 rewards_pool_pubkeys_time_us,
-                executor_cache_time_us,
+                executor_cache_time_us: 0,
                 transaction_debug_keys_time_us,
                 transaction_log_collector_config_time_us,
                 feature_set_time_us,
@@ -1643,13 +1626,6 @@ impl Bank {
                 fill_sysvar_cache_time_us,
             },
         );
-
-        parent
-            .executor_cache
-            .read()
-            .unwrap()
-            .stats
-            .submit(parent.slot());
 
         new
     }
@@ -1896,7 +1872,6 @@ impl Bank {
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
-            executor_cache: RwLock::new(BankExecutorCache::new(MAX_CACHED_EXECUTORS, fields.epoch)),
             transaction_debug_keys: debug_keys,
             transaction_log_collector_config: new(),
             transaction_log_collector: new(),
@@ -4077,76 +4052,12 @@ impl Bank {
         balances
     }
 
-    /// Get any cached executors needed by the transaction
-    #[cfg(test)]
-    fn get_tx_executor_cache(
-        &self,
-        accounts: &[TransactionAccount],
-    ) -> Rc<RefCell<TransactionExecutorCache>> {
-        let executable_keys: Vec<_> = accounts
-            .iter()
-            .filter_map(|(key, account)| {
-                if account.executable() && !native_loader::check_id(account.owner()) {
-                    Some(key)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        if executable_keys.is_empty() {
-            return Rc::new(RefCell::new(TransactionExecutorCache::default()));
-        }
-
-        let tx_executor_cache = {
-            let cache = self.executor_cache.read().unwrap();
-            TransactionExecutorCache::new(
-                executable_keys
-                    .into_iter()
-                    .filter_map(|key| cache.get(key).map(|executor| (*key, executor))),
-            )
-        };
-
-        Rc::new(RefCell::new(tx_executor_cache))
-    }
-
-    /// Add executors back to the bank's cache if they were missing and not re-/deployed
-    #[cfg(test)]
-    fn store_executors_which_added_to_the_cache(
-        &self,
-        tx_executor_cache: &RefCell<TransactionExecutorCache>,
-    ) {
-        let executors = tx_executor_cache
-            .borrow_mut()
-            .get_executors_added_to_the_cache();
-        if !executors.is_empty() {
-            self.executor_cache
-                .write()
-                .unwrap()
-                .put(executors.into_iter());
-        }
-    }
-
-    /// Add re-/deployed executors to the bank's cache
-    #[cfg(test)]
-    fn store_executors_which_were_deployed(
-        &self,
-        tx_executor_cache: &RefCell<TransactionExecutorCache>,
-    ) {
-        let executors = tx_executor_cache
-            .borrow_mut()
-            .get_executors_which_were_deployed();
-        if !executors.is_empty() {
-            self.executor_cache
-                .write()
-                .unwrap()
-                .put(executors.into_iter());
-        }
-    }
-
-    /// Remove an executor from the bank's cache
-    fn remove_executor(&self, pubkey: &Pubkey) {
-        let _ = self.executor_cache.write().unwrap().remove(pubkey);
+    /// Unload a program from the bank's cache
+    fn remove_program_from_cache(&self, pubkey: &Pubkey) {
+        self.loaded_programs_cache
+            .write()
+            .unwrap()
+            .remove_programs([*pubkey].into_iter());
     }
 
     fn program_modification_slot(&self, pubkey: &Pubkey) -> Result<Slot> {
@@ -4248,8 +4159,11 @@ impl Bank {
         .map_err(|err| TransactionError::InstructionError(0, err))
     }
 
-    pub fn clear_executors(&self) {
-        self.executor_cache.write().unwrap().clear();
+    pub fn clear_program_cache(&self) {
+        self.loaded_programs_cache
+            .write()
+            .unwrap()
+            .unload_all_programs();
     }
 
     /// Execute a transaction using the provided loaded accounts and update
@@ -4502,51 +4416,6 @@ impl Bank {
             let (_was_occupied, entry) = loaded_programs_cache.replenish(key, program);
             // Use the returned entry as that might have been deduplicated globally
             loaded_programs_for_txs.replenish(key, entry);
-        }
-
-        loaded_programs_for_txs
-    }
-
-    #[allow(dead_code)] // Preparation for BankExecutorCache rework
-    fn replenish_executor_cache(
-        &self,
-        program_accounts_map: &HashMap<Pubkey, &Pubkey>,
-    ) -> HashMap<Pubkey, Arc<LoadedProgram>> {
-        let mut loaded_programs_for_txs = HashMap::new();
-        let mut filter_missing_programs_time = Measure::start("filter_missing_programs_accounts");
-        let missing_executors = program_accounts_map
-            .keys()
-            .filter_map(|key| {
-                self.executor_cache
-                    .read()
-                    .unwrap()
-                    .get(key)
-                    .map(|program| {
-                        loaded_programs_for_txs.insert(*key, program.clone());
-                        program
-                    })
-                    .is_none()
-                    .then_some(key)
-            })
-            .collect::<Vec<_>>();
-        filter_missing_programs_time.stop();
-
-        let executors = missing_executors.iter().map(|pubkey| {
-            let program = self.load_program(pubkey, false).unwrap_or_else(|err| {
-                // Create a tombstone for the program in the cache
-                debug!("Failed to load program {}, error {:?}", pubkey, err);
-                Arc::new(LoadedProgram::new_tombstone(
-                    self.slot,
-                    LoadedProgramType::FailedVerification,
-                ))
-            });
-            loaded_programs_for_txs.insert(**pubkey, program.clone());
-            (**pubkey, program)
-        });
-
-        // avoid locking the cache if there are no new executors
-        if executors.len() > 0 {
-            self.executor_cache.write().unwrap().put(executors);
         }
 
         loaded_programs_for_txs
@@ -7703,7 +7572,7 @@ impl Bank {
                 // Clear new account
                 self.store_account(new_address, &AccountSharedData::default());
 
-                self.remove_executor(old_address);
+                self.remove_program_from_cache(old_address);
 
                 self.calculate_and_update_accounts_data_size_delta_off_chain(
                     old_account.data().len(),
