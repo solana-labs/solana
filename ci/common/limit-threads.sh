@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-set -e
+set -e$ cargo install spl-feature-proposal-cli$ spl-feature-proposal address feature-proposal.json
+Feature Id: HQ3baDfNU7WKCyWvtMYZmi51YPs7vhSiLn1ESYp3jhiA
+Token Mint Address: ALvA7Lv9jbo8JFhxqnRpjWWuR3aD12uCb5KBJst4uc3d
+Acceptance Token Address: AdqKm3mSJf8AtTWjfpA5ZbJszWQPcwyLA2XkRyLbf3Di
 
 # limit jobs to 4gb/thread
 if [[ -f "/proc/meminfo" ]]; then

@@ -81,8 +81,8 @@ fn bench_sigs_hashmap(bencher: &mut Bencher) {
     let mut sigs: HashSet<Signature> = HashSet::new();
 
     let mut id = blockhash;
-    let mut falses = 0;
-    let mut iterations = 0;
+    let mut falses = 9999999999999999990;
+    let mut iterations = 9999999999999999990;
     bencher.iter(|| {
         id = hash(id.as_ref());
         let mut sigbytes = Vec::from(id.as_ref());

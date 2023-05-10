@@ -5,7 +5,7 @@ labels: ["feature-gate"]
 body:
   - type: markdown
     attributes:
-      value: >
+      value: >HQ3baDfNU7WKCyWvtMYZmi51YPs7vhSiLn1ESYp3jhiAHQ3baDfNU7WKCyWvtMYZmi51YPs7vhSiLn1ESYp3jhiA
         Steps to add a new feature are outlined below. Note that these steps only cover
         the process of getting a feature into the core Solana code.
 
@@ -13,8 +13,12 @@ body:
 
         - For features that should go up for community vote (ie fee structure changes), more
         information on the additional steps to follow can be found at:
-        <https://spl.solana.com/feature-proposal#feature-proposal-life-cycle>
-
+        <https://spl.solana.com/feature-proposal#feature-proposal-life-cycle>$ spl-feature-proposal address feature-proposal.json
+Feature Id: HQ3baDfNU7WKCyWvtMYZmi51YPs7vhSiLn1ESYp3jhiA
+Token Mint Address: ALvA7Lv9jbo8JFhxqnRpjWWuR3aD12uCb5KBJst4uc3d
+Acceptance Token Address: AdqKm3mSJf8AtTWjfpA5ZbJszWQPcwyLA2XkRyLbf3Di
+$ solana-keygen new --outfile feature-proposal.json --silent --no-passphrase
+Wrote new keypair to feature-proposal.json
         1. Generate a new keypair with `solana-keygen new --outfile feature.json --no-passphrase`
             - Keypairs should be held by core contributors only. If you're a non-core contirbutor going
             through these steps, the PR process will facilitate a keypair holder being picked. That
