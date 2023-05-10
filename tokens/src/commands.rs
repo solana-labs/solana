@@ -24,7 +24,7 @@ use {
         request::{MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_MULTIPLE_ACCOUNTS},
     },
     solana_sdk::{
-        clock::{Slot, DEFAULT_MS_PER_SLOT},
+        clock::Slot,
         commitment_config::CommitmentConfig,
         hash::Hash,
         instruction::Instruction,
@@ -49,7 +49,7 @@ use {
             Arc,
         },
         thread::sleep,
-        time::{Duration, Instant},
+        time::Duration,
     },
 };
 
@@ -108,6 +108,10 @@ pub enum Error {
     ClientError(#[from] ClientError),
     #[error("Missing lockup authority")]
     MissingLockupAuthority,
+    #[error("Missing messages")]
+    MissingMessages,
+    #[error("Error estimating message fees")]
+    FeeEstimationError,
     #[error("insufficient funds in {0:?}, requires {1}")]
     InsufficientFunds(FundingSources, String),
     #[error("Program error")]
@@ -747,23 +751,18 @@ fn log_transaction_confirmations(
     Ok(())
 }
 
-pub fn get_fees_for_messages(messages: &[Message], client: &RpcClient) -> Result<u64, Error> {
-    // This is an arbitrary value to get regular blockhash updates for balance checks without
-    // hitting the RPC node with too many requests
-    const BLOCKHASH_REFRESH_MILLIS: u64 = DEFAULT_MS_PER_SLOT * 32;
-
-    let mut latest_blockhash = client.get_latest_blockhash()?;
-    let mut now = Instant::now();
-    let mut fees = 0;
-    for mut message in messages.iter().cloned() {
-        if now.elapsed() > Duration::from_millis(BLOCKHASH_REFRESH_MILLIS) {
-            latest_blockhash = client.get_latest_blockhash()?;
-            now = Instant::now();
-        }
-        message.recent_blockhash = latest_blockhash;
-        fees += client.get_fee_for_message(&message)?;
-    }
-    Ok(fees)
+pub fn get_fee_estimate_for_messages(
+    messages: &[Message],
+    client: &RpcClient,
+) -> Result<u64, Error> {
+    let mut message = messages.first().ok_or(Error::MissingMessages)?.clone();
+    let latest_blockhash = client.get_latest_blockhash()?;
+    message.recent_blockhash = latest_blockhash;
+    let fee = client.get_fee_for_message(&message)?;
+    let fee_estimate = fee
+        .checked_mul(messages.len() as u64)
+        .ok_or(Error::FeeEstimationError)?;
+    Ok(fee_estimate)
 }
 
 fn check_payer_balances(
@@ -773,7 +772,7 @@ fn check_payer_balances(
     args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
     let mut undistributed_tokens: u64 = allocations.iter().map(|x| x.amount).sum();
-    let fees = get_fees_for_messages(messages, client)?;
+    let fees = get_fee_estimate_for_messages(messages, client)?;
 
     let (distribution_source, unlocked_sol_source) = if let Some(stake_args) = &args.stake_args {
         let total_unlocked_sol = allocations.len() as u64 * stake_args.unlocked_sol;
