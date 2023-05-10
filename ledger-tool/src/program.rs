@@ -525,7 +525,6 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             invoke_context.get_compute_budget(),
             true,
             true,
-            true,
         )
         .unwrap();
         let executable =

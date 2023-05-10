@@ -2023,7 +2023,6 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
         &FeatureSet::default(),
         &ComputeBudget::default(),
         true,
-        true,
         false,
     )
     .unwrap();

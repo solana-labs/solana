@@ -93,7 +93,6 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
         &FeatureSet::default(),
         &ComputeBudget::default(),
         true,
-        true,
         false,
     )
     .unwrap();
@@ -117,7 +116,6 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let loader = create_loader(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
-        true,
         true,
         false,
     )
@@ -236,7 +234,6 @@ fn bench_create_vm(bencher: &mut Bencher) {
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
-        true,
         false,
     )
     .unwrap();
@@ -296,7 +293,6 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let loader = create_loader(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
-        true,
         true,
         false,
     )

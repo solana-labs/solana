@@ -35,10 +35,9 @@ use {
         feature_set::{
             bpf_account_data_direct_mapping, cap_accounts_data_allocations_per_transaction,
             cap_bpf_program_instruction_accounts, delay_visibility_of_program_deployment,
-            disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, native_programs_consume_cu,
-            remove_bpf_loader_incorrect_program_id, FeatureSet,
+            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
+            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
+            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -77,13 +76,10 @@ pub fn load_program_from_bytes(
     debugging_features: bool,
 ) -> Result<LoadedProgram, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
-    let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
-        && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
     let loader = syscalls::create_loader(
         feature_set,
         compute_budget,
         reject_deployment_of_broken_elfs,
-        disable_deploy_of_alloc_free_syscall,
         debugging_features,
     )
     .map_err(|e| {
