@@ -2833,6 +2833,7 @@ pub struct Sockets {
     pub ip_echo: Option<TcpListener>,
     pub tvu: Vec<UdpSocket>,
     pub tvu_forwards: Vec<UdpSocket>,
+    pub tvu_quic: UdpSocket,
     pub tpu: Vec<UdpSocket>,
     pub tpu_forwards: Vec<UdpSocket>,
     pub tpu_vote: Vec<UdpSocket>,
@@ -2867,7 +2868,8 @@ impl Node {
         let (gossip_port, (gossip, ip_echo)) =
             bind_common_in_range(localhost_ip_addr, port_range).unwrap();
         let gossip_addr = SocketAddr::new(localhost_ip_addr, gossip_port);
-        let tvu = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let ((_tvu_port, tvu), (_tvu_quic_port, tvu_quic)) =
+            bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let tvu_forwards = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
             bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
@@ -2924,6 +2926,7 @@ impl Node {
                 ip_echo: Some(ip_echo),
                 tvu: vec![tvu],
                 tvu_forwards: vec![tvu_forwards],
+                tvu_quic,
                 tpu: vec![tpu],
                 tpu_forwards: vec![tpu_forwards],
                 tpu_vote: vec![tpu_vote],
@@ -2966,7 +2969,8 @@ impl Node {
     ) -> Self {
         let (gossip_port, (gossip, ip_echo)) =
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
-        let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
+        let ((tvu_port, tvu), (_tvu_quic_port, tvu_quic)) =
+            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
         let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
@@ -3015,6 +3019,7 @@ impl Node {
                 ip_echo: Some(ip_echo),
                 tvu: vec![tvu],
                 tvu_forwards: vec![tvu_forwards],
+                tvu_quic,
                 tpu: vec![tpu],
                 tpu_forwards: vec![tpu_forwards],
                 tpu_vote: vec![tpu_vote],
@@ -3042,7 +3047,10 @@ impl Node {
 
         let (tvu_port, tvu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tvu multi_bind");
-
+        let (_tvu_port_quic, tvu_quic) = Self::bind(
+            bind_ip_addr,
+            (tvu_port + QUIC_PORT_OFFSET, tvu_port + QUIC_PORT_OFFSET + 1),
+        );
         let (tvu_forwards_port, tvu_forwards_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tvu_forwards multi_bind");
 
@@ -3103,6 +3111,7 @@ impl Node {
                 gossip,
                 tvu: tvu_sockets,
                 tvu_forwards: tvu_forwards_sockets,
+                tvu_quic,
                 tpu: tpu_sockets,
                 tpu_forwards: tpu_forwards_sockets,
                 tpu_vote: tpu_vote_sockets,
@@ -3294,6 +3303,7 @@ mod tests {
                     ip_echo: None,
                     tvu: vec![],
                     tvu_forwards: vec![],
+                    tvu_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
                     tpu: vec![],
                     tpu_forwards: vec![],
                     tpu_vote: vec![],
