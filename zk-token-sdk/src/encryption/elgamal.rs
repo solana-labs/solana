@@ -58,7 +58,6 @@ pub enum ElGamalError {
     DerivationMethodNotSupported,
 }
 
-
 /// Algorithm handle for the twisted ElGamal encryption scheme
 pub struct ElGamal;
 impl ElGamal {
