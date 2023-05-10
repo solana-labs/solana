@@ -3,6 +3,7 @@ use solana_rbpf::error::EbpfError;
 use {
     crate::{invoke_context::InvokeContext, timings::ExecuteDetailsTimings},
     itertools::Itertools,
+    log::{debug, log_enabled, trace},
     percentage::PercentageInteger,
     solana_measure::measure::Measure,
     solana_rbpf::{
@@ -109,6 +110,60 @@ pub struct LoadedProgram {
     pub maybe_expiration_slot: Option<Slot>,
     /// How often this entry was used
     pub usage_counter: AtomicU64,
+}
+
+#[derive(Debug, Default)]
+pub struct Stats {
+    pub hits: AtomicU64,
+    pub misses: AtomicU64,
+    pub evictions: HashMap<Pubkey, u64>,
+    pub insertions: AtomicU64,
+    pub replacements: AtomicU64,
+    pub one_hit_wonders: AtomicU64,
+}
+
+impl Stats {
+    /// Logs the measurement values
+    pub fn submit(&self, slot: Slot) {
+        let hits = self.hits.load(Ordering::Relaxed);
+        let misses = self.misses.load(Ordering::Relaxed);
+        let insertions = self.insertions.load(Ordering::Relaxed);
+        let replacements = self.replacements.load(Ordering::Relaxed);
+        let one_hit_wonders = self.one_hit_wonders.load(Ordering::Relaxed);
+        let evictions: u64 = self.evictions.values().sum();
+        datapoint_info!(
+            "bank-executor-cache-stats",
+            ("slot", slot, i64),
+            ("hits", hits, i64),
+            ("misses", misses, i64),
+            ("evictions", evictions, i64),
+            ("insertions", insertions, i64),
+            ("replacements", replacements, i64),
+            ("one_hit_wonders", one_hit_wonders, i64),
+        );
+        debug!(
+            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}, One-Hit-Wonders: {}",
+            hits, misses, evictions, insertions, replacements, one_hit_wonders,
+        );
+        if log_enabled!(log::Level::Trace) && !self.evictions.is_empty() {
+            let mut evictions = self.evictions.iter().collect::<Vec<_>>();
+            evictions.sort_by_key(|e| e.1);
+            let evictions = evictions
+                .into_iter()
+                .rev()
+                .map(|(program_id, evictions)| {
+                    format!("  {:<44}  {}", program_id.to_string(), evictions)
+                })
+                .collect::<Vec<_>>();
+            let evictions = evictions.join("\n");
+            trace!(
+                "Eviction Details:\n  {:<44}  {}\n{}",
+                "Program",
+                "Count",
+                evictions
+            );
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -281,6 +336,7 @@ pub struct LoadedPrograms {
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
 
     latest_root: Slot,
+    pub stats: Stats,
 }
 
 #[derive(Debug, Default)]
@@ -381,10 +437,12 @@ impl LoadedPrograms {
                     // a chance.
                     second_level.swap_remove(entry_index);
                 } else {
+                    self.stats.replacements.fetch_add(1, Ordering::Relaxed);
                     return (true, existing.clone());
                 }
             }
         }
+        self.stats.insertions.fetch_add(1, Ordering::Relaxed);
         second_level.insert(index.unwrap_or(second_level.len()), entry.clone());
         (false, entry)
     }
@@ -506,7 +564,14 @@ impl LoadedPrograms {
                 missing.push(key);
                 None
             })
-            .collect();
+            .collect::<HashMap<Pubkey, Arc<LoadedProgram>>>();
+
+        self.stats
+            .misses
+            .fetch_add(missing.len() as u64, Ordering::Relaxed);
+        self.stats
+            .hits
+            .fetch_add(found.len() as u64, Ordering::Relaxed);
         (
             LoadedProgramsForTxBatch {
                 entries: found,
@@ -592,6 +657,14 @@ impl LoadedPrograms {
         for (id, program) in remove {
             if let Some(entries) = self.entries.get_mut(id) {
                 if let Some(candidate) = entries.iter_mut().find(|entry| entry == &program) {
+                    if candidate.usage_counter.load(Ordering::Relaxed) == 1 {
+                        self.stats.one_hit_wonders.fetch_add(1, Ordering::Relaxed);
+                    }
+                    self.stats
+                        .evictions
+                        .entry(*id)
+                        .and_modify(|c| saturating_add_assign!(*c, 1))
+                        .or_insert(1);
                     *candidate = Arc::new(candidate.to_unloaded());
                 }
             }
