@@ -582,7 +582,7 @@ impl LoadedPrograms {
 
     pub fn unload_all_programs(&mut self) {
         let keys = self.entries.keys().copied().collect::<Vec<Pubkey>>();
-        keys.iter().for_each(|key| self.unload_program(&key));
+        keys.iter().for_each(|key| self.unload_program(key));
     }
 
     fn unload_program_entries<'a>(
