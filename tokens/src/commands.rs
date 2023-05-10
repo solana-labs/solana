@@ -21,7 +21,7 @@ use {
     solana_rpc_client_api::{
         client_error::{Error as ClientError, Result as ClientResult},
         config::RpcSendTransactionConfig,
-        request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+        request::{MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_MULTIPLE_ACCOUNTS},
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
@@ -297,7 +297,27 @@ fn build_messages(
     stake_extras: &mut StakeExtras,
     created_accounts: &mut u64,
 ) -> Result<(), Error> {
-    for allocation in allocations.iter() {
+    let mut existing_associated_token_accounts = vec![];
+    if let Some(spl_token_args) = &args.spl_token_args {
+        let allocation_chunks = allocations.chunks(MAX_MULTIPLE_ACCOUNTS);
+        for allocation_chunk in allocation_chunks {
+            let associated_token_addresses = allocation_chunk
+                .iter()
+                .map(|x| {
+                    let wallet_address = x.recipient.parse().unwrap();
+                    let associated_token_address = get_associated_token_address(
+                        &wallet_address,
+                        &spl_token_pubkey(&spl_token_args.mint),
+                    );
+                    pubkey_from_spl_token(&associated_token_address)
+                })
+                .collect::<Vec<_>>();
+            let mut maybe_accounts = client.get_multiple_accounts(&associated_token_addresses)?;
+            existing_associated_token_accounts.append(&mut maybe_accounts);
+        }
+    }
+
+    for (i, allocation) in allocations.iter().enumerate() {
         if exit.load(Ordering::SeqCst) {
             db.dump()?;
             return Err(Error::ExitSignal);
@@ -311,14 +331,8 @@ fn build_messages(
 
         let do_create_associated_token_account = if let Some(spl_token_args) = &args.spl_token_args
         {
-            let wallet_address = allocation.recipient.parse().unwrap();
-            let associated_token_address = get_associated_token_address(
-                &wallet_address,
-                &spl_token_pubkey(&spl_token_args.mint),
-            );
-            let do_create_associated_token_account = client
-                .get_multiple_accounts(&[pubkey_from_spl_token(&associated_token_address)])?[0]
-                .is_none();
+            let do_create_associated_token_account =
+                existing_associated_token_accounts[i].is_none();
             if do_create_associated_token_account {
                 *created_accounts += 1;
             }
