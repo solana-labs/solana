@@ -1,7 +1,7 @@
 use {
     crate::{
         accounts::Accounts,
-        accounts_db::AccountStorageEntry,
+        accounts_db::{AccountStorageEntry, IncludeSlotInHash, INCLUDE_SLOT_IN_HASH_TESTS},
         accounts_hash::{AccountsHash, AccountsHashEnum},
         bank::Bank,
         epoch_accounts_hash::EpochAccountsHash,
@@ -41,6 +41,7 @@ pub struct AccountsPackage {
     /// The instant this accounts package was send to the queue.
     /// Used to track how long accounts packages wait before processing.
     pub enqueued: Instant,
+    pub include_slot_in_hash: IncludeSlotInHash,
 }
 
 impl AccountsPackage {
@@ -133,6 +134,7 @@ impl AccountsPackage {
             is_incremental_accounts_hash_feature_enabled,
             snapshot_info,
             enqueued: Instant::now(),
+            include_slot_in_hash: bank.include_slot_in_hash(),
         }
     }
 
@@ -159,6 +161,7 @@ impl AccountsPackage {
                 epoch_accounts_hash: Option::default(),
             }),
             enqueued: Instant::now(),
+            include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
         }
     }
 

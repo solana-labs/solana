@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_db::{AccountStorageEntry, PUBKEY_BINS_FOR_CALCULATING_HASHES},
+        accounts_db::{AccountStorageEntry, IncludeSlotInHash, PUBKEY_BINS_FOR_CALCULATING_HASHES},
         ancestors::Ancestors,
         rent_collector::RentCollector,
     },
@@ -101,7 +101,6 @@ pub struct CalcAccountsHashConfig<'a> {
     /// true to use a thread pool dedicated to bg operations
     pub use_bg_thread_pool: bool,
     /// verify every hash in append vec/write cache with a recalculated hash
-    /// this option will be removed
     pub check_hash: bool,
     /// 'ancestors' is used to get storages
     pub ancestors: Option<&'a Ancestors>,
@@ -111,6 +110,7 @@ pub struct CalcAccountsHashConfig<'a> {
     pub rent_collector: &'a RentCollector,
     /// used for tracking down hash mismatches after the fact
     pub store_detailed_debug_info_on_failure: bool,
+    pub include_slot_in_hash: IncludeSlotInHash,
 }
 
 // smallest, 3 quartiles, largest, average

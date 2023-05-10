@@ -5508,6 +5508,7 @@ mod tests {
                     epoch_schedule: deserialized_bank.epoch_schedule(),
                     rent_collector: deserialized_bank.rent_collector(),
                     store_detailed_debug_info_on_failure: false,
+                    include_slot_in_hash: bank.include_slot_in_hash(),
                 },
                 &SortedStorages::new(&other_incremental_snapshot_storages),
                 HashStats::default(),
