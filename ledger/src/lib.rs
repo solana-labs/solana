@@ -14,6 +14,8 @@ pub mod blockstore_meta;
 pub mod blockstore_metrics;
 pub mod blockstore_options;
 pub mod blockstore_processor;
+pub mod entry_notifier_interface;
+pub mod entry_notifier_service;
 pub mod genesis_utils;
 pub mod leader_schedule;
 pub mod leader_schedule_cache;

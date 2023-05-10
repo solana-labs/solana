@@ -11,8 +11,8 @@ use {
     },
     crossbeam_channel::Receiver,
     log::*,
+    solana_ledger::entry_notifier_interface::EntryNotifierLock,
     solana_rpc::{
-        entry_notifier_interface::EntryNotifierLock,
         optimistically_confirmed_bank_tracker::SlotNotification,
         transaction_notifier_interface::TransactionNotifierLock,
     },

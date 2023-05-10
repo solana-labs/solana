@@ -51,6 +51,8 @@ use {
         },
         blockstore_options::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
         blockstore_processor::{self, TransactionStatusSender},
+        entry_notifier_interface::EntryNotifierLock,
+        entry_notifier_service::{EntryNotifierSender, EntryNotifierService},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
     },
@@ -422,6 +424,7 @@ pub struct Validator {
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
     cache_block_meta_service: Option<CacheBlockMetaService>,
+    entry_notifier_service: Option<EntryNotifierService>,
     system_monitor_service: Option<SystemMonitorService>,
     sample_performance_service: Option<SamplePerformanceService>,
     poh_timing_report_service: PohTimingReportService,
@@ -584,14 +587,21 @@ impl Validator {
             .as_ref()
             .and_then(|geyser_plugin_service| geyser_plugin_service.get_transaction_notifier());
 
+        let entry_notifier = geyser_plugin_service
+            .as_ref()
+            .and_then(|geyser_plugin_service| geyser_plugin_service.get_entry_notifier());
+
         let block_metadata_notifier = geyser_plugin_service
             .as_ref()
             .and_then(|geyser_plugin_service| geyser_plugin_service.get_block_metadata_notifier());
 
         info!(
-            "Geyser plugin: accounts_update_notifier: {} transaction_notifier: {}",
+            "Geyser plugin: accounts_update_notifier: {}, \
+            transaction_notifier: {}, \
+            entry_notifier: {}",
             accounts_update_notifier.is_some(),
-            transaction_notifier.is_some()
+            transaction_notifier.is_some(),
+            entry_notifier.is_some()
         );
 
         let system_monitor_service = Some(SystemMonitorService::new(
@@ -630,6 +640,7 @@ impl Validator {
             blockstore_process_options,
             blockstore_root_scan,
             pruned_banks_receiver,
+            entry_notifier_service,
         ) = load_blockstore(
             config,
             ledger_path,
@@ -637,6 +648,7 @@ impl Validator {
             &start_progress,
             accounts_update_notifier,
             transaction_notifier,
+            entry_notifier,
             Some(poh_timing_point_sender.clone()),
         )?;
 
@@ -751,6 +763,9 @@ impl Validator {
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
+        let entry_notification_sender = entry_notifier_service
+            .as_ref()
+            .map(|service| service.sender());
         let mut process_blockstore = ProcessBlockStore::new(
             &id,
             vote_account,
@@ -762,6 +777,7 @@ impl Validator {
             &blockstore_process_options,
             transaction_status_sender.as_ref(),
             cache_block_meta_sender.clone(),
+            entry_notification_sender,
             blockstore_root_scan,
             accounts_background_request_sender.clone(),
             config,
@@ -1074,6 +1090,9 @@ impl Validator {
             info!("Disabled banking tracer");
         }
 
+        let entry_notification_sender = entry_notifier_service
+            .as_ref()
+            .map(|service| service.sender_cloned());
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -1100,6 +1119,7 @@ impl Validator {
             transaction_status_sender.clone(),
             rewards_recorder_sender,
             cache_block_meta_sender,
+            entry_notification_sender.clone(),
             vote_tracker.clone(),
             retransmit_slots_sender,
             gossip_verified_vote_hash_receiver,
@@ -1141,6 +1161,7 @@ impl Validator {
             },
             &rpc_subscriptions,
             transaction_status_sender,
+            entry_notification_sender,
             &blockstore,
             &config.broadcast_stage_type,
             &exit,
@@ -1183,6 +1204,7 @@ impl Validator {
             transaction_status_service,
             rewards_recorder_service,
             cache_block_meta_service,
+            entry_notifier_service,
             system_monitor_service,
             sample_performance_service,
             poh_timing_report_service,
@@ -1297,6 +1319,12 @@ impl Validator {
             sample_performance_service
                 .join()
                 .expect("sample_performance_service");
+        }
+
+        if let Some(entry_notifier_service) = self.entry_notifier_service {
+            entry_notifier_service
+                .join()
+                .expect("entry_notifier_service");
         }
 
         if let Some(s) = self.snapshot_packager_service {
@@ -1488,6 +1516,7 @@ fn load_blockstore(
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
+    entry_notifier: Option<EntryNotifierLock>,
     poh_timing_point_sender: Option<PohTimingSender>,
 ) -> Result<
     (
@@ -1503,6 +1532,7 @@ fn load_blockstore(
         blockstore_processor::ProcessOptions,
         BlockstoreRootScan,
         DroppedSlotsReceiver,
+        Option<EntryNotifierService>,
     ),
     String,
 > {
@@ -1580,6 +1610,9 @@ fn load_blockstore(
             TransactionHistoryServices::default()
         };
 
+    let entry_notifier_service =
+        entry_notifier.map(|entry_notifier| EntryNotifierService::new(entry_notifier, exit));
+
     let (bank_forks, mut leader_schedule_cache, starting_snapshot_hashes) =
         bank_forks_utils::load_bank_forks(
             &genesis_config,
@@ -1591,6 +1624,9 @@ fn load_blockstore(
             transaction_history_services
                 .cache_block_meta_sender
                 .as_ref(),
+            entry_notifier_service
+                .as_ref()
+                .map(|service| service.sender()),
             accounts_update_notifier,
             exit,
         );
@@ -1643,6 +1679,7 @@ fn load_blockstore(
         process_options,
         blockstore_root_scan,
         pruned_banks_receiver,
+        entry_notifier_service,
     ))
 }
 
@@ -1657,6 +1694,7 @@ pub struct ProcessBlockStore<'a> {
     process_options: &'a blockstore_processor::ProcessOptions,
     transaction_status_sender: Option<&'a TransactionStatusSender>,
     cache_block_meta_sender: Option<CacheBlockMetaSender>,
+    entry_notification_sender: Option<&'a EntryNotifierSender>,
     blockstore_root_scan: Option<BlockstoreRootScan>,
     accounts_background_request_sender: AbsRequestSender,
     config: &'a ValidatorConfig,
@@ -1676,6 +1714,7 @@ impl<'a> ProcessBlockStore<'a> {
         process_options: &'a blockstore_processor::ProcessOptions,
         transaction_status_sender: Option<&'a TransactionStatusSender>,
         cache_block_meta_sender: Option<CacheBlockMetaSender>,
+        entry_notification_sender: Option<&'a EntryNotifierSender>,
         blockstore_root_scan: BlockstoreRootScan,
         accounts_background_request_sender: AbsRequestSender,
         config: &'a ValidatorConfig,
@@ -1691,6 +1730,7 @@ impl<'a> ProcessBlockStore<'a> {
             process_options,
             transaction_status_sender,
             cache_block_meta_sender,
+            entry_notification_sender,
             blockstore_root_scan: Some(blockstore_root_scan),
             accounts_background_request_sender,
             config,
@@ -1728,6 +1768,7 @@ impl<'a> ProcessBlockStore<'a> {
                 self.process_options,
                 self.transaction_status_sender,
                 self.cache_block_meta_sender.as_ref(),
+                self.entry_notification_sender,
                 &self.accounts_background_request_sender,
             ) {
                 exit.store(true, Ordering::Relaxed);

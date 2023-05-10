@@ -1,8 +1,8 @@
 use {
     crate::{
         block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
-        blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
-        token_balances::collect_token_balances,
+        blockstore_meta::SlotMeta, entry_notifier_service::EntryNotifierSender,
+        leader_schedule_cache::LeaderScheduleCache, token_balances::collect_token_balances,
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
     crossbeam_channel::Sender,
@@ -677,6 +677,7 @@ pub fn test_process_blockstore(
         opts,
         None,
         None,
+        None,
         exit,
     );
 
@@ -685,6 +686,7 @@ pub fn test_process_blockstore(
         &bank_forks,
         &leader_schedule_cache,
         opts,
+        None,
         None,
         None,
         &abs_request_sender,
@@ -703,6 +705,7 @@ pub(crate) fn process_blockstore_for_bank_0(
     account_paths: Vec<PathBuf>,
     opts: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    entry_notification_sender: Option<&EntryNotifierSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> Arc<RwLock<BankForks>> {
@@ -729,6 +732,7 @@ pub(crate) fn process_blockstore_for_bank_0(
         opts,
         &VerifyRecyclers::default(),
         cache_block_meta_sender,
+        entry_notification_sender,
     );
     bank_forks
 }
@@ -742,6 +746,7 @@ pub fn process_blockstore_from_root(
     opts: &ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    entry_notification_sender: Option<&EntryNotifierSender>,
     accounts_background_request_sender: &AbsRequestSender,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let (start_slot, start_slot_hash) = {
@@ -791,6 +796,7 @@ pub fn process_blockstore_from_root(
             opts,
             transaction_status_sender,
             cache_block_meta_sender,
+            entry_notification_sender,
             &mut timing,
             accounts_background_request_sender,
         )?
@@ -896,6 +902,7 @@ fn confirm_full_slot(
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
     transaction_status_sender: Option<&TransactionStatusSender>,
+    entry_notification_sender: Option<&EntryNotifierSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timing: &mut ExecuteTimings,
 ) -> result::Result<(), BlockstoreProcessorError> {
@@ -910,6 +917,7 @@ fn confirm_full_slot(
         progress,
         skip_verification,
         transaction_status_sender,
+        entry_notification_sender,
         replay_vote_sender,
         recyclers,
         opts.allow_dead_slots,
@@ -1055,6 +1063,7 @@ pub fn confirm_slot(
     progress: &mut ConfirmationProgress,
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
+    entry_notification_sender: Option<&EntryNotifierSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
@@ -1084,6 +1093,7 @@ pub fn confirm_slot(
         progress,
         skip_verification,
         transaction_status_sender,
+        entry_notification_sender,
         replay_vote_sender,
         recyclers,
         log_messages_bytes_limit,
@@ -1099,6 +1109,7 @@ fn confirm_slot_entries(
     progress: &mut ConfirmationProgress,
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
+    _entry_notification_sender: Option<&EntryNotifierSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
@@ -1281,6 +1292,7 @@ fn process_bank_0(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    entry_notification_sender: Option<&EntryNotifierSender>,
 ) {
     assert_eq!(bank0.slot(), 0);
     let mut progress = ConfirmationProgress::new(bank0.last_blockhash());
@@ -1291,6 +1303,7 @@ fn process_bank_0(
         recyclers,
         &mut progress,
         None,
+        entry_notification_sender,
         None,
         &mut ExecuteTimings::default(),
     )
@@ -1371,6 +1384,7 @@ fn load_frozen_forks(
     opts: &ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    entry_notification_sender: Option<&EntryNotifierSender>,
     timing: &mut ExecuteTimings,
     accounts_background_request_sender: &AbsRequestSender,
 ) -> result::Result<(u64, usize), BlockstoreProcessorError> {
@@ -1458,6 +1472,7 @@ fn load_frozen_forks(
                 &mut progress,
                 transaction_status_sender,
                 cache_block_meta_sender,
+                entry_notification_sender,
                 None,
                 timing,
             )
@@ -1648,6 +1663,7 @@ fn supermajority_root_from_vote_accounts(
 
 // Processes and replays the contents of a single slot, returns Error
 // if failed to play the slot
+#[allow(clippy::too_many_arguments)]
 fn process_single_slot(
     blockstore: &Blockstore,
     bank: &Arc<Bank>,
@@ -1656,6 +1672,7 @@ fn process_single_slot(
     progress: &mut ConfirmationProgress,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    entry_notification_sender: Option<&EntryNotifierSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timing: &mut ExecuteTimings,
 ) -> result::Result<(), BlockstoreProcessorError> {
@@ -1668,6 +1685,7 @@ fn process_single_slot(
         recyclers,
         progress,
         transaction_status_sender,
+        entry_notification_sender,
         replay_vote_sender,
         timing,
     )
@@ -3384,7 +3402,7 @@ pub mod tests {
                 vec![entry_1, tick, entry_2.clone()],
                 true,
                 None,
-                None
+                None,
             ),
             Ok(())
         );
@@ -3562,7 +3580,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let recyclers = VerifyRecyclers::default();
-        process_bank_0(&bank0, &blockstore, &opts, &recyclers, None);
+        process_bank_0(&bank0, &blockstore, &opts, &recyclers, None, None);
         let bank1 = bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
         confirm_full_slot(
             &blockstore,
@@ -3570,6 +3588,7 @@ pub mod tests {
             &opts,
             &recyclers,
             &mut ConfirmationProgress::new(bank0.last_blockhash()),
+            None,
             None,
             None,
             &mut ExecuteTimings::default(),
@@ -3590,6 +3609,7 @@ pub mod tests {
             &bank_forks,
             &leader_schedule_cache,
             &opts,
+            None,
             None,
             None,
             &AbsRequestSender::default(),
@@ -4214,6 +4234,7 @@ pub mod tests {
             false,
             None,
             None,
+            None,
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
@@ -4357,6 +4378,7 @@ pub mod tests {
             false,
             Some(&transaction_status_sender),
             None,
+            None,
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
@@ -4401,6 +4423,7 @@ pub mod tests {
             &mut progress,
             false,
             Some(&transaction_status_sender),
+            None,
             None,
             &VerifyRecyclers::default(),
             None,
