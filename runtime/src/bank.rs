@@ -4053,11 +4053,11 @@ impl Bank {
     }
 
     /// Unload a program from the bank's cache
-    fn unload_program(&self, pubkey: &Pubkey) {
+    fn remove_program_from_cache(&self, pubkey: &Pubkey) {
         self.loaded_programs_cache
             .write()
             .unwrap()
-            .unload_program(pubkey);
+            .remove_programs([*pubkey].into_iter());
     }
 
     fn program_modification_slot(&self, pubkey: &Pubkey) -> Result<Slot> {
@@ -7577,7 +7577,7 @@ impl Bank {
                 // Clear new account
                 self.store_account(new_address, &AccountSharedData::default());
 
-                self.unload_program(old_address);
+                self.remove_program_from_cache(old_address);
 
                 self.calculate_and_update_accounts_data_size_delta_off_chain(
                     old_account.data().len(),

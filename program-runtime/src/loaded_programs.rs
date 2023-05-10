@@ -570,7 +570,7 @@ impl LoadedPrograms {
         }
     }
 
-    pub fn unload_program(&mut self, id: &Pubkey) {
+    fn unload_program(&mut self, id: &Pubkey) {
         if let Some(entries) = self.entries.get_mut(id) {
             entries.iter_mut().for_each(|entry| {
                 if entry.is_loaded() {
