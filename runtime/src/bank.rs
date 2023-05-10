@@ -56,7 +56,7 @@ use {
         ancestors::{Ancestors, AncestorsForSerialization},
         bank::metrics::*,
         blockhash_queue::BlockhashQueue,
-        builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
+        builtins::{self, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
@@ -7260,7 +7260,7 @@ impl Bank {
         !self.is_delta.load(Relaxed)
     }
 
-    /// Add an instruction processor to intercept instructions before the dynamic loader.
+    /// Add a built-in program
     pub fn add_builtin(&mut self, program_id: Pubkey, builtin: Arc<LoadedProgram>) {
         let name = match &builtin.program {
             LoadedProgramType::Builtin(name, _) => name,
@@ -7283,19 +7283,18 @@ impl Bank {
         debug!("Added program {} under {:?}", name, program_id);
     }
 
-    /// Remove a builtin instruction processor if it already exists
-    pub fn remove_builtin(&mut self, program_id: &Pubkey) {
+    /// Remove a built-in instruction processor
+    pub fn remove_builtin(&mut self, program_id: Pubkey) {
         debug!("Removing program {}", program_id);
         // Don't remove the account since the bank expects the account state to
         // be idempotent
-        if let Some(position) = self
-            .builtin_programs
-            .vec
-            .iter()
-            .position(|entry| entry.0 == *program_id)
-        {
-            self.builtin_programs.vec.remove(position);
-        }
+        self.add_builtin(
+            program_id,
+            Arc::new(LoadedProgram::new_tombstone(
+                self.slot,
+                LoadedProgramType::Closed,
+            )),
+        );
         debug!("Removed program {}", program_id);
     }
 
@@ -7520,25 +7519,17 @@ impl Bank {
         new_feature_activations: &HashSet<Pubkey>,
     ) {
         let feature_set = self.feature_set.clone();
-        let should_apply_action_for_feature_transition = |feature_id: &Pubkey| -> bool {
-            if only_apply_transitions_for_new_features {
-                new_feature_activations.contains(feature_id)
-            } else {
-                feature_set.is_active(feature_id)
-            }
-        };
 
         let builtin_feature_transitions = self.builtin_feature_transitions.clone();
         for transition in builtin_feature_transitions.iter() {
-            if let Some(builtin_action) =
-                transition.to_action(&should_apply_action_for_feature_transition)
-            {
-                match builtin_action {
-                    BuiltinAction::Add(program_id, builtin) => {
-                        self.add_builtin(program_id, builtin)
-                    }
-                    BuiltinAction::Remove(program_id) => self.remove_builtin(&program_id),
-                }
+            let should_apply_action_for_feature_transition =
+                if only_apply_transitions_for_new_features {
+                    new_feature_activations.contains(&transition.feature_id)
+                } else {
+                    feature_set.is_active(&transition.feature_id)
+                };
+            if should_apply_action_for_feature_transition {
+                self.add_builtin(transition.program_id, transition.builtin.clone());
             }
         }
 
