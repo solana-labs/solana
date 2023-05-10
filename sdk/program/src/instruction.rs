@@ -14,7 +14,9 @@
 #![allow(clippy::integer_arithmetic)]
 
 use {
-    crate::{pubkey::Pubkey, sanitize::Sanitize, short_vec, wasm_bindgen},
+    crate::{
+        account_info::AccountInfo, pubkey::Pubkey, sanitize::Sanitize, short_vec, wasm_bindgen,
+    },
     bincode::serialize,
     borsh::BorshSerialize,
     serde::Serialize,
@@ -615,6 +617,16 @@ impl AccountMeta {
             pubkey,
             is_signer,
             is_writable: false,
+        }
+    }
+}
+
+impl From<&AccountInfo<'_>> for AccountMeta {
+    fn from(account_info: &AccountInfo<'_>) -> Self {
+        Self {
+            pubkey: *account_info.key,
+            is_signer: account_info.is_signer,
+            is_writable: account_info.is_writable,
         }
     }
 }
