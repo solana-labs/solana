@@ -63,8 +63,10 @@ pull_request_rules:
         method: squash
   - name: remove automerge label on CI failure
     conditions:
-      - label=automerge
-      - "#status-failure!=0"
+      - and:
+        - label=automerge
+        - "#status-failure!=0"
+        - -merged
     actions:
       label:
         remove:
