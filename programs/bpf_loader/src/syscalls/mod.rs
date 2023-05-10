@@ -185,7 +185,6 @@ pub fn create_loader<'a>(
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
-    let is_abi_v2 = false;
 
     let mut result = BuiltInProgram::new_loader(config);
 
@@ -268,49 +267,46 @@ pub fn create_loader<'a>(
     result.register_function_by_name("sol_memcmp_", SyscallMemcmp::call)?;
     result.register_function_by_name("sol_memset_", SyscallMemset::call)?;
 
-    if !is_abi_v2 {
-        // Processed sibling instructions
-        result.register_function_by_name(
-            "sol_get_processed_sibling_instruction",
-            SyscallGetProcessedSiblingInstruction::call,
-        )?;
+    // Processed sibling instructions
+    result.register_function_by_name(
+        "sol_get_processed_sibling_instruction",
+        SyscallGetProcessedSiblingInstruction::call,
+    )?;
 
-        // Stack height
-        result.register_function_by_name("sol_get_stack_height", SyscallGetStackHeight::call)?;
+    // Stack height
+    result.register_function_by_name("sol_get_stack_height", SyscallGetStackHeight::call)?;
 
-        // Return data
-        result.register_function_by_name("sol_set_return_data", SyscallSetReturnData::call)?;
-        result.register_function_by_name("sol_get_return_data", SyscallGetReturnData::call)?;
+    // Return data
+    result.register_function_by_name("sol_set_return_data", SyscallSetReturnData::call)?;
+    result.register_function_by_name("sol_get_return_data", SyscallGetReturnData::call)?;
 
-        // Cross-program invocation
-        result.register_function_by_name("sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
-        result
-            .register_function_by_name("sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
+    // Cross-program invocation
+    result.register_function_by_name("sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
+    result.register_function_by_name("sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
 
-        // Memory allocator
-        register_feature_gated_function!(
-            result,
-            !disable_deploy_of_alloc_free_syscall,
-            "sol_alloc_free_",
-            SyscallAllocFree::call,
-        )?;
+    // Memory allocator
+    register_feature_gated_function!(
+        result,
+        !disable_deploy_of_alloc_free_syscall,
+        "sol_alloc_free_",
+        SyscallAllocFree::call,
+    )?;
 
-        // Alt_bn128
-        register_feature_gated_function!(
-            result,
-            enable_alt_bn128_syscall,
-            "sol_alt_bn128_group_op",
-            SyscallAltBn128::call,
-        )?;
+    // Alt_bn128
+    register_feature_gated_function!(
+        result,
+        enable_alt_bn128_syscall,
+        "sol_alt_bn128_group_op",
+        SyscallAltBn128::call,
+    )?;
 
-        // Big_mod_exp
-        register_feature_gated_function!(
-            result,
-            enable_big_mod_exp_syscall,
-            "sol_big_mod_exp",
-            SyscallBigModExp::call,
-        )?;
-    }
+    // Big_mod_exp
+    register_feature_gated_function!(
+        result,
+        enable_big_mod_exp_syscall,
+        "sol_big_mod_exp",
+        SyscallBigModExp::call,
+    )?;
 
     // Log data
     result.register_function_by_name("sol_log_data", SyscallLogData::call)?;
