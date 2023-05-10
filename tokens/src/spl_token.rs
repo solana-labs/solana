@@ -1,7 +1,7 @@
 use {
     crate::{
         args::{DistributeTokensArgs, SplTokenArgs},
-        commands::{get_fees_for_messages, Allocation, Error, FundingSource},
+        commands::{get_fee_estimate_for_messages, Allocation, Error, FundingSource},
     },
     console::style,
     solana_account_decoder::parse_token::{
@@ -96,7 +96,7 @@ pub fn check_spl_token_balances(
         .as_ref()
         .expect("spl_token_args must be some");
     let allocation_amount: u64 = allocations.iter().map(|x| x.amount).sum();
-    let fees = get_fees_for_messages(messages, client)?;
+    let fees = get_fee_estimate_for_messages(messages, client)?;
 
     let token_account_rent_exempt_balance =
         client.get_minimum_balance_for_rent_exemption(SplTokenAccount::LEN)?;
