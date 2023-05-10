@@ -249,10 +249,9 @@ impl Consumer {
         slot_metrics_tracker
             .increment_retryable_packets_filtered_count(retryable_packets_filtered_count as u64);
 
-        inc_new_counter_info!(
-            "banking_stage-dropped_tx_before_forwarding",
-            retryable_packets_filtered_count
-        );
+        banking_stage_stats
+            .dropped_forward_packets_count
+            .fetch_add(retryable_packets_filtered_count, Ordering::Relaxed);
 
         process_transactions_summary.retryable_transaction_indexes =
             filtered_retryable_transaction_indexes;

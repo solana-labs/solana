@@ -86,6 +86,10 @@ impl Forwarder {
                 filter_forwarding_result.total_filter_packets_us,
                 Ordering::Relaxed,
             );
+        banking_stage_stats.dropped_forward_packets_count.fetch_add(
+            filter_forwarding_result.total_dropped_packets,
+            Ordering::Relaxed,
+        );
 
         forward_packet_batches_by_accounts
             .iter_batches()
