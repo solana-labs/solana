@@ -16,7 +16,6 @@
 use {
     crate::encryption::{
         discrete_log::DiscreteLog,
-        errors::ElGamalError,
         pedersen::{Pedersen, PedersenCommitment, PedersenOpening, G, H},
     },
     core::ops::{Add, Mul, Sub},
@@ -39,6 +38,7 @@ use {
     },
     std::convert::TryInto,
     subtle::{Choice, ConstantTimeEq},
+    thiserror::Error,
     zeroize::Zeroize,
 };
 #[cfg(not(target_os = "solana"))]
@@ -51,6 +51,12 @@ use {
         path::Path,
     },
 };
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum ElGamalError {
+    #[error("key derivation method not supported")]
+    DerivationMethodNotSupported,
+}
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
 pub struct ElGamal;
