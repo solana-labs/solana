@@ -2,7 +2,7 @@
 
 #[repr(u8)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum LoaderV3Instruction {
+pub enum LoaderV4Instruction {
     /// Write ELF data into an undeployed program account.
     ///
     /// Writing at the end (offset is length) increases the size of the program account and

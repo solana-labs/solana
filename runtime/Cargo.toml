@@ -50,7 +50,7 @@ solana-compute-budget-program = { workspace = true }
 solana-config-program = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
-solana-loader-v3-program = { workspace = true }
+solana-loader-v4-program = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
 solana-perf = { workspace = true }

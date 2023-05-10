@@ -59,7 +59,7 @@ members = [
     "programs/compute-budget",
     "programs/config",
     "programs/ed25519-tests",
-    "programs/loader-v3",
+    "programs/loader-v4",
     "programs/stake",
     "programs/system",
     "programs/vote",
@@ -319,7 +319,7 @@ solana-genesis-utils = { path = "genesis-utils", version = "=1.16.0" }
 solana-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=1.16.0" }
 solana-geyser-plugin-manager = { path = "geyser-plugin-manager", version = "=1.16.0" }
 solana-gossip = { path = "gossip", version = "=1.16.0" }
-solana-loader-v3-program = { path = "programs/loader-v3", version = "=1.16.0" }
+solana-loader-v4-program = { path = "programs/loader-v4", version = "=1.16.0" }
 solana-ledger = { path = "ledger", version = "=1.16.0" }
 solana-local-cluster = { path = "local-cluster", version = "=1.16.0" }
 solana-logger = { path = "logger", version = "=1.16.0" }
