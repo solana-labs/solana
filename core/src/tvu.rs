@@ -40,6 +40,7 @@ use {
         entry_notifier_service::EntryNotifierSender, leader_schedule_cache::LeaderScheduleCache,
     },
     solana_poh::poh_recorder::PohRecorder,
+    solana_quic_client::QuicConnectionCache,
     solana_rpc::{
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSenderConfig,
         rpc_subscriptions::RpcSubscriptions,
@@ -141,6 +142,7 @@ impl Tvu {
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         banking_tracer: Arc<BankingTracer>,
         staked_nodes: Arc<RwLock<StakedNodes>>,
+        quic_connection_cache: Arc<QuicConnectionCache>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -188,6 +190,7 @@ impl Tvu {
             leader_schedule_cache.clone(),
             cluster_info.clone(),
             Arc::new(retransmit_sockets),
+            quic_connection_cache,
             retransmit_receiver,
             max_slots.clone(),
             Some(rpc_subscriptions.clone()),
@@ -374,6 +377,7 @@ impl Tvu {
 pub mod tests {
     use {
         super::*,
+        crate::validator::TURBINE_QUIC_CONNECTION_POOL_SIZE,
         serial_test::serial,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
@@ -387,7 +391,10 @@ pub mod tests {
         solana_runtime::bank::Bank,
         solana_sdk::signature::{Keypair, Signer},
         solana_streamer::socket::SocketAddrSpace,
-        std::sync::atomic::{AtomicU64, Ordering},
+        std::{
+            net::{IpAddr, Ipv4Addr},
+            sync::atomic::{AtomicU64, Ordering},
+        },
     };
 
     #[ignore]
@@ -404,12 +411,20 @@ pub mod tests {
 
         let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
 
-        //start cluster_info1
-        let cluster_info1 = ClusterInfo::new(
-            target1.info.clone(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
+        let keypair = Arc::new(Keypair::new());
+        let quic_connection_cache = Arc::new(
+            solana_quic_client::new_quic_connection_cache(
+                "connection_cache_test",
+                &keypair,
+                IpAddr::V4(Ipv4Addr::LOCALHOST),
+                &Arc::<RwLock<StakedNodes>>::default(),
+                TURBINE_QUIC_CONNECTION_POOL_SIZE,
+            )
+            .unwrap(),
         );
+        //start cluster_info1
+        let cluster_info1 =
+            ClusterInfo::new(target1.info.clone(), keypair, SocketAddrSpace::Unspecified);
         cluster_info1.insert_info(leader.info);
         let cref1 = Arc::new(cluster_info1);
 
@@ -491,6 +506,7 @@ pub mod tests {
             &ignored_prioritization_fee_cache,
             BankingTracer::new_disabled(),
             Arc::<RwLock<StakedNodes>>::default(),
+            quic_connection_cache,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);
