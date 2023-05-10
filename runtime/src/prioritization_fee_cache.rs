@@ -212,7 +212,7 @@ impl PrioritizationFeeCache {
                         continue;
                     }
 
-                    let round_compute_unit_price_enabled = false; // TODO: bank.feture_set.is_active(...)
+                    let round_compute_unit_price_enabled = false; // TODO: bank.feture_set.is_active(round_compute_unit_price)
                     let priority_details = sanitized_transaction
                         .get_transaction_priority_details(round_compute_unit_price_enabled);
                     let account_locks = sanitized_transaction

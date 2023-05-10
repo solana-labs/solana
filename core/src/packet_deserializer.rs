@@ -53,7 +53,8 @@ impl PacketDeserializer {
     ) -> Result<ReceivePacketResults, RecvTimeoutError> {
         let (packet_count, packet_batches) = self.receive_until(recv_timeout, capacity)?;
 
-        // get current root bank to get feature gate status
+        // Note: this can be removed after feature `round_compute_unit_price` is activated in
+        // mainnet-beta
         let _working_bank = self.bank_forks.read().unwrap().working_bank();
         let round_compute_unit_price_enabled = false; // TODO get from working_bank.feature_set
 
