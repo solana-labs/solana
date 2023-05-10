@@ -266,6 +266,29 @@ pub enum SlotStateUpdate {
 }
 
 impl SlotStateUpdate {
+    fn into_state_changes(self, slot: Slot) -> Vec<ResultingStateChange> {
+        let bank_frozen_hash = self.bank_hash();
+        if bank_frozen_hash.is_none() {
+            // If the bank hasn't been frozen yet, then there's nothing to do
+            // since replay of the slot hasn't finished yet.
+            return vec![];
+        }
+
+        match self {
+            SlotStateUpdate::Dead(dead_state) => on_dead_slot(slot, dead_state),
+            SlotStateUpdate::BankFrozen(bank_frozen_state) => {
+                on_frozen_slot(slot, bank_frozen_state)
+            }
+            SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state) => {
+                on_duplicate_confirmed(slot, duplicate_confirmed_state)
+            }
+            SlotStateUpdate::Duplicate(duplicate_state) => on_duplicate(duplicate_state),
+            SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state) => {
+                on_epoch_slots_frozen(slot, epoch_slots_frozen_state)
+            }
+        }
+    }
+
     fn bank_hash(&self) -> Option<Hash> {
         match self {
             SlotStateUpdate::BankFrozen(bank_frozen_state) => Some(bank_frozen_state.frozen_hash),
@@ -295,31 +318,6 @@ pub enum ResultingStateChange {
     // Hash of our current frozen version of the slot
     DuplicateConfirmedSlotMatchesCluster(Hash),
     SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate),
-}
-
-impl SlotStateUpdate {
-    fn into_state_changes(self, slot: Slot) -> Vec<ResultingStateChange> {
-        let bank_frozen_hash = self.bank_hash();
-        if bank_frozen_hash.is_none() {
-            // If the bank hasn't been frozen yet, then there's nothing to do
-            // since replay of the slot hasn't finished yet.
-            return vec![];
-        }
-
-        match self {
-            SlotStateUpdate::Dead(dead_state) => on_dead_slot(slot, dead_state),
-            SlotStateUpdate::BankFrozen(bank_frozen_state) => {
-                on_frozen_slot(slot, bank_frozen_state)
-            }
-            SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state) => {
-                on_duplicate_confirmed(slot, duplicate_confirmed_state)
-            }
-            SlotStateUpdate::Duplicate(duplicate_state) => on_duplicate(duplicate_state),
-            SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state) => {
-                on_epoch_slots_frozen(slot, epoch_slots_frozen_state)
-            }
-        }
-    }
 }
 
 fn check_duplicate_confirmed_hash_against_frozen_hash(
