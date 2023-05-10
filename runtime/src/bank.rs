@@ -101,7 +101,7 @@ use {
         },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
-        timings::{ExecuteTimingType, ExecuteTimings},
+        timings::{ExecuteDetailsTimings, ExecuteTimingType, ExecuteTimings},
     },
     solana_sdk::{
         account::{
@@ -1626,6 +1626,13 @@ impl Bank {
                 fill_sysvar_cache_time_us,
             },
         );
+
+        parent
+            .loaded_programs_cache
+            .read()
+            .unwrap()
+            .stats
+            .submit(parent.slot());
 
         new
     }
@@ -4155,7 +4162,11 @@ impl Bank {
             programdata.as_ref().unwrap_or(&program),
             debugging_features,
         )
-        .map(|(loaded_program, _create_executor_metrics)| loaded_program)
+        .map(|(loaded_program, metrics)| {
+            let mut timings = ExecuteDetailsTimings::default();
+            metrics.submit_datapoint(&mut timings);
+            loaded_program
+        })
         .map_err(|err| TransactionError::InstructionError(0, err))
     }
 

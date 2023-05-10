@@ -150,7 +150,7 @@ pub fn load_program_from_account(
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
     debugging_features: bool,
-) -> Result<(Arc<LoadedProgram>, Option<LoadProgramMetrics>), InstructionError> {
+) -> Result<(Arc<LoadedProgram>, LoadProgramMetrics), InstructionError> {
     if !check_loader_id(program.get_owner()) {
         ic_logger_msg!(
             log_collector,
@@ -189,7 +189,7 @@ pub fn load_program_from_account(
         debugging_features,
     )?);
 
-    Ok((loaded_program, Some(load_program_metrics)))
+    Ok((loaded_program, load_program_metrics))
 }
 
 fn find_program_in_cache(
