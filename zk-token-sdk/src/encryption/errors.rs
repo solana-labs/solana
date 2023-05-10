@@ -10,12 +10,6 @@ pub enum DiscreteLogError {
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
-pub enum ElGamalError {
-    #[error("key derivation method not supported")]
-    DerivationMethodNotSupported,
-}
-
-#[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum AuthenticatedEncryptionError {
     #[error("key derivation method not supported")]
     DerivationMethodNotSupported,

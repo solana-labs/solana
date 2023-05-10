@@ -17,7 +17,6 @@
 #![cfg(not(target_os = "solana"))]
 
 use {
-    crate::encryption::errors::DiscreteLogError,
     curve25519_dalek::{
         constants::RISTRETTO_BASEPOINT_POINT as G,
         ristretto::RistrettoPoint,
@@ -27,10 +26,19 @@ use {
     itertools::Itertools,
     serde::{Deserialize, Serialize},
     std::{collections::HashMap, thread},
+    thiserror::Error,
 };
 
 const TWO16: u64 = 65536; // 2^16
 const TWO17: u64 = 131072; // 2^17
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum DiscreteLogError {
+    #[error("discrete log number of threads not power-of-two")]
+    DiscreteLogThreads,
+    #[error("discrete log batch size too large")]
+    DiscreteLogBatchSize,
+}
 
 /// Type that captures a discrete log challenge.
 ///

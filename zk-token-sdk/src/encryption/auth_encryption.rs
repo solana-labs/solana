@@ -3,12 +3,12 @@
 //! This module is a simple wrapper of the `Aes128GcmSiv` implementation.
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::errors::AuthenticatedEncryptionError,
     aes_gcm_siv::{
         aead::{Aead, NewAead},
         Aes128GcmSiv,
     },
     rand::{rngs::OsRng, CryptoRng, Rng, RngCore},
+    thiserror::Error,
 };
 use {
     arrayref::{array_ref, array_refs},
@@ -32,6 +32,15 @@ use {
     subtle::ConstantTimeEq,
     zeroize::Zeroize,
 };
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum AuthenticatedEncryptionError {
+    #[error("key derivation method not supported")]
+    DerivationMethodNotSupported,
+
+    #[error("pubkey does not exist")]
+    PubkeyDoesNotExist,
+}
 
 struct AuthenticatedEncryption;
 impl AuthenticatedEncryption {
