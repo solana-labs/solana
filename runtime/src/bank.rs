@@ -7010,6 +7010,7 @@ impl Bank {
                     Some(last_full_snapshot_slot),
                     true,
                     Some(last_full_snapshot_slot),
+                    self.epoch_schedule(),
                 );
                 info!("Cleaning... Done.");
             } else {
@@ -7021,10 +7022,11 @@ impl Bank {
             let should_shrink = !accounts_db_skip_shrink && self.slot() > 0;
             if should_shrink {
                 info!("Shrinking...");
-                self.rc
-                    .accounts
-                    .accounts_db
-                    .shrink_all_slots(true, Some(last_full_snapshot_slot));
+                self.rc.accounts.accounts_db.shrink_all_slots(
+                    true,
+                    Some(last_full_snapshot_slot),
+                    self.epoch_schedule(),
+                );
                 info!("Shrinking... Done.");
             } else {
                 info!("Shrinking... Skipped.");
@@ -7321,6 +7323,7 @@ impl Bank {
             Some(highest_slot_to_clean),
             false,
             last_full_snapshot_slot,
+            self.epoch_schedule(),
         );
     }
 

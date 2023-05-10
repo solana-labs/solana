@@ -2640,6 +2640,7 @@ impl AccountsDb {
         purges: Vec<Pubkey>,
         max_clean_root_inclusive: Option<Slot>,
         ancient_account_cleans: &AtomicU64,
+        epoch_schedule: &EpochSchedule,
     ) -> (ReclaimResult, PubkeysRemovedFromAccountsIndex) {
         let pubkeys_removed_from_accounts_index = HashSet::default();
         if purges.is_empty() {
@@ -2652,7 +2653,7 @@ impl AccountsDb {
         // the hot loop will be the order of ~Xms.
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
 
-        let one_epoch_old = self.get_accounts_hash_complete_oldest_non_ancient_slot();
+        let one_epoch_old = self.get_oldest_non_ancient_slot(epoch_schedule);
         let pubkeys_removed_from_accounts_index = Mutex::new(pubkeys_removed_from_accounts_index);
 
         let mut clean_rooted = Measure::start("clean_old_root-ms");
@@ -2905,6 +2906,21 @@ impl AccountsDb {
         }
     }
 
+    /// get the oldest slot that is within one epoch of the highest known root.
+    /// The slot will have been offset by `self.ancient_append_vec_offset`
+    fn get_oldest_non_ancient_slot(&self, epoch_schedule: &EpochSchedule) -> Slot {
+        let max_root_inclusive = self.accounts_index.max_root_inclusive();
+        let mut result = max_root_inclusive;
+        if let Some(offset) = self.ancient_append_vec_offset {
+            result = Self::apply_offset_to_slot(result, offset);
+        }
+        result = Self::apply_offset_to_slot(
+            result,
+            -((epoch_schedule.slots_per_epoch as i64).saturating_sub(1)),
+        );
+        result.min(max_root_inclusive)
+    }
+
     /// hash calc is completed as of 'slot'
     /// so, any process that wants to take action on really old slots can now proceed up to 'completed_slot'-slots per epoch
     pub fn notify_accounts_hash_calculated_complete(
@@ -3097,7 +3113,7 @@ impl AccountsDb {
 
     /// Call clean_accounts() with the common parameters that tests/benches use.
     pub fn clean_accounts_for_tests(&self) {
-        self.clean_accounts(None, false, None)
+        self.clean_accounts(None, false, None, &EpochSchedule::default())
     }
 
     /// called with cli argument to verify refcounts are correct on all accounts
@@ -3171,6 +3187,7 @@ impl AccountsDb {
         max_clean_root_inclusive: Option<Slot>,
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
+        epoch_schedule: &EpochSchedule,
     ) {
         if self.exhaustively_verify_refcounts {
             self.exhaustively_verify_refcounts(max_clean_root_inclusive);
@@ -3322,6 +3339,7 @@ impl AccountsDb {
                 purges_old_accounts,
                 max_clean_root_inclusive,
                 &ancient_account_cleans,
+                epoch_schedule,
             );
 
         self.do_reset_uncleaned_roots(max_clean_root_inclusive);
@@ -4754,7 +4772,12 @@ impl AccountsDb {
         num_candidates
     }
 
-    pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
+    pub fn shrink_all_slots(
+        &self,
+        is_startup: bool,
+        last_full_snapshot_slot: Option<Slot>,
+        epoch_schedule: &EpochSchedule,
+    ) {
         let _guard = self.active_stats.activate(ActiveStatItem::Shrink);
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
@@ -4769,14 +4792,14 @@ impl AccountsDb {
                     }
                 });
                 if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
-                    self.clean_accounts(None, is_startup, last_full_snapshot_slot);
+                    self.clean_accounts(None, is_startup, last_full_snapshot_slot, epoch_schedule);
                 }
             });
         } else {
             for slot in self.all_slots_in_storage() {
                 self.shrink_slot_forced(slot);
                 if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
-                    self.clean_accounts(None, is_startup, last_full_snapshot_slot);
+                    self.clean_accounts(None, is_startup, last_full_snapshot_slot, epoch_schedule);
                 }
             }
         }
@@ -11811,7 +11834,7 @@ pub mod tests {
         // updates in later slots in slot 1
         assert_eq!(accounts.alive_account_count_in_slot(0), 1);
         assert_eq!(accounts.alive_account_count_in_slot(1), 1);
-        accounts.clean_accounts(Some(0), false, None);
+        accounts.clean_accounts(Some(0), false, None, &EpochSchedule::default());
         assert_eq!(accounts.alive_account_count_in_slot(0), 1);
         assert_eq!(accounts.alive_account_count_in_slot(1), 1);
         assert!(accounts
@@ -11820,7 +11843,7 @@ pub mod tests {
             .is_some());
 
         // Now the account can be cleaned up
-        accounts.clean_accounts(Some(1), false, None);
+        accounts.clean_accounts(Some(1), false, None, &EpochSchedule::default());
         assert_eq!(accounts.alive_account_count_in_slot(0), 0);
         assert_eq!(accounts.alive_account_count_in_slot(1), 0);
 
@@ -13313,7 +13336,7 @@ pub mod tests {
                 accounts.shrink_candidate_slots();
             }
 
-            accounts.shrink_all_slots(*startup, None);
+            accounts.shrink_all_slots(*startup, None, &EpochSchedule::default());
         }
     }
 
@@ -13361,7 +13384,7 @@ pub mod tests {
                 pubkey_count,
                 accounts.all_account_count_in_append_vec(shrink_slot)
             );
-            accounts.shrink_all_slots(*startup, None);
+            accounts.shrink_all_slots(*startup, None, &EpochSchedule::default());
             assert_eq!(
                 pubkey_count_after_shrink,
                 accounts.all_account_count_in_append_vec(shrink_slot)
@@ -13388,7 +13411,7 @@ pub mod tests {
                 .unwrap();
 
             // repeating should be no-op
-            accounts.shrink_all_slots(*startup, None);
+            accounts.shrink_all_slots(*startup, None, &epoch_schedule);
             assert_eq!(
                 pubkey_count_after_shrink,
                 accounts.all_account_count_in_append_vec(shrink_slot)
@@ -13450,7 +13473,7 @@ pub mod tests {
         );
 
         // Now, do full-shrink.
-        accounts.shrink_all_slots(false, None);
+        accounts.shrink_all_slots(false, None, &EpochSchedule::default());
         assert_eq!(
             pubkey_count_after_shrink,
             accounts.all_account_count_in_append_vec(shrink_slot)
@@ -13964,7 +13987,7 @@ pub mod tests {
         accounts.add_root(1);
         accounts.flush_accounts_cache(true, None);
         accounts.clean_accounts_for_tests();
-        accounts.shrink_all_slots(false, None);
+        accounts.shrink_all_slots(false, None, &EpochSchedule::default());
 
         // Clean again to flush the dirty stores
         // and allow them to be recycled in the next step
@@ -14069,7 +14092,7 @@ pub mod tests {
         db.add_root_and_flush_write_cache(1);
 
         // Only clean zero lamport accounts up to slot 0
-        db.clean_accounts(Some(0), false, None);
+        db.clean_accounts(Some(0), false, None, &EpochSchedule::default());
 
         // Should still be able to find zero lamport account in slot 1
         assert_eq!(
@@ -15195,7 +15218,7 @@ pub mod tests {
         db.calculate_accounts_delta_hash(1);
 
         // Clean to remove outdated entry from slot 0
-        db.clean_accounts(Some(1), false, None);
+        db.clean_accounts(Some(1), false, None, &EpochSchedule::default());
 
         // Shrink Slot 0
         let slot0_store = db.get_and_assert_single_storage(0);
@@ -15215,7 +15238,7 @@ pub mod tests {
         // Should be one store before clean for slot 0
         db.get_and_assert_single_storage(0);
         db.calculate_accounts_delta_hash(2);
-        db.clean_accounts(Some(2), false, None);
+        db.clean_accounts(Some(2), false, None, &EpochSchedule::default());
 
         // No stores should exist for slot 0 after clean
         assert_no_storages_at_slot(&db, 0);
@@ -16152,13 +16175,13 @@ pub mod tests {
 
         assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 3);
 
-        accounts_db.clean_accounts(Some(slot2), false, Some(slot2));
+        accounts_db.clean_accounts(Some(slot2), false, Some(slot2), &EpochSchedule::default());
         assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 2);
 
-        accounts_db.clean_accounts(None, false, Some(slot2));
+        accounts_db.clean_accounts(None, false, Some(slot2), &EpochSchedule::default());
         assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 1);
 
-        accounts_db.clean_accounts(None, false, Some(slot3));
+        accounts_db.clean_accounts(None, false, Some(slot3), &EpochSchedule::default());
         assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 0);
     }
 
@@ -17057,6 +17080,91 @@ pub mod tests {
     }
 
     #[test]
+    fn test_sweep_get_oldest_non_ancient_slot_max() {
+        let epoch_schedule = EpochSchedule::default();
+        // way into future
+        for ancient_append_vec_offset in [
+            epoch_schedule.slots_per_epoch,
+            epoch_schedule.slots_per_epoch + 1,
+            epoch_schedule.slots_per_epoch * 2,
+        ] {
+            let db = AccountsDb::new_with_config(
+                Vec::new(),
+                &ClusterType::Development,
+                AccountSecondaryIndexes::default(),
+                AccountShrinkThreshold::default(),
+                Some(AccountsDbConfig {
+                    ancient_append_vec_offset: Some(ancient_append_vec_offset as i64),
+                    ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+                }),
+                None,
+                &Arc::default(),
+            );
+            // before any roots are added, we expect the oldest non-ancient slot to be 0
+            assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
+            for max_root_inclusive in [
+                0,
+                epoch_schedule.slots_per_epoch,
+                epoch_schedule.slots_per_epoch * 2,
+                epoch_schedule.slots_per_epoch * 10,
+            ] {
+                db.add_root(max_root_inclusive);
+                // oldest non-ancient will never exceed max_root_inclusive, even if the offset is so large it would mathematically move ancient PAST the newest root
+                assert_eq!(
+                    max_root_inclusive,
+                    db.get_oldest_non_ancient_slot(&epoch_schedule)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_sweep_get_oldest_non_ancient_slot() {
+        let epoch_schedule = EpochSchedule::default();
+        let ancient_append_vec_offset = 50_000;
+        let db = AccountsDb::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+            Some(AccountsDbConfig {
+                ancient_append_vec_offset: Some(ancient_append_vec_offset),
+                ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+            }),
+            None,
+            &Arc::default(),
+        );
+        // before any roots are added, we expect the oldest non-ancient slot to be 0
+        assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
+        // adding roots until slots_per_epoch +/- ancient_append_vec_offset should still saturate to 0 as oldest non ancient slot
+        let max_root_inclusive = AccountsDb::apply_offset_to_slot(0, ancient_append_vec_offset - 1);
+        db.add_root(max_root_inclusive);
+        // oldest non-ancient will never exceed max_root_inclusive
+        assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
+        for offset in 0..3u64 {
+            let max_root_inclusive = ancient_append_vec_offset as u64 + offset;
+            db.add_root(max_root_inclusive);
+            assert_eq!(
+                0,
+                db.get_oldest_non_ancient_slot(&epoch_schedule),
+                "offset: {offset}"
+            );
+        }
+        for offset in 0..3u64 {
+            let max_root_inclusive = AccountsDb::apply_offset_to_slot(
+                epoch_schedule.slots_per_epoch - 1,
+                -ancient_append_vec_offset,
+            ) + offset;
+            db.add_root(max_root_inclusive);
+            assert_eq!(
+                offset,
+                db.get_oldest_non_ancient_slot(&epoch_schedule),
+                "offset: {offset}, max_root_inclusive: {max_root_inclusive}"
+            );
+        }
+    }
+
+    #[test]
     fn test_sweep_get_accounts_hash_complete_oldest_non_ancient_slot() {
         // note that this test has to worry about saturation at 0 as we subtract `slots_per_epoch` and `ancient_append_vec_offset`
         let epoch_schedule = EpochSchedule::default();
@@ -17081,6 +17189,9 @@ pub mod tests {
                     None,
                     &Arc::default(),
                 );
+                // before any roots are added, we expect the oldest non-ancient slot to be 0
+                assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
+
                 let ancient_append_vec_offset = db.ancient_append_vec_offset.unwrap();
                 // check the default value
                 assert_eq!(
@@ -17106,6 +17217,20 @@ pub mod tests {
                         db.get_accounts_hash_complete_oldest_non_ancient_slot(),
                         expected_oldest_non_ancient_slot,
                         "inc: {inc}, completed_slot: {completed_slot}, ancient_append_vec_offset: {ancient_append_vec_offset}, starting_slot_offset: {starting_slot_offset}"
+                    );
+
+                    // test get_oldest_non_ancient_slot, which is based off the largest root
+                    db.add_root(completed_slot);
+                    let expected_oldest_non_ancient_slot = AccountsDb::apply_offset_to_slot(
+                        AccountsDb::apply_offset_to_slot(
+                            completed_slot,
+                            -((epoch_schedule.slots_per_epoch as i64).saturating_sub(1)),
+                        ),
+                        ancient_append_vec_offset,
+                    );
+                    assert_eq!(
+                        expected_oldest_non_ancient_slot,
+                        db.get_oldest_non_ancient_slot(&epoch_schedule)
                     );
                 }
             }
@@ -18196,7 +18321,7 @@ pub mod tests {
 
         // calculate the full accounts hash
         let full_accounts_hash = {
-            accounts_db.clean_accounts(Some(slot - 1), false, None);
+            accounts_db.clean_accounts(Some(slot - 1), false, None, &EpochSchedule::default());
             let (storages, _) = accounts_db.get_snapshot_storages(..=slot);
             let storages = SortedStorages::new(&storages);
             accounts_db
@@ -18263,7 +18388,12 @@ pub mod tests {
 
         // calculate the incremental accounts hash
         let incremental_accounts_hash = {
-            accounts_db.clean_accounts(Some(slot - 1), false, Some(full_accounts_hash_slot));
+            accounts_db.clean_accounts(
+                Some(slot - 1),
+                false,
+                Some(full_accounts_hash_slot),
+                &EpochSchedule::default(),
+            );
             let (storages, _) =
                 accounts_db.get_snapshot_storages(full_accounts_hash_slot + 1..=slot);
             let storages = SortedStorages::new(&storages);
