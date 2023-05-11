@@ -15,7 +15,7 @@ pub fn create_builtin(
 ) -> Arc<LoadedProgram> {
     let mut program = BuiltInProgram::default();
     program
-        .register_function_by_name("entrypoint", process_instruction)
+        .register_function(b"entrypoint", process_instruction)
         .unwrap();
     Arc::new(LoadedProgram::new_builtin(name, 0, program))
 }

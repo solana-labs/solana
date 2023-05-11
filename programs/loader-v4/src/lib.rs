@@ -12,10 +12,11 @@ use {
     solana_rbpf::{
         aligned_memory::AlignedMemory,
         ebpf,
+        elf::Executable,
         memory_region::{MemoryMapping, MemoryRegion},
         verifier::RequisiteVerifier,
         vm::{
-            BuiltInProgram, Config, ContextObject, EbpfVm, ProgramResult, VerifiedExecutable,
+            BuiltInProgram, Config, ContextObject, EbpfVm, ProgramResult,
             PROGRAM_ENVIRONMENT_KEY_SHIFT,
         },
     },
@@ -79,6 +80,7 @@ pub fn load_program_from_account(
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
+        enable_address_translation: true, // To be deactivated once we have BTF inference and verification
         enable_stack_frame_gaps: false,
         instruction_meter_checkpoint_distance: 10000,
         enable_instruction_meter: true,
@@ -139,9 +141,9 @@ fn calculate_heap_cost(heap_size: u64, heap_cost: u64) -> u64 {
 /// Create the SBF virtual machine
 pub fn create_vm<'a, 'b>(
     invoke_context: &'a mut InvokeContext<'b>,
-    program: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>,
+    program: &'a Executable<RequisiteVerifier, InvokeContext<'b>>,
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
-    let config = program.get_executable().get_config();
+    let config = program.get_config();
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
     invoke_context.consume_checked(calculate_heap_cost(
@@ -154,7 +156,7 @@ pub fn create_vm<'a, 'b>(
     );
     let stack_len = stack.len();
     let regions: Vec<MemoryRegion> = vec![
-        program.get_executable().get_ro_region(),
+        program.get_ro_region(),
         MemoryRegion::new_writable_gapped(stack.as_slice_mut(), ebpf::MM_STACK_START, 0),
         MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
     ];
@@ -173,7 +175,7 @@ pub fn create_vm<'a, 'b>(
 
 fn execute(
     invoke_context: &mut InvokeContext,
-    program: &VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
+    program: &Executable<RequisiteVerifier, InvokeContext<'static>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let log_collector = invoke_context.get_log_collector();
     let stack_height = invoke_context.get_stack_height();
@@ -183,7 +185,7 @@ fn execute(
     #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
     let use_jit = false;
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-    let use_jit = program.get_executable().get_compiled_program().is_some();
+    let use_jit = program.get_compiled_program().is_some();
 
     let compute_meter_prev = invoke_context.get_remaining();
     let mut create_vm_time = Measure::start("create_vm");
