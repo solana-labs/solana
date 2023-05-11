@@ -2266,7 +2266,6 @@ impl<'a> ZeroLamport for StoredAccountMeta<'a> {
 }
 
 struct IndexAccountMapEntry<'a> {
-    pub store_id: AppendVecId,
     pub stored_account: StoredAccountMeta<'a>,
 }
 
@@ -8741,13 +8740,7 @@ impl AccountsDb {
         storage.accounts.account_iter().for_each(|stored_account| {
             let pubkey = stored_account.pubkey();
             assert!(!self.is_filler_account(pubkey));
-            accounts_map.insert(
-                *pubkey,
-                IndexAccountMapEntry {
-                    store_id: storage.append_vec_id(),
-                    stored_account,
-                },
-            );
+            accounts_map.insert(*pubkey, IndexAccountMapEntry { stored_account });
         });
         accounts_map
     }
@@ -8774,6 +8767,7 @@ impl AccountsDb {
         &self,
         accounts_map: GenerateIndexAccountsMap<'_>,
         slot: &Slot,
+        store_id: AppendVecId,
         rent_collector: &RentCollector,
     ) -> SlotIndexGenerationInfo {
         if accounts_map.is_empty() {
@@ -8787,43 +8781,38 @@ impl AccountsDb {
         let mut num_accounts_rent_paying = 0;
         let num_accounts = accounts_map.len();
         let mut amount_to_top_off_rent = 0;
-        let items = accounts_map.into_iter().map(
-            |(
-                pubkey,
-                IndexAccountMapEntry {
-                    store_id,
-                    stored_account,
-                },
-            )| {
-                if secondary {
-                    self.accounts_index.update_secondary_indexes(
-                        &pubkey,
-                        &stored_account,
-                        &self.account_indexes,
-                    );
-                }
-                if !stored_account.is_zero_lamport() {
-                    accounts_data_len += stored_account.data().len() as u64;
-                }
+        let items =
+            accounts_map
+                .into_iter()
+                .map(|(pubkey, IndexAccountMapEntry { stored_account })| {
+                    if secondary {
+                        self.accounts_index.update_secondary_indexes(
+                            &pubkey,
+                            &stored_account,
+                            &self.account_indexes,
+                        );
+                    }
+                    if !stored_account.is_zero_lamport() {
+                        accounts_data_len += stored_account.data().len() as u64;
+                    }
 
-                if let Some(amount_to_top_off_rent_this_account) =
-                    Self::stats_for_rent_payers(&pubkey, &stored_account, rent_collector)
-                {
-                    amount_to_top_off_rent += amount_to_top_off_rent_this_account;
-                    num_accounts_rent_paying += 1;
-                    // remember this rent-paying account pubkey
-                    rent_paying_accounts_by_partition.push(pubkey);
-                }
+                    if let Some(amount_to_top_off_rent_this_account) =
+                        Self::stats_for_rent_payers(&pubkey, &stored_account, rent_collector)
+                    {
+                        amount_to_top_off_rent += amount_to_top_off_rent_this_account;
+                        num_accounts_rent_paying += 1;
+                        // remember this rent-paying account pubkey
+                        rent_paying_accounts_by_partition.push(pubkey);
+                    }
 
-                (
-                    pubkey,
-                    AccountInfo::new(
-                        StorageLocation::AppendVec(store_id, stored_account.offset()), // will never be cached
-                        stored_account.lamports(),
-                    ),
-                )
-            },
-        );
+                    (
+                        pubkey,
+                        AccountInfo::new(
+                            StorageLocation::AppendVec(store_id, stored_account.offset()), // will never be cached
+                            stored_account.lamports(),
+                        ),
+                    )
+                });
 
         let (dirty_pubkeys, insert_time_us) = self
             .accounts_index
@@ -8994,11 +8983,12 @@ impl AccountsDb {
                     for (index, slot) in slots.iter().enumerate() {
                         let mut scan_time = Measure::start("scan");
                         log_status.report(index as u64);
-                        let storage = self.storage.get_slot_storage_entry(*slot);
-                        let accounts_map = storage
-                            .as_ref()
-                            .map(|storage| self.process_storage_slot(storage))
-                            .unwrap_or_default();
+                        let Some(storage) = self.storage.get_slot_storage_entry(*slot) else {
+                            // no storage at this slot, no information to pull out
+                            continue;
+                        };
+                        let accounts_map = self.process_storage_slot(&storage);
+                        let store_id = storage.append_vec_id();
 
                         scan_time.stop();
                         scan_time_sum += scan_time.as_us();
@@ -9006,6 +8996,7 @@ impl AccountsDb {
                             &storage_info,
                             &accounts_map,
                             &storage_info_timings,
+                            store_id,
                         );
 
                         let insert_us = if pass == 0 {
@@ -9019,7 +9010,12 @@ impl AccountsDb {
                                 amount_to_top_off_rent: amount_to_top_off_rent_this_slot,
                                 rent_paying_accounts_by_partition:
                                     rent_paying_accounts_by_partition_this_slot,
-                            } = self.generate_index_for_slot(accounts_map, slot, &rent_collector);
+                            } = self.generate_index_for_slot(
+                                accounts_map,
+                                slot,
+                                store_id,
+                                &rent_collector,
+                            );
                             rent_paying.fetch_add(rent_paying_this_slot, Ordering::Relaxed);
                             amount_to_top_off_rent
                                 .fetch_add(amount_to_top_off_rent_this_slot, Ordering::Relaxed);
@@ -9051,7 +9047,7 @@ impl AccountsDb {
                                         count += 1;
                                         let ai = AccountInfo::new(
                                             StorageLocation::AppendVec(
-                                                account_info.store_id,
+                                                store_id,
                                                 account_info.stored_account.offset(),
                                             ), // will never be cached
                                             account_info.stored_account.lamports(),
@@ -9285,28 +9281,26 @@ impl AccountsDb {
         storage_info: &StorageSizeAndCountMap,
         accounts_map: &GenerateIndexAccountsMap<'_>,
         timings: &Mutex<GenerateIndexTimings>,
+        store_id: AppendVecId,
     ) {
         let mut storage_size_accounts_map_time = Measure::start("storage_size_accounts_map");
 
-        let mut storage_info_local = HashMap::<AppendVecId, StorageSizeAndCount>::default();
         // first collect into a local HashMap with no lock contention
+        let mut storage_info_local = StorageSizeAndCount::default();
         for (_, v) in accounts_map.iter() {
-            let mut info = storage_info_local
-                .entry(v.store_id)
-                .or_insert_with(StorageSizeAndCount::default);
-            info.stored_size += v.stored_account.stored_size();
-            info.count += 1;
+            storage_info_local.stored_size += v.stored_account.stored_size();
+            storage_info_local.count += 1;
         }
         storage_size_accounts_map_time.stop();
         // second, collect into the shared DashMap once we've figured out all the info per store_id
         let mut storage_size_accounts_map_flatten_time =
             Measure::start("storage_size_accounts_map_flatten_time");
-        for (store_id, v) in storage_info_local.into_iter() {
+        if !accounts_map.is_empty() {
             let mut info = storage_info
                 .entry(store_id)
                 .or_insert_with(StorageSizeAndCount::default);
-            info.stored_size += v.stored_size;
-            info.count += v.count;
+            info.stored_size += storage_info_local.stored_size;
+            info.count += storage_info_local.count;
         }
         storage_size_accounts_map_flatten_time.stop();
 
@@ -15982,7 +15976,12 @@ pub mod tests {
         let storage = accounts.storage.get_slot_storage_entry(slot0).unwrap();
         let storage_info = StorageSizeAndCountMap::default();
         let accounts_map = accounts.process_storage_slot(&storage);
-        AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
+        AccountsDb::update_storage_info(
+            &storage_info,
+            &accounts_map,
+            &Mutex::default(),
+            storage.append_vec_id(),
+        );
         assert_eq!(storage_info.len(), 1);
         for entry in storage_info.iter() {
             assert_eq!(
@@ -15999,7 +15998,12 @@ pub mod tests {
         let storage = accounts.create_and_insert_store(0, 1, "test");
         let storage_info = StorageSizeAndCountMap::default();
         let accounts_map = accounts.process_storage_slot(&storage);
-        AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
+        AccountsDb::update_storage_info(
+            &storage_info,
+            &accounts_map,
+            &Mutex::default(),
+            storage.append_vec_id(),
+        );
         assert!(storage_info.is_empty());
     }
 
@@ -16032,7 +16036,12 @@ pub mod tests {
         let storage = accounts.storage.get_slot_storage_entry(slot0).unwrap();
         let storage_info = StorageSizeAndCountMap::default();
         let accounts_map = accounts.process_storage_slot(&storage);
-        AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
+        AccountsDb::update_storage_info(
+            &storage_info,
+            &accounts_map,
+            &Mutex::default(),
+            storage.append_vec_id(),
+        );
         assert_eq!(storage_info.len(), 1);
         for entry in storage_info.iter() {
             assert_eq!(
