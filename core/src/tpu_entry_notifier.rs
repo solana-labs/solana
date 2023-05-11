@@ -22,9 +22,8 @@ impl TpuEntryNotifier {
         receiver: Receiver<WorkingBankEntry>,
         entry_notification_sender: Option<EntryNotifierSender>,
         broadcast_entry_sender: Sender<WorkingBankEntry>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
-        let exit = exit.clone();
         let thread_hdl = Builder::new()
             .name("solTpuEntry".to_string())
             .spawn(move || loop {
@@ -70,6 +69,7 @@ impl TpuEntryNotifier {
             }
         }
 
+        // TODO: in PohRecorder, we panic if the send to BroadcastStage fails. Should we do the same here?
         if let Err(err) = broadcast_entry_sender.send((bank, (entry, tick_height))) {
             warn!(
                 "Failed to send slot {slot:?} entry {index:?} from Tpu to BroadcastStage, error {err:?}",
