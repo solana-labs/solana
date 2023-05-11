@@ -5565,7 +5565,7 @@ impl Bank {
     }
 
     /// true if we should include the slot in account hash
-    /// This is goverened by a feature.
+    /// This is governed by a feature.
     pub(crate) fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         if self
             .feature_set
