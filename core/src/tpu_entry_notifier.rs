@@ -19,12 +19,11 @@ pub(crate) struct TpuEntryNotifier {
 
 impl TpuEntryNotifier {
     pub(crate) fn new(
-        receiver: Receiver<WorkingBankEntry>,
+        entry_receiver: Receiver<WorkingBankEntry>,
         entry_notification_sender: EntryNotifierSender,
         broadcast_entry_sender: Sender<WorkingBankEntry>,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let exit = exit.clone();
         let thread_hdl = Builder::new()
             .name("solTpuEntry".to_string())
             .spawn(move || loop {
@@ -33,7 +32,7 @@ impl TpuEntryNotifier {
                 }
 
                 if let Err(RecvTimeoutError::Disconnected) = Self::send_entry_notification(
-                    &receiver,
+                    &entry_receiver,
                     &entry_notification_sender,
                     &broadcast_entry_sender,
                 ) {
@@ -45,11 +44,11 @@ impl TpuEntryNotifier {
     }
 
     pub(crate) fn send_entry_notification(
-        receiver: &Receiver<WorkingBankEntry>,
+        entry_receiver: &Receiver<WorkingBankEntry>,
         entry_notification_sender: &EntryNotifierSender,
         broadcast_entry_sender: &Sender<WorkingBankEntry>,
     ) -> Result<(), RecvTimeoutError> {
-        let (bank, (entry, tick_height)) = receiver.recv_timeout(Duration::from_secs(1))?;
+        let (bank, (entry, tick_height)) = entry_receiver.recv_timeout(Duration::from_secs(1))?;
         let slot = bank.slot();
         let index = 0;
 
