@@ -8983,12 +8983,10 @@ impl AccountsDb {
                     for (index, slot) in slots.iter().enumerate() {
                         let mut scan_time = Measure::start("scan");
                         log_status.report(index as u64);
-                        let storage = self.storage.get_slot_storage_entry(*slot);
-                        if storage.is_none() {
+                        let Some(storage) = self.storage.get_slot_storage_entry(*slot) else {
                             // no storage at this slot, no information to pull out
                             continue;
-                        }
-                        let storage = storage.unwrap();
+                        };
                         let accounts_map = self.process_storage_slot(&storage);
                         let store_id = storage.append_vec_id();
 
