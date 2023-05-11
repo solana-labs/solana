@@ -34,6 +34,7 @@ pub struct AccountsPackage {
     pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
     pub is_incremental_accounts_hash_feature_enabled: bool,
+    pub include_slot_in_hash: IncludeSlotInHash,
 
     /// Supplemental information needed for snapshots
     pub snapshot_info: Option<SupplementalSnapshotInfo>,
@@ -41,7 +42,6 @@ pub struct AccountsPackage {
     /// The instant this accounts package was send to the queue.
     /// Used to track how long accounts packages wait before processing.
     pub enqueued: Instant,
-    pub include_slot_in_hash: IncludeSlotInHash,
 }
 
 impl AccountsPackage {
