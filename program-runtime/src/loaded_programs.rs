@@ -491,7 +491,7 @@ impl LoadedPrograms {
         self.latest_root = std::cmp::max(self.latest_root, new_root);
     }
 
-    fn matches_loaded_program(
+    fn matches_loaded_program_criteria(
         program: &Arc<LoadedProgram>,
         criteria: &LoadedProgramMatchCriteria,
     ) -> bool {
@@ -502,6 +502,27 @@ impl LoadedPrograms {
             LoadedProgramMatchCriteria::Tombstone => program.is_tombstone(),
             LoadedProgramMatchCriteria::NoCriteria => true,
         }
+    }
+
+    fn is_entry_usable(
+        entry: &Arc<LoadedProgram>,
+        current_slot: Slot,
+        match_criteria: &LoadedProgramMatchCriteria,
+    ) -> bool {
+        if entry
+            .maybe_expiration_slot
+            .map(|expiration_slot| expiration_slot <= current_slot)
+            .unwrap_or(false)
+        {
+            // Found an entry that's already expired. Any further entries in the list
+            // are older than the current one. So treat the program as missing in the
+            // cache and return early.
+            return false;
+        }
+
+        Self::matches_loaded_program_criteria(entry, match_criteria)
+            // If the program was unloaded. Consider it as unusable, so it can be reloaded.
+            && !matches!(entry.program, LoadedProgramType::Unloaded)
     }
 
     /// Extracts a subset of the programs relevant to a transaction batch
@@ -521,25 +542,7 @@ impl LoadedPrograms {
                             || entry.deployment_slot == current_slot
                             || working_slot.is_ancestor(entry.deployment_slot)
                         {
-                            if entry
-                                .maybe_expiration_slot
-                                .map(|expiration_slot| current_slot >= expiration_slot)
-                                .unwrap_or(false)
-                            {
-                                // Found an entry that's already expired. Any further entries in the list
-                                // are older than the current one. So treat the program as missing in the
-                                // cache and return early.
-                                missing.push(key);
-                                return None;
-                            }
-
-                            if !Self::matches_loaded_program(entry, &match_criteria) {
-                                missing.push(key);
-                                return None;
-                            }
-
-                            if matches!(entry.program, LoadedProgramType::Unloaded) {
-                                // The program was unloaded. Consider it as missing, so it can be reloaded.
+                            if !Self::is_entry_usable(entry, current_slot, &match_criteria) {
                                 missing.push(key);
                                 return None;
                             }
@@ -1788,5 +1791,149 @@ mod tests {
                 .deployment_slot,
             0
         );
+    }
+
+    #[test]
+    fn test_usable_entries_for_slot() {
+        let unloaded_entry = Arc::new(LoadedProgram {
+            program: LoadedProgramType::Unloaded,
+            account_size: 0,
+            deployment_slot: 0,
+            effective_slot: 0,
+            maybe_expiration_slot: None,
+            usage_counter: AtomicU64::default(),
+        });
+        assert!(!LoadedPrograms::is_entry_usable(
+            &unloaded_entry,
+            0,
+            &LoadedProgramMatchCriteria::NoCriteria
+        ));
+
+        assert!(!LoadedPrograms::is_entry_usable(
+            &unloaded_entry,
+            1,
+            &LoadedProgramMatchCriteria::NoCriteria
+        ));
+
+        assert!(!LoadedPrograms::is_entry_usable(
+            &unloaded_entry,
+            1,
+            &LoadedProgramMatchCriteria::Tombstone
+        ));
+
+        assert!(!LoadedPrograms::is_entry_usable(
+            &unloaded_entry,
+            1,
+            &LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(0)
+        ));
+
+        let tombstone = Arc::new(LoadedProgram::new_tombstone(0, LoadedProgramType::Closed));
+
+        assert!(LoadedPrograms::is_entry_usable(
+            &tombstone,
+            0,
+            &LoadedProgramMatchCriteria::NoCriteria
+        ));
+
+        assert!(LoadedPrograms::is_entry_usable(
+            &tombstone,
+            1,
+            &LoadedProgramMatchCriteria::Tombstone
+        ));
+
+        assert!(LoadedPrograms::is_entry_usable(
+            &tombstone,
+            1,
+            &LoadedProgramMatchCriteria::NoCriteria
+        ));
+
+        assert!(LoadedPrograms::is_entry_usable(
+            &tombstone,
+            1,
+            &LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(0)
+        ));
+
+        assert!(!LoadedPrograms::is_entry_usable(
+            &tombstone,
+            1,
+            &LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(1)
+        ));
+
+        let program = new_test_loaded_program(0, 1);
+
+        assert!(LoadedPrograms::is_entry_usable(
+            &program,
+            0,
+            &LoadedProgramMatchCriteria::NoCriteria
+        ));
+
+        assert!(!LoadedPrograms::is_entry_usable(
+            &program,
+            1,
+            &LoadedProgramMatchCriteria::Tombstone
+        ));
+
+        assert!(LoadedPrograms::is_entry_usable(
+            &program,
+            1,
+            &LoadedProgramMatchCriteria::NoCriteria
+        ));
+
+        assert!(LoadedPrograms::is_entry_usable(
+            &program,
+            1,
+            &LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(0)
+        ));
+
+        assert!(!LoadedPrograms::is_entry_usable(
+            &program,
+            1,
+            &LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(1)
+        ));
+
+        let program = Arc::new(LoadedProgram {
+            program: LoadedProgramType::TestLoaded,
+            account_size: 0,
+            deployment_slot: 0,
+            effective_slot: 1,
+            maybe_expiration_slot: Some(2),
+            usage_counter: AtomicU64::default(),
+        });
+
+        assert!(LoadedPrograms::is_entry_usable(
+            &program,
+            0,
+            &LoadedProgramMatchCriteria::NoCriteria
+        ));
+
+        assert!(LoadedPrograms::is_entry_usable(
+            &program,
+            1,
+            &LoadedProgramMatchCriteria::NoCriteria
+        ));
+
+        assert!(!LoadedPrograms::is_entry_usable(
+            &program,
+            1,
+            &LoadedProgramMatchCriteria::Tombstone
+        ));
+
+        assert!(!LoadedPrograms::is_entry_usable(
+            &program,
+            2,
+            &LoadedProgramMatchCriteria::NoCriteria
+        ));
+
+        assert!(LoadedPrograms::is_entry_usable(
+            &program,
+            1,
+            &LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(0)
+        ));
+
+        assert!(!LoadedPrograms::is_entry_usable(
+            &program,
+            1,
+            &LoadedProgramMatchCriteria::DeployedOnOrAfterSlot(1)
+        ));
     }
 }
