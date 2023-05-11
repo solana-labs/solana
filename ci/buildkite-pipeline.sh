@@ -24,7 +24,6 @@ annotate() {
   fi
 }
 
-# bprumo: edit to trigger full CI
 # Assume everyting needs to be tested when this file or any Dockerfile changes
 mandatory_affected_files=()
 mandatory_affected_files+=(^ci/buildkite-pipeline.sh)
