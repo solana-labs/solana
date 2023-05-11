@@ -1,0 +1,84 @@
+use {
+    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
+    solana_entry::entry::EntrySummary,
+    solana_ledger::entry_notifier_service::{EntryNotification, EntryNotifierSender},
+    solana_poh::poh_recorder::WorkingBankEntry,
+    std::{
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::Duration,
+    },
+};
+
+pub(crate) struct TpuEntryNotifier {
+    thread_hdl: JoinHandle<()>,
+}
+
+impl TpuEntryNotifier {
+    pub(crate) fn new(
+        receiver: Receiver<WorkingBankEntry>,
+        entry_notification_sender: Option<EntryNotifierSender>,
+        broadcast_entry_sender: Sender<WorkingBankEntry>,
+        exit: &Arc<AtomicBool>,
+    ) -> Self {
+        let exit = exit.clone();
+        let thread_hdl = Builder::new()
+            .name("solTpuEntry".to_string())
+            .spawn(move || loop {
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                if let Err(RecvTimeoutError::Disconnected) = Self::send_entry_notification(
+                    &receiver,
+                    &entry_notification_sender,
+                    &broadcast_entry_sender,
+                ) {
+                    break;
+                }
+            })
+            .unwrap();
+        Self { thread_hdl }
+    }
+
+    pub(crate) fn send_entry_notification(
+        receiver: &Receiver<WorkingBankEntry>,
+        entry_notification_sender: &Option<EntryNotifierSender>,
+        broadcast_entry_sender: &Sender<WorkingBankEntry>,
+    ) -> Result<(), RecvTimeoutError> {
+        let (bank, (entry, tick_height)) = receiver.recv_timeout(Duration::from_secs(1))?;
+        let slot = bank.slot();
+        let index = 0;
+
+        if let Some(entry_notification_sender) = entry_notification_sender {
+            let entry_summary = EntrySummary {
+                num_hashes: entry.num_hashes,
+                hash: entry.hash,
+                num_transactions: entry.transactions.len() as u64,
+            };
+            if let Err(err) = entry_notification_sender.send(EntryNotification {
+                slot,
+                index,
+                entry: entry_summary,
+            }) {
+                warn!(
+                    "Failed to send slot {slot:?} entry {index:?} from Tpu to EntryNotifierService, error {err:?}",
+                );
+            }
+        }
+
+        if let Err(err) = broadcast_entry_sender.send((bank, (entry, tick_height))) {
+            warn!(
+                "Failed to send slot {slot:?} entry {index:?} from Tpu to BroadcastStage, error {err:?}",
+            );
+        }
+        Ok(())
+    }
+
+    pub(crate) fn join(self) -> thread::Result<()> {
+        self.thread_hdl.join()
+    }
+}
