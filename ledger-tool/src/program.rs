@@ -332,7 +332,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
     }
     let (action, matches) = match matches.subcommand() {
         ("cfg", Some(arg_matches)) => (Action::Cfg, arg_matches),
-        ("disassembler", Some(arg_matches)) => (Action::Dis, arg_matches),
+        ("disassemble", Some(arg_matches)) => (Action::Dis, arg_matches),
         ("run", Some(arg_matches)) => (Action::Run, arg_matches),
         _ => unreachable!(),
     };
