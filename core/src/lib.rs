@@ -74,6 +74,7 @@ mod tower1_14_11;
 mod tower1_7_14;
 pub mod tower_storage;
 pub mod tpu;
+mod tpu_entry_notifier;
 pub mod tracer_packet_stats;
 pub mod tree_diff;
 pub mod tvu;
