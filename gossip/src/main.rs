@@ -198,12 +198,12 @@ fn process_spy_results(
             }
         }
         if let Some(nodes) = pubkeys {
-            nodes.iter().for_each(|node| {
+            for node in nodes {
                 if !validators.iter().any(|x| x.pubkey() == node) {
                     eprintln!("Error: Could not find node {node:?}");
                     exit(1);
                 }
-            });
+            }
         }
     }
     if let Some(num_nodes_exactly) = num_nodes_exactly {
