@@ -137,7 +137,7 @@ use {
         inflation::Inflation,
         instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},
         lamports::LamportsError,
-        loader_v3,
+        loader_v4,
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
@@ -4088,8 +4088,8 @@ impl Bank {
                 }
             }
             Err(TransactionError::ProgramAccountNotFound)
-        } else if loader_v3::check_id(program.owner()) {
-            let state = solana_loader_v3_program::get_state(program.data())
+        } else if loader_v4::check_id(program.owner()) {
+            let state = solana_loader_v4_program::get_state(program.data())
                 .map_err(|_| TransactionError::ProgramAccountNotFound)?;
             Ok(state.slot)
         } else {

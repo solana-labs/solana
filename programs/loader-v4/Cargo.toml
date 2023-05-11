@@ -1,5 +1,5 @@
 [package]
-name = "solana-loader-v3-program"
+name = "solana-loader-v4-program"
 description = "Solana Loader v3"
 publish = false
 version = { workspace = true }
@@ -22,7 +22,7 @@ bincode = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
-name = "solana_loader_v3_program"
+name = "solana_loader_v4_program"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

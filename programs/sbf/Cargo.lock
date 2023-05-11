@@ -5125,7 +5125,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-loader-v3-program"
+name = "solana-loader-v4-program"
 version = "1.16.0"
 dependencies = [
  "log",
@@ -5632,7 +5632,7 @@ dependencies = [
  "solana-config-program",
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
- "solana-loader-v3-program",
+ "solana-loader-v4-program",
  "solana-measure",
  "solana-metrics",
  "solana-perf",

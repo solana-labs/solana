@@ -12,7 +12,7 @@ use {
         vm::{BuiltInProgram, VerifiedExecutable},
     },
     solana_sdk::{
-        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot, loader_v3,
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot, loader_v4,
         pubkey::Pubkey, saturating_add_assign,
     },
     std::{
@@ -228,7 +228,7 @@ impl LoadedProgram {
             LoadedProgramType::LegacyV0(VerifiedExecutable::from_executable(executable)?)
         } else if bpf_loader::check_id(loader_key) || bpf_loader_upgradeable::check_id(loader_key) {
             LoadedProgramType::LegacyV1(VerifiedExecutable::from_executable(executable)?)
-        } else if loader_v3::check_id(loader_key) {
+        } else if loader_v4::check_id(loader_key) {
             LoadedProgramType::Typed(VerifiedExecutable::from_executable(executable)?)
         } else {
             panic!();
