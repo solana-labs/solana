@@ -26,7 +26,7 @@ thiserror = { workspace = true }
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 ahash = { workspace = true }
 blake3 = { workspace = true, features = ["digest", "traits-preview"] }
-block-buffer = { workspace = true, features = ["block-padding"] }
+block-buffer = { workspace = true }
 byteorder = { workspace = true, features = ["i128"] }
 cc = { workspace = true, features = ["jobserver", "parallel"] }
 either = { workspace = true, features = ["use_std"] }
