@@ -649,7 +649,7 @@ fn main() {
                 Some(&entrypoint_addr),
                 None,                    // num_nodes
                 Duration::from_secs(60), // timeout
-                None,                    // find_node_by_pubkey
+                None,                    // find_nodes_by_pubkey
                 Some(&entrypoint_addr),  // find_node_by_gossip_addr
                 None,                    // my_gossip_addr
                 0,                       // my_shred_version
