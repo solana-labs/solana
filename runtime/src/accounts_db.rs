@@ -9298,11 +9298,13 @@ impl AccountsDb {
         // second, collect into the shared DashMap once we've figured out all the info per store_id
         let mut storage_size_accounts_map_flatten_time =
             Measure::start("storage_size_accounts_map_flatten_time");
-        let mut info = storage_info
-            .entry(store_id)
-            .or_insert_with(StorageSizeAndCount::default);
-        info.stored_size += storage_info_local.stored_size;
-        info.count += storage_info_local.count;
+        if !accounts_map.is_empty() {
+            let mut info = storage_info
+                .entry(store_id)
+                .or_insert_with(StorageSizeAndCount::default);
+            info.stored_size += storage_info_local.stored_size;
+            info.count += storage_info_local.count;
+        }
         storage_size_accounts_map_flatten_time.stop();
 
         let mut timings = timings.lock().unwrap();
