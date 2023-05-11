@@ -2266,7 +2266,6 @@ impl<'a> ZeroLamport for StoredAccountMeta<'a> {
 }
 
 struct IndexAccountMapEntry<'a> {
-    pub write_version: StoredMetaWriteVersion,
     pub store_id: AppendVecId,
     pub stored_account: StoredAccountMeta<'a>,
 }
@@ -8740,13 +8739,11 @@ impl AccountsDb {
         let num_accounts = storage.approx_stored_count();
         let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
         storage.accounts.account_iter().for_each(|stored_account| {
-            let this_version = stored_account.write_version();
             let pubkey = stored_account.pubkey();
             assert!(!self.is_filler_account(pubkey));
             accounts_map.insert(
                 *pubkey,
                 IndexAccountMapEntry {
-                    write_version: this_version,
                     store_id: storage.append_vec_id(),
                     stored_account,
                 },
@@ -8794,7 +8791,6 @@ impl AccountsDb {
             |(
                 pubkey,
                 IndexAccountMapEntry {
-                    write_version: _write_version,
                     store_id,
                     stored_account,
                 },
