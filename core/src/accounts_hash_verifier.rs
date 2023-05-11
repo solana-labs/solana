@@ -392,14 +392,6 @@ impl AccountsHashVerifier {
             assert_eq!(expected_hash, accounts_hash);
         };
 
-        accounts_package
-            .accounts
-            .accounts_db
-            .notify_accounts_hash_calculated_complete(
-                sorted_storages.max_slot_inclusive(),
-                &accounts_package.epoch_schedule,
-            );
-
         datapoint_info!(
             "accounts_hash_verifier",
             ("calculate_hash", measure_hash_us, i64),

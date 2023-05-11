@@ -2877,26 +2877,6 @@ impl AccountsDb {
         }
     }
 
-    /// return `slot` - slots_in_epoch + 1
-    /// The resulting slot is within one epoch length of `slot`
-    fn get_oldest_slot_within_one_epoch_prior(slot: Slot, epoch_schedule: &EpochSchedule) -> Slot {
-        // would like to use:
-        // slot.saturating_sub(epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(slot)))
-        // but there are problems with warmup and such on tests and probably test clusters.
-        // So, just use the maximum below (epoch_schedule.slots_per_epoch)
-        if slot >= epoch_schedule.slots_per_epoch {
-            // slot - `slots_per_epoch` is the newest ancient slot.
-            // the next slot (ie. + 1) is the oldest slot withIN one epoch prior to `slot`
-            slot.saturating_sub(epoch_schedule.slots_per_epoch)
-                .saturating_add(1)
-        } else {
-            // If `slot` is less than 1 epoch older than 0, then the result here is 0.
-            // In other words, 0 is the oldest slot withIN one epoch prior of `slot`.
-            // slot 1 is the second oldest slot withIN one epoch prior.
-            0
-        }
-    }
-
     /// get the oldest slot that is within one epoch of the highest known root.
     /// The slot will have been offset by `self.ancient_append_vec_offset`
     fn get_oldest_non_ancient_slot(&self, epoch_schedule: &EpochSchedule) -> Slot {
@@ -2910,38 +2890,6 @@ impl AccountsDb {
             -((epoch_schedule.slots_per_epoch as i64).saturating_sub(1)),
         );
         result.min(max_root_inclusive)
-    }
-
-    /// hash calc is completed as of 'slot'
-    /// so, any process that wants to take action on really old slots can now proceed up to 'completed_slot'-slots per epoch
-    pub fn notify_accounts_hash_calculated_complete(
-        &self,
-        completed_slot: Slot,
-        epoch_schedule: &EpochSchedule,
-    ) {
-        let one_epoch_old_slot =
-            Self::get_oldest_slot_within_one_epoch_prior(completed_slot, epoch_schedule);
-        let mut accounts_hash_complete_oldest_non_ancient_slot = self
-            .accounts_hash_complete_oldest_non_ancient_slot
-            .write()
-            .unwrap();
-        *accounts_hash_complete_oldest_non_ancient_slot = std::cmp::max(
-            *accounts_hash_complete_oldest_non_ancient_slot,
-            one_epoch_old_slot,
-        );
-    }
-
-    /// get the oldest slot that is within one epoch of the highest slot that has been used for hash calculation.
-    /// The slot will have been offset by `self.ancient_append_vec_offset`
-    fn get_accounts_hash_complete_oldest_non_ancient_slot(&self) -> Slot {
-        let mut result = *self
-            .accounts_hash_complete_oldest_non_ancient_slot
-            .read()
-            .unwrap();
-        if let Some(offset) = self.ancient_append_vec_offset {
-            result = Self::apply_offset_to_slot(result, offset);
-        }
-        result
     }
 
     /// Collect all the uncleaned slots, up to a max slot
@@ -7009,7 +6957,6 @@ impl AccountsDb {
             ("hash_total", hash_total, i64),
             ("collect", collect.as_us(), i64),
         );
-        self.assert_safe_squashing_accounts_hash(max_slot, config.epoch_schedule);
 
         let accounts_hash = AccountsHash(accumulated_hash);
         Ok((accounts_hash, total_lamports))
@@ -7561,19 +7508,6 @@ impl AccountsDb {
         )
     }
 
-    /// if we ever try to calc hash where there are squashed append vecs within the last epoch, we will fail
-    fn assert_safe_squashing_accounts_hash(&self, slot: Slot, epoch_schedule: &EpochSchedule) {
-        let previous = self.get_accounts_hash_complete_oldest_non_ancient_slot();
-        let mut current = Self::get_oldest_slot_within_one_epoch_prior(slot, epoch_schedule);
-        if let Some(offset) = self.ancient_append_vec_offset {
-            current = Self::apply_offset_to_slot(current, offset);
-        }
-        assert!(
-             previous <= current,
-            "get_accounts_hash_complete_oldest_non_ancient_slot: {previous}, get_oldest_slot_within_one_epoch_prior: {current}, slot: {slot}"
-        );
-    }
-
     /// normal code path returns the common cache path
     /// when called after a failure has been detected, redirect the cache storage to a separate folder for debugging later
     fn get_cache_hash_data(
@@ -7716,7 +7650,6 @@ impl AccountsDb {
         } else {
             scan_and_hash()
         };
-        self.assert_safe_squashing_accounts_hash(slot, config.epoch_schedule);
         stats.log();
         result
     }
@@ -17364,31 +17297,12 @@ pub mod tests {
                 assert_eq!(0, db.get_oldest_non_ancient_slot(&epoch_schedule));
 
                 let ancient_append_vec_offset = db.ancient_append_vec_offset.unwrap();
-                // check the default value
-                assert_eq!(
-                    db.get_accounts_hash_complete_oldest_non_ancient_slot(),
-                    AccountsDb::apply_offset_to_slot(0, ancient_append_vec_offset)
-                );
                 assert_ne!(ancient_append_vec_offset, 0);
                 // try a few values to simulate a real validator
                 for inc in [0, 1, 2, 3, 4, 5, 8, 10, 10, 11, 200, 201, 1_000] {
-                    let expected_first_ancient_slot = inc + starting_slot_offset;
                     // oldest non-ancient slot is 1 greater than first ancient slot
-                    let expected_oldest_non_ancient_slot = expected_first_ancient_slot + 1;
-                    // the return of `get_accounts_hash_complete_oldest_non_ancient_slot` will offset by `ancient_append_vec_offset`
-                    let expected_oldest_non_ancient_slot = AccountsDb::apply_offset_to_slot(
-                        expected_oldest_non_ancient_slot,
-                        ancient_append_vec_offset,
-                    );
                     let completed_slot =
                         epoch_schedule.slots_per_epoch + inc + starting_slot_offset;
-                    db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
-                    // check the result after repeated calls increasing the completed slot
-                    assert_eq!(
-                        db.get_accounts_hash_complete_oldest_non_ancient_slot(),
-                        expected_oldest_non_ancient_slot,
-                        "inc: {inc}, completed_slot: {completed_slot}, ancient_append_vec_offset: {ancient_append_vec_offset}, starting_slot_offset: {starting_slot_offset}"
-                    );
 
                     // test get_oldest_non_ancient_slot, which is based off the largest root
                     db.add_root(completed_slot);
