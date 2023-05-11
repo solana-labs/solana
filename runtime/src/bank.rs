@@ -7343,7 +7343,10 @@ impl Bank {
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
-        self.rc.accounts.accounts_db.shrink_candidate_slots()
+        self.rc
+            .accounts
+            .accounts_db
+            .shrink_candidate_slots(self.epoch_schedule())
     }
 
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
