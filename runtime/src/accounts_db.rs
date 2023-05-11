@@ -8984,14 +8984,13 @@ impl AccountsDb {
                         let mut scan_time = Measure::start("scan");
                         log_status.report(index as u64);
                         let storage = self.storage.get_slot_storage_entry(*slot);
-                        let accounts_map = storage
-                            .as_ref()
-                            .map(|storage| self.process_storage_slot(storage))
-                            .unwrap_or_default();
-                        let store_id = storage.as_ref().map(|storage| storage.append_vec_id());
-                        assert!(store_id.is_some() || accounts_map.is_empty());
-                        // if storage is none, accounts_map must be empty, and thus, store_id is irrelevant because there are no accounts from no storage to add to the index
-                        let store_id = store_id.unwrap_or_default();
+                        if storage.is_none() {
+                            // no storage at this slot, no information to pull out
+                            continue;
+                        }
+                        let storage = storage.unwrap();
+                        let accounts_map = self.process_storage_slot(&storage);
+                        let store_id = storage.append_vec_id();
 
                         scan_time.stop();
                         scan_time_sum += scan_time.as_us();
