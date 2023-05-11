@@ -7,7 +7,7 @@ use {
         aead::{Aead, NewAead},
         Aes128GcmSiv,
     },
-    rand::{rngs::OsRng, CryptoRng, Rng, RngCore},
+    rand::{rngs::OsRng, Rng},
     thiserror::Error,
 };
 use {
@@ -43,8 +43,8 @@ pub enum AuthenticatedEncryptionError {
 struct AuthenticatedEncryption;
 impl AuthenticatedEncryption {
     #[cfg(not(target_os = "solana"))]
-    fn keygen<T: RngCore + CryptoRng>(rng: &mut T) -> AeKey {
-        AeKey(rng.gen::<[u8; 16]>())
+    fn keygen() -> AeKey {
+        AeKey(OsRng.gen::<[u8; 16]>())
     }
 
     #[cfg(not(target_os = "solana"))]
@@ -104,8 +104,8 @@ impl AeKey {
         Ok(result.to_vec())
     }
 
-    pub fn random<T: RngCore + CryptoRng>(rng: &mut T) -> Self {
-        AuthenticatedEncryption::keygen(rng)
+    pub fn new_rand() -> Self {
+        AuthenticatedEncryption::keygen()
     }
 
     pub fn encrypt(&self, amount: u64) -> AeCiphertext {
@@ -217,7 +217,7 @@ mod tests {
 
     #[test]
     fn test_aes_encrypt_decrypt_correctness() {
-        let key = AeKey::random(&mut OsRng);
+        let key = AeKey::new_rand();
         let amount = 55;
 
         let ct = key.encrypt(amount);
