@@ -2265,11 +2265,7 @@ impl<'a> ZeroLamport for StoredAccountMeta<'a> {
     }
 }
 
-struct IndexAccountMapEntry<'a> {
-    pub stored_account: StoredAccountMeta<'a>,
-}
-
-type GenerateIndexAccountsMap<'a> = HashMap<Pubkey, IndexAccountMapEntry<'a>>;
+type GenerateIndexAccountsMap<'a> = HashMap<Pubkey, StoredAccountMeta<'a>>;
 
 /// called on a struct while scanning append vecs
 trait AppendVecScan: Send + Sync + Clone {
@@ -8735,7 +8731,7 @@ impl AccountsDb {
         storage.accounts.account_iter().for_each(|stored_account| {
             let pubkey = stored_account.pubkey();
             assert!(!self.is_filler_account(pubkey));
-            accounts_map.insert(*pubkey, IndexAccountMapEntry { stored_account });
+            accounts_map.insert(*pubkey, stored_account);
         });
         accounts_map
     }
@@ -8776,38 +8772,35 @@ impl AccountsDb {
         let mut num_accounts_rent_paying = 0;
         let num_accounts = accounts_map.len();
         let mut amount_to_top_off_rent = 0;
-        let items =
-            accounts_map
-                .into_iter()
-                .map(|(pubkey, IndexAccountMapEntry { stored_account })| {
-                    if secondary {
-                        self.accounts_index.update_secondary_indexes(
-                            &pubkey,
-                            &stored_account,
-                            &self.account_indexes,
-                        );
-                    }
-                    if !stored_account.is_zero_lamport() {
-                        accounts_data_len += stored_account.data().len() as u64;
-                    }
+        let items = accounts_map.into_iter().map(|(pubkey, stored_account)| {
+            if secondary {
+                self.accounts_index.update_secondary_indexes(
+                    &pubkey,
+                    &stored_account,
+                    &self.account_indexes,
+                );
+            }
+            if !stored_account.is_zero_lamport() {
+                accounts_data_len += stored_account.data().len() as u64;
+            }
 
-                    if let Some(amount_to_top_off_rent_this_account) =
-                        Self::stats_for_rent_payers(&pubkey, &stored_account, rent_collector)
-                    {
-                        amount_to_top_off_rent += amount_to_top_off_rent_this_account;
-                        num_accounts_rent_paying += 1;
-                        // remember this rent-paying account pubkey
-                        rent_paying_accounts_by_partition.push(pubkey);
-                    }
+            if let Some(amount_to_top_off_rent_this_account) =
+                Self::stats_for_rent_payers(&pubkey, &stored_account, rent_collector)
+            {
+                amount_to_top_off_rent += amount_to_top_off_rent_this_account;
+                num_accounts_rent_paying += 1;
+                // remember this rent-paying account pubkey
+                rent_paying_accounts_by_partition.push(pubkey);
+            }
 
-                    (
-                        pubkey,
-                        AccountInfo::new(
-                            StorageLocation::AppendVec(store_id, stored_account.offset()), // will never be cached
-                            stored_account.lamports(),
-                        ),
-                    )
-                });
+            (
+                pubkey,
+                AccountInfo::new(
+                    StorageLocation::AppendVec(store_id, stored_account.offset()), // will never be cached
+                    stored_account.lamports(),
+                ),
+            )
+        });
 
         let (dirty_pubkeys, insert_time_us) = self
             .accounts_index
@@ -9043,9 +9036,9 @@ impl AccountsDb {
                                         let ai = AccountInfo::new(
                                             StorageLocation::AppendVec(
                                                 store_id,
-                                                account_info.stored_account.offset(),
+                                                account_info.offset(),
                                             ), // will never be cached
-                                            account_info.stored_account.lamports(),
+                                            account_info.lamports(),
                                         );
                                         assert_eq!(&ai, account_info2);
                                     }
@@ -9283,7 +9276,7 @@ impl AccountsDb {
         // first collect into a local HashMap with no lock contention
         let mut storage_info_local = StorageSizeAndCount::default();
         for (_, v) in accounts_map.iter() {
-            storage_info_local.stored_size += v.stored_account.stored_size();
+            storage_info_local.stored_size += v.stored_size();
             storage_info_local.count += 1;
         }
         storage_size_accounts_map_time.stop();
