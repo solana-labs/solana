@@ -14,7 +14,7 @@ use {
         tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
     solana_geyser_plugin_manager::GeyserPluginManagerRequest,
-    solana_gossip::contact_info::ContactInfo,
+    solana_gossip::contact_info::{ContactInfo, Protocol},
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
     solana_runtime::accounts_index::AccountIndex,
@@ -95,6 +95,11 @@ impl From<ContactInfo> for AdminRpcContactInfo {
                     SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16)
                 })
             };
+            ($name:ident, $protocol:expr) => {
+                node.$name($protocol).unwrap_or_else(|_| {
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16)
+                })
+            };
         }
         Self {
             id: node.pubkey().to_string(),
@@ -103,8 +108,8 @@ impl From<ContactInfo> for AdminRpcContactInfo {
             tvu: unwrap_socket!(tvu),
             tvu_forwards: unwrap_socket!(tvu_forwards),
             repair: unwrap_socket!(repair),
-            tpu: unwrap_socket!(tpu),
-            tpu_forwards: unwrap_socket!(tpu_forwards),
+            tpu: unwrap_socket!(tpu, Protocol::UDP),
+            tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),
             tpu_vote: unwrap_socket!(tpu_vote),
             rpc: unwrap_socket!(rpc),
             rpc_pubsub: unwrap_socket!(rpc_pubsub),
@@ -614,7 +619,7 @@ impl AdminRpc for AdminRpcImpl {
             post_init
                 .cluster_info
                 .my_contact_info()
-                .tpu()
+                .tpu(Protocol::UDP)
                 .map_err(|err| {
                     error!(
                         "The public TPU address isn't being published. \
@@ -634,8 +639,8 @@ impl AdminRpc for AdminRpcImpl {
             let my_contact_info = post_init.cluster_info.my_contact_info();
             warn!(
                 "Public TPU addresses set to {:?} (udp) and {:?} (quic)",
-                my_contact_info.tpu(),
-                my_contact_info.tpu_quic(),
+                my_contact_info.tpu(Protocol::UDP),
+                my_contact_info.tpu(Protocol::QUIC),
             );
             Ok(())
         })
@@ -652,7 +657,7 @@ impl AdminRpc for AdminRpcImpl {
             post_init
                 .cluster_info
                 .my_contact_info()
-                .tpu_forwards()
+                .tpu_forwards(Protocol::UDP)
                 .map_err(|err| {
                     error!(
                         "The public TPU Forwards address isn't being published. \
@@ -672,8 +677,8 @@ impl AdminRpc for AdminRpcImpl {
             let my_contact_info = post_init.cluster_info.my_contact_info();
             warn!(
                 "Public TPU Forwards addresses set to {:?} (udp) and {:?} (quic)",
-                my_contact_info.tpu_forwards(),
-                my_contact_info.tpu_forwards_quic(),
+                my_contact_info.tpu_forwards(Protocol::UDP),
+                my_contact_info.tpu_forwards(Protocol::QUIC),
             );
             Ok(())
         })

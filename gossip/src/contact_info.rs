@@ -1,4 +1,3 @@
-pub use crate::legacy_contact_info::LegacyContactInfo;
 use {
     crate::crds_value::MAX_WALLCLOCK,
     matches::{assert_matches, debug_assert_matches},
@@ -18,6 +17,9 @@ use {
         time::{SystemTime, UNIX_EPOCH},
     },
     thiserror::Error,
+};
+pub use {
+    crate::legacy_contact_info::LegacyContactInfo, solana_client::connection_cache::Protocol,
 };
 
 const SOCKET_TAG_GOSSIP: u8 = 0;
@@ -115,6 +117,17 @@ macro_rules! get_socket {
             Ok(socket)
         }
     };
+    ($name:ident, $udp:ident, $quic:ident) => {
+        pub fn $name(&self, protocol: Protocol) -> Result<SocketAddr, Error> {
+            let key = match protocol {
+                Protocol::QUIC => $quic,
+                Protocol::UDP => $udp,
+            };
+            let socket = self.cache[usize::from(key)];
+            sanitize_socket(&socket)?;
+            Ok(socket)
+        }
+    };
 }
 
 macro_rules! set_socket {
@@ -203,10 +216,12 @@ impl ContactInfo {
     get_socket!(rpc, SOCKET_TAG_RPC);
     get_socket!(rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
     get_socket!(serve_repair, SOCKET_TAG_SERVE_REPAIR);
-    get_socket!(tpu, SOCKET_TAG_TPU);
-    get_socket!(tpu_forwards, SOCKET_TAG_TPU_FORWARDS);
-    get_socket!(tpu_forwards_quic, SOCKET_TAG_TPU_FORWARDS_QUIC);
-    get_socket!(tpu_quic, SOCKET_TAG_TPU_QUIC);
+    get_socket!(tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
+    get_socket!(
+        tpu_forwards,
+        SOCKET_TAG_TPU_FORWARDS,
+        SOCKET_TAG_TPU_FORWARDS_QUIC
+    );
     get_socket!(tpu_vote, SOCKET_TAG_TPU_VOTE);
     get_socket!(tvu, SOCKET_TAG_TVU);
     get_socket!(tvu_forwards, SOCKET_TAG_TVU_FORWARDS);
@@ -705,18 +720,21 @@ mod tests {
                 node.serve_repair().ok().as_ref(),
                 sockets.get(&SOCKET_TAG_SERVE_REPAIR)
             );
-            assert_eq!(node.tpu().ok().as_ref(), sockets.get(&SOCKET_TAG_TPU));
             assert_eq!(
-                node.tpu_forwards().ok().as_ref(),
+                node.tpu(Protocol::UDP).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_TPU)
+            );
+            assert_eq!(
+                node.tpu(Protocol::QUIC).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_TPU_QUIC)
+            );
+            assert_eq!(
+                node.tpu_forwards(Protocol::UDP).ok().as_ref(),
                 sockets.get(&SOCKET_TAG_TPU_FORWARDS)
             );
             assert_eq!(
-                node.tpu_forwards_quic().ok().as_ref(),
+                node.tpu_forwards(Protocol::QUIC).ok().as_ref(),
                 sockets.get(&SOCKET_TAG_TPU_FORWARDS_QUIC)
-            );
-            assert_eq!(
-                node.tpu_quic().ok().as_ref(),
-                sockets.get(&SOCKET_TAG_TPU_QUIC)
             );
             assert_eq!(
                 node.tpu_vote().ok().as_ref(),
@@ -778,20 +796,34 @@ mod tests {
         assert_eq!(old.rpc().unwrap(), node.rpc().unwrap());
         assert_eq!(old.rpc_pubsub().unwrap(), node.rpc_pubsub().unwrap());
         assert_eq!(old.serve_repair().unwrap(), node.serve_repair().unwrap());
-        assert_eq!(old.tpu().unwrap(), node.tpu().unwrap());
-        assert_eq!(old.tpu_forwards().unwrap(), node.tpu_forwards().unwrap());
         assert_eq!(
-            node.tpu_forwards_quic().unwrap(),
+            old.tpu(Protocol::QUIC).unwrap(),
+            node.tpu(Protocol::QUIC).unwrap()
+        );
+        assert_eq!(
+            old.tpu(Protocol::UDP).unwrap(),
+            node.tpu(Protocol::UDP).unwrap()
+        );
+        assert_eq!(
+            old.tpu_forwards(Protocol::QUIC).unwrap(),
+            node.tpu_forwards(Protocol::QUIC).unwrap()
+        );
+        assert_eq!(
+            old.tpu_forwards(Protocol::UDP).unwrap(),
+            node.tpu_forwards(Protocol::UDP).unwrap()
+        );
+        assert_eq!(
+            node.tpu_forwards(Protocol::QUIC).unwrap(),
             SocketAddr::new(
-                old.tpu_forwards().unwrap().ip(),
-                old.tpu_forwards().unwrap().port() + QUIC_PORT_OFFSET
+                old.tpu_forwards(Protocol::UDP).unwrap().ip(),
+                old.tpu_forwards(Protocol::UDP).unwrap().port() + QUIC_PORT_OFFSET
             )
         );
         assert_eq!(
-            node.tpu_quic().unwrap(),
+            node.tpu(Protocol::QUIC).unwrap(),
             SocketAddr::new(
-                old.tpu().unwrap().ip(),
-                old.tpu().unwrap().port() + QUIC_PORT_OFFSET
+                old.tpu(Protocol::UDP).unwrap().ip(),
+                old.tpu(Protocol::UDP).unwrap().port() + QUIC_PORT_OFFSET
             )
         );
         assert_eq!(old.tpu_vote().unwrap(), node.tpu_vote().unwrap());
@@ -860,23 +892,26 @@ mod tests {
             .unwrap();
         // TPU socket.
         node.set_tpu(socket).unwrap();
-        assert_eq!(node.tpu().unwrap(), socket);
+        assert_eq!(node.tpu(Protocol::UDP).unwrap(), socket);
         assert_eq!(
-            node.tpu_quic().unwrap(),
+            node.tpu(Protocol::QUIC).unwrap(),
             SocketAddr::new(socket.ip(), socket.port() + QUIC_PORT_OFFSET)
         );
         node.remove_tpu();
-        assert_matches!(node.tpu(), Err(Error::InvalidPort(0)));
-        assert_matches!(node.tpu_quic(), Err(Error::InvalidPort(0)));
+        assert_matches!(node.tpu(Protocol::UDP), Err(Error::InvalidPort(0)));
+        assert_matches!(node.tpu(Protocol::QUIC), Err(Error::InvalidPort(0)));
         // TPU forwards socket.
         node.set_tpu_forwards(socket).unwrap();
-        assert_eq!(node.tpu_forwards().unwrap(), socket);
+        assert_eq!(node.tpu_forwards(Protocol::UDP).unwrap(), socket);
         assert_eq!(
-            node.tpu_forwards_quic().unwrap(),
+            node.tpu_forwards(Protocol::QUIC).unwrap(),
             SocketAddr::new(socket.ip(), socket.port() + QUIC_PORT_OFFSET)
         );
         node.remove_tpu_forwards();
-        assert_matches!(node.tpu_forwards(), Err(Error::InvalidPort(0)));
-        assert_matches!(node.tpu_forwards_quic(), Err(Error::InvalidPort(0)));
+        assert_matches!(node.tpu_forwards(Protocol::UDP), Err(Error::InvalidPort(0)));
+        assert_matches!(
+            node.tpu_forwards(Protocol::QUIC),
+            Err(Error::InvalidPort(0))
+        );
     }
 }

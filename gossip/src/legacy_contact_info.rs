@@ -2,11 +2,10 @@ use {
     crate::{
         contact_info::{
             get_quic_socket, sanitize_quic_offset, sanitize_socket, socket_addr_unspecified,
-            ContactInfo, Error,
+            ContactInfo, Error, Protocol,
         },
         crds_value::MAX_WALLCLOCK,
     },
-    solana_client::connection_cache::Protocol,
     solana_sdk::{
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
@@ -63,6 +62,16 @@ macro_rules! get_socket {
             let socket = &self.$name;
             sanitize_socket(socket)?;
             Ok(socket).copied()
+        }
+    };
+    (@quic $name:ident) => {
+        pub fn $name(&self, protocol: Protocol) -> Result<SocketAddr, Error> {
+            let socket = &self.$name;
+            sanitize_socket(socket)?;
+            match protocol {
+                Protocol::QUIC => get_quic_socket(socket),
+                Protocol::UDP => Ok(socket).copied(),
+            }
         }
     };
 }
@@ -189,8 +198,8 @@ impl LegacyContactInfo {
     get_socket!(tvu);
     get_socket!(tvu_forwards);
     get_socket!(repair);
-    get_socket!(tpu);
-    get_socket!(tpu_forwards);
+    get_socket!(@quic tpu);
+    get_socket!(@quic tpu_forwards);
     get_socket!(tpu_vote);
     get_socket!(rpc);
     get_socket!(rpc_pubsub);
@@ -198,14 +207,6 @@ impl LegacyContactInfo {
 
     set_socket!(set_gossip, gossip);
     set_socket!(set_rpc, rpc);
-
-    pub fn tpu_quic(&self) -> Result<SocketAddr, Error> {
-        self.tpu().and_then(|addr| get_quic_socket(&addr))
-    }
-
-    pub fn tpu_forwards_quic(&self) -> Result<SocketAddr, Error> {
-        self.tpu_forwards().and_then(|addr| get_quic_socket(&addr))
-    }
 
     fn is_valid_ip(addr: IpAddr) -> bool {
         !(addr.is_unspecified() || addr.is_multicast())
@@ -226,17 +227,14 @@ impl LegacyContactInfo {
         protocol: Protocol,
         socket_addr_space: &SocketAddrSpace,
     ) -> Option<(SocketAddr, SocketAddr)> {
-        let rpc = self
-            .rpc()
-            .ok()
-            .filter(|addr| socket_addr_space.check(addr))?;
-        let tpu = match protocol {
-            Protocol::QUIC => self.tpu_quic(),
-            Protocol::UDP => self.tpu(),
-        }
-        .ok()
-        .filter(|addr| socket_addr_space.check(addr))?;
-        Some((rpc, tpu))
+        Some((
+            self.rpc()
+                .ok()
+                .filter(|addr| socket_addr_space.check(addr))?,
+            self.tpu(protocol)
+                .ok()
+                .filter(|addr| socket_addr_space.check(addr))?,
+        ))
     }
 }
 
@@ -248,17 +246,28 @@ impl TryFrom<&ContactInfo> for LegacyContactInfo {
             ($name:ident) => {
                 node.$name().ok().unwrap_or_else(socket_addr_unspecified)
             };
+            ($name:ident, $protocol:expr) => {
+                node.$name($protocol)
+                    .ok()
+                    .unwrap_or_else(socket_addr_unspecified)
+            };
         }
-        sanitize_quic_offset(&node.tpu().ok(), &node.tpu_quic().ok())?;
-        sanitize_quic_offset(&node.tpu_forwards().ok(), &node.tpu_forwards_quic().ok())?;
+        sanitize_quic_offset(
+            &node.tpu(Protocol::UDP).ok(),
+            &node.tpu(Protocol::QUIC).ok(),
+        )?;
+        sanitize_quic_offset(
+            &node.tpu_forwards(Protocol::UDP).ok(),
+            &node.tpu_forwards(Protocol::QUIC).ok(),
+        )?;
         Ok(Self {
             id: *node.pubkey(),
             gossip: unwrap_socket!(gossip),
             tvu: unwrap_socket!(tvu),
             tvu_forwards: unwrap_socket!(tvu_forwards),
             repair: unwrap_socket!(repair),
-            tpu: unwrap_socket!(tpu),
-            tpu_forwards: unwrap_socket!(tpu_forwards),
+            tpu: unwrap_socket!(tpu, Protocol::UDP),
+            tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),
             tpu_vote: unwrap_socket!(tpu_vote),
             rpc: unwrap_socket!(rpc),
             rpc_pubsub: unwrap_socket!(rpc_pubsub),

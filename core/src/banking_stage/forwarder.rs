@@ -8,7 +8,7 @@ use {
         unprocessed_transaction_storage::UnprocessedTransactionStorage,
     },
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::LegacyContactInfo as ContactInfo},
+    solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure_us,
     solana_perf::{data_budget::DataBudget, packet::Packet},
     solana_poh::poh_recorder::PohRecorder,
@@ -218,15 +218,11 @@ impl Forwarder {
     fn get_leader_and_addr(&self, forward_option: &ForwardOption) -> Option<(Pubkey, SocketAddr)> {
         match forward_option {
             ForwardOption::NotForward => None,
-            ForwardOption::ForwardTransaction => next_leader(
-                &self.cluster_info,
-                &self.poh_recorder,
-                match *self.connection_cache {
-                    ConnectionCache::Quic(_) => ContactInfo::tpu_forwards_quic,
-                    ConnectionCache::Udp(_) => ContactInfo::tpu_forwards,
-                },
-            ),
-
+            ForwardOption::ForwardTransaction => {
+                next_leader(&self.cluster_info, &self.poh_recorder, |node| {
+                    node.tpu_forwards(self.connection_cache.protocol())
+                })
+            }
             ForwardOption::ForwardTpuVote => {
                 next_leader_tpu_vote(&self.cluster_info, &self.poh_recorder)
             }
