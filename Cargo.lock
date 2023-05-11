@@ -4943,7 +4943,7 @@ name = "solana-account-decoder"
 version = "1.16.0"
 dependencies = [
  "Inflector",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "bs58",
  "bv",
@@ -5372,7 +5372,7 @@ name = "solana-cli-output"
 version = "1.16.0"
 dependencies = [
  "Inflector",
- "base64 0.13.1",
+ "base64 0.21.0",
  "chrono",
  "clap 2.33.3",
  "console",
@@ -5502,7 +5502,7 @@ dependencies = [
 name = "solana-core"
 version = "1.16.0"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "bs58",
  "chrono",
@@ -5760,7 +5760,7 @@ dependencies = [
 name = "solana-genesis"
 version = "1.16.0"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "clap 2.33.3",
  "itertools",
@@ -6338,7 +6338,7 @@ dependencies = [
  "ark-serialize 0.4.2",
  "array-bytes",
  "assert_matches",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "bitflags",
  "blake3",
@@ -6388,7 +6388,7 @@ dependencies = [
 name = "solana-program-runtime"
 version = "1.16.0"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "eager",
  "enum-iterator",
@@ -6417,7 +6417,7 @@ version = "1.16.0"
 dependencies = [
  "assert_matches",
  "async-trait",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "chrono-humanize",
  "crossbeam-channel",
@@ -6520,7 +6520,7 @@ dependencies = [
 name = "solana-rpc"
 version = "1.16.0"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "bs58",
  "crossbeam-channel",
@@ -6579,7 +6579,7 @@ version = "1.16.0"
 dependencies = [
  "assert_matches",
  "async-trait",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "bs58",
  "crossbeam-channel",
@@ -6606,7 +6606,7 @@ dependencies = [
 name = "solana-rpc-client-api"
 version = "1.16.0"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.0",
  "bs58",
  "jsonrpc-core",
  "reqwest",
@@ -6799,7 +6799,7 @@ version = "1.16.0"
 dependencies = [
  "anyhow",
  "assert_matches",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "bitflags",
  "borsh",
@@ -7046,7 +7046,7 @@ dependencies = [
 name = "solana-test-validator"
 version = "1.16.0"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "crossbeam-channel",
  "log",
@@ -7173,7 +7173,7 @@ name = "solana-transaction-status"
 version = "1.16.0"
 dependencies = [
  "Inflector",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "borsh",
  "bs58",
@@ -7392,7 +7392,7 @@ version = "1.16.0"
 dependencies = [
  "aes-gcm-siv",
  "arrayref",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bincode",
  "bytemuck",
  "byteorder",

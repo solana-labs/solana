@@ -607,6 +607,7 @@ mod tests {
             optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank, rpc_pubsub_service,
             rpc_subscriptions::RpcSubscriptions,
         },
+        base64::{prelude::BASE64_STANDARD, Engine},
         jsonrpc_core::{IoHandler, Response},
         serial_test::serial,
         solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding},
@@ -941,7 +942,7 @@ mod tests {
                    "value": {
                        "owner": stake_program_id.to_string(),
                        "lamports": balance,
-                       "data": [base64::encode(expected_data), encoding],
+                       "data": [BASE64_STANDARD.encode(expected_data), encoding],
                        "executable": false,
                        "rentEpoch": u64::MAX,
                        "space": expected_data.len(),

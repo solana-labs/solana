@@ -1,6 +1,7 @@
 pub use bytemuck::{Pod, Zeroable};
 use {
     crate::zk_token_proof_instruction::ProofType,
+    base64::{prelude::BASE64_STANDARD, Engine},
     num_traits::{FromPrimitive, ToPrimitive},
     solana_program::instruction::InstructionError,
     std::fmt,
@@ -66,7 +67,7 @@ impl fmt::Debug for ElGamalCiphertext {
 
 impl fmt::Display for ElGamalCiphertext {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", base64::encode(self.0))
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
     }
 }
 
@@ -88,7 +89,7 @@ impl fmt::Debug for ElGamalPubkey {
 
 impl fmt::Display for ElGamalPubkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", base64::encode(self.0))
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
     }
 }
 
@@ -220,7 +221,7 @@ impl fmt::Debug for AeCiphertext {
 
 impl fmt::Display for AeCiphertext {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", base64::encode(self.0))
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
     }
 }
 

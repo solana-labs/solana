@@ -12,6 +12,7 @@ use {
 };
 use {
     arrayref::{array_ref, array_refs},
+    base64::{prelude::BASE64_STANDARD, Engine},
     sha3::{Digest, Sha3_512},
     solana_sdk::{
         derivation_path::DerivationPath,
@@ -198,7 +199,7 @@ impl AeCiphertext {
 
 impl fmt::Display for AeCiphertext {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", base64::encode(self.to_bytes()))
+        write!(f, "{}", BASE64_STANDARD.encode(self.to_bytes()))
     }
 }
 

@@ -7,6 +7,7 @@ use {
         account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
         program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
     },
+    base64::{prelude::BASE64_STANDARD, Engine},
     itertools::Itertools,
     std::sync::{Arc, RwLock},
 };
@@ -89,7 +90,10 @@ pub trait SyscallStubs: Sync + Send {
     }
     fn sol_set_return_data(&self, _data: &[u8]) {}
     fn sol_log_data(&self, fields: &[&[u8]]) {
-        println!("data: {}", fields.iter().map(base64::encode).join(" "));
+        println!(
+            "data: {}",
+            fields.iter().map(|v| BASE64_STANDARD.encode(v)).join(" ")
+        );
     }
     fn sol_get_processed_sibling_instruction(&self, _index: usize) -> Option<Instruction> {
         None
