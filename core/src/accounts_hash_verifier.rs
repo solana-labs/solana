@@ -334,6 +334,7 @@ impl AccountsHashVerifier {
             epoch_schedule: &accounts_package.epoch_schedule,
             rent_collector: &accounts_package.rent_collector,
             store_detailed_debug_info_on_failure: false,
+            include_slot_in_hash: accounts_package.include_slot_in_hash,
         };
 
         let ((accounts_hash, lamports), measure_hash_us) = measure_us!(accounts_package
@@ -428,6 +429,7 @@ impl AccountsHashVerifier {
             epoch_schedule: &accounts_package.epoch_schedule,
             rent_collector: &accounts_package.rent_collector,
             store_detailed_debug_info_on_failure: false,
+            include_slot_in_hash: accounts_package.include_slot_in_hash,
         };
 
         let (incremental_accounts_hash, measure_hash_us) = measure_us!(

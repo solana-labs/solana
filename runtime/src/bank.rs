@@ -5565,7 +5565,8 @@ impl Bank {
     }
 
     /// true if we should include the slot in account hash
-    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+    /// This is governed by a feature.
+    pub(crate) fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         if self
             .feature_set
             .is_active(&feature_set::account_hash_ignore_slot::id())
@@ -6662,6 +6663,7 @@ impl Bank {
         let cap = self.capitalization();
         let epoch_schedule = self.epoch_schedule();
         let rent_collector = self.rent_collector();
+        let include_slot_in_hash = self.include_slot_in_hash();
         if config.run_in_background {
             let ancestors = ancestors.clone();
             let accounts = Arc::clone(accounts);
@@ -6687,6 +6689,7 @@ impl Bank {
                                 ignore_mismatch: config.ignore_mismatch,
                                 store_detailed_debug_info: config.store_hash_raw_data_for_debug,
                                 use_bg_thread_pool: true,
+                                include_slot_in_hash,
                             },
                         );
                         accounts_
@@ -6711,6 +6714,7 @@ impl Bank {
                     ignore_mismatch: config.ignore_mismatch,
                     store_detailed_debug_info: config.store_hash_raw_data_for_debug,
                     use_bg_thread_pool: false, // fg is waiting for this to run, so we can use the fg thread pool
+                    include_slot_in_hash,
                 },
             );
             self.set_initial_accounts_hash_verification_completed();
@@ -6848,6 +6852,7 @@ impl Bank {
                 self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
+                self.include_slot_in_hash(),
             )
             .1
     }
@@ -6936,6 +6941,7 @@ impl Bank {
             self.epoch_schedule(),
             &self.rent_collector,
             is_startup,
+            self.include_slot_in_hash(),
         );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -6958,6 +6964,7 @@ impl Bank {
                     self.epoch_schedule(),
                     &self.rent_collector,
                     is_startup,
+                    self.include_slot_in_hash(),
                 );
             }
 
@@ -6984,6 +6991,7 @@ impl Bank {
             epoch_schedule: &self.epoch_schedule,
             rent_collector: &self.rent_collector,
             store_detailed_debug_info_on_failure: false,
+            include_slot_in_hash: self.include_slot_in_hash(),
         };
         let storages = self.get_snapshot_storages(Some(base_slot));
         let sorted_storages = SortedStorages::new(&storages);
