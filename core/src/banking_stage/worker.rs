@@ -1,6 +1,6 @@
 use {
     super::{
-        consumer::Consumer,
+        consumer::{Consumer, ExecuteAndCommitTransactionsOutput, ProcessTransactionBatchOutput},
         forwarder::Forwarder,
         scheduler_messages::{ConsumeWork, FinishedConsumeWork, FinishedForwardWork, ForwardWork},
         ForwardOption,
@@ -104,7 +104,14 @@ impl Worker {
 
     /// Consume a single batch.
     fn consume(&self, bank: &Arc<Bank>, mut work: ConsumeWork) -> Result<(), WorkerError> {
-        let summary = self.consumer.process_and_record_aged_transactions(
+        let ProcessTransactionBatchOutput {
+            execute_and_commit_transactions_output:
+                ExecuteAndCommitTransactionsOutput {
+                    retryable_transaction_indexes,
+                    ..
+                },
+            ..
+        } = self.consumer.process_and_record_aged_transactions(
             bank,
             &work.transactions,
             &mut work.max_age_slots,
@@ -112,9 +119,7 @@ impl Worker {
 
         self.consumed_sender.send(FinishedConsumeWork {
             work,
-            retryable_indexes: summary
-                .execute_and_commit_transactions_output
-                .retryable_transaction_indexes,
+            retryable_indexes: retryable_transaction_indexes,
         })?;
         Ok(())
     }
