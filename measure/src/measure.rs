@@ -113,7 +113,11 @@ mod tests {
             Res: PartialOrd + Debug,
         {
             let measure = Measure::start("test");
-            sleep(Duration::from_millis(sleep_ms));
+            let wait_duration = Duration::from_millis(sleep_ms);
+            let start = Instant::now();
+            while start.elapsed() < wait_duration {
+                core::hint::spin_loop();
+            }
             let result = method(measure);
             assert!(
                 result >= lower,
