@@ -158,3 +158,37 @@ members = [
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[patch.crates-io]
+# We include the following crates as our dependencies from crates.io:
+#
+#  * spl-associated-token-account
+#  * spl-instruction-padding
+#  * spl-memo
+#  * spl-token
+#  * spl-token-2022
+#
+# They are included indirectly, for example, `account-decoder` depends on
+#
+#     solana-sdk = { workspace = true }
+#
+# and that is specified as
+#
+#     spl-token = "=3.5.0"
+#
+# in `../../Cargo.toml`.
+#
+# `spl-token`, in turn, depends on `solana-program`, which we explicitly specify above as a local
+# path dependency:
+#
+#     solana-program = { path = "../../sdk/program", version = "=1.16.0" }
+#
+# Unfortunately, Cargo will try to resolve the `spl-token` `solana-program` dependency only using
+# what is available on crates.io.  Crates.io normally contains a previous version of these crates,
+# and we end up with two versions of `solana-program` and `solana-zk-token-sdk` and all of their
+# dependencies in our build tree.
+#
+# There is a similar override in `../../Cargo.toml`.  Please keep both comments and the
+# overrides in sync.
+solana-program = { path = "../../sdk/program" }
+solana-zk-token-sdk = { path = "../../zk-token-sdk" }
