@@ -142,7 +142,12 @@ fn bench_process_and_record_transactions(bencher: &mut Bencher, batch_size: usiz
     let mut transaction_iter = transactions.chunks(batch_size);
 
     bencher.iter(move || {
-        consumer.process_and_record_transactions(&bank, transaction_iter.next().unwrap(), 0);
+        let summary =
+            consumer.process_and_record_transactions(&bank, transaction_iter.next().unwrap(), 0);
+        assert!(summary
+            .execute_and_commit_transactions_output
+            .commit_transactions_result
+            .is_ok());
     });
 
     exit.store(true, Ordering::Relaxed);
