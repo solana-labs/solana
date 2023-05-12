@@ -347,7 +347,7 @@ mod tests {
         assert_eq!(consumed.retryable_indexes, vec![0]);
 
         drop(test_frame);
-        let _ = worker_thread.join();
+        let _ = worker_thread.join().unwrap();
     }
 
     #[test]
@@ -389,7 +389,7 @@ mod tests {
         assert_eq!(consumed.retryable_indexes, Vec::<usize>::new());
 
         drop(test_frame);
-        let _ = worker_thread.join();
+        let _ = worker_thread.join().unwrap();
     }
 
     #[test]
@@ -434,7 +434,7 @@ mod tests {
         assert_eq!(consumed.retryable_indexes, vec![1]); // id2 is retryable since lock conflict
 
         drop(test_frame);
-        let _ = worker_thread.join();
+        let _ = worker_thread.join().unwrap();
     }
 
     #[test]
@@ -502,7 +502,7 @@ mod tests {
         assert_eq!(consumed.retryable_indexes, Vec::<usize>::new());
 
         drop(test_frame);
-        let _ = worker_thread.join();
+        let _ = worker_thread.join().unwrap();
     }
 
     #[test]
@@ -570,7 +570,7 @@ mod tests {
         assert_eq!(consumed.retryable_indexes, Vec::<usize>::new());
 
         drop(test_frame);
-        let _ = worker_thread.join();
+        let _ = worker_thread.join().unwrap();
     }
 
     #[test]
@@ -615,6 +615,6 @@ mod tests {
         assert!(forwarded.successful);
 
         drop(test_frame);
-        let _ = worker_thread.join();
+        let _ = worker_thread.join().unwrap();
     }
 }
