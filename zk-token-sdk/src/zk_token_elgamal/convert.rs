@@ -67,7 +67,7 @@ mod target_arch {
                 equality_proof::{CtxtCommEqualityProof, CtxtCtxtEqualityProof},
                 errors::*,
                 fee_proof::FeeSigmaProof,
-                pubkey_proof::PubkeySigmaProof,
+                pubkey_proof::PubkeyValidityProof,
                 validity_proof::{AggregatedValidityProof, ValidityProof},
                 zero_balance_proof::ZeroBalanceProof,
             },
@@ -275,16 +275,16 @@ mod target_arch {
         }
     }
 
-    impl From<PubkeySigmaProof> for pod::PubkeySigmaProof {
-        fn from(proof: PubkeySigmaProof) -> Self {
+    impl From<PubkeyValidityProof> for pod::PubkeyValidityProof {
+        fn from(proof: PubkeyValidityProof) -> Self {
             Self(proof.to_bytes())
         }
     }
 
-    impl TryFrom<pod::PubkeySigmaProof> for PubkeySigmaProof {
+    impl TryFrom<pod::PubkeyValidityProof> for PubkeyValidityProof {
         type Error = PubkeyValidityProofError;
 
-        fn try_from(pod: pod::PubkeySigmaProof) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::PubkeyValidityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }
