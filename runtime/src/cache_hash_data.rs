@@ -61,12 +61,12 @@ impl CacheHashDataFile {
     }
 
     /// get '&mut EntryType' from cache file [ix]
-    fn get_mut(&mut self, ix: u64) -> &mut EntryType {
-        let item_slice = self.get_slice_internal(ix);
-        unsafe {
-            let item = item_slice.as_ptr() as *mut EntryType;
-            &mut *item
-        }
+    fn get_mut_slice(&mut self, ix: u64, len: usize) -> &mut [EntryType] {
+        let start = self.get_element_offset_byte(ix);
+        let item_slice: &mut [u8] = &mut self.mmap[start..];
+        let remaining_elements = (item_slice.len() / std::mem::size_of::<EntryType>()).min(len);
+        let item = item_slice.as_mut_ptr() as *mut EntryType;
+        unsafe { std::slice::from_raw_parts_mut(item, remaining_elements) }
     }
 
     /// get '&[EntryType]' from cache file [ix..]
@@ -85,21 +85,6 @@ impl CacheHashDataFile {
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
         debug_assert_eq!(start % std::mem::align_of::<EntryType>(), 0);
         start
-    }
-
-    /// get the bytes representing cache file [ix]
-    fn get_slice_internal(&self, ix: u64) -> &[u8] {
-        let start = self.get_element_offset_byte(ix);
-        let end = start + std::mem::size_of::<EntryType>();
-        assert!(
-            end <= self.capacity as usize,
-            "end: {}, capacity: {}, ix: {}, cell size: {}",
-            end,
-            self.capacity,
-            ix,
-            self.cell_size
-        );
-        &self.mmap[start..end]
     }
 
     fn get_header_mut(&mut self) -> &mut Header {
@@ -330,11 +315,11 @@ impl CacheHashData {
         let mut m2 = Measure::start("write_to_mmap");
         let mut i = 0;
         data.iter().for_each(|x| {
-            x.iter().for_each(|item| {
-                let d = cache_file.get_mut(i as u64);
-                i += 1;
-                *d = item.clone();
-            })
+            let len = x.len();
+            let dest = cache_file.get_mut_slice(i as u64, len);
+            assert_eq!(dest.len(), len);
+            dest.copy_from_slice(&x[..]);
+            i += len;
         });
         assert_eq!(i, entries);
         m2.stop();
