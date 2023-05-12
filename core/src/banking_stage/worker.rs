@@ -126,7 +126,7 @@ impl Worker {
             .upgrade()
     }
 
-    /// Retry current batche and all outstanding batches.
+    /// Retry current batch and all outstanding batches.
     fn retry_drain(&self, work: ConsumeWork) -> Result<(), WorkerError> {
         for work in std::iter::once(work).chain(self.consume_receiver.try_iter()) {
             self.retry(work)?;
