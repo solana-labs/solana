@@ -324,23 +324,18 @@ fn output_trace(
     }
 }
 
-enum Action {
-    Cfg,
-    Dis,
-}
-
-fn process_static_action(action: Action, matches: &ArgMatches<'_>) {
-    let transaction_accounts = Vec::new();
-    let program_id = Pubkey::new_unique();
-    with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
-    let program = matches.value_of("PROGRAM").unwrap();
-    let mut file = File::open(Path::new(program)).unwrap();
+fn load_program<'a>(
+    filename: &Path,
+    program_id: Pubkey,
+    invoke_context: &InvokeContext<'a>,
+) -> Executable<RequisiteVerifier, InvokeContext<'a>> {
+    let mut file = File::open(filename).unwrap();
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic).unwrap();
     file.rewind().unwrap();
+    let is_elf = magic == [0x7f, 0x45, 0x4c, 0x46];
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
-
     let slot = Slot::default();
     let reject_deployment_of_broken_elfs = false;
     let debugging_features = true;
@@ -351,8 +346,7 @@ fn process_static_action(action: Action, matches: &ArgMatches<'_>) {
         ..LoadProgramMetrics::default()
     };
     let account_size = contents.len();
-    #[allow(unused_mut)]
-    let mut verified_executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
+    let mut verified_executable = if is_elf {
         let result = load_program_from_bytes(
             &invoke_context.feature_set,
             invoke_context.get_compute_budget(),
@@ -378,21 +372,32 @@ fn process_static_action(action: Action, matches: &ArgMatches<'_>) {
             invoke_context.get_compute_budget(),
             true,
             true,
-            true,
         )
         .unwrap();
         let executable =
             assemble::<InvokeContext>(std::str::from_utf8(contents.as_slice()).unwrap(), loader)
                 .unwrap();
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+        Executable::<RequisiteVerifier, InvokeContext>::verified(executable)
             .map_err(|err| format!("Assembling executable failed: {err:?}"))
     }
     .unwrap();
-
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();
-    let mut analysis = LazyAnalysis::new(&verified_executable);
+    verified_executable
+}
 
+enum Action {
+    Cfg,
+    Dis,
+}
+
+fn process_static_action(action: Action, matches: &ArgMatches<'_>) {
+    let transaction_accounts = Vec::new();
+    let program_id = Pubkey::new_unique();
+    with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+    let program = matches.value_of("PROGRAM").unwrap();
+    let verified_executable = load_program(Path::new(program), program_id, &invoke_context);
+    let mut analysis = LazyAnalysis::new(&verified_executable);
     match action {
         Action::Cfg => {
             let mut file = File::create("cfg.dot").unwrap();
@@ -566,62 +571,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
     .unwrap();
 
     let program = matches.value_of("PROGRAM").unwrap();
-    let mut file = File::open(Path::new(program)).unwrap();
-    let mut magic = [0u8; 4];
-    file.read_exact(&mut magic).unwrap();
-    file.rewind().unwrap();
-    let mut contents = Vec::new();
-    file.read_to_end(&mut contents).unwrap();
-
-    let slot = Slot::default();
-    let reject_deployment_of_broken_elfs = false;
-    let debugging_features = true;
-    let log_collector = invoke_context.get_log_collector();
-    let loader_key = bpf_loader_upgradeable::id();
-    let mut load_program_metrics = LoadProgramMetrics {
-        program_id: program_id.to_string(),
-        ..LoadProgramMetrics::default()
-    };
-    let account_size = contents.len();
-    #[allow(unused_mut)]
-    let mut verified_executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        let result = load_program_from_bytes(
-            &invoke_context.feature_set,
-            invoke_context.get_compute_budget(),
-            log_collector,
-            &mut load_program_metrics,
-            &contents,
-            &loader_key,
-            account_size,
-            slot,
-            reject_deployment_of_broken_elfs,
-            debugging_features,
-        );
-        match result {
-            Ok(loaded_program) => match loaded_program.program {
-                LoadedProgramType::LegacyV1(program) => Ok(unsafe { std::mem::transmute(program) }),
-                _ => unreachable!(),
-            },
-            Err(err) => Err(format!("Loading executable failed: {err:?}")),
-        }
-    } else {
-        let loader = create_loader(
-            &invoke_context.feature_set,
-            invoke_context.get_compute_budget(),
-            true,
-            true,
-        )
-        .unwrap();
-        let executable =
-            assemble::<InvokeContext>(std::str::from_utf8(contents.as_slice()).unwrap(), loader)
-                .unwrap();
-        Executable::<RequisiteVerifier, InvokeContext>::verified(executable)
-            .map_err(|err| format!("Assembling executable failed: {err:?}"))
-    }
-    .unwrap();
-
-    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-    verified_executable.jit_compile().unwrap();
+    let verified_executable = load_program(Path::new(program), program_id, &invoke_context);
     let mut analysis = LazyAnalysis::new(&verified_executable);
     create_vm!(
         vm,
