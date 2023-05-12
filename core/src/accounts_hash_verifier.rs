@@ -20,6 +20,7 @@ use {
             self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
             SnapshotType,
         },
+        snapshot_utils,
         sorted_storages::SortedStorages,
     },
     solana_sdk::{
@@ -219,7 +220,8 @@ impl AccountsHashVerifier {
         snapshot_config: &SnapshotConfig,
         accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     ) {
-        let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
+        let accounts_hash =
+            Self::calculate_and_verify_accounts_hash(&accounts_package, snapshot_config);
 
         Self::save_epoch_accounts_hash(&accounts_package, accounts_hash);
 
@@ -243,7 +245,10 @@ impl AccountsHashVerifier {
     }
 
     /// returns calculated accounts hash
-    fn calculate_and_verify_accounts_hash(accounts_package: &AccountsPackage) -> AccountsHashEnum {
+    fn calculate_and_verify_accounts_hash(
+        accounts_package: &AccountsPackage,
+        snapshot_config: &SnapshotConfig,
+    ) -> AccountsHashEnum {
         let accounts_hash_calculation_flavor = match accounts_package.package_type {
             AccountsPackageType::AccountsHashVerifier => CalcAccountsHashFlavor::Full,
             AccountsPackageType::EpochAccountsHash => CalcAccountsHashFlavor::Full,
@@ -312,6 +317,24 @@ impl AccountsHashVerifier {
                 .accounts_db
                 .purge_old_accounts_hashes(accounts_package.slot);
         }
+
+        // After an accounts package has had its accounts hash calculated and
+        // has been reserialized to become a BankSnapshotPost, it is now safe
+        // to clean up some older bank snapshots.
+        //
+        // If we are generating snapshots, then this accounts package will be sent
+        // to SnapshotPackagerService to be archived.  SPS needs the bank snapshots
+        // to make the archives, so we cannot purge any bank snapshots that SPS
+        // may still be using. Therefore, we defer purging to SPS.
+        //
+        // If we are *not* generating snapshots, then purge old bank snapshots here.
+        if !snapshot_config.should_generate_snapshots() {
+            snapshot_utils::purge_bank_snapshots_older_than_slot(
+                &snapshot_config.bank_snapshots_dir,
+                accounts_package.slot,
+            );
+        }
+
         accounts_hash_enum
     }
 
