@@ -394,18 +394,24 @@ impl Consumer {
         chunk_offset: usize,
     ) -> ProcessTransactionBatchOutput {
         let (
-            (transaction_costs, transactions_qos_results, cost_model_throttled_transactions_count),
+            (transaction_qos_cost_results, cost_model_throttled_transactions_count),
             cost_model_us,
-        ) = measure_us!(self
-            .qos_service
-            .select_and_accumulate_transaction_costs(bank, txs));
+        ) = measure_us!(self.qos_service.select_and_accumulate_transaction_costs(
+            bank,
+            txs,
+            std::iter::repeat(Ok(())) // no filtering before QoS
+        ));
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let (batch, lock_us) = measure_us!(
-            bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.iter())
-        );
+        let (batch, lock_us) = measure_us!(bank.prepare_sanitized_batch_with_results(
+            txs,
+            transaction_qos_cost_results.iter().map(|r| match r {
+                Ok(_cost) => Ok(()),
+                Err(err) => Err(err.clone()),
+            })
+        ));
 
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
         // WouldExceedMaxAccountCostLimit, WouldExceedMaxVoteCostLimit
@@ -424,8 +430,7 @@ impl Consumer {
         } = execute_and_commit_transactions_output;
 
         QosService::update_or_remove_transaction_costs(
-            transaction_costs.iter(),
-            transactions_qos_results.iter(),
+            transaction_qos_cost_results.iter(),
             commit_transactions_result.as_ref().ok(),
             bank,
         );

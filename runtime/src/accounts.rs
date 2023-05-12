@@ -1233,14 +1233,14 @@ impl Accounts {
     pub fn lock_accounts_with_results<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        results: impl Iterator<Item = &'a Result<()>>,
+        results: impl Iterator<Item = Result<()>>,
         tx_account_lock_limit: usize,
     ) -> Vec<Result<()>> {
         let tx_account_locks_results: Vec<Result<_>> = txs
             .zip(results)
             .map(|(tx, result)| match result {
                 Ok(()) => tx.get_account_locks(tx_account_lock_limit),
-                Err(err) => Err(err.clone()),
+                Err(err) => Err(err),
             })
             .collect();
         self.lock_accounts_inner(tx_account_locks_results)
@@ -3162,7 +3162,7 @@ mod tests {
 
         let results = accounts.lock_accounts_with_results(
             txs.iter(),
-            qos_results.iter(),
+            qos_results.into_iter(),
             MAX_TX_ACCOUNT_LOCKS,
         );
 
