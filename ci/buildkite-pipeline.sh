@@ -3,7 +3,7 @@
 # Builds a buildkite pipeline based on the environment variables
 #
 
-set -e
+set -x
 cd "$(dirname "$0")"/..
 
 output_file=${1:-/dev/stderr}
