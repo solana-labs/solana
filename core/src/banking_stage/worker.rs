@@ -73,22 +73,22 @@ impl Worker {
     pub fn run(self) -> Result<(), WorkerError> {
         loop {
             select! {
-                recv(self.consume_receiver) -> consume_work => {
-                    self.consume_loop(consume_work?)?;
+                recv(self.consume_receiver) -> work => {
+                    self.consume_loop(work?)?;
                 },
-                recv(self.forward_receiver) -> forward_work => {
-                    self.forward_loop(forward_work?)?;
+                recv(self.forward_receiver) -> work => {
+                    self.forward_loop(work?)?;
                 },
             }
         }
     }
 
-    fn consume_loop(&self, consume_work: ConsumeWork) -> Result<(), WorkerError> {
+    fn consume_loop(&self, work: ConsumeWork) -> Result<(), WorkerError> {
         let Some(mut bank) = self.get_consume_bank() else {
-            return self.retry_drain(consume_work);
+            return self.retry_drain(work);
         };
 
-        for work in std::iter::once(consume_work).chain(self.consume_receiver.try_iter()) {
+        for work in std::iter::once(work).chain(self.consume_receiver.try_iter()) {
             if bank.is_complete() {
                 if let Some(new_bank) = self.get_consume_bank() {
                     bank = new_bank;
@@ -103,15 +103,15 @@ impl Worker {
     }
 
     /// Consume a single batch.
-    fn consume(&self, bank: &Arc<Bank>, mut consume_work: ConsumeWork) -> Result<(), WorkerError> {
+    fn consume(&self, bank: &Arc<Bank>, mut work: ConsumeWork) -> Result<(), WorkerError> {
         let summary = self.consumer.process_and_record_aged_transactions(
             bank,
-            &consume_work.transactions,
-            &mut consume_work.max_age_slots,
+            &work.transactions,
+            &mut work.max_age_slots,
         );
 
         self.consumed_sender.send(FinishedConsumeWork {
-            work: consume_work,
+            work,
             retryable_indexes: summary
                 .execute_and_commit_transactions_output
                 .retryable_transaction_indexes,
@@ -144,8 +144,8 @@ impl Worker {
         Ok(())
     }
 
-    fn forward_loop(&self, forward_work: ForwardWork) -> Result<(), WorkerError> {
-        for work in std::iter::once(forward_work).chain(self.forward_receiver.try_iter()) {
+    fn forward_loop(&self, work: ForwardWork) -> Result<(), WorkerError> {
+        for work in std::iter::once(work).chain(self.forward_receiver.try_iter()) {
             let (res, _num_packets, _forward_us, _leader_pubkey) = self.forwarder.forward_packets(
                 &self.forward_option,
                 work.packets.iter().map(|p| p.original_packet()),
