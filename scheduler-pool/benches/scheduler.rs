@@ -15,15 +15,13 @@ use {
         bank::Bank,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         installed_scheduler_pool::{
-            InstalledScheduler, InstalledSchedulerPoolArc, ResultWithTimings, SchedulerId,
-            SchedulingContext, WaitReason,
+            InstalledScheduler, InstalledSchedulerPoolArc, ResultWithTimings, ScheduleExecutionArg,
+            SchedulerId, SchedulingContext, WaitReason, WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
     },
     solana_scheduler::SchedulingMode,
-    solana_scheduler_pool::{
-        PooledScheduler, ScheduledTransactionHandler, SchedulerPool, WithTransactionAndIndex,
-    },
+    solana_scheduler_pool::{PooledScheduler, ScheduledTransactionHandler, SchedulerPool},
     solana_sdk::{
         system_transaction,
         transaction::{Result, SanitizedTransaction},
@@ -39,21 +37,30 @@ use {
 
 const TX_COUNT: usize = 10_000;
 
+#[derive(Debug)]
+struct ScheduleExecutionArgForBench;
+
 // use Arc-ed transaction for very cheap .clone() so that the consumer is never starved for
 // incoming transactions.
 type TransactionWithIndexForBench = Arc<(SanitizedTransaction, usize)>;
 
-#[derive(Debug)]
-struct BenchFriendlyHandler<const MUTATE_ARC: bool>;
+impl ScheduleExecutionArg for ScheduleExecutionArgForBench {
+    type TransactionWithIndex<'_tx> = TransactionWithIndexForBench;
+}
 
-impl<const MUTATE_ARC: bool> ScheduledTransactionHandler<TransactionWithIndexForBench>
-    for BenchFriendlyHandler<MUTATE_ARC>
+#[derive(Debug)]
+struct BenchFriendlyHandler<SEA: ScheduleExecutionArg, const MUTATE_ARC: bool>(
+    std::marker::PhantomData<SEA>,
+);
+
+impl<SEA: ScheduleExecutionArg, const MUTATE_ARC: bool> ScheduledTransactionHandler<SEA>
+    for BenchFriendlyHandler<SEA, MUTATE_ARC>
 {
     fn handle(
         _result: &mut Result<()>,
         _timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
-        with_transaction: &TransactionWithIndexForBench,
+        transaction_with_index: SEA::TransactionWithIndex<'_>,
         _pool: &SchedulerPool,
     ) {
         //std::hint::black_box(bank.clone());
@@ -66,21 +73,21 @@ impl<const MUTATE_ARC: bool> ScheduledTransactionHandler<TransactionWithIndexFor
             }
             // call random one of Bank's lightweight-and-very-multi-threaded-friendly methods which take a
             // transaction inside this artifical tight loop.
-            i += bank.get_fee_for_message_with_lamports_per_signature(
-                with_transaction.transaction().message(),
-                i,
-            )
+            transaction_with_index.with_transaction_and_index(|transaction, _index| {
+                i += bank.get_fee_for_message_with_lamports_per_signature(transaction.message(), i)
+            });
         }
         std::hint::black_box(i);
     }
 }
 
-type BenchFriendlyHandlerWithArcMutation = BenchFriendlyHandler<true>;
-type BenchFriendlyHandlerWithoutArcMutation = BenchFriendlyHandler<false>;
+type BenchFriendlyHandlerWithArcMutation = BenchFriendlyHandler<ScheduleExecutionArgForBench, true>;
+type BenchFriendlyHandlerWithoutArcMutation =
+    BenchFriendlyHandler<ScheduleExecutionArgForBench, false>;
 
 fn run_bench<
     F: FnOnce(Arc<SchedulerPool>, SchedulingContext) -> I,
-    I: InstalledScheduler<TransactionWithIndexForBench>,
+    I: InstalledScheduler<ScheduleExecutionArgForBench>,
 >(
     bencher: &mut Bencher,
     create_scheduler: F,
@@ -117,10 +124,51 @@ fn run_bench<
     });
 }
 
+mod blocking_ref {
+    use {super::*, solana_runtime::installed_scheduler_pool::DefaultScheduleExecutionArg};
+
+    #[bench]
+    fn bench_without_arc_mutation(bencher: &mut Bencher) {
+        solana_logger::setup();
+
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(1_000_000_000);
+        let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
+        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let pool = SchedulerPool::new(None, None, None, _ignored_prioritization_fee_cache);
+        let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
+
+        let mut scheduler = PooledScheduler::<
+            BenchFriendlyHandler<DefaultScheduleExecutionArg, false>,
+            DefaultScheduleExecutionArg,
+        >::spawn(pool, context.clone());
+        let tx0 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            &mint_keypair,
+            &solana_sdk::pubkey::new_rand(),
+            2,
+            genesis_config.hash(),
+        ));
+        let tx_with_index = &(tx0, 0);
+        bencher.iter(|| {
+            for _ in 0..TX_COUNT {
+                scheduler.schedule_execution(tx_with_index);
+            }
+            assert_matches!(
+                scheduler.wait_for_termination(&WaitReason::TerminatedToFreeze),
+                Some((Ok(()), _))
+            );
+            scheduler.replace_context(context.clone());
+        });
+    }
+}
+
 mod blocking {
     use super::*;
 
-    type BlockingScheduler<H> = PooledScheduler<H, TransactionWithIndexForBench>;
+    type BlockingScheduler<H> = PooledScheduler<H, ScheduleExecutionArgForBench>;
 
     #[bench]
     fn bench_with_arc_mutation(bencher: &mut Bencher) {
@@ -141,9 +189,7 @@ mod nonblocking {
     use super::*;
 
     #[derive(Debug)]
-    pub struct NonblockingScheduler<
-        H: ScheduledTransactionHandler<TransactionWithIndexForBench> + Debug,
-    > {
+    struct NonblockingScheduler<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench>> {
         id: SchedulerId,
         pool: Arc<SchedulerPool>,
         transaction_sender: crossbeam_channel::Sender<ChainedChannel>,
@@ -175,8 +221,8 @@ mod nonblocking {
         }
     }
 
-    impl<H: ScheduledTransactionHandler<TransactionWithIndexForBench> + Debug> NonblockingScheduler<H> {
-        pub fn spawn(
+    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench>> NonblockingScheduler<H> {
+        fn spawn(
             pool: Arc<SchedulerPool>,
             initial_context: SchedulingContext,
             lane_count: usize,
@@ -203,7 +249,7 @@ mod nonblocking {
                                         &mut result,
                                         &mut timings,
                                         &bank,
-                                        &with_transaction_and_index,
+                                        with_transaction_and_index,
                                         &pool,
                                     );
                                 }
@@ -237,8 +283,8 @@ mod nonblocking {
             }
         }
     }
-    impl<H: ScheduledTransactionHandler<TransactionWithIndexForBench> + Send + Sync + Debug>
-        InstalledScheduler<TransactionWithIndexForBench> for NonblockingScheduler<H>
+    impl<H: ScheduledTransactionHandler<ScheduleExecutionArgForBench>>
+        InstalledScheduler<ScheduleExecutionArgForBench> for NonblockingScheduler<H>
     {
         fn id(&self) -> SchedulerId {
             self.id

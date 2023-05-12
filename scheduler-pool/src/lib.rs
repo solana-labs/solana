@@ -17,17 +17,17 @@ use {
     solana_runtime::{
         bank::Bank,
         installed_scheduler_pool::{
-            InstalledScheduler, InstalledSchedulerBox, InstalledSchedulerPool,
-            InstalledSchedulerPoolArc, ResultWithTimings, SchedulerId, SchedulingContext,
-            TransactionWithIndex, WaitReason,
+            DefaultScheduleExecutionArg, InstalledScheduler, InstalledSchedulerBox,
+            InstalledSchedulerPool, InstalledSchedulerPoolArc, ResultWithTimings,
+            ScheduleExecutionArg, SchedulerId, SchedulingContext, WaitReason,
+            WithTransactionAndIndex,
         },
         prioritization_fee_cache::PrioritizationFeeCache,
         vote_sender_types::ReplayVoteSender,
     },
     solana_scheduler::{SchedulingMode, WithSchedulingMode},
-    solana_sdk::transaction::{Result, SanitizedTransaction},
+    solana_sdk::transaction::Result,
     std::{
-        borrow::Borrow,
         fmt::Debug,
         marker::PhantomData,
         sync::{Arc, Mutex, Weak},
@@ -96,10 +96,10 @@ impl InstalledSchedulerPool for SchedulerPool {
             scheduler.replace_context(context);
             scheduler
         } else {
-            Box::new(PooledScheduler::<DefaultTransactionHandler>::spawn(
-                self.self_arc(),
-                context,
-            ))
+            Box::new(PooledScheduler::<
+                DefaultTransactionHandler,
+                DefaultScheduleExecutionArg,
+            >::spawn(self.self_arc(), context))
         }
     }
 
@@ -113,12 +113,12 @@ impl InstalledSchedulerPool for SchedulerPool {
     }
 }
 
-pub trait ScheduledTransactionHandler<WTI: WithTransactionAndIndex>: Debug {
+pub trait ScheduledTransactionHandler<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
     fn handle(
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
-        with_transaction_and_index: &WTI,
+        with_transaction_and_index: SEA::TransactionWithIndex<'_>,
         pool: &SchedulerPool,
     );
 }
@@ -126,48 +126,31 @@ pub trait ScheduledTransactionHandler<WTI: WithTransactionAndIndex>: Debug {
 #[derive(Debug)]
 struct DefaultTransactionHandler;
 
-impl<WTI: WithTransactionAndIndex> ScheduledTransactionHandler<WTI> for DefaultTransactionHandler {
+impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTransactionHandler {
     fn handle(
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
-        with_transaction_and_index: &WTI,
+        transaction_with_index: SEA::TransactionWithIndex<'_>,
         pool: &SchedulerPool,
     ) {
-        let (transaction, index) = (
-            with_transaction_and_index.transaction(),
-            with_transaction_and_index.index(),
-        );
-        let batch = bank.prepare_sanitized_batch_without_locking(transaction.clone());
-        let batch_with_indexes = TransactionBatchWithIndexes {
-            batch,
-            transaction_indexes: vec![index],
-        };
+        transaction_with_index.with_transaction_and_index(move |transaction, index| {
+            let batch = bank.prepare_sanitized_batch_without_locking(transaction.clone());
+            let batch_with_indexes = TransactionBatchWithIndexes {
+                batch,
+                transaction_indexes: vec![index],
+            };
 
-        *result = execute_batch(
-            &batch_with_indexes,
-            bank,
-            pool.transaction_status_sender.as_ref(),
-            pool.replay_vote_sender.as_ref(),
-            timings,
-            pool.log_messages_bytes_limit,
-            &pool.prioritization_fee_cache,
-        );
-    }
-}
-
-pub trait WithTransactionAndIndex: Send + Sync + Debug {
-    fn transaction(&self) -> &SanitizedTransaction;
-    fn index(&self) -> usize;
-}
-
-impl<T: Send + Sync + Debug + Borrow<TransactionWithIndex>> WithTransactionAndIndex for T {
-    fn transaction(&self) -> &SanitizedTransaction {
-        &self.borrow().0
-    }
-
-    fn index(&self) -> usize {
-        self.borrow().1
+            *result = execute_batch(
+                &batch_with_indexes,
+                bank,
+                pool.transaction_status_sender.as_ref(),
+                pool.replay_vote_sender.as_ref(),
+                timings,
+                pool.log_messages_bytes_limit,
+                &pool.prioritization_fee_cache,
+            );
+        });
     }
 }
 
@@ -175,18 +158,15 @@ impl<T: Send + Sync + Debug + Borrow<TransactionWithIndex>> WithTransactionAndIn
 // this will be replaced with more proper implementation...
 // not usable at all, especially for mainnet-beta
 #[derive(Debug)]
-pub struct PooledScheduler<
-    TH: ScheduledTransactionHandler<WTI>,
-    WTI: WithTransactionAndIndex = TransactionWithIndex,
-> {
+pub struct PooledScheduler<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> {
     id: SchedulerId,
     pool: Arc<SchedulerPool>,
     context: Option<SchedulingContext>,
     result_with_timings: Mutex<Option<ResultWithTimings>>,
-    _phantom: PhantomData<(TH, WTI)>,
+    _phantom: PhantomData<(TH, SEA)>,
 }
 
-impl<TH: ScheduledTransactionHandler<WTI>, WTI: WithTransactionAndIndex> PooledScheduler<TH, WTI> {
+impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
     pub fn spawn(pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
         Self {
             id: thread_rng().gen::<SchedulerId>(),
@@ -197,8 +177,9 @@ impl<TH: ScheduledTransactionHandler<WTI>, WTI: WithTransactionAndIndex> PooledS
         }
     }
 }
-impl<TH: ScheduledTransactionHandler<WTI> + Send + Sync, WTI: WithTransactionAndIndex>
-    InstalledScheduler<WTI> for PooledScheduler<TH, WTI>
+
+impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledScheduler<SEA>
+    for PooledScheduler<TH, SEA>
 {
     fn id(&self) -> SchedulerId {
         self.id
@@ -208,7 +189,7 @@ impl<TH: ScheduledTransactionHandler<WTI> + Send + Sync, WTI: WithTransactionAnd
         self.pool.clone()
     }
 
-    fn schedule_execution(&self, with_transaction_and_index: WTI) {
+    fn schedule_execution(&self, with_transaction_and_index: SEA::TransactionWithIndex<'_>) {
         let context = self.context.as_ref().expect("active context");
 
         let fail_fast = match context.mode() {
@@ -227,7 +208,7 @@ impl<TH: ScheduledTransactionHandler<WTI> + Send + Sync, WTI: WithTransactionAnd
                 result,
                 timings,
                 context.bank(),
-                &with_transaction_and_index,
+                with_transaction_and_index,
                 &self.pool,
             );
         }
@@ -287,7 +268,10 @@ mod tests {
             installed_scheduler_pool::SchedulingContext,
             prioritization_fee_cache::PrioritizationFeeCache,
         },
-        solana_sdk::{pubkey::Pubkey, signer::keypair::Keypair, system_transaction},
+        solana_sdk::{
+            pubkey::Pubkey, signer::keypair::Keypair, system_transaction,
+            transaction::SanitizedTransaction,
+        },
         std::sync::Arc,
     };
 
@@ -460,7 +444,7 @@ mod tests {
 
         assert_eq!(bank.transaction_count(), 0);
         let scheduler = pool.take_from_pool(context);
-        scheduler.schedule_execution((tx0.clone(), 0));
+        scheduler.schedule_execution(&(tx0, 0));
         assert_eq!(bank.transaction_count(), 1);
         bank.install_scheduler(scheduler);
         assert_matches!(bank.wait_for_completed_scheduler(), Some((Ok(()), _)));
@@ -489,7 +473,7 @@ mod tests {
 
         assert_eq!(bank.transaction_count(), 0);
         let scheduler = pool.take_from_pool(context);
-        scheduler.schedule_execution((tx0.clone(), 0));
+        scheduler.schedule_execution(&(tx0, 0));
         assert_eq!(bank.transaction_count(), 0);
 
         let tx1 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
@@ -502,7 +486,7 @@ mod tests {
             bank.simulate_transaction_unchecked(tx1.clone()).result,
             Ok(_)
         );
-        scheduler.schedule_execution((tx1.clone(), 0));
+        scheduler.schedule_execution(&(tx1, 0));
         // transaction_count should remain same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
 

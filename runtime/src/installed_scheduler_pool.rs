@@ -34,7 +34,7 @@ use {
         slot_history::Slot,
         transaction::{Result, SanitizedTransaction},
     },
-    std::{fmt::Debug, ops::Deref, sync::Arc},
+    std::{borrow::Borrow, fmt::Debug, ops::Deref, sync::Arc},
 };
 
 // Send + Sync is needed to be a field of BankForks
@@ -99,14 +99,15 @@ pub trait InstalledSchedulerPool: Send + Sync + Debug {
 #[cfg_attr(any(test, feature = "test-in-workspace"), automock)]
 // suppress false clippy complaints arising from mockall-derive:
 //   warning: `#[must_use]` has no effect when applied to a struct field
-#[allow(unused_attributes)]
+//   warning: the following explicit lifetimes could be elided: 'a
+#[allow(unused_attributes, clippy::needless_lifetimes)]
 // Send + Sync is needed to be a field of Bank
-pub trait InstalledScheduler<TI: Send + Sync>: Send + Sync + Debug {
+pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
     fn id(&self) -> SchedulerId;
     fn pool(&self) -> InstalledSchedulerPoolArc;
 
     // Calling this is illegal as soon as schedule_termiantion is called on &self.
-    fn schedule_execution(&self, transaction_with_index: TI);
+    fn schedule_execution<'a>(&'a self, transaction_with_index: SEA::TransactionWithIndex<'a>);
 
     // This optionally signals scheduling termination request to the scheduler.
     // This is subtle but important, to break circular dependency of Arc<Bank> => Scheduler =>
@@ -117,9 +118,6 @@ pub trait InstalledScheduler<TI: Send + Sync>: Send + Sync + Debug {
     #[must_use]
     fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
 
-    // suppress false clippy complaints arising from mockall-derive:
-    //   warning: the following explicit lifetimes could be elided: 'a
-    #[allow(clippy::needless_lifetimes)]
     fn context<'a>(&'a self) -> Option<&'a SchedulingContext>;
     fn replace_context(&mut self, context: SchedulingContext);
 }
@@ -130,7 +128,33 @@ pub type SchedulerId = u64;
 
 pub type ResultWithTimings = (Result<()>, ExecuteTimings);
 
-pub type TransactionWithIndex = (SanitizedTransaction, usize);
+pub trait WithTransactionAndIndex: Send + Sync + Debug {
+    fn with_transaction_and_index(&self, callback: impl FnOnce(&SanitizedTransaction, usize));
+}
+
+impl<
+        T: Send + Sync + Debug + Borrow<SanitizedTransaction>,
+        U: Send + Sync + Debug + Borrow<usize>,
+        Z: Send + Sync + Debug + Deref<Target = (T, U)>,
+    > WithTransactionAndIndex for Z
+{
+    fn with_transaction_and_index(&self, callback: impl FnOnce(&SanitizedTransaction, usize)) {
+        callback(self.0.borrow(), *self.1.borrow());
+    }
+}
+
+pub trait ScheduleExecutionArg: Send + Sync + Debug {
+    // GAT is used to make schedule_execution parametric even supporting references
+    // under the object-safety req. of InstalledScheduler trait...
+    type TransactionWithIndex<'tx>: WithTransactionAndIndex;
+}
+
+#[derive(Debug)]
+pub struct DefaultScheduleExecutionArg;
+
+impl ScheduleExecutionArg for DefaultScheduleExecutionArg {
+    type TransactionWithIndex<'tx> = &'tx (&'tx SanitizedTransaction, usize);
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum WaitReason {
@@ -143,7 +167,7 @@ pub enum WaitReason {
     ReinitializedForRecentBlockhash,
 }
 
-pub type InstalledSchedulerBox = Box<dyn InstalledScheduler<TransactionWithIndex>>;
+pub type InstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
 // somewhat arbitrary new type just to pacify Bank's frozen_abi...
 #[derive(Debug, Default)]
 pub(crate) struct InstalledSchedulerBoxInBank(Option<InstalledSchedulerBox>);
@@ -284,7 +308,7 @@ impl Bank {
         let scheduler = scheduler_guard.0.as_ref().expect("active scheduler");
 
         for (sanitized_transaction, &index) in transactions.iter().zip(transaction_indexes) {
-            scheduler.schedule_execution((sanitized_transaction.clone(), index));
+            scheduler.schedule_execution(&(sanitized_transaction, index));
         }
     }
 
@@ -384,7 +408,7 @@ mod tests {
 
     fn setup_mocked_scheduler_with_extra(
         wait_reasons: impl Iterator<Item = WaitReason>,
-        f: Option<impl Fn(&mut MockInstalledScheduler<TransactionWithIndex>)>,
+        f: Option<impl Fn(&mut MockInstalledScheduler<DefaultScheduleExecutionArg>)>,
     ) -> InstalledSchedulerBox {
         let mut mock = MockInstalledScheduler::new();
         let mut seq = Sequence::new();
@@ -413,7 +437,7 @@ mod tests {
     ) -> InstalledSchedulerBox {
         setup_mocked_scheduler_with_extra(
             wait_reasons,
-            None::<fn(&mut MockInstalledScheduler<TransactionWithIndex>) -> ()>,
+            None::<fn(&mut MockInstalledScheduler<DefaultScheduleExecutionArg>) -> ()>,
         )
     }
 
@@ -490,7 +514,7 @@ mod tests {
         let mocked_scheduler = setup_mocked_scheduler_with_extra(
             [WaitReason::TerminatedFromBankDrop].into_iter(),
             Some(
-                |mocked: &mut MockInstalledScheduler<TransactionWithIndex>| {
+                |mocked: &mut MockInstalledScheduler<DefaultScheduleExecutionArg>| {
                     mocked
                         .expect_schedule_execution()
                         .times(1)
