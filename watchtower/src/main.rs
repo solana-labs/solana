@@ -271,7 +271,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
             if val == None { break; }
 
-            let latency = get_latency(val.unwrap().to_string(), config.rpc_timeout).unwrap();
+            let latency_option = get_latency(val.unwrap().to_string(), config.rpc_timeout);
+
+            if latency_option == None { continue; }
+
+            let latency = latency_option.unwrap();
+                
             if latency < lowest_latency {
                 lowest_latency = latency;
                 lowest_latency_url = val.unwrap().to_string();
