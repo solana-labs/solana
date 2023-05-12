@@ -1239,7 +1239,7 @@ mod tests {
             slot: 2,
             root: 1,
             highest_confirmed_slot: 1,
-            highest_confirmed_root: 1,
+            highest_super_majority_root: 1,
         };
         subscriptions.notify_subscribers(commitment_slots);
         let expected = json!({

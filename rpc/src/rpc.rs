@@ -129,7 +129,7 @@ fn is_finalized(
     blockstore: &Blockstore,
     slot: Slot,
 ) -> bool {
-    slot <= block_commitment_cache.highest_confirmed_root()
+    slot <= block_commitment_cache.highest_super_majority_root()
         && (blockstore.is_root(slot) || bank.status_cache_ancestors().contains(&slot))
 }
 
@@ -1091,7 +1091,7 @@ impl JsonRpcRequestProcessor {
                     .block_commitment_cache
                     .read()
                     .unwrap()
-                    .highest_confirmed_root()
+                    .highest_super_majority_root()
             {
                 self.check_blockstore_writes_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
@@ -1167,16 +1167,16 @@ impl JsonRpcRequestProcessor {
         let commitment = commitment.unwrap_or_default();
         check_is_at_least_confirmed(commitment)?;
 
-        let highest_confirmed_root = self
+        let highest_super_majority_root = self
             .block_commitment_cache
             .read()
             .unwrap()
-            .highest_confirmed_root();
+            .highest_super_majority_root();
 
         let end_slot = min(
             end_slot.unwrap_or_else(|| start_slot.saturating_add(MAX_GET_CONFIRMED_BLOCKS_RANGE)),
             if commitment.is_finalized() {
-                highest_confirmed_root
+                highest_super_majority_root
             } else {
                 self.bank(Some(CommitmentConfig::confirmed())).slot()
             },
@@ -1220,7 +1220,7 @@ impl JsonRpcRequestProcessor {
             .blockstore
             .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
             .map_err(|_| Error::internal_error())?
-            .filter(|&slot| slot <= end_slot && slot <= highest_confirmed_root)
+            .filter(|&slot| slot <= end_slot && slot <= highest_super_majority_root)
             .collect();
         let last_element = blocks
             .last()
@@ -1273,11 +1273,11 @@ impl JsonRpcRequestProcessor {
             }
         }
 
-        let highest_confirmed_root = self
+        let highest_super_majority_root = self
             .block_commitment_cache
             .read()
             .unwrap()
-            .highest_confirmed_root();
+            .highest_super_majority_root();
 
         // Finalized blocks
         let mut blocks: Vec<_> = self
@@ -1285,7 +1285,7 @@ impl JsonRpcRequestProcessor {
             .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
             .map_err(|_| Error::internal_error())?
             .take(limit)
-            .filter(|&slot| slot <= highest_confirmed_root)
+            .filter(|&slot| slot <= highest_super_majority_root)
             .collect();
 
         // Maybe add confirmed blocks
@@ -1316,7 +1316,7 @@ impl JsonRpcRequestProcessor {
                 .block_commitment_cache
                 .read()
                 .unwrap()
-                .highest_confirmed_root()
+                .highest_super_majority_root()
         {
             let result = self.blockstore.get_block_time(slot);
             self.check_blockstore_root(&result, slot)?;
@@ -1400,7 +1400,7 @@ impl JsonRpcRequestProcessor {
                             .block_commitment_cache
                             .read()
                             .unwrap()
-                            .highest_confirmed_root()
+                            .highest_super_majority_root()
                     })
                     .map(|(slot, status_meta)| {
                         let err = status_meta.status.clone().err();
@@ -1517,7 +1517,7 @@ impl JsonRpcRequestProcessor {
                             .block_commitment_cache
                             .read()
                             .unwrap()
-                            .highest_confirmed_root()
+                            .highest_super_majority_root()
                     {
                         return Ok(Some(encode_transaction(confirmed_transaction)?));
                     }
@@ -1553,7 +1553,7 @@ impl JsonRpcRequestProcessor {
                 self.block_commitment_cache
                     .read()
                     .unwrap()
-                    .highest_confirmed_root(),
+                    .highest_super_majority_root(),
             );
             self.blockstore
                 .get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
@@ -1575,23 +1575,23 @@ impl JsonRpcRequestProcessor {
         check_is_at_least_confirmed(commitment)?;
 
         if self.config.enable_rpc_transaction_history {
-            let highest_confirmed_root = self
+            let highest_super_majority_root = self
                 .block_commitment_cache
                 .read()
                 .unwrap()
-                .highest_confirmed_root();
+                .highest_super_majority_root();
             let highest_slot = if commitment.is_confirmed() {
                 let confirmed_bank = self.get_bank_with_config(config)?;
                 confirmed_bank.slot()
             } else {
                 let min_context_slot = config.min_context_slot.unwrap_or_default();
-                if highest_confirmed_root < min_context_slot {
+                if highest_super_majority_root < min_context_slot {
                     return Err(RpcCustomError::MinContextSlotNotReached {
-                        context_slot: highest_confirmed_root,
+                        context_slot: highest_super_majority_root,
                     }
                     .into());
                 }
-                highest_confirmed_root
+                highest_super_majority_root
             };
 
             let SignatureInfosForAddress {
@@ -1607,7 +1607,7 @@ impl JsonRpcRequestProcessor {
                     .into_iter()
                     .map(|x| {
                         let mut item: RpcConfirmedTransactionStatusWithSignature = x.into();
-                        if item.slot <= highest_confirmed_root {
+                        if item.slot <= highest_super_majority_root {
                             item.confirmation_status =
                                 Some(TransactionConfirmationStatus::Finalized);
                         } else {
@@ -6989,7 +6989,7 @@ pub mod tests {
         rpc.block_commitment_cache
             .write()
             .unwrap()
-            .set_highest_confirmed_root(8);
+            .set_highest_super_majority_root(8);
 
         let request = create_test_request("getBlockProduction", Some(json!([])));
         let result: RpcResponse<RpcBlockProduction> =
@@ -7046,7 +7046,7 @@ pub mod tests {
         rpc.block_commitment_cache
             .write()
             .unwrap()
-            .set_highest_confirmed_root(8);
+            .set_highest_super_majority_root(8);
 
         let request = create_test_request("getBlocks", Some(json!([0u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
@@ -7071,7 +7071,7 @@ pub mod tests {
         rpc.block_commitment_cache
             .write()
             .unwrap()
-            .set_highest_confirmed_root(std::u64::MAX);
+            .set_highest_super_majority_root(std::u64::MAX);
 
         let request = create_test_request(
             "getBlocks",
@@ -7099,7 +7099,7 @@ pub mod tests {
         rpc.block_commitment_cache
             .write()
             .unwrap()
-            .set_highest_confirmed_root(8);
+            .set_highest_super_majority_root(8);
 
         let request = create_test_request("getBlocksWithLimit", Some(json!([0u64, 500_001u64])));
         let response = parse_failure_response(rpc.handle_request_sync(request));
@@ -7145,7 +7145,7 @@ pub mod tests {
         rpc.block_commitment_cache
             .write()
             .unwrap()
-            .set_highest_confirmed_root(7);
+            .set_highest_super_majority_root(7);
 
         let slot_duration = slot_duration_from_slots_per_year(rpc.working_bank().slots_per_year());
 
@@ -7391,13 +7391,13 @@ pub mod tests {
         block_commitment.entry(1).or_insert(cache0);
         block_commitment.entry(2).or_insert(cache1);
         block_commitment.entry(3).or_insert(cache2);
-        let highest_confirmed_root = 1;
+        let highest_super_majority_root = 1;
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             50,
             CommitmentSlots {
                 slot: bank.slot(),
-                highest_confirmed_root,
+                highest_super_majority_root,
                 ..CommitmentSlots::default()
             },
         );

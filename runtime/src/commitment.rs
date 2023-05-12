@@ -97,8 +97,8 @@ impl BlockCommitmentCache {
         self.commitment_slots.highest_confirmed_slot
     }
 
-    pub fn highest_confirmed_root(&self) -> Slot {
-        self.commitment_slots.highest_confirmed_root
+    pub fn highest_super_majority_root(&self) -> Slot {
+        self.commitment_slots.highest_super_majority_root
     }
 
     pub fn commitment_slots(&self) -> CommitmentSlots {
@@ -120,7 +120,7 @@ impl BlockCommitmentCache {
             CommitmentLevel::SingleGossip | CommitmentLevel::Confirmed => {
                 self.highest_gossip_confirmed_slot()
             }
-            CommitmentLevel::Max | CommitmentLevel::Finalized => self.highest_confirmed_root(),
+            CommitmentLevel::Max | CommitmentLevel::Finalized => self.highest_super_majority_root(),
         }
     }
 
@@ -180,7 +180,7 @@ impl BlockCommitmentCache {
                 slot,
                 root,
                 highest_confirmed_slot: root,
-                highest_confirmed_root: root,
+                highest_super_majority_root: root,
             },
         }
     }
@@ -189,8 +189,8 @@ impl BlockCommitmentCache {
         self.commitment_slots.highest_confirmed_slot = slot;
     }
 
-    pub fn set_highest_confirmed_root(&mut self, root: Slot) {
-        self.commitment_slots.highest_confirmed_root = root;
+    pub fn set_highest_super_majority_root(&mut self, root: Slot) {
+        self.commitment_slots.highest_super_majority_root = root;
     }
 
     pub fn initialize_slots(&mut self, slot: Slot, root: Slot) {
@@ -202,7 +202,7 @@ impl BlockCommitmentCache {
         self.commitment_slots.slot = slot;
         self.commitment_slots.highest_confirmed_slot = slot;
         self.commitment_slots.root = root;
-        self.commitment_slots.highest_confirmed_root = root;
+        self.commitment_slots.highest_super_majority_root = root;
     }
 }
 
@@ -214,8 +214,8 @@ pub struct CommitmentSlots {
     pub root: Slot,
     /// Highest cluster-confirmed slot
     pub highest_confirmed_slot: Slot,
-    /// Highest cluster-confirmed root
-    pub highest_confirmed_root: Slot,
+    /// Highest slot rooted by a super majority of the cluster
+    pub highest_super_majority_root: Slot,
 }
 
 impl CommitmentSlots {
