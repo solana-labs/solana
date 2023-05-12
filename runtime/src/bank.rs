@@ -1198,6 +1198,27 @@ impl WorkingSlot for Bank {
     }
 }
 
+pub trait IntoCowForSanitizedTransaction<'a>:
+    'a + Clone + std::borrow::Borrow<Self::Target>
+{
+    type Target: Clone;
+    fn into_cow(self) -> Cow<'a, [Self::Target]>;
+}
+
+impl<'a> IntoCowForSanitizedTransaction<'a> for SanitizedTransaction {
+    type Target = Self;
+    fn into_cow(self) -> Cow<'a, [Self::Target]> {
+        Cow::Owned(vec![self])
+    }
+}
+
+impl<'a> IntoCowForSanitizedTransaction<'a> for &'a SanitizedTransaction {
+    type Target = SanitizedTransaction;
+    fn into_cow(self) -> Cow<'a, [Self::Target]> {
+        Cow::Borrowed(std::slice::from_ref(self))
+    }
+}
+
 impl Bank {
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
@@ -3823,16 +3844,17 @@ impl Bank {
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
 
-    pub fn prepare_sanitized_batch_without_locking(
-        &self,
-        transaction: SanitizedTransaction,
-    ) -> TransactionBatch<'_, '_> {
+    pub fn prepare_sanitized_batch_without_locking<'a>(
+        &'a self,
+        transaction: impl IntoCowForSanitizedTransaction<'a, Target = SanitizedTransaction>,
+    ) -> TransactionBatch<'a, 'a> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_result = transaction
+            .borrow()
             .get_account_locks(tx_account_lock_limit)
             .map(|_| ());
-        let mut batch =
-            TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
+        let transaction = transaction.into_cow();
+        let mut batch = TransactionBatch::new(vec![lock_result], self, transaction);
         batch.set_needs_unlock(false);
         batch
     }

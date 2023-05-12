@@ -135,7 +135,7 @@ impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTran
         pool: &SchedulerPool,
     ) {
         transaction_with_index.with_transaction_and_index(move |transaction, index| {
-            let batch = bank.prepare_sanitized_batch_without_locking(transaction.clone());
+            let batch = bank.prepare_sanitized_batch_without_locking(transaction);
             let batch_with_indexes = TransactionBatchWithIndexes {
                 batch,
                 transaction_indexes: vec![index],
