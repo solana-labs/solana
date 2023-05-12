@@ -6,7 +6,7 @@ use {
             pedersen::PedersenOpening,
         },
         errors::ProofError,
-        sigma_proofs::equality_proof::CtxtCtxtEqualityProof,
+        sigma_proofs::ctxt_ctxt_equality_proof::CiphertextCiphertextEqualityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
@@ -134,7 +134,7 @@ impl ZkProofData<WithdrawWithheldTokensProofContext> for WithdrawWithheldTokensD
 #[repr(C)]
 #[allow(non_snake_case)]
 pub struct WithdrawWithheldTokensProof {
-    pub proof: pod::CtxtCtxtEqualityProof,
+    pub proof: pod::CiphertextCiphertextEqualityProof,
 }
 
 #[allow(non_snake_case)]
@@ -171,12 +171,12 @@ impl WithdrawWithheldTokensProof {
         destination_opening: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> Self {
-        let equality_proof = CtxtCtxtEqualityProof::new(
+        let equality_proof = CiphertextCiphertextEqualityProof::new(
             withdraw_withheld_authority_keypair,
             destination_pubkey,
             withdraw_withheld_authority_ciphertext,
-            amount,
             destination_opening,
+            amount,
             transcript,
         );
 
@@ -193,7 +193,7 @@ impl WithdrawWithheldTokensProof {
         destination_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
-        let proof: CtxtCtxtEqualityProof = self.proof.try_into()?;
+        let proof: CiphertextCiphertextEqualityProof = self.proof.try_into()?;
         proof.verify(
             source_pubkey,
             destination_pubkey,

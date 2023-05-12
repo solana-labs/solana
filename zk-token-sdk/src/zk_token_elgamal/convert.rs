@@ -64,7 +64,8 @@ mod target_arch {
             },
             range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
-                equality_proof::{CtxtCommEqualityProof, CtxtCtxtEqualityProof},
+                ctxt_comm_equality_proof::CiphertextCommitmentEqualityProof,
+                ctxt_ctxt_equality_proof::CiphertextCiphertextEqualityProof,
                 errors::*,
                 fee_proof::FeeSigmaProof,
                 pubkey_proof::PubkeyValidityProof,
@@ -191,30 +192,30 @@ mod target_arch {
         }
     }
 
-    impl From<CtxtCommEqualityProof> for pod::CtxtCommEqualityProof {
-        fn from(proof: CtxtCommEqualityProof) -> Self {
+    impl From<CiphertextCommitmentEqualityProof> for pod::CiphertextCommitmentEqualityProof {
+        fn from(proof: CiphertextCommitmentEqualityProof) -> Self {
             Self(proof.to_bytes())
         }
     }
 
-    impl TryFrom<pod::CtxtCommEqualityProof> for CtxtCommEqualityProof {
+    impl TryFrom<pod::CiphertextCommitmentEqualityProof> for CiphertextCommitmentEqualityProof {
         type Error = EqualityProofError;
 
-        fn try_from(pod: pod::CtxtCommEqualityProof) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::CiphertextCommitmentEqualityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }
 
-    impl From<CtxtCtxtEqualityProof> for pod::CtxtCtxtEqualityProof {
-        fn from(proof: CtxtCtxtEqualityProof) -> Self {
+    impl From<CiphertextCiphertextEqualityProof> for pod::CiphertextCiphertextEqualityProof {
+        fn from(proof: CiphertextCiphertextEqualityProof) -> Self {
             Self(proof.to_bytes())
         }
     }
 
-    impl TryFrom<pod::CtxtCtxtEqualityProof> for CtxtCtxtEqualityProof {
+    impl TryFrom<pod::CiphertextCiphertextEqualityProof> for CiphertextCiphertextEqualityProof {
         type Error = EqualityProofError;
 
-        fn try_from(pod: pod::CtxtCtxtEqualityProof) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::CiphertextCiphertextEqualityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }

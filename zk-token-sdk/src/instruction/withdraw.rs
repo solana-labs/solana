@@ -7,7 +7,7 @@ use {
         },
         errors::ProofError,
         range_proof::RangeProof,
-        sigma_proofs::equality_proof::CtxtCommEqualityProof,
+        sigma_proofs::ctxt_comm_equality_proof::CiphertextCommitmentEqualityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
@@ -115,7 +115,7 @@ pub struct WithdrawProof {
     pub commitment: pod::PedersenCommitment,
 
     /// Associated equality proof
-    pub equality_proof: pod::CtxtCommEqualityProof,
+    pub equality_proof: pod::CiphertextCommitmentEqualityProof,
 
     /// Associated range proof
     pub range_proof: pod::RangeProof64, // 672 bytes
@@ -149,11 +149,11 @@ impl WithdrawProof {
         transcript.append_commitment(b"commitment", &pod_commitment);
 
         // generate equality_proof
-        let equality_proof = CtxtCommEqualityProof::new(
+        let equality_proof = CiphertextCommitmentEqualityProof::new(
             keypair,
             final_ciphertext,
-            final_balance,
             &opening,
+            final_balance,
             transcript,
         );
 
@@ -176,7 +176,7 @@ impl WithdrawProof {
         transcript.append_commitment(b"commitment", &self.commitment);
 
         let commitment: PedersenCommitment = self.commitment.try_into()?;
-        let equality_proof: CtxtCommEqualityProof = self.equality_proof.try_into()?;
+        let equality_proof: CiphertextCommitmentEqualityProof = self.equality_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
         // verify equality proof
