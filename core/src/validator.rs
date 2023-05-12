@@ -30,7 +30,7 @@ use {
     crossbeam_channel::{bounded, unbounded, Receiver},
     lazy_static::lazy_static,
     rand::{thread_rng, Rng},
-    solana_client::connection_cache::ConnectionCache,
+    solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::{
         geyser_plugin_service::GeyserPluginService, GeyserPluginManagerRequest,
@@ -874,7 +874,7 @@ impl Validator {
                     Some((
                         &identity_keypair,
                         node.info
-                            .tpu()
+                            .tpu(Protocol::UDP)
                             .expect("Operator must spin up node with valid TPU address")
                             .ip(),
                     )),

@@ -1,5 +1,5 @@
 use {
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol},
     solana_poh::poh_recorder::PohRecorder,
     solana_sdk::{clock::NUM_CONSECUTIVE_LEADER_SLOTS, pubkey::Pubkey},
     solana_send_transaction_service::tpu_info::TpuInfo,
@@ -33,7 +33,7 @@ impl TpuInfo for ClusterTpuInfo {
             .cluster_info
             .tpu_peers()
             .into_iter()
-            .filter_map(|node| Some((*node.pubkey(), node.tpu().ok()?)))
+            .filter_map(|node| Some((*node.pubkey(), node.tpu(Protocol::UDP).ok()?)))
             .collect();
     }
 

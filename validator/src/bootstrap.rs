@@ -8,6 +8,7 @@ use {
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
+        contact_info::Protocol,
         crds_value,
         gossip_service::GossipService,
         legacy_contact_info::LegacyContactInfo as ContactInfo,
@@ -83,11 +84,11 @@ fn verify_reachable_ports(
     if verify_address(&node.info.serve_repair().ok()) {
         udp_sockets.push(&node.sockets.serve_repair);
     }
-    if verify_address(&node.info.tpu().ok()) {
+    if verify_address(&node.info.tpu(Protocol::UDP).ok()) {
         udp_sockets.extend(node.sockets.tpu.iter());
         udp_sockets.push(&node.sockets.tpu_quic);
     }
-    if verify_address(&node.info.tpu_forwards().ok()) {
+    if verify_address(&node.info.tpu_forwards(Protocol::UDP).ok()) {
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
         udp_sockets.push(&node.sockets.tpu_forwards_quic);
     }

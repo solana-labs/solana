@@ -17,7 +17,7 @@ use {
         staked_nodes_updater_service::StakedNodesUpdaterService,
     },
     crossbeam_channel::{unbounded, Receiver},
-    solana_client::connection_cache::ConnectionCache,
+    solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
@@ -149,7 +149,7 @@ impl Tpu {
             keypair,
             cluster_info
                 .my_contact_info()
-                .tpu_quic()
+                .tpu(Protocol::QUIC)
                 .expect("Operator must spin up node with valid (QUIC) TPU address")
                 .ip(),
             packet_sender,
@@ -169,7 +169,7 @@ impl Tpu {
             keypair,
             cluster_info
                 .my_contact_info()
-                .tpu_forwards_quic()
+                .tpu_forwards(Protocol::QUIC)
                 .expect("Operator must spin up node with valid (QUIC) TPU-forwards address")
                 .ip(),
             forwarded_packet_sender,

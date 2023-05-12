@@ -49,6 +49,7 @@ use {
     solana_core::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_dos::cli::*,
     solana_gossip::{
+        contact_info::Protocol,
         gossip_service::{discover, get_multi_client},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
@@ -416,6 +417,11 @@ fn get_target(
     entrypoint_addr: SocketAddr,
     tpu_use_quic: bool,
 ) -> Option<(Pubkey, SocketAddr)> {
+    let protocol = if tpu_use_quic {
+        Protocol::QUIC
+    } else {
+        Protocol::UDP
+    };
     let mut target = None;
     if nodes.is_empty() {
         // skip-gossip case
@@ -434,24 +440,10 @@ fn get_target(
                     Mode::Gossip => Some((*node.pubkey(), node.gossip().unwrap())),
                     Mode::Tvu => Some((*node.pubkey(), node.tvu().unwrap())),
                     Mode::TvuForwards => Some((*node.pubkey(), node.tvu_forwards().unwrap())),
-                    Mode::Tpu => Some((
-                        *node.pubkey(),
-                        if tpu_use_quic {
-                            node.tpu_quic()
-                        } else {
-                            node.tpu()
-                        }
-                        .unwrap(),
-                    )),
-                    Mode::TpuForwards => Some((
-                        *node.pubkey(),
-                        if tpu_use_quic {
-                            node.tpu_forwards_quic()
-                        } else {
-                            node.tpu_forwards()
-                        }
-                        .unwrap(),
-                    )),
+                    Mode::Tpu => Some((*node.pubkey(), node.tpu(protocol).unwrap())),
+                    Mode::TpuForwards => {
+                        Some((*node.pubkey(), node.tpu_forwards(protocol).unwrap()))
+                    }
                     Mode::Repair => Some((*node.pubkey(), node.repair().unwrap())),
                     Mode::ServeRepair => Some((*node.pubkey(), node.serve_repair().unwrap())),
                     Mode::Rpc => None,
@@ -964,7 +956,10 @@ pub mod test {
 
         let client = Arc::new(ThinClient::new(
             cluster.entry_point_info.rpc().unwrap(),
-            cluster.entry_point_info.tpu().unwrap(),
+            cluster
+                .entry_point_info
+                .tpu(cluster.connection_cache.protocol())
+                .unwrap(),
             cluster.connection_cache.clone(),
         ));
 
@@ -1100,10 +1095,10 @@ pub mod test {
 
         let client = Arc::new(ThinClient::new(
             cluster.entry_point_info.rpc().unwrap(),
-            match *cluster.connection_cache {
-                ConnectionCache::Quic(_) => cluster.entry_point_info.tpu_quic().unwrap(),
-                ConnectionCache::Udp(_) => cluster.entry_point_info.tpu().unwrap(),
-            },
+            cluster
+                .entry_point_info
+                .tpu(cluster.connection_cache.protocol())
+                .unwrap(),
             cluster.connection_cache.clone(),
         ));
 

@@ -59,10 +59,7 @@ pub fn get_client_facing_addr<T: Borrow<LegacyContactInfo>>(
 ) -> (SocketAddr, SocketAddr) {
     let contact_info = contact_info.borrow();
     let rpc = contact_info.rpc().unwrap();
-    let mut tpu = match protocol {
-        Protocol::QUIC => contact_info.tpu_quic().unwrap(),
-        Protocol::UDP => contact_info.tpu().unwrap(),
-    };
+    let mut tpu = contact_info.tpu(protocol).unwrap();
     // QUIC certificate authentication requires the IP Address to match. ContactInfo might have
     // 0.0.0.0 as the IP instead of 127.0.0.1.
     tpu.set_ip(IpAddr::V4(Ipv4Addr::LOCALHOST));
