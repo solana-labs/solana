@@ -15,17 +15,11 @@ use {
 #[derive(Debug, Error)]
 pub enum WorkerError {
     #[error("Failed to receive work from scheduler: {0}")]
-    Recv(RecvError),
+    Recv(#[from] RecvError),
     #[error("Failed to send finalized consume work to scheduler: {0}")]
     ConsumedSend(SendError<FinishedConsumeWork>),
     #[error("Failed to send finalized forward work to scheduler: {0}")]
     ForwardedSend(SendError<FinishedForwardWork>),
-}
-
-impl From<RecvError> for WorkerError {
-    fn from(err: RecvError) -> Self {
-        Self::Recv(err)
-    }
 }
 
 impl From<SendError<FinishedConsumeWork>> for WorkerError {
