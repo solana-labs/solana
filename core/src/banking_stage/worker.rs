@@ -88,7 +88,7 @@ impl Worker {
             return self.retry_drain(work);
         };
 
-        for work in std::iter::once(work).chain(self.consume_receiver.try_iter()) {
+        for work in try_drain_iter(work, &self.consume_receiver) {
             if bank.is_complete() {
                 if let Some(new_bank) = self.get_consume_bank() {
                     bank = new_bank;
@@ -133,7 +133,7 @@ impl Worker {
 
     /// Retry current batch and all outstanding batches.
     fn retry_drain(&self, work: ConsumeWork) -> Result<(), WorkerError> {
-        for work in std::iter::once(work).chain(self.consume_receiver.try_iter()) {
+        for work in try_drain_iter(work, &self.consume_receiver) {
             self.retry(work)?;
         }
         Ok(())
@@ -150,7 +150,7 @@ impl Worker {
     }
 
     fn forward_loop(&self, work: ForwardWork) -> Result<(), WorkerError> {
-        for work in std::iter::once(work).chain(self.forward_receiver.try_iter()) {
+        for work in try_drain_iter(work, &self.forward_receiver) {
             let (res, _num_packets, _forward_us, _leader_pubkey) = self.forwarder.forward_packets(
                 &self.forward_option,
                 work.packets.iter().map(|p| p.original_packet()),
@@ -167,7 +167,7 @@ impl Worker {
     }
 
     fn failed_forward_drain(&self, work: ForwardWork) -> Result<(), WorkerError> {
-        for work in std::iter::once(work).chain(self.forward_receiver.try_iter()) {
+        for work in try_drain_iter(work, &self.forward_receiver) {
             self.forwarded_sender.send(FinishedForwardWork {
                 work,
                 successful: false,
@@ -175,6 +175,12 @@ impl Worker {
         }
         Ok(())
     }
+}
+
+/// Helper function to create an non-blocking iterator over work in the receiver,
+/// starting with the given work item.
+fn try_drain_iter<T>(work: T, receiver: &Receiver<T>) -> impl Iterator<Item = T> + '_ {
+    std::iter::once(work).chain(receiver.try_iter())
 }
 
 #[cfg(test)]
