@@ -150,14 +150,13 @@ impl Worker {
                 &self.forward_option,
                 work.packets.iter().map(|p| p.original_packet()),
             );
-            if res.is_ok() {
-                self.forwarded_sender.send(FinishedForwardWork {
+            match res {
+                Ok(()) => self.forwarded_sender.send(FinishedForwardWork {
                     work,
                     successful: true,
-                })?;
-            } else {
-                return self.failed_forward_drain(work);
-            }
+                })?,
+                Err(_err) => return self.failed_forward_drain(work),
+            };
         }
         Ok(())
     }
