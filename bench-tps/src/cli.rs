@@ -1,5 +1,4 @@
 use {
-    crate::spl_convert::FromOtherSolana,
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
     solana_clap_utils::{
         hidden_unless_forced,
@@ -530,7 +529,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         let program_id = matches
             .value_of("instruction_padding_program_id")
             .map(|target_str| target_str.parse().unwrap())
-            .unwrap_or_else(|| FromOtherSolana::from(spl_instruction_padding::ID));
+            .unwrap_or_else(|| spl_instruction_padding::ID);
         let data_size = data_size
             .parse()
             .map_err(|_| "Can't parse padded instruction data size")?;
