@@ -47,6 +47,7 @@ pub(crate) struct Worker {
     leader_bank_notifier: Arc<LeaderBankNotifier>,
 }
 
+#[allow(dead_code)]
 impl Worker {
     pub fn new(
         consume_receiver: Receiver<ConsumeWork>,
@@ -227,11 +228,11 @@ mod tests {
         mint_keypair: Keypair,
         genesis_config: GenesisConfig,
         bank: Arc<Bank>,
-        ledger_path: TempDir,
-        entry_receiver: Receiver<WorkingBankEntry>,
+        _ledger_path: TempDir,
+        _entry_receiver: Receiver<WorkingBankEntry>,
         poh_recorder: Arc<RwLock<PohRecorder>>,
-        poh_simulator: JoinHandle<()>,
-        replay_vote_receiver: ReplayVoteReceiver,
+        _poh_simulator: JoinHandle<()>,
+        _replay_vote_receiver: ReplayVoteReceiver,
 
         consume_sender: Sender<ConsumeWork>,
         consumed_receiver: Receiver<FinishedConsumeWork>,
@@ -306,11 +307,11 @@ mod tests {
                 mint_keypair,
                 genesis_config,
                 bank,
-                ledger_path,
-                entry_receiver,
+                _ledger_path: ledger_path,
+                _entry_receiver: entry_receiver,
                 poh_recorder,
-                poh_simulator,
-                replay_vote_receiver,
+                _poh_simulator: poh_simulator,
+                _replay_vote_receiver: replay_vote_receiver,
                 consume_sender,
                 consumed_receiver,
                 forward_sender,

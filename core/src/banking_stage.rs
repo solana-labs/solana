@@ -54,7 +54,6 @@ mod scheduler_messages;
 
 #[allow(dead_code)]
 mod thread_aware_account_locks;
-#[allow(dead_code)]
 mod worker;
 
 // Fixed thread size seems to be fastest on GCP setup
