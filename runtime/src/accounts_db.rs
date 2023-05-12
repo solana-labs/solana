@@ -2943,7 +2943,9 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
         timings: &mut CleanKeyTimings,
+        epoch_schedule: &EpochSchedule,
     ) -> (Vec<Pubkey>, Option<Slot>) {
+        let oldest_non_ancient_slot = self.get_oldest_non_ancient_slot(epoch_schedule);
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot_inclusive =
             max_clean_root_inclusive.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
@@ -2970,7 +2972,7 @@ impl AccountsDb {
                 .map(|dirty_store_chunk| {
                     let mut oldest_dirty_slot = max_slot_inclusive.saturating_add(1);
                     dirty_store_chunk.iter().for_each(|(slot, store)| {
-                        if is_ancient(&store.accounts) {
+                        if slot < &oldest_non_ancient_slot {
                             dirty_ancient_stores.fetch_add(1, Ordering::Relaxed);
                         }
                         oldest_dirty_slot = oldest_dirty_slot.min(*slot);
@@ -3147,6 +3149,7 @@ impl AccountsDb {
             is_startup,
             last_full_snapshot_slot,
             &mut key_timings,
+            epoch_schedule,
         );
 
         let mut sort = Measure::start("sort");
