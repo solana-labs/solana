@@ -56,6 +56,10 @@ _ $cargoNightly bench --manifest-path gossip/Cargo.toml ${V:+--verbose} \
 _ $cargoNightly bench --manifest-path poh/Cargo.toml ${V:+--verbose} \
   -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
 
+# Run scheduler-pool benches
+_ $cargoNightly bench --manifest-path scheduler-pool/Cargo.toml ${V:+--verbose} \
+  -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
+
 # Run core benches
 _ $cargoNightly bench --manifest-path core/Cargo.toml ${V:+--verbose} \
   -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
