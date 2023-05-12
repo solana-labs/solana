@@ -34,8 +34,9 @@ const SOCKET_TAG_TPU_QUIC: u8 = 8;
 const SOCKET_TAG_TPU_VOTE: u8 = 9;
 const SOCKET_TAG_TVU: u8 = 10;
 const SOCKET_TAG_TVU_FORWARDS: u8 = 11;
-const_assert_eq!(SOCKET_CACHE_SIZE, 12);
-const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_TVU_FORWARDS as usize + 1usize;
+const SOCKET_TAG_TVU_QUIC: u8 = 12;
+const_assert_eq!(SOCKET_CACHE_SIZE, 13);
+const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_TVU_QUIC as usize + 1usize;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -223,7 +224,7 @@ impl ContactInfo {
         SOCKET_TAG_TPU_FORWARDS_QUIC
     );
     get_socket!(tpu_vote, SOCKET_TAG_TPU_VOTE);
-    get_socket!(tvu, SOCKET_TAG_TVU);
+    get_socket!(tvu, SOCKET_TAG_TVU, SOCKET_TAG_TVU_QUIC);
     get_socket!(tvu_forwards, SOCKET_TAG_TVU_FORWARDS);
 
     set_socket!(set_gossip, SOCKET_TAG_GOSSIP);
@@ -238,7 +239,7 @@ impl ContactInfo {
         SOCKET_TAG_TPU_FORWARDS_QUIC
     );
     set_socket!(set_tpu_vote, SOCKET_TAG_TPU_VOTE);
-    set_socket!(set_tvu, SOCKET_TAG_TVU);
+    set_socket!(set_tvu, SOCKET_TAG_TVU, SOCKET_TAG_TVU_QUIC);
     set_socket!(set_tvu_forwards, SOCKET_TAG_TVU_FORWARDS);
 
     remove_socket!(remove_serve_repair, SOCKET_TAG_SERVE_REPAIR);
@@ -248,7 +249,7 @@ impl ContactInfo {
         SOCKET_TAG_TPU_FORWARDS,
         SOCKET_TAG_TPU_FORWARDS_QUIC
     );
-    remove_socket!(remove_tvu, SOCKET_TAG_TVU);
+    remove_socket!(remove_tvu, SOCKET_TAG_TVU, SOCKET_TAG_TVU_QUIC);
     remove_socket!(remove_tvu_forwards, SOCKET_TAG_TVU_FORWARDS);
 
     #[cfg(test)]
@@ -740,7 +741,14 @@ mod tests {
                 node.tpu_vote().ok().as_ref(),
                 sockets.get(&SOCKET_TAG_TPU_VOTE)
             );
-            assert_eq!(node.tvu().ok().as_ref(), sockets.get(&SOCKET_TAG_TVU));
+            assert_eq!(
+                node.tvu(Protocol::UDP).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_TVU)
+            );
+            assert_eq!(
+                node.tvu(Protocol::QUIC).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_TVU_QUIC)
+            );
             assert_eq!(
                 node.tvu_forwards().ok().as_ref(),
                 sockets.get(&SOCKET_TAG_TVU_FORWARDS)
@@ -827,7 +835,14 @@ mod tests {
             )
         );
         assert_eq!(old.tpu_vote().unwrap(), node.tpu_vote().unwrap());
-        assert_eq!(old.tvu().unwrap(), node.tvu().unwrap());
+        assert_eq!(
+            old.tvu(Protocol::QUIC).unwrap(),
+            node.tvu(Protocol::QUIC).unwrap()
+        );
+        assert_eq!(
+            old.tvu(Protocol::UDP).unwrap(),
+            node.tvu(Protocol::UDP).unwrap()
+        );
         assert_eq!(old.tvu_forwards().unwrap(), node.tvu_forwards().unwrap());
     }
 

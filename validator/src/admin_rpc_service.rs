@@ -105,7 +105,7 @@ impl From<ContactInfo> for AdminRpcContactInfo {
             id: node.pubkey().to_string(),
             last_updated_timestamp: node.wallclock(),
             gossip: unwrap_socket!(gossip),
-            tvu: unwrap_socket!(tvu),
+            tvu: unwrap_socket!(tvu, Protocol::UDP),
             tvu_forwards: unwrap_socket!(tvu_forwards),
             repair: unwrap_socket!(repair),
             tpu: unwrap_socket!(tpu, Protocol::UDP),

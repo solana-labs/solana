@@ -6,9 +6,9 @@ use {
     rayon::iter::*,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
+        contact_info::{LegacyContactInfo as ContactInfo, Protocol},
         crds::Cursor,
         gossip_service::GossipService,
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_perf::packet::Packet,
     solana_runtime::bank_forks::BankForks,
@@ -136,7 +136,7 @@ fn retransmit_to(
     } else {
         peers
             .iter()
-            .filter_map(|peer| peer.tvu().ok())
+            .filter_map(|peer| peer.tvu(Protocol::UDP).ok())
             .filter(|addr| socket_addr_space.check(addr))
             .collect()
     };
