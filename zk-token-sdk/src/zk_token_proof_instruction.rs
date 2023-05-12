@@ -25,7 +25,7 @@ pub enum ProofInstruction {
     ///
     CloseContextState,
 
-    /// Verify a close account zero-knowledge proof.
+    /// Verify that an ElGamal ciphertext encrypts zero.
     ///
     /// This instruction can be configured to optionally create a proof context state account.
     ///
@@ -39,9 +39,9 @@ pub enum ProofInstruction {
     ///   None
     ///
     /// Data expected by this instruction:
-    ///   `CloseAccountData`
+    ///   `ZeroBalanceProofData`
     ///
-    VerifyCloseAccount,
+    VerifyZeroBalance,
 
     /// Verify a withdraw zero-knowledge proof.
     ///
@@ -161,12 +161,12 @@ pub fn close_context_state(
     }
 }
 
-/// Create a `VerifyCloseAccount` instruction.
-pub fn verify_close_account(
+/// Create a `VerifyZeroBalance` instruction.
+pub fn verify_zero_balance(
     context_state_info: Option<ContextStateInfo>,
-    proof_data: &CloseAccountData,
+    proof_data: &ZeroBalanceProofData,
 ) -> Instruction {
-    ProofInstruction::VerifyCloseAccount.encode_verify_proof(context_state_info, proof_data)
+    ProofInstruction::VerifyZeroBalance.encode_verify_proof(context_state_info, proof_data)
 }
 
 /// Create a `VerifyWithdraw` instruction.

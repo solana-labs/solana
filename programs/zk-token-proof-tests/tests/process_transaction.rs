@@ -16,7 +16,7 @@ use {
 };
 
 const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 6] = [
-    ProofInstruction::VerifyCloseAccount,
+    ProofInstruction::VerifyZeroBalance,
     ProofInstruction::VerifyWithdraw,
     ProofInstruction::VerifyWithdrawWithheldTokens,
     ProofInstruction::VerifyTransfer,
@@ -25,36 +25,36 @@ const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 6] = [
 ];
 
 #[tokio::test]
-async fn test_close_account() {
+async fn test_zero_balance() {
     let elgamal_keypair = ElGamalKeypair::new_rand();
 
     let zero_ciphertext = elgamal_keypair.public.encrypt(0_u64);
-    let success_proof_data = CloseAccountData::new(&elgamal_keypair, &zero_ciphertext).unwrap();
+    let success_proof_data = ZeroBalanceProofData::new(&elgamal_keypair, &zero_ciphertext).unwrap();
 
     let incorrect_keypair = ElGamalKeypair {
         public: ElGamalKeypair::new_rand().public,
         secret: ElGamalKeypair::new_rand().secret,
     };
-    let fail_proof_data = CloseAccountData::new(&incorrect_keypair, &zero_ciphertext).unwrap();
+    let fail_proof_data = ZeroBalanceProofData::new(&incorrect_keypair, &zero_ciphertext).unwrap();
 
     test_verify_proof_without_context(
-        ProofInstruction::VerifyCloseAccount,
+        ProofInstruction::VerifyZeroBalance,
         &success_proof_data,
         &fail_proof_data,
     )
     .await;
 
     test_verify_proof_with_context(
-        ProofInstruction::VerifyCloseAccount,
-        size_of::<ProofContextState<CloseAccountProofContext>>(),
+        ProofInstruction::VerifyZeroBalance,
+        size_of::<ProofContextState<ZeroBalanceProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
     )
     .await;
 
     test_close_context_state(
-        ProofInstruction::VerifyCloseAccount,
-        size_of::<ProofContextState<CloseAccountProofContext>>(),
+        ProofInstruction::VerifyZeroBalance,
+        size_of::<ProofContextState<ZeroBalanceProofContext>>(),
         &success_proof_data,
     )
     .await;

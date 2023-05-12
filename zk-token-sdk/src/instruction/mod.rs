@@ -1,9 +1,9 @@
-pub mod close_account;
 pub mod pubkey_validity;
 pub mod transfer;
 pub mod transfer_with_fee;
 pub mod withdraw;
 pub mod withdraw_withheld;
+pub mod zero_balance;
 
 use num_derive::{FromPrimitive, ToPrimitive};
 #[cfg(not(target_os = "solana"))]
@@ -19,12 +19,12 @@ use {
 };
 pub use {
     bytemuck::Pod,
-    close_account::{CloseAccountData, CloseAccountProofContext},
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
     transfer::{TransferData, TransferProofContext},
     transfer_with_fee::{FeeParameters, TransferWithFeeData, TransferWithFeeProofContext},
     withdraw::{WithdrawData, WithdrawProofContext},
     withdraw_withheld::{WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext},
+    zero_balance::{ZeroBalanceProofContext, ZeroBalanceProofData},
 };
 
 #[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
@@ -32,7 +32,7 @@ pub use {
 pub enum ProofType {
     /// Empty proof type used to distinguish if a proof context account is initialized
     Uninitialized,
-    CloseAccount,
+    ZeroBalance,
     Withdraw,
     WithdrawWithheldTokens,
     Transfer,

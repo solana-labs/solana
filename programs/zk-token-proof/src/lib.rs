@@ -135,14 +135,14 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
             ic_msg!(invoke_context, "CloseContextState");
             process_close_proof_context(invoke_context)
         }
-        ProofInstruction::VerifyCloseAccount => {
+        ProofInstruction::VerifyZeroBalance => {
             if native_programs_consume_cu {
                 invoke_context
                     .consume_checked(6_012)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
-            ic_msg!(invoke_context, "VerifyCloseAccount");
-            process_verify_proof::<CloseAccountData, CloseAccountProofContext>(invoke_context)
+            ic_msg!(invoke_context, "VerifyZeroBalance");
+            process_verify_proof::<ZeroBalanceProofData, ZeroBalanceProofContext>(invoke_context)
         }
         ProofInstruction::VerifyWithdraw => {
             if native_programs_consume_cu {
