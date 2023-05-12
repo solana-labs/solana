@@ -200,7 +200,7 @@ impl SanitizedMessage {
     /// Returns the list of account keys used for account lookup tables.
     pub fn message_address_table_lookups(&self) -> &[v0::MessageAddressTableLookup] {
         match self {
-            Self::Legacy(_) => &[],
+            Self::Legacy(_message) => &[],
             Self::V0(message) => &message.message.address_table_lookups,
         }
     }
