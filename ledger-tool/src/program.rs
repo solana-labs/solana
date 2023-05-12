@@ -22,7 +22,7 @@ use {
     },
     solana_rbpf::{
         assembler::assemble, elf::Executable, static_analysis::Analysis,
-        verifier::RequisiteVerifier, vm::VerifiedExecutable,
+        verifier::RequisiteVerifier,
     },
     solana_runtime::{bank::Bank, runtime_config::RuntimeConfig},
     solana_sdk::{
@@ -281,11 +281,11 @@ impl Debug for Output {
 // https://github.com/rust-lang/rust/issues/74465
 struct LazyAnalysis<'a, 'b> {
     analysis: Option<Analysis<'a>>,
-    executable: &'a Executable<InvokeContext<'b>>,
+    executable: &'a Executable<RequisiteVerifier, InvokeContext<'b>>,
 }
 
 impl<'a, 'b> LazyAnalysis<'a, 'b> {
-    fn new(executable: &'a Executable<InvokeContext<'b>>) -> Self {
+    fn new(executable: &'a Executable<RequisiteVerifier, InvokeContext<'b>>) -> Self {
         Self {
             analysis: None,
             executable,
@@ -525,20 +525,19 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             invoke_context.get_compute_budget(),
             true,
             true,
-            true,
         )
         .unwrap();
         let executable =
             assemble::<InvokeContext>(std::str::from_utf8(contents.as_slice()).unwrap(), loader)
                 .unwrap();
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+        Executable::<RequisiteVerifier, InvokeContext>::verified(executable)
             .map_err(|err| format!("Assembling executable failed: {err:?}"))
     }
     .unwrap();
 
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();
-    let mut analysis = LazyAnalysis::new(verified_executable.get_executable());
+    let mut analysis = LazyAnalysis::new(&verified_executable);
 
     match action {
         Action::Cfg => {

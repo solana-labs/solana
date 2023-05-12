@@ -24,7 +24,7 @@ use {
         error::EbpfError,
         memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
         verifier::RequisiteVerifier,
-        vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
+        vm::{ContextObject, EbpfVm, ProgramResult},
     },
     solana_sdk::{
         account::WritableAccount,
@@ -35,10 +35,9 @@ use {
         feature_set::{
             bpf_account_data_direct_mapping, cap_accounts_data_allocations_per_transaction,
             cap_bpf_program_instruction_accounts, delay_visibility_of_program_deployment,
-            disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, native_programs_consume_cu,
-            remove_bpf_loader_incorrect_program_id, FeatureSet,
+            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
+            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
+            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -77,13 +76,10 @@ pub fn load_program_from_bytes(
     debugging_features: bool,
 ) -> Result<LoadedProgram, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
-    let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
-        && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
     let loader = syscalls::create_loader(
         feature_set,
         compute_budget,
         reject_deployment_of_broken_elfs,
-        disable_deploy_of_alloc_free_syscall,
         debugging_features,
     )
     .map_err(|e| {
@@ -285,7 +281,7 @@ pub fn calculate_heap_cost(heap_size: u64, heap_cost: u64, enable_rounding_fix: 
 
 /// Only used in macro, do not use directly!
 pub fn create_vm<'a, 'b>(
-    program: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>,
+    program: &'a Executable<RequisiteVerifier, InvokeContext<'b>>,
     regions: Vec<MemoryRegion>,
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
@@ -296,7 +292,7 @@ pub fn create_vm<'a, 'b>(
     let heap_size = heap.len();
     let accounts = Arc::clone(invoke_context.transaction_context.accounts());
     let memory_mapping = create_memory_mapping(
-        program.get_executable(),
+        program,
         stack,
         heap,
         regions,
@@ -337,7 +333,7 @@ pub fn create_vm<'a, 'b>(
 macro_rules! create_vm {
     ($vm:ident, $program:expr, $regions:expr, $orig_account_lengths:expr, $invoke_context:expr $(,)?) => {
         let invoke_context = &*$invoke_context;
-        let stack_size = $program.get_executable().get_config().stack_size();
+        let stack_size = $program.get_config().stack_size();
         let heap_size = invoke_context
             .get_compute_budget()
             .heap_size
@@ -382,17 +378,14 @@ macro_rules! mock_create_vm {
             solana_rbpf::vm::Config::default(),
         ));
         let function_registry = solana_rbpf::vm::FunctionRegistry::default();
-        let executable = solana_rbpf::elf::Executable::<InvokeContext>::from_text_bytes(
-            &[0x95, 0, 0, 0, 0, 0, 0, 0],
-            loader,
-            function_registry,
+        let executable = solana_rbpf::elf::Executable::<
+            solana_rbpf::verifier::TautologyVerifier,
+            InvokeContext,
+        >::from_text_bytes(
+            &[0x95, 0, 0, 0, 0, 0, 0, 0], loader, function_registry
         )
         .unwrap();
-        let verified_executable = solana_rbpf::vm::VerifiedExecutable::<
-            solana_rbpf::verifier::RequisiteVerifier,
-            InvokeContext,
-        >::from_executable(executable)
-        .unwrap();
+        let verified_executable = solana_rbpf::elf::Executable::verified(executable).unwrap();
         $crate::create_vm!(
             $vm,
             &verified_executable,
@@ -404,7 +397,7 @@ macro_rules! mock_create_vm {
 }
 
 fn create_memory_mapping<'a, 'b, C: ContextObject>(
-    executable: &'a Executable<C>,
+    executable: &'a Executable<RequisiteVerifier, C>,
     stack: &'b mut AlignedMemory<{ HOST_ALIGN }>,
     heap: &'b mut AlignedMemory<{ HOST_ALIGN }>,
     additional_regions: Vec<MemoryRegion>,
@@ -1526,7 +1519,7 @@ fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), 
 }
 
 fn execute<'a, 'b: 'a>(
-    executable: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
+    executable: &'a Executable<RequisiteVerifier, InvokeContext<'static>>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let log_collector = invoke_context.get_log_collector();
@@ -1536,7 +1529,7 @@ fn execute<'a, 'b: 'a>(
     #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
     let use_jit = false;
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-    let use_jit = executable.get_executable().get_compiled_program().is_some();
+    let use_jit = executable.get_compiled_program().is_some();
     let bpf_account_data_direct_mapping = invoke_context
         .feature_set
         .is_active(&bpf_account_data_direct_mapping::id());
@@ -1570,7 +1563,7 @@ fn execute<'a, 'b: 'a>(
             // We dropped the lifetime tracking in the Executor by setting it to 'static,
             // thus we need to reintroduce the correct lifetime of InvokeContext here again.
             unsafe {
-                mem::transmute::<_, &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>>(
+                mem::transmute::<_, &'a Executable<RequisiteVerifier, InvokeContext<'b>>>(
                     executable,
                 )
             },
@@ -1739,7 +1732,7 @@ mod tests {
             invoke_context::mock_process_instruction, with_mock_invoke_context,
         },
         solana_rbpf::{
-            verifier::{Verifier, VerifierError},
+            verifier::Verifier,
             vm::{Config, ContextObject, FunctionRegistry},
         },
         solana_sdk::{
@@ -1803,17 +1796,6 @@ mod tests {
         program_account.set_data(elf);
         program_account.set_executable(true);
         program_account
-    }
-
-    struct TautologyVerifier {}
-    impl Verifier for TautologyVerifier {
-        fn verify(
-            _prog: &[u8],
-            _config: &Config,
-            _function_registry: &FunctionRegistry,
-        ) -> std::result::Result<(), VerifierError> {
-            Ok(())
-        }
     }
 
     #[test]

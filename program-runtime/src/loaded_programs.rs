@@ -6,11 +6,7 @@ use {
     log::{debug, log_enabled, trace},
     percentage::PercentageInteger,
     solana_measure::measure::Measure,
-    solana_rbpf::{
-        elf::Executable,
-        verifier::RequisiteVerifier,
-        vm::{BuiltInProgram, VerifiedExecutable},
-    },
+    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::BuiltInProgram},
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot, loader_v4,
         pubkey::Pubkey, saturating_add_assign,
@@ -67,9 +63,9 @@ pub enum LoadedProgramType {
     DelayVisibility,
     /// Successfully verified but not currently compiled, used to track usage statistics when a compiled program is evicted from memory.
     Unloaded,
-    LegacyV0(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
-    LegacyV1(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
-    Typed(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
+    LegacyV0(Executable<RequisiteVerifier, InvokeContext<'static>>),
+    LegacyV1(Executable<RequisiteVerifier, InvokeContext<'static>>),
+    Typed(Executable<RequisiteVerifier, InvokeContext<'static>>),
     #[cfg(test)]
     TestLoaded,
     Builtin(String, BuiltInProgram<InvokeContext<'static>>),
@@ -225,11 +221,11 @@ impl LoadedProgram {
         // Allowing mut here, since it may be needed for jit compile, which is under a config flag
         #[allow(unused_mut)]
         let mut program = if bpf_loader_deprecated::check_id(loader_key) {
-            LoadedProgramType::LegacyV0(VerifiedExecutable::from_executable(executable)?)
+            LoadedProgramType::LegacyV0(Executable::verified(executable)?)
         } else if bpf_loader::check_id(loader_key) || bpf_loader_upgradeable::check_id(loader_key) {
-            LoadedProgramType::LegacyV1(VerifiedExecutable::from_executable(executable)?)
+            LoadedProgramType::LegacyV1(Executable::verified(executable)?)
         } else if loader_v4::check_id(loader_key) {
-            LoadedProgramType::Typed(VerifiedExecutable::from_executable(executable)?)
+            LoadedProgramType::Typed(Executable::verified(executable)?)
         } else {
             panic!();
         };
