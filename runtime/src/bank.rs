@@ -78,7 +78,7 @@ use {
         status_cache::{SlotDelta, StatusCache},
         storable_accounts::StorableAccounts,
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
-        transaction_batch::TransactionBatch,
+        transaction_batch::{IntoCowForSanitizedTransaction, TransactionBatch},
         transaction_error_metrics::TransactionErrorMetrics,
         vote_account::{VoteAccount, VoteAccountsHashMap},
     },
@@ -1195,24 +1195,6 @@ impl WorkingSlot for Bank {
 
     fn is_ancestor(&self, other: Slot) -> bool {
         self.ancestors.contains_key(&other)
-    }
-}
-
-pub trait IntoCowForSanitizedTransaction<'a>:
-    'a + Clone + std::borrow::Borrow<SanitizedTransaction>
-{
-    fn into_cow(self) -> Cow<'a, [SanitizedTransaction]>;
-}
-
-impl<'a> IntoCowForSanitizedTransaction<'a> for SanitizedTransaction {
-    fn into_cow(self) -> Cow<'a, [SanitizedTransaction]> {
-        Cow::Owned(vec![self])
-    }
-}
-
-impl<'a> IntoCowForSanitizedTransaction<'a> for &'a SanitizedTransaction {
-    fn into_cow(self) -> Cow<'a, [SanitizedTransaction]> {
-        Cow::Borrowed(std::slice::from_ref(self))
     }
 }
 

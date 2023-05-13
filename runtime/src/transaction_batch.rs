@@ -55,6 +55,24 @@ impl<'a, 'b> Drop for TransactionBatch<'a, 'b> {
     }
 }
 
+pub trait IntoCowForSanitizedTransaction<'a>:
+    'a + Clone + std::borrow::Borrow<SanitizedTransaction>
+{
+    fn into_cow(self) -> Cow<'a, [SanitizedTransaction]>;
+}
+
+impl<'a> IntoCowForSanitizedTransaction<'a> for SanitizedTransaction {
+    fn into_cow(self) -> Cow<'a, [SanitizedTransaction]> {
+        Cow::Owned(vec![self])
+    }
+}
+
+impl<'a> IntoCowForSanitizedTransaction<'a> for &'a SanitizedTransaction {
+    fn into_cow(self) -> Cow<'a, [SanitizedTransaction]> {
+        Cow::Borrowed(std::slice::from_ref(self))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
