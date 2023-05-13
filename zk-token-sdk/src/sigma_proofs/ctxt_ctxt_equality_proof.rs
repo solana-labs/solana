@@ -273,10 +273,7 @@ impl CiphertextCiphertextEqualityProof {
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        crate::encryption::{elgamal::ElGamalSecretKey, pedersen::Pedersen},
-    };
+    use super::*;
 
     #[test]
     fn test_ciphertext_ciphertext_equality_proof_correctness() {

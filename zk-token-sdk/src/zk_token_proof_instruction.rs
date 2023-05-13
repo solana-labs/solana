@@ -61,7 +61,7 @@ pub enum ProofInstruction {
     ///
     VerifyWithdraw,
 
-    /// Verify a withdraw withheld tokens zero-knowledge proof.
+    /// Verify a ciphertext-ciphertext equality proof.
     ///
     /// This instruction can be configured to optionally create a proof context state account.
     ///
@@ -75,9 +75,9 @@ pub enum ProofInstruction {
     ///   None
     ///
     /// Data expected by this instruction:
-    ///   `WithdrawWithheldTokensData`
+    ///   `CiphertextCiphertextEqualityProofData`
     ///
-    VerifyWithdrawWithheldTokens,
+    VerifyCiphertextCiphertextEquality,
 
     /// Verify a transfer zero-knowledge proof.
     ///
@@ -177,12 +177,12 @@ pub fn verify_withdraw(
     ProofInstruction::VerifyWithdraw.encode_verify_proof(context_state_info, proof_data)
 }
 
-/// Create a `VerifyWithdrawWithheldTokens` instruction.
-pub fn verify_withdraw_withheld_tokens(
+/// Create a `VerifyCiphertextCiphertextEquality` instruction.
+pub fn verify_ciphertext_ciphertext_equality(
     context_state_info: Option<ContextStateInfo>,
-    proof_data: &WithdrawWithheldTokensData,
+    proof_data: &CiphertextCiphertextEqualityProofData,
 ) -> Instruction {
-    ProofInstruction::VerifyWithdrawWithheldTokens
+    ProofInstruction::VerifyCiphertextCiphertextEquality
         .encode_verify_proof(context_state_info, proof_data)
 }
 

@@ -1,8 +1,8 @@
+pub mod ctxt_ctxt_equality;
 pub mod pubkey_validity;
 pub mod transfer;
 pub mod transfer_with_fee;
 pub mod withdraw;
-pub mod withdraw_withheld;
 pub mod zero_balance;
 
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -19,11 +19,13 @@ use {
 };
 pub use {
     bytemuck::Pod,
+    ctxt_ctxt_equality::{
+        CiphertextCiphertextEqualityProofContext, CiphertextCiphertextEqualityProofData,
+    },
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
     transfer::{TransferData, TransferProofContext},
     transfer_with_fee::{FeeParameters, TransferWithFeeData, TransferWithFeeProofContext},
     withdraw::{WithdrawData, WithdrawProofContext},
-    withdraw_withheld::{WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext},
     zero_balance::{ZeroBalanceProofContext, ZeroBalanceProofData},
 };
 

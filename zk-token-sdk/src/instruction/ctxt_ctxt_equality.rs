@@ -1,0 +1,202 @@
+#[cfg(not(target_os = "solana"))]
+use {
+    crate::{
+        encryption::{
+            elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
+            pedersen::PedersenOpening,
+        },
+        errors::ProofError,
+        sigma_proofs::ctxt_ctxt_equality_proof::CiphertextCiphertextEqualityProof,
+        transcript::TranscriptProtocol,
+    },
+    merlin::Transcript,
+    std::convert::TryInto,
+};
+use {
+    crate::{
+        instruction::{ProofType, ZkProofData},
+        zk_token_elgamal::pod,
+    },
+    bytemuck::{Pod, Zeroable},
+};
+
+/// The instruction data that is needed for the
+/// `ProofInstruction::VerifyCiphertextCiphertextEquality` instruction.
+///
+/// It includes the cryptographic proof as well as the context data information needed to verify
+/// the proof.
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct CiphertextCiphertextEqualityProofData {
+    pub context: CiphertextCiphertextEqualityProofContext,
+
+    pub proof: pod::CiphertextCiphertextEqualityProof,
+}
+
+/// The context data needed to verify a `CiphertextCiphertextEqualityProof`.
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct CiphertextCiphertextEqualityProofContext {
+    pub source_pubkey: pod::ElGamalPubkey, // 32 bytes
+
+    pub destination_pubkey: pod::ElGamalPubkey, // 32 bytes
+
+    pub source_ciphertext: pod::ElGamalCiphertext, // 64 bytes
+
+    pub destination_ciphertext: pod::ElGamalCiphertext, // 64 bytes
+}
+
+#[cfg(not(target_os = "solana"))]
+impl CiphertextCiphertextEqualityProofData {
+    pub fn new(
+        source_keypair: &ElGamalKeypair,
+        destination_pubkey: &ElGamalPubkey,
+        source_ciphertext: &ElGamalCiphertext,
+        amount: u64,
+    ) -> Result<Self, ProofError> {
+        // encrypt withdraw amount under destination public key
+        let destination_opening = PedersenOpening::new_rand();
+        let destination_ciphertext = destination_pubkey.encrypt_with(amount, &destination_opening);
+
+        let pod_source_pubkey = pod::ElGamalPubkey(source_keypair.public.to_bytes());
+        let pod_destination_pubkey = pod::ElGamalPubkey(destination_pubkey.to_bytes());
+        let pod_source_ciphertext = pod::ElGamalCiphertext(source_ciphertext.to_bytes());
+        let pod_destination_ciphertext = pod::ElGamalCiphertext(destination_ciphertext.to_bytes());
+
+        let context = CiphertextCiphertextEqualityProofContext {
+            source_pubkey: pod_source_pubkey,
+            destination_pubkey: pod_destination_pubkey,
+            source_ciphertext: pod_source_ciphertext,
+            destination_ciphertext: pod_destination_ciphertext,
+        };
+
+        let mut transcript = CiphertextCiphertextEqualityProof::transcript_new(
+            &pod_source_pubkey,
+            &pod_destination_pubkey,
+            &pod_source_ciphertext,
+            &pod_destination_ciphertext,
+        );
+
+        let proof = CiphertextCiphertextEqualityProof::new(
+            source_keypair,
+            destination_pubkey,
+            source_ciphertext,
+            &destination_opening,
+            amount,
+            &mut transcript,
+        )
+        .into();
+
+        Ok(Self { context, proof })
+    }
+}
+
+impl ZkProofData<CiphertextCiphertextEqualityProofContext>
+    for CiphertextCiphertextEqualityProofData
+{
+    const PROOF_TYPE: ProofType = ProofType::WithdrawWithheldTokens;
+
+    fn context_data(&self) -> &CiphertextCiphertextEqualityProofContext {
+        &self.context
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    fn verify_proof(&self) -> Result<(), ProofError> {
+        let mut transcript = CiphertextCiphertextEqualityProof::transcript_new(
+            &self.context.source_pubkey,
+            &self.context.destination_pubkey,
+            &self.context.source_ciphertext,
+            &self.context.destination_ciphertext,
+        );
+
+        let source_pubkey = self.context.source_pubkey.try_into()?;
+        let destination_pubkey = self.context.destination_pubkey.try_into()?;
+        let source_ciphertext = self.context.source_ciphertext.try_into()?;
+        let destination_ciphertext = self.context.destination_ciphertext.try_into()?;
+        let proof: CiphertextCiphertextEqualityProof = self.proof.try_into()?;
+
+        proof
+            .verify(
+                &source_pubkey,
+                &destination_pubkey,
+                &source_ciphertext,
+                &destination_ciphertext,
+                &mut transcript,
+            )
+            .map_err(|e| e.into())
+    }
+}
+
+#[allow(non_snake_case)]
+#[cfg(not(target_os = "solana"))]
+impl CiphertextCiphertextEqualityProof {
+    fn transcript_new(
+        source_pubkey: &pod::ElGamalPubkey,
+        destination_pubkey: &pod::ElGamalPubkey,
+        source_ciphertext: &pod::ElGamalCiphertext,
+        destination_ciphertext: &pod::ElGamalCiphertext,
+    ) -> Transcript {
+        let mut transcript = Transcript::new(b"CiphertextCiphertextEqualityProof");
+
+        transcript.append_pubkey(b"pubkey-source", source_pubkey);
+        transcript.append_pubkey(b"pubkey-dest", destination_pubkey);
+
+        transcript.append_ciphertext(b"ciphertext-source", source_ciphertext);
+        transcript.append_ciphertext(b"ciphertext-dest", destination_ciphertext);
+
+        transcript
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_ciphertext_ciphertext_instruction_correctness() {
+        let withdraw_withheld_authority_keypair = ElGamalKeypair::new_rand();
+        let dest_keypair = ElGamalKeypair::new_rand();
+
+        let amount: u64 = 0;
+        let withdraw_withheld_authority_ciphertext =
+            withdraw_withheld_authority_keypair.public.encrypt(amount);
+
+        let withdraw_withheld_tokens_data = CiphertextCiphertextEqualityProofData::new(
+            &withdraw_withheld_authority_keypair,
+            &dest_keypair.public,
+            &withdraw_withheld_authority_ciphertext,
+            amount,
+        )
+        .unwrap();
+
+        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
+
+        let amount: u64 = 55;
+        let withdraw_withheld_authority_ciphertext =
+            withdraw_withheld_authority_keypair.public.encrypt(amount);
+
+        let withdraw_withheld_tokens_data = CiphertextCiphertextEqualityProofData::new(
+            &withdraw_withheld_authority_keypair,
+            &dest_keypair.public,
+            &withdraw_withheld_authority_ciphertext,
+            amount,
+        )
+        .unwrap();
+
+        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
+
+        let amount = u64::max_value();
+        let withdraw_withheld_authority_ciphertext =
+            withdraw_withheld_authority_keypair.public.encrypt(amount);
+
+        let withdraw_withheld_tokens_data = CiphertextCiphertextEqualityProofData::new(
+            &withdraw_withheld_authority_keypair,
+            &dest_keypair.public,
+            &withdraw_withheld_authority_ciphertext,
+            amount,
+        )
+        .unwrap();
+
+        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
+    }
+}
