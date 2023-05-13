@@ -8,7 +8,9 @@ use {
     serial_test::serial,
     solana_core::validator::ValidatorConfig,
     solana_gossip::gossip_service::discover_cluster,
-    solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore},
+    solana_ledger::{
+        ancestor_iterator::AncestorIterator, blockstore::Blockstore, leader_schedule::FixedSchedule,
+    },
     solana_local_cluster::{
         cluster::Cluster,
         cluster_tests,
@@ -23,7 +25,13 @@ use {
         signature::{Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    std::{collections::HashSet, sync::Arc, thread::sleep, time::Duration},
+    std::{
+        collections::HashSet,
+        sync::Arc,
+        thread::sleep,
+        time::{Duration, Instant},
+    },
+    trees::tr,
 };
 
 mod common;
@@ -451,5 +459,283 @@ fn test_slot_hash_expiry() {
         &[cluster.get_contact_info(&a_pubkey).unwrap().clone()],
         &cluster.connection_cache,
         "test_slot_hashes_expiry",
+    );
+}
+
+// This test simulates a case where a leader sends a duplicate block with different ancestory. One
+// version builds off of the rooted path, however the other version builds off a pruned branch. The
+// validators that receive the pruned version will need to repair in order to continue, which
+// requires an ancestor hashes repair.
+//
+// We setup 3 validators:
+// - majority, will produce the rooted path
+// - minority, will produce the pruned path
+// - our_node, will be fed the pruned version of the duplicate block and need to repair
+//
+// Additionally we setup 3 observer nodes to propagate votes and participate in the ancestor hashes
+// sample.
+//
+// Fork structure:
+//
+// 0 - 1 - ... - 10 (fork slot) - 30 - ... - 61 (rooted path) - ...
+//                |
+//                |- 11 - ... - 29 (pruned path) - 81'
+//
+//
+// Steps:
+// 1) Different leader schedule, minority thinks it produces 0-29 and majority rest, majority
+//    thinks minority produces all blocks. This is to avoid majority accidentally producing blocks
+//    before it shuts down.
+// 2) Start cluster, kill our_node.
+// 3) Kill majority cluster after it votes for any slot > fork slot (guarantees that the fork slot is
+//    reached as minority cannot pass threshold otherwise).
+// 4) Let minority produce forks on pruned forks until out of leader slots then kill.
+// 5) Truncate majority ledger past fork slot so it starts building off of fork slot.
+// 6) Restart majority and wait untill it starts producing blocks on main fork and roots something
+//    past the fork slot.
+// 7) Construct our ledger by copying majority ledger and copying blocks from minority for the pruned path.
+// 8) In our node's ledger, change the parent of the latest slot in majority fork to be the latest
+//    slot in the minority fork (simulates duplicate built off of pruned block)
+// 9) Start our node which will pruned the minority fork on ledger replay and verify that we can make roots.
+//
+#[test]
+#[serial]
+fn test_duplicate_with_pruned_ancestor() {
+    solana_logger::setup_with("info,solana_metrics=off");
+    solana_core::duplicate_repair_status::set_ancestor_hash_repair_sample_size_for_tests_only(3);
+
+    let majority_leader_stake = 10_000_000 * DEFAULT_NODE_STAKE;
+    let minority_leader_stake = 2_000_000 * DEFAULT_NODE_STAKE;
+    let our_node = DEFAULT_NODE_STAKE;
+    let observer_stake = DEFAULT_NODE_STAKE;
+
+    let slots_per_epoch = 2048;
+    let fork_slot: u64 = 10;
+    let fork_length: u64 = 20;
+    let majority_fork_buffer = 5;
+
+    let mut node_stakes = vec![majority_leader_stake, minority_leader_stake, our_node];
+    // We need enough observers to reach `ANCESTOR_HASH_REPAIR_SAMPLE_SIZE`
+    node_stakes.append(&mut vec![observer_stake; 3]);
+
+    let num_nodes = node_stakes.len();
+
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+        "4mx9yoFBeYasDKBGDWCTWGJdWuJCKbgqmuP8bN9umybCh5Jzngw7KQxe99Rf5uzfyzgba1i65rJW4Wqk7Ab5S8ye",
+        "3zsEPEDsjfEay7te9XqNjRTCE7vwuT6u4DHzBJC19yp7GS8BuNRMRjnpVrKCBzb3d44kxc4KPGSHkCmk6tEfswCg",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .chain(std::iter::repeat_with(|| (Arc::new(Keypair::new()), true)))
+    .take(node_stakes.len())
+    .collect::<Vec<_>>();
+    let validators = validator_keys
+        .iter()
+        .map(|(kp, _)| kp.pubkey())
+        .collect::<Vec<_>>();
+    let (majority_pubkey, minority_pubkey, our_node_pubkey) =
+        (validators[0], validators[1], validators[2]);
+
+    let mut default_config = ValidatorConfig::default_for_test();
+    // Minority fork is leader long enough to create pruned fork
+    let validator_to_slots = vec![
+        (minority_pubkey, (fork_slot + fork_length) as usize),
+        (majority_pubkey, slots_per_epoch as usize),
+    ];
+    let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
+    default_config.fixed_leader_schedule = Some(FixedSchedule {
+        leader_schedule: Arc::new(leader_schedule),
+    });
+
+    let mut validator_configs = make_identical_validator_configs(&default_config, num_nodes);
+    validator_configs[3].voting_disabled = true;
+    // Don't let majority produce anything past the fork by tricking its leader schedule
+    validator_configs[0].fixed_leader_schedule = Some(FixedSchedule {
+        leader_schedule: Arc::new(create_custom_leader_schedule(
+            [(minority_pubkey, slots_per_epoch as usize)].into_iter(),
+        )),
+    });
+
+    let mut config = ClusterConfig {
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
+        node_stakes,
+        validator_configs,
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+
+    let majority_ledger_path = cluster.ledger_path(&majority_pubkey);
+    let minority_ledger_path = cluster.ledger_path(&minority_pubkey);
+    let our_node_ledger_path = cluster.ledger_path(&our_node_pubkey);
+
+    info!(
+        "majority {} ledger path {:?}",
+        majority_pubkey, majority_ledger_path
+    );
+    info!(
+        "minority {} ledger path {:?}",
+        minority_pubkey, minority_ledger_path
+    );
+    info!(
+        "our_node {} ledger path {:?}",
+        our_node_pubkey, our_node_ledger_path
+    );
+
+    info!("Killing our node");
+    let our_node_info = cluster.exit_node(&our_node_pubkey);
+
+    info!("Waiting on majority validator to vote on at least {fork_slot}");
+    let now = Instant::now();
+    let mut last_majority_vote = 0;
+    loop {
+        let elapsed = now.elapsed();
+        assert!(
+            elapsed <= Duration::from_secs(30),
+            "Majority validator failed to vote on a slot >= {} in {} secs,
+            majority validator last vote: {}",
+            fork_slot,
+            elapsed.as_secs(),
+            last_majority_vote,
+        );
+        sleep(Duration::from_millis(100));
+
+        if let Some((last_vote, _)) = last_vote_in_tower(&majority_ledger_path, &majority_pubkey) {
+            last_majority_vote = last_vote;
+            if last_vote >= fork_slot {
+                break;
+            }
+        }
+    }
+
+    info!("Killing majority validator, waiting for minority fork to reach a depth of at least 15",);
+    let mut majority_validator_info = cluster.exit_node(&majority_pubkey);
+
+    let now = Instant::now();
+    let mut last_minority_vote = 0;
+    while last_minority_vote < fork_slot + 15 {
+        let elapsed = now.elapsed();
+        assert!(
+            elapsed <= Duration::from_secs(30),
+            "Minority validator failed to create a fork of depth >= {} in {} secs,
+            last_minority_vote: {}",
+            15,
+            elapsed.as_secs(),
+            last_minority_vote,
+        );
+
+        if let Some((last_vote, _)) = last_vote_in_tower(&minority_ledger_path, &minority_pubkey) {
+            last_minority_vote = last_vote;
+        }
+    }
+
+    info!(
+        "Killing minority validator, fork created successfully: {:?}",
+        last_minority_vote
+    );
+    let last_minority_vote =
+        wait_for_last_vote_in_tower_to_land_in_ledger(&minority_ledger_path, &minority_pubkey);
+    let minority_validator_info = cluster.exit_node(&minority_pubkey);
+
+    info!("Truncating majority validator ledger to {fork_slot}");
+    {
+        remove_tower(&majority_ledger_path, &majority_pubkey);
+        let blockstore = open_blockstore(&majority_ledger_path);
+        purge_slots_with_count(&blockstore, fork_slot + 1, 100);
+    }
+
+    info!("Restarting majority validator");
+    // Make sure we don't send duplicate votes
+    majority_validator_info.config.wait_to_vote_slot = Some(fork_slot + fork_length);
+    // Fix the leader schedule so we can produce blocks
+    majority_validator_info.config.fixed_leader_schedule =
+        minority_validator_info.config.fixed_leader_schedule.clone();
+    cluster.restart_node(
+        &majority_pubkey,
+        majority_validator_info,
+        SocketAddrSpace::Unspecified,
+    );
+
+    let mut last_majority_root = 0;
+    let now = Instant::now();
+    info!(
+        "Waiting for majority validator to root something past {}",
+        fork_slot + fork_length + majority_fork_buffer
+    );
+    while last_majority_root <= fork_slot + fork_length + majority_fork_buffer {
+        let elapsed = now.elapsed();
+        assert!(
+            elapsed <= Duration::from_secs(60),
+            "Majority validator failed to root something > {} in {} secs,
+            last majority validator vote: {},",
+            fork_slot + fork_length + majority_fork_buffer,
+            elapsed.as_secs(),
+            last_majority_vote,
+        );
+        sleep(Duration::from_millis(100));
+
+        if let Some(last_root) = last_root_in_tower(&majority_ledger_path, &majority_pubkey) {
+            last_majority_root = last_root;
+        }
+    }
+
+    let last_majority_vote =
+        wait_for_last_vote_in_tower_to_land_in_ledger(&majority_ledger_path, &majority_pubkey);
+    info!("Creating duplicate block built off of pruned branch for our node. Last majority vote {last_majority_vote}, Last minority vote {last_minority_vote}");
+    {
+        {
+            // Copy majority fork
+            std::fs::remove_dir_all(&our_node_info.info.ledger_path).unwrap();
+            let mut opt = fs_extra::dir::CopyOptions::new();
+            opt.copy_inside = true;
+            fs_extra::dir::copy(&majority_ledger_path, &our_node_ledger_path, &opt).unwrap();
+            remove_tower(&our_node_ledger_path, &majority_pubkey);
+        }
+
+        // Copy minority fork. Rewind our root so that we can copy over the purged bank
+        let minority_blockstore = open_blockstore(&minority_validator_info.info.ledger_path);
+        let mut our_blockstore = open_blockstore(&our_node_info.info.ledger_path);
+        our_blockstore.set_last_root(fork_slot - 1);
+        copy_blocks(last_minority_vote, &minority_blockstore, &our_blockstore);
+
+        // Change last block parent to chain off of (purged) minority fork
+        info!("For our node, changing parent of {last_majority_vote} to {last_minority_vote}");
+        purge_slots_with_count(&our_blockstore, last_majority_vote, 1);
+        our_blockstore.add_tree(
+            tr(last_minority_vote) / tr(last_majority_vote),
+            false,
+            true,
+            64,
+            Hash::default(),
+        );
+
+        // Update the root to set minority fork back as pruned
+        our_blockstore.set_last_root(fork_slot + fork_length);
+    }
+
+    // Actual test, `our_node` will replay the minority fork, then the majority fork which will
+    // prune the minority fork. Then finally the problematic block will be skipped (not replayed)
+    // because its parent has been pruned from bank forks. Meanwhile the majority validator has
+    // continued making blocks and voting, duplicate confirming everything. This will cause the
+    // pruned fork to become popular triggering an ancestor hashes repair, eventually allowing our
+    // node to dump & repair & continue making roots.
+    info!("Restarting our node, verifying that our node is making roots past the duplicate block");
+
+    cluster.restart_node(
+        &our_node_pubkey,
+        our_node_info,
+        SocketAddrSpace::Unspecified,
+    );
+
+    cluster_tests::check_for_new_roots(
+        16,
+        &[cluster.get_contact_info(&our_node_pubkey).unwrap().clone()],
+        &cluster.connection_cache,
+        "test_duplicate_with_pruned_ancestor",
     );
 }

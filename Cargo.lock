@@ -6082,6 +6082,7 @@ dependencies = [
  "solana-tpu-client",
  "solana-vote-program",
  "tempfile",
+ "trees",
 ]
 
 [[package]]

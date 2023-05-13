@@ -32,6 +32,7 @@ solana-thin-client = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-vote-program = { workspace = true }
 tempfile = { workspace = true }
+trees = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

@@ -7,7 +7,10 @@ use {
         cluster_info_vote_listener::VerifiedVoteReceiver,
         completed_data_sets_service::CompletedDataSetsSender,
         repair_response,
-        repair_service::{DumpedSlotsReceiver, OutstandingShredRepairs, RepairInfo, RepairService},
+        repair_service::{
+            DumpedSlotsReceiver, OutstandingShredRepairs, PopularPrunedForksSender, RepairInfo,
+            RepairService,
+        },
         result::{Error, Result},
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
@@ -316,6 +319,7 @@ impl WindowService {
         duplicate_slots_sender: DuplicateSlotSender,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
         dumped_slots_receiver: DumpedSlotsReceiver,
+        popular_pruned_forks_sender: PopularPrunedForksSender,
     ) -> WindowService {
         let outstanding_requests = Arc::<RwLock<OutstandingShredRepairs>>::default();
 
@@ -331,6 +335,7 @@ impl WindowService {
             outstanding_requests.clone(),
             ancestor_hashes_replay_update_receiver,
             dumped_slots_receiver,
+            popular_pruned_forks_sender,
         );
 
         let (duplicate_sender, duplicate_receiver) = unbounded();
