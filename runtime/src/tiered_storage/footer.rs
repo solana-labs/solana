@@ -1,5 +1,9 @@
 use {
-    crate::tiered_storage::{file::TieredStorageFile, mmap_utils::get_type},
+    crate::tiered_storage::{
+        error::{TieredStorageError, TieredStorageResult as TsResult},
+        file::TieredStorageFile,
+        mmap_utils::get_type,
+    },
     memmap2::Mmap,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
     std::{mem, path::Path},
@@ -186,19 +190,19 @@ impl Default for TieredStorageFooter {
 }
 
 impl TieredStorageFooter {
-    pub fn new_from_path(path: impl AsRef<Path>) -> std::io::Result<Self> {
+    pub fn new_from_path(path: impl AsRef<Path>) -> TsResult<Self> {
         let file = TieredStorageFile::new_readonly(path);
         Self::new_from_footer_block(&file)
     }
 
-    pub fn write_footer_block(&self, file: &TieredStorageFile) -> std::io::Result<()> {
+    pub fn write_footer_block(&self, file: &TieredStorageFile) -> TsResult<()> {
         file.write_type(self)?;
         file.write_type(&TieredStorageMagicNumber::default())?;
 
         Ok(())
     }
 
-    pub fn new_from_footer_block(file: &TieredStorageFile) -> std::io::Result<Self> {
+    pub fn new_from_footer_block(file: &TieredStorageFile) -> TsResult<Self> {
         let mut footer_size: u64 = 0;
         let mut footer_version: u64 = 0;
         let mut magic_number = TieredStorageMagicNumber(0);
@@ -209,9 +213,9 @@ impl TieredStorageFooter {
         file.read_type(&mut magic_number)?;
 
         if magic_number != TieredStorageMagicNumber::default() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "TieredStorageError: Magic mumber mismatch",
+            return Err(TieredStorageError::MagicNumberMismatch(
+                TieredStorageMagicNumber::default().0,
+                magic_number.0,
             ));
         }
 
@@ -222,16 +226,16 @@ impl TieredStorageFooter {
         Ok(footer)
     }
 
-    pub fn new_from_mmap(map: &Mmap) -> std::io::Result<&TieredStorageFooter> {
+    pub fn new_from_mmap(map: &Mmap) -> TsResult<&TieredStorageFooter> {
         let offset = map.len().saturating_sub(FOOTER_TAIL_SIZE);
         let (footer_size, offset) = get_type::<u64>(map, offset)?;
         let (_footer_version, offset) = get_type::<u64>(map, offset)?;
         let (magic_number, _offset) = get_type::<TieredStorageMagicNumber>(map, offset)?;
 
         if *magic_number != TieredStorageMagicNumber::default() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "TieredStorageError: Magic mumber mismatch",
+            return Err(TieredStorageError::MagicNumberMismatch(
+                TieredStorageMagicNumber::default().0,
+                magic_number.0,
             ));
         }
 

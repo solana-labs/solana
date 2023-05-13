@@ -5,6 +5,7 @@ use {
         },
         append_vec::{AppendVec, MatchAccountOwnerError},
         storable_accounts::StorableAccounts,
+        tiered_storage::error::TieredStorageError,
     },
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
@@ -30,6 +31,9 @@ macro_rules! u64_align {
 pub enum AccountsFileError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("TieredStorageError: {0}")]
+    TieredStorageError(#[from] TieredStorageError),
 }
 
 pub type Result<T> = std::result::Result<T, AccountsFileError>;
