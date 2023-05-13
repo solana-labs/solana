@@ -62,12 +62,10 @@ impl CiphertextCiphertextEqualityProofData {
         source_keypair: &ElGamalKeypair,
         destination_pubkey: &ElGamalPubkey,
         source_ciphertext: &ElGamalCiphertext,
+        destination_ciphertext: &ElGamalCiphertext,
+        destination_opening: &PedersenOpening,
         amount: u64,
     ) -> Result<Self, ProofError> {
-        // encrypt withdraw amount under destination public key
-        let destination_opening = PedersenOpening::new_rand();
-        let destination_ciphertext = destination_pubkey.encrypt_with(amount, &destination_opening);
-
         let pod_source_pubkey = pod::ElGamalPubkey(source_keypair.public.to_bytes());
         let pod_destination_pubkey = pod::ElGamalPubkey(destination_pubkey.to_bytes());
         let pod_source_ciphertext = pod::ElGamalCiphertext(source_ciphertext.to_bytes());
@@ -91,7 +89,7 @@ impl CiphertextCiphertextEqualityProofData {
             source_keypair,
             destination_pubkey,
             source_ciphertext,
-            &destination_opening,
+            destination_opening,
             amount,
             &mut transcript,
         )
@@ -104,7 +102,7 @@ impl CiphertextCiphertextEqualityProofData {
 impl ZkProofData<CiphertextCiphertextEqualityProofContext>
     for CiphertextCiphertextEqualityProofData
 {
-    const PROOF_TYPE: ProofType = ProofType::WithdrawWithheldTokens;
+    const PROOF_TYPE: ProofType = ProofType::CiphertextCiphertextEquality;
 
     fn context_data(&self) -> &CiphertextCiphertextEqualityProofContext {
         &self.context
@@ -164,49 +162,67 @@ mod test {
 
     #[test]
     fn test_ciphertext_ciphertext_instruction_correctness() {
-        let withdraw_withheld_authority_keypair = ElGamalKeypair::new_rand();
-        let dest_keypair = ElGamalKeypair::new_rand();
+        let source_keypair = ElGamalKeypair::new_rand();
+        let destination_keypair = ElGamalKeypair::new_rand();
 
         let amount: u64 = 0;
-        let withdraw_withheld_authority_ciphertext =
-            withdraw_withheld_authority_keypair.public.encrypt(amount);
+        let source_ciphertext = source_keypair.public.encrypt(amount);
 
-        let withdraw_withheld_tokens_data = CiphertextCiphertextEqualityProofData::new(
-            &withdraw_withheld_authority_keypair,
-            &dest_keypair.public,
-            &withdraw_withheld_authority_ciphertext,
+        let destination_opening = PedersenOpening::new_rand();
+        let destination_ciphertext = destination_keypair
+            .public
+            .encrypt_with(amount, &destination_opening);
+
+        let proof_data = CiphertextCiphertextEqualityProofData::new(
+            &source_keypair,
+            &destination_keypair.public,
+            &source_ciphertext,
+            &destination_ciphertext,
+            &destination_opening,
             amount,
         )
         .unwrap();
 
-        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
+        assert!(proof_data.verify_proof().is_ok());
 
         let amount: u64 = 55;
-        let withdraw_withheld_authority_ciphertext =
-            withdraw_withheld_authority_keypair.public.encrypt(amount);
+        let source_ciphertext = source_keypair.public.encrypt(amount);
 
-        let withdraw_withheld_tokens_data = CiphertextCiphertextEqualityProofData::new(
-            &withdraw_withheld_authority_keypair,
-            &dest_keypair.public,
-            &withdraw_withheld_authority_ciphertext,
+        let destination_opening = PedersenOpening::new_rand();
+        let destination_ciphertext = destination_keypair
+            .public
+            .encrypt_with(amount, &destination_opening);
+
+        let proof_data = CiphertextCiphertextEqualityProofData::new(
+            &source_keypair,
+            &destination_keypair.public,
+            &source_ciphertext,
+            &destination_ciphertext,
+            &destination_opening,
             amount,
         )
         .unwrap();
 
-        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
+        assert!(proof_data.verify_proof().is_ok());
 
         let amount = u64::max_value();
-        let withdraw_withheld_authority_ciphertext =
-            withdraw_withheld_authority_keypair.public.encrypt(amount);
+        let source_ciphertext = source_keypair.public.encrypt(amount);
 
-        let withdraw_withheld_tokens_data = CiphertextCiphertextEqualityProofData::new(
-            &withdraw_withheld_authority_keypair,
-            &dest_keypair.public,
-            &withdraw_withheld_authority_ciphertext,
+        let destination_opening = PedersenOpening::new_rand();
+        let destination_ciphertext = destination_keypair
+            .public
+            .encrypt_with(amount, &destination_opening);
+
+        let proof_data = CiphertextCiphertextEqualityProofData::new(
+            &source_keypair,
+            &destination_keypair.public,
+            &source_ciphertext,
+            &destination_ciphertext,
+            &destination_opening,
             amount,
         )
         .unwrap();
 
-        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
+        assert!(proof_data.verify_proof().is_ok());
     }
 }

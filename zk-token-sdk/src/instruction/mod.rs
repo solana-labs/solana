@@ -36,7 +36,7 @@ pub enum ProofType {
     Uninitialized,
     ZeroBalance,
     Withdraw,
-    WithdrawWithheldTokens,
+    CiphertextCiphertextEquality,
     Transfer,
     TransferWithFee,
     PubkeyValidity,

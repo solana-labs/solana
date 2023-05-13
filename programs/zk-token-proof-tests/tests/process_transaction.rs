@@ -9,8 +9,11 @@ use {
         transaction::{Transaction, TransactionError},
     },
     solana_zk_token_sdk::{
-        encryption::elgamal::ElGamalKeypair, instruction::*, zk_token_proof_instruction::*,
-        zk_token_proof_program, zk_token_proof_state::ProofContextState,
+        encryption::{elgamal::ElGamalKeypair, pedersen::PedersenOpening},
+        instruction::*,
+        zk_token_proof_instruction::*,
+        zk_token_proof_program,
+        zk_token_proof_state::ProofContextState,
     },
     std::mem::size_of,
 };
@@ -68,10 +71,17 @@ async fn test_ciphertext_ciphertext_equality() {
     let amount: u64 = 0;
     let source_ciphertext = source_keypair.public.encrypt(amount);
 
+    let destination_opening = PedersenOpening::new_rand();
+    let destination_ciphertext = destination_keypair
+        .public
+        .encrypt_with(amount, &destination_opening);
+
     let success_proof_data = CiphertextCiphertextEqualityProofData::new(
         &source_keypair,
         &destination_keypair.public,
         &source_ciphertext,
+        &destination_ciphertext,
+        &destination_opening,
         amount,
     )
     .unwrap();
@@ -84,6 +94,8 @@ async fn test_ciphertext_ciphertext_equality() {
         &incorrect_keypair,
         &destination_keypair.public,
         &source_ciphertext,
+        &destination_ciphertext,
+        &destination_opening,
         amount,
     )
     .unwrap();
