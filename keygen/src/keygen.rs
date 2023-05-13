@@ -1,20 +1,28 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    bip39::{Language, Mnemonic, MnemonicType, Seed},
+    bip39::{Mnemonic, MnemonicType, Seed},
     clap::{crate_description, crate_name, Arg, ArgMatches, Command},
     solana_clap_v3_utils::{
         input_parsers::STDOUT_OUTFILE_TOKEN,
         input_validators::{is_parsable, is_prompt_signer_source},
+        keygen::{
+            check_for_overwrite,
+            derivation_path::{acquire_derivation_path, derivation_path_arg},
+            mnemonic::{
+                acquire_language, acquire_passphrase_and_message, no_passphrase_and_message,
+                WORD_COUNT_ARG,
+            },
+            no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
+        },
         keypair::{
-            keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
+            keypair_from_path, keypair_from_seed_phrase, signer_from_path,
             SKIP_SEED_PHRASE_VALIDATION_ARG,
         },
-        ArgConstant, DisplayError,
+        DisplayError,
     },
     solana_cli_config::{Config, CONFIG_FILE},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
-        derivation_path::DerivationPath,
         instruction::{AccountMeta, Instruction},
         message::Message,
         pubkey::{write_pubkey_file, Pubkey},
@@ -26,7 +34,6 @@ use {
     std::{
         collections::HashSet,
         error,
-        path::Path,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
@@ -48,100 +55,10 @@ mod smallest_length_44_public_key {
     }
 }
 
-const NO_PASSPHRASE: &str = "";
-const DEFAULT_DERIVATION_PATH: &str = "m/44'/501'/0'/0'";
-
 struct GrindMatch {
     starts: String,
     ends: String,
     count: AtomicU64,
-}
-
-const WORD_COUNT_ARG: ArgConstant<'static> = ArgConstant {
-    long: "word-count",
-    name: "word_count",
-    help: "Specify the number of words that will be present in the generated seed phrase",
-};
-
-const LANGUAGE_ARG: ArgConstant<'static> = ArgConstant {
-    long: "language",
-    name: "language",
-    help: "Specify the mnemonic language that will be present in the generated seed phrase",
-};
-
-const NO_PASSPHRASE_ARG: ArgConstant<'static> = ArgConstant {
-    long: "no-bip39-passphrase",
-    name: "no_passphrase",
-    help: "Do not prompt for a BIP39 passphrase",
-};
-
-const NO_OUTFILE_ARG: ArgConstant<'static> = ArgConstant {
-    long: "no-outfile",
-    name: "no_outfile",
-    help: "Only print a seed phrase and pubkey. Do not output a keypair file",
-};
-
-fn word_count_arg<'a>() -> Arg<'a> {
-    Arg::new(WORD_COUNT_ARG.name)
-        .long(WORD_COUNT_ARG.long)
-        .possible_values(["12", "15", "18", "21", "24"])
-        .default_value("12")
-        .value_name("NUMBER")
-        .takes_value(true)
-        .help(WORD_COUNT_ARG.help)
-}
-
-fn language_arg<'a>() -> Arg<'a> {
-    Arg::new(LANGUAGE_ARG.name)
-        .long(LANGUAGE_ARG.long)
-        .possible_values([
-            "english",
-            "chinese-simplified",
-            "chinese-traditional",
-            "japanese",
-            "spanish",
-            "korean",
-            "french",
-            "italian",
-        ])
-        .default_value("english")
-        .value_name("LANGUAGE")
-        .takes_value(true)
-        .help(LANGUAGE_ARG.help)
-}
-
-fn no_passphrase_arg<'a>() -> Arg<'a> {
-    Arg::new(NO_PASSPHRASE_ARG.name)
-        .long(NO_PASSPHRASE_ARG.long)
-        .alias("no-passphrase")
-        .help(NO_PASSPHRASE_ARG.help)
-}
-
-fn no_outfile_arg<'a>() -> Arg<'a> {
-    Arg::new(NO_OUTFILE_ARG.name)
-        .long(NO_OUTFILE_ARG.long)
-        .help(NO_OUTFILE_ARG.help)
-}
-
-trait KeyGenerationCommonArgs {
-    fn key_generation_common_args(self) -> Self;
-}
-
-impl KeyGenerationCommonArgs for Command<'_> {
-    fn key_generation_common_args(self) -> Self {
-        self.arg(word_count_arg())
-            .arg(language_arg())
-            .arg(no_passphrase_arg())
-    }
-}
-
-fn check_for_overwrite(outfile: &str, matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
-    let force = matches.is_present("force");
-    if !force && Path::new(outfile).exists() {
-        let err_msg = format!("Refusing to overwrite {outfile} without --force flag");
-        return Err(err_msg.into());
-    }
-    Ok(())
 }
 
 fn get_keypair_from_matches(
@@ -226,45 +143,6 @@ fn grind_validator_starts_and_ends_with(v: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn acquire_language(matches: &ArgMatches) -> Language {
-    match matches.value_of(LANGUAGE_ARG.name).unwrap() {
-        "english" => Language::English,
-        "chinese-simplified" => Language::ChineseSimplified,
-        "chinese-traditional" => Language::ChineseTraditional,
-        "japanese" => Language::Japanese,
-        "spanish" => Language::Spanish,
-        "korean" => Language::Korean,
-        "french" => Language::French,
-        "italian" => Language::Italian,
-        _ => unreachable!(),
-    }
-}
-
-fn no_passphrase_and_message() -> (String, String) {
-    (NO_PASSPHRASE.to_string(), "".to_string())
-}
-
-fn acquire_passphrase_and_message(
-    matches: &ArgMatches,
-) -> Result<(String, String), Box<dyn error::Error>> {
-    if matches.is_present(NO_PASSPHRASE_ARG.name) {
-        Ok(no_passphrase_and_message())
-    } else {
-        match prompt_passphrase(
-            "\nFor added security, enter a BIP39 passphrase\n\
-             \nNOTE! This passphrase improves security of the recovery seed phrase NOT the\n\
-             keypair file itself, which is stored as insecure plain text\n\
-             \nBIP39 Passphrase (empty for none): ",
-        ) {
-            Ok(passphrase) => {
-                println!();
-                Ok((passphrase, " and your BIP39 passphrase".to_string()))
-            }
-            Err(e) => Err(e),
-        }
-    }
-}
-
 fn grind_print_info(grind_matches: &[GrindMatch], num_threads: usize) {
     println!("Searching with {num_threads} threads for:");
     for gm in grind_matches {
@@ -340,33 +218,6 @@ fn grind_parse_args(
     }
     grind_print_info(&grind_matches, num_threads);
     grind_matches
-}
-
-fn derivation_path_arg<'a>() -> Arg<'a> {
-    Arg::new("derivation_path")
-        .long("derivation-path")
-        .value_name("DERIVATION_PATH")
-        .takes_value(true)
-        .min_values(0)
-        .max_values(1)
-        .help("Derivation path. All indexes will be promoted to hardened. \
-            If arg is not presented then derivation path will not be used. \
-            If arg is presented with empty DERIVATION_PATH value then m/44'/501'/0'/0' will be used."
-        )
-}
-
-fn acquire_derivation_path(
-    matches: &ArgMatches,
-) -> Result<Option<DerivationPath>, Box<dyn error::Error>> {
-    if matches.is_present("derivation_path") {
-        Ok(Some(DerivationPath::from_absolute_path_str(
-            matches
-                .value_of("derivation_path")
-                .unwrap_or(DEFAULT_DERIVATION_PATH),
-        )?))
-    } else {
-        Ok(None)
-    }
 }
 
 fn app<'a>(num_threads: &'a str, crate_version: &'a str) -> Command<'a> {
