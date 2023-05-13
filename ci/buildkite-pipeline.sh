@@ -303,20 +303,20 @@ pull_or_push_steps() {
   fi
 
   # just a bunch of debugging
-  git branch
+  git branch --all
   git status
   git log --oneline -15
-  optional_old_version_number_debug=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
+  optional_old_version_number_debug=$(git diff origin/"$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
     grep -e "^-version" | sed  's/-version = "\(.*\)"/\1/')
   echo "optional_old_version_number_debug: ->$optional_old_version_number_debug<-"
 
-    diff_other_than_version_bump_debug=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD | \
-      grep -vE "^ |^@@ |^--- |^\+\+\+ |^index |^diff |^-( \")?solana.*$optional_old_version_number|^\+( \")?solana.*$new_version_number|^-version|^\+version"|cat)
-    echo "diff_other_than_version_bump_debug: ->$diff_other_than_version_bump_debug<-"
+  diff_other_than_version_bump_debug=$(git diff origin/"$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD | \
+    grep -vE "^ |^@@ |^--- |^\+\+\+ |^index |^diff |^-( \")?solana.*$optional_old_version_number|^\+( \")?solana.*$new_version_number|^-version|^\+version"|cat)
+  echo "diff_other_than_version_bump_debug: ->$diff_other_than_version_bump_debug<-"
 
   # Version bump PRs are an edge case that can skip most of the CI steps
   if affects .toml$ && affects .lock$ && ! affects_other_than .toml$ .lock$; then
-    optional_old_version_number=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
+    optional_old_version_number=$(git diff origin/"$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
       grep -e "^-version" | sed  's/-version = "\(.*\)"/\1/')
     echo "optional_old_version_number: ->$optional_old_version_number<-"
     new_version_number=$(grep -e  "^version = " validator/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
