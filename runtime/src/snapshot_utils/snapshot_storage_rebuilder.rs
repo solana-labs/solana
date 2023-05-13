@@ -99,8 +99,7 @@ impl SnapshotStorageRebuilder {
             snapshot_storage_lengths,
             append_vec_files,
             snapshot_from,
-        )
-        .map_err(|err| SnapshotError::IoWithSource(err, "rebuild snapshot storages"))?;
+        )?;
 
         Ok(RebuiltSnapshotStorage {
             snapshot_version,
@@ -207,7 +206,7 @@ impl SnapshotStorageRebuilder {
         snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
         append_vec_files: Vec<PathBuf>,
         snapshot_from: SnapshotFrom,
-    ) -> Result<AccountStorageMap, std::io::Error> {
+    ) -> Result<AccountStorageMap, SnapshotError> {
         let rebuilder = Arc::new(SnapshotStorageRebuilder::new(
             file_receiver,
             num_threads,
@@ -236,17 +235,17 @@ impl SnapshotStorageRebuilder {
     }
 
     /// Processes buffered append_vec_files
-    fn process_buffered_files(&self, append_vec_files: Vec<PathBuf>) -> Result<(), std::io::Error> {
+    fn process_buffered_files(&self, append_vec_files: Vec<PathBuf>) -> Result<(), SnapshotError> {
         append_vec_files
             .into_par_iter()
             .map(|path| self.process_append_vec_file(path))
-            .collect::<Result<(), std::io::Error>>()
+            .collect::<Result<(), SnapshotError>>()
     }
 
     /// Spawn a single thread to process received append_vec_files
     fn spawn_receiver_thread(
         thread_pool: &ThreadPool,
-        exit_sender: Sender<Result<(), std::io::Error>>,
+        exit_sender: Sender<Result<(), SnapshotError>>,
         rebuilder: Arc<SnapshotStorageRebuilder>,
     ) {
         thread_pool.spawn(move || {
@@ -269,7 +268,7 @@ impl SnapshotStorageRebuilder {
     }
 
     /// Process an append_vec_file
-    fn process_append_vec_file(&self, path: PathBuf) -> Result<(), std::io::Error> {
+    fn process_append_vec_file(&self, path: PathBuf) -> Result<(), SnapshotError> {
         let filename = path.file_name().unwrap().to_str().unwrap().to_owned();
         if let Some(SnapshotFileKind::Storage) = get_snapshot_file_kind(&filename) {
             let (slot, append_vec_id) = get_slot_and_append_vec_id(&filename);
@@ -300,7 +299,7 @@ impl SnapshotStorageRebuilder {
     }
 
     /// Process a slot that has received all storage entries
-    fn process_complete_slot(&self, slot: Slot) -> Result<(), std::io::Error> {
+    fn process_complete_slot(&self, slot: Slot) -> Result<(), SnapshotError> {
         let slot_storage_paths = self.storage_paths.get(&slot).unwrap();
         let lock = slot_storage_paths.lock().unwrap();
 
@@ -335,7 +334,7 @@ impl SnapshotStorageRebuilder {
 
                 Ok((storage_entry.append_vec_id(), storage_entry))
             })
-            .collect::<Result<HashMap<AppendVecId, Arc<AccountStorageEntry>>, std::io::Error>>()?;
+            .collect::<Result<HashMap<AppendVecId, Arc<AccountStorageEntry>>, SnapshotError>>()?;
 
         let storage = if slot_stores.len() > 1 {
             let remapped_append_vec_folder = lock.first().unwrap().parent().unwrap();
@@ -388,8 +387,8 @@ impl SnapshotStorageRebuilder {
     /// Wait for the completion of the rebuilding threads
     fn wait_for_completion(
         &self,
-        exit_receiver: Receiver<Result<(), std::io::Error>>,
-    ) -> Result<(), std::io::Error> {
+        exit_receiver: Receiver<Result<(), SnapshotError>>,
+    ) -> Result<(), SnapshotError> {
         let num_slots = self.snapshot_storage_lengths.len();
         let mut last_log_time = Instant::now();
         loop {
