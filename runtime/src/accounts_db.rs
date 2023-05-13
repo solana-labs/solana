@@ -30,7 +30,7 @@ use {
         },
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
-        accounts_file::AccountsFile,
+        accounts_file::{AccountsFile, AccountsFileError},
         accounts_hash::{
             AccountsDeltaHash, AccountsHash, AccountsHashEnum, AccountsHasher,
             CalcAccountsHashConfig, CalculateHashIntermediate, HashStats, IncrementalAccountsHash,
@@ -97,7 +97,7 @@ use {
         boxed::Box,
         collections::{hash_map, BTreeSet, HashMap, HashSet},
         hash::{Hash as StdHash, Hasher as StdHasher},
-        io::{Error as IoError, Result as IoResult},
+        io::Result as IoResult,
         ops::{Range, RangeBounds},
         path::{Path, PathBuf},
         str::FromStr,
@@ -1138,7 +1138,7 @@ impl AccountStorageEntry {
         self.id.load(Ordering::Acquire)
     }
 
-    pub fn flush(&self) -> Result<(), IoError> {
+    pub fn flush(&self) -> Result<(), AccountsFileError> {
         self.accounts.flush()
     }
 

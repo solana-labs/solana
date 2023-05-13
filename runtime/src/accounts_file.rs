@@ -9,9 +9,10 @@ use {
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
         borrow::Borrow,
-        io, mem,
+        mem,
         path::{Path, PathBuf},
     },
+    thiserror::Error,
 };
 
 // Data placement should be aligned at the next boundary. Without alignment accessing the memory may
@@ -23,6 +24,15 @@ macro_rules! u64_align {
         ($addr + (ALIGN_BOUNDARY_OFFSET - 1)) & !(ALIGN_BOUNDARY_OFFSET - 1)
     };
 }
+
+#[derive(Error, Debug)]
+/// An enum for AccountsFile related error.
+pub enum AccountsFileError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+pub type Result<T> = std::result::Result<T, AccountsFileError>;
 
 #[derive(Debug)]
 /// An enum for accessing an accounts file which can be implemented
@@ -36,7 +46,7 @@ impl AccountsFile {
     ///
     /// The second element of the returned tuple is the number of accounts in the
     /// accounts file.
-    pub fn new_from_file(path: impl AsRef<Path>, current_len: usize) -> io::Result<(Self, usize)> {
+    pub fn new_from_file(path: impl AsRef<Path>, current_len: usize) -> Result<(Self, usize)> {
         let (av, num_accounts) = AppendVec::new_from_file(path, current_len)?;
         Ok((Self::AppendVec(av), num_accounts))
     }
@@ -50,7 +60,7 @@ impl AccountsFile {
         }
     }
 
-    pub fn flush(&self) -> io::Result<()> {
+    pub fn flush(&self) -> Result<()> {
         match self {
             Self::AppendVec(av) => av.flush(),
         }
@@ -109,7 +119,7 @@ impl AccountsFile {
         &self,
         offset: usize,
         owners: &[&Pubkey],
-    ) -> Result<usize, MatchAccountOwnerError> {
+    ) -> std::result::Result<usize, MatchAccountOwnerError> {
         match self {
             Self::AppendVec(av) => av.account_matches_owners(offset, owners),
         }

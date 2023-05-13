@@ -8,7 +8,7 @@ use {
         accounts_db::{
             get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
         },
-        accounts_file::AccountsFile,
+        accounts_file::{AccountsFile, AccountsFileError},
         accounts_hash::{AccountsDeltaHash, AccountsHash},
         bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
@@ -43,7 +43,7 @@ use {
 fn copy_append_vecs<P: AsRef<Path>>(
     accounts_db: &AccountsDb,
     output_dir: P,
-) -> std::io::Result<StorageAndNextAppendVecId> {
+) -> Result<StorageAndNextAppendVecId, AccountsFileError> {
     let storage_entries = accounts_db.get_snapshot_storages(RangeFull).0;
     let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
     let mut next_append_vec_id = 0;

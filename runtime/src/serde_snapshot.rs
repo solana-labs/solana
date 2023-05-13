@@ -627,7 +627,9 @@ pub(crate) fn reconstruct_single_storage(
     current_len: usize,
     append_vec_id: AppendVecId,
 ) -> io::Result<Arc<AccountStorageEntry>> {
-    let (accounts_file, num_accounts) = AccountsFile::new_from_file(append_vec_path, current_len)?;
+    let (accounts_file, num_accounts) =
+        AccountsFile::new_from_file(append_vec_path, current_len)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{}", err)))?;
     Ok(Arc::new(AccountStorageEntry::new_existing(
         *slot,
         append_vec_id,
