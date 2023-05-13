@@ -1,9 +1,5 @@
 //! The public-key (validity) proof system.
 //!
-//! A public-key proof is defined with respect to an ElGamal public key. The proof certifies that a
-//! given public key is a valid ElGamal public key (i.e. the prover knows a corresponding secret
-//! key). To generate the proof, a prover must prove the secret key for the public key.
-//!
 //! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
 

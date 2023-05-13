@@ -1,10 +1,5 @@
 //! The ciphertext-ciphertext equality sigma proof system.
 //!
-//! A ciphertext-ciphertext equality proof is defined with respect to two twisted ElGamal
-//! ciphertexts. The proof certifies that the two ciphertexts encrypt the same message. To generate
-//! the proof, a prover must provide the decryption key for the first ciphertext and the randomness
-//! used to generate the second ciphertext.
-//!
 //! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
 

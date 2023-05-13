@@ -60,7 +60,10 @@ lazy_static::lazy_static! {
     pub static ref COMMITMENT_MAX_FEE_BASIS_POINTS: PedersenCommitment = Pedersen::encode(MAX_FEE_BASIS_POINTS);
 }
 
-// #[derive(Clone, Copy, Pod, Zeroable)]
+/// The instruction data that is needed for the `ProofInstruction::TransferWithFee` instruction.
+///
+/// It includes the cryptographic proof as well as the cotnext data information needed to verify
+/// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeeData {
@@ -71,6 +74,7 @@ pub struct TransferWithFeeData {
     pub proof: TransferWithFeeProof,
 }
 
+/// The context data needed to verify a transfer-with-fee proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeeProofContext {

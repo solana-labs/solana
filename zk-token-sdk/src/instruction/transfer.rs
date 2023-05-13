@@ -43,6 +43,10 @@ lazy_static::lazy_static! {
                                                                          TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1);
 }
 
+/// The instruction data that is needed for the `ProofInstruction::VerifyTransfer` instruction.
+///
+/// It includes the cryptographic proof as well as the context data information needed to verify
+/// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferData {
@@ -53,6 +57,7 @@ pub struct TransferData {
     pub proof: TransferProof,
 }
 
+/// The context data needed to verify a transfer proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferProofContext {
@@ -383,8 +388,6 @@ impl TransferProof {
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
         // verify equality proof
-        //
-        // TODO: we can also consider verifying equality and range proof in a batch
         equality_proof.verify(
             &transfer_pubkeys.source_pubkey,
             ciphertext_new_spendable,

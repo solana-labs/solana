@@ -25,7 +25,7 @@ pub enum ProofInstruction {
     ///
     CloseContextState,
 
-    /// Verify that an ElGamal ciphertext encrypts zero.
+    /// Verify a zero-balance proof.
     ///
     /// This instruction can be configured to optionally create a proof context state account.
     ///

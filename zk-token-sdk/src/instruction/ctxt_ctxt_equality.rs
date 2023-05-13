@@ -1,3 +1,13 @@
+//! The ciphertext-ciphertext equality proof instruction.
+//!
+//! A ciphertext-ciphertext equality proof is defined with respect to two twisted ElGamal
+//! cipehrtexts. The proof certifies that the two ciphertexts encrypt the same message. To generate
+//! the proof, a prover must provide the decryption key for the first ciphertext and the randomness
+//! used to generate the second ciphertext.
+//!
+//! The first ciphertext associated with the proof is referred to as the "source" ciphertext. The
+//! second ciphertext associated with the proof is referred to as the "destination" ciphertext.
+
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -33,7 +43,7 @@ pub struct CiphertextCiphertextEqualityProofData {
     pub proof: pod::CiphertextCiphertextEqualityProof,
 }
 
-/// The context data needed to verify a `CiphertextCiphertextEqualityProof`.
+/// The context data needed to verify a ciphertext-ciphertext equality proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct CiphertextCiphertextEqualityProofContext {

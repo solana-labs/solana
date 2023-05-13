@@ -1,3 +1,9 @@
+//! The zero-balance proof instruction.
+//!
+//! A zero-balance proof is defined with respect to a twisted ElGamal ciphertext. The proof
+//! certifies that a given ciphertext encrypts the message 0 in the field (`Scalar::zero()`). To
+//! generate the proof, a prover must provide the decryption key for the ciphertext.
+
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -17,23 +23,21 @@ use {
     bytemuck::{Pod, Zeroable},
 };
 
-/// This struct includes the cryptographic proof *and* the account data information needed to verify
-/// the proof
+/// The instruction data that is needed for the `ProofInstruction::ZeroBalance` instruction.
 ///
-/// - The pre-instruction should call ZeroBalanceProofData::verify_proof(&self)
-/// - The actual program should check that `balance` is consistent with what is
-///   currently stored in the confidential token account
-///
+/// It includes the cryptographic proof as well as the context data information needed to verify
+/// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct ZeroBalanceProofData {
     /// The context data for the zero-balance proof
-    pub context: ZeroBalanceProofContext,
+    pub context: ZeroBalanceProofContext, // 96 bytes
 
     /// Proof that the source account available balance is zero
     pub proof: pod::ZeroBalanceProof, // 96 bytes
 }
 
+/// The context data needed to verify a zero-balance proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct ZeroBalanceProofContext {

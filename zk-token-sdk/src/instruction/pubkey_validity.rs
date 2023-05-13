@@ -1,3 +1,10 @@
+//! The public-key validity proof instruction.
+//!
+//! A public-key validity proof system is defined with respect to an ElGamal public key. The proof
+//! certifies that a given public key is a valid ElGamal public key (i.e. the prover knows a
+//! corresponding secret key). To generate the proof, a prover must provide the secret key for the
+//! public key.
+
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -15,22 +22,22 @@ use {
     bytemuck::{Pod, Zeroable},
 };
 
-/// This struct includes the cryptographic proof *and* the account data information needed to
-/// verify the proof
+/// The instruction data that is needed for the `ProofInstruction::VerifyPubkeyValidity`
+/// instruction.
 ///
-/// - The pre-instruction should call PubkeyValidityData::verify_proof(&self)
-/// - The actual program should check that the public key in this struct is consistent with what is
-/// stored in the confidential token account
+/// It includes the cryptographic proof as well as the context data information needed to verify
+/// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct PubkeyValidityData {
     /// The context data for the public key validity proof
-    pub context: PubkeyValidityProofContext,
+    pub context: PubkeyValidityProofContext, // 32 bytes
 
     /// Proof that the public key is well-formed
     pub proof: pod::PubkeyValidityProof, // 64 bytes
 }
 
+/// The context data needed to verify a pubkey validity proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct PubkeyValidityProofContext {
