@@ -305,6 +305,7 @@ pull_or_push_steps() {
   # just a bunch of debugging
   git branch
   git status
+  git log --oneline -15
   optional_old_version_number_debug=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
     grep -e "^-version" | sed  's/-version = "\(.*\)"/\1/')
   echo "optional_old_version_number_debug: ->$optional_old_version_number_debug<-"
