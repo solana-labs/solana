@@ -461,7 +461,7 @@ fn initial_last_notified_slot(
                 block_commitment_cache
                     .read()
                     .unwrap()
-                    .highest_confirmed_root()
+                    .highest_super_majority_root()
             } else if params.commitment.is_confirmed() {
                 optimistically_confirmed_bank.read().unwrap().bank.slot()
             } else {
@@ -960,7 +960,7 @@ impl RpcSubscriptions {
         subscriptions.for_each(|(_id, subscription)| {
             let slot = if let Some(commitment) = subscription.commitment() {
                 if commitment.is_finalized() {
-                    Some(commitment_slots.highest_confirmed_root)
+                    Some(commitment_slots.highest_super_majority_root)
                 } else if commitment.is_confirmed() {
                     Some(commitment_slots.highest_confirmed_slot)
                 } else {
@@ -1567,7 +1567,7 @@ pub(crate) mod tests {
             slot,
             root: slot,
             highest_confirmed_slot: slot,
-            highest_confirmed_root: slot,
+            highest_super_majority_root: slot,
         });
         let should_err = receiver.recv_timeout(Duration::from_millis(300));
         assert!(should_err.is_err());
@@ -1769,7 +1769,7 @@ pub(crate) mod tests {
             slot,
             root: slot,
             highest_confirmed_slot: slot,
-            highest_confirmed_root: slot,
+            highest_super_majority_root: slot,
         });
         let actual_resp = receiver.recv();
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
