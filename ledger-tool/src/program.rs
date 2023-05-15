@@ -45,6 +45,10 @@ use {
     },
 };
 
+// The ELF magic number [ELFMAG0, ELFMAG1, ELFGMAG2, ELFMAG3] as defined by
+// https://github.com/torvalds/linux/blob/master/include/uapi/linux/elf.h
+const ELF_MAGIC_NUMBER: [u8; 4] = [0x7f, 0x45, 0x4c, 0x46];
+
 #[derive(Serialize, Deserialize, Debug)]
 struct Account {
     key: String,
@@ -333,7 +337,7 @@ fn load_program<'a>(
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic).unwrap();
     file.rewind().unwrap();
-    let is_elf = magic == [0x7f, 0x45, 0x4c, 0x46];
+    let is_elf = magic == ELF_MAGIC_NUMBER;
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
     let slot = Slot::default();
