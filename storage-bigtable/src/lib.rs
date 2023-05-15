@@ -4,7 +4,7 @@ use {
     crate::bigtable::RowKey,
     log::*,
     serde::{Deserialize, Serialize},
-    solana_metrics::{datapoint_info, inc_new_counter_debug},
+    solana_metrics::datapoint_info,
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,
@@ -12,6 +12,7 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         sysvar::is_sysvar_id,
+        timing::AtomicInterval,
         transaction::{TransactionError, VersionedTransaction},
     },
     solana_storage_proto::convert::{generated, tx_by_addr},
@@ -24,6 +25,10 @@ use {
     std::{
         collections::{HashMap, HashSet},
         convert::TryInto,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
         time::Duration,
     },
     thiserror::Error,
@@ -399,9 +404,34 @@ impl Default for LedgerStorageConfig {
     }
 }
 
+const METRICS_REPORT_INTERVAL_MS: u64 = 10_000;
+
+#[derive(Default)]
+struct LedgerStorageStats {
+    num_queries: AtomicUsize,
+    last_report: AtomicInterval,
+}
+
+impl LedgerStorageStats {
+    fn update_and_maybe_report(&self) {
+        self.num_queries.fetch_add(1, Ordering::Relaxed);
+        if self.last_report.should_update(METRICS_REPORT_INTERVAL_MS) {
+            datapoint_debug!(
+                "storage-bigtable-query",
+                (
+                    "num_queries",
+                    self.num_queries.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                )
+            );
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct LedgerStorage {
     connection: bigtable::BigTableConnection,
+    stats: Arc<LedgerStorageStats>,
 }
 
 impl LedgerStorage {
@@ -425,6 +455,7 @@ impl LedgerStorage {
         endpoint: &str,
         timeout: Option<Duration>,
     ) -> Result<Self> {
+        let stats = Arc::new(LedgerStorageStats::default());
         Ok(Self {
             connection: bigtable::BigTableConnection::new_for_emulator(
                 instance_name,
@@ -432,10 +463,12 @@ impl LedgerStorage {
                 endpoint,
                 timeout,
             )?,
+            stats,
         })
     }
 
     pub async fn new_with_config(config: LedgerStorageConfig) -> Result<Self> {
+        let stats = Arc::new(LedgerStorageStats::default());
         let LedgerStorageConfig {
             read_only,
             timeout,
@@ -451,7 +484,7 @@ impl LedgerStorage {
             credential_type,
         )
         .await?;
-        Ok(Self { connection })
+        Ok(Self { stats, connection })
     }
 
     pub async fn new_with_stringified_credential(credential: String) -> Result<Self> {
@@ -465,7 +498,7 @@ impl LedgerStorage {
     /// Return the available slot that contains a block
     pub async fn get_first_available_block(&self) -> Result<Option<Slot>> {
         trace!("LedgerStorage::get_first_available_block request received");
-        inc_new_counter_debug!("storage-bigtable-query", 1);
+        self.stats.update_and_maybe_report();
         let mut bigtable = self.connection.client();
         let blocks = bigtable.get_row_keys("blocks", None, None, 1).await?;
         if blocks.is_empty() {
@@ -484,7 +517,7 @@ impl LedgerStorage {
             start_slot,
             limit
         );
-        inc_new_counter_debug!("storage-bigtable-query", 1);
+        self.stats.update_and_maybe_report();
         let mut bigtable = self.connection.client();
         let blocks = bigtable
             .get_row_keys(
@@ -506,7 +539,7 @@ impl LedgerStorage {
             "LedgerStorage::get_confirmed_blocks_with_data request received: {:?}",
             slots
         );
-        inc_new_counter_debug!("storage-bigtable-query", 1);
+        self.stats.update_and_maybe_report();
         let mut bigtable = self.connection.client();
         let row_keys = slots.iter().copied().map(slot_to_blocks_key);
         let data = bigtable
@@ -533,7 +566,7 @@ impl LedgerStorage {
             "LedgerStorage::get_confirmed_block request received: {:?}",
             slot
         );
-        inc_new_counter_debug!("storage-bigtable-query", 1);
+        self.stats.update_and_maybe_report();
         let mut bigtable = self.connection.client();
         let block_cell_data = bigtable
             .get_protobuf_or_bincode_cell::<StoredConfirmedBlock, generated::ConfirmedBlock>(
@@ -559,7 +592,7 @@ impl LedgerStorage {
             "LedgerStorage::confirmed_block_exists request received: {:?}",
             slot
         );
-        inc_new_counter_debug!("storage-bigtable-query", 1);
+        self.stats.update_and_maybe_report();
         let mut bigtable = self.connection.client();
 
         let block_exists = bigtable
@@ -574,7 +607,7 @@ impl LedgerStorage {
             "LedgerStorage::get_signature_status request received: {:?}",
             signature
         );
-        inc_new_counter_debug!("storage-bigtable-query", 1);
+        self.stats.update_and_maybe_report();
         let mut bigtable = self.connection.client();
         let transaction_info = bigtable
             .get_bincode_cell::<TransactionInfo>("tx", signature.to_string())
@@ -595,7 +628,7 @@ impl LedgerStorage {
             "LedgerStorage::get_confirmed_transactions request received: {:?}",
             signatures
         );
-        inc_new_counter_debug!("storage-bigtable-query", 1);
+        self.stats.update_and_maybe_report();
         let mut bigtable = self.connection.client();
 
         // Fetch transactions info
@@ -657,7 +690,7 @@ impl LedgerStorage {
             "LedgerStorage::get_confirmed_transaction request received: {:?}",
             signature
         );
-        inc_new_counter_debug!("storage-bigtable-query", 1);
+        self.stats.update_and_maybe_report();
         let mut bigtable = self.connection.client();
 
         // Figure out which block the transaction is located in
@@ -717,7 +750,7 @@ impl LedgerStorage {
             "LedgerStorage::get_confirmed_signatures_for_address request received: {:?}",
             address
         );
-        inc_new_counter_debug!("storage-bigtable-query", 1);
+        self.stats.update_and_maybe_report();
         let mut bigtable = self.connection.client();
         let address_prefix = format!("{address}/");
 
