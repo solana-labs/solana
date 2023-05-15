@@ -1163,7 +1163,7 @@ pub fn keypair_from_seed_phrase(
     let keypair: Keypair =
         encodable_key_from_seed_phrase(keypair_name, skip_validation, derivation_path, legacy)?;
     if confirm_pubkey {
-        confirm_encodable_keypair_pubkey(&keypair, "keypair");
+        confirm_encodable_keypair_pubkey(&keypair, "pubkey");
     }
     Ok(keypair)
 }
