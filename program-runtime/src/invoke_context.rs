@@ -1,10 +1,9 @@
 use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
-        builtin_program::{BuiltinPrograms, ProcessInstructionWithContext},
         compute_budget::ComputeBudget,
         ic_logger_msg, ic_msg,
-        loaded_programs::{LoadedProgramType, LoadedProgramsForTxBatch},
+        loaded_programs::{LoadedProgram, LoadedProgramType, LoadedProgramsForTxBatch},
         log_collector::LogCollector,
         pre_account::PreAccount,
         stable_log,
@@ -15,7 +14,7 @@ use {
     solana_rbpf::{
         ebpf::MM_HEAP_START,
         memory_region::MemoryMapping,
-        vm::{Config, ContextObject, ProgramResult},
+        vm::{BuiltInFunction, Config, ContextObject, ProgramResult},
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -43,6 +42,8 @@ use {
         sync::{atomic::Ordering, Arc},
     },
 };
+
+pub type ProcessInstructionWithContext = BuiltInFunction<InvokeContext<'static>>;
 
 /// Adapter so we can unify the interfaces of built-in programs and syscalls
 #[macro_export]
@@ -152,7 +153,6 @@ pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    builtin_programs: &'a BuiltinPrograms,
     sysvar_cache: &'a SysvarCache,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
@@ -175,7 +175,6 @@ impl<'a> InvokeContext<'a> {
     pub fn new(
         transaction_context: &'a mut TransactionContext,
         rent: Rent,
-        builtin_programs: &'a BuiltinPrograms,
         sysvar_cache: &'a SysvarCache,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
@@ -191,7 +190,6 @@ impl<'a> InvokeContext<'a> {
             transaction_context,
             rent,
             pre_accounts: Vec::new(),
-            builtin_programs,
             sysvar_cache,
             log_collector,
             current_compute_budget: compute_budget,
@@ -724,80 +722,77 @@ impl<'a> InvokeContext<'a> {
             }
         };
 
-        for entry in self.builtin_programs.vec.iter() {
-            if entry.0 == builtin_id {
-                // The Murmur3 hash value (used by RBPF) of the string "entrypoint"
-                const ENTRYPOINT_KEY: u32 = 0x71E3CF81;
-                let process_instruction = match &entry.1.program {
-                    LoadedProgramType::Builtin(_name, program) => program
-                        .lookup_function(ENTRYPOINT_KEY)
-                        .map(|(_name, process_instruction)| process_instruction),
-                    _ => None,
-                }
-                .ok_or(InstructionError::GenericError)?;
-                entry.1.usage_counter.fetch_add(1, Ordering::Relaxed);
+        // The Murmur3 hash value (used by RBPF) of the string "entrypoint"
+        const ENTRYPOINT_KEY: u32 = 0x71E3CF81;
+        let entry = self
+            .programs_loaded_for_tx_batch
+            .find(&builtin_id)
+            .ok_or(InstructionError::UnsupportedProgramId)?;
+        let process_instruction = match &entry.program {
+            LoadedProgramType::Builtin(program) => program
+                .lookup_function(ENTRYPOINT_KEY)
+                .map(|(_name, process_instruction)| process_instruction),
+            _ => None,
+        }
+        .ok_or(InstructionError::UnsupportedProgramId)?;
+        entry.usage_counter.fetch_add(1, Ordering::Relaxed);
 
-                let program_id =
-                    *instruction_context.get_last_program_key(self.transaction_context)?;
-                self.transaction_context
-                    .set_return_data(program_id, Vec::new())?;
-                let logger = self.get_log_collector();
-                stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
-                let pre_remaining_units = self.get_remaining();
-                let mock_config = Config::default();
-                let mut mock_memory_mapping = MemoryMapping::new(Vec::new(), &mock_config).unwrap();
-                let mut result = ProgramResult::Ok(0);
-                process_instruction(
-                    // Removes lifetime tracking
-                    unsafe { std::mem::transmute::<&mut InvokeContext, &mut InvokeContext>(self) },
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    &mut mock_memory_mapping,
-                    &mut result,
-                );
-                let result = match result {
-                    ProgramResult::Ok(_) => {
-                        stable_log::program_success(&logger, &program_id);
-                        Ok(())
-                    }
-                    ProgramResult::Err(err) => {
-                        stable_log::program_failure(&logger, &program_id, err.as_ref());
-                        if let Some(err) = err.downcast_ref::<InstructionError>() {
-                            Err(err.clone())
-                        } else {
-                            Err(InstructionError::ProgramFailedToComplete)
-                        }
-                    }
-                };
-                let post_remaining_units = self.get_remaining();
-                *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
-
-                if builtin_id == program_id
-                    && result.is_ok()
-                    && *compute_units_consumed == 0
-                    && self
-                        .feature_set
-                        .is_active(&native_programs_consume_cu::id())
-                {
-                    return Err(InstructionError::BuiltinProgramsMustConsumeComputeUnits);
-                }
-
-                process_executable_chain_time.stop();
-                saturating_add_assign!(
-                    timings
-                        .execute_accessories
-                        .process_instructions
-                        .process_executable_chain_us,
-                    process_executable_chain_time.as_us()
-                );
-                return result;
+        let program_id = *instruction_context.get_last_program_key(self.transaction_context)?;
+        self.transaction_context
+            .set_return_data(program_id, Vec::new())?;
+        let logger = self.get_log_collector();
+        stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
+        let pre_remaining_units = self.get_remaining();
+        let mock_config = Config::default();
+        let mut mock_memory_mapping = MemoryMapping::new(Vec::new(), &mock_config).unwrap();
+        let mut result = ProgramResult::Ok(0);
+        process_instruction(
+            // Removes lifetime tracking
+            unsafe { std::mem::transmute::<&mut InvokeContext, &mut InvokeContext>(self) },
+            0,
+            0,
+            0,
+            0,
+            0,
+            &mut mock_memory_mapping,
+            &mut result,
+        );
+        let result = match result {
+            ProgramResult::Ok(_) => {
+                stable_log::program_success(&logger, &program_id);
+                Ok(())
             }
+            ProgramResult::Err(err) => {
+                stable_log::program_failure(&logger, &program_id, err.as_ref());
+                if let Some(err) = err.downcast_ref::<InstructionError>() {
+                    Err(err.clone())
+                } else {
+                    Err(InstructionError::ProgramFailedToComplete)
+                }
+            }
+        };
+        let post_remaining_units = self.get_remaining();
+        *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+
+        if builtin_id == program_id
+            && result.is_ok()
+            && *compute_units_consumed == 0
+            && self
+                .feature_set
+                .is_active(&native_programs_consume_cu::id())
+        {
+            return Err(InstructionError::BuiltinProgramsMustConsumeComputeUnits);
         }
 
-        Err(InstructionError::UnsupportedProgramId)
+        process_executable_chain_time.stop();
+        saturating_add_assign!(
+            timings
+                .execute_accessories
+                .process_instructions
+                .process_executable_chain_us,
+            process_executable_chain_time.as_us()
+        );
+        result
     }
 
     /// Get this invocation's LogCollector
@@ -893,12 +888,11 @@ impl<'a> InvokeContext<'a> {
 }
 
 #[macro_export]
-macro_rules! with_mock_invoke_context_and_builtin_programs {
+macro_rules! with_mock_invoke_context {
     (
         $invoke_context:ident,
         $transaction_context:ident,
-        $transaction_accounts:expr,
-        $builtin_programs:expr
+        $transaction_accounts:expr $(,)?
     ) => {
         use {
             solana_sdk::{
@@ -944,7 +938,6 @@ macro_rules! with_mock_invoke_context_and_builtin_programs {
         let mut $invoke_context = InvokeContext::new(
             &mut $transaction_context,
             Rent::default(),
-            $builtin_programs,
             &sysvar_cache,
             Some(LogCollector::new_ref()),
             compute_budget,
@@ -955,37 +948,6 @@ macro_rules! with_mock_invoke_context_and_builtin_programs {
             Hash::default(),
             0,
             0,
-        );
-    };
-}
-
-#[macro_export]
-macro_rules! with_mock_invoke_context {
-    (
-        $invoke_context:ident,
-        $transaction_context:ident,
-        $transaction_accounts:expr,
-        $builtin_programs:expr
-    ) => {
-        use $crate::with_mock_invoke_context_and_builtin_programs;
-        with_mock_invoke_context_and_builtin_programs!(
-            $invoke_context,
-            $transaction_context,
-            $transaction_accounts,
-            $builtin_programs
-        );
-    };
-
-    ($invoke_context:ident, $transaction_context:ident, $transaction_accounts:expr) => {
-        use $crate::{
-            builtin_program::BuiltinPrograms, with_mock_invoke_context_and_builtin_programs,
-        };
-        let builtin_programs = BuiltinPrograms::default();
-        with_mock_invoke_context_and_builtin_programs!(
-            $invoke_context,
-            $transaction_context,
-            $transaction_accounts,
-            &builtin_programs
         );
     };
 }
@@ -1028,13 +990,13 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
     program_indices.insert(0, transaction_accounts.len() as IndexOfAccount);
     let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
     transaction_accounts.push((*loader_id, processor_account));
-    let builtin_programs = BuiltinPrograms::new_mock(*loader_id, process_instruction);
-    with_mock_invoke_context!(
-        invoke_context,
-        transaction_context,
-        transaction_accounts,
-        &builtin_programs
+    with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+    let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+    programs_loaded_for_tx_batch.replenish(
+        *loader_id,
+        Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
     );
+    invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
     pre_adjustments(&mut invoke_context);
     let result = invoke_context.process_instruction(
         instruction_data,
@@ -1282,13 +1244,13 @@ mod tests {
                 is_writable: instruction_account_index < 2,
             })
             .collect::<Vec<_>>();
-        let builtin_programs = BuiltinPrograms::new_mock(callee_program_id, process_instruction);
-        with_mock_invoke_context!(
-            invoke_context,
-            transaction_context,
-            transaction_accounts,
-            &builtin_programs
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+        let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        programs_loaded_for_tx_batch.replenish(
+            callee_program_id,
+            Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
         );
+        invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
 
         // Account modification tests
         let cases = vec![
@@ -1428,13 +1390,13 @@ mod tests {
                 is_writable: false,
             },
         ];
-        let builtin_programs = BuiltinPrograms::new_mock(program_key, process_instruction);
-        with_mock_invoke_context!(
-            invoke_context,
-            transaction_context,
-            transaction_accounts,
-            &builtin_programs
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+        let mut programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        programs_loaded_for_tx_batch.replenish(
+            program_key,
+            Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
         );
+        invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
 
         // Test: Resize the account to *the same size*, so not consuming any additional size; this must succeed
         {

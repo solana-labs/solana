@@ -531,12 +531,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
         AccountSharedData::new(0, 0, &loader_id),
     ));
     let interpreted = matches.value_of("mode").unwrap() != "jit";
-    with_mock_invoke_context!(
-        invoke_context,
-        transaction_context,
-        transaction_accounts,
-        bank.get_builtin_programs()
-    );
+    with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
 
     // Adding `DELAY_VISIBILITY_SLOT_OFFSET` to slots to accommodate for delay visibility of the program
     let mut loaded_programs =

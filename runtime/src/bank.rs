@@ -56,7 +56,7 @@ use {
         ancestors::{Ancestors, AncestorsForSerialization},
         bank::metrics::*,
         blockhash_queue::BlockhashQueue,
-        builtins::{self, BuiltinFeatureTransition, Builtins},
+        builtins::{BuiltinPrototype, BUILTINS},
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
@@ -93,8 +93,8 @@ use {
     solana_perf::perf_libs,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
-        builtin_program::BuiltinPrograms,
         compute_budget::{self, ComputeBudget},
+        invoke_context::ProcessInstructionWithContext,
         loaded_programs::{
             LoadedProgram, LoadedProgramMatchCriteria, LoadedProgramType, LoadedPrograms,
             LoadedProgramsForTxBatch, WorkingSlot,
@@ -777,7 +777,6 @@ impl PartialEq for Bank {
             // TODO: Confirm if all these fields are intentionally ignored!
             builtin_programs: _,
             runtime_config: _,
-            builtin_feature_transitions: _,
             rewards: _,
             cluster_type: _,
             lazy_rent_collection: _,
@@ -1016,15 +1015,10 @@ pub struct Bank {
     /// stream for the slot == self.slot
     is_delta: AtomicBool,
 
-    /// The builtin programs
-    builtin_programs: BuiltinPrograms,
+    builtin_programs: HashSet<Pubkey>,
 
     /// Optional config parameters that can override runtime behavior
     runtime_config: Arc<RuntimeConfig>,
-
-    /// Dynamic feature transitions for builtin programs
-    #[allow(clippy::rc_buffer)]
-    builtin_feature_transitions: Arc<Vec<BuiltinFeatureTransition>>,
 
     /// Protocol-level rewards that were distributed by this bank
     pub rewards: RwLock<Vec<(Pubkey, RewardInfo)>>,
@@ -1281,9 +1275,8 @@ impl Bank {
             stakes_cache: StakesCache::default(),
             epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
             is_delta: AtomicBool::default(),
-            builtin_programs: BuiltinPrograms::default(),
+            builtin_programs: HashSet::<Pubkey>::default(),
             runtime_config: Arc::<RuntimeConfig>::default(),
-            builtin_feature_transitions: Arc::<Vec<BuiltinFeatureTransition>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
@@ -1358,7 +1351,7 @@ impl Bank {
         runtime_config: Arc<RuntimeConfig>,
         paths: Vec<PathBuf>,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
+        additional_builtins: Option<&[BuiltinPrototype]>,
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
@@ -1555,11 +1548,10 @@ impl Bank {
             ancestors: Ancestors::default(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
+            builtin_programs,
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
-            builtin_programs,
             runtime_config: parent.runtime_config.clone(),
-            builtin_feature_transitions: parent.builtin_feature_transitions.clone(),
             hard_forks: parent.hard_forks.clone(),
             rewards: RwLock::new(vec![]),
             cluster_type: parent.cluster_type,
@@ -1834,7 +1826,7 @@ impl Bank {
         runtime_config: Arc<RuntimeConfig>,
         fields: BankFieldsToDeserialize,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
+        additional_builtins: Option<&[BuiltinPrototype]>,
         debug_do_not_add_builtins: bool,
         accounts_data_size_initial: u64,
     ) -> Self {
@@ -1902,7 +1894,6 @@ impl Bank {
             is_delta: AtomicBool::new(fields.is_delta),
             builtin_programs: new(),
             runtime_config,
-            builtin_feature_transitions: new(),
             rewards: new(),
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
@@ -4275,7 +4266,6 @@ impl Bank {
         let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::new(self.slot);
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
-            &self.builtin_programs,
             tx.message(),
             &loaded_transaction.program_indices,
             &mut transaction_context,
@@ -4528,13 +4518,20 @@ impl Bank {
             bpf_loader_deprecated::id(),
         ];
         let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
-        let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
+        let mut program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
             &self.ancestors,
             sanitized_txs,
             &mut check_results,
             &program_owners_refs,
             &self.blockhash_queue.read().unwrap(),
         );
+        for precompile in get_precompiles() {
+            program_accounts_map.remove(&precompile.program_id);
+        }
+        let native_loader = native_loader::id();
+        for builtin_program in self.builtin_programs.iter() {
+            program_accounts_map.insert(*builtin_program, &native_loader);
+        }
 
         let programs_loaded_for_tx_batch = Rc::new(RefCell::new(
             self.replenish_program_cache(&program_accounts_map),
@@ -6262,24 +6259,24 @@ impl Bank {
     fn finish_init(
         &mut self,
         genesis_config: &GenesisConfig,
-        additional_builtins: Option<&Builtins>,
+        additional_builtins: Option<&[BuiltinPrototype]>,
         debug_do_not_add_builtins: bool,
     ) {
         self.rewards_pool_pubkeys =
             Arc::new(genesis_config.rewards_pools.keys().cloned().collect());
 
-        let mut builtins = builtins::get();
-        if let Some(additional_builtins) = additional_builtins {
-            builtins
-                .genesis_builtins
-                .extend_from_slice(&additional_builtins.genesis_builtins);
-            builtins
-                .feature_transitions
-                .extend_from_slice(&additional_builtins.feature_transitions);
-        }
         if !debug_do_not_add_builtins {
-            for (program_id, builtin) in builtins.genesis_builtins {
-                self.add_builtin(program_id, builtin);
+            for builtin in BUILTINS
+                .iter()
+                .chain(additional_builtins.unwrap_or(&[]).iter())
+            {
+                if builtin.feature_id.is_none() {
+                    self.add_builtin(
+                        builtin.program_id,
+                        builtin.name.to_string(),
+                        LoadedProgram::new_builtin(0, builtin.name.len(), builtin.entrypoint),
+                    );
+                }
             }
             for precompile in get_precompiles() {
                 if precompile.feature.is_none() {
@@ -6287,7 +6284,6 @@ impl Bank {
                 }
             }
         }
-        self.builtin_feature_transitions = Arc::new(builtins.feature_transitions);
 
         self.apply_feature_activations(
             ApplyFeatureActivationsCaller::FinishInit,
@@ -7311,40 +7307,39 @@ impl Bank {
         !self.is_delta.load(Relaxed)
     }
 
+    pub fn add_mockup_builtin(
+        &mut self,
+        program_id: Pubkey,
+        entrypoint: ProcessInstructionWithContext,
+    ) {
+        self.add_builtin(
+            program_id,
+            "mockup".to_string(),
+            LoadedProgram::new_builtin(0, 0, entrypoint),
+        );
+    }
+
     /// Add a built-in program
-    pub fn add_builtin(&mut self, program_id: Pubkey, builtin: Arc<LoadedProgram>) {
-        let name = match &builtin.program {
-            LoadedProgramType::Builtin(name, _) => name,
-            _ => unreachable!(),
-        };
+    pub fn add_builtin(&mut self, program_id: Pubkey, name: String, builtin: LoadedProgram) {
         debug!("Adding program {} under {:?}", name, program_id);
         self.add_builtin_account(name.as_str(), &program_id, false);
-        if let Some(entry) = self
-            .builtin_programs
-            .vec
-            .iter_mut()
-            .find(|entry| entry.0 == program_id)
-        {
-            entry.1 = builtin.clone();
-        } else {
-            self.builtin_programs
-                .vec
-                .push((program_id, builtin.clone()));
-        }
+        self.builtin_programs.insert(program_id);
+        self.loaded_programs_cache
+            .write()
+            .unwrap()
+            .replenish(program_id, Arc::new(builtin));
         debug!("Added program {} under {:?}", name, program_id);
     }
 
     /// Remove a built-in instruction processor
-    pub fn remove_builtin(&mut self, program_id: Pubkey) {
+    pub fn remove_builtin(&mut self, program_id: Pubkey, name: String) {
         debug!("Removing program {}", program_id);
         // Don't remove the account since the bank expects the account state to
         // be idempotent
         self.add_builtin(
             program_id,
-            Arc::new(LoadedProgram::new_tombstone(
-                self.slot,
-                LoadedProgramType::Closed,
-            )),
+            name,
+            LoadedProgram::new_tombstone(self.slot, LoadedProgramType::Closed),
         );
         debug!("Removed program {}", program_id);
     }
@@ -7573,18 +7568,25 @@ impl Bank {
         only_apply_transitions_for_new_features: bool,
         new_feature_activations: &HashSet<Pubkey>,
     ) {
-        let feature_set = self.feature_set.clone();
-
-        let builtin_feature_transitions = self.builtin_feature_transitions.clone();
-        for transition in builtin_feature_transitions.iter() {
-            let should_apply_action_for_feature_transition =
-                if only_apply_transitions_for_new_features {
-                    new_feature_activations.contains(&transition.feature_id)
-                } else {
-                    feature_set.is_active(&transition.feature_id)
-                };
-            if should_apply_action_for_feature_transition {
-                self.add_builtin(transition.program_id, transition.builtin.clone());
+        for builtin in BUILTINS.iter() {
+            if let Some(feature_id) = builtin.feature_id {
+                let should_apply_action_for_feature_transition =
+                    if only_apply_transitions_for_new_features {
+                        new_feature_activations.contains(&feature_id)
+                    } else {
+                        self.feature_set.is_active(&feature_id)
+                    };
+                if should_apply_action_for_feature_transition {
+                    self.add_builtin(
+                        builtin.program_id,
+                        builtin.name.to_string(),
+                        LoadedProgram::new_builtin(
+                            self.feature_set.activated_slot(&feature_id).unwrap_or(0),
+                            builtin.name.len(),
+                            builtin.entrypoint,
+                        ),
+                    );
+                }
             }
         }
 
@@ -7774,11 +7776,6 @@ impl Bank {
                 .saturating_sub(forward_transactions_to_leader_at_slot_offset as usize),
             &mut error_counters,
         )
-    }
-
-    /// Return reference to builtin_progams
-    pub fn get_builtin_programs(&self) -> &BuiltinPrograms {
-        &self.builtin_programs
     }
 }
 

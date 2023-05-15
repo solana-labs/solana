@@ -3884,7 +3884,7 @@ mod tests {
         programdata_account = accounts.first().unwrap().clone();
         program_account = accounts.get(3).unwrap().clone();
         process_instruction(
-            &program_address,
+            &loader_id,
             &[0, 1],
             &[],
             vec![
