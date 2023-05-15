@@ -6997,11 +6997,7 @@ impl AccountsDb {
     fn update_old_slot_stats(&self, stats: &HashStats, storage: Option<&Arc<AccountStorageEntry>>) {
         if let Some(storage) = storage {
             stats.roots_older_than_epoch.fetch_add(1, Ordering::Relaxed);
-            let mut ancients = 0;
             let num_accounts = storage.count();
-            if is_ancient(&storage.accounts) {
-                ancients += 1;
-            }
             let sizes = storage.capacity();
             stats
                 .append_vec_sizes_older_than_epoch
@@ -7009,9 +7005,6 @@ impl AccountsDb {
             stats
                 .accounts_in_roots_older_than_epoch
                 .fetch_add(num_accounts, Ordering::Relaxed);
-            stats
-                .ancient_append_vecs
-                .fetch_add(ancients, Ordering::Relaxed);
         }
     }
 
