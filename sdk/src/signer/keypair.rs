@@ -145,7 +145,7 @@ impl EncodableKeypair for Keypair {
 
     /// Returns the associated pubkey. Use this function specifically for settings that invole
     /// reading or writing pubkeys. For other settings, use `Signer::pubkey()` instead.
-    fn encodable_pubkey(&self) -> Pubkey {
+    fn encodable_pubkey(&self) -> Self::Pubkey {
         self.pubkey()
     }
 }
