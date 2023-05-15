@@ -51,6 +51,13 @@ pub struct BucketMapHolderStats {
     pub flush_entries_updated_on_disk: AtomicU64,
     pub flush_entries_evicted_from_mem: AtomicU64,
     pub active_threads: AtomicU64,
+    pub upsert_found_in_mem_read_lock: AtomicU64,
+    pub upsert_found_in_mem_write_lock: AtomicU64,
+    pub upsert_disk_lookup_us: AtomicU64,
+    pub upsert_missing_disk: AtomicU64,
+    pub upsert_found_disk: AtomicU64,
+    pub upsert_second_lookup_us: AtomicU64,
+    pub read_lock_wait_us: AtomicU64,
     pub get_range_us: AtomicU64,
     last_age: AtomicU8,
     last_ages_flushed: AtomicU64,
@@ -368,6 +375,43 @@ impl BucketMapHolderStats {
                 (
                     "active_threads",
                     self.active_threads.load(Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_found_in_mem_read_lock",
+                    self.upsert_found_in_mem_read_lock
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_found_in_mem_write_lock",
+                    self.upsert_found_in_mem_write_lock
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_disk_lookup_us",
+                    self.upsert_disk_lookup_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_found_disk",
+                    self.upsert_found_disk.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_missing_disk",
+                    self.upsert_missing_disk.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "upsert_second_lookup_us",
+                    self.upsert_second_lookup_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "read_lock_wait_us",
+                    self.read_lock_wait_us.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 ("items", self.items.swap(0, Ordering::Relaxed), i64),
