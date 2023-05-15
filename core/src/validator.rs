@@ -979,7 +979,7 @@ impl Validator {
             block_commitment_cache
                 .write()
                 .unwrap()
-                .set_highest_confirmed_root(bank_forks.read().unwrap().root());
+                .set_highest_super_majority_root(bank_forks.read().unwrap().root());
 
             // Park with the RPC service running, ready for inspection!
             warn!("Validator halted");

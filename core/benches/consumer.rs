@@ -84,11 +84,11 @@ fn create_consumer(poh_recorder: &RwLock<PohRecorder>) -> Consumer {
 
 struct BenchFrame {
     bank: Arc<Bank>,
-    _ledger_path: TempDir,
+    ledger_path: TempDir,
     exit: Arc<AtomicBool>,
     poh_recorder: Arc<RwLock<PohRecorder>>,
     poh_service: PohService,
-    _signal_receiver: Receiver<(Arc<Bank>, (Entry, u64))>,
+    signal_receiver: Receiver<(Arc<Bank>, (Entry, u64))>,
 }
 
 fn setup() -> BenchFrame {
@@ -120,29 +120,34 @@ fn setup() -> BenchFrame {
 
     BenchFrame {
         bank,
-        _ledger_path: ledger_path,
+        ledger_path,
         exit,
         poh_recorder,
         poh_service,
-        _signal_receiver: signal_receiver,
+        signal_receiver,
     }
 }
 
 fn bench_process_and_record_transactions(bencher: &mut Bencher, batch_size: usize) {
     let BenchFrame {
         bank,
-        _ledger_path,
+        ledger_path: _ledger_path,
         exit,
         poh_recorder,
         poh_service,
-        ..
+        signal_receiver: _signal_receiver,
     } = setup();
     let consumer = create_consumer(&poh_recorder);
     let transactions = create_transactions(&bank, 2_usize.pow(20));
     let mut transaction_iter = transactions.chunks(batch_size);
 
     bencher.iter(move || {
-        consumer.process_and_record_transactions(&bank, transaction_iter.next().unwrap(), 0);
+        let summary =
+            consumer.process_and_record_transactions(&bank, transaction_iter.next().unwrap(), 0);
+        assert!(summary
+            .execute_and_commit_transactions_output
+            .commit_transactions_result
+            .is_ok());
     });
 
     exit.store(true, Ordering::Relaxed);

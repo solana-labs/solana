@@ -160,19 +160,11 @@ impl SnapshotRequestHandler {
 
         datapoint_info!(
             "handle_snapshot_requests",
+            ("num_outstanding_requests", num_outstanding_requests, i64),
+            ("num_re_enqueued_requests", num_re_enqueued_requests, i64),
             (
-                "num-outstanding-requests",
-                num_outstanding_requests as i64,
-                i64
-            ),
-            (
-                "num-re-enqueued-requests",
-                num_re_enqueued_requests as i64,
-                i64
-            ),
-            (
-                "enqueued-time-us",
-                snapshot_request.enqueued.elapsed().as_micros() as i64,
+                "enqueued_time_us",
+                snapshot_request.enqueued.elapsed().as_micros(),
                 i64
             ),
         );

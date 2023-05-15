@@ -6,10 +6,10 @@ use {
     rand_chacha::ChaChaRng,
     solana_gossip::{
         cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
+        contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo, Protocol},
         crds::GossipRoute,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         crds_value::{CrdsData, CrdsValue},
-        legacy_contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
         weighted_shuffle::WeightedShuffle,
     },
     solana_ledger::shred::ShredId,
@@ -179,7 +179,7 @@ impl ClusterNodes<RetransmitStage> {
         if neighbors.is_empty() {
             let peers = children.into_iter().filter_map(|node| {
                 node.contact_info()?
-                    .tvu()
+                    .tvu(Protocol::UDP)
                     .ok()
                     .filter(|addr| addrs.get(addr) == Some(&node.pubkey()))
             });
@@ -209,7 +209,7 @@ impl ClusterNodes<RetransmitStage> {
             })
             .chain(children.into_iter().filter_map(|node| {
                 node.contact_info()?
-                    .tvu()
+                    .tvu(Protocol::UDP)
                     .ok()
                     .filter(|addr| addrs.get(addr) == Some(&node.pubkey()))
             }));
@@ -244,7 +244,7 @@ impl ClusterNodes<RetransmitStage> {
             .map(|index| &self.nodes[index])
             .inspect(|node| {
                 if let Some(node) = node.contact_info() {
-                    if let Ok(addr) = node.tvu() {
+                    if let Ok(addr) = node.tvu(Protocol::UDP) {
                         addrs.entry(addr).or_insert(*node.pubkey());
                     }
                     if !drop_redundant_turbine_path {

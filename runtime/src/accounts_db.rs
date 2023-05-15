@@ -2943,7 +2943,9 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
         timings: &mut CleanKeyTimings,
+        epoch_schedule: &EpochSchedule,
     ) -> (Vec<Pubkey>, Option<Slot>) {
+        let oldest_non_ancient_slot = self.get_oldest_non_ancient_slot(epoch_schedule);
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot_inclusive =
             max_clean_root_inclusive.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
@@ -2970,7 +2972,7 @@ impl AccountsDb {
                 .map(|dirty_store_chunk| {
                     let mut oldest_dirty_slot = max_slot_inclusive.saturating_add(1);
                     dirty_store_chunk.iter().for_each(|(slot, store)| {
-                        if is_ancient(&store.accounts) {
+                        if slot < &oldest_non_ancient_slot {
                             dirty_ancient_stores.fetch_add(1, Ordering::Relaxed);
                         }
                         oldest_dirty_slot = oldest_dirty_slot.min(*slot);
@@ -3147,6 +3149,7 @@ impl AccountsDb {
             is_startup,
             last_full_snapshot_slot,
             &mut key_timings,
+            epoch_schedule,
         );
 
         let mut sort = Measure::start("sort");
@@ -6997,11 +7000,7 @@ impl AccountsDb {
     fn update_old_slot_stats(&self, stats: &HashStats, storage: Option<&Arc<AccountStorageEntry>>) {
         if let Some(storage) = storage {
             stats.roots_older_than_epoch.fetch_add(1, Ordering::Relaxed);
-            let mut ancients = 0;
             let num_accounts = storage.count();
-            if is_ancient(&storage.accounts) {
-                ancients += 1;
-            }
             let sizes = storage.capacity();
             stats
                 .append_vec_sizes_older_than_epoch
@@ -7009,9 +7008,6 @@ impl AccountsDb {
             stats
                 .accounts_in_roots_older_than_epoch
                 .fetch_add(num_accounts, Ordering::Relaxed);
-            stats
-                .ancient_append_vecs
-                .fetch_add(ancients, Ordering::Relaxed);
         }
     }
 
@@ -7206,6 +7202,15 @@ impl AccountsDb {
         slots_per_epoch: Slot,
         mut stats: &mut crate::accounts_hash::HashStats,
     ) {
+        // Nothing to do if ancient append vecs are enabled.
+        // Ancient slots will be visited by the ancient append vec code and dealt with correctly.
+        // we expect these ancient append vecs to be old and keeping accounts
+        // We can expect the normal processes will keep them cleaned.
+        // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
+        if self.ancient_append_vec_offset.is_some() {
+            return;
+        }
+
         let mut mark_time = Measure::start("mark_time");
         let mut num_dirty_slots: usize = 0;
         let max = storages.max_slot_inclusive();
@@ -7214,13 +7219,8 @@ impl AccountsDb {
         let in_epoch_range_start = max.saturating_sub(sub);
         for (slot, storage) in storages.iter_range(&(..in_epoch_range_start)) {
             if let Some(storage) = storage {
-                if !is_ancient(&storage.accounts) {
-                    // ancient stores are managed separately - we expect them to be old and keeping accounts
-                    // We can expect the normal processes will keep them cleaned.
-                    // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
-                    self.dirty_stores.insert(slot, storage.clone());
-                    num_dirty_slots += 1;
-                }
+                self.dirty_stores.insert(slot, storage.clone());
+                num_dirty_slots += 1;
             }
         }
         mark_time.stop();

@@ -324,20 +324,69 @@ impl AncestorRequestStatus {
             }
             let our_frozen_hash = blockstore.get_bank_hash(*ancestor_slot);
             if let Some(our_frozen_hash) = our_frozen_hash {
-                if earliest_erroring_ancestor.is_some() && our_frozen_hash == *agreed_upon_hash {
-                    // It's impossible have a different version of an earlier ancestor, but
-                    // then also have the same version of a later ancestor.
-                    info!("{} mismatches then matches", self.requested_mismatched_slot);
-                    return DuplicateAncestorDecision::InvalidSample;
-                } else if our_frozen_hash != *agreed_upon_hash
-                    && earliest_erroring_ancestor.is_none()
-                {
-                    earliest_erroring_ancestor = Some((
-                        agreed_response.len() - i - 1,
-                        DuplicateAncestorDecision::EarliestMismatchFound(
-                            DuplicateSlotRepairStatus::default(),
-                        ),
-                    ));
+                match (
+                    &earliest_erroring_ancestor,
+                    our_frozen_hash == *agreed_upon_hash,
+                ) {
+                    (
+                        Some((mismatch_i, DuplicateAncestorDecision::EarliestMismatchFound(_))),
+                        true,
+                    ) => {
+                        // It's impossible have a different version of an earlier ancestor, but
+                        // then also have the same version of a later ancestor.
+                        let (mismatch_slot, mismatch_agreed_upon_hash) =
+                            agreed_response[*mismatch_i];
+                        let mismatch_our_frozen_hash = blockstore.get_bank_hash(mismatch_slot);
+                        info!(
+                            "When processing the ancestor sample for {}, there was a mismatch
+                            for {mismatch_slot}: we had frozen hash {:?} and the cluster agreed upon
+                            {mismatch_agreed_upon_hash}. However for a later ancestor {ancestor_slot}
+                            we have agreement on {our_frozen_hash} as the bank hash. This should never
+                            be possible, something is wrong or the cluster sample is invalid.
+                            Rejecting and queuing the ancestor hashes request for retry",
+                            self.requested_mismatched_slot,
+                            mismatch_our_frozen_hash
+                        );
+                        return DuplicateAncestorDecision::InvalidSample;
+                    }
+                    (
+                        Some((mismatch_i, DuplicateAncestorDecision::EarliestAncestorNotFrozen(_))),
+                        true,
+                    ) => {
+                        // In this case an earlier ancestor was not frozen in our blockstore,
+                        // however this later ancestor is matching with our version. This most
+                        // likely should never happen however it could happen if we initiate an
+                        // ancestor_hashes request immediately after startup from snapshot, we will
+                        // have a match for the snapshot bank, however we don't have any of the
+                        // ancestors frozen
+                        let (mismatch_slot, mismatch_agreed_upon_hash) =
+                            agreed_response[*mismatch_i];
+                        info!(
+                            "When processing the ancestor sample for {}, an earlier ancestor {mismatch_slot}
+                            was agreed upon by the cluster with hash {mismatch_agreed_upon_hash} but not
+                            frozen in our blockstore. However for a later ancestor {ancestor_slot} we have
+                            agreement on {our_frozen_hash} as the bank hash. This should only be possible if
+                            we have just started from snapshot and immediately encountered a duplicate block,
+                            otherwise something is seriously wrong. Continuing with the repair",
+                            self.requested_mismatched_slot
+                        );
+                    }
+                    (Some(decision), true) => panic!(
+                        "Programmer error, {:?} should not be set in decision loop",
+                        decision
+                    ),
+                    (Some(_), false) => { /* Already found a mismatch, descendants continue to mismatch as well */
+                    }
+                    (None, true) => { /* Mismatch hasn't been found yet */ }
+                    (None, false) => {
+                        // A mismatch has been found
+                        earliest_erroring_ancestor = Some((
+                            agreed_response.len() - i - 1,
+                            DuplicateAncestorDecision::EarliestMismatchFound(
+                                DuplicateSlotRepairStatus::default(),
+                            ),
+                        ));
+                    }
                 }
             } else if earliest_erroring_ancestor.is_none() && self.request_type.is_pruned() {
                 // If the slot we are requesting for is pruned, then the slot and many of its
@@ -779,7 +828,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_add_multiple_responses_invalid_sample_matches_then_mismatches() {
+    fn test_add_multiple_responses_invalid_sample_mismatches_then_matches() {
         let request_slot = 100;
         let mut test_setup = setup_add_response_test(request_slot, 10);
 
@@ -805,6 +854,33 @@ pub mod tests {
                 &mut test_setup
             ),
             DuplicateAncestorDecision::InvalidSample
+        );
+    }
+
+    #[test]
+    fn test_add_multiple_responses_start_from_snapshot_missing_then_matches() {
+        let request_slot = 100;
+        let mut test_setup = setup_add_response_test(request_slot, 10);
+
+        // Only insert the later half in our blockstore
+        for &(slot, correct_hash) in test_setup.correct_ancestors_response.iter().take(5) {
+            test_setup
+                .blockstore
+                .insert_bank_hash(slot, correct_hash, false);
+        }
+
+        // We don't have the earlier ancestors because we just started up, however sample should
+        // not be rejected as invalid.
+        let repair_status =
+            match run_add_multiple_correct_and_incorrect_responses(vec![], &mut test_setup) {
+                DuplicateAncestorDecision::ContinueSearch(repair_status) => repair_status,
+                x => panic!("Incorrect decision {x:?}"),
+            };
+
+        // Expect to find everything in the `correct_ancestors_to_repair`.
+        assert_eq!(
+            repair_status.correct_ancestors_to_repair,
+            test_setup.correct_ancestors_response
         );
     }
 

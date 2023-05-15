@@ -847,7 +847,7 @@ impl ClusterInfo {
                         self.addr_to_string(&ip_addr, &node.tpu_vote().ok()),
                         self.addr_to_string(&ip_addr, &node.tpu(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tpu_forwards(contact_info::Protocol::UDP).ok()),
-                        self.addr_to_string(&ip_addr, &node.tvu().ok()),
+                        self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tvu_forwards().ok()),
                         self.addr_to_string(&ip_addr, &node.repair().ok()),
                         self.addr_to_string(&ip_addr, &node.serve_repair().ok()),
@@ -1314,7 +1314,8 @@ impl ClusterInfo {
         self.time_gossip_read_lock("all_tvu_peers", &self.stats.all_tvu_peers)
             .get_nodes_contact_info()
             .filter(|node| {
-                node.pubkey() != &self_pubkey && self.check_socket_addr_space(&node.tvu())
+                node.pubkey() != &self_pubkey
+                    && self.check_socket_addr_space(&node.tvu(contact_info::Protocol::UDP))
             })
             .cloned()
             .collect()
@@ -1329,7 +1330,7 @@ impl ClusterInfo {
             .filter(|node| {
                 node.pubkey() != &self_pubkey
                     && node.shred_version() == self_shred_version
-                    && self.check_socket_addr_space(&node.tvu())
+                    && self.check_socket_addr_space(&node.tvu(contact_info::Protocol::UDP))
             })
             .cloned()
             .collect()
@@ -1346,7 +1347,7 @@ impl ClusterInfo {
             .filter(|node| {
                 node.pubkey() != &self_pubkey
                     && node.shred_version() == self_shred_version
-                    && self.check_socket_addr_space(&node.tvu())
+                    && self.check_socket_addr_space(&node.tvu(contact_info::Protocol::UDP))
                     && self.check_socket_addr_space(&node.serve_repair())
                     && match gossip_crds.get::<&LowestSlot>(*node.pubkey()) {
                         None => true, // fallback to legacy behavior
@@ -1361,7 +1362,7 @@ impl ClusterInfo {
         ![
             node.tpu(contact_info::Protocol::UDP),
             node.gossip(),
-            node.tvu(),
+            node.tvu(contact_info::Protocol::UDP),
         ]
         .into_iter()
         .all(|addr| {

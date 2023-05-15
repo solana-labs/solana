@@ -195,7 +195,7 @@ impl LegacyContactInfo {
     }
 
     get_socket!(gossip);
-    get_socket!(tvu);
+    get_socket!(@quic tvu);
     get_socket!(tvu_forwards);
     get_socket!(repair);
     get_socket!(@quic tpu);
@@ -263,7 +263,7 @@ impl TryFrom<&ContactInfo> for LegacyContactInfo {
         Ok(Self {
             id: *node.pubkey(),
             gossip: unwrap_socket!(gossip),
-            tvu: unwrap_socket!(tvu),
+            tvu: unwrap_socket!(tvu, Protocol::UDP),
             tvu_forwards: unwrap_socket!(tvu_forwards),
             repair: unwrap_socket!(repair),
             tpu: unwrap_socket!(tpu, Protocol::UDP),

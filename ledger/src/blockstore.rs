@@ -2512,7 +2512,7 @@ impl Blockstore {
     pub fn get_confirmed_signatures_for_address2(
         &self,
         address: Pubkey,
-        highest_slot: Slot, // highest_confirmed_root or highest_confirmed_slot
+        highest_slot: Slot, // highest_super_majority_root or highest_confirmed_slot
         before: Option<Signature>,
         until: Option<Signature>,
         limit: usize,
@@ -8334,13 +8334,13 @@ pub mod tests {
         blockstore
             .set_roots(vec![1, 2, 4, 5, 6, 7, 8].iter())
             .unwrap();
-        let highest_confirmed_root = 8;
+        let highest_super_majority_root = 8;
 
         // Fetch all rooted signatures for address 0 at once...
         let sig_infos = blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 None,
                 None,
                 usize::MAX,
@@ -8354,7 +8354,7 @@ pub mod tests {
         let all1 = blockstore
             .get_confirmed_signatures_for_address2(
                 address1,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 None,
                 None,
                 usize::MAX,
@@ -8368,7 +8368,7 @@ pub mod tests {
             let sig_infos = blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,
-                    highest_confirmed_root,
+                    highest_super_majority_root,
                     if i == 0 {
                         None
                     } else {
@@ -8388,7 +8388,7 @@ pub mod tests {
             let results = blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,
-                    highest_confirmed_root,
+                    highest_super_majority_root,
                     if i == 0 {
                         None
                     } else {
@@ -8410,7 +8410,7 @@ pub mod tests {
         let sig_infos = blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 Some(all0[all0.len() - 1].signature),
                 None,
                 1,
@@ -8422,7 +8422,7 @@ pub mod tests {
         assert!(blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 None,
                 Some(all0[0].signature),
                 2,
@@ -8437,7 +8437,7 @@ pub mod tests {
             let results = blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,
-                    highest_confirmed_root,
+                    highest_super_majority_root,
                     if i == 0 {
                         None
                     } else {
@@ -8460,7 +8460,7 @@ pub mod tests {
             let results = blockstore
                 .get_confirmed_signatures_for_address2(
                     address1,
-                    highest_confirmed_root,
+                    highest_super_majority_root,
                     if i == 0 {
                         None
                     } else {
@@ -8482,7 +8482,7 @@ pub mod tests {
         let sig_infos = blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 Some(all1[0].signature),
                 None,
                 usize::MAX,
@@ -8497,7 +8497,7 @@ pub mod tests {
         let results2 = blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 Some(all1[0].signature),
                 Some(all1[4].signature),
                 usize::MAX,
@@ -8688,7 +8688,7 @@ pub mod tests {
         let sig_infos = blockstore
             .get_confirmed_signatures_for_address2(
                 address0,
-                highest_confirmed_root,
+                highest_super_majority_root,
                 Some(all0[0].signature),
                 None,
                 usize::MAX,
