@@ -11,7 +11,7 @@ Now let's get started.
 
 ## Open The Terminal Program
 
-To start this guide, you will be running commands on your trusted personal computer. First, locate the terminal program on your _personal computer_.
+To start this guide, you will be running commands on your trusted computer, not on the remote machine that you plan to use for validator operations. First, locate the terminal program on your _trusted computer_.
 
 - on Mac, you can search for the word _terminal_ in spotlight.
 - on Ubuntu, you can type `CTRL + Alt + T`.
@@ -34,7 +34,7 @@ solana --version
 You should see an output that looks similar to this (note your version number may be higher):
 
 ```
-solana-cli 1.10.11 (src:f61b4f95; feat:1122441720)
+solana-cli 1.14.17 (src:b29a37cf; feat:3488713414)
 ```
 
 Once you have successfully installed the cli, the next step is to change your config so that it is making requests to the `testnet` cluster:
@@ -67,7 +67,7 @@ solana-keygen new -o vote-account-keypair.json
 solana-keygen new -o authorized-withdrawer-keypair.json
 ```
 
-> **IMPORTANT** the `authorized-withdrawer-keypair.json` should be stored in a secure place like a hardware wallet or a password protection app. It should **NOT** be stored on the validator. See the [FAQ](../faq.md) for more details.
+> **IMPORTANT** the `authorized-withdrawer-keypair.json` should be considered very sensitive information.  Many operators choose to use a hardware wallet for the authorized withdrawer key.  The key should always be stored safely. The authorized withdrawer should **never** be stored on the remote machine that the validator software runs on.  For more information, see [validator secuirty best practices](../best-practices/security.md#do-not-store-your-withdrawer-key-on-your-validator)
 
 ## Create a Vote Account
 
@@ -95,17 +95,23 @@ The above command does not work on mainnet, so you will have to acquire some SOL
 
 Now, use the Solana network to create a vote account.
 
-As a reminder, all commands mentioned so far **should be done on your personal computer** and **NOT** on a server where you intend to run your validator. It is especially important that the following command is done on your _personal computer_:
+As a reminder, all commands mentioned so far **should be done on your trusted computer** and **NOT** on a server where you intend to run your validator. It is especially important that the following command is done on a _trusted computer_:
 
 ```
-solana create-vote-account ./vote-account-keypair.json ./validator-keypair.json ./authorized-withdrawer-keypair.json
+solana create-vote-account -ut \
+    -k ./validator-keypair.json \
+    ./vote-account-keypair.json \
+    ./validator-keypair.json \
+    ./authorized-withdrawer-keypair.json
 ```
+
+> Note `-ut` tells the cli command that we would like to use the testnet cluster.  `-k`is specifying the keypair for fee paying.  Both flags are not necessary if you configured the solana cli properly above but they are useful to ensure you're using the intended cluster and keypair.
 
 ## Save the Withdrawer Keypair Securely
 
-Make sure your `authorized-withdrawer-keypair` is stored in a safe place, then delete it from your local machine.
+If you chose to create the `authorized-withdrawer-keypair.json` locally (not using a hardware wallet), make sure your `authorized-withdrawer-keypair.json` is stored in a safe place, then delete it from your local machine.
 
-**IMPORTANT**: If you lose your withdrawer key pair, you will not be able to withdraw tokens from the vote account. Make sure to store the `authorized-withdrawer-keypair.json` securely before you move on.
+**IMPORTANT**: If you lose your withdrawer key pair, you will lose control of your vote account. You will not be able to withdraw tokens from the vote account or update the withdrawer. Make sure to store the `authorized-withdrawer-keypair.json` securely before you move on.
 
 ## SSH To Your Validator
 
@@ -249,6 +255,8 @@ scp validator-keypair.json sol@<server.hostname>:
 scp vote-account-keypair.json sol@<server.hostname>:
 ```
 
+> **Note**: The `vote-account-keypair.json` does not have any function other than identifying the vote account to potential delegators.  Only the public key of the vote account is important once the account is created.
+
 ## Switch to the sol User
 
 On the validator server, switch to the `sol` user:
@@ -276,7 +284,7 @@ nano /home/sol/bin/validator.sh
 Copy and paste the following contents into `validator.sh` then save the file:
 
 ```
-solana-validator \
+exec solana-validator \
     --identity validator-keypair.json \
     --vote-account vote-account-keypair.json \
     --known-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
@@ -350,7 +358,7 @@ solana gossip | grep <pubkey>
 After running the command, you should see a single line that looks like this:
 
 ```
-172.16.254.1  | 3ZtxSmWJnDVxws31MAkLXnNzNPB8eTYzsyJWMJULVYuz | 8000   | 8003  | none                  | 1.10.9  | 1122441720
+139.178.68.207  | 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on | 8001   | 8004  | 139.178.68.207:80     | 1.14.17 | 3488713414
 ```
 
 If you do not see any output after grep-ing the output of gossip, your validator may be having startup problems. If that is the case, start debugging by looking through the validator log output.
@@ -366,7 +374,7 @@ solana validators | grep <pubkey>
 You should see a line of output that looks like this:
 
 ```
-  3ZtxSmWJnDVxws31MAkLXnNzNPB8eTYzsyJWMJULVYuz  FBGaLZsV9xMamgc9aFg6aAer5BxiGiunamCVXer26xAQ   10%  130100678 ( -7)  130100632 (-10)   7.62%   293731   1.10.9   12479.55 SOL (1.11%)
+5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on  FX6NNbS5GHc2kuzgTZetup6GZX6ReaWyki8Z8jC7rbNG  100%  197434166 (  0)  197434133 (  0)   2.11%   323614  1.14.17   2450110.588302720 SOL (1.74%)
 ```
 
 ### Solana Catchup

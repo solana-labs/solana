@@ -14,9 +14,9 @@ sudo apt update
 sudo apt upgrade
 ```
 
-## DO NOT Store Your Withdrawer Key On Your Validator
+## DO NOT Store Your Withdrawer Key On Your Validator Machine
 
-Your withdrawer key gives you full access to the vote account of your validator. It is highly sensitive information and should not be stored on the validator itself. Make sure you create this key on a secure computer (other than your validator computer) and that you store it somewhere safe. Ideally you should store this key in cold storage like a hardware wallet, or at the very least in a password protector so that a hacker could not get access to it directly.
+Your withdrawer key gives you full access to the vote account of your validator. It is highly sensitive information and should not be stored on the validator itself. Make sure you create this key is either stored on a hardware wallet or created on a trusted computer (other than your validator computer) and that you store it somewhere safe. Ideally you should store this key in cold storage like a hardware wallet, or at the very least in a password protector.
 
 Again, this should never be stored on your validator at any time.
 

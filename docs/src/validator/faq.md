@@ -43,6 +43,6 @@ See [Solana validator prerequisites](./overview/validator-prerequisites.md).
 
 ### What are the economics of running a validator?
 
-See [economics of running a validator](./overview/running-validator-or-rpc-node.md#economics-of-running-a-validator).
+See [economics of running a validator](./overview/running-validator-or-rpc-node.md#economics-of-running-a-consensus-validator).
 
 

@@ -15,24 +15,29 @@ Since all votes in Solana happen on the blockchain, a validator incurs a transac
 
 > It is important to make sure your validator always has enough SOL in its identity account to pay for these transactions!
 
-### Economics of running a Validator
+### Economics of running a consensus validator
 
-As an operator, it is important to understand how a validator spends and receives sol through the algorithm.
+As an operator, it is important to understand how a consensus validator spends and earns sol through the protocol.
 
-The following links are great community provided resources that go into the economics of running a validator:
+All validators who vote (consensus validators) must pay vote transaction fees for blocks that they agree with.  The cost of voting can be up to 1.1 SOL per day.
 
-- Congent Crypto has written a [blog post](https://medium.com/@Cogent_Crypto/how-to-become-a-validator-on-solana-9dc4288107b7) that discusses economics and getting started.
+A voting validator can earn SOL through 2 methods:
+
+1. Inflationary rewards paid at the end of an epoch. See [staking rewards](./../../implemented-proposals/staking-rewards.md)
+2. Earning 50% of transaction fees for the blocks produced by the validator.  See [transaction fee basic economic design](../../transaction_fees.md#basic-economic-design)
+
+The following links are community provided resources that discuss the economics of running a validator:
+
 - Michael Hubbard wrote an [article](https://laine-sa.medium.com/solana-staking-rewards-validator-economics-how-does-it-work-6718e4cccc4e) that explains the economics of Solana in more depth for stakers and for validators.
-- Shinobi Systems created an [economic estimator spreadsheet](https://docs.google.com/spreadsheets/d/1HPU_uG3iJ_ns27CItdWGllW0c-Pn07J0_LEDZs1otQY/edit#gid=0).
-
-For the most up to date resources, go to the [Solana discord](https://discord.com/invite/solana) and look in the `#validator-resources` channel for a list of links.
+- Congent Crypto has written a [blog post](https://medium.com/@Cogent_Crypto/how-to-become-a-validator-on-solana-9dc4288107b7) that discusses economics and getting started.
+- Cogent Crypto also provides a [validator profit calculator](https://cogentcrypto.io/ValidatorProfitCalculator)
 
 ## RPC Nodes
 
 While RPC operators **do NOT** receive rewards (because the node is not participating in voting), there are different motivations for running an RPC node.
 
-Instead, an RPC operator is providing a service to users who want to interact with the Solana blockchain. Because your primary user is often technical, you will have to be able to answer technical questions about performance of RPC calls. This option may require more understanding of the [core Solana architecture](../../cluster/overview.md).
+An RPC operator is providing a service to users who want to interact with the Solana blockchain. Because your primary user is often technical, you will have to be able to answer technical questions about performance of RPC calls. This option may require more understanding of the [core Solana architecture](../../cluster/overview.md).
 
-If you are operating an RPC node as a business, your job will also involve scaling your system to meet the demands of the users. For example, some RPC providers create dedicated servers for projects that require a high volume of requests to the node. Someone with a background in development operations or software engineering will be a very important part of your team. You will likely need a good understanding of the Solana architecture and the [RPC API](../../developing/clients/jsonrpc-api.md).
+If you are operating an RPC node as a business, your job will also involve scaling your system to meet the demands of the users. For example, some RPC providers create dedicated servers for projects that require a high volume of requests to the node. Someone with a background in development operations or software engineering will be a very important part of your team. You will need a strong understanding of the Solana architecture and the [RPC API](../../developing/clients/jsonrpc-api.md).
 
-Alternatively, you may be a development team that would like to run their own infrastructure. In this case, the RPC infrastructure would likely be a part of your production stack. A development team could use the [Geyser plugin](../../developing/plugins/geyser-plugins.md) to get real time access to information about accounts or blocks in the cluster.
+Alternatively, you may be a development team that would like to run their own infrastructure. In this case, the RPC infrastructure could be a part of your production stack. A development team could use the [Geyser plugin](../../developing/plugins/geyser-plugins.md), for example, to get real time access to information about accounts or blocks in the cluster.

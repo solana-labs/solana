@@ -5,11 +5,15 @@ sidebar_label: General Operations
 
 After you have successfully gotten a [validator running on testnet](../get-started/setup-a-validator.md) (or another cluster of your choice), you will want to become familiar with how to operate your validator on a day-to-day basis. During daily operations, you will be [monitoring your server](./monitoring.md), updating software regularly (both the Solana validator software and operating system packages), and managing your stake account and identity account.
 
-All of these skills are critical to practice. You do **NOT** want to accidentally cause a prolonged outage of your validator when it is running on mainnet.
+All of these skills are critical to practice. Maximizing your validator uptime is an important part of being a good operator.
+
+## Educational Workshops
+
+The Solana validator community holds regular educational workshops. You can watch past workshops through the [solana validator educational workshops playlist](https://www.youtube.com/watch?v=86zySQ5vGW8&list=PLilwLeBwGuK6jKrmn7KOkxRxS9tvbRa5p).
 
 ## Help with the validator command line
 
-From within the Solana CLI, you can always execute the `solana-validator` command with the `--help` flag to get a better understanding of each command you may need to run.
+From within the Solana CLI, you can execute the `solana-validator` command with the `--help` flag to get a better understanding of the flags and sub commands available.
 
 ```
 solana-validator --help
@@ -17,17 +21,27 @@ solana-validator --help
 
 ## Restarting your validator
 
-There are many operational reasons where you may want to restart your validator. As a best practice, you will want to avoid a restart during a leader slot. A [leader slot](../../terminology.md#leader-schedule) is the time when your validator is expected to produce blocks. You do not want to miss out on that time and miss the rewards.
+There are many operational reasons you may want to restart your validator. As a best practice, you should avoid a restart during a leader slot. A [leader slot](../../terminology.md#leader-schedule) is the time when your validator is expected to produce blocks. For the health of the cluster and also for your validator's ability to earn transaction fee rewards, you do not want your validator to be offline during an opportunity to produce blocks.
 
-The `solana-validator` command provides the `exit` subcommand that stops your validator when there is a restart window. To execute the command, run:
+To see the full leader schedule for an epoch, use the following command:
 
 ```
-solana-validator exit
+solana leader-schedule
+```
+
+Based on the current slot and the leader schedule, you and calculate open time windows where your validator is not expected to produce blocks.
+
+Assuming you are ready to restart, you may use the `solana-validator exit` command.  The command exits your validator process when an appropriate idle time window is reached.  Assuming that you have systemd implemented for your validator process, the validator should restart automatically after the exit.  See the below help command for details:
+
+```
+solana-validator exit --help
 ```
 
 ## Upgrading
 
 There are many ways to upgrade the [Solana software](../../cli/install-solana-cli-tools.md). As an operator, you will need to upgrade often, so it is important to get comfortable with this process.
+
+> **Note** validator nodes do not need to be offline while the newest version is being downloaded or built from source.  All methods below can be done before the validator process is restarted.
 
 ### Building From Source
 
@@ -39,25 +53,37 @@ If you build from source on the validator machine (or a machine with the same CP
 
 If you are not comfortable building from source, or you need to quickly install a new version to test something out, you could instead try using the `solana-install` command.
 
-Assuming you want to install Solana version `1.10.13`, you would execute the following:
+Assuming you want to install Solana version `1.14.17`, you would execute the following:
 
 ```
-solana-install init 1.10.13
+solana-install init 1.14.17
 ```
 
-This command downloads the executable for `1.10.13` and installs it into a `.local` directory. You can also look at `solana-install --help` for more options.
+This command downloads the executable for `1.14.17` and installs it into a `.local` directory. You can also look at `solana-install --help` for more options.
+
+### Restart
+
+For all install methods, the validator process will need to be restarted before the newly installed version is in use.  Use `solana-validator exit` to restart your validator process.
+
+### Verifying version
+
+The best way to verify that your validator process has changed to the desired version is to grep the logs after a restart. The following grep command should show you the version that your validator restarted with:
+
+```
+grep -B1 'Starting validator with' <path/to/logfile>
+```
 
 ## Snapshots
 
-Startup time for your validator is important because you want to minimize downtime as much as possible. If your validator is offline for a short period of time, and you have a recent snapshot of the ledger on your local hard drive, you can avoid some startup time by skipping the snapshot fetching that the validator will do by default.
+Validators operators who have not experienced significant downtime (multiple hours of downtime), should avoid downloading snapshots.  It is important for the health of the cluster as well as your validator history to maintain the local ledger.  Therefore, you should not download a new snapshot any time your validator is offline or experiences an issue.  Downloading a snapshot should only be reserved for occasions when you do not have local state.  Prolonged downtime or the first install of a new validator are examples of times when you may not have state locally.  In other cases such as restarts for upgrades, a snapshot download should be avoided.
 
-In your startup script, add the following flag to the `solana-validator` command:
+To avoid downloading a snapshot on restart, add the following flag to the `solana-validator` command:
 
 ```
 --no-snapshot-fetch
 ```
 
-If you use this flag with the `solana-validator` command, make sure that you run `solana catchup <pubkey>` after your validator starts to make sure that the validator is catching up in a reasonable time. If the snapshot that you are using locally is too old, it may be faster to use a snapshot from another validator. Be aware that using a snapshot instead of catching up will likely result in missing blocks in your local copy of the ledger. Because of these trade-offs, you may have to experiment with this flag to figure out what works best for you.
+If you use this flag with the `solana-validator` command, make sure that you run `solana catchup <pubkey>` after your validator starts to make sure that the validator is catching up in a reasonable time. After some time (potentially a few hours), if it appears that your validator continues to fall behind, then you may have to download a new snapshot.
 
 ### Downloading Snapshots
 
@@ -94,7 +120,7 @@ Once you have a local snapshot, you can restart your validator with the `--no-sn
 
 ## Regularly Check Account Balances
 
-It is important that you do not accidentally run out of funds in your identity account, as your node will stop voting. However, this account is somewhat vulnerable because the keypair for the account must be stored on your validator to run the `solana-validator` software. How much SOL you should store there is up to you. As a best practice, make sure to check the account regularly and refill it as needed. To check the account balance do:
+It is important that you do not accidentally run out of funds in your identity account, as your node will stop voting. It is also important to note that this account keypair is the most vulnerable of the three keypairs in a vote account because the keypair for the identity account is stored on your validator when running the `solana-validator` software. How much SOL you should store there is up to you. As a best practice, make sure to check the account regularly and refill or deduct from it as needed. To check the account balance do:
 
 ```
 solana balance validator-keypair.json
