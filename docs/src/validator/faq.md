@@ -3,44 +3,46 @@ title: Validator Frequently Asked Questions
 sidebar_label: Frequently Asked Questions
 ---
 
-### How long does it take for new stake to show up for my validator?
+### What is a validator?
 
-You will have to wait until the next epoch. Each epoch is approximately 2 days. You can get information about the current epoch using `solana epoch-info`.
+A validator is a computer that runs a software program to verify transactions that are added to the Solana blockchain.  A validator can be a voting validator or a non voting validator. To learn more, see [what is a validator](./overview/what-is-a-validator.md).
+
+### What is an RPC node?
+
+An RPC node is also a computer that runs the validator software.  Typically, an RPC node does not vote on the network.  Instead the RPC node's job is to respond to API requests.  See [what is an rpc node](./overview/what-is-an-rpc-node.md) for more information.
+
+### What is a cluster?
+
+For a definition and an overview of the topic, see [what is a cluster?](../cluster/overview.md). Solana maintains several clusters. For details on each, see [Solana clusters](../clusters.md).
+
+### What is Proof of Stake?
+
+Proof of Stake (PoS) is a blockchain architecture. Solana is a Proof of Stake blockchain. To read more, see [Proof of Stake](./overview/what-is-a-validator.md#proof-of-stake).
+
+### What is Proof of Work? Is running a Solana validator the same as mining?
+
+No, a Solana validator uses Proof of Stake. It does not use Proof of Work (often called mining). See [Proof of Work: For Contrast](./overview/what-is-a-validator.md#proof-of-stake).
+
+### Who can operate a validator?
+
+Anyone can operate a validator.  All Solana clusters are permissionless. A new operator can choose to join at any time.
+
+### What are the hardware requirements for running a validator?
+
+See [validator requirements](../running-validator/validator-reqs.md).
 
 ### Can I run my validator at home?
 
-Anyone can join the cluster including home users. However, you must make sure that your system can perform well and keep up with the cluster. Many home internet connections are not suitable to run a Solana validator.
+Anyone can join the cluster including home users. You must make sure that your system can perform well and keep up with the cluster. Many home internet connections are not suitable to run a Solana validator.  Most operators choose to operate their validator in a data center either by using a server provider or by supplying your own hardware at a colocation data center.
 
-See the [validator system requirements](../running-validator/validator-reqs.md) for more information.
+See the [validator requirements](../running-validator/validator-reqs.md) for more information.
 
-### Is running a validator the same as mining?
+### What skills does a Solana validator operator need?
 
-No, a validator uses proof of stake instead of proof of work. See [what is a validator?](./overview/what-is-a-validator.md#proof-of-stake).
+See [Solana validator prerequisites](./overview/validator-prerequisites.md).
 
-### What are the 3 keys (identity, voting, withdrawer) used for in my validator?
+### What are the economics of running a validator?
 
-- _Identity_: this keypair is used as a payment account for the sol transaction fees incurred on the network. It must be stored on the validator server for the `solana-validator` program to operate.
+See [economics of running a validator](./overview/running-validator-or-rpc-node.md#economics-of-running-a-validator).
 
-- _Vote_: this keypair is used to create your [vote account](../terminology.md#ledger-vote). The account is identified by the keypair's pubkey. Once the vote account is created, this keypair can be deleted.
 
-- _Withdrawer_: this keypair allows the operator of the validator to withdraw funds awarded to the validator. It should **NOT** be kept on the validator itself. This keypair should be stored in a secure place like a hardware wallet or key storage system.
-
-### Should I store my withdrawer key on my validator?
-
-No, do not store your withdrawer key on your validator.
-
-### Can my withdrawer key be the same as my identity key?
-
-No, the withdrawer key should not be stored on the validator and should not be the same keypair.
-
-### What does catching up to the cluster mean?
-
-When a validator node starts up, it must either download a snapshot or use a local snapshot. This snapshot represents the state of the cluster, but the cluster may have advanced beyond your local snapshot by the time your node starts. In order for your node to be involved in voting, it must download all the blocks that it does not have in its snapshot. This process is known as catching up to the cluster. You will have to do this almost any time you stop and then restart your validator service.
-
-### How can you check if your node has caught up to the cluster?
-
-`solana catchup <pubkey>`
-
-### How do you find your pubkey?
-
-`solana-keygen pubkey validator-keypair.json`

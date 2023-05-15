@@ -333,6 +333,7 @@ module.exports = {
         "validator/overview/what-is-an-rpc-node",
         "validator/overview/running-validator-or-rpc-node",
         "validator/overview/validator-prerequisites",
+        "validator/overview/validator-initiatives",
       ],
     },
     {
