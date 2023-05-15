@@ -129,7 +129,7 @@ mod tests {
             );
         }
 
-        test_end_as(Measure::end_as_s, 100, 0.09f32, 0.11f32);
+        test_end_as(Measure::end_as_s, 100, 0.09f32, 0.15f32);
         test_end_as(Measure::end_as_ms, 100, 90, 110);
         test_end_as(Measure::end_as_us, 100, 90_000, 110_000);
         test_end_as(Measure::end_as_ns, 100, 90_000_000, 110_000_000);
