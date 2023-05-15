@@ -195,3 +195,177 @@ impl KeyType {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        solana_sdk::pubkey::Pubkey,
+        tempfile::{tempdir, TempDir},
+    };
+
+    fn process_test_command(args: &[&str]) -> Result<(), Box<dyn error::Error>> {
+        let solana_version = solana_version::version!();
+        let app_matches = app(solana_version).get_matches_from(args);
+        do_main(&app_matches)
+    }
+
+    fn tmp_outfile_path(out_dir: &TempDir, name: &str) -> String {
+        let path = out_dir.path().join(name);
+        path.into_os_string().into_string().unwrap()
+    }
+
+    #[test]
+    fn test_new_elgamal() {
+        let outfile_dir = tempdir().unwrap();
+        // use `Pubkey::new_unique()` to generate names for temporary key files
+        let outfile_path = tmp_outfile_path(&outfile_dir, &Pubkey::new_unique().to_string());
+
+        // general success case
+        process_test_command(&[
+            "solana-zk-keygen",
+            "new",
+            "--key-type",
+            "elgamal",
+            "--outfile",
+            &outfile_path,
+            "--no-bip39-passphrase",
+        ])
+        .unwrap();
+
+        // refuse to overwrite file
+        let result = process_test_command(&[
+            "solana-zk-keygen",
+            "new",
+            "--key-type",
+            "elgamal",
+            "--outfile",
+            &outfile_path,
+            "--no-bip39-passphrase",
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Refusing to overwrite {outfile_path} without --force flag");
+        assert_eq!(result, expected);
+
+        // no outfile
+        process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--key-type",
+            "elgamal",
+            "--no-bip39-passphrase",
+            "--no-outfile",
+        ])
+        .unwrap();
+
+        // sanity check on languages and word count combinations
+        let languages = [
+            "english",
+            "chinese-simplified",
+            "chinese-traditional",
+            "japanese",
+            "spanish",
+            "korean",
+            "french",
+            "italian",
+        ];
+        let word_counts = ["12", "15", "18", "21", "24"];
+
+        for language in languages {
+            for word_count in word_counts {
+                process_test_command(&[
+                    "solana-keygen",
+                    "new",
+                    "--key-type",
+                    "elgamal",
+                    "--no-outfile",
+                    "--no-bip39-passphrase",
+                    "--language",
+                    language,
+                    "--word-count",
+                    word_count,
+                ])
+                .unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn test_new_symmetric() {
+        let outfile_dir = tempdir().unwrap();
+        // use `Pubkey::new_unique()` to generate names for temporary key files
+        let outfile_path = tmp_outfile_path(&outfile_dir, &Pubkey::new_unique().to_string());
+
+        // general success case
+        process_test_command(&[
+            "solana-zk-keygen",
+            "new",
+            "--key-type",
+            "symmetric",
+            "--outfile",
+            &outfile_path,
+            "--no-bip39-passphrase",
+        ])
+        .unwrap();
+
+        // refuse to overwrite file
+        let result = process_test_command(&[
+            "solana-zk-keygen",
+            "new",
+            "--key-type",
+            "symmetric",
+            "--outfile",
+            &outfile_path,
+            "--no-bip39-passphrase",
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Refusing to overwrite {outfile_path} without --force flag");
+        assert_eq!(result, expected);
+
+        // no outfile
+        process_test_command(&[
+            "solana-keygen",
+            "new",
+            "--key-type",
+            "symmetric",
+            "--no-bip39-passphrase",
+            "--no-outfile",
+        ])
+        .unwrap();
+
+        // sanity check on languages and word count combinations
+        let languages = [
+            "english",
+            "chinese-simplified",
+            "chinese-traditional",
+            "japanese",
+            "spanish",
+            "korean",
+            "french",
+            "italian",
+        ];
+        let word_counts = ["12", "15", "18", "21", "24"];
+
+        for language in languages {
+            for word_count in word_counts {
+                process_test_command(&[
+                    "solana-keygen",
+                    "new",
+                    "--key-type",
+                    "symmetric",
+                    "--no-outfile",
+                    "--no-bip39-passphrase",
+                    "--language",
+                    language,
+                    "--word-count",
+                    word_count,
+                ])
+                .unwrap();
+            }
+        }
+    }
+}
