@@ -313,7 +313,8 @@ pull_or_push_steps() {
   fi
 
   # just a bunch of debugging
-  git branch
+  git remote -v
+  git branch -avv
   git status
   optional_old_version_number_debug=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
     grep -e "^-version" | sed  's/-version = "\(.*\)"/\1/')
