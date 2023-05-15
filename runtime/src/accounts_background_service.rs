@@ -16,7 +16,6 @@ use {
     crossbeam_channel::{Receiver, SendError, Sender},
     log::*,
     rand::{thread_rng, Rng},
-    snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN,
     solana_measure::measure::Measure,
     solana_sdk::clock::{BankId, Slot},
     stats::StatsManager,
@@ -389,14 +388,6 @@ impl SnapshotRequestHandler {
             snapshot_root_bank.hash(),
         );
 
-        // Cleanup outdated snapshots
-        let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
-        snapshot_utils::purge_old_bank_snapshots(
-            &self.snapshot_config.bank_snapshots_dir,
-            MAX_BANK_SNAPSHOTS_TO_RETAIN,
-            None,
-        );
-        purge_old_snapshots_time.stop();
         total_time.stop();
 
         datapoint_info!(
@@ -409,11 +400,6 @@ impl SnapshotRequestHandler {
             ("shrink_time", shrink_time.as_us(), i64),
             ("clean_time", clean_time.as_us(), i64),
             ("snapshot_time", snapshot_time.as_us(), i64),
-            (
-                "purge_old_snapshots_time",
-                purge_old_snapshots_time.as_us(),
-                i64
-            ),
             ("total_us", total_time.as_us(), i64),
             ("non_snapshot_time_us", non_snapshot_time_us, i64),
         );

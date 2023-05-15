@@ -75,7 +75,7 @@ impl SnapshotPackagerService {
                     info!("handling snapshot package: {snapshot_package:?}");
                     let enqueued_time = snapshot_package.enqueued.elapsed();
 
-                    let (_, handling_time_us) = measure_us!({
+                    let (purge_bank_snapshots_time_us, handling_time_us) = measure_us!({
                         // Archiving the snapshot package is not allowed to fail.
                         // AccountsBackgroundService calls `clean_accounts()` with a value for
                         // last_full_snapshot_slot that requires this archive call to succeed.
@@ -99,10 +99,10 @@ impl SnapshotPackagerService {
                         // all bank snapshots older than this slot.  We want to keep the bank
                         // snapshot *at this slot* so that it can be used during restarts, when
                         // booting from local state.
-                        snapshot_utils::purge_bank_snapshots_older_than_slot(
+                        measure_us!(snapshot_utils::purge_bank_snapshots_older_than_slot(
                             &snapshot_config.bank_snapshots_dir,
                             snapshot_package.slot(),
-                        );
+                        )).1
                     });
 
                     datapoint_info!(
@@ -119,6 +119,7 @@ impl SnapshotPackagerService {
                         ),
                         ("enqueued_time_us", enqueued_time.as_micros(), i64),
                         ("handling_time_us", handling_time_us, i64),
+                        ("purge_old_snapshots_time_us", purge_bank_snapshots_time_us, i64),
                     );
                 }
                 info!("SnapshotPackagerService has stopped");
