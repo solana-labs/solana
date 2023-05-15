@@ -22,6 +22,7 @@ RUN set -x \
       sudo \
       golang \
       unzip \
+      lld \
       \
  && apt remove -y libcurl4-openssl-dev \
  && rm -rf /var/lib/apt/lists/* \
