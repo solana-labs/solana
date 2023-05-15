@@ -155,8 +155,8 @@ pub trait EncodableKey: Sized {
     ) -> Result<Self, Box<dyn error::Error>>;
 }
 
-/// The `EncodableKeypair` trait extends `EncodableKey` asymmetric keypairs, i.e. have associated
-/// public keys.
+/// The `EncodableKeypair` trait extends `EncodableKey` for asymmetric keypairs, i.e. have
+/// associated public keys.
 pub trait EncodableKeypair: EncodableKey {
     type Pubkey: ToString;
 
