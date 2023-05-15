@@ -3,7 +3,6 @@ use {
     crate::cluster_nodes::ClusterNodesCache,
     itertools::Itertools,
     solana_entry::entry::Entry,
-    solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
     solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
     solana_sdk::{
         hash::Hash,
@@ -305,7 +304,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             .iter()
             .filter_map(|shred| {
                 let node = cluster_nodes.get_broadcast_peer(&shred.id())?;
-                if !socket_addr_space.check(&node.tvu().ok()?) {
+                if !socket_addr_space.check(&node.tvu(Protocol::UDP).ok()?) {
                     return None;
                 }
                 if self
@@ -338,7 +337,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                             .iter()
                             .filter_map(|pubkey| {
                                 let tvu = cluster_info
-                                    .lookup_contact_info(pubkey, ContactInfo::tvu)?
+                                    .lookup_contact_info(pubkey, |node| node.tvu(Protocol::UDP))?
                                     .ok()?;
                                 Some((shred.payload(), tvu))
                             })
@@ -346,7 +345,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     );
                 }
 
-                Some(vec![(shred.payload(), node.tvu().ok()?)])
+                Some(vec![(shred.payload(), node.tvu(Protocol::UDP).ok()?)])
             })
             .flatten()
             .collect();

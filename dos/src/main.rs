@@ -438,7 +438,7 @@ fn get_target(
                 info!("{:?}", node.gossip());
                 target = match mode {
                     Mode::Gossip => Some((*node.pubkey(), node.gossip().unwrap())),
-                    Mode::Tvu => Some((*node.pubkey(), node.tvu().unwrap())),
+                    Mode::Tvu => Some((*node.pubkey(), node.tvu(Protocol::UDP).unwrap())),
                     Mode::TvuForwards => Some((*node.pubkey(), node.tvu_forwards().unwrap())),
                     Mode::Tpu => Some((*node.pubkey(), node.tpu(protocol).unwrap())),
                     Mode::TpuForwards => {
