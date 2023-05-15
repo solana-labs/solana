@@ -118,17 +118,17 @@ impl AccountsHashVerifier {
                     datapoint_info!(
                         "accounts_hash_verifier",
                         (
-                            "num-outstanding-accounts-packages",
+                            "num_outstanding_accounts_packages",
                             num_outstanding_accounts_packages,
                             i64
                         ),
                         (
-                            "num-re-enqueued-accounts-packages",
+                            "num_re_enqueued_accounts_packages",
                             num_re_enqueued_accounts_packages,
                             i64
                         ),
-                        ("enqueued-time-us", enqueued_time.as_micros(), i64),
-                        ("handling-time-us", handling_time_us, i64),
+                        ("enqueued_time_us", enqueued_time.as_micros(), i64),
+                        ("handling_time_us", handling_time_us, i64),
                     );
                 }
                 debug!(
@@ -329,9 +329,18 @@ impl AccountsHashVerifier {
         //
         // If we are *not* generating snapshots, then purge old bank snapshots here.
         if !snapshot_config.should_generate_snapshots() {
-            snapshot_utils::purge_bank_snapshots_older_than_slot(
-                &snapshot_config.bank_snapshots_dir,
-                accounts_package.slot,
+            let (_, purge_bank_snapshots_time_us) =
+                measure_us!(snapshot_utils::purge_bank_snapshots_older_than_slot(
+                    &snapshot_config.bank_snapshots_dir,
+                    accounts_package.slot,
+                ));
+            datapoint_info!(
+                "accounts_hash_verifier",
+                (
+                    "purge_old_snapshots_time_us",
+                    purge_bank_snapshots_time_us,
+                    i64
+                ),
             );
         }
 
