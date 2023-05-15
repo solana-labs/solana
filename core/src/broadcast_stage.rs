@@ -14,7 +14,10 @@ use {
     },
     crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender},
     itertools::Itertools,
-    solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError},
+    solana_gossip::{
+        cluster_info::{ClusterInfo, ClusterInfoError},
+        contact_info::Protocol,
+    },
     solana_ledger::{blockstore::Blockstore, shred::Shred},
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_error, inc_new_counter_info},
@@ -412,7 +415,7 @@ pub fn broadcast_shreds(
             shreds.filter_map(move |shred| {
                 cluster_nodes
                     .get_broadcast_peer(&shred.id())?
-                    .tvu()
+                    .tvu(Protocol::UDP)
                     .ok()
                     .filter(|addr| socket_addr_space.check(addr))
                     .map(|addr| (shred.payload(), addr))

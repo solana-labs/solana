@@ -556,7 +556,7 @@ impl ThreadLocalUnprocessedPackets {
         let mut total_forwardable_packets: usize = 0;
         let mut total_packet_conversion_us: u64 = 0;
         let mut total_filter_packets_us: u64 = 0;
-        let mut dropped_tx_before_forwarding_count: usize = 0;
+        let mut total_dropped_packets: usize = 0;
 
         let mut original_priority_queue = self.take_priority_queue();
         let original_capacity = original_priority_queue.capacity();
@@ -589,7 +589,11 @@ impl ThreadLocalUnprocessedPackets {
                                 (Vec<SanitizedTransaction>, Vec<usize>),
                                 _,
                             ) = measure!(
-                                self.sanitize_unforwarded_packets(&packets_to_forward, &bank),
+                                self.sanitize_unforwarded_packets(
+                                    &packets_to_forward,
+                                    &bank,
+                                    &mut total_dropped_packets
+                                ),
                                 "sanitize_packet",
                             );
                             saturating_add_assign!(
@@ -598,7 +602,11 @@ impl ThreadLocalUnprocessedPackets {
                             );
 
                             let (forwardable_transaction_indexes, filter_packets_time) = measure!(
-                                Self::filter_invalid_transactions(&sanitized_transactions, &bank),
+                                Self::filter_invalid_transactions(
+                                    &sanitized_transactions,
+                                    &bank,
+                                    &mut total_dropped_packets
+                                ),
                                 "filter_packets",
                             );
                             saturating_add_assign!(
@@ -622,7 +630,7 @@ impl ThreadLocalUnprocessedPackets {
                                     &sanitized_transactions,
                                     &transaction_to_packet_indexes,
                                     &forwardable_transaction_indexes,
-                                    &mut dropped_tx_before_forwarding_count,
+                                    &mut total_dropped_packets,
                                     &bank.feature_set,
                                 );
                             accepting_packets = accepted_packet_indexes.len()
@@ -644,10 +652,7 @@ impl ThreadLocalUnprocessedPackets {
                             )
                         } else {
                             // skip sanitizing and filtering if not longer able to add more packets for forwarding
-                            saturating_add_assign!(
-                                dropped_tx_before_forwarding_count,
-                                packets_to_forward.len()
-                            );
+                            saturating_add_assign!(total_dropped_packets, packets_to_forward.len());
                             packets_to_forward
                         },
                     ]
@@ -667,15 +672,11 @@ impl ThreadLocalUnprocessedPackets {
                 .len()
         );
 
-        inc_new_counter_info!(
-            "banking_stage-dropped_tx_before_forwarding",
-            dropped_tx_before_forwarding_count
-        );
-
         FilterForwardingResults {
             total_forwardable_packets,
             total_tracer_packets_in_buffer,
             total_forwardable_tracer_packets,
+            total_dropped_packets,
             total_packet_conversion_us,
             total_filter_packets_us,
         }
@@ -711,6 +712,7 @@ impl ThreadLocalUnprocessedPackets {
         &mut self,
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
         bank: &Arc<Bank>,
+        total_dropped_packets: &mut usize,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
         // Get ref of ImmutableDeserializedPacket
         let deserialized_packets = packets_to_process.iter().map(|p| &**p);
@@ -728,14 +730,9 @@ impl ThreadLocalUnprocessedPackets {
                 })
                 .unzip();
 
-        // report metrics
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
-        let unsanitized_packets_filtered_count =
-            packets_to_process.len().saturating_sub(transactions.len());
-        inc_new_counter_info!(
-            "banking_stage-dropped_tx_before_forwarding",
-            unsanitized_packets_filtered_count
-        );
+        let filtered_count = packets_to_process.len().saturating_sub(transactions.len());
+        saturating_add_assign!(*total_dropped_packets, filtered_count);
 
         (transactions, transaction_to_packet_indexes)
     }
@@ -744,6 +741,7 @@ impl ThreadLocalUnprocessedPackets {
     fn filter_invalid_transactions(
         transactions: &[SanitizedTransaction],
         bank: &Arc<Bank>,
+        total_dropped_packets: &mut usize,
     ) -> Vec<usize> {
         let filter = vec![Ok(()); transactions.len()];
         let results = bank.check_transactions_with_forwarding_delay(
@@ -751,12 +749,9 @@ impl ThreadLocalUnprocessedPackets {
             &filter,
             FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET,
         );
-        // report metrics
-        let filtered_out_transactions_count = transactions.len().saturating_sub(results.len());
-        inc_new_counter_info!(
-            "banking_stage-dropped_tx_before_forwarding",
-            filtered_out_transactions_count
-        );
+
+        let filtered_count = transactions.len().saturating_sub(results.len());
+        saturating_add_assign!(*total_dropped_packets, filtered_count);
 
         results
             .iter()
@@ -785,7 +780,7 @@ impl ThreadLocalUnprocessedPackets {
         transactions: &[SanitizedTransaction],
         transaction_to_packet_indexes: &[usize],
         forwardable_transaction_indexes: &[usize],
-        dropped_tx_before_forwarding_count: &mut usize,
+        total_dropped_packets: &mut usize,
         feature_set: &FeatureSet,
     ) -> Vec<usize> {
         let mut added_packets_count: usize = 0;
@@ -807,11 +802,10 @@ impl ThreadLocalUnprocessedPackets {
             saturating_add_assign!(added_packets_count, 1);
         }
 
-        // count the packets not being forwarded in this batch
-        saturating_add_assign!(
-            *dropped_tx_before_forwarding_count,
-            forwardable_transaction_indexes.len() - added_packets_count
-        );
+        let filtered_count = forwardable_transaction_indexes
+            .len()
+            .saturating_sub(added_packets_count);
+        saturating_add_assign!(*total_dropped_packets, filtered_count);
 
         accepted_packet_indexes
     }

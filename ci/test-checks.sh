@@ -75,7 +75,7 @@ fi
 
  _ ci/order-crates-for-publishing.py
 
-nightly_clippy_allows=()
+nightly_clippy_allows=(--allow=clippy::redundant_clone)
 
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
  _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \

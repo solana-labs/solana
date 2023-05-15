@@ -38,7 +38,7 @@ impl CommitmentAggregationData {
     }
 }
 
-fn get_highest_confirmed_root(mut rooted_stake: Vec<(Slot, u64)>, total_stake: u64) -> Slot {
+fn get_highest_super_majority_root(mut rooted_stake: Vec<(Slot, u64)>, total_stake: u64) -> Slot {
     rooted_stake.sort_by(|a, b| a.0.cmp(&b.0).reverse());
     let mut stake_sum = 0;
     for (root, stake) in rooted_stake {
@@ -117,8 +117,8 @@ impl AggregateCommitmentService {
                     i64
                 ),
                 (
-                    "highest-confirmed-root",
-                    update_commitment_slots.highest_confirmed_root as i64,
+                    "highest-super-majority-root",
+                    update_commitment_slots.highest_super_majority_root as i64,
                     i64
                 ),
                 (
@@ -143,8 +143,8 @@ impl AggregateCommitmentService {
         let (block_commitment, rooted_stake) =
             Self::aggregate_commitment(&ancestors, &aggregation_data.bank);
 
-        let highest_confirmed_root =
-            get_highest_confirmed_root(rooted_stake, aggregation_data.total_stake);
+        let highest_super_majority_root =
+            get_highest_super_majority_root(rooted_stake, aggregation_data.total_stake);
 
         let mut new_block_commitment = BlockCommitmentCache::new(
             block_commitment,
@@ -153,7 +153,7 @@ impl AggregateCommitmentService {
                 slot: aggregation_data.bank.slot(),
                 root: aggregation_data.root,
                 highest_confirmed_slot: aggregation_data.root,
-                highest_confirmed_root,
+                highest_super_majority_root,
             },
         );
         let highest_confirmed_slot = new_block_commitment.calculate_highest_confirmed_slot();
@@ -161,11 +161,11 @@ impl AggregateCommitmentService {
 
         let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
 
-        let highest_confirmed_root = max(
-            new_block_commitment.highest_confirmed_root(),
-            w_block_commitment_cache.highest_confirmed_root(),
+        let highest_super_majority_root = max(
+            new_block_commitment.highest_super_majority_root(),
+            w_block_commitment_cache.highest_super_majority_root(),
         );
-        new_block_commitment.set_highest_confirmed_root(highest_confirmed_root);
+        new_block_commitment.set_highest_super_majority_root(highest_super_majority_root);
 
         *w_block_commitment_cache = new_block_commitment;
         w_block_commitment_cache.commitment_slots()
@@ -265,12 +265,12 @@ mod tests {
     };
 
     #[test]
-    fn test_get_highest_confirmed_root() {
-        assert_eq!(get_highest_confirmed_root(vec![], 10), 0);
+    fn test_get_highest_super_majority_root() {
+        assert_eq!(get_highest_super_majority_root(vec![], 10), 0);
         let rooted_stake = vec![(0, 5), (1, 5)];
-        assert_eq!(get_highest_confirmed_root(rooted_stake, 10), 0);
+        assert_eq!(get_highest_super_majority_root(rooted_stake, 10), 0);
         let rooted_stake = vec![(1, 5), (0, 10), (2, 5), (1, 4)];
-        assert_eq!(get_highest_confirmed_root(rooted_stake, 10), 1);
+        assert_eq!(get_highest_super_majority_root(rooted_stake, 10), 1);
     }
 
     #[test]
@@ -483,11 +483,11 @@ mod tests {
             }
         }
         assert_eq!(rooted_stake.len(), 2);
-        assert_eq!(get_highest_confirmed_root(rooted_stake, 100), 1)
+        assert_eq!(get_highest_super_majority_root(rooted_stake, 100), 1)
     }
 
     #[test]
-    fn test_highest_confirmed_root_advance() {
+    fn test_highest_super_majority_root_advance() {
         fn get_vote_account_root_slot(vote_pubkey: Pubkey, bank: &Arc<Bank>) -> Slot {
             let vote_account = bank.get_vote_account(&vote_pubkey).unwrap();
             let slot = vote_account
@@ -569,20 +569,20 @@ mod tests {
             },
             ancestors,
         );
-        let highest_confirmed_root = block_commitment_cache
+        let highest_super_majority_root = block_commitment_cache
             .read()
             .unwrap()
-            .highest_confirmed_root();
+            .highest_super_majority_root();
         bank_forks.set_root(
             root,
             &AbsRequestSender::default(),
-            Some(highest_confirmed_root),
+            Some(highest_super_majority_root),
         );
-        let highest_confirmed_root_bank = bank_forks.get(highest_confirmed_root);
-        assert!(highest_confirmed_root_bank.is_some());
+        let highest_super_majority_root_bank = bank_forks.get(highest_super_majority_root);
+        assert!(highest_super_majority_root_bank.is_some());
 
         // Add a forked bank. Because the vote for bank 33 landed in the non-ancestor, the vote
-        // account's root (and thus the highest_confirmed_root) rolls back to slot 1
+        // account's root (and thus the highest_super_majority_root) rolls back to slot 1
         let bank33 = bank_forks.get(33).unwrap();
         let bank35 = Bank::new_from_parent(&bank33, &Pubkey::default(), 35);
         bank_forks.insert(bank35);
@@ -598,12 +598,12 @@ mod tests {
             },
             ancestors,
         );
-        let highest_confirmed_root = block_commitment_cache
+        let highest_super_majority_root = block_commitment_cache
             .read()
             .unwrap()
-            .highest_confirmed_root();
-        let highest_confirmed_root_bank = bank_forks.get(highest_confirmed_root);
-        assert!(highest_confirmed_root_bank.is_some());
+            .highest_super_majority_root();
+        let highest_super_majority_root_bank = bank_forks.get(highest_super_majority_root);
+        assert!(highest_super_majority_root_bank.is_some());
 
         // Add additional banks beyond lockout built on the new fork to ensure that behavior
         // continues normally
@@ -638,16 +638,16 @@ mod tests {
             },
             ancestors,
         );
-        let highest_confirmed_root = block_commitment_cache
+        let highest_super_majority_root = block_commitment_cache
             .read()
             .unwrap()
-            .highest_confirmed_root();
+            .highest_super_majority_root();
         bank_forks.set_root(
             root,
             &AbsRequestSender::default(),
-            Some(highest_confirmed_root),
+            Some(highest_super_majority_root),
         );
-        let highest_confirmed_root_bank = bank_forks.get(highest_confirmed_root);
-        assert!(highest_confirmed_root_bank.is_some());
+        let highest_super_majority_root_bank = bank_forks.get(highest_super_majority_root);
+        assert!(highest_super_majority_root_bank.is_some());
     }
 }

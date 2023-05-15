@@ -498,6 +498,10 @@ impl HeaviestSubtreeForkChoice {
             .map(|(slot_hash, fork_info)| (slot_hash, fork_info.stake_voted_subtree))
     }
 
+    pub fn slots_iter(&self) -> impl Iterator<Item = Slot> + '_ {
+        self.fork_infos.iter().map(|((slot, _), _)| slot).copied()
+    }
+
     /// Split off the node at `slot_hash_key` and propagate the stake subtraction up to the root of the
     /// tree.
     ///

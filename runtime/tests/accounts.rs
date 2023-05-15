@@ -11,6 +11,7 @@ use {
         clock::Slot,
         genesis_config::ClusterType,
         pubkey::Pubkey,
+        sysvar::epoch_schedule::EpochSchedule,
     },
     std::{
         collections::HashSet,
@@ -38,7 +39,7 @@ fn test_shrink_and_clean() {
             if exit_for_shrink.load(Ordering::Relaxed) {
                 break;
             }
-            accounts_for_shrink.shrink_all_slots(false, None);
+            accounts_for_shrink.shrink_all_slots(false, None, &EpochSchedule::default());
         });
 
         let mut alive_accounts = vec![];

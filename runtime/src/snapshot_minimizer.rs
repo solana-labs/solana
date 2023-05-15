@@ -7,7 +7,7 @@ use {
         },
         accounts_partition,
         bank::Bank,
-        builtins, static_ids,
+        static_ids,
     },
     dashmap::DashSet,
     log::info,
@@ -114,9 +114,13 @@ impl<'a> SnapshotMinimizer<'a> {
 
     /// Used to get builtin accounts in `minimize`
     fn get_builtins(&self) {
-        builtins::get_pubkeys().iter().for_each(|pubkey| {
-            self.minimized_account_set.insert(*pubkey);
-        });
+        self.bank
+            .get_builtin_programs()
+            .vec
+            .iter()
+            .for_each(|(pubkey, _builtin)| {
+                self.minimized_account_set.insert(*pubkey);
+            });
     }
 
     /// Used to get static runtime accounts in `minimize`

@@ -379,7 +379,10 @@ fn test_program_sbf_loader_deprecated() {
         let bank = Bank::new_for_tests(&genesis_config);
         let program_id = create_program(&bank, &bpf_loader_deprecated::id(), program);
 
-        let bank_client = BankClient::new(bank);
+        let mut bank_client = BankClient::new(bank);
+        bank_client
+            .advance_slot(1, &Pubkey::default())
+            .expect("Failed to advance the slot");
         let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
         let instruction = Instruction::new_with_bytes(program_id, &[1], account_metas);
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
@@ -446,7 +449,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
     // Enable _sol_alloc_free syscall
     bank.deactivate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
     bank.clear_signatures();
-    bank.clear_executors();
+    bank.clear_program_cache();
 
     // Try and finalize the program now that sol_alloc_free is re-enabled
     assert!(bank.process_transaction(&finalize_tx).is_ok());
@@ -464,7 +467,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
     assert!(bank.process_transaction(&invoke_tx).is_ok());
 
     bank.clear_signatures();
-    bank.clear_executors();
+    bank.clear_program_cache();
 
     // invoke should still succeed on execute because the program is already deployed
     assert!(bank.process_transaction(&invoke_tx).is_ok());
@@ -2065,8 +2068,10 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
         ],
     );
 
+    // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
+    // after 2 slots. So we need to advance the bank client by 2 slots here.
     let bank = bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(2, &Pubkey::default())
         .expect("Failed to advance slot");
 
     // Prepare redeployment
@@ -2160,8 +2165,10 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
         ],
     );
 
+    // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
+    // after 2 slots. So we need to advance the bank client by 2 slots here.
     let bank = bank_client
-        .advance_slot(1, &Pubkey::default())
+        .advance_slot(2, &Pubkey::default())
         .expect("Failed to advance slot");
 
     // Prepare undeployment
@@ -3904,7 +3911,10 @@ fn test_program_sbf_inner_instruction_alignment_checks() {
 
     // invoke unaligned program, which will call aligned program twice,
     // unaligned should be allowed once invoke completes
-    let bank_client = BankClient::new(bank);
+    let mut bank_client = BankClient::new(bank);
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
     let mut instruction = Instruction::new_with_bytes(
         inner_instruction_alignment_check,
         &[0],

@@ -563,6 +563,7 @@ mod tests {
         },
         std::{
             cell::RefCell,
+            mem::transmute,
             rc::Rc,
             slice::{self, from_raw_parts, from_raw_parts_mut},
         },
@@ -994,58 +995,94 @@ mod tests {
     }
 
     // the old bpf_loader in-program deserializer bpf_loader::id()
-    #[allow(clippy::type_complexity)]
+    #[deny(unsafe_op_in_unsafe_fn)]
     pub unsafe fn deserialize_unaligned<'a>(
         input: *mut u8,
     ) -> (&'a Pubkey, Vec<AccountInfo<'a>>, &'a [u8]) {
+        // this boring boilerplate struct is needed until inline const...
+        struct Ptr<T>(std::marker::PhantomData<T>);
+        impl<T> Ptr<T> {
+            const COULD_BE_UNALIGNED: bool = std::mem::align_of::<T>() > 1;
+
+            #[inline(always)]
+            fn read_possibly_unaligned(input: *mut u8, offset: usize) -> T {
+                unsafe {
+                    let src = input.add(offset) as *const T;
+                    if Self::COULD_BE_UNALIGNED {
+                        src.read_unaligned()
+                    } else {
+                        src.read()
+                    }
+                }
+            }
+
+            // rustc inserts debug_assert! for misaligned pointer dereferences when
+            // deserializing, starting from [1]. so, use std::mem::transmute as the last resort
+            // while preventing clippy from complaining to suggest not to use it.
+            // [1]: https://github.com/rust-lang/rust/commit/22a7a19f9333bc1fcba97ce444a3515cb5fb33e6
+            // as for the ub nature of the misaligned pointer dereference, this is
+            // acceptable in this code, given that this is cfg(test) and it's cared only with
+            // x86-64 and the target only incurs some performance penalty, not like segfaults
+            // in other targets.
+            #[inline(always)]
+            fn ref_possibly_unaligned<'a>(input: *mut u8, offset: usize) -> &'a T {
+                #[allow(clippy::transmute_ptr_to_ref)]
+                unsafe {
+                    transmute(input.add(offset) as *const T)
+                }
+            }
+
+            // See ref_possibly_unaligned's comment
+            #[inline(always)]
+            fn mut_possibly_unaligned<'a>(input: *mut u8, offset: usize) -> &'a mut T {
+                #[allow(clippy::transmute_ptr_to_ref)]
+                unsafe {
+                    transmute(input.add(offset) as *mut T)
+                }
+            }
+        }
+
         let mut offset: usize = 0;
 
         // number of accounts present
 
-        #[allow(clippy::cast_ptr_alignment)]
-        let num_accounts = *(input.add(offset) as *const u64) as usize;
+        let num_accounts = Ptr::<u64>::read_possibly_unaligned(input, offset) as usize;
         offset += size_of::<u64>();
 
         // account Infos
 
         let mut accounts = Vec::with_capacity(num_accounts);
         for _ in 0..num_accounts {
-            let dup_info = *(input.add(offset) as *const u8);
+            let dup_info = Ptr::<u8>::read_possibly_unaligned(input, offset);
             offset += size_of::<u8>();
             if dup_info == NON_DUP_MARKER {
-                #[allow(clippy::cast_ptr_alignment)]
-                let is_signer = *(input.add(offset) as *const u8) != 0;
+                let is_signer = Ptr::<u8>::read_possibly_unaligned(input, offset) != 0;
                 offset += size_of::<u8>();
 
-                #[allow(clippy::cast_ptr_alignment)]
-                let is_writable = *(input.add(offset) as *const u8) != 0;
+                let is_writable = Ptr::<u8>::read_possibly_unaligned(input, offset) != 0;
                 offset += size_of::<u8>();
 
-                let key: &Pubkey = &*(input.add(offset) as *const Pubkey);
+                let key = Ptr::<Pubkey>::ref_possibly_unaligned(input, offset);
                 offset += size_of::<Pubkey>();
 
-                #[allow(clippy::cast_ptr_alignment)]
-                let lamports = Rc::new(RefCell::new(&mut *(input.add(offset) as *mut u64)));
+                let lamports = Rc::new(RefCell::new(Ptr::mut_possibly_unaligned(input, offset)));
                 offset += size_of::<u64>();
 
-                #[allow(clippy::cast_ptr_alignment)]
-                let data_len = *(input.add(offset) as *const u64) as usize;
+                let data_len = Ptr::<u64>::read_possibly_unaligned(input, offset) as usize;
                 offset += size_of::<u64>();
 
-                let data = Rc::new(RefCell::new({
+                let data = Rc::new(RefCell::new(unsafe {
                     from_raw_parts_mut(input.add(offset), data_len)
                 }));
                 offset += data_len;
 
-                let owner: &Pubkey = &*(input.add(offset) as *const Pubkey);
+                let owner: &Pubkey = Ptr::<Pubkey>::ref_possibly_unaligned(input, offset);
                 offset += size_of::<Pubkey>();
 
-                #[allow(clippy::cast_ptr_alignment)]
-                let executable = *(input.add(offset) as *const u8) != 0;
+                let executable = Ptr::<u8>::read_possibly_unaligned(input, offset) != 0;
                 offset += size_of::<u8>();
 
-                #[allow(clippy::cast_ptr_alignment)]
-                let rent_epoch = *(input.add(offset) as *const u64);
+                let rent_epoch = Ptr::<u64>::read_possibly_unaligned(input, offset);
                 offset += size_of::<u64>();
 
                 accounts.push(AccountInfo {
@@ -1066,16 +1103,15 @@ mod tests {
 
         // instruction data
 
-        #[allow(clippy::cast_ptr_alignment)]
-        let instruction_data_len = *(input.add(offset) as *const u64) as usize;
+        let instruction_data_len = Ptr::<u64>::read_possibly_unaligned(input, offset) as usize;
         offset += size_of::<u64>();
 
-        let instruction_data = { from_raw_parts(input.add(offset), instruction_data_len) };
+        let instruction_data = unsafe { from_raw_parts(input.add(offset), instruction_data_len) };
         offset += instruction_data_len;
 
         // program Id
 
-        let program_id: &Pubkey = &*(input.add(offset) as *const Pubkey);
+        let program_id = Ptr::<Pubkey>::ref_possibly_unaligned(input, offset);
 
         (program_id, accounts, instruction_data)
     }

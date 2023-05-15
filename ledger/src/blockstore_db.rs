@@ -1813,7 +1813,7 @@ fn get_db_options(access_type: &AccessType) -> Options {
     // Per the docs, a good value for this is the number of cores on the machine
     options.increase_parallelism(num_cpus::get() as i32);
 
-    let mut env = rocksdb::Env::default().unwrap();
+    let mut env = rocksdb::Env::new().unwrap();
     // While a compaction is ongoing, all the background threads
     // could be used by the compaction. This can stall writes which
     // need to flush the memtable. Add some high-priority background threads

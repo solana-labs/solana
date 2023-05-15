@@ -21,8 +21,8 @@ use {
         ebpf::MM_INPUT_START,
         elf::Executable,
         memory_region::MemoryRegion,
-        verifier::RequisiteVerifier,
-        vm::{ContextObject, VerifiedExecutable},
+        verifier::{RequisiteVerifier, TautologyVerifier},
+        vm::ContextObject,
     },
     solana_runtime::{
         bank::Bank,
@@ -93,12 +93,12 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
         &FeatureSet::default(),
         &ComputeBudget::default(),
         true,
-        true,
         false,
     )
     .unwrap();
     bencher.iter(|| {
-        let _ = Executable::<InvokeContext>::from_elf(&elf, loader.clone()).unwrap();
+        let _ =
+            Executable::<TautologyVerifier, InvokeContext>::from_elf(&elf, loader.clone()).unwrap();
     });
 }
 
@@ -118,15 +118,14 @@ fn bench_program_alu(bencher: &mut Bencher) {
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
-        true,
         false,
     )
     .unwrap();
-    let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
+    let executable =
+        Executable::<TautologyVerifier, InvokeContext>::from_elf(&elf, loader).unwrap();
 
     let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-            .unwrap();
+        Executable::<RequisiteVerifier, InvokeContext>::verified(executable).unwrap();
 
     verified_executable.jit_compile().unwrap();
     create_vm!(
@@ -236,15 +235,14 @@ fn bench_create_vm(bencher: &mut Bencher) {
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
-        true,
         false,
     )
     .unwrap();
-    let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
+    let executable =
+        Executable::<TautologyVerifier, InvokeContext>::from_elf(&elf, loader).unwrap();
 
     let verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-            .unwrap();
+        Executable::<RequisiteVerifier, InvokeContext>::verified(executable).unwrap();
 
     // Serialize account data
     let (_serialized, regions, account_lengths) = serialize_parameters(
@@ -297,15 +295,14 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
-        true,
         false,
     )
     .unwrap();
-    let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
+    let executable =
+        Executable::<TautologyVerifier, InvokeContext>::from_elf(&elf, loader).unwrap();
 
     let verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-            .unwrap();
+        Executable::<RequisiteVerifier, InvokeContext>::verified(executable).unwrap();
 
     create_vm!(
         vm,

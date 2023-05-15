@@ -24,7 +24,7 @@ use {
         cluster_info_metrics::{
             submit_gossip_stats, Counter, GossipStats, ScopedTimer, TimedGuard,
         },
-        contact_info::{ContactInfo, Error as ContactInfoError, LegacyContactInfo},
+        contact_info::{self, ContactInfo, Error as ContactInfoError, LegacyContactInfo},
         crds::{Crds, Cursor, GossipRoute},
         crds_gossip::CrdsGossip,
         crds_gossip_error::CrdsGossipError,
@@ -845,9 +845,9 @@ impl ClusterInfo {
                         },
                         self.addr_to_string(&ip_addr, &node.gossip().ok()),
                         self.addr_to_string(&ip_addr, &node.tpu_vote().ok()),
-                        self.addr_to_string(&ip_addr, &node.tpu().ok()),
-                        self.addr_to_string(&ip_addr, &node.tpu_forwards().ok()),
-                        self.addr_to_string(&ip_addr, &node.tvu().ok()),
+                        self.addr_to_string(&ip_addr, &node.tpu(contact_info::Protocol::UDP).ok()),
+                        self.addr_to_string(&ip_addr, &node.tpu_forwards(contact_info::Protocol::UDP).ok()),
+                        self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tvu_forwards().ok()),
                         self.addr_to_string(&ip_addr, &node.repair().ok()),
                         self.addr_to_string(&ip_addr, &node.serve_repair().ok()),
@@ -1144,7 +1144,7 @@ impl ClusterInfo {
     ) -> Result<(), GossipError> {
         let tpu = tpu
             .map(Ok)
-            .unwrap_or_else(|| self.my_contact_info().tpu())?;
+            .unwrap_or_else(|| self.my_contact_info().tpu(contact_info::Protocol::UDP))?;
         let buf = serialize(transaction)?;
         self.socket.send_to(&buf, tpu)?;
         Ok(())
@@ -1314,7 +1314,8 @@ impl ClusterInfo {
         self.time_gossip_read_lock("all_tvu_peers", &self.stats.all_tvu_peers)
             .get_nodes_contact_info()
             .filter(|node| {
-                node.pubkey() != &self_pubkey && self.check_socket_addr_space(&node.tvu())
+                node.pubkey() != &self_pubkey
+                    && self.check_socket_addr_space(&node.tvu(contact_info::Protocol::UDP))
             })
             .cloned()
             .collect()
@@ -1329,7 +1330,7 @@ impl ClusterInfo {
             .filter(|node| {
                 node.pubkey() != &self_pubkey
                     && node.shred_version() == self_shred_version
-                    && self.check_socket_addr_space(&node.tvu())
+                    && self.check_socket_addr_space(&node.tvu(contact_info::Protocol::UDP))
             })
             .cloned()
             .collect()
@@ -1346,7 +1347,7 @@ impl ClusterInfo {
             .filter(|node| {
                 node.pubkey() != &self_pubkey
                     && node.shred_version() == self_shred_version
-                    && self.check_socket_addr_space(&node.tvu())
+                    && self.check_socket_addr_space(&node.tvu(contact_info::Protocol::UDP))
                     && self.check_socket_addr_space(&node.serve_repair())
                     && match gossip_crds.get::<&LowestSlot>(*node.pubkey()) {
                         None => true, // fallback to legacy behavior
@@ -1358,12 +1359,16 @@ impl ClusterInfo {
     }
 
     fn is_spy_node(node: &LegacyContactInfo, socket_addr_space: &SocketAddrSpace) -> bool {
-        ![node.tpu(), node.gossip(), node.tvu()]
-            .into_iter()
-            .all(|addr| {
-                addr.map(|addr| socket_addr_space.check(&addr))
-                    .unwrap_or_default()
-            })
+        ![
+            node.tpu(contact_info::Protocol::UDP),
+            node.gossip(),
+            node.tvu(contact_info::Protocol::UDP),
+        ]
+        .into_iter()
+        .all(|addr| {
+            addr.map(|addr| socket_addr_space.check(&addr))
+                .unwrap_or_default()
+        })
     }
 
     /// compute broadcast table
@@ -1373,7 +1378,8 @@ impl ClusterInfo {
         gossip_crds
             .get_nodes_contact_info()
             .filter(|node| {
-                node.pubkey() != &self_pubkey && self.check_socket_addr_space(&node.tpu())
+                node.pubkey() != &self_pubkey
+                    && self.check_socket_addr_space(&node.tpu(contact_info::Protocol::UDP))
             })
             .cloned()
             .collect()

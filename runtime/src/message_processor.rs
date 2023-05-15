@@ -4,8 +4,8 @@ use {
     solana_program_runtime::{
         builtin_program::BuiltinPrograms,
         compute_budget::ComputeBudget,
-        executor_cache::TransactionExecutorCache,
         invoke_context::InvokeContext,
+        loaded_programs::LoadedProgramsForTxBatch,
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
@@ -58,7 +58,9 @@ impl MessageProcessor {
         transaction_context: &mut TransactionContext,
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
-        tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
+        programs_loaded_for_tx_batch: Rc<RefCell<LoadedProgramsForTxBatch>>,
+        programs_modified_by_tx: Rc<RefCell<LoadedProgramsForTxBatch>>,
+        programs_updated_only_for_global_cache: Rc<RefCell<LoadedProgramsForTxBatch>>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
         timings: &mut ExecuteTimings,
@@ -75,7 +77,9 @@ impl MessageProcessor {
             sysvar_cache,
             log_collector,
             compute_budget,
-            tx_executor_cache,
+            programs_loaded_for_tx_batch,
+            programs_modified_by_tx,
+            programs_updated_only_for_global_cache,
             feature_set,
             blockhash,
             lamports_per_signature,
@@ -272,7 +276,8 @@ mod tests {
         let mut transaction_context =
             TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let program_indices = vec![vec![2]];
-        let tx_executor_cache = Rc::new(RefCell::new(TransactionExecutorCache::default()));
+        let programs_loaded_for_tx_batch =
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default()));
         let account_keys = (0..transaction_context.get_number_of_accounts())
             .map(|index| {
                 *transaction_context
@@ -308,7 +313,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            tx_executor_cache.clone(),
+            programs_loaded_for_tx_batch.clone(),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -358,7 +365,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            tx_executor_cache.clone(),
+            programs_loaded_for_tx_batch.clone(),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -398,7 +407,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            tx_executor_cache,
+            programs_loaded_for_tx_batch,
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -496,7 +507,8 @@ mod tests {
         let mut transaction_context =
             TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let program_indices = vec![vec![2]];
-        let tx_executor_cache = Rc::new(RefCell::new(TransactionExecutorCache::default()));
+        let programs_loaded_for_tx_batch =
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default()));
         let account_metas = vec![
             AccountMeta::new(
                 *transaction_context.get_key_of_account_at_index(0).unwrap(),
@@ -529,7 +541,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            tx_executor_cache.clone(),
+            programs_loaded_for_tx_batch.clone(),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -563,7 +577,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            tx_executor_cache.clone(),
+            programs_loaded_for_tx_batch.clone(),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -594,7 +610,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            tx_executor_cache,
+            programs_loaded_for_tx_batch,
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -668,7 +686,9 @@ mod tests {
             &mut transaction_context,
             RentCollector::default().rent,
             None,
-            Rc::new(RefCell::new(TransactionExecutorCache::default())),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),

@@ -113,17 +113,17 @@ To turn on SBF interpreter trace messages in a local cluster configure the
 ## Source level debugging
 
 Source level debugging of on-chain programs written in Rust or C can
-be done using the `run` subcommand of `solana-ledger-tool`, and lldb,
-distrubuted with Solana Rust and Clang compiler binary package
-platform-tools.
+be done using the `program run` subcommand of `solana-ledger-tool`,
+and lldb, distrubuted with Solana Rust and Clang compiler binary
+package platform-tools.
 
-The `solana-ledger-tool run` subcommand loads a compiled on-chain
-program, executes it in RBPF virtual machine and runs a gdb server
-that accepts incoming connections from LLDB or GDB.  Once lldb is
-connected to `solana-ledger-tool` gdbserver, it can control execution of
-an on-chain program.  Run `solana-ledger-tool run --help`
-for an example of specifying input data for parameters of the program
-entrypoint function.
+The `solana-ledger-tool program run` subcommand loads a compiled
+on-chain program, executes it in RBPF virtual machine and runs a gdb
+server that accepts incoming connections from LLDB or GDB.  Once lldb
+is connected to `solana-ledger-tool` gdbserver, it can control
+execution of an on-chain program.  Run `solana-ledger-tool program run
+--help` for an example of specifying input data for parameters of the
+program entrypoint function.
 
 To compile a program for debugging use cargo-build-sbf build utility
 with the command line option `--debug`. The utility will generate two
@@ -131,8 +131,8 @@ loadable files, one a usual loadable module with the extension `.so`,
 and another the same loadable module but containing Dwarf debug
 information, a file with extension `.debug`.
 
-To execute a program in debugger, run `solana-ledger-tool run` with
-`-u debugger` command line option. For example, a crate named
+To execute a program in debugger, run `solana-ledger-tool program run`
+with `-e debugger` command line option. For example, a crate named
 'helloworld' is compiled and an executable program is built in
 `target/deploy` directory. There should be three files in that
 directory
@@ -141,7 +141,7 @@ directory
 - helloworld.so -- an executable file loadable into the virtual machine.
 The command line for running `solana-ledger-tool` would be something like this
 ```
-solana-ledger-tool run -l test-ledger -u debugger target/deploy/helloworld.so
+solana-ledger-tool program run -l test-ledger -e debugger target/deploy/helloworld.so
 ```
 Note that `solana-ledger-tool` always loads a ledger database. Most
 on-chain programs interact with a ledger in some manner. Even if for
@@ -150,7 +150,7 @@ debugging purpose a ledger is not needed, it has to be provided to
 running `solana-test-validator`, which creates a ledger in
 `test-ledger` subdirectory.
 
-In debugger mode `solana-ledger-tool run` loads an `.so` file and
+In debugger mode `solana-ledger-tool program run` loads an `.so` file and
 starts listening for an incoming connection from a debugger
 ```
 Waiting for a Debugger connection on "127.0.0.1:9001"...
@@ -159,7 +159,7 @@ Waiting for a Debugger connection on "127.0.0.1:9001"...
 To connect to `solana-ledger-tool` and execute the program, run lldb. For
 debugging rust programs it may be beneficial to run solana-lldb
 wrapper to lldb, i.e. at a new shell prompt (other than the one used
-to run `solana-ledger-tool`) run the command
+to start `solana-ledger-tool`) run the command
 
 ```
 solana-lldb
@@ -230,13 +230,13 @@ First file is `tasks.json` with the following content
         {
             "label": "solana-debugger",
             "type": "shell",
-            "command": "solana-ledger-tool run -l test-ledger -u debugger ${workspaceFolder}/target/deploy/helloworld.so"
+            "command": "solana-ledger-tool program run -l test-ledger -e debugger ${workspaceFolder}/target/deploy/helloworld.so"
         }
     ]
 }
 ```
 The first task is to build the on-chain program using cargo-build-sbf
-utility. The second task is to run `solana-ledger-tool run` in debugger mode.
+utility. The second task is to run `solana-ledger-tool program run` in debugger mode.
 
 Another file is `launch.json` with the following content
 ```

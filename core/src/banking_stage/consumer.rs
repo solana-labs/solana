@@ -249,10 +249,9 @@ impl Consumer {
         slot_metrics_tracker
             .increment_retryable_packets_filtered_count(retryable_packets_filtered_count as u64);
 
-        inc_new_counter_info!(
-            "banking_stage-dropped_tx_before_forwarding",
-            retryable_packets_filtered_count
-        );
+        banking_stage_stats
+            .dropped_forward_packets_count
+            .fetch_add(retryable_packets_filtered_count, Ordering::Relaxed);
 
         process_transactions_summary.retryable_transaction_indexes =
             filtered_retryable_transaction_indexes;
@@ -395,18 +394,24 @@ impl Consumer {
         chunk_offset: usize,
     ) -> ProcessTransactionBatchOutput {
         let (
-            (transaction_costs, transactions_qos_results, cost_model_throttled_transactions_count),
+            (transaction_qos_cost_results, cost_model_throttled_transactions_count),
             cost_model_us,
-        ) = measure_us!(self
-            .qos_service
-            .select_and_accumulate_transaction_costs(bank, txs));
+        ) = measure_us!(self.qos_service.select_and_accumulate_transaction_costs(
+            bank,
+            txs,
+            std::iter::repeat(Ok(())) // no filtering before QoS
+        ));
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let (batch, lock_us) = measure_us!(
-            bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.iter())
-        );
+        let (batch, lock_us) = measure_us!(bank.prepare_sanitized_batch_with_results(
+            txs,
+            transaction_qos_cost_results.iter().map(|r| match r {
+                Ok(_cost) => Ok(()),
+                Err(err) => Err(err.clone()),
+            })
+        ));
 
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
         // WouldExceedMaxAccountCostLimit, WouldExceedMaxVoteCostLimit
@@ -425,8 +430,7 @@ impl Consumer {
         } = execute_and_commit_transactions_output;
 
         QosService::update_or_remove_transaction_costs(
-            transaction_costs.iter(),
-            transactions_qos_results.iter(),
+            transaction_qos_cost_results.iter(),
             commit_transactions_result.as_ref().ok(),
             bank,
         );
@@ -665,7 +669,8 @@ mod tests {
         super::*,
         crate::{
             banking_stage::tests::{create_slow_genesis_config, simulate_poh},
-            unprocessed_packet_batches::{self, UnprocessedPacketBatches},
+            immutable_deserialized_packet::DeserializedPacketError,
+            unprocessed_packet_batches::{DeserializedPacket, UnprocessedPacketBatches},
             unprocessed_transaction_storage::ThreadType,
         },
         crossbeam_channel::{unbounded, Receiver},
@@ -678,6 +683,7 @@ mod tests {
             get_tmp_ledger_path_auto_delete,
             leader_schedule_cache::LeaderScheduleCache,
         },
+        solana_perf::packet::Packet,
         solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
         solana_program_runtime::timings::ProgramTiming,
         solana_rpc::transaction_status_service::TransactionStatusService,
@@ -840,6 +846,18 @@ mod tests {
             entry_receiver,
             poh_simulator,
         )
+    }
+
+    fn transactions_to_deserialized_packets(
+        transactions: &[Transaction],
+    ) -> Result<Vec<DeserializedPacket>, DeserializedPacketError> {
+        transactions
+            .iter()
+            .map(|transaction| {
+                let packet = Packet::from_data(None, transaction)?;
+                DeserializedPacket::new(packet)
+            })
+            .collect()
     }
 
     #[test]
@@ -1712,9 +1730,7 @@ mod tests {
                 setup_conflicting_transactions(ledger_path.path());
             let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
-            let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+            let deserialized_packets = transactions_to_deserialized_packets(&transactions).unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -1792,9 +1808,7 @@ mod tests {
                 .push(duplicate_account_key); // corrupt transaction
             let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
-            let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+            let deserialized_packets = transactions_to_deserialized_packets(&transactions).unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -1845,9 +1859,7 @@ mod tests {
                 setup_conflicting_transactions(ledger_path.path());
             let recorder = poh_recorder.read().unwrap().new_recorder();
             let num_conflicting_transactions = transactions.len();
-            let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+            let deserialized_packets = transactions_to_deserialized_packets(&transactions).unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let retryable_packet = deserialized_packets[0].clone();
             let mut buffered_packet_batches =

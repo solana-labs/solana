@@ -5,6 +5,7 @@ use {
             self, BlockstoreProcessorError, CacheBlockMetaSender, ProcessOptions,
             TransactionStatusSender,
         },
+        entry_notifier_service::EntryNotifierSender,
         leader_schedule_cache::LeaderScheduleCache,
     },
     log::*,
@@ -49,6 +50,7 @@ pub fn load(
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    entry_notification_sender: Option<&EntryNotifierSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> LoadResult {
@@ -60,6 +62,7 @@ pub fn load(
         snapshot_config,
         &process_options,
         cache_block_meta_sender,
+        entry_notification_sender,
         accounts_update_notifier,
         exit,
     );
@@ -71,6 +74,7 @@ pub fn load(
         &process_options,
         transaction_status_sender,
         cache_block_meta_sender,
+        entry_notification_sender,
         &AbsRequestSender::default(),
     )
     .map(|_| (bank_forks, leader_schedule_cache, starting_snapshot_hashes))
@@ -85,6 +89,7 @@ pub fn load_bank_forks(
     snapshot_config: Option<&SnapshotConfig>,
     process_options: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    entry_notification_sender: Option<&EntryNotifierSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> (
@@ -145,6 +150,7 @@ pub fn load_bank_forks(
             account_paths,
             process_options,
             cache_block_meta_sender,
+            entry_notification_sender,
             accounts_update_notifier,
             exit,
         );

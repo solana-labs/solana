@@ -9,7 +9,6 @@ use {
         spl_convert::FromOtherSolana,
     },
     solana_client::{
-        connection_cache::ConnectionCache,
         thin_client::ThinClient,
         tpu_client::{TpuClient, TpuClientConfig},
     },
@@ -82,10 +81,10 @@ fn test_bench_tps_local_cluster(config: Config) {
 
     let client = Arc::new(ThinClient::new(
         cluster.entry_point_info.rpc().unwrap(),
-        match *cluster.connection_cache {
-            ConnectionCache::Quic(_) => cluster.entry_point_info.tpu_quic().unwrap(),
-            ConnectionCache::Udp(_) => cluster.entry_point_info.tpu().unwrap(),
-        },
+        cluster
+            .entry_point_info
+            .tpu(cluster.connection_cache.protocol())
+            .unwrap(),
         cluster.connection_cache.clone(),
     ));
 

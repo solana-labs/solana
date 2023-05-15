@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_db::{AccountStorageEntry, PUBKEY_BINS_FOR_CALCULATING_HASHES},
+        accounts_db::{AccountStorageEntry, IncludeSlotInHash, PUBKEY_BINS_FOR_CALCULATING_HASHES},
         ancestors::Ancestors,
         rent_collector::RentCollector,
     },
@@ -101,7 +101,6 @@ pub struct CalcAccountsHashConfig<'a> {
     /// true to use a thread pool dedicated to bg operations
     pub use_bg_thread_pool: bool,
     /// verify every hash in append vec/write cache with a recalculated hash
-    /// this option will be removed
     pub check_hash: bool,
     /// 'ancestors' is used to get storages
     pub ancestors: Option<&'a Ancestors>,
@@ -111,6 +110,7 @@ pub struct CalcAccountsHashConfig<'a> {
     pub rent_collector: &'a RentCollector,
     /// used for tracking down hash mismatches after the fact
     pub store_detailed_debug_info_on_failure: bool,
+    pub include_slot_in_hash: IncludeSlotInHash,
 }
 
 // smallest, 3 quartiles, largest, average
@@ -138,8 +138,6 @@ pub struct HashStats {
     pub roots_older_than_epoch: AtomicUsize,
     pub accounts_in_roots_older_than_epoch: AtomicUsize,
     pub append_vec_sizes_older_than_epoch: AtomicUsize,
-    /// # ancient append vecs encountered
-    pub ancient_append_vecs: AtomicUsize,
     pub longest_ancient_scan_us: AtomicU64,
     pub sum_ancient_scans_us: AtomicU64,
     pub count_ancient_scans: AtomicU64,
@@ -239,11 +237,6 @@ impl HashStats {
                 i64
             ),
             ("oldest_root", self.oldest_root as i64, i64),
-            (
-                "ancient_append_vecs",
-                self.ancient_append_vecs.load(Ordering::Relaxed) as i64,
-                i64
-            ),
             (
                 "longest_ancient_scan_us",
                 self.longest_ancient_scan_us.load(Ordering::Relaxed) as i64,

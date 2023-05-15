@@ -12,7 +12,9 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
+        accounts_db::{
+            AccountShrinkThreshold, CalcAccountsHashDataSource, INCLUDE_SLOT_IN_HASH_TESTS,
+        },
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankTestConfig},
@@ -123,7 +125,8 @@ impl TestEnvironment {
             SocketAddrSpace::Unspecified,
         ));
 
-        let (pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
+        let pruned_banks_receiver =
+            AccountsBackgroundService::setup_bank_drop_callback(Arc::clone(&bank_forks));
         let background_services = BackgroundServices::new(
             Arc::clone(&exit),
             Arc::clone(&cluster_info),
@@ -132,12 +135,6 @@ impl TestEnvironment {
             Arc::clone(&bank_forks),
         );
         let bank = bank_forks.read().unwrap().working_bank();
-        bank.set_callback(Some(Box::new(
-            bank.rc
-                .accounts
-                .accounts_db
-                .create_drop_bank_callback(pruned_banks_sender),
-        )));
         assert!(bank
             .feature_set
             .is_active(&feature_set::epoch_accounts_hash::id()));
@@ -159,7 +156,7 @@ impl TestEnvironment {
 
 /// In order to shut down the background services correctly, each service's thread must be joined.
 /// However, since `.join()` takes a `self` and `drop()` takes a `&mut self`, it means a "normal"
-/// implementation of drop will no work.  Instead, we must handle drop ourselves.
+/// implementation of drop will not work.  Instead, we must handle drop ourselves.
 struct BackgroundServices {
     exit: Arc<AtomicBool>,
     accounts_background_service: ManuallyDrop<AccountsBackgroundService>,
@@ -322,6 +319,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
                         epoch_schedule: bank.epoch_schedule(),
                         rent_collector: bank.rent_collector(),
                         store_detailed_debug_info_on_failure: false,
+                        include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
                     },
                 )
                 .unwrap();

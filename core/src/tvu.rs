@@ -37,7 +37,7 @@ use {
     },
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
-        leader_schedule_cache::LeaderScheduleCache,
+        entry_notifier_service::EntryNotifierSender, leader_schedule_cache::LeaderScheduleCache,
     },
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
@@ -120,6 +120,7 @@ impl Tvu {
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         cache_block_meta_sender: Option<CacheBlockMetaSender>,
+        entry_notification_sender: Option<EntryNotifierSender>,
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
@@ -187,17 +188,18 @@ impl Tvu {
         );
 
         let cluster_slots = Arc::new(ClusterSlots::default());
-        let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
+        let (ancestor_duplicate_slots_sender, ancestor_duplicate_slots_receiver) = unbounded();
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
             unbounded();
         let (dumped_slots_sender, dumped_slots_receiver) = unbounded();
+        let (popular_pruned_forks_sender, popular_pruned_forks_receiver) = unbounded();
         let window_service = {
             let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
             let repair_info = RepairInfo {
                 bank_forks: bank_forks.clone(),
                 epoch_schedule,
-                duplicate_slots_reset_sender,
+                ancestor_duplicate_slots_sender,
                 repair_validators: tvu_config.repair_validators,
                 repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
@@ -217,6 +219,7 @@ impl Tvu {
                 duplicate_slots_sender,
                 ancestor_hashes_replay_update_receiver,
                 dumped_slots_receiver,
+                popular_pruned_forks_sender,
             )
         };
 
@@ -243,6 +246,7 @@ impl Tvu {
             transaction_status_sender,
             rewards_recorder_sender,
             cache_block_meta_sender,
+            entry_notification_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
@@ -288,7 +292,7 @@ impl Tvu {
             vote_tracker,
             cluster_slots,
             retransmit_slots_sender,
-            duplicate_slots_reset_receiver,
+            ancestor_duplicate_slots_receiver,
             replay_vote_sender,
             gossip_confirmed_slots_receiver,
             gossip_verified_vote_hash_receiver,
@@ -301,6 +305,7 @@ impl Tvu {
             prioritization_fee_cache.clone(),
             dumped_slots_sender,
             banking_tracer,
+            popular_pruned_forks_receiver,
         )?;
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -457,6 +462,7 @@ pub mod tests {
             &exit,
             block_commitment_cache,
             Arc::<AtomicBool>::default(),
+            None,
             None,
             None,
             None,
