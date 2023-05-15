@@ -2988,6 +2988,27 @@ pub fn purge_old_bank_snapshots(
     );
 }
 
+/// At startup, purge old (i.e. unusable) bank snapshots
+///
+/// Only a single bank snapshot could be needed at startup (when using fast boot), so
+/// retain the highest bank snapshot "post", and purge the rest.
+pub fn purge_old_bank_snapshots_at_startup(bank_snapshots_dir: impl AsRef<Path>) {
+    let bank_snapshots_pre = get_bank_snapshots_pre(&bank_snapshots_dir);
+    purge_bank_snapshots(&bank_snapshots_pre);
+
+    let mut bank_snapshots_post = get_bank_snapshots_post(&bank_snapshots_dir);
+    bank_snapshots_post.sort_unstable();
+    let highest_bank_snapshot_post = bank_snapshots_post.pop();
+    purge_bank_snapshots(&bank_snapshots_post);
+
+    if let Some(highest_bank_snapshot_post) = highest_bank_snapshot_post {
+        debug!(
+            "Retained bank snapshot for slot {}, and purged the rest.",
+            highest_bank_snapshot_post.slot
+        );
+    }
+}
+
 /// Purges bank snapshots that are older than `slot`
 pub fn purge_bank_snapshots_older_than_slot(bank_snapshots_dir: impl AsRef<Path>, slot: Slot) {
     let mut bank_snapshots = get_bank_snapshots(&bank_snapshots_dir);
@@ -5639,5 +5660,23 @@ mod tests {
         let bank_snapshots_after = get_bank_snapshots(&bank_snapshots_dir);
         assert_eq!(bank_snapshots_before.len(), bank_snapshots_after.len() + 9);
         assert!(bank_snapshots_after.is_empty());
+    }
+
+    #[test]
+    fn test_purge_old_bank_snapshots_at_startup() {
+        let genesis_config = GenesisConfig::default();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+
+        // The bank must stay in scope to ensure the temp dirs that it holds are not dropped
+        let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 9, 6);
+
+        purge_old_bank_snapshots_at_startup(&bank_snapshots_dir);
+
+        let bank_snapshots_pre = get_bank_snapshots_pre(&bank_snapshots_dir);
+        assert!(bank_snapshots_pre.is_empty());
+
+        let bank_snapshots_post = get_bank_snapshots_post(&bank_snapshots_dir);
+        assert_eq!(bank_snapshots_post.len(), 1);
+        assert_eq!(bank_snapshots_post.first().unwrap().slot, 6);
     }
 }
