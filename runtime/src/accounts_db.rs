@@ -1362,9 +1362,6 @@ pub struct AccountsDb {
     /// Keeps tracks of index into AppendVec on a per slot basis
     pub accounts_index: AccountInfoAccountsIndex,
 
-    /// oldest slot that is not ancient, relative to the highest slot where accounts hash calculation has completed
-    pub accounts_hash_complete_oldest_non_ancient_slot: RwLock<Slot>,
-
     /// Some(offset) iff we want to squash old append vecs together into 'ancient append vecs'
     /// Some(offset) means for slots up to (max_slot - (slots_per_epoch - 'offset')), put them in ancient append vecs
     pub ancient_append_vec_offset: Option<i64>,
@@ -2388,7 +2385,6 @@ impl AccountsDb {
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
             active_stats: ActiveStats::default(),
-            accounts_hash_complete_oldest_non_ancient_slot: RwLock::default(),
             skip_initial_hash_calc: false,
             ancient_append_vec_offset: None,
             accounts_index,
@@ -17213,7 +17209,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_sweep_get_accounts_hash_complete_oldest_non_ancient_slot() {
+    fn test_sweep_get_oldest_non_ancient_slot2() {
         // note that this test has to worry about saturation at 0 as we subtract `slots_per_epoch` and `ancient_append_vec_offset`
         let epoch_schedule = EpochSchedule::default();
         for ancient_append_vec_offset in [-10_000i64, 50_000] {
