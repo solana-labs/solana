@@ -61,7 +61,7 @@ solana-transaction-status = { path = "../transaction-status", version = "=1.14.1
 solana-version = { path = "../version", version = "=1.14.18" }
 solana-vote-program = { path = "../programs/vote", version = "=1.14.18" }
 sys-info = "0.9.1"
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 thiserror = "1.0"
 tokio = { version = "~1.14.1", features = ["full"] }
 trees = "0.4.2"

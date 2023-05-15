@@ -51,7 +51,7 @@ tiny-bip39 = "0.8.2"
 [dev-dependencies]
 solana-streamer = { path = "../streamer", version = "=1.14.18" }
 solana-test-validator = { path = "../test-validator", version = "=1.14.18" }
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 
 [[bin]]
 name = "solana"
