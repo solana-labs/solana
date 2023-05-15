@@ -464,7 +464,7 @@ impl LedgerStorage {
 
     /// Return the available slot that contains a block
     pub async fn get_first_available_block(&self) -> Result<Option<Slot>> {
-        debug!("LedgerStorage::get_first_available_block request received");
+        trace!("LedgerStorage::get_first_available_block request received");
         inc_new_counter_debug!("storage-bigtable-query", 1);
         let mut bigtable = self.connection.client();
         let blocks = bigtable.get_row_keys("blocks", None, None, 1).await?;
@@ -479,9 +479,10 @@ impl LedgerStorage {
     /// start_slot: slot to start the search from (inclusive)
     /// limit: stop after this many slots have been found
     pub async fn get_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<Vec<Slot>> {
-        debug!(
+        trace!(
             "LedgerStorage::get_confirmed_blocks request received: {:?} {:?}",
-            start_slot, limit
+            start_slot,
+            limit
         );
         inc_new_counter_debug!("storage-bigtable-query", 1);
         let mut bigtable = self.connection.client();
@@ -501,7 +502,7 @@ impl LedgerStorage {
         &self,
         slots: &'a [Slot],
     ) -> Result<impl Iterator<Item = (Slot, ConfirmedBlock)> + 'a> {
-        debug!(
+        trace!(
             "LedgerStorage::get_confirmed_blocks_with_data request received: {:?}",
             slots
         );
@@ -528,7 +529,7 @@ impl LedgerStorage {
 
     /// Fetch the confirmed block from the desired slot
     pub async fn get_confirmed_block(&self, slot: Slot) -> Result<ConfirmedBlock> {
-        debug!(
+        trace!(
             "LedgerStorage::get_confirmed_block request received: {:?}",
             slot
         );
@@ -554,7 +555,7 @@ impl LedgerStorage {
 
     /// Does the confirmed block exist in the Bigtable
     pub async fn confirmed_block_exists(&self, slot: Slot) -> Result<bool> {
-        debug!(
+        trace!(
             "LedgerStorage::confirmed_block_exists request received: {:?}",
             slot
         );
@@ -569,7 +570,7 @@ impl LedgerStorage {
     }
 
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {
-        debug!(
+        trace!(
             "LedgerStorage::get_signature_status request received: {:?}",
             signature
         );
@@ -590,7 +591,7 @@ impl LedgerStorage {
         &self,
         signatures: &[Signature],
     ) -> Result<Vec<ConfirmedTransactionWithStatusMeta>> {
-        debug!(
+        trace!(
             "LedgerStorage::get_confirmed_transactions request received: {:?}",
             signatures
         );
@@ -652,7 +653,7 @@ impl LedgerStorage {
         &self,
         signature: &Signature,
     ) -> Result<Option<ConfirmedTransactionWithStatusMeta>> {
-        debug!(
+        trace!(
             "LedgerStorage::get_confirmed_transaction request received: {:?}",
             signature
         );
@@ -712,7 +713,7 @@ impl LedgerStorage {
             u32, /*slot index*/
         )>,
     > {
-        debug!(
+        trace!(
             "LedgerStorage::get_confirmed_signatures_for_address request received: {:?}",
             address
         );
@@ -835,12 +836,16 @@ impl LedgerStorage {
         Ok(infos)
     }
 
-    // Upload a new confirmed block and associated meta data.
+    /// Upload a new confirmed block and associated meta data.
     pub async fn upload_confirmed_block(
         &self,
         slot: Slot,
         confirmed_block: VersionedConfirmedBlock,
     ) -> Result<()> {
+        trace!(
+            "LedgerStorage::upload_confirmed_block request received: {:?}",
+            slot
+        );
         let mut by_addr: HashMap<&Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
 
         let mut tx_cells = vec![];
