@@ -118,17 +118,17 @@ impl AccountsHashVerifier {
                     datapoint_info!(
                         "accounts_hash_verifier",
                         (
-                            "num-outstanding-accounts-packages",
+                            "num_outstanding_accounts_packages",
                             num_outstanding_accounts_packages,
                             i64
                         ),
                         (
-                            "num-re-enqueued-accounts-packages",
+                            "num_re_enqueued_accounts_packages",
                             num_re_enqueued_accounts_packages,
                             i64
                         ),
-                        ("enqueued-time-us", enqueued_time.as_micros(), i64),
-                        ("handling-time-us", handling_time_us, i64),
+                        ("enqueued_time_us", enqueued_time.as_micros(), i64),
+                        ("handling_time_us", handling_time_us, i64),
                     );
                 }
                 debug!(

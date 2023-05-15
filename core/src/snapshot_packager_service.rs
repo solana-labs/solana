@@ -108,17 +108,17 @@ impl SnapshotPackagerService {
                     datapoint_info!(
                         "snapshot_packager_service",
                         (
-                            "num-outstanding-snapshot-packages",
+                            "num_outstanding_snapshot_packages",
                             num_outstanding_snapshot_packages,
                             i64
                         ),
                         (
-                            "num-re-enqueued-snapshot-packages",
+                            "num_re_enqueued_snapshot_packages",
                             num_re_enqueued_snapshot_packages,
                             i64
                         ),
-                        ("enqueued-time-us", enqueued_time.as_micros(), i64),
-                        ("handling-time-us", handling_time_us, i64),
+                        ("enqueued_time_us", enqueued_time.as_micros(), i64),
+                        ("handling_time_us", handling_time_us, i64),
                     );
                 }
                 info!("SnapshotPackagerService has stopped");
