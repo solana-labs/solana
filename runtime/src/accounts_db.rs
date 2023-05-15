@@ -7202,6 +7202,15 @@ impl AccountsDb {
         slots_per_epoch: Slot,
         mut stats: &mut crate::accounts_hash::HashStats,
     ) {
+        // Nothing to do if ancient append vecs are enabled.
+        // Ancient slots will be visited by the ancient append vec code and dealt with correctly.
+        // we expect these ancient append vecs to be old and keeping accounts
+        // We can expect the normal processes will keep them cleaned.
+        // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
+        if self.ancient_append_vec_offset.is_some() {
+            return;
+        }
+
         let mut mark_time = Measure::start("mark_time");
         let mut num_dirty_slots: usize = 0;
         let max = storages.max_slot_inclusive();
@@ -7210,13 +7219,8 @@ impl AccountsDb {
         let in_epoch_range_start = max.saturating_sub(sub);
         for (slot, storage) in storages.iter_range(&(..in_epoch_range_start)) {
             if let Some(storage) = storage {
-                if !is_ancient(&storage.accounts) {
-                    // ancient stores are managed separately - we expect them to be old and keeping accounts
-                    // We can expect the normal processes will keep them cleaned.
-                    // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
-                    self.dirty_stores.insert(slot, storage.clone());
-                    num_dirty_slots += 1;
-                }
+                self.dirty_stores.insert(slot, storage.clone());
+                num_dirty_slots += 1;
             }
         }
         mark_time.stop();
