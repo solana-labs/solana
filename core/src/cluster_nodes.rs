@@ -307,7 +307,9 @@ pub fn new_cluster_nodes<T: 'static>(
 ) -> ClusterNodes<T> {
     let self_pubkey = cluster_info.id();
     let nodes: Vec<_> = get_nodes(cluster_info, stakes)
-        .into_iter().filter(|node| node.stake > 0).collect();
+        .into_iter()
+        .filter(|node| node.stake > 0)
+        .collect();
     let index: HashMap<_, _> = nodes
         .iter()
         .enumerate()
