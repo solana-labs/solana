@@ -1066,13 +1066,8 @@ impl Validator {
             gossip_verified_vote_hash_sender,
             replay_vote_receiver,
             replay_vote_sender,
-<<<<<<< HEAD
-            bank_notification_sender,
-            config.tpu_coalesce_ms,
-=======
             bank_notification_sender.map(|sender| sender.sender),
-            config.tpu_coalesce,
->>>>>>> 7cf50e60fc (Fixed missing Root notifications via geyser plugin framework (#31180))
+            config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
             &cost_model,
             &connection_cache,
