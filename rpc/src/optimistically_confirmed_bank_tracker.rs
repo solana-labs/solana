@@ -396,7 +396,7 @@ mod tests {
         let oldest_parent = parents.last().map(|last| last.parent_slot());
         parents.push(bank.clone());
         let mut rooted_slots: Vec<_> = parents.iter().map(|bank| bank.slot()).collect();
-        rooted_slots.push(oldest_parent.unwrap_or(bank.parent_slot()));
+        rooted_slots.push(oldest_parent.unwrap_or_else(|| bank.parent_slot()));
         rooted_slots
     }
 
