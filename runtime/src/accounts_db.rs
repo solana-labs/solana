@@ -7086,13 +7086,11 @@ impl AccountsDb {
     where
         S: AppendVecScan,
     {
-        let splitter = SplitAncientStorages::new(
-            self.get_oldest_non_ancient_slot_for_hash_calc_scan(
-                snapshot_storages.max_slot_inclusive(),
-                config,
-            ),
-            snapshot_storages,
+        let oldest_non_ancient_slot = self.get_oldest_non_ancient_slot_for_hash_calc_scan(
+            snapshot_storages.max_slot_inclusive(),
+            config,
         );
+        let splitter = SplitAncientStorages::new(oldest_non_ancient_slot, snapshot_storages);
 
         stats.scan_chunks = splitter.chunk_count;
         (0..splitter.chunk_count)
@@ -7152,9 +7150,8 @@ impl AccountsDb {
                 let mut init_accum = true;
                 // load from cache failed, so create the cache file for this chunk
                 for (slot, storage) in snapshot_storages.iter_range(&range_this_chunk) {
-                    let mut ancient = false;
+                    let ancient = slot < oldest_non_ancient_slot;
                     let (_, scan_us) = measure_us!(if let Some(storage) = storage {
-                        ancient = is_ancient(&storage.accounts);
                         if init_accum {
                             let range = bin_range.end - bin_range.start;
                             scanner.init_accum(range);
