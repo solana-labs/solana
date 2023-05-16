@@ -413,8 +413,12 @@ struct LedgerStorageStats {
 }
 
 impl LedgerStorageStats {
-    fn update_and_maybe_report(&self) {
+    fn increment_num_queries(&self) {
         self.num_queries.fetch_add(1, Ordering::Relaxed);
+        self.maybe_report();
+    }
+
+    fn maybe_report(&self) {
         if self.last_report.should_update(METRICS_REPORT_INTERVAL_MS) {
             datapoint_debug!(
                 "storage-bigtable-query",
@@ -498,7 +502,7 @@ impl LedgerStorage {
     /// Return the available slot that contains a block
     pub async fn get_first_available_block(&self) -> Result<Option<Slot>> {
         trace!("LedgerStorage::get_first_available_block request received");
-        self.stats.update_and_maybe_report();
+        self.stats.increment_num_queries();
         let mut bigtable = self.connection.client();
         let blocks = bigtable.get_row_keys("blocks", None, None, 1).await?;
         if blocks.is_empty() {
@@ -517,7 +521,7 @@ impl LedgerStorage {
             start_slot,
             limit
         );
-        self.stats.update_and_maybe_report();
+        self.stats.increment_num_queries();
         let mut bigtable = self.connection.client();
         let blocks = bigtable
             .get_row_keys(
@@ -539,7 +543,7 @@ impl LedgerStorage {
             "LedgerStorage::get_confirmed_blocks_with_data request received: {:?}",
             slots
         );
-        self.stats.update_and_maybe_report();
+        self.stats.increment_num_queries();
         let mut bigtable = self.connection.client();
         let row_keys = slots.iter().copied().map(slot_to_blocks_key);
         let data = bigtable
@@ -566,7 +570,7 @@ impl LedgerStorage {
             "LedgerStorage::get_confirmed_block request received: {:?}",
             slot
         );
-        self.stats.update_and_maybe_report();
+        self.stats.increment_num_queries();
         let mut bigtable = self.connection.client();
         let block_cell_data = bigtable
             .get_protobuf_or_bincode_cell::<StoredConfirmedBlock, generated::ConfirmedBlock>(
@@ -592,7 +596,7 @@ impl LedgerStorage {
             "LedgerStorage::confirmed_block_exists request received: {:?}",
             slot
         );
-        self.stats.update_and_maybe_report();
+        self.stats.increment_num_queries();
         let mut bigtable = self.connection.client();
 
         let block_exists = bigtable
@@ -607,7 +611,7 @@ impl LedgerStorage {
             "LedgerStorage::get_signature_status request received: {:?}",
             signature
         );
-        self.stats.update_and_maybe_report();
+        self.stats.increment_num_queries();
         let mut bigtable = self.connection.client();
         let transaction_info = bigtable
             .get_bincode_cell::<TransactionInfo>("tx", signature.to_string())
@@ -628,7 +632,7 @@ impl LedgerStorage {
             "LedgerStorage::get_confirmed_transactions request received: {:?}",
             signatures
         );
-        self.stats.update_and_maybe_report();
+        self.stats.increment_num_queries();
         let mut bigtable = self.connection.client();
 
         // Fetch transactions info
@@ -690,7 +694,7 @@ impl LedgerStorage {
             "LedgerStorage::get_confirmed_transaction request received: {:?}",
             signature
         );
-        self.stats.update_and_maybe_report();
+        self.stats.increment_num_queries();
         let mut bigtable = self.connection.client();
 
         // Figure out which block the transaction is located in
@@ -750,7 +754,7 @@ impl LedgerStorage {
             "LedgerStorage::get_confirmed_signatures_for_address request received: {:?}",
             address
         );
-        self.stats.update_and_maybe_report();
+        self.stats.increment_num_queries();
         let mut bigtable = self.connection.client();
         let address_prefix = format!("{address}/");
 
