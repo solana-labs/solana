@@ -41,7 +41,7 @@ use {
         account_overrides::AccountOverrides,
         account_rent_state::RentState,
         accounts::{
-            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot,
+            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot, RewardInterval,
             TransactionLoadResult,
         },
         accounts_db::{
@@ -4544,6 +4544,7 @@ impl Bank {
             &self.feature_set,
             &self.fee_structure,
             account_overrides,
+            RewardInterval::OutsideInterval,
             &program_accounts_map,
             &programs_loaded_for_tx_batch.borrow(),
         );
