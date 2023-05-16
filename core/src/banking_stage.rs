@@ -52,9 +52,10 @@ mod packet_receiver;
 #[allow(dead_code)]
 mod scheduler_messages;
 
+mod consume_worker;
+mod forward_worker;
 #[allow(dead_code)]
 mod thread_aware_account_locks;
-mod worker;
 
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 6;

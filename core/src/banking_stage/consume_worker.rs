@@ -1,9 +1,7 @@
 use {
     super::{
         consumer::{Consumer, ExecuteAndCommitTransactionsOutput, ProcessTransactionBatchOutput},
-        forwarder::Forwarder,
-        scheduler_messages::{ConsumeWork, FinishedConsumeWork, FinishedForwardWork, ForwardWork},
-        ForwardOption,
+        scheduler_messages::{ConsumeWork, FinishedConsumeWork},
     },
     crossbeam_channel::{select, Receiver, RecvError, SendError, Sender},
     solana_poh::leader_bank_notifier::LeaderBankNotifier,
@@ -13,66 +11,48 @@ use {
 };
 
 #[derive(Debug, Error)]
-pub enum WorkerError {
+pub enum ConsumeWorkerError {
     #[error("Failed to receive work from scheduler: {0}")]
     Recv(#[from] RecvError),
     #[error("Failed to send finalized consume work to scheduler: {0}")]
-    ConsumedSend(#[from] SendError<FinishedConsumeWork>),
-    #[error("Failed to send finalized forward work to scheduler: {0}")]
-    ForwardedSend(#[from] SendError<FinishedForwardWork>),
+    Send(#[from] SendError<FinishedConsumeWork>),
 }
 
-pub(crate) struct Worker {
+pub(crate) struct ConsumeWorker {
     consume_receiver: Receiver<ConsumeWork>,
     consumer: Consumer,
     consumed_sender: Sender<FinishedConsumeWork>,
-
-    forward_receiver: Receiver<ForwardWork>,
-    forward_option: ForwardOption,
-    forwarder: Forwarder,
-    forwarded_sender: Sender<FinishedForwardWork>,
 
     leader_bank_notifier: Arc<LeaderBankNotifier>,
 }
 
 #[allow(dead_code)]
-impl Worker {
+impl ConsumeWorker {
     pub fn new(
         consume_receiver: Receiver<ConsumeWork>,
         consumer: Consumer,
         consumed_sender: Sender<FinishedConsumeWork>,
-        forward_receiver: Receiver<ForwardWork>,
-        forward_option: ForwardOption,
-        forwarder: Forwarder,
-        forwarded_sender: Sender<FinishedForwardWork>,
         leader_bank_notifier: Arc<LeaderBankNotifier>,
     ) -> Self {
         Self {
             consume_receiver,
             consumer,
             consumed_sender,
-            forward_receiver,
-            forward_option,
-            forwarder,
-            forwarded_sender,
             leader_bank_notifier,
         }
     }
 
-    pub fn run(self) -> Result<(), WorkerError> {
+    pub fn run(self) -> Result<(), ConsumeWorkerError> {
         loop {
             select! {
                 recv(self.consume_receiver) -> work => {
                     self.consume_loop(work?)?;
                 },
-                recv(self.forward_receiver) -> work => {
-                    self.forward_loop(work?)?;
-                },
             }
         }
     }
 
-    fn consume_loop(&self, work: ConsumeWork) -> Result<(), WorkerError> {
+    fn consume_loop(&self, work: ConsumeWork) -> Result<(), ConsumeWorkerError> {
         let Some(mut bank) = self.get_consume_bank() else {
             return self.retry_drain(work);
         };
@@ -92,7 +72,7 @@ impl Worker {
     }
 
     /// Consume a single batch.
-    fn consume(&self, bank: &Arc<Bank>, mut work: ConsumeWork) -> Result<(), WorkerError> {
+    fn consume(&self, bank: &Arc<Bank>, mut work: ConsumeWork) -> Result<(), ConsumeWorkerError> {
         let ProcessTransactionBatchOutput {
             execute_and_commit_transactions_output:
                 ExecuteAndCommitTransactionsOutput {
@@ -121,7 +101,7 @@ impl Worker {
     }
 
     /// Retry current batch and all outstanding batches.
-    fn retry_drain(&self, work: ConsumeWork) -> Result<(), WorkerError> {
+    fn retry_drain(&self, work: ConsumeWork) -> Result<(), ConsumeWorkerError> {
         for work in try_drain_iter(work, &self.consume_receiver) {
             self.retry(work)?;
         }
@@ -129,39 +109,12 @@ impl Worker {
     }
 
     /// Send transactions back to scheduler as retryable.
-    fn retry(&self, work: ConsumeWork) -> Result<(), WorkerError> {
+    fn retry(&self, work: ConsumeWork) -> Result<(), ConsumeWorkerError> {
         let retryable_indexes = (0..work.transactions.len()).collect();
         self.consumed_sender.send(FinishedConsumeWork {
             work,
             retryable_indexes,
         })?;
-        Ok(())
-    }
-
-    fn forward_loop(&self, work: ForwardWork) -> Result<(), WorkerError> {
-        for work in try_drain_iter(work, &self.forward_receiver) {
-            let (res, _num_packets, _forward_us, _leader_pubkey) = self.forwarder.forward_packets(
-                &self.forward_option,
-                work.packets.iter().map(|p| p.original_packet()),
-            );
-            match res {
-                Ok(()) => self.forwarded_sender.send(FinishedForwardWork {
-                    work,
-                    successful: true,
-                })?,
-                Err(_err) => return self.failed_forward_drain(work),
-            };
-        }
-        Ok(())
-    }
-
-    fn failed_forward_drain(&self, work: ForwardWork) -> Result<(), WorkerError> {
-        for work in try_drain_iter(work, &self.forward_receiver) {
-            self.forwarded_sender.send(FinishedForwardWork {
-                work,
-                successful: false,
-            })?;
-        }
         Ok(())
     }
 }
@@ -180,12 +133,8 @@ mod tests {
             banking_stage::{
                 committer::Committer,
                 scheduler_messages::{TransactionBatchId, TransactionId},
-                tests::{
-                    create_slow_genesis_config, new_test_cluster_info, sanitize_transactions,
-                    simulate_poh,
-                },
+                tests::{create_slow_genesis_config, sanitize_transactions, simulate_poh},
             },
-            immutable_deserialized_packet::ImmutableDeserializedPacket,
             qos_service::QosService,
         },
         crossbeam_channel::unbounded,
@@ -193,7 +142,6 @@ mod tests {
             blockstore::Blockstore, genesis_utils::GenesisConfigInfo,
             get_tmp_ledger_path_auto_delete, leader_schedule_cache::LeaderScheduleCache,
         },
-        solana_perf::packet::to_packet_batches,
         solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
         solana_runtime::{
             bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
@@ -224,11 +172,9 @@ mod tests {
 
         consume_sender: Sender<ConsumeWork>,
         consumed_receiver: Receiver<FinishedConsumeWork>,
-        forward_sender: Sender<ForwardWork>,
-        forwarded_receiver: Receiver<FinishedForwardWork>,
     }
 
-    fn setup_test_frame() -> (TestFrame, Worker) {
+    fn setup_test_frame() -> (TestFrame, ConsumeWorker) {
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
@@ -265,28 +211,12 @@ mod tests {
         );
         let consumer = Consumer::new(committer, recorder, QosService::new(1), None);
 
-        let (_local_node, cluster_info) = new_test_cluster_info(None);
-        let cluster_info = Arc::new(cluster_info);
-        let forwarder = Forwarder::new(
-            poh_recorder.clone(),
-            bank_forks,
-            cluster_info,
-            Arc::default(),
-            Arc::default(),
-        );
-
         let (consume_sender, consume_receiver) = unbounded();
-        let (forward_sender, forward_receiver) = unbounded();
         let (consumed_sender, consumed_receiver) = unbounded();
-        let (forwarded_sender, forwarded_receiver) = unbounded();
-        let worker = Worker::new(
+        let worker = ConsumeWorker::new(
             consume_receiver,
             consumer,
             consumed_sender,
-            forward_receiver,
-            ForwardOption::ForwardTransaction,
-            forwarder,
-            forwarded_sender,
             poh_recorder.read().unwrap().new_leader_bank_notifier(),
         );
 
@@ -302,8 +232,6 @@ mod tests {
                 _replay_vote_receiver: replay_vote_receiver,
                 consume_sender,
                 consumed_receiver,
-                forward_sender,
-                forwarded_receiver,
             },
             worker,
         )
@@ -567,51 +495,6 @@ mod tests {
         assert_eq!(consumed.work.ids, vec![id2]);
         assert_eq!(consumed.work.max_age_slots, vec![bank.slot()]);
         assert_eq!(consumed.retryable_indexes, Vec::<usize>::new());
-
-        drop(test_frame);
-        let _ = worker_thread.join().unwrap();
-    }
-
-    #[test]
-    fn test_worker_forward_simple() {
-        let (test_frame, worker) = setup_test_frame();
-        let TestFrame {
-            mint_keypair,
-            genesis_config,
-            forward_sender,
-            forwarded_receiver,
-            ..
-        } = &test_frame;
-        let worker_thread = std::thread::spawn(move || worker.run());
-
-        let pubkey1 = Pubkey::new_unique();
-        let pubkey2 = Pubkey::new_unique();
-
-        let txs = vec![
-            system_transaction::transfer(mint_keypair, &pubkey1, 2, genesis_config.hash()),
-            system_transaction::transfer(mint_keypair, &pubkey2, 2, genesis_config.hash()),
-        ];
-
-        let id1 = TransactionId::new(1);
-        let id2 = TransactionId::new(0);
-
-        let packets = to_packet_batches(&txs, 2);
-        assert_eq!(packets.len(), 1);
-        let packets = packets[0]
-            .into_iter()
-            .cloned()
-            .map(|p| ImmutableDeserializedPacket::new(p).unwrap())
-            .map(Arc::new)
-            .collect();
-        forward_sender
-            .send(ForwardWork {
-                packets,
-                ids: vec![id1, id2],
-            })
-            .unwrap();
-        let forwarded = forwarded_receiver.recv().unwrap();
-        assert_eq!(forwarded.work.ids, vec![id1, id2]);
-        assert!(forwarded.successful);
 
         drop(test_frame);
         let _ = worker_thread.join().unwrap();
