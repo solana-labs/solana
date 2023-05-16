@@ -37,7 +37,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
-        let bank = receive_results.bank.clone();
+        let bank = receive_results.bank;
         let last_tick_height = receive_results.last_tick_height;
 
         let next_shred_index = blockstore
