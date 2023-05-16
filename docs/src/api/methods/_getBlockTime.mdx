@@ -34,7 +34,6 @@ in a set of recent blocks recorded on the ledger.
 ### Result:
 
 - `<i64>` - estimated production time, as Unix timestamp (seconds since the Unix epoch)
-- `<null>` - timestamp is not available for this block
 
 </CodeParams>
 
@@ -54,10 +53,25 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### Response:
 
+When a block time is available:
+
 ```json
 {
   "jsonrpc": "2.0",
   "result": 1574721591,
+  "id": 1
+}
+```
+
+When a block time is not available:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32004,
+    "message": "Block not available for slot 150"
+  },
   "id": 1
 }
 ```
