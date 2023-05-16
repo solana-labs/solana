@@ -335,7 +335,7 @@ pub struct LoadedPrograms {
     pub stats: Stats,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct LoadedProgramsForTxBatch {
     /// Pubkey is the address of a program.
     /// LoadedProgram is the corresponding program entry valid for the slot in which a transaction is being executed.
