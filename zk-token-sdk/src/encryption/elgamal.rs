@@ -427,6 +427,45 @@ impl ElGamalSecretKey {
     }
 }
 
+impl EncodableKey for ElGamalSecretKey {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+        let bytes: Vec<u8> = serde_json::from_reader(reader)?;
+        Self::from_bytes(&bytes).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::Other, "Invalid ElGamalSecretKey").into()
+        })
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+        let bytes = self.to_bytes();
+        let json = serde_json::to_string(&bytes.to_vec())?;
+        writer.write_all(&json.clone().into_bytes())?;
+        Ok(json)
+    }
+}
+
+impl SeedDerivable for ElGamalSecretKey {
+    fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+        Self::from_seed(seed)
+    }
+
+    fn from_seed_and_derivation_path(
+        _seed: &[u8],
+        _derivation_path: Option<DerivationPath>,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        Err(ElGamalError::DerivationMethodNotSupported.into())
+    }
+
+    fn from_seed_phrase_and_passphrase(
+        seed_phrase: &str,
+        passphrase: &str,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        Self::from_seed(&generate_seed_from_seed_phrase_and_passphrase(
+            seed_phrase,
+            passphrase,
+        ))
+    }
+}
+
 impl From<Scalar> for ElGamalSecretKey {
     fn from(scalar: Scalar) -> ElGamalSecretKey {
         ElGamalSecretKey(scalar)
