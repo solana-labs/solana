@@ -1170,7 +1170,8 @@ impl ProgramTestContext {
         Ok(blockhash)
     }
 
-    pub fn add_hard_fork(&mut self, hard_fork_slot: Slot) {
+    /// record a hard fork slot in working bank; should be in the past
+    pub fn register_hard_fork(&mut self, hard_fork_slot: Slot) {
         let bank_forks = self.bank_forks.write().unwrap();
         let hard_forks = bank_forks.working_bank().hard_forks();
         let mut write = hard_forks.write().unwrap();
