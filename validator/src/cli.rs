@@ -1093,14 +1093,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Specify the configuration file for the Geyser plugin."),
         )
         .arg(
-            Arg::with_name("halt_on_known_validators_accounts_hash_mismatch")
-                .alias("halt-on-trusted-validators-accounts-hash-mismatch")
-                .long("halt-on-known-validators-accounts-hash-mismatch")
-                .requires("known_validators")
-                .takes_value(false)
-                .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
-        )
-        .arg(
             Arg::with_name("snapshot_archive_format")
                 .long("snapshot-archive-format")
                 .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older
@@ -1731,6 +1723,14 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         Arg::with_name("enable_quic_servers")
             .long("enable-quic-servers"),
         usage_warning: "The quic server is now enabled by default.",
+    );
+    add_arg!(
+        Arg::with_name("halt_on_known_validators_accounts_hash_mismatch")
+            .alias("halt-on-trusted-validators-accounts-hash-mismatch")
+            .long("halt-on-known-validators-accounts-hash-mismatch")
+            .requires("known_validators")
+            .takes_value(false)
+            .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
     );
     add_arg!(Arg::with_name("incremental_snapshots")
         .long("incremental-snapshots")

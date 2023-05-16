@@ -265,8 +265,6 @@ pub fn load_bank_forks(
         exit.clone(),
         cluster_info,
         None,
-        false,
-        None,
         SnapshotConfig::new_load_only(),
     );
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
