@@ -533,7 +533,13 @@ fn is_valid_genesis_archive_entry<'a>(
         (["rocksdb_fifo"], Directory) => UnpackPath::Ignore,
         (["rocksdb_fifo", _], GNUSparse) => UnpackPath::Ignore,
         (["rocksdb_fifo", _], Regular) => UnpackPath::Ignore,
-        _ => UnpackPath::Invalid,
+        (parts, _kind) => {
+            // e.g. "._rocksdb"
+            if parts.first().unwrap().starts_with("._") {
+                return UnpackPath::Ignore;
+            }
+            UnpackPath::Invalid
+        },
     }
 }
 

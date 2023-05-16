@@ -1560,6 +1560,7 @@ mod tests {
         );
         for ka in ka.iter() {
             accounts.store_for_tests(0, &ka.0, &ka.1);
+            println!("store for test {} {:?}", ka.0.pubkey(), ka.1);
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();

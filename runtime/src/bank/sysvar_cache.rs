@@ -7,7 +7,8 @@ impl Bank {
     pub(crate) fn fill_missing_sysvar_cache_entries(&self) {
         let mut sysvar_cache = self.sysvar_cache.write().unwrap();
         sysvar_cache.fill_missing_entries(|pubkey, callback| {
-            if let Some(account) = self.get_account_with_fixed_root(pubkey) {
+            let acc = self.get_account_with_fixed_root(pubkey);
+            if let Some(account) = acc {
                 callback(account.data());
             }
         });

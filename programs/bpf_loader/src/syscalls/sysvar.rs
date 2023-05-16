@@ -1,3 +1,4 @@
+use solana_rbpf::error::EbpfError;
 use {super::*, crate::declare_syscall};
 
 fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
@@ -105,6 +106,28 @@ declare_syscall!(
     ) -> Result<u64, Error> {
         get_sysvar(
             invoke_context.get_sysvar_cache().get_rent(),
+            var_addr,
+            invoke_context.get_check_aligned(),
+            memory_mapping,
+            invoke_context,
+        )
+    }
+);
+
+declare_syscall!(
+    /// Get a Last Restart Slot sysvar
+    SyscallGetLastRestartSlotSysvar,
+    fn inner_call(
+        invoke_context: &mut InvokeContext,
+        var_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, Error> {
+        get_sysvar(
+            invoke_context.get_sysvar_cache().get_last_restart_slot(),
             var_addr,
             invoke_context.get_check_aligned(),
             memory_mapping,

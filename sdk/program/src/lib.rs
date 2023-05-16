@@ -529,6 +529,7 @@ pub mod system_program;
 pub mod sysvar;
 pub mod vote;
 pub mod wasm;
+pub mod last_restart_slot;
 
 #[cfg(target_os = "solana")]
 pub use solana_sdk_macro::wasm_bindgen_stub as wasm_bindgen;
