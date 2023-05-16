@@ -15,8 +15,8 @@ use {
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE,
         validator::{
-            is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod,
-            GeneratorConfig, Validator, ValidatorConfig, ValidatorStartProgress,
+            is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod, Validator,
+            ValidatorConfig, ValidatorStartProgress,
         },
     },
     solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},
@@ -1576,14 +1576,6 @@ pub fn main() {
         BlockProductionMethod
     )
     .unwrap_or_default();
-
-    validator_config.generator_config =
-        matches
-            .value_of("generate_blocks_with_accounts")
-            .map(|path| GeneratorConfig {
-                accounts_path: path.to_string(),
-                starting_keypairs: Arc::new(vec![]),
-            });
 
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {
