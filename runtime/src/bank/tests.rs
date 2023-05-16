@@ -173,8 +173,8 @@ fn new_execution_result(
             executed_units: 0,
             accounts_data_len_delta: 0,
         },
-        programs_modified_by_tx: LoadedProgramsForTxBatch::default(),
-        programs_updated_only_for_global_cache: LoadedProgramsForTxBatch::default(),
+        programs_modified_by_tx: Box::<LoadedProgramsForTxBatch>::default(),
+        programs_updated_only_for_global_cache: Box::<LoadedProgramsForTxBatch>::default(),
     }
 }
 
