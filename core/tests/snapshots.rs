@@ -1002,8 +1002,6 @@ fn test_snapshots_with_background_services(
         exit.clone(),
         cluster_info,
         None,
-        false,
-        None,
         snapshot_test_config.snapshot_config.clone(),
     );
 

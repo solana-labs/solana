@@ -4,10 +4,8 @@
 use {
     common::*,
     log::*,
-    rand::{thread_rng, Rng},
     serial_test::serial,
     solana_core::validator::ValidatorConfig,
-    solana_gossip::gossip_service::discover_cluster,
     solana_ledger::{
         ancestor_iterator::AncestorIterator, blockstore::Blockstore, leader_schedule::FixedSchedule,
     },
@@ -18,9 +16,8 @@ use {
         validator_configs::*,
     },
     solana_sdk::{
-        client::SyncClient,
         clock::Slot,
-        hash::{extend_and_hash, Hash},
+        hash::Hash,
         poh_config::PohConfig,
         signature::{Keypair, Signer},
     },
@@ -72,119 +69,6 @@ fn test_cluster_partition_1_1_1() {
         None,
         vec![],
     )
-}
-
-#[test]
-#[serial]
-fn test_consistency_halt() {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
-    let snapshot_interval_slots = 20;
-    let num_account_paths = 1;
-
-    // Create cluster with a leader producing bad snapshot hashes.
-    let mut leader_snapshot_test_config =
-        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
-
-    // Prepare fault hash injection for testing.
-    leader_snapshot_test_config
-        .validator_config
-        .accounts_hash_fault_injector = Some(|hash: &Hash, slot: Slot| {
-        const FAULT_INJECTION_RATE_SLOTS: u64 = 40; // Inject a fault hash every 40 slots
-        (slot % FAULT_INJECTION_RATE_SLOTS == 0).then(|| {
-            let rand = thread_rng().gen_range(0, 10);
-            let fault_hash = extend_and_hash(hash, &[rand]);
-            warn!("inserting fault at slot: {}", slot);
-            fault_hash
-        })
-    });
-
-    let validator_stake = DEFAULT_NODE_STAKE;
-    let mut config = ClusterConfig {
-        node_stakes: vec![validator_stake],
-        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
-        validator_configs: vec![leader_snapshot_test_config.validator_config],
-        ..ClusterConfig::default()
-    };
-
-    let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
-
-    sleep(Duration::from_millis(5000));
-    let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip().unwrap(),
-        1,
-        SocketAddrSpace::Unspecified,
-    )
-    .unwrap();
-    info!("num_nodes: {}", cluster_nodes.len());
-
-    // Add a validator with the leader as trusted, it should halt when it detects
-    // mismatch.
-    let mut validator_snapshot_test_config =
-        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
-
-    let mut known_validators = HashSet::new();
-    known_validators.insert(*cluster_nodes[0].pubkey());
-
-    validator_snapshot_test_config
-        .validator_config
-        .known_validators = Some(known_validators);
-    validator_snapshot_test_config
-        .validator_config
-        .halt_on_known_validators_accounts_hash_mismatch = true;
-
-    warn!("adding a validator");
-    cluster.add_validator(
-        &validator_snapshot_test_config.validator_config,
-        validator_stake,
-        Arc::new(Keypair::new()),
-        None,
-        SocketAddrSpace::Unspecified,
-    );
-    let num_nodes = 2;
-    assert_eq!(
-        discover_cluster(
-            &cluster.entry_point_info.gossip().unwrap(),
-            num_nodes,
-            SocketAddrSpace::Unspecified
-        )
-        .unwrap()
-        .len(),
-        num_nodes
-    );
-
-    // Check for only 1 node on the network.
-    let mut encountered_error = false;
-    loop {
-        let discover = discover_cluster(
-            &cluster.entry_point_info.gossip().unwrap(),
-            2,
-            SocketAddrSpace::Unspecified,
-        );
-        match discover {
-            Err(_) => {
-                encountered_error = true;
-                break;
-            }
-            Ok(nodes) => {
-                if nodes.len() < 2 {
-                    encountered_error = true;
-                    break;
-                }
-                info!("checking cluster for fewer nodes.. {:?}", nodes.len());
-            }
-        }
-        let client = cluster
-            .get_validator_client(cluster.entry_point_info.pubkey())
-            .unwrap();
-        if let Ok(slot) = client.get_slot() {
-            if slot > 210 {
-                break;
-            }
-            info!("slot: {}", slot);
-        }
-        sleep(Duration::from_millis(1000));
-    }
-    assert!(encountered_error);
 }
 
 // Cluster needs a supermajority to remain, so the minimum size for this test is 4

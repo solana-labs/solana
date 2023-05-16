@@ -195,8 +195,6 @@ impl BackgroundServices {
             exit.clone(),
             cluster_info,
             None,
-            false,
-            None,
             snapshot_config.clone(),
         );
 
