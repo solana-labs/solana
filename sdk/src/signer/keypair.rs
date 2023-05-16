@@ -5,7 +5,7 @@ use {
         derivation_path::DerivationPath,
         pubkey::Pubkey,
         signature::Signature,
-        signer::{EncodableKey, EncodableKeypair, Signer, SignerError},
+        signer::{EncodableKey, EncodableKeypair, SeedDerivable, Signer, SignerError},
     },
     ed25519_dalek::Signer as DalekSigner,
     ed25519_dalek_bip32::Error as Bip32Error,
@@ -120,7 +120,9 @@ impl EncodableKey for Keypair {
     fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
         write_keypair(self, writer)
     }
+}
 
+impl SeedDerivable for Keypair {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
         keypair_from_seed(seed)
     }
