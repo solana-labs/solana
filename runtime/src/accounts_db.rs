@@ -142,7 +142,7 @@ const SHRINK_COLLECT_CHUNK_SIZE: usize = 50;
 
 /// temporary enum during feature activation of
 /// ignore slot when calculating an account hash #28420
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IncludeSlotInHash {
     /// this is the status quo, prior to feature activation
     /// INCLUDE the slot in the account hash calculation
