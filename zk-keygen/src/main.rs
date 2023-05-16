@@ -60,7 +60,7 @@ fn app(crate_version: &str) -> Command {
                         .short('t')
                         .long("key-type")
                         .takes_value(true)
-                        .possible_values(["elgamal", "symmetric"])
+                        .possible_values(["elgamal", "aes128"])
                         .value_name("TYPE")
                         .required(true)
                         .help("The type of encryption key")
@@ -103,7 +103,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
         ("new", matches) => {
             let key_type = match matches.value_of("key_type").unwrap() {
                 "elgamal" => KeyType::ElGamal,
-                "symmetric" => KeyType::Symmetric,
+                "aes128" => KeyType::Aes128,
                 _ => unreachable!(),
             };
 
@@ -153,15 +153,15 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                         );
                     }
                 }
-                KeyType::Symmetric => {
+                KeyType::Aes128 => {
                     let silent = matches.is_present("silent");
                     if !silent {
-                        println!("Generating a new symmetric encryption key");
+                        println!("Generating a new AES128 encryption key");
                     }
 
-                    let symmetric_key = AeKey::from_seed(seed.as_bytes())?;
+                    let aes_key = AeKey::from_seed(seed.as_bytes())?;
                     if let Some(outfile) = outfile {
-                        output_encodable_key(&symmetric_key, outfile, "new symmetric key")
+                        output_encodable_key(&aes_key, outfile, "new AES128 key")
                             .map_err(|err| format!("Unable to write {outfile}: {err}"))?;
                     }
 
@@ -169,7 +169,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                         let phrase: &str = mnemonic.phrase();
                         let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
                         println!(
-                            "{}\nSave this seed phrase{} to recover your new symmetric key:\n{}\n{}",
+                            "{}\nSave this seed phrase{} to recover your new AES128 key:\n{}\n{}",
                             &divider, passphrase_message, phrase, &divider
                         );
                     }
@@ -184,14 +184,14 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
 enum KeyType {
     ElGamal,
-    Symmetric,
+    Aes128,
 }
 
 impl KeyType {
     fn default_file_name(&self) -> String {
         match self {
             KeyType::ElGamal => "elgamal.json".to_string(),
-            KeyType::Symmetric => "symmetric.json".to_string(),
+            KeyType::Aes128 => "aes128.json".to_string(),
         }
     }
 }
@@ -293,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    fn test_new_symmetric() {
+    fn test_new_aes128() {
         let outfile_dir = tempdir().unwrap();
         // use `Pubkey::new_unique()` to generate names for temporary key files
         let outfile_path = tmp_outfile_path(&outfile_dir, &Pubkey::new_unique().to_string());
@@ -303,7 +303,7 @@ mod tests {
             "solana-zk-keygen",
             "new",
             "--key-type",
-            "symmetric",
+            "aes128",
             "--outfile",
             &outfile_path,
             "--no-bip39-passphrase",
@@ -315,7 +315,7 @@ mod tests {
             "solana-zk-keygen",
             "new",
             "--key-type",
-            "symmetric",
+            "aes128",
             "--outfile",
             &outfile_path,
             "--no-bip39-passphrase",
@@ -331,7 +331,7 @@ mod tests {
             "solana-keygen",
             "new",
             "--key-type",
-            "symmetric",
+            "aes128",
             "--no-bip39-passphrase",
             "--no-outfile",
         ])
@@ -356,7 +356,7 @@ mod tests {
                     "solana-keygen",
                     "new",
                     "--key-type",
-                    "symmetric",
+                    "aes128",
                     "--no-outfile",
                     "--no-bip39-passphrase",
                     "--language",
