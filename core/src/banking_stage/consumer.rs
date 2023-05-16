@@ -417,7 +417,7 @@ impl Consumer {
                 } else {
                     let lookup_tables = tx.message().message_address_table_lookups();
                     if !lookup_tables.is_empty() {
-                        bank.load_addresses(tx.message().message_address_table_lookups())?;
+                        bank.load_addresses(lookup_tables)?;
                     }
                     Ok(())
                 }
