@@ -7,7 +7,7 @@ use {
         *,
     },
     crate::{
-        accounts::AccountAddressFilter,
+        accounts::{AccountAddressFilter, RewardInterval},
         accounts_background_service::{PrunedBanksRequestHandler, SendDroppedBankCallback},
         accounts_db::{AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_RATIO},
         accounts_index::{
@@ -11333,6 +11333,7 @@ fn test_rent_state_list_len() {
         &bank.feature_set,
         &FeeStructure::default(),
         None,
+        RewardInterval::OutsideInterval,
         &HashMap::new(),
         &LoadedProgramsForTxBatch::default(),
     );
