@@ -874,7 +874,7 @@ impl AbiExample for OptionalDropCallback {
 }
 
 #[derive(AbiExample, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct StartBlockHeightAndRewards {
+pub(crate) struct StartBlockHeightAndRewards {
     /// the block height of the parent of the slot at which rewards distribution began
     pub(crate) parent_start_block_height: u64,
     /// calculated epoch rewards pending distribution
@@ -883,7 +883,7 @@ pub struct StartBlockHeightAndRewards {
 
 /// Represent whether bank is in the reward phase or not.
 #[derive(AbiExample, AbiEnumVisitor, Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub enum EpochRewardStatus {
+pub(crate) enum EpochRewardStatus {
     /// this bank is in the reward phase.
     /// Contents are the start point for epoch reward calculation,
     /// i.e. parent_slot and parent_block height for the starting
