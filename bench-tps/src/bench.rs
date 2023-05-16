@@ -4,7 +4,6 @@ use {
         cli::{Config, InstructionPaddingConfig},
         perf_utils::{sample_txs, SampleStats},
         send_batch::*,
-        spl_convert::FromOtherSolana,
     },
     log::*,
     rand::distributions::{Distribution, Uniform},
@@ -577,15 +576,13 @@ fn transfer_with_compute_unit_price_and_padding(
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
     let instruction = if let Some(instruction_padding_config) = instruction_padding_config {
-        FromOtherSolana::from(
-            wrap_instruction(
-                FromOtherSolana::from(instruction_padding_config.program_id),
-                FromOtherSolana::from(transfer_instruction),
-                vec![],
-                instruction_padding_config.data_size,
-            )
-            .expect("Could not create padded instruction"),
+        wrap_instruction(
+            instruction_padding_config.program_id,
+            transfer_instruction,
+            vec![],
+            instruction_padding_config.data_size,
         )
+        .expect("Could not create padded instruction")
     } else {
         transfer_instruction
     };
@@ -672,15 +669,13 @@ fn nonced_transfer_with_padding(
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
     let instruction = if let Some(instruction_padding_config) = instruction_padding_config {
-        FromOtherSolana::from(
-            wrap_instruction(
-                FromOtherSolana::from(instruction_padding_config.program_id),
-                FromOtherSolana::from(transfer_instruction),
-                vec![],
-                instruction_padding_config.data_size,
-            )
-            .expect("Could not create padded instruction"),
+        wrap_instruction(
+            instruction_padding_config.program_id,
+            transfer_instruction,
+            vec![],
+            instruction_padding_config.data_size,
         )
+        .expect("Could not create padded instruction")
     } else {
         transfer_instruction
     };
