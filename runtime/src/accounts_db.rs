@@ -475,7 +475,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: true,
-    create_ancient_storage: CreateAncientStorage::Append,
+    create_ancient_storage: CreateAncientStorage::Pack,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -486,7 +486,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: false,
-    create_ancient_storage: CreateAncientStorage::Append,
+    create_ancient_storage: CreateAncientStorage::Pack,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -2380,7 +2380,7 @@ impl AccountsDb {
         AccountsDb {
             assert_stakes_cache_consistency: false,
             bank_progress: BankCreationFreezingProgress::default(),
-            create_ancient_storage: CreateAncientStorage::Append,
+            create_ancient_storage: CreateAncientStorage::Pack,
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
