@@ -155,6 +155,15 @@ pub trait EncodableKey: Sized {
     ) -> Result<Self, Box<dyn error::Error>>;
 }
 
+/// The `EncodableKeypair` trait extends `EncodableKey` for asymmetric keypairs, i.e. have
+/// associated public keys.
+pub trait EncodableKeypair: EncodableKey {
+    type Pubkey: ToString;
+
+    /// Returns an encodable representation of the associated public key.
+    fn encodable_pubkey(&self) -> Self::Pubkey;
+}
+
 #[cfg(test)]
 mod tests {
     use {super::*, crate::signer::keypair::Keypair};

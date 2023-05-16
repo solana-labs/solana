@@ -30,7 +30,7 @@ use {
         pubkey::Pubkey,
         signature::{
             generate_seed_from_seed_phrase_and_passphrase, read_keypair, read_keypair_file,
-            EncodableKey, Keypair, NullSigner, Presigner, Signature, Signer,
+            EncodableKey, EncodableKeypair, Keypair, NullSigner, Presigner, Signature, Signer,
         },
     },
     solana_zk_token_sdk::encryption::{auth_encryption::AeKey, elgamal::ElGamalKeypair},
@@ -1004,21 +1004,9 @@ pub fn keypair_from_path(
 ) -> Result<Keypair, Box<dyn error::Error>> {
     let keypair = encodable_key_from_path(matches, path, keypair_name)?;
     if confirm_pubkey {
-        confirm_keypair_pubkey(&keypair);
+        confirm_encodable_keypair_pubkey(&keypair, "pubkey");
     }
     Ok(keypair)
-}
-
-fn confirm_keypair_pubkey(keypair: &Keypair) {
-    let pubkey = keypair.pubkey();
-    print!("Recovered pubkey `{pubkey:?}`. Continue? (y/n): ");
-    let _ignored = stdout().flush();
-    let mut input = String::new();
-    stdin().read_line(&mut input).expect("Unexpected input");
-    if input.to_lowercase().trim() != "y" {
-        println!("Exiting");
-        exit(1);
-    }
 }
 
 /// Loads an [ElGamalKeypair] from one of several possible sources.
@@ -1063,14 +1051,14 @@ pub fn elgamal_keypair_from_path(
 ) -> Result<ElGamalKeypair, Box<dyn error::Error>> {
     let elgamal_keypair = encodable_key_from_path(matches, path, elgamal_keypair_name)?;
     if confirm_pubkey {
-        confirm_elgamal_keypair_pubkey(&elgamal_keypair);
+        confirm_encodable_keypair_pubkey(&elgamal_keypair, "ElGamal pubkey");
     }
     Ok(elgamal_keypair)
 }
 
-fn confirm_elgamal_keypair_pubkey(keypair: &ElGamalKeypair) {
-    let elgamal_pubkey = keypair.public;
-    print!("Recovered ElGamal pubkey `{elgamal_pubkey:?}`. Continue? (y/n): ");
+fn confirm_encodable_keypair_pubkey<K: EncodableKeypair>(keypair: &K, pubkey_label: &str) {
+    let pubkey = keypair.encodable_pubkey().to_string();
+    println!("Recovered {pubkey_label} `{pubkey:?}`. Continue? (y/n): ");
     let _ignored = stdout().flush();
     let mut input = String::new();
     stdin().read_line(&mut input).expect("Unexpected input");
@@ -1175,7 +1163,7 @@ pub fn keypair_from_seed_phrase(
     let keypair: Keypair =
         encodable_key_from_seed_phrase(keypair_name, skip_validation, derivation_path, legacy)?;
     if confirm_pubkey {
-        confirm_keypair_pubkey(&keypair);
+        confirm_encodable_keypair_pubkey(&keypair, "pubkey");
     }
     Ok(keypair)
 }
@@ -1198,7 +1186,7 @@ pub fn elgamal_keypair_from_seed_phrase(
         legacy,
     )?;
     if confirm_pubkey {
-        confirm_elgamal_keypair_pubkey(&elgamal_keypair);
+        confirm_encodable_keypair_pubkey(&elgamal_keypair, "ElGamal pubkey");
     }
     Ok(elgamal_keypair)
 }

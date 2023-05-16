@@ -33,8 +33,8 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         signer::{
-            keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, Signer,
-            SignerError,
+            keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, EncodableKeypair,
+            Signer, SignerError,
         },
     },
     std::convert::TryInto,
@@ -270,6 +270,14 @@ impl EncodableKey for ElGamalKeypair {
             seed_phrase,
             passphrase,
         ))
+    }
+}
+
+impl EncodableKeypair for ElGamalKeypair {
+    type Pubkey = ElGamalPubkey;
+
+    fn encodable_pubkey(&self) -> Self::Pubkey {
+        self.public
     }
 }
 
