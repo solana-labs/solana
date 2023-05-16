@@ -215,6 +215,14 @@ mod tests {
     }
 
     #[test]
+    fn test_arguments() {
+        let solana_version = solana_version::version!();
+
+        // run clap internal assert statements
+        app(solana_version).debug_assert();
+    }
+
+    #[test]
     fn test_new_elgamal() {
         let outfile_dir = tempdir().unwrap();
         // use `Pubkey::new_unique()` to generate names for temporary key files
