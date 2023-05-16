@@ -17,21 +17,9 @@ pub enum WorkerError {
     #[error("Failed to receive work from scheduler: {0}")]
     Recv(#[from] RecvError),
     #[error("Failed to send finalized consume work to scheduler: {0}")]
-    ConsumedSend(SendError<FinishedConsumeWork>),
+    ConsumedSend(#[from] SendError<FinishedConsumeWork>),
     #[error("Failed to send finalized forward work to scheduler: {0}")]
-    ForwardedSend(SendError<FinishedForwardWork>),
-}
-
-impl From<SendError<FinishedConsumeWork>> for WorkerError {
-    fn from(err: SendError<FinishedConsumeWork>) -> Self {
-        Self::ConsumedSend(err)
-    }
-}
-
-impl From<SendError<FinishedForwardWork>> for WorkerError {
-    fn from(err: SendError<FinishedForwardWork>) -> Self {
-        Self::ForwardedSend(err)
-    }
+    ForwardedSend(#[from] SendError<FinishedForwardWork>),
 }
 
 pub(crate) struct Worker {
