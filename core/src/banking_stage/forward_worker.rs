@@ -154,7 +154,7 @@ mod tests {
         let (_local_node, cluster_info) = new_test_cluster_info(None);
         let cluster_info = Arc::new(cluster_info);
         let forwarder = Forwarder::new(
-            poh_recorder.clone(),
+            poh_recorder,
             bank_forks,
             cluster_info,
             Arc::default(),

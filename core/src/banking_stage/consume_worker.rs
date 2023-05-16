@@ -69,7 +69,7 @@ impl ConsumeWorker {
     }
 
     /// Consume a single batch.
-    fn consume(&self, bank: &Arc<Bank>, mut work: ConsumeWork) -> Result<(), ConsumeWorkerError> {
+    fn consume(&self, bank: &Arc<Bank>, work: ConsumeWork) -> Result<(), ConsumeWorkerError> {
         let ProcessTransactionBatchOutput {
             execute_and_commit_transactions_output:
                 ExecuteAndCommitTransactionsOutput {
@@ -80,7 +80,7 @@ impl ConsumeWorker {
         } = self.consumer.process_and_record_aged_transactions(
             bank,
             &work.transactions,
-            &mut work.max_age_slots,
+            &work.max_age_slots,
         );
 
         self.consumed_sender.send(FinishedConsumeWork {
@@ -146,7 +146,7 @@ mod tests {
         },
         solana_sdk::{
             genesis_config::GenesisConfig, poh_config::PohConfig, pubkey::Pubkey,
-            signature::Keypair, signer::Signer, system_transaction,
+            signature::Keypair, system_transaction,
         },
         std::{
             sync::{atomic::AtomicBool, RwLock},
