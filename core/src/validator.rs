@@ -175,6 +175,13 @@ impl BlockProductionMethod {
     }
 }
 
+/// Configuration for the block generator invalidator for replay.
+#[derive(Clone, Debug)]
+pub struct GeneratorConfig {
+    pub accounts_path: String,
+    pub starting_keypairs: Arc<Vec<Keypair>>,
+}
+
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
@@ -240,6 +247,7 @@ pub struct ValidatorConfig {
     pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
     pub block_verification_method: BlockVerificationMethod,
     pub block_production_method: BlockProductionMethod,
+    pub generator_config: Option<GeneratorConfig>,
 }
 
 impl Default for ValidatorConfig {
@@ -306,6 +314,7 @@ impl Default for ValidatorConfig {
             banking_trace_dir_byte_limit: 0,
             block_verification_method: BlockVerificationMethod::default(),
             block_production_method: BlockProductionMethod::default(),
+            generator_config: None,
         }
     }
 }
@@ -1184,6 +1193,7 @@ impl Validator {
             tracer_thread,
             tpu_enable_udp,
             &prioritization_fee_cache,
+            config.generator_config.clone(),
         );
 
         datapoint_info!(
