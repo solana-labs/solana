@@ -1082,7 +1082,9 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let mut bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
+        bank.deactivate_feature(&feature_set::apply_cost_tracker_during_replay::id());
+        let bank = Arc::new(bank);
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
