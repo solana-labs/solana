@@ -40,9 +40,7 @@ The hardware recommendations below are provided as a guide.  Operators are encou
   - The Samsung 970 and 980 Pro series SSDs are popular with the validator community
 - GPUs
   - Not necessary at this time
-  - Operators in the validator community do no use GPUs currently.
-  - Motherboard and power supply spec'd to add one or more high-end GPUs in the
-    future suggested
+  - Operators in the validator community do no use GPUs currently
 
 ### RPC Node Recommendations
 
@@ -114,8 +112,3 @@ For security purposes, it is not suggested that the following ports be open to
 the internet on staked, mainnet-beta validators.
 - 8899 TCP - JSONRPC over HTTP. Change with `--rpc-port RPC_PORT``
 - 8900 TCP - JSONRPC over Websockets. Derived. Uses `RPC_PORT + 1`
-
-## GPU Requirements
-
-A GPU is not necessary. For operators who choose to use a GPU, CUDA is required.  The provided Solana release binaries are built on Ubuntu 20.04 with [CUDA Toolkit 10.1 update 1](https://developer.nvidia.com/cuda-toolkit-archive). If your machine is using
-a different CUDA version then you will need to rebuild from source.

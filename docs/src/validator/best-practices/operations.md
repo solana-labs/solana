@@ -61,6 +61,8 @@ solana-install init 1.14.17
 
 This command downloads the executable for `1.14.17` and installs it into a `.local` directory. You can also look at `solana-install --help` for more options.
 
+> **Note** this command only works if you already have the solana cli installed. If you do not have the cli installed, refer to [install solana cli tools](../../cli/install-solana-cli-tools.md)
+
 ### Restart
 
 For all install methods, the validator process will need to be restarted before the newly installed version is in use.  Use `solana-validator exit` to restart your validator process.
@@ -125,6 +127,8 @@ It is important that you do not accidentally run out of funds in your identity a
 ```
 solana balance validator-keypair.json
 ```
+
+> **Note** `solana-watchtower` can monitor for a minimum validator identity balance.  See [monitoring best practices](./monitoring.md) for details.
 
 ## Regularly Withdraw From Vote Account
 
