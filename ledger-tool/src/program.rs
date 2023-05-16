@@ -350,6 +350,8 @@ fn load_program<'a>(
         ..LoadProgramMetrics::default()
     };
     let account_size = contents.len();
+    // Allowing mut here, since it may be needed for jit compile, which is under a config flag
+    #[allow(unused_mut)]
     let mut verified_executable = if is_elf {
         let result = load_program_from_bytes(
             &invoke_context.feature_set,
