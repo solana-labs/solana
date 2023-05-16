@@ -651,7 +651,7 @@ pub mod test {
             let ticks_per_slot;
             let slot;
             {
-                let bank = broadcast_service.bank.clone();
+                let bank = broadcast_service.bank;
                 start_tick_height = bank.tick_height();
                 max_tick_height = bank.max_tick_height();
                 ticks_per_slot = bank.ticks_per_slot();
