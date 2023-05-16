@@ -120,6 +120,33 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
     }
 }
 
+#[allow(dead_code)]
+/// The last parameter exists until this feature is activated:
+///  ignore slot when calculating an account hash #28420
+impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
+    for (Slot, &'a [&'a (Pubkey, T)], IncludeSlotInHash)
+{
+    fn pubkey(&self, index: usize) -> &Pubkey {
+        &self.1[index].0
+    }
+    fn account(&self, index: usize) -> &T {
+        &self.1[index].1
+    }
+    fn slot(&self, _index: usize) -> Slot {
+        // per-index slot is not unique per slot when per-account slot is not included in the source data
+        self.target_slot()
+    }
+    fn target_slot(&self) -> Slot {
+        self.0
+    }
+    fn len(&self) -> usize {
+        self.1.len()
+    }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.2
+    }
+}
+
 /// The last parameter exists until this feature is activated:
 ///  ignore slot when calculating an account hash #28420
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
@@ -325,6 +352,7 @@ pub mod tests {
         assert_eq!(a.target_slot(), b.target_slot());
         assert_eq!(a.len(), b.len());
         assert_eq!(a.is_empty(), b.is_empty());
+        assert_eq!(a.include_slot_in_hash(), b.include_slot_in_hash());
         (0..a.len()).for_each(|i| {
             assert_eq!(a.pubkey(i), b.pubkey(i));
             assert!(accounts_equal(a.account(i), b.account(i)));
@@ -382,6 +410,7 @@ pub mod tests {
                     let hash = Hash::new_unique();
                     let mut raw = Vec::new();
                     let mut raw2 = Vec::new();
+                    let mut raw4 = Vec::new();
                     for entry in 0..entries {
                         let pk = Pubkey::from([entry; 32]);
                         let account = AccountSharedData::create(
@@ -412,23 +441,34 @@ pub mod tests {
                     for entry in 0..entries {
                         let offset = 99;
                         let stored_size = 101;
+                        let raw = &raw[entry as usize];
                         raw2.push(StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
-                            meta: &raw[entry as usize].3,
-                            account_meta: &raw[entry as usize].4,
+                            meta: &raw.3,
+                            account_meta: &raw.4,
                             data: &data,
                             offset,
                             stored_size,
                             hash: &hash,
                         }));
+                        raw4.push((raw.0, raw.1.clone()));
                     }
 
                     let mut two = Vec::new();
                     let mut three = Vec::new();
-                    raw.iter().zip(raw2.iter()).for_each(|(raw, raw2)| {
-                        two.push((&raw.0, &raw.1)); // 2 item tuple
-                        three.push(raw2);
-                    });
+                    let mut four_pubkey_and_account_value = Vec::new();
+                    raw.iter()
+                        .zip(raw2.iter().zip(raw4.iter()))
+                        .for_each(|(raw, (raw2, raw4))| {
+                            two.push((&raw.0, &raw.1)); // 2 item tuple
+                            three.push(raw2);
+                            four_pubkey_and_account_value.push(raw4);
+                        });
                     let test2 = (target_slot, &two[..], INCLUDE_SLOT_IN_HASH_TESTS);
+                    let test4 = (
+                        target_slot,
+                        &four_pubkey_and_account_value[..],
+                        INCLUDE_SLOT_IN_HASH_TESTS,
+                    );
 
                     let source_slot = starting_slot % max_slots;
                     let test3 = (
@@ -451,19 +491,23 @@ pub mod tests {
                         INCLUDE_SLOT_IN_HASH_TESTS,
                     );
                     compare(&test2, &test3);
+                    compare(&test2, &test4);
                     compare(&test2, &test_moving_slots);
                     compare(&test2, &test_moving_slots2);
                     for (i, raw) in raw.iter().enumerate() {
                         assert_eq!(raw.0, *test3.pubkey(i));
                         assert!(accounts_equal(&raw.1, test3.account(i)));
                         assert_eq!(raw.2, test3.slot(i));
+                        assert_eq!(target_slot, test4.slot(i));
                         assert_eq!(target_slot, test2.slot(i));
                         assert_eq!(old_slot, test_moving_slots.slot(i));
                         assert_eq!(old_slot, test_moving_slots2.slot(i));
                     }
                     assert_eq!(target_slot, test3.target_slot());
+                    assert_eq!(target_slot, test4.target_slot());
                     assert_eq!(target_slot, test_moving_slots2.target_slot());
                     assert!(!test2.contains_multiple_slots());
+                    assert!(!test4.contains_multiple_slots());
                     assert!(!test_moving_slots.contains_multiple_slots());
                     assert_eq!(test3.contains_multiple_slots(), entries > 1);
                 }
