@@ -402,7 +402,7 @@ impl Consumer {
         &self,
         bank: &Arc<Bank>,
         txs: &[SanitizedTransaction],
-        max_slot_ages: &mut [Slot],
+        max_slot_ages: &[Slot],
     ) -> ProcessTransactionBatchOutput {
         // Need to filter out transactions since they were sanitized earlier.
         // This means that the transaction may cross and epoch boundary (not allowed),
@@ -412,15 +412,15 @@ impl Consumer {
             .zip(max_slot_ages)
             .map(|(tx, max_slot_age)| {
                 if *max_slot_age < bank.slot() {
-                    *max_slot_age = 0; // Sentinal value to indicate transaction was sanitized before epoch boundary
-                    Err(TransactionError::BlockhashNotFound)
-                } else {
-                    let lookup_tables = tx.message().message_address_table_lookups();
-                    if !lookup_tables.is_empty() {
-                        bank.load_addresses(lookup_tables)?;
-                    }
-                    Ok(())
+                    // Attempt re-sanitization after epoch-cross.
+                    // Only need to verify pre-compiles.
+                    tx.verify_precompiles(&bank.feature_set)?;
                 }
+                let lookup_tables = tx.message().message_address_table_lookups();
+                if !lookup_tables.is_empty() {
+                    bank.load_addresses(lookup_tables)?;
+                }
+                Ok(())
             })
             .collect_vec();
         self.process_and_record_transactions_with_pre_results(bank, txs, 0, pre_results.into_iter())
