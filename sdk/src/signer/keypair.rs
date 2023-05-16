@@ -5,7 +5,7 @@ use {
         derivation_path::DerivationPath,
         pubkey::Pubkey,
         signature::Signature,
-        signer::{EncodableKey, Signer, SignerError},
+        signer::{EncodableKey, EncodableKeypair, Signer, SignerError},
     },
     ed25519_dalek::Signer as DalekSigner,
     ed25519_dalek_bip32::Error as Bip32Error,
@@ -137,6 +137,16 @@ impl EncodableKey for Keypair {
         passphrase: &str,
     ) -> Result<Self, Box<dyn error::Error>> {
         keypair_from_seed_phrase_and_passphrase(seed_phrase, passphrase)
+    }
+}
+
+impl EncodableKeypair for Keypair {
+    type Pubkey = Pubkey;
+
+    /// Returns the associated pubkey. Use this function specifically for settings that involve
+    /// reading or writing pubkeys. For other settings, use `Signer::pubkey()` instead.
+    fn encodable_pubkey(&self) -> Self::Pubkey {
+        self.pubkey()
     }
 }
 
