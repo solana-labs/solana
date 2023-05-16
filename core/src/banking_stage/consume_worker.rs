@@ -3,7 +3,7 @@ use {
         consumer::{Consumer, ExecuteAndCommitTransactionsOutput, ProcessTransactionBatchOutput},
         scheduler_messages::{ConsumeWork, FinishedConsumeWork},
     },
-    crossbeam_channel::{select, Receiver, RecvError, SendError, Sender},
+    crossbeam_channel::{Receiver, RecvError, SendError, Sender},
     solana_poh::leader_bank_notifier::LeaderBankNotifier,
     solana_runtime::bank::Bank,
     std::{sync::Arc, time::Duration},
@@ -44,11 +44,8 @@ impl ConsumeWorker {
 
     pub fn run(self) -> Result<(), ConsumeWorkerError> {
         loop {
-            select! {
-                recv(self.consume_receiver) -> work => {
-                    self.consume_loop(work?)?;
-                },
-            }
+            let work = self.consume_receiver.recv()?;
+            self.consume_loop(work)?;
         }
     }
 

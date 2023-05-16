@@ -4,7 +4,7 @@ use {
         scheduler_messages::{FinishedForwardWork, ForwardWork},
         ForwardOption,
     },
-    crossbeam_channel::{select, Receiver, RecvError, SendError, Sender},
+    crossbeam_channel::{Receiver, RecvError, SendError, Sender},
     thiserror::Error,
 };
 
@@ -41,11 +41,8 @@ impl ForwardWorker {
 
     pub fn run(self) -> Result<(), ForwardWorkerError> {
         loop {
-            select! {
-                recv(self.forward_receiver) -> work => {
-                    self.forward_loop(work?)?;
-                },
-            }
+            let work = self.forward_receiver.recv()?;
+            self.forward_loop(work)?;
         }
     }
 
