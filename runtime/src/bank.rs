@@ -320,8 +320,8 @@ pub struct TransactionExecutionDetails {
 pub enum TransactionExecutionResult {
     Executed {
         details: TransactionExecutionDetails,
-        programs_modified_by_tx: LoadedProgramsForTxBatch,
-        programs_updated_only_for_global_cache: LoadedProgramsForTxBatch,
+        programs_modified_by_tx: Box<LoadedProgramsForTxBatch>,
+        programs_updated_only_for_global_cache: Box<LoadedProgramsForTxBatch>,
     },
     NotExecuted(TransactionError),
 }
@@ -4380,8 +4380,10 @@ impl Bank {
                 executed_units,
                 accounts_data_len_delta,
             },
-            programs_modified_by_tx,
-            programs_updated_only_for_global_cache,
+            programs_modified_by_tx: Box::new(programs_modified_by_tx),
+            programs_updated_only_for_global_cache: Box::new(
+                programs_updated_only_for_global_cache,
+            ),
         }
     }
 
@@ -4615,7 +4617,7 @@ impl Bank {
                         if details.status.is_ok() {
                             programs_loaded_for_tx_batch
                                 .borrow_mut()
-                                .merge(&programs_modified_by_tx);
+                                .merge(programs_modified_by_tx);
                         }
                     }
 
