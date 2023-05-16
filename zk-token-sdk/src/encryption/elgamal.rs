@@ -34,7 +34,7 @@ use {
         signature::Signature,
         signer::{
             keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, EncodableKeypair,
-            Signer, SignerError,
+            SeedDerivable, Signer, SignerError,
         },
     },
     std::convert::TryInto,
@@ -248,7 +248,9 @@ impl EncodableKey for ElGamalKeypair {
     fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
         self.write_json(writer)
     }
+}
 
+impl SeedDerivable for ElGamalKeypair {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
         let secret = ElGamalSecretKey::from_seed(seed)?;
         let public = ElGamalPubkey::new(&secret);
