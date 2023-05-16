@@ -94,7 +94,7 @@ Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubunt
 MacOS or WSL users may build from source.
 
 ## Networking
-Internet service should be at least 300Mbit/s symmetric, commercial. 1GBit/s preferred. Some staked validators prefer to use 10GBit/s connections.
+Internet service should be at least 1GBbit/s symmetric, commercial. 10GBit/s preferred.
 
 ### Port Forwarding
 The following ports need to be open to the internet for both inbound and outbound
