@@ -38,27 +38,10 @@ that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 
 ### Linux
 
-#### Automatic
-
-The solana repo includes a daemon to adjust system settings to optimize performance
-(namely by increasing the OS UDP buffer and file mapping limits).
-
-The daemon (`solana-sys-tuner`) is included in the solana binary release. Restart
-it, _before_ restarting your validator, after each software upgrade to ensure that
-the latest recommended settings are applied.
-
-To run it:
-
-```bash
-sudo $(command -v solana-sys-tuner) --user $(whoami) > sys-tuner.log 2>&1 &
-```
-
-#### Manual
-
 If you would prefer to manage system settings on your own, you may do so with
 the following commands.
 
-##### **Optimize sysctl knobs**
+#### **Optimize sysctl knobs**
 
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/21-solana-validator.conf <<EOF
@@ -80,7 +63,7 @@ EOF"
 sudo sysctl -p /etc/sysctl.d/21-solana-validator.conf
 ```
 
-##### **Increase systemd and session file limits**
+#### **Increase systemd and session file limits**
 
 Add
 
@@ -353,7 +336,6 @@ the following:
 [Unit]
 Description=Solana Validator
 After=network.target
-Wants=solana-sys-tuner.service
 StartLimitIntervalSec=0
 
 [Service]
