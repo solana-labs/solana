@@ -7,6 +7,7 @@ use {
     crate::{
         accounts_hash::AccountsHash,
         ancestors::AncestorsForSerialization,
+        bank::EpochRewardStatus,
         stakes::{serde_stakes_enum_compat, StakesEnum},
     },
     solana_measure::measure::Measure,
@@ -334,8 +335,11 @@ impl<'a> TypeContext<'a> for Context {
         let incremental_snapshot_persistence = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.incremental_snapshot_persistence = incremental_snapshot_persistence;
 
-        let epoch_accounts_hash = ignore_eof_error(deserialize_from(stream))?;
+        let epoch_accounts_hash = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.epoch_accounts_hash = epoch_accounts_hash;
+
+        let _epoch_reward_status: EpochRewardStatus =
+            ignore_eof_error(deserialize_from(&mut stream))?;
 
         Ok((bank_fields, accounts_db_fields))
     }

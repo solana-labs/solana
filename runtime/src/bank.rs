@@ -873,6 +873,27 @@ impl AbiExample for OptionalDropCallback {
     }
 }
 
+#[derive(AbiExample, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct StartBlockHeightAndRewards {
+    /// the block height of the parent of the slot at which rewards distribution began
+    pub(crate) parent_start_block_height: u64,
+    /// calculated epoch rewards pending distribution
+    pub(crate) calculated_epoch_stake_rewards: Arc<StakeRewards>,
+}
+
+/// Represent whether bank is in the reward phase or not.
+#[derive(AbiExample, AbiEnumVisitor, Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub(crate) enum EpochRewardStatus {
+    /// this bank is in the reward phase.
+    /// Contents are the start point for epoch reward calculation,
+    /// i.e. parent_slot and parent_block height for the starting
+    /// block of the current epoch.
+    Active(StartBlockHeightAndRewards),
+    /// this bank is outside of the rewarding phase.
+    #[default]
+    Inactive,
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
@@ -1084,7 +1105,7 @@ struct VoteReward {
 }
 
 type VoteRewards = DashMap<Pubkey, VoteReward>;
-type StakeRewards = Vec<StakeReward>;
+pub(crate) type StakeRewards = Vec<StakeReward>;
 
 #[derive(Debug, Default)]
 pub struct NewBankOptions {
@@ -1111,7 +1132,8 @@ pub struct CommitTransactionCounts {
     pub signature_count: u64,
 }
 
-struct StakeReward {
+#[derive(AbiExample, Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub(crate) struct StakeReward {
     stake_pubkey: Pubkey,
     stake_reward_info: RewardInfo,
     stake_account: AccountSharedData,
