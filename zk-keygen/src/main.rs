@@ -66,7 +66,6 @@ fn app(crate_version: &str) -> Command {
                 )
                 .arg(
                     Arg::new("outfile")
-                        .short('o')
                         .long("outfile")
                         .value_name("FILEPATH")
                         .takes_value(true)
@@ -74,13 +73,11 @@ fn app(crate_version: &str) -> Command {
                 )
                 .arg(
                     Arg::new("force")
-                        .short('f')
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
                 .arg(
                     Arg::new("silent")
-                        .short('s')
                         .long("silent")
                         .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
