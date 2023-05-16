@@ -57,7 +57,6 @@ fn app(crate_version: &str) -> Command {
                 .disable_version_flag(true)
                 .arg(
                     Arg::new("key_type")
-                        .short('t')
                         .long("key-type")
                         .takes_value(true)
                         .possible_values(["elgamal", "aes128"])
