@@ -338,6 +338,22 @@ impl ElGamalPubkey {
     }
 }
 
+impl EncodableKey for ElGamalPubkey {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+        let bytes: Vec<u8> = serde_json::from_reader(reader)?;
+        Self::from_bytes(&bytes).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::Other, "Invalid ElGamalPubkey").into()
+        })
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+        let bytes = self.to_bytes();
+        let json = serde_json::to_string(&bytes.to_vec())?;
+        writer.write_all(&json.clone().into_bytes())?;
+        Ok(json)
+    }
+}
+
 impl fmt::Display for ElGamalPubkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", BASE64_STANDARD.encode(self.to_bytes()))
