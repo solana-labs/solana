@@ -12848,7 +12848,7 @@ fn test_rewards_computation() {
 
     let RewardCalculationResult {
         stake_rewards,
-        total_rewards: total_stake_rewards,
+        total_stake_rewards_lamports,
     } = bank.do_calculate_validator_rewards_and_distribute_vote_rewards_with_thread_pool(
         1,
         expected_rewards,
@@ -12859,7 +12859,7 @@ fn test_rewards_computation() {
     );
 
     // assert that total rewards matches
-    assert_eq!(total_stake_rewards, expected_rewards);
+    assert_eq!(total_stake_rewards_lamports, expected_rewards);
 
     // assert that number of rewards matches
     assert_eq!(stake_rewards.len(), expected_num_delegations);

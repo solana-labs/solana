@@ -1190,7 +1190,7 @@ impl WorkingSlot for Bank {
 #[derive(Default)]
 struct RewardCalculationResult {
     stake_rewards: StakeRewards,
-    total_rewards: u64,
+    total_stake_rewards_lamports: u64,
 }
 
 impl Bank {
@@ -2602,7 +2602,7 @@ impl Bank {
 
         let RewardCalculationResult {
             stake_rewards,
-            total_rewards: total_stake_rewards,
+            total_stake_rewards_lamports,
         } = self.do_calculate_validator_rewards_and_distribute_vote_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
@@ -2636,11 +2636,11 @@ impl Bank {
         );
 
         // verify that we didn't pay any more than we expected to
-        assert!(validator_rewards >= validator_rewards_paid + total_stake_rewards);
+        assert!(validator_rewards >= validator_rewards_paid + total_stake_rewards_lamports);
 
         info!(
             "distributed vote rewards: {} out of {}, remaining {}",
-            validator_rewards_paid, validator_rewards, total_stake_rewards
+            validator_rewards_paid, validator_rewards, total_stake_rewards_lamports
         );
 
         let (num_stake_accounts, num_vote_accounts) = {
@@ -2677,7 +2677,7 @@ impl Bank {
         );
 
         (
-            validator_rewards_paid + total_stake_rewards,
+            validator_rewards_paid + total_stake_rewards_lamports,
             validator_rewards_paid,
             stake_rewards,
         )
@@ -3160,7 +3160,7 @@ impl Bank {
 
             RewardCalculationResult {
                 stake_rewards,
-                total_rewards: u64::try_from(total).unwrap(),
+                total_stake_rewards_lamports: u64::try_from(total).unwrap(),
             }
         } else {
             RewardCalculationResult::default()
