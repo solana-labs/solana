@@ -100,6 +100,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             is_delta: dvb.is_delta,
             incremental_snapshot_persistence: None,
             epoch_accounts_hash: None,
+            epoch_reward_status: EpochRewardStatus::Inactive,
         }
     }
 }
