@@ -687,6 +687,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) accounts_data_len: u64,
     pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
     pub(crate) epoch_accounts_hash: Option<Hash>,
+    pub(crate) epoch_reward_status: EpochRewardStatus,
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -797,6 +798,7 @@ impl PartialEq for Bank {
             incremental_snapshot_persistence: _,
             loaded_programs_cache: _,
             check_program_modification_slot: _,
+            epoch_reward_status: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -1074,6 +1076,8 @@ pub struct Bank {
 
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
+
+    epoch_reward_status: EpochRewardStatus,
 }
 
 struct VoteWithStakeDelegations {
@@ -1300,6 +1304,7 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
             check_program_modification_slot: false,
+            epoch_reward_status: EpochRewardStatus::default(),
         };
 
         bank.bank_created();
@@ -1590,6 +1595,7 @@ impl Bank {
             fee_structure: parent.fee_structure.clone(),
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
             check_program_modification_slot: false,
+            epoch_reward_status: parent.epoch_reward_status.clone(),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1916,6 +1922,7 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
             check_program_modification_slot: false,
+            epoch_reward_status: EpochRewardStatus::default(),
         };
         bank.bank_created();
 
