@@ -349,6 +349,7 @@ impl JsonRpcService {
         genesis_hash: Hash,
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Exit>>,
+        exit: Arc<AtomicBool>,
         known_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         startup_verification_complete: Arc<AtomicBool>,
@@ -476,7 +477,6 @@ impl JsonRpcService {
             prioritization_fee_cache,
         );
 
-        let exit = Arc::new(AtomicBool::new(false));
         let leader_info =
             poh_recorder.map(|recorder| ClusterTpuInfo::new(cluster_info.clone(), recorder));
         let _send_transaction_service = Arc::new(SendTransactionService::new_with_config(
@@ -560,7 +560,6 @@ impl JsonRpcService {
             .unwrap()
             .register_exit(Box::new(move || {
                 close_handle_.close();
-                exit.store(true, Ordering::Relaxed);
             }));
         Ok(Self {
             thread_hdl,
@@ -576,7 +575,8 @@ impl JsonRpcService {
         }
     }
 
-    pub fn join(self) -> thread::Result<()> {
+    pub fn join(mut self) -> thread::Result<()> {
+        self.exit();
         self.thread_hdl.join()
     }
 }
@@ -642,6 +642,7 @@ mod tests {
             Hash::default(),
             &PathBuf::from("farf"),
             validator_exit,
+            exit,
             None,
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicBool::new(true)),
