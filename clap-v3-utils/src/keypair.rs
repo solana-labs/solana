@@ -1198,7 +1198,7 @@ pub fn ae_key_from_seed_phrase(
     skip_validation: bool,
     derivation_path: Option<DerivationPath>,
     legacy: bool,
-) -> Result<ElGamalKeypair, Box<dyn error::Error>> {
+) -> Result<AeKey, Box<dyn error::Error>> {
     encodable_key_from_seed_phrase(keypair_name, skip_validation, derivation_path, legacy)
 }
 
