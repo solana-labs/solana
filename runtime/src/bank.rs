@@ -3158,10 +3158,12 @@ impl Bank {
         let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
 
         Self::sort_and_shuffle_partitioned_rewards(&mut stake_rewards, rewarded_epoch, rewards);
-        let total = stake_rewards
-            .par_iter()
-            .map(|stake_reward| stake_reward.stake_reward_info.lamports)
-            .sum::<i64>();
+        let total = thread_pool.install(|| {
+            stake_rewards
+                .par_iter()
+                .map(|stake_reward| stake_reward.stake_reward_info.lamports)
+                .sum::<i64>()
+        });
 
         self.update_reward_history(vec![], vote_rewards);
 
