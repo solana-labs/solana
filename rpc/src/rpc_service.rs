@@ -576,7 +576,8 @@ impl JsonRpcService {
         }
     }
 
-    pub fn join(self) -> thread::Result<()> {
+    pub fn join(mut self) -> thread::Result<()> {
+        self.exit();
         self.thread_hdl.join()
     }
 }
