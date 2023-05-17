@@ -94,7 +94,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             } else if matches.is_present(NO_OUTFILE_ARG.name) {
                 None
             } else {
-                path.extend([".config", "solana", &key_type.default_file_name()]);
+                path.extend([".config", "solana", key_type.default_file_name()]);
                 Some(path.to_str().unwrap())
             };
 
