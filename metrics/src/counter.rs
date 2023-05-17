@@ -18,8 +18,8 @@ pub struct Counter {
     /// total accumulated value
     pub counts: AtomicUsize,
     pub times: AtomicUsize,
-    /// last accumulated value logged
-    pub lastlog: AtomicUsize,
+    /// last accumulated value reported for metrics
+    pub last_report: AtomicUsize,
     pub lograte: AtomicUsize,
     pub metricsrate: AtomicU64,
     // interval for checking if metrics should be reported
@@ -50,7 +50,7 @@ macro_rules! create_counter {
             name: $name,
             counts: std::sync::atomic::AtomicUsize::new(0),
             times: std::sync::atomic::AtomicUsize::new(0),
-            lastlog: std::sync::atomic::AtomicUsize::new(0),
+            last_report: std::sync::atomic::AtomicUsize::new(0),
             lograte: std::sync::atomic::AtomicUsize::new($lograte),
             metricsrate: std::sync::atomic::AtomicU64::new($metricsrate),
             metrics_interval: solana_sdk::timing::AtomicInterval::const_default(),
@@ -193,11 +193,11 @@ impl Counter {
 
         // Accumulate counts for `metricsrate` and then send to agent
         if self.metrics_interval.should_update(metricsrate) {
-            let lastlog = self.lastlog.swap(counts, Ordering::Relaxed);
+            let last_reported_count = self.last_report.swap(counts, Ordering::Relaxed);
             let bucket = now / metricsrate;
             let counter = CounterPoint {
                 name: self.name,
-                count: counts as i64 - lastlog as i64,
+                count: counts as i64 - last_reported_count as i64,
                 timestamp: SystemTime::now(),
             };
             submit_counter(counter, level, bucket);
@@ -259,7 +259,7 @@ mod tests {
             assert_eq!(COUNTER.counts.load(Ordering::Relaxed), 1);
             assert_eq!(COUNTER.times.load(Ordering::Relaxed), 1);
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), 1000);
-            assert_eq!(COUNTER.lastlog.load(Ordering::Relaxed), 0);
+            assert_eq!(COUNTER.last_report.load(Ordering::Relaxed), 0);
             assert_eq!(COUNTER.name, "test");
         }
         for _ in 0..199 {
