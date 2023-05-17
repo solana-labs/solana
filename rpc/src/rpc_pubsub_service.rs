@@ -152,6 +152,12 @@ fn count_final(params: &SubscriptionParams) {
 }
 
 impl BroadcastHandler {
+    fn new(current_subscriptions: Arc<DashMap<SubscriptionId, SubscriptionToken>>) -> Self {
+        Self {
+            current_subscriptions,
+        }
+    }
+
     fn handle(&self, notification: RpcNotification) -> Result<Option<Arc<String>>, Error> {
         if let Entry::Occupied(entry) = self
             .current_subscriptions
@@ -243,9 +249,7 @@ pub fn test_connection(
         subscriptions.control().clone(),
         Arc::clone(&current_subscriptions),
     );
-    let broadcast_handler = BroadcastHandler {
-        current_subscriptions,
-    };
+    let broadcast_handler = BroadcastHandler::new(current_subscriptions);
     let receiver = TestBroadcastReceiver {
         inner: subscriptions.control().broadcast_receiver(),
         handler: broadcast_handler,
@@ -291,9 +295,7 @@ async fn handle_connection(
         Arc::clone(&current_subscriptions),
     );
     json_rpc_handler.extend_with(rpc_impl.to_delegate());
-    let broadcast_handler = BroadcastHandler {
-        current_subscriptions,
-    };
+    let broadcast_handler = BroadcastHandler::new(current_subscriptions);
     loop {
         // Extra block for dropping `receive_future`.
         {
