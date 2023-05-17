@@ -1196,7 +1196,7 @@ struct RewardCalculationResult {
 struct DistributedRewardsSum {
     num_rewards: usize,
     /// total distributed rewards in lamports
-    total_rewards_in_lamports: i64,
+    total_rewards_in_lamports: u64,
 }
 
 impl Bank {
@@ -3710,7 +3710,7 @@ impl Bank {
 
         DistributedRewardsSum {
             num_rewards: stake_rewards.len(),
-            total_rewards_in_lamports: total,
+            total_rewards_in_lamports: total as u64,
         }
     }
 
@@ -3846,10 +3846,10 @@ impl Bank {
 
         // increase total capitalization by the distributed rewards
         self.capitalization
-            .fetch_add(total_stake_rewards as u64, Relaxed);
+            .fetch_add(total_stake_rewards, Relaxed);
 
         // update EpochRewards sysvar with distributed rewards (decrease total capital by distributed rewards)
-        self.update_epoch_rewards(total_stake_rewards as u64);
+        self.update_epoch_rewards(total_stake_rewards);
 
         metrics.post_capitalization = self.capitalization();
 
