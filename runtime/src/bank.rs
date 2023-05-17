@@ -1900,7 +1900,10 @@ impl Bank {
 
             if height >= credit_start && height < credit_end_exclusive {
                 let partition_index = height - credit_start;
-                self.credit_epoch_rewards_in_partition(partition_index);
+                self.credit_epoch_rewards_in_partition(
+                    &status.calculated_epoch_stake_rewards,
+                    partition_index,
+                );
             } else if height >= credit_end_exclusive {
                 datapoint_warn!(
                     "reward-status-update",
@@ -1916,7 +1919,10 @@ impl Bank {
     }
 
     fn deactivate_epoch_reward_status(&mut self) {
-        assert!(matches!(self.epoch_reward_status, EpochRewardStatus::Active(_)));
+        assert!(matches!(
+            self.epoch_reward_status,
+            EpochRewardStatus::Active(_)
+        ));
         self.epoch_reward_status = EpochRewardStatus::Inactive;
         if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
             if account.lamports() > 0 {
@@ -3810,46 +3816,44 @@ impl Bank {
 
     /// Process reward credits for a partition of rewards
     ///     - partition_index: reward partition index
-    /// Store the rewards to AccountsDB, update reward history record and total capital.
-    fn credit_epoch_rewards_in_partition(&mut self, partition_index: u64) {
-        if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
-            parent_start_block_height: _parent_start_block_height,
-            calculated_epoch_stake_rewards: ref stake_rewards,
-        }) = self.epoch_reward_status
-        {
-            let mut metrics = RewardsStoreMetrics {
-                pre_capitalization: self.capitalization(),
-                total_stake_accounts_count: stake_rewards.len(),
-                partition_index,
-                ..RewardsStoreMetrics::default()
-            };
+    /// Store the rewards to AccountsDB, update reward history record and total capitalization.
+    fn credit_epoch_rewards_in_partition(
+        &self,
+        all_stake_rewards: &[StakeReward],
+        partition_index: u64,
+    ) {
+        let mut metrics = RewardsStoreMetrics {
+            pre_capitalization: self.capitalization(),
+            total_stake_accounts_count: all_stake_rewards.len(),
+            partition_index,
+            ..RewardsStoreMetrics::default()
+        };
 
-            let this_partition_stake_rewards =
-                self.get_stake_rewards_in_partition(partition_index, stake_rewards);
+        let this_partition_stake_rewards =
+            self.get_stake_rewards_in_partition(partition_index, all_stake_rewards);
 
-            let (
-                DistributedRewardsSum {
-                    num_rewards: stake_store_counts,
-                    total_rewards_in_lamports: total_stake_rewards,
-                },
-                measure_us,
-            ) = measure_us!(self.store_stake_accounts_in_partition(this_partition_stake_rewards));
-            metrics.store_stake_accounts_us += measure_us;
-            metrics.store_stake_accounts_count += stake_store_counts;
+        let (
+            DistributedRewardsSum {
+                num_rewards: stake_store_counts,
+                total_rewards_in_lamports: total_stake_rewards,
+            },
+            measure_us,
+        ) = measure_us!(self.store_stake_accounts_in_partition(this_partition_stake_rewards));
+        metrics.store_stake_accounts_us += measure_us;
+        metrics.store_stake_accounts_count += stake_store_counts;
 
-            self.update_reward_history_in_partition(this_partition_stake_rewards);
+        self.update_reward_history_in_partition(this_partition_stake_rewards);
 
-            // increase total capital by the distributed rewards
-            self.capitalization
-                .fetch_add(total_stake_rewards as u64, Relaxed);
+        // increase total capitalization by the distributed rewards
+        self.capitalization
+            .fetch_add(total_stake_rewards as u64, Relaxed);
 
-            // update EpochRewards sysvar with distributed rewards (decrease total capital by distributed rewards)
-            self.update_epoch_rewards(total_stake_rewards as u64);
+        // update EpochRewards sysvar with distributed rewards (decrease total capital by distributed rewards)
+        self.update_epoch_rewards(total_stake_rewards as u64);
 
-            metrics.post_capitalization = self.capitalization();
+        metrics.post_capitalization = self.capitalization();
 
-            report_partitioned_reward_metrics(self, metrics);
-        }
+        report_partitioned_reward_metrics(self, metrics);
     }
 
     /// Create EpochRewards syavar with calculated rewards
