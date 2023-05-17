@@ -13155,7 +13155,7 @@ fn test_epoch_reward_sysvar() {
     assert_eq!(epoch_rewards, expected_epoch_rewards);
 
     // make a distribution from epoch rewards sysvar
-    bank.update_epoch_rewards(10);
+    bank.update_epoch_rewards_sysvar(10);
     let account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
     assert_eq!(account.lamports(), total_rewards - 20);
     let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();

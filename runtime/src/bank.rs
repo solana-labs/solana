@@ -3848,8 +3848,8 @@ impl Bank {
         self.capitalization
             .fetch_add(total_stake_rewards, Relaxed);
 
-        // update EpochRewards sysvar with distributed rewards (decrease total capital by distributed rewards)
-        self.update_epoch_rewards(total_stake_rewards);
+        // update EpochRewards sysvar with distributed rewards (decrease total capitalization by distributed rewards)
+        self.update_epoch_rewards_sysvar(total_stake_rewards);
 
         metrics.post_capitalization = self.capitalization();
 
@@ -3883,7 +3883,7 @@ impl Bank {
     }
 
     /// Update EpochRewards sysvar with distributed rewards
-    fn update_epoch_rewards(&self, distributed: u64) {
+    fn update_epoch_rewards_sysvar(&self, distributed: u64) {
         assert!(self.partitioned_rewards_feature_enabled());
 
         let mut epoch_rewards: sysvar::epoch_rewards::EpochRewards =
