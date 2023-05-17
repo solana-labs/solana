@@ -10,7 +10,7 @@ use {
         },
         accounts_file::{AccountsFile, AccountsFileError},
         accounts_hash::{AccountsDeltaHash, AccountsHash},
-        bank::{Bank, BankTestConfig},
+        bank::{Bank, BankTestConfig, EpochRewardStatus, StartBlockHeightAndRewards},
         epoch_accounts_hash,
         genesis_utils::{activate_all_features, activate_feature},
         snapshot_utils::{
@@ -531,6 +531,9 @@ fn test_extra_fields_eof() {
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
+    // Set epoch reward status
+    bank.set_epoch_reward_status_active_for_test(100, vec![]);
+
     // Serialize
     let snapshot_storages = bank.get_snapshot_storages(None);
     let mut buf = vec![];
@@ -578,6 +581,20 @@ fn test_extra_fields_eof() {
         bank.fee_rate_governor.lamports_per_signature,
         dbank.fee_rate_governor.lamports_per_signature
     );
+
+    // assert epoch_reward_status is the same as the set epoch reward status
+    let epoch_reward_status = bank.get_epoch_reward_status_for_test();
+    assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
+    if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
+        parent_start_block_height,
+        calculated_epoch_stake_rewards: ref stake_rewards,
+    }) = epoch_reward_status
+    {
+        assert_eq!(*parent_start_block_height, 100);
+        assert_eq!(stake_rewards.len(), 0);
+    } else {
+        unreachable!("Epoch reward status should NOT be inactive.");
+    }
 }
 
 #[test]
@@ -595,6 +612,9 @@ fn test_extra_fields_full_snapshot_archive() {
 
     // Set extra field
     bank.fee_rate_governor.lamports_per_signature = 7000;
+
+    // Set epoch reward status
+    bank.set_epoch_reward_status_active_for_test(100, vec![]);
 
     let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
     let bank_snapshots_dir = TempDir::new().unwrap();
@@ -640,6 +660,20 @@ fn test_extra_fields_full_snapshot_archive() {
         bank.fee_rate_governor.lamports_per_signature,
         dbank.fee_rate_governor.lamports_per_signature
     );
+
+    // assert epoch_reward_status is the same as the set epoch reward status
+    let epoch_reward_status = bank.get_epoch_reward_status_for_test();
+    assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
+    if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
+        parent_start_block_height,
+        calculated_epoch_stake_rewards: ref stake_rewards,
+    }) = epoch_reward_status
+    {
+        assert_eq!(*parent_start_block_height, 100);
+        assert_eq!(stake_rewards.len(), 0);
+    } else {
+        unreachable!("Epoch reward status should NOT be inactive.");
+    }
 }
 
 #[test]
@@ -711,6 +745,10 @@ fn test_blank_extra_fields() {
 
     // Defaults to 0
     assert_eq!(0, dbank.fee_rate_governor.lamports_per_signature);
+
+    // epoch_reward status should defaults to `Inactive`
+    let epoch_reward_status = bank.get_epoch_reward_status_for_test();
+    assert!(matches!(epoch_reward_status, EpochRewardStatus::Inactive));
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]

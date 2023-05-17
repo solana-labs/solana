@@ -22,6 +22,7 @@ The following sysvars support `get`:
 - EpochSchedule
 - Fees
 - Rent
+- EpochRewards
 
 The second is to pass the sysvar to the program as an account by including its address as one of the accounts in the `Instruction` and then deserializing the data during execution.  Access to sysvars accounts is
 always _readonly_.
@@ -140,3 +141,14 @@ and de-activations per epoch. It is updated at the start of every epoch.
 - Address: `SysvarStakeHistory1111111111111111111111111`
 - Layout:
   [StakeHistory](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/stake_history/struct.StakeHistory.html)
+
+## EpochRewards
+
+The EpochRewards sysvar tracks the progress of epoch reward distribution. The
+sysvar is created in the first block of the epoch, and lasts for serval blocks
+for paying out the rewards. When all rewards have been distributed, the sysvar
+will be deleted.
+
+- Address: `SysvarEpochReward51111111111111111111111111`
+- Layout:
+  [EpochRewards](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/epoch_rewards/struct.EpochRewards.html)

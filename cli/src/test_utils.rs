@@ -51,3 +51,24 @@ pub fn wait_for_next_epoch(rpc_client: &RpcClient) -> Epoch {
         }
     }
 }
+
+pub fn wait_for_next_epoch_plus_n_slots(rpc_client: &RpcClient, n: u64) -> (Epoch, u64) {
+    let current_epoch = rpc_client.get_epoch_info().unwrap().epoch;
+    let next_epoch = current_epoch + 1;
+    println!("waiting for epoch {next_epoch} plus {n} slots");
+    loop {
+        sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+
+        let next_epoch = rpc_client.get_epoch_info().unwrap().epoch;
+        if next_epoch > current_epoch {
+            let slot = rpc_client.get_slot().unwrap();
+            loop {
+                sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+                let new_slot = rpc_client.get_slot().unwrap();
+                if new_slot - slot > n {
+                    return (next_epoch, new_slot);
+                }
+            }
+        }
+    }
+}

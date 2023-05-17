@@ -120,7 +120,6 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
     }
 }
 
-#[allow(dead_code)]
 /// The last parameter exists until this feature is activated:
 ///  ignore slot when calculating an account hash #28420
 impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>

@@ -1,12 +1,13 @@
 #![allow(clippy::integer_arithmetic)]
 #![allow(clippy::redundant_closure)]
+
 use {
     solana_cli::{
         check_balance,
         cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
         spend_utils::SpendAmount,
         stake::StakeAuthorizationIndexed,
-        test_utils::{check_ready, wait_for_next_epoch},
+        test_utils::{check_ready, wait_for_next_epoch_plus_n_slots},
     },
     solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
     solana_faucet::faucet::run_local_faucet,
@@ -157,8 +158,8 @@ fn test_stake_redelegation() {
     };
     process_command(&config).unwrap();
 
-    // wait for new epoch
-    wait_for_next_epoch(&rpc_client);
+    // wait for new epoch plus one addition slot for rewards payout
+    wait_for_next_epoch_plus_n_slots(&rpc_client, 1);
 
     // `stake_keypair` should now be delegated to `vote_keypair` and fully activated
     let stake_account = rpc_client.get_account(&stake_keypair.pubkey()).unwrap();
@@ -197,10 +198,10 @@ fn test_stake_redelegation() {
     )
     .unwrap();
 
-    // wait for a new epoch to ensure the `Redelegate` happens as soon as possible in the epoch
+    // wait for a new epoch to ensure the `Redelegate` happens as soon as possible in the epoch after rewards payout
     // to reduce the risk of a race condition when checking the stake account correctly enters the
     // deactivating state for the remainder of the current epoch
-    wait_for_next_epoch(&rpc_client);
+    wait_for_next_epoch_plus_n_slots(&rpc_client, 1);
 
     // Redelegate to `vote2_keypair` via `stake2_keypair
     config.signers = vec![&default_signer, &stake2_keypair];
@@ -251,7 +252,7 @@ fn test_stake_redelegation() {
     check_balance!(50_000_000_000, &rpc_client, &stake2_keypair.pubkey());
 
     // wait for new epoch
-    wait_for_next_epoch(&rpc_client);
+    wait_for_next_epoch_plus_n_slots(&rpc_client, 1);
 
     // `stake_keypair` should now be deactivated
     assert_eq!(

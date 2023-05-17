@@ -39,6 +39,7 @@ once_cell = { workspace = true }
 ouroboros = { workspace = true }
 percentage = { workspace = true }
 rand = { workspace = true }
+rand_chacha = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }

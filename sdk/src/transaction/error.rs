@@ -157,6 +157,10 @@ pub enum TransactionError {
     /// LoadedAccountsDataSizeLimit set for transaction must be greater than 0.
     #[error("LoadedAccountsDataSizeLimit set for transaction must be greater than 0.")]
     InvalidLoadedAccountsDataSizeLimit,
+
+    /// Stake program is unavailable during reward period
+    #[error("Stake program is unavailable during reward period")]
+    StakeProgramUnavailable,
 }
 
 impl From<SanitizeError> for TransactionError {
