@@ -10,7 +10,6 @@ use {
         },
         DisplayError,
     },
-    solana_cli_config::CONFIG_FILE,
     solana_sdk::signer::EncodableKey,
     solana_zk_token_sdk::encryption::{auth_encryption::AeKey, elgamal::ElGamalKeypair},
     std::error,
@@ -37,20 +36,6 @@ fn app(crate_version: &str) -> Command {
         .version(crate_version)
         .subcommand_required(true)
         .arg_required_else_help(true)
-        .arg({
-            let arg = Arg::new("config_file")
-                .short('C')
-                .long("config")
-                .value_name("FILEPATH")
-                .takes_value(true)
-                .global(true)
-                .help("Configuration file to use");
-            if let Some(ref config_file) = *CONFIG_FILE {
-                arg.default_value(config_file)
-            } else {
-                arg
-            }
-        })
         .subcommand(
             Command::new("new")
                 .about("Generate a new encryption key/keypair file from a random seed phrase and optional BIP39 passphrase")
