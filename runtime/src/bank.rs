@@ -1717,11 +1717,8 @@ impl Bank {
                 let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
                 new.update_epoch_stakes(leader_schedule_epoch);
 
-                assert!(new.epoch_schedule.slots_per_epoch > new.get_reward_total_num_blocks());
-
-                // Start partitioned reward distribution.
                 if new.partitioned_rewards_feature_enabled() {
-                    new.distribute_epoch_rewards();
+                    new.distribute_partitioned_epoch_rewards();
                 }
             }
         });
@@ -1889,8 +1886,12 @@ impl Bank {
     }
 
     /// Process reward distribution for the block if it is inside reward interval.
-    fn distribute_epoch_rewards(&mut self) {
+    fn distribute_partitioned_epoch_rewards(&mut self) {
         if let EpochRewardStatus::Active(status) = &self.epoch_reward_status {
+            assert!(
+                self.epoch_schedule.get_slots_in_epoch(self.epoch)
+                    > self.get_reward_total_num_blocks()
+            );
             let height = self.block_height();
             let parent_start_block_height = status.parent_start_block_height;
             // + 1 because parent_start_block_height is the parent block of the current epoch.
@@ -1900,9 +1901,7 @@ impl Bank {
             if height >= credit_start && height < credit_end_exclusive {
                 let partition_index = height - credit_start;
                 self.credit_epoch_rewards_in_partition(partition_index);
-            }
-
-            if height >= credit_end_exclusive {
+            } else if height >= credit_end_exclusive {
                 datapoint_warn!(
                     "reward-status-update",
                     ("slot", self.slot(), i64),
