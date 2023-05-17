@@ -480,7 +480,7 @@ impl JsonRpcService {
             receiver,
             &connection_cache,
             send_transaction_service_config,
-            exit.clone(),
+            exit,
         ));
 
         #[cfg(test)]
