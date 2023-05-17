@@ -39,7 +39,7 @@ use {
         cell::RefCell,
         fmt::{self, Debug},
         rc::Rc,
-        sync::{atomic::Ordering, Arc},
+        sync::{atomic::Ordering, Arc, RwLock},
     },
 };
 
@@ -159,7 +159,7 @@ pub struct InvokeContext<'a> {
     current_compute_budget: ComputeBudget,
     compute_meter: RefCell<u64>,
     accounts_data_meter: AccountsDataMeter,
-    pub programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
+    pub programs_loaded_for_tx_batch: Arc<RwLock<LoadedProgramsForTxBatch>>,
     pub programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
     pub programs_updated_only_for_global_cache: &'a mut LoadedProgramsForTxBatch,
     pub feature_set: Arc<FeatureSet>,
@@ -178,7 +178,7 @@ impl<'a> InvokeContext<'a> {
         sysvar_cache: &'a SysvarCache,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
-        programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
+        programs_loaded_for_tx_batch: Arc<RwLock<LoadedProgramsForTxBatch>>,
         programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
         programs_updated_only_for_global_cache: &'a mut LoadedProgramsForTxBatch,
         feature_set: Arc<FeatureSet>,
@@ -726,6 +726,8 @@ impl<'a> InvokeContext<'a> {
         const ENTRYPOINT_KEY: u32 = 0x71E3CF81;
         let entry = self
             .programs_loaded_for_tx_batch
+            .read()
+            .unwrap()
             .find(&builtin_id)
             .ok_or(InstructionError::UnsupportedProgramId)?;
         let process_instruction = match &entry.program {
@@ -899,7 +901,7 @@ macro_rules! with_mock_invoke_context {
                 account::ReadableAccount, feature_set::FeatureSet, hash::Hash, sysvar::rent::Rent,
                 transaction_context::TransactionContext,
             },
-            std::sync::Arc,
+            std::sync::{Arc, RwLock},
             $crate::{
                 compute_budget::ComputeBudget, invoke_context::InvokeContext,
                 loaded_programs::LoadedProgramsForTxBatch, log_collector::LogCollector,
@@ -932,7 +934,6 @@ macro_rules! with_mock_invoke_context {
                 }
             }
         });
-        let programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
         let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let mut $invoke_context = InvokeContext::new(
@@ -941,7 +942,7 @@ macro_rules! with_mock_invoke_context {
             &sysvar_cache,
             Some(LogCollector::new_ref()),
             compute_budget,
-            &programs_loaded_for_tx_batch,
+            Arc::new(RwLock::new(LoadedProgramsForTxBatch::default())),
             &mut programs_modified_by_tx,
             &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
@@ -996,7 +997,8 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
         *loader_id,
         Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
     );
-    invoke_context.programs_loaded_for_tx_batch = &programs_loaded_for_tx_batch;
+    invoke_context.programs_loaded_for_tx_batch =
+        Arc::new(RwLock::new(programs_loaded_for_tx_batch));
     pre_adjustments(&mut invoke_context);
     let result = invoke_context.process_instruction(
         instruction_data,

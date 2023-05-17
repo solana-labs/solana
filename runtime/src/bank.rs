@@ -87,6 +87,7 @@ use {
     percentage::Percentage,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+        prelude::*,
         ThreadPool, ThreadPoolBuilder,
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment,
@@ -104,6 +105,7 @@ use {
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimingType, ExecuteTimings},
     },
+    solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{
             create_account_shared_data_with_fields as create_account, from_account, Account,
@@ -170,7 +172,6 @@ use {
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
         borrow::Cow,
-        cell::RefCell,
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
@@ -205,6 +206,14 @@ mod sysvar_cache;
 #[cfg(test)]
 mod tests;
 mod transaction_account_state_info;
+
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_thread_count())
+        .thread_name(|i| format!("solTxBatchProc{i:02}"))
+        .build()
+        .unwrap();
+}
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
@@ -4214,7 +4223,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
-        programs_loaded_for_tx_batch: &LoadedProgramsForTxBatch,
+        programs_loaded_for_tx_batch: Arc<RwLock<LoadedProgramsForTxBatch>>,
     ) -> TransactionExecutionResult {
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
@@ -4532,9 +4541,7 @@ impl Bank {
             program_accounts_map.insert(*builtin_program, &native_loader);
         }
 
-        let programs_loaded_for_tx_batch = Rc::new(RefCell::new(
-            self.replenish_program_cache(&program_accounts_map),
-        ));
+        let programs_loaded_for_tx_batch = self.replenish_program_cache(&program_accounts_map);
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = self.rc.accounts.load_accounts(
@@ -4549,83 +4556,105 @@ impl Bank {
             account_overrides,
             RewardInterval::OutsideInterval,
             &program_accounts_map,
-            &programs_loaded_for_tx_batch.borrow(),
+            &programs_loaded_for_tx_batch,
         );
         load_time.stop();
+
+        let programs_loaded_for_tx_batch = Arc::new(RwLock::new(programs_loaded_for_tx_batch));
 
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
 
-        let execution_results: Vec<TransactionExecutionResult> = loaded_transactions
-            .iter_mut()
-            .zip(sanitized_txs.iter())
-            .map(|(accs, tx)| match accs {
-                (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
-                (Ok(loaded_transaction), nonce) => {
-                    let compute_budget = if let Some(compute_budget) =
-                        self.runtime_config.compute_budget
-                    {
-                        compute_budget
-                    } else {
-                        let mut compute_budget =
-                            ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
+        let execution_results: Vec<(
+            TransactionExecutionResult,
+            (ExecuteTimings, TransactionErrorMetrics),
+        )> = PAR_THREAD_POOL
+            .install(|| {
+                loaded_transactions
+                    .par_iter_mut()
+                    .zip(sanitized_txs.par_iter())
+                    .map(|(accs, tx)| match accs {
+                        (Err(e), _nonce) => (
+                            TransactionExecutionResult::NotExecuted(e.clone()),
+                            (
+                                ExecuteTimings::default(),
+                                TransactionErrorMetrics::default(),
+                            ),
+                        ),
+                        (Ok(loaded_transaction), nonce) => {
+                            let mut timing = ExecuteTimings::default();
+                            let mut error_counters = TransactionErrorMetrics::default();
+                            let compute_budget =
+                                if let Some(compute_budget) = self.runtime_config.compute_budget {
+                                    compute_budget
+                                } else {
+                                    let mut compute_budget = ComputeBudget::new(
+                                        compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64,
+                                    );
 
-                        let mut compute_budget_process_transaction_time =
-                            Measure::start("compute_budget_process_transaction_time");
-                        let process_transaction_result = compute_budget.process_instructions(
-                            tx.message().program_instructions_iter(),
-                            true,
-                            !self
-                                .feature_set
-                                .is_active(&remove_deprecated_request_unit_ix::id()),
-                            true, // don't reject txs that use request heap size ix
-                            self.feature_set
-                                .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
-                        );
-                        compute_budget_process_transaction_time.stop();
-                        saturating_add_assign!(
-                            timings
-                                .execute_accessories
-                                .compute_budget_process_transaction_us,
-                            compute_budget_process_transaction_time.as_us()
-                        );
-                        if let Err(err) = process_transaction_result {
-                            return TransactionExecutionResult::NotExecuted(err);
+                                    let mut compute_budget_process_transaction_time =
+                                        Measure::start("compute_budget_process_transaction_time");
+                                    let process_transaction_result = compute_budget
+                                        .process_instructions(
+                                        tx.message().program_instructions_iter(),
+                                        true,
+                                        !self
+                                            .feature_set
+                                            .is_active(&remove_deprecated_request_unit_ix::id()),
+                                        true, // don't reject txs that use request heap size ix
+                                        self.feature_set.is_active(
+                                            &add_set_tx_loaded_accounts_data_size_instruction::id(),
+                                        ),
+                                    );
+                                    compute_budget_process_transaction_time.stop();
+                                    saturating_add_assign!(
+                                        timing
+                                            .execute_accessories
+                                            .compute_budget_process_transaction_us,
+                                        compute_budget_process_transaction_time.as_us()
+                                    );
+                                    if let Err(err) = process_transaction_result {
+                                        return (
+                                            TransactionExecutionResult::NotExecuted(err),
+                                            (timing, error_counters),
+                                        );
+                                    }
+                                    compute_budget
+                                };
+
+                            let result = self.execute_loaded_transaction(
+                                tx,
+                                loaded_transaction,
+                                compute_budget,
+                                nonce.as_ref().map(DurableNonceFee::from),
+                                enable_cpi_recording,
+                                enable_log_recording,
+                                enable_return_data_recording,
+                                &mut timing,
+                                &mut error_counters,
+                                log_messages_bytes_limit,
+                                programs_loaded_for_tx_batch.clone(),
+                            );
+
+                            if let TransactionExecutionResult::Executed {
+                                details,
+                                programs_modified_by_tx,
+                                programs_updated_only_for_global_cache: _,
+                            } = &result
+                            {
+                                // Update batch specific cache of the loaded programs with the modifications
+                                // made by the transaction, if it executed successfully.
+                                if details.status.is_ok() {
+                                    programs_loaded_for_tx_batch
+                                        .write()
+                                        .unwrap()
+                                        .merge(programs_modified_by_tx);
+                                }
+                            }
+
+                            (result, (timing, error_counters))
                         }
-                        compute_budget
-                    };
-
-                    let result = self.execute_loaded_transaction(
-                        tx,
-                        loaded_transaction,
-                        compute_budget,
-                        nonce.as_ref().map(DurableNonceFee::from),
-                        enable_cpi_recording,
-                        enable_log_recording,
-                        enable_return_data_recording,
-                        timings,
-                        &mut error_counters,
-                        log_messages_bytes_limit,
-                        &programs_loaded_for_tx_batch.borrow(),
-                    );
-
-                    if let TransactionExecutionResult::Executed {
-                        details,
-                        programs_modified_by_tx,
-                        programs_updated_only_for_global_cache: _,
-                    } = &result
-                    {
-                        // Update batch specific cache of the loaded programs with the modifications
-                        // made by the transaction, if it executed successfully.
-                        if details.status.is_ok() {
-                            programs_loaded_for_tx_batch
-                                .borrow_mut()
-                                .merge(programs_modified_by_tx);
-                        }
-                    }
-
-                    result
-                }
+                    })
             })
             .collect();
 
@@ -4657,7 +4686,9 @@ impl Bank {
             self.transaction_log_collector_config.read().unwrap();
 
         let mut collect_logs_time = Measure::start("collect_logs_time");
-        for (execution_result, tx) in execution_results.iter().zip(sanitized_txs) {
+        for ((execution_result, (timing, errors)), tx) in
+            execution_results.iter().zip(sanitized_txs)
+        {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in tx.message().account_keys().iter() {
                     if debug_keys.contains(key) {
@@ -4761,6 +4792,10 @@ impl Bank {
                 *err_count + executed_with_successful_result_count
             );
         }
+        let (execution_results, _): (
+            Vec<TransactionExecutionResult>,
+            (Vec<ExecuteTimings>, Vec<TransactionErrorMetrics>),
+        ) = execution_results.into_iter().unzip();
         LoadAndExecuteTransactionsOutput {
             loaded_transactions,
             execution_results,

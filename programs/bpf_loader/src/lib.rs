@@ -171,7 +171,13 @@ fn find_program_in_cache(
     invoke_context
         .programs_modified_by_tx
         .find(pubkey)
-        .or_else(|| invoke_context.programs_loaded_for_tx_batch.find(pubkey))
+        .or_else(|| {
+            invoke_context
+                .programs_loaded_for_tx_batch
+                .read()
+                .unwrap()
+                .find(pubkey)
+        })
 }
 
 macro_rules! deploy_program {

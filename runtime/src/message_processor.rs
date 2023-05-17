@@ -21,7 +21,11 @@ use {
         transaction::TransactionError,
         transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
     },
-    std::{cell::RefCell, rc::Rc, sync::Arc},
+    std::{
+        cell::RefCell,
+        rc::Rc,
+        sync::{Arc, RwLock},
+    },
 };
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -56,7 +60,7 @@ impl MessageProcessor {
         transaction_context: &mut TransactionContext,
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
-        programs_loaded_for_tx_batch: &LoadedProgramsForTxBatch,
+        programs_loaded_for_tx_batch: Arc<RwLock<LoadedProgramsForTxBatch>>,
         programs_modified_by_tx: &mut LoadedProgramsForTxBatch,
         programs_updated_only_for_global_cache: &mut LoadedProgramsForTxBatch,
         feature_set: Arc<FeatureSet>,
@@ -275,6 +279,7 @@ mod tests {
             mock_system_program_id,
             Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
         );
+        let programs_loaded_for_tx_batch = Arc::new(RwLock::new(programs_loaded_for_tx_batch));
         let account_keys = (0..transaction_context.get_number_of_accounts())
             .map(|index| {
                 *transaction_context
@@ -311,7 +316,7 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            &programs_loaded_for_tx_batch,
+            programs_loaded_for_tx_batch.clone(),
             &mut programs_modified_by_tx,
             &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
@@ -364,7 +369,7 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            &programs_loaded_for_tx_batch,
+            programs_loaded_for_tx_batch.clone(),
             &mut programs_modified_by_tx,
             &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
@@ -407,7 +412,7 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            &programs_loaded_for_tx_batch,
+            programs_loaded_for_tx_batch.clone(),
             &mut programs_modified_by_tx,
             &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
@@ -509,6 +514,7 @@ mod tests {
             mock_program_id,
             Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
         );
+        let programs_loaded_for_tx_batch = Arc::new(RwLock::new(programs_loaded_for_tx_batch));
         let account_metas = vec![
             AccountMeta::new(
                 *transaction_context.get_key_of_account_at_index(0).unwrap(),
@@ -542,7 +548,7 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            &programs_loaded_for_tx_batch,
+            programs_loaded_for_tx_batch.clone(),
             &mut programs_modified_by_tx,
             &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
@@ -579,7 +585,7 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            &programs_loaded_for_tx_batch,
+            programs_loaded_for_tx_batch.clone(),
             &mut programs_modified_by_tx,
             &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
@@ -613,7 +619,7 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            &programs_loaded_for_tx_batch,
+            programs_loaded_for_tx_batch.clone(),
             &mut programs_modified_by_tx,
             &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
@@ -686,6 +692,7 @@ mod tests {
             mock_program_id,
             Arc::new(LoadedProgram::new_builtin(0, 0, process_instruction)),
         );
+        let programs_loaded_for_tx_batch = Arc::new(RwLock::new(programs_loaded_for_tx_batch));
         let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
         let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
@@ -694,7 +701,7 @@ mod tests {
             &mut transaction_context,
             RentCollector::default().rent,
             None,
-            &programs_loaded_for_tx_batch,
+            programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
             &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
