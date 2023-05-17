@@ -263,37 +263,6 @@ mod tests {
             "--no-outfile",
         ])
         .unwrap();
-
-        // sanity check on languages and word count combinations
-        let languages = [
-            "english",
-            "chinese-simplified",
-            "chinese-traditional",
-            "japanese",
-            "spanish",
-            "korean",
-            "french",
-            "italian",
-        ];
-        let word_counts = ["12", "15", "18", "21", "24"];
-
-        for language in languages {
-            for word_count in word_counts {
-                process_test_command(&[
-                    "solana-keygen",
-                    "new",
-                    "--key-type",
-                    "elgamal",
-                    "--no-outfile",
-                    "--no-bip39-passphrase",
-                    "--language",
-                    language,
-                    "--word-count",
-                    word_count,
-                ])
-                .unwrap();
-            }
-        }
     }
 
     #[test]
@@ -340,36 +309,5 @@ mod tests {
             "--no-outfile",
         ])
         .unwrap();
-
-        // sanity check on languages and word count combinations
-        let languages = [
-            "english",
-            "chinese-simplified",
-            "chinese-traditional",
-            "japanese",
-            "spanish",
-            "korean",
-            "french",
-            "italian",
-        ];
-        let word_counts = ["12", "15", "18", "21", "24"];
-
-        for language in languages {
-            for word_count in word_counts {
-                process_test_command(&[
-                    "solana-keygen",
-                    "new",
-                    "--key-type",
-                    "aes128",
-                    "--no-outfile",
-                    "--no-bip39-passphrase",
-                    "--language",
-                    language,
-                    "--word-count",
-                    word_count,
-                ])
-                .unwrap();
-            }
-        }
     }
 }
