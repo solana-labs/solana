@@ -7,7 +7,7 @@ use {
         },
         errors::ProofError,
         range_proof::RangeProof,
-        sigma_proofs::equality_proof::CtxtCommEqualityProof,
+        sigma_proofs::ctxt_comm_equality_proof::CiphertextCommitmentEqualityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
@@ -24,13 +24,10 @@ use {
 #[cfg(not(target_os = "solana"))]
 const WITHDRAW_AMOUNT_BIT_LENGTH: usize = 64;
 
-/// This struct includes the cryptographic proof *and* the account data information needed to verify
-/// the proof
+/// The instruction data that is needed for the `ProofInstruction::VerifyWithdraw` instruction.
 ///
-/// - The pre-instruction should call WithdrawData::verify_proof(&self)
-/// - The actual program should check that `current_ct` is consistent with what is
-///   currently stored in the confidential token account TODO: update this statement
-///
+/// It includes the cryptographic proof as well as the context data information needed to verify
+/// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct WithdrawData {
@@ -41,6 +38,7 @@ pub struct WithdrawData {
     pub proof: WithdrawProof, // 736 bytes
 }
 
+/// The context data needed to verify a withdraw proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct WithdrawProofContext {
@@ -105,8 +103,9 @@ impl ZkProofData<WithdrawProofContext> for WithdrawData {
     }
 }
 
-/// This struct represents the cryptographic proof component that certifies the account's solvency
-/// for withdrawal
+/// The withdraw proof.
+///
+/// It contains a ciphertext-commitment equality proof and a 64-bit range proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 #[allow(non_snake_case)]
@@ -115,7 +114,7 @@ pub struct WithdrawProof {
     pub commitment: pod::PedersenCommitment,
 
     /// Associated equality proof
-    pub equality_proof: pod::CtxtCommEqualityProof,
+    pub equality_proof: pod::CiphertextCommitmentEqualityProof,
 
     /// Associated range proof
     pub range_proof: pod::RangeProof64, // 672 bytes
@@ -149,11 +148,11 @@ impl WithdrawProof {
         transcript.append_commitment(b"commitment", &pod_commitment);
 
         // generate equality_proof
-        let equality_proof = CtxtCommEqualityProof::new(
+        let equality_proof = CiphertextCommitmentEqualityProof::new(
             keypair,
             final_ciphertext,
-            final_balance,
             &opening,
+            final_balance,
             transcript,
         );
 
@@ -176,17 +175,13 @@ impl WithdrawProof {
         transcript.append_commitment(b"commitment", &self.commitment);
 
         let commitment: PedersenCommitment = self.commitment.try_into()?;
-        let equality_proof: CtxtCommEqualityProof = self.equality_proof.try_into()?;
+        let equality_proof: CiphertextCommitmentEqualityProof = self.equality_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
         // verify equality proof
-        //
-        // TODO: we can also consider verifying equality and range proof in a batch
         equality_proof.verify(pubkey, final_ciphertext, &commitment, transcript)?;
 
         // verify range proof
-        //
-        // TODO: double compressing here - consider modifying range proof input type to `PedersenCommitment`
         range_proof.verify(
             vec![&commitment],
             vec![WITHDRAW_AMOUNT_BIT_LENGTH],

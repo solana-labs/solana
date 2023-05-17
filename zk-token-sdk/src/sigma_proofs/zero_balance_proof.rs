@@ -1,9 +1,5 @@
 //! The zero-balance sigma proof system.
 //!
-//! A zero-balance proof is defined with respect to a twisted ElGamal ciphertext. The proof
-//! certifies that a given ciphertext encrypts the message 0 (`Scalar::zero()`). To generate the
-//! proof, a prover must provide the decryption key for the ciphertext.
-//!
 //! The protocol guarantees computationally soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
 
