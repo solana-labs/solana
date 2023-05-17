@@ -64,10 +64,11 @@ mod target_arch {
             },
             range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
-                equality_proof::{CtxtCommEqualityProof, CtxtCtxtEqualityProof},
+                ctxt_comm_equality_proof::CiphertextCommitmentEqualityProof,
+                ctxt_ctxt_equality_proof::CiphertextCiphertextEqualityProof,
                 errors::*,
                 fee_proof::FeeSigmaProof,
-                pubkey_proof::PubkeySigmaProof,
+                pubkey_proof::PubkeyValidityProof,
                 validity_proof::{AggregatedValidityProof, ValidityProof},
                 zero_balance_proof::ZeroBalanceProof,
             },
@@ -191,30 +192,30 @@ mod target_arch {
         }
     }
 
-    impl From<CtxtCommEqualityProof> for pod::CtxtCommEqualityProof {
-        fn from(proof: CtxtCommEqualityProof) -> Self {
+    impl From<CiphertextCommitmentEqualityProof> for pod::CiphertextCommitmentEqualityProof {
+        fn from(proof: CiphertextCommitmentEqualityProof) -> Self {
             Self(proof.to_bytes())
         }
     }
 
-    impl TryFrom<pod::CtxtCommEqualityProof> for CtxtCommEqualityProof {
+    impl TryFrom<pod::CiphertextCommitmentEqualityProof> for CiphertextCommitmentEqualityProof {
         type Error = EqualityProofError;
 
-        fn try_from(pod: pod::CtxtCommEqualityProof) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::CiphertextCommitmentEqualityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }
 
-    impl From<CtxtCtxtEqualityProof> for pod::CtxtCtxtEqualityProof {
-        fn from(proof: CtxtCtxtEqualityProof) -> Self {
+    impl From<CiphertextCiphertextEqualityProof> for pod::CiphertextCiphertextEqualityProof {
+        fn from(proof: CiphertextCiphertextEqualityProof) -> Self {
             Self(proof.to_bytes())
         }
     }
 
-    impl TryFrom<pod::CtxtCtxtEqualityProof> for CtxtCtxtEqualityProof {
+    impl TryFrom<pod::CiphertextCiphertextEqualityProof> for CiphertextCiphertextEqualityProof {
         type Error = EqualityProofError;
 
-        fn try_from(pod: pod::CtxtCtxtEqualityProof) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::CiphertextCiphertextEqualityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }
@@ -275,16 +276,16 @@ mod target_arch {
         }
     }
 
-    impl From<PubkeySigmaProof> for pod::PubkeySigmaProof {
-        fn from(proof: PubkeySigmaProof) -> Self {
+    impl From<PubkeyValidityProof> for pod::PubkeyValidityProof {
+        fn from(proof: PubkeyValidityProof) -> Self {
             Self(proof.to_bytes())
         }
     }
 
-    impl TryFrom<pod::PubkeySigmaProof> for PubkeySigmaProof {
+    impl TryFrom<pod::PubkeyValidityProof> for PubkeyValidityProof {
         type Error = PubkeyValidityProofError;
 
-        fn try_from(pod: pod::PubkeySigmaProof) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::PubkeyValidityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }

@@ -11,7 +11,8 @@ use {
         instruction::{combine_lo_hi_ciphertexts, split_u64, Role},
         range_proof::RangeProof,
         sigma_proofs::{
-            equality_proof::CtxtCommEqualityProof, validity_proof::AggregatedValidityProof,
+            ctxt_comm_equality_proof::CiphertextCommitmentEqualityProof,
+            validity_proof::AggregatedValidityProof,
         },
         transcript::TranscriptProtocol,
     },
@@ -42,6 +43,10 @@ lazy_static::lazy_static! {
                                                                          TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1);
 }
 
+/// The instruction data that is needed for the `ProofInstruction::VerifyTransfer` instruction.
+///
+/// It includes the cryptographic proof as well as the context data information needed to verify
+/// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferData {
@@ -52,6 +57,7 @@ pub struct TransferData {
     pub proof: TransferProof,
 }
 
+/// The context data needed to verify a transfer proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferProofContext {
@@ -252,7 +258,7 @@ pub struct TransferProof {
     pub new_source_commitment: pod::PedersenCommitment,
 
     /// Associated equality proof
-    pub equality_proof: pod::CtxtCommEqualityProof,
+    pub equality_proof: pod::CiphertextCommitmentEqualityProof,
 
     /// Associated ciphertext validity proof
     pub validity_proof: pod::AggregatedValidityProof,
@@ -307,11 +313,11 @@ impl TransferProof {
         transcript.append_commitment(b"commitment-new-source", &pod_new_source_commitment);
 
         // generate equality_proof
-        let equality_proof = CtxtCommEqualityProof::new(
+        let equality_proof = CiphertextCommitmentEqualityProof::new(
             source_keypair,
             new_source_ciphertext,
-            source_new_balance,
             &source_opening,
+            source_new_balance,
             transcript,
         );
 
@@ -377,13 +383,11 @@ impl TransferProof {
         transcript.append_commitment(b"commitment-new-source", &self.new_source_commitment);
 
         let commitment: PedersenCommitment = self.new_source_commitment.try_into()?;
-        let equality_proof: CtxtCommEqualityProof = self.equality_proof.try_into()?;
+        let equality_proof: CiphertextCommitmentEqualityProof = self.equality_proof.try_into()?;
         let aggregated_validity_proof: AggregatedValidityProof = self.validity_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
         // verify equality proof
-        //
-        // TODO: we can also consider verifying equality and range proof in a batch
         equality_proof.verify(
             &transfer_pubkeys.source_pubkey,
             ciphertext_new_spendable,

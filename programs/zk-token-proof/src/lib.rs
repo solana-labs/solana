@@ -135,14 +135,14 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
             ic_msg!(invoke_context, "CloseContextState");
             process_close_proof_context(invoke_context)
         }
-        ProofInstruction::VerifyCloseAccount => {
+        ProofInstruction::VerifyZeroBalance => {
             if native_programs_consume_cu {
                 invoke_context
                     .consume_checked(6_012)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
-            ic_msg!(invoke_context, "VerifyCloseAccount");
-            process_verify_proof::<CloseAccountData, CloseAccountProofContext>(invoke_context)
+            ic_msg!(invoke_context, "VerifyZeroBalance");
+            process_verify_proof::<ZeroBalanceProofData, ZeroBalanceProofContext>(invoke_context)
         }
         ProofInstruction::VerifyWithdraw => {
             if native_programs_consume_cu {
@@ -153,16 +153,17 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
             ic_msg!(invoke_context, "VerifyWithdraw");
             process_verify_proof::<WithdrawData, WithdrawProofContext>(invoke_context)
         }
-        ProofInstruction::VerifyWithdrawWithheldTokens => {
+        ProofInstruction::VerifyCiphertextCiphertextEquality => {
             if native_programs_consume_cu {
                 invoke_context
                     .consume_checked(7_943)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
-            ic_msg!(invoke_context, "VerifyWithdrawWithheldTokens");
-            process_verify_proof::<WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext>(
-                invoke_context,
-            )
+            ic_msg!(invoke_context, "VerifyCiphertextCiphertextEquality");
+            process_verify_proof::<
+                CiphertextCiphertextEqualityProofData,
+                CiphertextCiphertextEqualityProofContext,
+            >(invoke_context)
         }
         ProofInstruction::VerifyTransfer => {
             if native_programs_consume_cu {

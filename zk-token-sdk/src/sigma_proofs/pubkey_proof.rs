@@ -1,9 +1,5 @@
 //! The public-key (validity) proof system.
 //!
-//! A public-key proof is defined with respect to an ElGamal public key. The proof certifies that a
-//! given public key is a valid ElGamal public key (i.e. the prover knows a corresponding secret
-//! key). To generate the proof, a prover must prove the secret key for the public key.
-//!
 //! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
 
@@ -35,14 +31,14 @@ use {
 /// Contains all the elliptic curve and scalar components that make up the sigma protocol.
 #[allow(non_snake_case)]
 #[derive(Clone)]
-pub struct PubkeySigmaProof {
+pub struct PubkeyValidityProof {
     Y: CompressedRistretto,
     z: Scalar,
 }
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
-impl PubkeySigmaProof {
+impl PubkeyValidityProof {
     /// Public-key proof constructor.
     ///
     /// The function does *not* hash the public key and ciphertext into the transcript. For
@@ -136,7 +132,7 @@ impl PubkeySigmaProof {
         let Y = CompressedRistretto::from_slice(Y);
         let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Deserialization)?;
 
-        Ok(PubkeySigmaProof { Y, z })
+        Ok(PubkeyValidityProof { Y, z })
     }
 }
 
@@ -155,7 +151,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"test");
         let mut verifier_transcript = Transcript::new(b"test");
 
-        let proof = PubkeySigmaProof::new(&keypair, &mut prover_transcript);
+        let proof = PubkeyValidityProof::new(&keypair, &mut prover_transcript);
         assert!(proof
             .verify(&keypair.public, &mut verifier_transcript)
             .is_ok());
@@ -166,7 +162,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"test");
         let mut verifier_transcript = Transcript::new(b"test");
 
-        let proof = PubkeySigmaProof::new(&keypair, &mut prover_transcript);
+        let proof = PubkeyValidityProof::new(&keypair, &mut prover_transcript);
         assert!(proof
             .verify(&keypair.public, &mut verifier_transcript)
             .is_ok());
