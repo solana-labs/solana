@@ -3107,7 +3107,7 @@ impl Bank {
     }
 
     /// Calculate epoch reward and payout vote rewards (optimized with cache and no-join of vote/stake accounts)
-    /// Returns rewards for stake accounts and total reward distribute for vote accounts
+    /// Returns rewards for stake accounts and total rewards to distribute for vote accounts
     fn do_calculate_validator_rewards_and_distribute_vote_rewards_with_thread_pool(
         &mut self,
         rewarded_epoch: Epoch,
