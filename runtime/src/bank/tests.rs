@@ -12865,7 +12865,7 @@ fn test_rewards_computation() {
     assert_eq!(total_stake_rewards, expected_rewards);
 
     // assert that number of rewards matches
-    assert_eq!(stake_rewards.unwrap().len(), expected_num_delegations);
+    assert_eq!(stake_rewards.len(), expected_num_delegations);
 }
 
 /// Test rewards compuation and partitioned rewards distribution at the epoch boundary

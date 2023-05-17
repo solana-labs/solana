@@ -1189,7 +1189,7 @@ impl WorkingSlot for Bank {
 
 #[derive(Default)]
 struct RewardCalculationResult {
-    stake_rewards: Option<StakeRewards>,
+    stake_rewards: StakeRewards,
     total_rewards: u64,
 }
 
@@ -2675,7 +2675,7 @@ impl Bank {
         (
             validator_rewards_paid + total_stake_rewards,
             validator_rewards_paid,
-            stake_rewards.unwrap_or(vec![]),
+            stake_rewards,
         )
     }
 
@@ -3155,7 +3155,7 @@ impl Bank {
             self.update_reward_history(vec![], vote_rewards);
 
             RewardCalculationResult {
-                stake_rewards: Some(stake_rewards),
+                stake_rewards,
                 total_rewards: u64::try_from(total).unwrap(),
             }
         } else {
