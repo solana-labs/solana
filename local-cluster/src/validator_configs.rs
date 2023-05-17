@@ -30,8 +30,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         repair_validators: config.repair_validators.clone(),
         repair_whitelist: config.repair_whitelist.clone(),
         gossip_validators: config.gossip_validators.clone(),
-        halt_on_known_validators_accounts_hash_mismatch: config
-            .halt_on_known_validators_accounts_hash_mismatch,
         accounts_hash_interval_slots: config.accounts_hash_interval_slots,
         accounts_hash_fault_injector: config.accounts_hash_fault_injector,
         max_genesis_archive_unpacked_size: config.max_genesis_archive_unpacked_size,
@@ -68,6 +66,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         banking_trace_dir_byte_limit: config.banking_trace_dir_byte_limit,
         block_verification_method: config.block_verification_method.clone(),
         block_production_method: config.block_production_method.clone(),
+        generator_config: config.generator_config.clone(),
     }
 }
 

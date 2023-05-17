@@ -26,7 +26,7 @@ use {
     },
     solana_sdk::{
         clock::{FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
-        saturating_add_assign,
+        feature_set, saturating_add_assign,
         timing::timestamp,
         transaction::{self, SanitizedTransaction, TransactionError},
     },
@@ -429,11 +429,19 @@ impl Consumer {
             ..
         } = execute_and_commit_transactions_output;
 
-        QosService::update_or_remove_transaction_costs(
-            transaction_qos_cost_results.iter(),
-            commit_transactions_result.as_ref().ok(),
-            bank,
-        );
+        // once feature `apply_cost_tracker_during_replay` is activated, leader shall no longer
+        // adjust block with executed cost (a behavior more inline with bankless leader), instead
+        // will be exclusively using requested `compute_unit_limit` in cost tracking.
+        if !bank
+            .feature_set
+            .is_active(&feature_set::apply_cost_tracker_during_replay::id())
+        {
+            QosService::update_or_remove_transaction_costs(
+                transaction_qos_cost_results.iter(),
+                commit_transactions_result.as_ref().ok(),
+                bank,
+            );
+        }
 
         retryable_transaction_indexes
             .iter_mut()
@@ -1074,7 +1082,9 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let mut bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
+        bank.deactivate_feature(&feature_set::apply_cost_tracker_during_replay::id());
+        let bank = Arc::new(bank);
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();

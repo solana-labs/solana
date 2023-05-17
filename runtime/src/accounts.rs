@@ -82,6 +82,12 @@ pub struct AccountLocks {
     readonly_locks: HashMap<Pubkey, u64>,
 }
 
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub(crate) enum RewardInterval {
+    /// the slot within the epoch is OUTSIDE the reward distribution interval
+    OutsideInterval,
+}
+
 impl AccountLocks {
     fn is_locked_readonly(&self, key: &Pubkey) -> bool {
         self.readonly_locks
@@ -336,6 +342,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
+        _reward_interval: RewardInterval,
         program_accounts: &HashMap<Pubkey, &Pubkey>,
         loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Result<LoadedTransaction> {
@@ -683,7 +690,7 @@ impl Accounts {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn load_accounts(
+    pub(crate) fn load_accounts(
         &self,
         ancestors: &Ancestors,
         txs: &[SanitizedTransaction],
@@ -694,6 +701,7 @@ impl Accounts {
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
+        in_reward_interval: RewardInterval,
         program_accounts: &HashMap<Pubkey, &Pubkey>,
         loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Vec<TransactionLoadResult> {
@@ -731,6 +739,7 @@ impl Accounts {
                         rent_collector,
                         feature_set,
                         account_overrides,
+                        in_reward_interval,
                         program_accounts,
                         loaded_programs,
                     ) {
@@ -1490,9 +1499,7 @@ mod tests {
         },
         std::{
             borrow::Cow,
-            cell::RefCell,
             convert::TryFrom,
-            rc::Rc,
             sync::atomic::{AtomicBool, AtomicU64, Ordering},
             thread, time,
         },
@@ -1524,10 +1531,8 @@ mod tests {
                 executed_units: 0,
                 accounts_data_len_delta: 0,
             },
-            programs_modified_by_tx: Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            programs_updated_only_for_global_cache: Rc::new(RefCell::new(
-                LoadedProgramsForTxBatch::default(),
-            )),
+            programs_modified_by_tx: Box::<LoadedProgramsForTxBatch>::default(),
+            programs_updated_only_for_global_cache: Box::<LoadedProgramsForTxBatch>::default(),
         }
     }
 
@@ -1564,6 +1569,7 @@ mod tests {
             feature_set,
             fee_structure,
             None,
+            RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
         )
@@ -3368,6 +3374,7 @@ mod tests {
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
             account_overrides,
+            RewardInterval::OutsideInterval,
             &HashMap::new(),
             &LoadedProgramsForTxBatch::default(),
         )

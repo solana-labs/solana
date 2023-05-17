@@ -41,7 +41,7 @@ use {
         account_overrides::AccountOverrides,
         account_rent_state::RentState,
         accounts::{
-            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot,
+            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot, RewardInterval,
             TransactionLoadResult,
         },
         accounts_db::{
@@ -320,8 +320,8 @@ pub struct TransactionExecutionDetails {
 pub enum TransactionExecutionResult {
     Executed {
         details: TransactionExecutionDetails,
-        programs_modified_by_tx: Rc<RefCell<LoadedProgramsForTxBatch>>,
-        programs_updated_only_for_global_cache: Rc<RefCell<LoadedProgramsForTxBatch>>,
+        programs_modified_by_tx: Box<LoadedProgramsForTxBatch>,
+        programs_updated_only_for_global_cache: Box<LoadedProgramsForTxBatch>,
     },
     NotExecuted(TransactionError),
 }
@@ -873,6 +873,27 @@ impl AbiExample for OptionalDropCallback {
     }
 }
 
+#[derive(AbiExample, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct StartBlockHeightAndRewards {
+    /// the block height of the parent of the slot at which rewards distribution began
+    pub(crate) parent_start_block_height: u64,
+    /// calculated epoch rewards pending distribution
+    pub(crate) calculated_epoch_stake_rewards: Arc<StakeRewards>,
+}
+
+/// Represent whether bank is in the reward phase or not.
+#[derive(AbiExample, AbiEnumVisitor, Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub(crate) enum EpochRewardStatus {
+    /// this bank is in the reward phase.
+    /// Contents are the start point for epoch reward calculation,
+    /// i.e. parent_slot and parent_block height for the starting
+    /// block of the current epoch.
+    Active(StartBlockHeightAndRewards),
+    /// this bank is outside of the rewarding phase.
+    #[default]
+    Inactive,
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
@@ -1084,7 +1105,7 @@ struct VoteReward {
 }
 
 type VoteRewards = DashMap<Pubkey, VoteReward>;
-type StakeRewards = Vec<StakeReward>;
+pub(crate) type StakeRewards = Vec<StakeReward>;
 
 #[derive(Debug, Default)]
 pub struct NewBankOptions {
@@ -1111,14 +1132,15 @@ pub struct CommitTransactionCounts {
     pub signature_count: u64,
 }
 
-struct StakeReward {
+#[derive(AbiExample, Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub(crate) struct StakeReward {
     stake_pubkey: Pubkey,
     stake_reward_info: RewardInfo,
     stake_account: AccountSharedData,
 }
 
 impl StakeReward {
-    pub fn get_stake_reward(&self) -> i64 {
+    fn get_stake_reward(&self) -> i64 {
         self.stake_reward_info.lamports
     }
 }
@@ -4192,7 +4214,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
-        programs_loaded_for_tx_batch: Rc<RefCell<LoadedProgramsForTxBatch>>,
+        programs_loaded_for_tx_batch: &LoadedProgramsForTxBatch,
     ) -> TransactionExecutionResult {
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
@@ -4242,10 +4264,8 @@ impl Bank {
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
 
         let mut executed_units = 0u64;
-        let programs_modified_by_tx =
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::new(self.slot)));
-        let programs_updated_only_for_global_cache =
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::new(self.slot)));
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new(self.slot);
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::new(self.slot);
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             &self.builtin_programs,
@@ -4255,8 +4275,8 @@ impl Bank {
             self.rent_collector.rent,
             log_collector.clone(),
             programs_loaded_for_tx_batch,
-            programs_modified_by_tx.clone(),
-            programs_updated_only_for_global_cache.clone(),
+            &mut programs_modified_by_tx,
+            &mut programs_updated_only_for_global_cache,
             self.feature_set.clone(),
             compute_budget,
             timings,
@@ -4360,8 +4380,10 @@ impl Bank {
                 executed_units,
                 accounts_data_len_delta,
             },
-            programs_modified_by_tx,
-            programs_updated_only_for_global_cache,
+            programs_modified_by_tx: Box::new(programs_modified_by_tx),
+            programs_updated_only_for_global_cache: Box::new(
+                programs_updated_only_for_global_cache,
+            ),
         }
     }
 
@@ -4522,6 +4544,7 @@ impl Bank {
             &self.feature_set,
             &self.fee_structure,
             account_overrides,
+            RewardInterval::OutsideInterval,
             &program_accounts_map,
             &programs_loaded_for_tx_batch.borrow(),
         );
@@ -4580,7 +4603,7 @@ impl Bank {
                         timings,
                         &mut error_counters,
                         log_messages_bytes_limit,
-                        programs_loaded_for_tx_batch.clone(),
+                        &programs_loaded_for_tx_batch.borrow(),
                     );
 
                     if let TransactionExecutionResult::Executed {
@@ -4594,7 +4617,7 @@ impl Bank {
                         if details.status.is_ok() {
                             programs_loaded_for_tx_batch
                                 .borrow_mut()
-                                .merge(&programs_modified_by_tx.borrow());
+                                .merge(programs_modified_by_tx);
                         }
                     }
 
@@ -5089,8 +5112,8 @@ impl Bank {
             {
                 if details.status.is_ok() {
                     let mut cache = self.loaded_programs_cache.write().unwrap();
-                    cache.merge(&programs_modified_by_tx.borrow());
-                    cache.merge(&programs_updated_only_for_global_cache.borrow());
+                    cache.merge(programs_modified_by_tx);
+                    cache.merge(programs_updated_only_for_global_cache);
                 }
             }
         }

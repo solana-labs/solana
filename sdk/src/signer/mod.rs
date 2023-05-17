@@ -144,6 +144,11 @@ pub trait EncodableKey: Sized {
 
         self.write(&mut f)
     }
+}
+
+/// The `SeedDerivable` trait defines the interface by which cryptographic keys/keypairs are
+/// derived from byte seeds, derivation paths, and passphrases.
+pub trait SeedDerivable: Sized {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>>;
     fn from_seed_and_derivation_path(
         seed: &[u8],
@@ -153,6 +158,15 @@ pub trait EncodableKey: Sized {
         seed_phrase: &str,
         passphrase: &str,
     ) -> Result<Self, Box<dyn error::Error>>;
+}
+
+/// The `EncodableKeypair` trait extends `EncodableKey` for asymmetric keypairs, i.e. have
+/// associated public keys.
+pub trait EncodableKeypair: EncodableKey {
+    type Pubkey: ToString;
+
+    /// Returns an encodable representation of the associated public key.
+    fn encodable_pubkey(&self) -> Self::Pubkey;
 }
 
 #[cfg(test)]
