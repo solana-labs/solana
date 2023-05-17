@@ -5068,7 +5068,6 @@ dependencies = [
  "solana-metrics",
  "solana-runtime",
  "solana-sdk",
- "solana-sys-tuner",
  "thiserror",
 ]
 
@@ -5976,21 +5975,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "x509-parser",
-]
-
-[[package]]
-name = "solana-sys-tuner"
-version = "1.16.0"
-dependencies = [
- "clap 2.33.3",
- "libc",
- "log",
- "nix",
- "solana-logger",
- "solana-version",
- "sysctl",
- "unix_socket2",
- "users",
 ]
 
 [[package]]
@@ -7152,15 +7136,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "unix_socket2"
-version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b57c6eace16c00eccb98a28e85db3370eab0685bdd5e13831d59e2bcb49a1d8a"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "unreachable"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7212,16 +7187,6 @@ dependencies = [
  "idna 0.2.0",
  "matches",
  "percent-encoding 2.1.0",
-]
-
-[[package]]
-name = "users"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa4227e95324a443c9fcb06e03d4d85e91aabe9a5a02aa818688b6918b6af486"
-dependencies = [
- "libc",
- "log",
 ]
 
 [[package]]

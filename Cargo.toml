@@ -91,7 +91,6 @@ members = [
     "storage-bigtable/build-proto",
     "storage-proto",
     "streamer",
-    "sys-tuner",
     "test-validator",
     "thin-client",
     "tokens",
@@ -349,7 +348,6 @@ solana-stake-program = { path = "programs/stake", version = "=1.16.0" }
 solana-storage-bigtable = { path = "storage-bigtable", version = "=1.16.0" }
 solana-storage-proto = { path = "storage-proto", version = "=1.16.0" }
 solana-streamer = { path = "streamer", version = "=1.16.0" }
-solana-sys-tuner = { path = "sys-tuner", version = "=1.16.0" }
 solana-system-program = { path = "programs/system", version = "=1.16.0" }
 solana-test-validator = { path = "test-validator", version = "=1.16.0" }
 solana-thin-client = { path = "thin-client", version = "=1.16.0" }

@@ -108,7 +108,6 @@ impl PohService {
         let tick_producer = Builder::new()
             .name("solPohTickProd".to_string())
             .spawn(move || {
-                solana_sys_tuner::request_realtime_poh();
                 if poh_config.hashes_per_tick.is_none() {
                     if poh_config.target_tick_count.is_none() {
                         Self::low_power_tick_producer(
