@@ -1499,9 +1499,7 @@ mod tests {
         },
         std::{
             borrow::Cow,
-            cell::RefCell,
             convert::TryFrom,
-            rc::Rc,
             sync::atomic::{AtomicBool, AtomicU64, Ordering},
             thread, time,
         },
@@ -1533,10 +1531,8 @@ mod tests {
                 executed_units: 0,
                 accounts_data_len_delta: 0,
             },
-            programs_modified_by_tx: Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            programs_updated_only_for_global_cache: Rc::new(RefCell::new(
-                LoadedProgramsForTxBatch::default(),
-            )),
+            programs_modified_by_tx: Box::<LoadedProgramsForTxBatch>::default(),
+            programs_updated_only_for_global_cache: Box::<LoadedProgramsForTxBatch>::default(),
         }
     }
 

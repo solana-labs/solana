@@ -196,14 +196,8 @@ fn find_program_in_cache(
     // the cache of the cache of the programs that are loaded for the transaction batch.
     invoke_context
         .programs_modified_by_tx
-        .borrow()
         .find(pubkey)
-        .or_else(|| {
-            invoke_context
-                .programs_loaded_for_tx_batch
-                .borrow()
-                .find(pubkey)
-        })
+        .or_else(|| invoke_context.programs_loaded_for_tx_batch.find(pubkey))
 }
 
 macro_rules! deploy_program {
@@ -229,7 +223,7 @@ macro_rules! deploy_program {
         $drop
         load_program_metrics.program_id = $program_id.to_string();
         load_program_metrics.submit_datapoint(&mut $invoke_context.timings);
-        $invoke_context.programs_modified_by_tx.borrow_mut().replenish($program_id, Arc::new(executor));
+        $invoke_context.programs_modified_by_tx.replenish($program_id, Arc::new(executor));
     }};
 }
 
@@ -1271,20 +1265,16 @@ fn process_loader_upgradeable_instruction(
                                 .feature_set
                                 .is_active(&delay_visibility_of_program_deployment::id())
                             {
-                                invoke_context
-                                    .programs_modified_by_tx
-                                    .borrow_mut()
-                                    .replenish(
-                                        program_key,
-                                        Arc::new(LoadedProgram::new_tombstone(
-                                            clock.slot,
-                                            LoadedProgramType::Closed,
-                                        )),
-                                    );
+                                invoke_context.programs_modified_by_tx.replenish(
+                                    program_key,
+                                    Arc::new(LoadedProgram::new_tombstone(
+                                        clock.slot,
+                                        LoadedProgramType::Closed,
+                                    )),
+                                );
                             } else {
                                 invoke_context
                                     .programs_updated_only_for_global_cache
-                                    .borrow_mut()
                                     .replenish(
                                         program_key,
                                         Arc::new(LoadedProgram::new_tombstone(
@@ -1714,9 +1704,12 @@ pub mod test_utils {
                     true,
                     false,
                 ) {
-                    let mut cache = invoke_context.programs_modified_by_tx.borrow_mut();
-                    cache.set_slot_for_tests(DELAY_VISIBILITY_SLOT_OFFSET);
-                    cache.replenish(*pubkey, Arc::new(loaded_program));
+                    invoke_context
+                        .programs_modified_by_tx
+                        .set_slot_for_tests(DELAY_VISIBILITY_SLOT_OFFSET);
+                    invoke_context
+                        .programs_modified_by_tx
+                        .replenish(*pubkey, Arc::new(loaded_program));
                 }
             }
         }
@@ -4109,7 +4102,6 @@ mod tests {
         };
         invoke_context
             .programs_modified_by_tx
-            .borrow_mut()
             .replenish(program_id, Arc::new(program));
 
         assert!(matches!(
@@ -4119,7 +4111,6 @@ mod tests {
 
         let updated_program = invoke_context
             .programs_modified_by_tx
-            .borrow()
             .find(&program_id)
             .expect("Didn't find upgraded program in the cache");
 
@@ -4142,7 +4133,6 @@ mod tests {
         };
         invoke_context
             .programs_modified_by_tx
-            .borrow_mut()
             .replenish(program_id, Arc::new(program));
 
         let program_id2 = Pubkey::new_unique();
@@ -4153,7 +4143,6 @@ mod tests {
 
         let program2 = invoke_context
             .programs_modified_by_tx
-            .borrow()
             .find(&program_id2)
             .expect("Didn't find upgraded program in the cache");
 

@@ -553,7 +553,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
         debug!("Loaded program {}", key);
         loaded_programs.replenish(key, program);
     }
-    invoke_context.programs_loaded_for_tx_batch = Rc::new(RefCell::new(loaded_programs));
+    invoke_context.programs_loaded_for_tx_batch = &loaded_programs;
 
     invoke_context
         .transaction_context
