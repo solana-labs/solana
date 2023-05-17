@@ -930,6 +930,7 @@ impl Validator {
                 genesis_config.hash(),
                 ledger_path,
                 config.validator_exit.clone(),
+                exit.clone(),
                 config.known_validators.clone(),
                 rpc_override_health_check.clone(),
                 startup_verification_complete,
