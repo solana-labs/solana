@@ -195,7 +195,10 @@ struct BroadcastHandler {
     sent_stats: Arc<SentNotificationStats>,
 }
 
-fn count_final(params: &SubscriptionParams, stats: &Arc<SentNotificationStats>) {
+fn increment_sent_notification_stats(
+    params: &SubscriptionParams,
+    stats: &Arc<SentNotificationStats>,
+) {
     match params {
         SubscriptionParams::Account(_) => {
             stats.num_account.fetch_add(1, Ordering::Relaxed);
@@ -242,7 +245,7 @@ impl BroadcastHandler {
             .current_subscriptions
             .entry(notification.subscription_id)
         {
-            count_final(entry.get().params(), &self.sent_stats);
+            increment_sent_notification_stats(entry.get().params(), &self.sent_stats);
 
             let time_since_created = notification.created_at.elapsed();
 
