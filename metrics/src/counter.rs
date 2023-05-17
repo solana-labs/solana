@@ -266,11 +266,11 @@ mod tests {
             inc_counter!(COUNTER, Level::Info, 2);
         }
         unsafe {
-            assert_eq!(COUNTER.lastlog.load(Ordering::Relaxed), 397);
+            assert_eq!(COUNTER.counts.load(Ordering::Relaxed), 399);
         }
         inc_counter!(COUNTER, Level::Info, 2);
         unsafe {
-            assert_eq!(COUNTER.lastlog.load(Ordering::Relaxed), 399);
+            assert_eq!(COUNTER.counts.load(Ordering::Relaxed), 401);
         }
     }
 
