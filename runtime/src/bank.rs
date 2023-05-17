@@ -3149,7 +3149,7 @@ impl Bank {
             point_value,
             credits_auto_rewind,
             thread_pool,
-            reward_calc_tracer.as_ref(),
+            reward_calc_tracer,
             metrics,
         );
         drop(reward_calculate_param);
