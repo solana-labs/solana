@@ -1,34 +1,5 @@
-//! # Examples
-//!
-//! ```
-//! # use solana_program::{
-//! #    account_info::{AccountInfo, next_account_info},
-//! #    entrypoint::ProgramResult,
-//! #    msg,
-//! #    pubkey::Pubkey,
-//! #    sysvar::Sysvar,
-//! # };
-//! #
-//! # use solana_program::last_restart_slot::LastRestartSlot;
-//! # use solana_program::program_error::ProgramError;
-//! # use solana_program::sysvar::last_restart_slot;
-//! #
-//! fn process_instruction(
-//!     program_id: &Pubkey,
-//!     accounts: &[AccountInfo],
-//!     instruction_data: &[u8],
-//! ) -> ProgramResult {
-//!     let account_info_iter = &mut accounts.iter();
-//!     let last_restart_slot_account_info = next_account_info(account_info_iter)?;
-//!
-//!     assert!(last_restart_slot::check_id(last_restart_slot_account_info.key));
-//!
-//!     let slot = LastRestartSlot::from_account_info(last_restart_slot_account_info)?;
-//!     msg!("last restart slot: {:#?}", slot);
-//!
-//!     Ok(())
-//! }
-//! ```
+//! Information about the last restart slot (hard fork).
+
 use solana_sdk_macro::CloneZeroed;
 
 pub type Slot = u64;
