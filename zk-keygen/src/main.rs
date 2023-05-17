@@ -169,10 +169,10 @@ enum KeyType {
 }
 
 impl KeyType {
-    fn default_file_name(&self) -> String {
+    fn default_file_name(&self) -> &str {
         match self {
-            KeyType::ElGamal => "elgamal.json".to_string(),
-            KeyType::Aes128 => "aes128.json".to_string(),
+            KeyType::ElGamal => "elgamal.json",
+            KeyType::Aes128 => "aes128.json",
         }
     }
 }
