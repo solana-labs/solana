@@ -1193,12 +1193,6 @@ struct RewardCalculationResult {
     total_rewards: u64,
 }
 
-struct DistributedRewardsSum {
-    num_accounts: usize,
-    /// total distributed rewards in lamports
-    total_rewards_in_lamports: u64,
-}
-
 impl Bank {
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
@@ -3667,14 +3661,11 @@ impl Bank {
     }
 
     /// store stake rewards in partition
-    /// return the number of rewards stored and the sum of all the stored rewards
+    /// return the sum of all the stored rewards
     ///
     /// Note: even if staker's reward is 0, the stake account still need to be stored because
     /// credits observed has changed
-    fn store_stake_accounts_in_partition(
-        &self,
-        stake_rewards: &[StakeReward],
-    ) -> DistributedRewardsSum {
+    fn store_stake_accounts_in_partition(&self, stake_rewards: &[StakeReward]) -> u64 {
         let mut total: i64 = 0;
         // Verify that stake account `lamports + reward_amount` matches what we have in the
         // rewarded account. This code will have a performance hit -  an extra load and compare of
@@ -3708,10 +3699,7 @@ impl Bank {
             total += a.stake_reward_info.lamports;
         }
 
-        DistributedRewardsSum {
-            num_accounts: stake_rewards.len(),
-            total_rewards_in_lamports: total as u64,
-        }
+        total as u64
     }
 
     fn store_vote_accounts_partitioned(
@@ -3826,13 +3814,8 @@ impl Bank {
         let this_partition_stake_rewards =
             self.get_stake_rewards_in_partition(partition_index, all_stake_rewards);
 
-        let (
-            DistributedRewardsSum {
-                num_accounts,
-                total_rewards_in_lamports,
-            },
-            store_stake_accounts_us,
-        ) = measure_us!(self.store_stake_accounts_in_partition(this_partition_stake_rewards));
+        let (total_rewards_in_lamports, store_stake_accounts_us) =
+            measure_us!(self.store_stake_accounts_in_partition(this_partition_stake_rewards));
 
         self.update_reward_history_in_partition(this_partition_stake_rewards);
 
@@ -3840,7 +3823,7 @@ impl Bank {
         self.capitalization
             .fetch_add(total_rewards_in_lamports, Relaxed);
 
-        // update EpochRewards sysvar with distributed rewards (decrease total capitalization by the distributed rewards)
+        // update EpochRewards sysvar with distributed rewards (decreases total capitalization by the distributed rewards)
         self.update_epoch_rewards_sysvar(total_rewards_in_lamports);
 
         let metrics = RewardsStoreMetrics {
@@ -3849,7 +3832,7 @@ impl Bank {
             total_stake_accounts_count: all_stake_rewards.len(),
             partition_index,
             store_stake_accounts_us,
-            store_stake_accounts_count: num_accounts,
+            store_stake_accounts_count: this_partition_stake_rewards.len(),
         };
 
         report_partitioned_reward_metrics(self, metrics);
