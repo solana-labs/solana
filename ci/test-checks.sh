@@ -85,6 +85,18 @@ nightly_clippy_allows=(--allow=clippy::redundant_clone)
    --deny=clippy::used_underscore_binding \
    "${nightly_clippy_allows[@]}"
 
+# temporarily run stable clippy as well to scan the codebase for
+# `redundant_clone`s, which is disabled as nightly clippy is buggy:
+#   https://github.com/rust-lang/rust-clippy/issues/10577
+#
+# can't use --all-targets:
+#   error[E0554]: `#![feature]` may not be used on the stable release channel
+_ scripts/cargo-for-all-lock-files.sh -- clippy --workspace  --tests --bins --examples --features dummy-for-ci-check -- \
+  --deny=warnings \
+  --deny=clippy::default_trait_access \
+  --deny=clippy::integer_arithmetic \
+  --deny=clippy::used_underscore_binding
+
 if [[ -n $CI ]]; then
   # exclude from printing "Checking xxx ..."
   _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" sort --workspace --check > /dev/null
