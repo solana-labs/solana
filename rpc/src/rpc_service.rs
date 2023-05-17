@@ -560,7 +560,6 @@ impl JsonRpcService {
             .unwrap()
             .register_exit(Box::new(move || {
                 close_handle_.close();
-                exit.store(true, Ordering::Relaxed);
             }));
         Ok(Self {
             thread_hdl,
