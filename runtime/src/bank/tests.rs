@@ -12589,11 +12589,9 @@ fn test_partitioned_reward_enable() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
 
     let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.set_partitioned_rewards_feature_enabled_for_tests(true);
-    assert!(bank.partitioned_rewards_feature_enabled());
-
-    bank.set_partitioned_rewards_feature_enabled_for_tests(false);
     assert!(!bank.partitioned_rewards_feature_enabled());
+    bank.set_partitioned_rewards_feature_enabled_for_tests();
+    assert!(bank.partitioned_rewards_feature_enabled());
 }
 
 /// Test get_reward_credit_num_blocks during normal epoch gives the expected result
@@ -12987,7 +12985,7 @@ fn test_reward_status_transtions_at_epoch_boundary() {
     });
 
     // enable partitioned rewards feature
-    bank0.set_partitioned_rewards_feature_enabled_for_tests(true);
+    bank0.set_partitioned_rewards_feature_enabled_for_tests();
     let bank0 = Arc::new(bank0);
 
     bank0.restore_old_behavior_for_fragile_tests();
@@ -13144,7 +13142,7 @@ fn test_epoch_reward_sysvar() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
     let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.set_partitioned_rewards_feature_enabled_for_tests(true);
+    bank.set_partitioned_rewards_feature_enabled_for_tests();
 
     let total_rewards = 1_000_000_000; // a large rewards so that the sysvar account is rent-exempted.
 

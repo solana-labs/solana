@@ -139,7 +139,7 @@ mod tests {
         drop(bank1_sysvar_cache);
 
         // inject a reward sysvar for test
-        bank1.set_partitioned_rewards_feature_enabled_for_tests(true);
+        bank1.set_partitioned_rewards_feature_enabled_for_tests();
         let expected_epoch_rewards = EpochRewards {
             total_rewards: 100,
             distributed_rewards: 10,

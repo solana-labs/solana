@@ -1496,12 +1496,8 @@ impl Bank {
     }
 
     #[cfg(test)]
-    pub(crate) fn set_partitioned_rewards_feature_enabled_for_tests(&mut self, enable: bool) {
-        if enable {
-            self.activate_feature(&enable_partitioned_epoch_reward::id())
-        } else {
-            self.deactivate_feature(&enable_partitioned_epoch_reward::id())
-        }
+    pub(crate) fn set_partitioned_rewards_feature_enabled_for_tests(&mut self) {
+        self.activate_feature(&enable_partitioned_epoch_reward::id())
     }
 
     /// Target to store 64 rewards per entry/tick in a block. A block has a minimal of 64
