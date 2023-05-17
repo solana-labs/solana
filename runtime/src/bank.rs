@@ -1200,10 +1200,6 @@ struct DistributedRewardsSum {
 }
 
 impl Bank {
-    /// reward calculation happens synchronously during the first block of the epoch boundary.
-    /// So, # blocks for reward calculation is 1.
-    const REWARD_CALCULATION_NUM_BLOCKS: u64 = 1;
-
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
     }
@@ -1499,6 +1495,10 @@ impl Bank {
     pub(crate) fn set_partitioned_rewards_feature_enabled_for_tests(&mut self) {
         self.activate_feature(&enable_partitioned_epoch_reward::id())
     }
+
+    /// reward calculation happens synchronously during the first block of the epoch boundary.
+    /// So, # blocks for reward calculation is 1.
+    const REWARD_CALCULATION_NUM_BLOCKS: u64 = 1;
 
     /// Target to store 64 rewards per entry/tick in a block. A block has a minimal of 64
     /// entries/ticks. This gives 4096 total rewards to store in one block.
