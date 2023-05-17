@@ -202,7 +202,9 @@ impl<'a> TypeContext<'a> for Context {
         let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
         let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
         let lamports_per_signature = fields.fee_rate_governor.lamports_per_signature;
-        let epoch_reward_status = None;
+        let epoch_reward_status = serializable_bank
+            .bank
+            .get_epoch_reward_status_to_serialize();
         match get_serialize_bank_fields(
             SerializableVersionedBank::from(fields),
             SerializableAccountsDb::<'a, Self> {
