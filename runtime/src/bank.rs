@@ -3822,13 +3822,7 @@ impl Bank {
         all_stake_rewards: &[StakeReward],
         partition_index: u64,
     ) {
-        let mut metrics = RewardsStoreMetrics {
-            pre_capitalization: self.capitalization(),
-            total_stake_accounts_count: all_stake_rewards.len(),
-            partition_index,
-            ..RewardsStoreMetrics::default()
-        };
-
+        let pre_capitalization = self.capitalization();
         let this_partition_stake_rewards =
             self.get_stake_rewards_in_partition(partition_index, all_stake_rewards);
 
@@ -3837,10 +3831,8 @@ impl Bank {
                 num_accounts,
                 total_rewards_in_lamports,
             },
-            measure_us,
+            store_stake_accounts_us,
         ) = measure_us!(self.store_stake_accounts_in_partition(this_partition_stake_rewards));
-        metrics.store_stake_accounts_us += measure_us;
-        metrics.store_stake_accounts_count += num_accounts;
 
         self.update_reward_history_in_partition(this_partition_stake_rewards);
 
@@ -3848,10 +3840,17 @@ impl Bank {
         self.capitalization
             .fetch_add(total_rewards_in_lamports, Relaxed);
 
-        // update EpochRewards sysvar with distributed rewards (decrease total capitalization by distributed rewards)
+        // update EpochRewards sysvar with distributed rewards (decrease total capitalization by the distributed rewards)
         self.update_epoch_rewards_sysvar(total_rewards_in_lamports);
 
-        metrics.post_capitalization = self.capitalization();
+        let metrics = RewardsStoreMetrics {
+            pre_capitalization,
+            post_capitalization: self.capitalization(),
+            total_stake_accounts_count: all_stake_rewards.len(),
+            partition_index,
+            store_stake_accounts_us,
+            store_stake_accounts_count: num_accounts,
+        };
 
         report_partitioned_reward_metrics(self, metrics);
     }
