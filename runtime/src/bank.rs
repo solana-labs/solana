@@ -3106,6 +3106,20 @@ impl Bank {
         }
     }
 
+    fn sort_and_shuffle_partitioned_rewards(
+        stake_rewards: &mut StakeRewards,
+        rewarded_epoch: Epoch,
+        rewards: u64,
+    ) {
+        // sort reward results by pubkey so stores per partition are consistent on every node
+        stake_rewards.sort_by(|a, b| a.stake_pubkey.partial_cmp(&b.stake_pubkey).unwrap());
+
+        // deterministically random shuffle the rewards with rewarded_epoch and rewards as the seed
+        let seed = rewarded_epoch ^ rewards;
+        let mut rng = ChaChaRng::seed_from_u64(seed);
+        stake_rewards.shuffle(&mut rng);
+    }
+
     /// Calculate epoch reward and payout vote rewards (optimized with cache and no-join of vote/stake accounts)
     /// Returns rewards for stake accounts and total rewards to distribute for vote accounts
     fn do_calculate_validator_rewards_and_distribute_vote_rewards_with_thread_pool(
@@ -3142,15 +3156,7 @@ impl Bank {
 
             let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
 
-            // sort the reward results by pubkey so that later on, the partition stores are consistent
-            // on different nodes.
-            stake_rewards.sort_by(|a, b| a.stake_pubkey.partial_cmp(&b.stake_pubkey).unwrap());
-
-            // random shuffle the rewards with epoch and rewards as the seed
-            let seed = rewarded_epoch ^ rewards;
-            let mut rng = ChaChaRng::seed_from_u64(seed);
-            stake_rewards.shuffle(&mut rng);
-
+            Self::sort_and_shuffle_partitioned_rewards(&mut stake_rewards, rewarded_epoch, rewards);
             let total = stake_rewards
                 .par_iter()
                 .map(|stake_reward| stake_reward.stake_reward_info.lamports)
