@@ -67,6 +67,14 @@ A measure of the network confirmation for the [block](#block).
 
 A set of [validators](#validator) maintaining a single [ledger](#ledger).
 
+## cluster restart
+When there is an outage such that the whole [cluster](#cluster) stalls, human 
+may need to restart most of the [validators](#validator) with a sane state so 
+that the cluster can continue to function. This is different from sporadic
+single validator restart which does not impact the cluster. See
+[cluster restart](https://docs.solana.com/running-validator/restart-cluster)
+for details.
+
 ## compute budget
 
 The maximum number of [compute units](#compute-units) consumed per transaction.
@@ -219,6 +227,10 @@ A computer participating in a [cluster](#cluster).
 ## node count
 
 The number of [validators](#validator) participating in a [cluster](#cluster).
+
+## optimistically confirmed block
+A [block](#block) which got the [votes](#vote) from [validators](#validator)
+holding more than 2/3 of total [stake](#stake) in a [cluster](#cluster).
 
 ## PoH
 
