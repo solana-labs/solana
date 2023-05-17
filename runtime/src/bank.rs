@@ -1194,7 +1194,7 @@ struct RewardCalculationResult {
 }
 
 struct DistributedRewardsSum {
-    num_rewards: usize,
+    num_accounts: usize,
     /// total distributed rewards in lamports
     total_rewards_in_lamports: u64,
 }
@@ -3709,7 +3709,7 @@ impl Bank {
         }
 
         DistributedRewardsSum {
-            num_rewards: stake_rewards.len(),
+            num_accounts: stake_rewards.len(),
             total_rewards_in_lamports: total as u64,
         }
     }
@@ -3834,13 +3834,13 @@ impl Bank {
 
         let (
             DistributedRewardsSum {
-                num_rewards: stake_store_counts,
+                num_accounts,
                 total_rewards_in_lamports: total_stake_rewards,
             },
             measure_us,
         ) = measure_us!(self.store_stake_accounts_in_partition(this_partition_stake_rewards));
         metrics.store_stake_accounts_us += measure_us;
-        metrics.store_stake_accounts_count += stake_store_counts;
+        metrics.store_stake_accounts_count += num_accounts;
 
         self.update_reward_history_in_partition(this_partition_stake_rewards);
 
