@@ -102,12 +102,10 @@ use {
         },
     },
     std::{
-        cell::RefCell,
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fs::File,
         io::Read,
-        rc::Rc,
         str::FromStr,
         sync::{
             atomic::{
@@ -175,10 +173,8 @@ fn new_execution_result(
             executed_units: 0,
             accounts_data_len_delta: 0,
         },
-        programs_modified_by_tx: Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-        programs_updated_only_for_global_cache: Rc::new(RefCell::new(
-            LoadedProgramsForTxBatch::default(),
-        )),
+        programs_modified_by_tx: Box::<LoadedProgramsForTxBatch>::default(),
+        programs_updated_only_for_global_cache: Box::<LoadedProgramsForTxBatch>::default(),
     }
 }
 
@@ -7604,9 +7600,12 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         Ok(()),
         solana_bpf_loader_program::process_instruction,
         |invoke_context| {
-            let mut cache = invoke_context.programs_modified_by_tx.borrow_mut();
-            cache.set_slot_for_tests(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
-            cache.replenish(program_keypair.pubkey(), loaded_program.clone());
+            invoke_context
+                .programs_modified_by_tx
+                .set_slot_for_tests(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
+            invoke_context
+                .programs_modified_by_tx
+                .replenish(program_keypair.pubkey(), loaded_program.clone());
         },
         |_invoke_context| {},
     );

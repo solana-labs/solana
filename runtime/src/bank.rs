@@ -320,8 +320,8 @@ pub struct TransactionExecutionDetails {
 pub enum TransactionExecutionResult {
     Executed {
         details: TransactionExecutionDetails,
-        programs_modified_by_tx: Rc<RefCell<LoadedProgramsForTxBatch>>,
-        programs_updated_only_for_global_cache: Rc<RefCell<LoadedProgramsForTxBatch>>,
+        programs_modified_by_tx: Box<LoadedProgramsForTxBatch>,
+        programs_updated_only_for_global_cache: Box<LoadedProgramsForTxBatch>,
     },
     NotExecuted(TransactionError),
 }
@@ -4214,7 +4214,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
-        programs_loaded_for_tx_batch: Rc<RefCell<LoadedProgramsForTxBatch>>,
+        programs_loaded_for_tx_batch: &LoadedProgramsForTxBatch,
     ) -> TransactionExecutionResult {
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
@@ -4264,10 +4264,8 @@ impl Bank {
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
 
         let mut executed_units = 0u64;
-        let programs_modified_by_tx =
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::new(self.slot)));
-        let programs_updated_only_for_global_cache =
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::new(self.slot)));
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::new(self.slot);
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::new(self.slot);
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             &self.builtin_programs,
@@ -4277,8 +4275,8 @@ impl Bank {
             self.rent_collector.rent,
             log_collector.clone(),
             programs_loaded_for_tx_batch,
-            programs_modified_by_tx.clone(),
-            programs_updated_only_for_global_cache.clone(),
+            &mut programs_modified_by_tx,
+            &mut programs_updated_only_for_global_cache,
             self.feature_set.clone(),
             compute_budget,
             timings,
@@ -4382,8 +4380,10 @@ impl Bank {
                 executed_units,
                 accounts_data_len_delta,
             },
-            programs_modified_by_tx,
-            programs_updated_only_for_global_cache,
+            programs_modified_by_tx: Box::new(programs_modified_by_tx),
+            programs_updated_only_for_global_cache: Box::new(
+                programs_updated_only_for_global_cache,
+            ),
         }
     }
 
@@ -4603,7 +4603,7 @@ impl Bank {
                         timings,
                         &mut error_counters,
                         log_messages_bytes_limit,
-                        programs_loaded_for_tx_batch.clone(),
+                        &programs_loaded_for_tx_batch.borrow(),
                     );
 
                     if let TransactionExecutionResult::Executed {
@@ -4617,7 +4617,7 @@ impl Bank {
                         if details.status.is_ok() {
                             programs_loaded_for_tx_batch
                                 .borrow_mut()
-                                .merge(&programs_modified_by_tx.borrow());
+                                .merge(programs_modified_by_tx);
                         }
                     }
 
@@ -5112,8 +5112,8 @@ impl Bank {
             {
                 if details.status.is_ok() {
                     let mut cache = self.loaded_programs_cache.write().unwrap();
-                    cache.merge(&programs_modified_by_tx.borrow());
-                    cache.merge(&programs_updated_only_for_global_cache.borrow());
+                    cache.merge(programs_modified_by_tx);
+                    cache.merge(programs_updated_only_for_global_cache);
                 }
             }
         }

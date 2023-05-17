@@ -58,9 +58,9 @@ impl MessageProcessor {
         transaction_context: &mut TransactionContext,
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
-        programs_loaded_for_tx_batch: Rc<RefCell<LoadedProgramsForTxBatch>>,
-        programs_modified_by_tx: Rc<RefCell<LoadedProgramsForTxBatch>>,
-        programs_updated_only_for_global_cache: Rc<RefCell<LoadedProgramsForTxBatch>>,
+        programs_loaded_for_tx_batch: &LoadedProgramsForTxBatch,
+        programs_modified_by_tx: &mut LoadedProgramsForTxBatch,
+        programs_updated_only_for_global_cache: &mut LoadedProgramsForTxBatch,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
         timings: &mut ExecuteTimings,
@@ -276,8 +276,7 @@ mod tests {
         let mut transaction_context =
             TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let program_indices = vec![vec![2]];
-        let programs_loaded_for_tx_batch =
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default()));
+        let programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         let account_keys = (0..transaction_context.get_number_of_accounts())
             .map(|index| {
                 *transaction_context
@@ -306,6 +305,8 @@ mod tests {
                 ]),
             )));
         let sysvar_cache = SysvarCache::default();
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &builtin_programs,
             &message,
@@ -313,9 +314,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            programs_loaded_for_tx_batch.clone(),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            &programs_loaded_for_tx_batch,
+            &mut programs_modified_by_tx,
+            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -358,6 +359,8 @@ mod tests {
                     ),
                 ]),
             )));
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &builtin_programs,
             &message,
@@ -365,9 +368,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            programs_loaded_for_tx_batch.clone(),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            &programs_loaded_for_tx_batch,
+            &mut programs_modified_by_tx,
+            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -400,6 +403,8 @@ mod tests {
                     ),
                 ]),
             )));
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &builtin_programs,
             &message,
@@ -407,9 +412,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            programs_loaded_for_tx_batch,
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            &programs_loaded_for_tx_batch,
+            &mut programs_modified_by_tx,
+            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -507,8 +512,7 @@ mod tests {
         let mut transaction_context =
             TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let program_indices = vec![vec![2]];
-        let programs_loaded_for_tx_batch =
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default()));
+        let programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
         let account_metas = vec![
             AccountMeta::new(
                 *transaction_context.get_key_of_account_at_index(0).unwrap(),
@@ -534,6 +538,8 @@ mod tests {
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         )));
         let sysvar_cache = SysvarCache::default();
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &builtin_programs,
             &message,
@@ -541,9 +547,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            programs_loaded_for_tx_batch.clone(),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            &programs_loaded_for_tx_batch,
+            &mut programs_modified_by_tx,
+            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -570,6 +576,8 @@ mod tests {
             )],
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         )));
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &builtin_programs,
             &message,
@@ -577,9 +585,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            programs_loaded_for_tx_batch.clone(),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            &programs_loaded_for_tx_batch,
+            &mut programs_modified_by_tx,
+            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -603,6 +611,8 @@ mod tests {
             )],
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
         )));
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &builtin_programs,
             &message,
@@ -610,9 +620,9 @@ mod tests {
             &mut transaction_context,
             rent_collector.rent,
             None,
-            programs_loaded_for_tx_batch,
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            &programs_loaded_for_tx_batch,
+            &mut programs_modified_by_tx,
+            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
@@ -679,6 +689,9 @@ mod tests {
             None,
         )));
         let sysvar_cache = SysvarCache::default();
+        let programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let result = MessageProcessor::process_message(
             &builtin_programs,
             &message,
@@ -686,9 +699,9 @@ mod tests {
             &mut transaction_context,
             RentCollector::default().rent,
             None,
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            &programs_loaded_for_tx_batch,
+            &mut programs_modified_by_tx,
+            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),

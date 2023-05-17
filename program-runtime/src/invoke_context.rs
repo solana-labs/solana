@@ -159,9 +159,9 @@ pub struct InvokeContext<'a> {
     current_compute_budget: ComputeBudget,
     compute_meter: RefCell<u64>,
     accounts_data_meter: AccountsDataMeter,
-    pub programs_loaded_for_tx_batch: Rc<RefCell<LoadedProgramsForTxBatch>>,
-    pub programs_modified_by_tx: Rc<RefCell<LoadedProgramsForTxBatch>>,
-    pub programs_updated_only_for_global_cache: Rc<RefCell<LoadedProgramsForTxBatch>>,
+    pub programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
+    pub programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
+    pub programs_updated_only_for_global_cache: &'a mut LoadedProgramsForTxBatch,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
@@ -179,9 +179,9 @@ impl<'a> InvokeContext<'a> {
         sysvar_cache: &'a SysvarCache,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
-        programs_loaded_for_tx_batch: Rc<RefCell<LoadedProgramsForTxBatch>>,
-        programs_modified_by_tx: Rc<RefCell<LoadedProgramsForTxBatch>>,
-        programs_updated_only_for_global_cache: Rc<RefCell<LoadedProgramsForTxBatch>>,
+        programs_loaded_for_tx_batch: &'a LoadedProgramsForTxBatch,
+        programs_modified_by_tx: &'a mut LoadedProgramsForTxBatch,
+        programs_updated_only_for_global_cache: &'a mut LoadedProgramsForTxBatch,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
@@ -905,7 +905,7 @@ macro_rules! with_mock_invoke_context_and_builtin_programs {
                 account::ReadableAccount, feature_set::FeatureSet, hash::Hash, sysvar::rent::Rent,
                 transaction_context::TransactionContext,
             },
-            std::{cell::RefCell, rc::Rc, sync::Arc},
+            std::sync::Arc,
             $crate::{
                 compute_budget::ComputeBudget, invoke_context::InvokeContext,
                 loaded_programs::LoadedProgramsForTxBatch, log_collector::LogCollector,
@@ -938,6 +938,9 @@ macro_rules! with_mock_invoke_context_and_builtin_programs {
                 }
             }
         });
+        let programs_loaded_for_tx_batch = LoadedProgramsForTxBatch::default();
+        let mut programs_modified_by_tx = LoadedProgramsForTxBatch::default();
+        let mut programs_updated_only_for_global_cache = LoadedProgramsForTxBatch::default();
         let mut $invoke_context = InvokeContext::new(
             &mut $transaction_context,
             Rent::default(),
@@ -945,9 +948,9 @@ macro_rules! with_mock_invoke_context_and_builtin_programs {
             &sysvar_cache,
             Some(LogCollector::new_ref()),
             compute_budget,
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
-            Rc::new(RefCell::new(LoadedProgramsForTxBatch::default())),
+            &programs_loaded_for_tx_batch,
+            &mut programs_modified_by_tx,
+            &mut programs_updated_only_for_global_cache,
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
             0,
