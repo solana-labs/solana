@@ -3134,42 +3134,40 @@ impl Bank {
         let stakes = self.stakes_cache.stakes();
         let reward_calculate_param = self.get_epoch_reward_calculate_param_info(&stakes);
 
-        let point_value = self.calculate_reward_points_partitioned(
+        let Some(point_value) = self.calculate_reward_points_partitioned(
             &reward_calculate_param,
             rewards,
             thread_pool,
             metrics,
+        ) else {
+            return RewardCalculationResult::default();
+        };
+
+        let (vote_account_rewards, mut stake_rewards) = self.calculate_stake_vote_rewards(
+            &reward_calculate_param,
+            rewarded_epoch,
+            point_value,
+            credits_auto_rewind,
+            thread_pool,
+            reward_calc_tracer.as_ref(),
+            metrics,
         );
+        drop(reward_calculate_param);
+        drop(stakes);
 
-        if let Some(point_value) = point_value {
-            let (vote_account_rewards, mut stake_rewards) = self.calculate_stake_vote_rewards(
-                &reward_calculate_param,
-                rewarded_epoch,
-                point_value,
-                credits_auto_rewind,
-                thread_pool,
-                reward_calc_tracer.as_ref(),
-                metrics,
-            );
-            drop(reward_calculate_param);
-            drop(stakes);
+        let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
 
-            let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
+        Self::sort_and_shuffle_partitioned_rewards(&mut stake_rewards, rewarded_epoch, rewards);
+        let total = stake_rewards
+            .par_iter()
+            .map(|stake_reward| stake_reward.stake_reward_info.lamports)
+            .sum::<i64>();
 
-            Self::sort_and_shuffle_partitioned_rewards(&mut stake_rewards, rewarded_epoch, rewards);
-            let total = stake_rewards
-                .par_iter()
-                .map(|stake_reward| stake_reward.stake_reward_info.lamports)
-                .sum::<i64>();
+        self.update_reward_history(vec![], vote_rewards);
 
-            self.update_reward_history(vec![], vote_rewards);
-
-            RewardCalculationResult {
-                stake_rewards,
-                total_stake_rewards_lamports: u64::try_from(total).unwrap(),
-            }
-        } else {
-            RewardCalculationResult::default()
+        RewardCalculationResult {
+            stake_rewards,
+            total_stake_rewards_lamports: u64::try_from(total).unwrap(),
         }
     }
 
