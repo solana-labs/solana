@@ -1,5 +1,7 @@
 #[allow(deprecated)]
-use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes, last_restart_slot::LastRestartSlot};
+use solana_sdk::sysvar::{
+    fees::Fees, last_restart_slot::LastRestartSlot, recent_blockhashes::RecentBlockhashes,
+};
 use {
     crate::invoke_context::InvokeContext,
     solana_sdk::{
@@ -78,7 +80,9 @@ impl SysvarCache {
     }
 
     pub fn get_last_restart_slot(&self) -> Result<Arc<LastRestartSlot>, InstructionError> {
-        self.last_restart_slot.clone().ok_or(InstructionError::UnsupportedSysvar)
+        self.last_restart_slot
+            .clone()
+            .ok_or(InstructionError::UnsupportedSysvar)
     }
 
     pub fn set_last_restart_slot(&mut self, last_restart_slot: LastRestartSlot) {

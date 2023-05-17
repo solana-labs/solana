@@ -373,7 +373,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
     fn sol_get_last_restart_slot_sysvar(&self, var_addr: *mut u8) -> u64 {
         get_sysvar(
-            get_invoke_context().get_sysvar_cache().get_last_restart_slot(),
+            get_invoke_context()
+                .get_sysvar_cache()
+                .get_last_restart_slot(),
             var_addr,
         )
     }

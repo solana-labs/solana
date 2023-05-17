@@ -2276,19 +2276,15 @@ impl Bank {
     }
 
     pub fn update_last_restart_slot(&self) {
-
-        let last_restart_slot =
-            {
-                let tmp = self.hard_forks();
-                let hard_forks = tmp.read().unwrap();
-                hard_forks.iter().last().map(|(slot, _)| *slot).unwrap_or(0)
-            };
+        let last_restart_slot = {
+            let tmp = self.hard_forks();
+            let hard_forks = tmp.read().unwrap();
+            hard_forks.iter().last().map(|(slot, _)| *slot).unwrap_or(0)
+        };
 
         self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
             create_account(
-                &LastRestartSlot {
-                    last_restart_slot
-                },
+                &LastRestartSlot { last_restart_slot },
                 self.inherit_specially_retained_account_fields(account),
             )
         });
@@ -8068,7 +8064,6 @@ impl Bank {
         if new_feature_activations.contains(&feature_set::update_hashes_per_tick::id()) {
             self.apply_updated_hashes_per_tick(DEFAULT_HASHES_PER_TICK);
         }
-
     }
 
     fn apply_updated_hashes_per_tick(&mut self, hashes_per_tick: u64) {

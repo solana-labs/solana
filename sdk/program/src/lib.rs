@@ -495,6 +495,7 @@ pub mod incinerator;
 pub mod instruction;
 pub mod keccak;
 pub mod lamports;
+pub mod last_restart_slot;
 pub mod loader_instruction;
 pub mod loader_upgradeable_instruction;
 pub mod loader_v4;
@@ -529,7 +530,6 @@ pub mod system_program;
 pub mod sysvar;
 pub mod vote;
 pub mod wasm;
-pub mod last_restart_slot;
 
 #[cfg(target_os = "solana")]
 pub use solana_sdk_macro::wasm_bindgen_stub as wasm_bindgen;
