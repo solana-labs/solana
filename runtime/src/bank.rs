@@ -1910,18 +1910,23 @@ impl Bank {
                     ("parent_start_height", parent_start_block_height, i64),
                 );
 
-                self.epoch_reward_status = EpochRewardStatus::Inactive;
-                if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
-                    if account.lamports() > 0 {
-                        warn!(
-                            "burn {} extra lamports in EpochRewards sysvar account at slot {}",
-                            account.lamports(),
-                            self.slot()
-                        );
-                    }
-                    self.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
-                }
+                self.deactivate_epoch_reward_status();
             }
+        }
+    }
+
+    fn deactivate_epoch_reward_status(&mut self) {
+        assert!(matches!(self.epoch_reward_status, EpochRewardStatus::Active(_)));
+        self.epoch_reward_status = EpochRewardStatus::Inactive;
+        if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
+            if account.lamports() > 0 {
+                warn!(
+                    "burn {} extra lamports in EpochRewards sysvar account at slot {}",
+                    account.lamports(),
+                    self.slot()
+                );
+            }
+            self.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
         }
     }
 
