@@ -1,7 +1,7 @@
 //! The ciphertext-ciphertext equality proof instruction.
 //!
 //! A ciphertext-ciphertext equality proof is defined with respect to two twisted ElGamal
-//! cipehrtexts. The proof certifies that the two ciphertexts encrypt the same message. To generate
+//! ciphertexts. The proof certifies that the two ciphertexts encrypt the same message. To generate
 //! the proof, a prover must provide the decryption key for the first ciphertext and the randomness
 //! used to generate the second ciphertext.
 //!
