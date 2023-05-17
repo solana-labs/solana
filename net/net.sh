@@ -232,8 +232,8 @@ build() {
   echo "Build took $SECONDS seconds"
 }
 
-SOLANA_HOME="\$HOME/solana"
-CARGO_BIN="\$HOME/.cargo/bin"
+SOLANA_HOME="~/solana"
+CARGO_BIN="~/.cargo/bin"
 
 startCommon() {
   declare ipAddress=$1
