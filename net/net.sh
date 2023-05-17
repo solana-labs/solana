@@ -232,7 +232,9 @@ build() {
   echo "Build took $SECONDS seconds"
 }
 
+# shellcheck disable=SC2088
 SOLANA_HOME="~/solana"
+# shellcheck disable=SC2088
 CARGO_BIN="~/.cargo/bin"
 
 startCommon() {
