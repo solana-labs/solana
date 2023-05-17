@@ -202,6 +202,7 @@ impl<'a> TypeContext<'a> for Context {
         let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
         let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
         let lamports_per_signature = fields.fee_rate_governor.lamports_per_signature;
+        let epoch_reward_status = None;
         match get_serialize_bank_fields(
             SerializableVersionedBank::from(fields),
             SerializableAccountsDb::<'a, Self> {
@@ -219,8 +220,10 @@ impl<'a> TypeContext<'a> for Context {
                 .bank
                 .get_epoch_accounts_hash_to_serialize()
                 .map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()),
+            epoch_reward_status,
         ) {
             BankFieldsToSerialize::WithoutEpochRewardStatus(data) => data.serialize(serializer),
+            BankFieldsToSerialize::WithEpochRewardStatus(data) => data.serialize(serializer),
         }
     }
 
@@ -376,6 +379,7 @@ impl<'a> TypeContext<'a> for Context {
         let hard_forks = RwLock::new(std::mem::take(&mut rhs.hard_forks));
         let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
         let epoch_accounts_hash = rhs.epoch_accounts_hash.as_ref();
+        let epoch_reward_status = rhs.epoch_reward_status;
 
         let bank = SerializableVersionedBank {
             blockhash_queue: &blockhash_queue,
@@ -418,8 +422,13 @@ impl<'a> TypeContext<'a> for Context {
             lamports_per_signature,
             incremental_snapshot_persistence.cloned(),
             epoch_accounts_hash.copied(),
+            matches!(epoch_reward_status, EpochRewardStatus::Active(_))
+                .then_some(&epoch_reward_status),
         ) {
             BankFieldsToSerialize::WithoutEpochRewardStatus(data) => {
+                bincode::serialize_into(stream_writer, &data)
+            }
+            BankFieldsToSerialize::WithEpochRewardStatus(data) => {
                 bincode::serialize_into(stream_writer, &data)
             }
         }
@@ -437,22 +446,46 @@ enum BankFieldsToSerialize<'a, T: Serialize> {
             Option<Hash>,
         ),
     ),
+    // this will not be readable by <= 1.14
+    // serialize this if EpochRewardStatus is non-default.
+    // This allows this code to be present and harmless
+    WithEpochRewardStatus(
+        (
+            SerializableVersionedBank<'a>,
+            T,
+            u64,
+            Option<BankIncrementalSnapshotPersistence>,
+            Option<Hash>,
+            &'a EpochRewardStatus,
+        ),
+    ),
 }
 
 /// serializing involves building these fields into a tuple
 /// This occurs during normal serialization and again during re-serialization.
-fn get_serialize_bank_fields<T: Serialize>(
-    bank: SerializableVersionedBank<'_>,
+fn get_serialize_bank_fields<'a, T: Serialize>(
+    bank: SerializableVersionedBank<'a>,
     accounts_db_fields: T,
     lamports_per_signature: u64,
     incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
     epoch_accounts_hash: Option<Hash>,
-) -> BankFieldsToSerialize<'_, T> {
-    BankFieldsToSerialize::WithoutEpochRewardStatus((
-        bank,
-        accounts_db_fields,
-        lamports_per_signature,
-        incremental_snapshot_persistence,
-        epoch_accounts_hash,
-    ))
+    epoch_reward_status: Option<&'a EpochRewardStatus>,
+) -> BankFieldsToSerialize<'a, T> {
+    match epoch_reward_status {
+        Some(epoch_reward_status) => BankFieldsToSerialize::WithEpochRewardStatus((
+            bank,
+            accounts_db_fields,
+            lamports_per_signature,
+            incremental_snapshot_persistence,
+            epoch_accounts_hash,
+            epoch_reward_status,
+        )),
+        None => BankFieldsToSerialize::WithoutEpochRewardStatus((
+            bank,
+            accounts_db_fields,
+            lamports_per_signature,
+            incremental_snapshot_persistence,
+            epoch_accounts_hash,
+        )),
+    }
 }
