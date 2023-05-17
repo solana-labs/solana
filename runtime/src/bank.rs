@@ -3835,7 +3835,7 @@ impl Bank {
         let (
             DistributedRewardsSum {
                 num_accounts,
-                total_rewards_in_lamports: total_stake_rewards,
+                total_rewards_in_lamports,
             },
             measure_us,
         ) = measure_us!(self.store_stake_accounts_in_partition(this_partition_stake_rewards));
@@ -3846,10 +3846,10 @@ impl Bank {
 
         // increase total capitalization by the distributed rewards
         self.capitalization
-            .fetch_add(total_stake_rewards, Relaxed);
+            .fetch_add(total_rewards_in_lamports, Relaxed);
 
         // update EpochRewards sysvar with distributed rewards (decrease total capitalization by distributed rewards)
-        self.update_epoch_rewards_sysvar(total_stake_rewards);
+        self.update_epoch_rewards_sysvar(total_rewards_in_lamports);
 
         metrics.post_capitalization = self.capitalization();
 
