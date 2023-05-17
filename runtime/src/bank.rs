@@ -1470,13 +1470,20 @@ impl Bank {
             .is_active(&enable_partitioned_epoch_reward::id())
     }
 
-    #[cfg(test)]
-    pub(crate) fn set_partitioned_rewards_feature_enabled_for_tests(&mut self, enable: bool) {
-        if enable {
-            self.activate_feature(&enable_partitioned_epoch_reward::id())
-        } else {
-            self.deactivate_feature(&enable_partitioned_epoch_reward::id())
-        }
+    fn set_epoch_reward_status_active(&mut self, parent_height: u64, stake_rewards: StakeRewards) {
+        self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
+            // Use the parent slot/block height here. Storing the parent_slot, we could possible reuse the reward computation results during forks.
+            //  N1
+            //   \ --> N2
+            //   \ --> N3
+            //   \ --> N4
+            // Let's say there are 3 forks at the epoch boundaries, where N2/N3/N4 are the start blocks in the current epoch and N1 is the parent of these three in previous epoch.
+            // Then the rewards computed from N2,N3,N4 should all be the same.
+            // To avoid redundant computation, we could store the calculated rewards in a map indexed by parent block N1's slot number, then computation from N3 and N4 can be avoided.
+            // This optimization is also applicable for the current design in theory, i.e. change `calculated_rewards` into a map of parent_slot->StakeRewards, to avoid repeated computation in forks.
+            parent_start_block_height: parent_height,
+            calculated_epoch_stake_rewards: Arc::new(stake_rewards),
+        });
     }
 
     #[cfg(test)]
@@ -1485,10 +1492,16 @@ impl Bank {
         parent_height: u64,
         stake_rewards: StakeRewards,
     ) {
-        self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
-            parent_start_block_height: parent_height,
-            calculated_epoch_stake_rewards: Arc::new(stake_rewards),
-        });
+        self.set_epoch_reward_status_active(parent_height, stake_rewards);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_partitioned_rewards_feature_enabled_for_tests(&mut self, enable: bool) {
+        if enable {
+            self.activate_feature(&enable_partitioned_epoch_reward::id())
+        } else {
+            self.deactivate_feature(&enable_partitioned_epoch_reward::id())
+        }
     }
 
     /// Target to store 64 rewards per entry/tick in a block. A block has a minimal of 64
@@ -1858,19 +1871,7 @@ impl Bank {
                 rewards_metrics,
             );
 
-        self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
-            // Use the parent slot/block height here. Storing the parent_slot, we could possible reuse the reward computation results during forks.
-            //  N1
-            //   \ --> N2
-            //   \ --> N3
-            //   \ --> N4
-            // Let's say there are 3 forks at the epoch boundaries, where N2/N3/N4 are the start blocks in the current epoch and N1 is the parent of these three in previous epoch.
-            // Then the rewards computed from N2,N3,N4 should all be the same.
-            // To avoid redundant computation, we could store the calculated rewards in a map indexed by parent block N1's slot number, then computation from N3 and N4 can be avoided.
-            // This optimization is also applicable for the current design in theory, i.e. change `calculated_rewards` into a map of parent_slot->StakeRewards, to avoid repeated computation in forks.
-            parent_start_block_height: parent_height,
-            calculated_epoch_stake_rewards: Arc::new(stake_rewards),
-        });
+        self.set_epoch_reward_status_active(parent_height, stake_rewards);
 
         datapoint_warn!(
             "reward-status-update",
