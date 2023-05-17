@@ -176,7 +176,7 @@ use {
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
-        ops::{AddAssign, Range, RangeInclusive},
+        ops::{AddAssign, RangeInclusive},
         path::PathBuf,
         rc::Rc,
         sync::{
@@ -3651,13 +3651,17 @@ impl Bank {
             .fetch_add(measure.as_us(), Relaxed);
     }
 
-    /// Return the reward partition range
-    fn get_partition_range(&self, partition_index: u64, stake_rewards_len: usize) -> Range<usize> {
+    /// Return the subset of `stake_rewards` in this `partition_index`
+    fn get_stake_rewards_in_partition<'a>(
+        &self,
+        partition_index: u64,
+        stake_rewards: &'a [StakeReward],
+    ) -> &'a [StakeReward] {
         assert!(partition_index < self.get_reward_credit_num_blocks());
         let begin = Self::PARTITION_REWARDS_STORES_PER_BLOCK * partition_index;
         let end_exclusive =
-            (begin + Self::PARTITION_REWARDS_STORES_PER_BLOCK).min(stake_rewards_len as u64);
-        (begin as usize)..(end_exclusive as usize)
+            (begin + Self::PARTITION_REWARDS_STORES_PER_BLOCK).min(stake_rewards.len() as u64);
+        &stake_rewards[(begin as usize)..(end_exclusive as usize)]
     }
 
     /// store stake rewards in partition
@@ -3825,7 +3829,7 @@ impl Bank {
             };
 
             let this_partition_stake_rewards =
-                &stake_rewards[self.get_partition_range(partition_index, stake_rewards.len())];
+                self.get_stake_rewards_in_partition(partition_index, stake_rewards);
 
             let (
                 DistributedRewardsSum {

@@ -12668,21 +12668,27 @@ fn test_get_epoch_reward_partition_range() {
     let stake_rewards = (0..expected_num)
         .map(|_| StakeReward::random())
         .collect::<Vec<_>>();
+    let stake_rewards_clone = stake_rewards.clone();
     bank.set_epoch_reward_status_active_for_test(0, stake_rewards);
 
     assert_eq!(bank.get_reward_credit_num_blocks(), 10);
 
     // assert expected full partition range
     for i in 0..9 {
-        let range = bank.get_partition_range(i, expected_num);
-        assert_eq!(range.start as u64, i * 4096);
-        assert_eq!(range.end as u64, (i + 1) * 4096);
+        let stake_rewards_in_partition =
+            bank.get_stake_rewards_in_partition(i as u64, &stake_rewards_clone);
+        assert_eq!(
+            &stake_rewards_clone[(i * 4096)..((i + 1) * 4096)],
+            stake_rewards_in_partition
+        );
     }
 
     // assert last partial partiton range
-    let range = bank.get_partition_range(9, expected_num);
-    assert_eq!(range.start, 9 * 4096);
-    assert_eq!(range.end, 40959);
+    let stake_rewards_in_partition = bank.get_stake_rewards_in_partition(9, &stake_rewards_clone);
+    assert_eq!(
+        &stake_rewards_clone[9 * 4096..40959],
+        stake_rewards_in_partition
+    );
 }
 
 /// Test that reward partition range panics when passing out of range partition index
@@ -12700,10 +12706,11 @@ fn test_get_epoch_reward_partition_range_panic() {
     let stake_rewards = (0..expected_num)
         .map(|_| StakeReward::random())
         .collect::<Vec<_>>();
+    let stake_rewards_clone = stake_rewards.clone();
     bank.set_epoch_reward_status_active_for_test(0, stake_rewards);
 
     // This call should panic, i.e. 15 is out of the num_credit_blocks
-    let _range = bank.get_partition_range(15, expected_num);
+    let _range = bank.get_stake_rewards_in_partition(15, &stake_rewards_clone);
 }
 
 /// Test partitioned credits of epoch rewards do cover all the rewards slice.
@@ -12735,8 +12742,7 @@ fn test_epoch_credit_rewards() {
     let mut total_rewards = 0;
 
     for partition_index in 0..bank.get_reward_credit_num_blocks() {
-        let stake_rewards =
-            &stake_rewards[bank.get_partition_range(partition_index, stake_rewards.len())];
+        let stake_rewards = bank.get_stake_rewards_in_partition(partition_index, &stake_rewards);
         let DistributedRewardsSum {
             num_rewards: num_accounts,
             total_rewards_in_lamports: rewards,
@@ -12780,8 +12786,7 @@ fn test_epoch_partitoned_reward_history_update() {
     let mut total_num_updates = 0;
 
     for partition_index in 0..bank.get_reward_credit_num_blocks() {
-        let stake_rewards =
-            &stake_rewards[bank.get_partition_range(partition_index, stake_rewards.len())];
+        let stake_rewards = &bank.get_stake_rewards_in_partition(partition_index, &stake_rewards);
 
         let num_history_updates = bank.update_reward_history_in_partition(stake_rewards);
 
