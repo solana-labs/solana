@@ -21,8 +21,8 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         signer::{
-            keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, Signer,
-            SignerError,
+            keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, SeedDerivable,
+            Signer, SignerError,
         },
     },
     std::{
@@ -126,7 +126,9 @@ impl EncodableKey for AeKey {
         writer.write_all(&json.clone().into_bytes())?;
         Ok(json)
     }
+}
 
+impl SeedDerivable for AeKey {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
         const MINIMUM_SEED_LEN: usize = 16;
 

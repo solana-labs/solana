@@ -30,7 +30,8 @@ use {
         pubkey::Pubkey,
         signature::{
             generate_seed_from_seed_phrase_and_passphrase, read_keypair, read_keypair_file,
-            EncodableKey, EncodableKeypair, Keypair, NullSigner, Presigner, Signature, Signer,
+            EncodableKey, EncodableKeypair, Keypair, NullSigner, Presigner, SeedDerivable,
+            Signature, Signer,
         },
     },
     solana_zk_token_sdk::encryption::{auth_encryption::AeKey, elgamal::ElGamalKeypair},
@@ -1106,7 +1107,7 @@ pub fn ae_key_from_path(
     encodable_key_from_path(matches, path, key_name)
 }
 
-fn encodable_key_from_path<K: EncodableKey>(
+fn encodable_key_from_path<K: EncodableKey + SeedDerivable>(
     matches: &ArgMatches,
     path: &str,
     keypair_name: &str,
@@ -1202,7 +1203,7 @@ pub fn ae_key_from_seed_phrase(
     encodable_key_from_seed_phrase(keypair_name, skip_validation, derivation_path, legacy)
 }
 
-fn encodable_key_from_seed_phrase<K: EncodableKey>(
+fn encodable_key_from_seed_phrase<K: EncodableKey + SeedDerivable>(
     key_name: &str,
     skip_validation: bool,
     derivation_path: Option<DerivationPath>,

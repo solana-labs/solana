@@ -34,7 +34,7 @@ use {
         signature::Signature,
         signer::{
             keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, EncodableKeypair,
-            Signer, SignerError,
+            SeedDerivable, Signer, SignerError,
         },
     },
     std::convert::TryInto,
@@ -248,7 +248,9 @@ impl EncodableKey for ElGamalKeypair {
     fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
         self.write_json(writer)
     }
+}
 
+impl SeedDerivable for ElGamalKeypair {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
         let secret = ElGamalSecretKey::from_seed(seed)?;
         let public = ElGamalPubkey::new(&secret);
@@ -333,6 +335,22 @@ impl ElGamalPubkey {
     /// opening.
     pub fn decrypt_handle(self, opening: &PedersenOpening) -> DecryptHandle {
         DecryptHandle::new(&self, opening)
+    }
+}
+
+impl EncodableKey for ElGamalPubkey {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+        let bytes: Vec<u8> = serde_json::from_reader(reader)?;
+        Self::from_bytes(&bytes).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::Other, "Invalid ElGamalPubkey").into()
+        })
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+        let bytes = self.to_bytes();
+        let json = serde_json::to_string(&bytes.to_vec())?;
+        writer.write_all(&json.clone().into_bytes())?;
+        Ok(json)
     }
 }
 
@@ -422,6 +440,45 @@ impl ElGamalSecretKey {
             Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey),
             _ => None,
         }
+    }
+}
+
+impl EncodableKey for ElGamalSecretKey {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
+        let bytes: Vec<u8> = serde_json::from_reader(reader)?;
+        Self::from_bytes(&bytes).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::Other, "Invalid ElGamalSecretKey").into()
+        })
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<String, Box<dyn error::Error>> {
+        let bytes = self.to_bytes();
+        let json = serde_json::to_string(&bytes.to_vec())?;
+        writer.write_all(&json.clone().into_bytes())?;
+        Ok(json)
+    }
+}
+
+impl SeedDerivable for ElGamalSecretKey {
+    fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+        Self::from_seed(seed)
+    }
+
+    fn from_seed_and_derivation_path(
+        _seed: &[u8],
+        _derivation_path: Option<DerivationPath>,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        Err(ElGamalError::DerivationMethodNotSupported.into())
+    }
+
+    fn from_seed_phrase_and_passphrase(
+        seed_phrase: &str,
+        passphrase: &str,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        Self::from_seed(&generate_seed_from_seed_phrase_and_passphrase(
+            seed_phrase,
+            passphrase,
+        ))
     }
 }
 
