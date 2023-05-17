@@ -3159,7 +3159,23 @@ impl Bank {
         let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
 
         Self::sort_and_shuffle_partitioned_rewards(&mut stake_rewards, rewarded_epoch, rewards);
-        let total = thread_pool.install(|| {
+
+        self.update_reward_history(vec![], vote_rewards);
+
+        RewardCalculationResult {
+            total_stake_rewards_lamports: Self::calc_total_stake_rewards_lamports(
+                &stake_rewards,
+                thread_pool,
+            ),
+            stake_rewards,
+        }
+    }
+
+    fn calc_total_stake_rewards_lamports(
+        stake_rewards: &[StakeReward],
+        thread_pool: &ThreadPool,
+    ) -> u64 {
+        thread_pool.install(|| {
             stake_rewards
                 .par_chunks(10_000)
                 .map(|stake_rewards| {
@@ -3169,14 +3185,7 @@ impl Bank {
                         .sum::<i64>()
                 })
                 .sum::<i64>()
-        });
-
-        self.update_reward_history(vec![], vote_rewards);
-
-        RewardCalculationResult {
-            stake_rewards,
-            total_stake_rewards_lamports: u64::try_from(total).unwrap(),
-        }
+        }) as u64
     }
 
     /// Load, calculate and payout epoch rewards for stake and vote accounts
