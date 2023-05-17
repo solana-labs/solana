@@ -1,11 +1,26 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
 use {
-    crate::serve_repair::RepairVerifyError,
     solana_gossip::{cluster_info, contact_info, gossip_error::GossipError},
     solana_ledger::blockstore,
     thiserror::Error,
 };
+
+#[derive(Error, Debug)]
+pub enum RepairVerifyError {
+    #[error("IdMismatch")]
+    IdMismatch,
+    #[error("Malformed")]
+    Malformed,
+    #[error("SelfRepair")]
+    SelfRepair,
+    #[error("SigVerify")]
+    SigVerify,
+    #[error("TimeSkew")]
+    TimeSkew,
+    #[error("Unsigned")]
+    Unsigned,
+}
 
 #[derive(Debug, Error)]
 pub enum Error {

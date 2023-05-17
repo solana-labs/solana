@@ -1,7 +1,8 @@
 use {
-    crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
+    crate::cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver,
     itertools::Itertools,
     solana_perf::packet::PacketBatch,
+    solana_result::result::Result,
     solana_runtime::{
         bank::Bank,
         vote_transaction::{VoteTransaction, VoteTransaction::VoteStateUpdate},
@@ -300,9 +301,10 @@ impl VerifiedVotePackets {
 mod tests {
     use {
         super::{SingleValidatorVotes::*, *},
-        crate::{result::Error, vote_simulator::VoteSimulator},
+        crate::vote_simulator::VoteSimulator,
         crossbeam_channel::unbounded,
         solana_perf::packet::Packet,
+        solana_result::result::Error,
         solana_sdk::slot_hashes::MAX_ENTRIES,
         solana_vote_program::vote_state::{Lockout, Vote, VoteStateUpdate},
         std::collections::VecDeque,

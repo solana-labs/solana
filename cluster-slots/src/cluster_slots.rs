@@ -32,7 +32,7 @@ pub struct ClusterSlots {
 }
 
 impl ClusterSlots {
-    pub(crate) fn lookup(&self, slot: Slot) -> Option<Arc<RwLock<SlotPubkeys>>> {
+    pub fn lookup(&self, slot: Slot) -> Option<Arc<RwLock<SlotPubkeys>>> {
         self.cluster_slots.read().unwrap().get(&slot).cloned()
     }
 
@@ -134,8 +134,8 @@ impl ClusterSlots {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn insert_node_id(&self, slot: Slot, node_id: Pubkey) {
+    // pub for tests
+    pub fn insert_node_id(&self, slot: Slot, node_id: Pubkey) {
         let balance = self
             .validator_stakes
             .read()
@@ -169,7 +169,7 @@ impl ClusterSlots {
         }
     }
 
-    pub(crate) fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<u64> {
+    pub fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<u64> {
         if repair_peers.is_empty() {
             return Vec::default();
         }
@@ -199,7 +199,7 @@ impl ClusterSlots {
             .collect()
     }
 
-    pub(crate) fn compute_weights_exclude_nonfrozen(
+    pub fn compute_weights_exclude_nonfrozen(
         &self,
         slot: Slot,
         repair_peers: &[ContactInfo],

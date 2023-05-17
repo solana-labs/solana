@@ -1,6 +1,6 @@
 use {
-    crate::consensus::Stake,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
+    solana_consensus::consensus::Stake,
     solana_measure::measure::Measure,
     solana_metrics::datapoint_info,
     solana_rpc::rpc_subscriptions::RpcSubscriptions,

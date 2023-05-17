@@ -1,6 +1,6 @@
 use {
-    crate::tower_storage::{SavedTowerVersions, TowerStorage},
     crossbeam_channel::Receiver,
+    solana_consensus::tower_storage::{SavedTowerVersions, TowerStorage},
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::PohRecorder,

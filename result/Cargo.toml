@@ -1,8 +1,6 @@
 [package]
-name = "solana-core"
-description = "Blockchain, Rebuilt for Scale"
-documentation = "https://docs.rs/solana-core"
-readme = "../README.md"
+name = "solana-result"
+description = "Solana Result"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
@@ -53,8 +51,6 @@ solana-perf = { workspace = true }
 solana-poh = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
-solana-repair = { workspace = true }
-solana-result = { workspace = true }
 solana-rpc = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-runtime = { workspace = true }
@@ -86,29 +82,8 @@ static_assertions = { workspace = true }
 systemstat = { workspace = true }
 test-case = { workspace = true }
 
-[target."cfg(unix)".dependencies]
-sysctl = { workspace = true }
-
 [build-dependencies]
 rustc_version = { workspace = true }
-
-[[bench]]
-name = "banking_stage"
-
-[[bench]]
-name = "cluster_info"
-
-[[bench]]
-name = "gen_keys"
-
-[[bench]]
-name = "sigverify_stage"
-
-[[bench]]
-name = "retransmit_stage"
-
-[[bench]]
-name = "unprocessed_packet_batches"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

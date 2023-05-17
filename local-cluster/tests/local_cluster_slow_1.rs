@@ -5,12 +5,11 @@ use {
     common::*,
     log::*,
     serial_test::serial,
+    solana_consensus::consensus::{DUPLICATE_THRESHOLD, SWITCH_FORK_THRESHOLD},
     solana_core::{
         broadcast_stage::{
             broadcast_duplicates_run::BroadcastDuplicatesConfig, BroadcastStageType,
         },
-        consensus::SWITCH_FORK_THRESHOLD,
-        replay_stage::DUPLICATE_THRESHOLD,
         validator::ValidatorConfig,
     },
     solana_gossip::gossip_service::discover_cluster,

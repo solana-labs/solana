@@ -18,7 +18,9 @@ members = [
     "cli-output",
     "client",
     "client-test",
+    "cluster-slots",
     "connection-cache",
+    "consensus",
     "core",
     "dos",
     "download-utils",
@@ -70,6 +72,8 @@ members = [
     "rayon-threadlimit",
     "rbpf-cli",
     "remote-wallet",
+    "repair",
+    "result",
     "rpc",
     "rpc-client",
     "rpc-client-api",
@@ -186,7 +190,7 @@ env_logger = "0.9.3"
 etcd-client = "0.8.1"
 fast-math = "0.1"
 fd-lock = "3.0.12"
-flate2 = "1.0.25"
+flate2 = "1.0.26"
 fnv = "1.0.7"
 fs_extra = "1.3.0"
 futures = "0.3.24"
@@ -269,7 +273,7 @@ rcgen = "0.10.0"
 reed-solomon-erasure = "6.0.0"
 regex = "1.6.0"
 rolling-file = "0.2.0"
-reqwest = { version = "0.11.12", default-features = false }
+reqwest = { version = "0.11.17", default-features = false }
 rpassword = "7.2"
 rustc_version = "0.4"
 rustls = { version = "0.20.8", default-features = false }
@@ -306,8 +310,10 @@ solana-cli = { path = "cli", version = "=1.16.0" }
 solana-cli-config = { path = "cli-config", version = "=1.16.0" }
 solana-cli-output = { path = "cli-output", version = "=1.16.0" }
 solana-client = { path = "client", version = "=1.16.0" }
+solana-cluster-slots = { path = "cluster-slots", version = "=1.16.0" }
 solana-compute-budget-program = { path = "programs/compute-budget", version = "=1.16.0" }
 solana-config-program = { path = "programs/config", version = "=1.16.0" }
+solana-consensus = { path = "consensus", version = "=1.16.0" }
 solana-core = { path = "core", version = "=1.16.0" }
 solana-download-utils = { path = "download-utils", version = "=1.16.0" }
 solana-entry = { path = "entry", version = "=1.16.0" }
@@ -337,6 +343,8 @@ solana-pubsub-client = { path = "pubsub-client", version = "=1.16.0" }
 solana-quic-client = { path = "quic-client", version = "=1.16.0" }
 solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=1.16.0" }
 solana-remote-wallet = { path = "remote-wallet", version = "=1.16.0", default-features = false }
+solana-repair = { path = "repair", version = "=1.16.0" }
+solana-result = { path = "result", version = "=1.16.0" }
 solana-rpc = { path = "rpc", version = "=1.16.0" }
 solana-rpc-client = { path = "rpc-client", version = "=1.16.0", default-features = false }
 solana-rpc-client-api = { path = "rpc-client-api", version = "=1.16.0" }

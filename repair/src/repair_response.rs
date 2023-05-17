@@ -40,7 +40,7 @@ pub fn repair_response_packet_from_bytes(
     Some(packet)
 }
 
-pub(crate) fn nonce(packet: &Packet) -> Option<Nonce> {
+pub fn nonce(packet: &Packet) -> Option<Nonce> {
     // Nonces are attached to both repair and ancestor hashes responses.
     let data = packet.data(..)?;
     let offset = data.len().checked_sub(SIZE_OF_NONCE)?;

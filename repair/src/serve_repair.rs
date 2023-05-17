@@ -1,11 +1,9 @@
 use {
     crate::{
-        cluster_slots::ClusterSlots,
         duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
         repair_response,
         repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
         request_response::RequestResponse,
-        result::{Error, Result},
     },
     bincode::serialize,
     lru::LruCache,
@@ -13,6 +11,7 @@ use {
         distributions::{Distribution, WeightedError, WeightedIndex},
         Rng,
     },
+    solana_cluster_slots::cluster_slots::ClusterSlots,
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
         legacy_contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
@@ -29,6 +28,7 @@ use {
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PacketBatchRecycler},
     },
+    solana_result::result::{Error, RepairVerifyError, Result},
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::Slot,
@@ -56,7 +56,6 @@ use {
         thread::{Builder, JoinHandle},
         time::{Duration, Instant},
     },
-    thiserror::Error,
 };
 
 /// the number of slots to respond with when responding to `Orphan` requests
@@ -83,22 +82,6 @@ const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(MAX_ANCESTOR_RESPONSES, 30);
-
-#[derive(Error, Debug)]
-pub enum RepairVerifyError {
-    #[error("IdMismatch")]
-    IdMismatch,
-    #[error("Malformed")]
-    Malformed,
-    #[error("SelfRepair")]
-    SelfRepair,
-    #[error("SigVerify")]
-    SigVerify,
-    #[error("TimeSkew")]
-    TimeSkew,
-    #[error("Unsigned")]
-    Unsigned,
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ShredRepairType {
@@ -149,8 +132,9 @@ impl AncestorHashesRepairType {
     }
 }
 
-#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
-#[frozen_abi(digest = "AKpurCovzn6rsji4aQrP3hUdEHxjtXUfT7AatZXN7Rpz")]
+//#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
+//#[frozen_abi(digest = "AKpurCovzn6rsji4aQrP3hUdEHxjtXUfT7AatZXN7Rpz")]
 pub enum AncestorHashesResponse {
     Hashes(Vec<(Slot, Hash)>),
     Ping(Ping),
@@ -201,7 +185,8 @@ struct ServeRepairStats {
     err_id_mismatch: usize,
 }
 
-#[derive(Debug, AbiExample, Deserialize, Serialize)]
+//#[derive(Debug, AbiExample, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct RepairRequestHeader {
     signature: Signature,
     sender: Pubkey,
@@ -225,8 +210,9 @@ impl RepairRequestHeader {
 pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
-#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
-#[frozen_abi(digest = "3bgE3sYHRqetvpo4fcDL6PTV3z2LMAtY6H8BoLFSjCwf")]
+//#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
+//#[frozen_abi(digest = "3bgE3sYHRqetvpo4fcDL6PTV3z2LMAtY6H8BoLFSjCwf")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
     LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
@@ -275,8 +261,9 @@ fn discard_malformed_repair_requests(
     well_formed_requests
 }
 
-#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
-#[frozen_abi(digest = "CkffjyMPCwuJgk9NiCMELXLCecAnTPZqpKEnUCb3VyVf")]
+//#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
+//#[frozen_abi(digest = "CkffjyMPCwuJgk9NiCMELXLCecAnTPZqpKEnUCb3VyVf")]
 pub(crate) enum RepairResponse {
     Ping(Ping),
 }
@@ -1182,7 +1169,7 @@ impl ServeRepair {
 
     /// Distinguish and process `RepairResponse` ping packets ignoring other
     /// packets in the batch.
-    pub(crate) fn handle_repair_response_pings(
+    pub fn handle_repair_response_pings(
         repair_socket: &UdpSocket,
         keypair: &Keypair,
         packet_batch: &mut PacketBatch,
@@ -1377,7 +1364,7 @@ impl ServeRepair {
 mod tests {
     use {
         super::*,
-        crate::{repair_response, result::Error},
+        crate::repair_response,
         solana_gossip::{contact_info::ContactInfo, socketaddr, socketaddr_any},
         solana_ledger::{
             blockstore::make_many_slot_entries,
@@ -1387,6 +1374,7 @@ mod tests {
             shred::{max_ticks_per_n_shreds, Shred, ShredFlags},
         },
         solana_perf::packet::{deserialize_from_with_limit, Packet},
+        solana_result::result::Error,
         solana_runtime::bank::Bank,
         solana_sdk::{
             feature_set::FeatureSet, hash::Hash, pubkey::Pubkey, signature::Keypair,

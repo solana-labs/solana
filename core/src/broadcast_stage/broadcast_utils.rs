@@ -1,10 +1,10 @@
 use {
-    crate::result::Result,
     bincode::serialized_size,
     crossbeam_channel::Receiver,
     solana_entry::entry::Entry,
     solana_ledger::shred::ShredData,
     solana_poh::poh_recorder::WorkingBankEntry,
+    solana_result::result::Result,
     solana_runtime::bank::Bank,
     solana_sdk::clock::Slot,
     std::{

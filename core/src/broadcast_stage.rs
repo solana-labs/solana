@@ -8,10 +8,7 @@ use {
         fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
         standard_broadcast_run::StandardBroadcastRun,
     },
-    crate::{
-        cluster_nodes::{ClusterNodes, ClusterNodesCache},
-        result::{Error, Result},
-    },
+    crate::cluster_nodes::{ClusterNodes, ClusterNodesCache},
     crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender},
     itertools::Itertools,
     solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError},
@@ -19,6 +16,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_error, inc_new_counter_info},
     solana_poh::poh_recorder::WorkingBankEntry,
+    solana_result::result::{Error, Result},
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::Slot,

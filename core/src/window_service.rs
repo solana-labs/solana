@@ -3,12 +3,8 @@
 //!
 use {
     crate::{
-        ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
         cluster_info_vote_listener::VerifiedVoteReceiver,
         completed_data_sets_service::CompletedDataSetsSender,
-        repair_response,
-        repair_service::{DumpedSlotsReceiver, OutstandingShredRepairs, RepairInfo, RepairService},
-        result::{Error, Result},
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     rayon::{prelude::*, ThreadPool},
@@ -22,6 +18,12 @@ use {
     solana_metrics::inc_new_counter_error,
     solana_perf::packet::{Packet, PacketBatch},
     solana_rayon_threadlimit::get_thread_count,
+    solana_repair::{
+        ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
+        repair_response,
+        repair_service::{DumpedSlotsReceiver, OutstandingShredRepairs, RepairInfo, RepairService},
+    },
+    solana_result::result::{Error, Result},
     solana_sdk::clock::Slot,
     std::{
         cmp::Reverse,
@@ -571,7 +573,7 @@ mod test {
 
     #[test]
     fn test_prune_shreds() {
-        use crate::serve_repair::ShredRepairType;
+        use solana_repair::serve_repair::ShredRepairType;
         solana_logger::setup();
         let shred = Shred::new_from_parity_shard(
             5,   // slot

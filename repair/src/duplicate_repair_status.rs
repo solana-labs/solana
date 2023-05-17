@@ -344,7 +344,7 @@ impl AncestorRequestStatus {
         timestamp() - self.start_ts > RETRY_INTERVAL_SECONDS as u64 * 1000
     }
 
-    #[cfg(test)]
+    // pub for tests
     pub fn make_expired(&mut self) {
         self.start_ts = timestamp() - RETRY_INTERVAL_SECONDS as u64 * 1000 - 1;
     }

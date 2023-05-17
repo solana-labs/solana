@@ -8,14 +8,13 @@ use {
 use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
-        cluster_info_vote_listener::VerifiedVoteReceiver,
-        cluster_slots::ClusterSlots,
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,
         serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
+    solana_cluster_slots::cluster_slots::ClusterSlots,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::{Blockstore, SlotMeta},
@@ -44,6 +43,9 @@ use {
         time::{Duration, Instant},
     },
 };
+
+// TODO: duplicated from cluster_info_vote_listener::VerifiedVoteReceiver
+type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vec<Slot>)>;
 
 // Time to defer repair requests to allow for turbine propagation
 const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
@@ -620,7 +622,7 @@ impl RepairService {
         blockstore: &Blockstore,
         max_repairs: usize,
         repair_range: &RepairSlotRange,
-    ) -> crate::result::Result<Vec<ShredRepairType>> {
+    ) -> solana_result::result::Result<Vec<ShredRepairType>> {
         // Slot height and shred indexes for shreds we want to repair
         let mut repairs: Vec<ShredRepairType> = vec![];
         for slot in repair_range.start..=repair_range.end {
@@ -736,7 +738,7 @@ impl RepairService {
         repair_stats: &mut RepairStats,
         nonce: Nonce,
         identity_keypair: &Keypair,
-    ) -> crate::result::Result<()> {
+    ) -> solana_result::result::Result<()> {
         let req = serve_repair.map_repair_request(
             repair_type,
             repair_pubkey,
