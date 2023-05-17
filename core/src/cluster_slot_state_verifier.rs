@@ -58,7 +58,7 @@ impl BankStatus {
     fn bank_hash(&self) -> Option<Hash> {
         match self {
             BankStatus::Frozen(hash) => Some(*hash),
-            BankStatus::Dead => Some(Hash::default()),
+            BankStatus::Dead => None,
             BankStatus::Unprocessed => None,
         }
     }
@@ -68,6 +68,14 @@ impl BankStatus {
             BankStatus::Frozen(_) => false,
             BankStatus::Dead => true,
             BankStatus::Unprocessed => false,
+        }
+    }
+
+    fn can_be_further_replayed(&self) -> bool {
+        match self {
+            BankStatus::Unprocessed => true,
+            BankStatus::Dead => false,
+            BankStatus::Frozen(_) => false,
         }
     }
 }
@@ -93,7 +101,7 @@ impl DeadState {
             gossip_duplicate_confirmed_slots,
             epoch_slots_frozen_slots,
             fork_choice,
-            Some(Hash::default()),
+            None,
         );
         let is_slot_duplicate = duplicate_slots_tracker.contains(&slot);
         Self::new(cluster_confirmed_hash, is_slot_duplicate)
@@ -279,11 +287,8 @@ pub enum SlotStateUpdate {
 
 impl SlotStateUpdate {
     fn into_state_changes(self, slot: Slot) -> Vec<ResultingStateChange> {
-        let bank_frozen_hash = self.bank_hash();
-        if bank_frozen_hash.is_none() && !self.is_popular_pruned() {
-            // If the bank hasn't been frozen yet, then there's nothing to do
-            // since replay of the slot hasn't finished yet.
-            // However if the bank is pruned, then replay will never finish so we still process now
+        if self.can_be_further_replayed() {
+            // If the bank is still awaiting replay, then there's nothing to do yet
             return vec![];
         }
 
@@ -303,28 +308,26 @@ impl SlotStateUpdate {
         }
     }
 
-    fn bank_hash(&self) -> Option<Hash> {
+    fn can_be_further_replayed(&self) -> bool {
         match self {
-            SlotStateUpdate::BankFrozen(bank_frozen_state) => Some(bank_frozen_state.frozen_hash),
+            SlotStateUpdate::BankFrozen(_) => false,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state) => {
-                duplicate_confirmed_state.bank_status.bank_hash()
+                duplicate_confirmed_state
+                    .bank_status
+                    .can_be_further_replayed()
             }
-            SlotStateUpdate::Dead(_) => Some(Hash::default()),
-            SlotStateUpdate::Duplicate(duplicate_state) => duplicate_state.bank_status.bank_hash(),
+            SlotStateUpdate::Dead(_) => false,
+            SlotStateUpdate::Duplicate(duplicate_state) => {
+                duplicate_state.bank_status.can_be_further_replayed()
+            }
             SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state) => {
-                epoch_slots_frozen_state.bank_status.bank_hash()
+                epoch_slots_frozen_state
+                    .bank_status
+                    .can_be_further_replayed()
+                    // If we have the slot pruned then it will never be replayed
+                    && !epoch_slots_frozen_state.is_popular_pruned()
             }
-            SlotStateUpdate::PopularPrunedFork => None,
-        }
-    }
-
-    fn is_popular_pruned(&self) -> bool {
-        match self {
-            SlotStateUpdate::PopularPrunedFork => true,
-            SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state) => {
-                epoch_slots_frozen_state.is_popular_pruned()
-            }
-            _ => false,
+            SlotStateUpdate::PopularPrunedFork => false,
         }
     }
 }
@@ -345,22 +348,42 @@ pub enum ResultingStateChange {
     SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate),
 }
 
-fn check_duplicate_confirmed_hash_against_frozen_hash(
+/// Checks the duplicate confirmed hash we observed against our local bank status
+///
+/// 1) If we haven't replayed locally do nothing
+/// 2) If our local bank is dead, mark for dump and repair
+/// 3) If our local bank is replayed but mismatch hash, notify fork choice of duplicate and dump and
+///    repair
+/// 4) If our local bank is replayed and matches the `duplicate_confirmed_hash`, notify fork choice
+///    that we have the correct version
+fn check_duplicate_confirmed_hash_against_bank_status(
     state_changes: &mut Vec<ResultingStateChange>,
     slot: Slot,
     duplicate_confirmed_hash: Hash,
-    bank_frozen_hash: Hash,
-    is_dead: bool,
+    bank_status: BankStatus,
 ) {
-    if duplicate_confirmed_hash != bank_frozen_hash {
-        if is_dead {
+    match bank_status {
+        BankStatus::Unprocessed => {}
+        BankStatus::Dead => {
             // If the cluster duplicate confirmed some version of this slot, then
             // there's another version of our dead slot
             warn!(
                 "Cluster duplicate confirmed slot {} with hash {}, but we marked slot dead",
                 slot, duplicate_confirmed_hash
             );
-        } else {
+            state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
+                duplicate_confirmed_hash,
+            ));
+        }
+        BankStatus::Frozen(bank_frozen_hash) if duplicate_confirmed_hash == bank_frozen_hash => {
+            // If the versions match, then add the slot to the candidate
+            // set to account for the case where it was removed earlier
+            // by the `on_duplicate_slot()` handler
+            state_changes.push(ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
+                bank_frozen_hash,
+            ));
+        }
+        BankStatus::Frozen(bank_frozen_hash) => {
             // The duplicate confirmed slot hash does not match our frozen hash.
             // Modify fork choice rule to exclude our version from being voted
             // on and also repair the correct version
@@ -368,69 +391,77 @@ fn check_duplicate_confirmed_hash_against_frozen_hash(
                 "Cluster duplicate confirmed slot {} with hash {}, but our version has hash {}",
                 slot, duplicate_confirmed_hash, bank_frozen_hash
             );
+            state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
+            state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
+                duplicate_confirmed_hash,
+            ));
         }
-
-        state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
-        state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
-            duplicate_confirmed_hash,
-        ));
-    } else {
-        // If the versions match, then add the slot to the candidate
-        // set to account for the case where it was removed earlier
-        // by the `on_duplicate_slot()` handler
-        state_changes.push(ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
-            bank_frozen_hash,
-        ));
     }
 }
 
-fn check_epoch_slots_hash_against_frozen_hash(
+/// Checks the epoch slots hash we observed against our local bank status
+/// Note epoch slots here does not refer to gossip but responses from ancestor_hashes_service
+///
+/// * If `epoch_slots_frozen_hash` matches our local frozen hash do nothing
+/// * If `slot` has not yet been replayed and is not pruned fail, as we should not be checking
+///   against this bank until it is replayed.
+///
+/// Dump and repair the slot if any of the following occur
+/// * Our version is dead
+/// * Our version is popular pruned and unplayed
+/// * If `epoch_slots_frozen_hash` does not match our local frozen hash (additionally notify fork
+///   choice of duplicate `slot`)
+fn check_epoch_slots_hash_against_bank_status(
     state_changes: &mut Vec<ResultingStateChange>,
     slot: Slot,
     epoch_slots_frozen_hash: Hash,
-    bank_frozen_hash: Hash,
-    is_dead: bool,
+    bank_status: BankStatus,
     is_popular_pruned: bool,
 ) {
-    if epoch_slots_frozen_hash != bank_frozen_hash {
-        if is_dead {
-            // If the cluster duplicate confirmed some version of this slot, then
-            // there's another version of our dead slot
+    match bank_status {
+        BankStatus::Frozen(bank_frozen_hash) if bank_frozen_hash == epoch_slots_frozen_hash => {
+            // Matches, nothing to do
+            return;
+        }
+        BankStatus::Frozen(bank_frozen_hash) => {
+            // The epoch slots hash does not match our frozen hash.
+            warn!(
+                "EpochSlots sample returned slot {} with hash {}, but our version
+                has hash {:?}",
+                slot, epoch_slots_frozen_hash, bank_frozen_hash
+            );
+            if !is_popular_pruned {
+                // If the slot is not already pruned notify fork choice to mark as invalid
+                state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
+            }
+        }
+        BankStatus::Dead => {
+            // Cluster sample found a hash for our dead slot, we must have the wrong version
             warn!(
                 "EpochSlots sample returned slot {} with hash {}, but we marked slot dead",
                 slot, epoch_slots_frozen_hash
             );
-        } else if is_popular_pruned {
+        }
+        BankStatus::Unprocessed => {
+            // If the bank was not popular pruned, we would never have made it here, as the bank is
+            // yet to be replayed
+            assert!(is_popular_pruned);
             // The cluster sample found the troublesome slot which caused this fork to be pruned
             warn!(
                 "EpochSlots sample returned slot {slot} with hash {epoch_slots_frozen_hash}, but we
                 have pruned it due to incorrect ancestry"
             );
-        } else {
-            // The duplicate confirmed slot hash does not match our frozen hash.
-            // Modify fork choice rule to exclude our version from being voted
-            // on and also repair the correct version
-            warn!(
-                "EpochSlots sample returned slot {} with hash {}, but our version
-                has hash {}",
-                slot, epoch_slots_frozen_hash, bank_frozen_hash
-            );
         }
-        if !is_popular_pruned {
-            // If the slot is already pruned, it will already be pruned from fork choice so no
-            // reason to mark as duplicate
-            state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
-        }
-        state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
-            epoch_slots_frozen_hash,
-        ));
     }
+    state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
+        epoch_slots_frozen_hash,
+    ));
 }
 
 fn on_dead_slot(slot: Slot, dead_state: DeadState) -> Vec<ResultingStateChange> {
     let DeadState {
         cluster_confirmed_hash,
-        is_slot_duplicate,
+        ..
     } = dead_state;
 
     let mut state_changes = vec![];
@@ -439,31 +470,25 @@ fn on_dead_slot(slot: Slot, dead_state: DeadState) -> Vec<ResultingStateChange> 
             ClusterConfirmedHash::DuplicateConfirmed(duplicate_confirmed_hash) => {
                 // If the cluster duplicate_confirmed some version of this slot, then
                 // check if our version agrees with the cluster,
-                let bank_hash = Hash::default();
-                let is_dead = true;
                 state_changes.push(ResultingStateChange::SendAncestorHashesReplayUpdate(
                     AncestorHashesReplayUpdate::DeadDuplicateConfirmed(slot),
                 ));
-                check_duplicate_confirmed_hash_against_frozen_hash(
+                check_duplicate_confirmed_hash_against_bank_status(
                     &mut state_changes,
                     slot,
                     duplicate_confirmed_hash,
-                    bank_hash,
-                    is_dead,
+                    BankStatus::Dead,
                 );
             }
             ClusterConfirmedHash::EpochSlotsFrozen(epoch_slots_frozen_hash) => {
                 // Lower priority than having seen an actual duplicate confirmed hash in the
                 // match arm above.
-                let bank_hash = Hash::default();
-                let is_dead = true;
                 let is_popular_pruned = false;
-                check_epoch_slots_hash_against_frozen_hash(
+                check_epoch_slots_hash_against_bank_status(
                     &mut state_changes,
                     slot,
                     epoch_slots_frozen_hash,
-                    bank_hash,
-                    is_dead,
+                    BankStatus::Dead,
                     is_popular_pruned,
                 );
             }
@@ -472,9 +497,6 @@ fn on_dead_slot(slot: Slot, dead_state: DeadState) -> Vec<ResultingStateChange> 
         state_changes.push(ResultingStateChange::SendAncestorHashesReplayUpdate(
             AncestorHashesReplayUpdate::Dead(slot),
         ));
-        if is_slot_duplicate {
-            state_changes.push(ResultingStateChange::MarkSlotDuplicate(Hash::default()));
-        }
     }
 
     state_changes
@@ -492,34 +514,29 @@ fn on_frozen_slot(slot: Slot, bank_frozen_state: BankFrozenState) -> Vec<Resulti
             ClusterConfirmedHash::DuplicateConfirmed(duplicate_confirmed_hash) => {
                 // If the cluster duplicate_confirmed some version of this slot, then
                 // check if our version agrees with the cluster,
-                let is_dead = false;
-                check_duplicate_confirmed_hash_against_frozen_hash(
+                check_duplicate_confirmed_hash_against_bank_status(
                     &mut state_changes,
                     slot,
                     duplicate_confirmed_hash,
-                    frozen_hash,
-                    is_dead,
+                    BankStatus::Frozen(frozen_hash),
                 );
             }
             ClusterConfirmedHash::EpochSlotsFrozen(epoch_slots_frozen_hash) => {
                 // Lower priority than having seen an actual duplicate confirmed hash in the
                 // match arm above.
-                let is_dead = false;
                 let is_popular_pruned = false;
-                check_epoch_slots_hash_against_frozen_hash(
+                check_epoch_slots_hash_against_bank_status(
                     &mut state_changes,
                     slot,
                     epoch_slots_frozen_hash,
-                    frozen_hash,
-                    is_dead,
+                    BankStatus::Frozen(frozen_hash),
                     is_popular_pruned,
                 );
             }
         }
-    }
-    // If `cluster_confirmed_hash` is Some above we should have already pushed a
-    // `MarkSlotDuplicate` state change
-    else if is_slot_duplicate {
+    } else if is_slot_duplicate {
+        // If `cluster_confirmed_hash` is Some above we should have already pushed a
+        // `MarkSlotDuplicate` state change
         state_changes.push(ResultingStateChange::MarkSlotDuplicate(frozen_hash));
     }
 
@@ -543,21 +560,17 @@ fn on_duplicate_confirmed(
         }
     }
 
-    let bank_hash = bank_status.bank_hash().expect("bank hash must exist");
-
     let mut state_changes = vec![];
-    let is_dead = bank_status.is_dead();
-    if is_dead {
+    if bank_status.is_dead() {
         state_changes.push(ResultingStateChange::SendAncestorHashesReplayUpdate(
             AncestorHashesReplayUpdate::DeadDuplicateConfirmed(slot),
         ));
     }
-    check_duplicate_confirmed_hash_against_frozen_hash(
+    check_duplicate_confirmed_hash_against_bank_status(
         &mut state_changes,
         slot,
         duplicate_confirmed_hash,
-        bank_hash,
-        is_dead,
+        bank_status,
     );
 
     state_changes
@@ -577,8 +590,6 @@ fn on_duplicate(duplicate_state: DuplicateState) -> Vec<ResultingStateChange> {
         }
     }
 
-    let bank_hash = bank_status.bank_hash().expect("bank hash must exist");
-
     // If the cluster duplicate_confirmed some version of this slot
     // then either the `SlotStateUpdate::DuplicateConfirmed`, `SlotStateUpdate::BankFrozen`,
     // or `SlotStateUpdate::Dead` state transitions will take care of marking the fork as
@@ -586,7 +597,9 @@ fn on_duplicate(duplicate_state: DuplicateState) -> Vec<ResultingStateChange> {
     if duplicate_confirmed_hash.is_none() {
         // If we have not yet seen any version of the slot duplicate confirmed, then mark
         // the slot as duplicate
-        return vec![ResultingStateChange::MarkSlotDuplicate(bank_hash)];
+        if let Some(bank_hash) = bank_status.bank_hash() {
+            return vec![ResultingStateChange::MarkSlotDuplicate(bank_hash)];
+        }
     }
 
     vec![]
@@ -642,15 +655,12 @@ fn on_epoch_slots_frozen(
         }
     }
 
-    let frozen_hash = bank_status.bank_hash().unwrap_or_default();
-    let is_dead = bank_status.is_dead();
     let mut state_changes = vec![];
-    check_epoch_slots_hash_against_frozen_hash(
+    check_epoch_slots_hash_against_bank_status(
         &mut state_changes,
         slot,
         epoch_slots_frozen_hash,
-        frozen_hash,
-        is_dead,
+        bank_status,
         is_popular_pruned,
     );
 
@@ -666,6 +676,14 @@ fn on_popular_pruned_fork(slot: Slot) -> Vec<ResultingStateChange> {
     )]
 }
 
+/// Finds the cluster confirmed hash
+///
+/// 1) If we have a frozen hash, check if it's been duplicate confirmed by cluster
+///    in turbine or gossip
+/// 2) Otherwise poll `epoch_slots_frozen_slots` to see if we have a hash
+///
+/// Note `epoch_slots_frozen_slots` is not populated from `EpochSlots` in gossip but actually
+/// aggregated through hashes sent in response to requests from `ancestor_hashes_service`
 fn get_cluster_confirmed_hash_from_state(
     slot: Slot,
     gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
@@ -723,6 +741,13 @@ fn get_duplicate_confirmed_hash_from_state(
     )
 }
 
+/// Finds the duplicate confirmed hash for a slot.
+///
+/// 1) If `is_local_replay_duplicate_confirmed`, return Some(local frozen hash)
+/// 2) If we have a `gossip_duplicate_confirmed_hash`, return Some(gossip_hash)
+/// 3) Else return None
+///
+/// Assumes that if `is_local_replay_duplicate_confirmed`, `bank_frozen_hash` is not None
 fn get_duplicate_confirmed_hash(
     slot: Slot,
     gossip_duplicate_confirmed_hash: Option<Hash>,
@@ -734,7 +759,6 @@ fn get_duplicate_confirmed_hash(
         // descendants with votes for this slot, hence this slot must be
         // frozen.
         let bank_frozen_hash = bank_frozen_hash.unwrap();
-        assert!(bank_frozen_hash != Hash::default());
         Some(bank_frozen_hash)
     } else {
         None
@@ -1133,7 +1157,6 @@ mod test {
                 SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
                 vec![
                 ResultingStateChange::SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate::DeadDuplicateConfirmed(10)),
-                ResultingStateChange::MarkSlotDuplicate(Hash::default()),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash)],
             )
         },
@@ -1189,7 +1212,8 @@ mod test {
             (
                 SlotStateUpdate::Dead(dead_state),
                 vec![
-                    ResultingStateChange::SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate::Dead(10)), ResultingStateChange::MarkSlotDuplicate(Hash::default())],
+                    ResultingStateChange::SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate::Dead(10))
+                ],
             )
         },
         dead_state_update_2: {
@@ -1204,7 +1228,6 @@ mod test {
                 SlotStateUpdate::Dead(dead_state),
                 vec![
                 ResultingStateChange::SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate::DeadDuplicateConfirmed(10)),
-                ResultingStateChange::MarkSlotDuplicate(Hash::default()),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash)],
             )
         },
@@ -1219,7 +1242,6 @@ mod test {
             (
                 SlotStateUpdate::Dead(dead_state),
                 vec![
-                ResultingStateChange::MarkSlotDuplicate(Hash::default()),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
             )
         },
@@ -1236,7 +1258,6 @@ mod test {
                 vec![
 
                     ResultingStateChange::SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate::DeadDuplicateConfirmed(10)),
-                ResultingStateChange::MarkSlotDuplicate(Hash::default()),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash)],
             )
         },
@@ -1250,9 +1271,7 @@ mod test {
             );
             (
                 SlotStateUpdate::Dead(dead_state),
-                vec![
-                    ResultingStateChange::MarkSlotDuplicate(Hash::default()),
-                    ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
+                vec![ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
             )
         },
         duplicate_state_update_0: {
@@ -1270,7 +1289,7 @@ mod test {
             let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
             (
                 SlotStateUpdate::Duplicate(duplicate_state),
-                vec![ResultingStateChange::MarkSlotDuplicate(Hash::default())],
+                Vec::<ResultingStateChange>::new(),
             )
         },
         duplicate_state_update_2: {
@@ -1357,9 +1376,7 @@ mod test {
             let epoch_slots_frozen_state = EpochSlotsFrozenState::new(epoch_slots_frozen_hash, duplicate_confirmed_hash, bank_status, false);
             (
                 SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
-                vec![
-                ResultingStateChange::MarkSlotDuplicate(Hash::default()),
-                ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
+                vec![ResultingStateChange::RepairDuplicateConfirmedVersion(epoch_slots_frozen_hash)],
             )
         },
         epoch_slots_frozen_state_update_4: {
