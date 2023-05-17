@@ -1491,11 +1491,6 @@ impl Bank {
         });
     }
 
-    #[cfg(test)]
-    pub(crate) fn get_epoch_reward_status_for_test(&self) -> &EpochRewardStatus {
-        &self.epoch_reward_status
-    }
-
     /// Target to store 64 rewards per entry/tick in a block. A block has a minimal of 64
     /// entries/ticks. This gives 4096 total rewards to store in one block.
     /// This constant affects consensus.

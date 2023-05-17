@@ -583,7 +583,9 @@ fn test_extra_fields_eof() {
     );
 
     // assert epoch_reward_status is the same as the set epoch reward status
-    let epoch_reward_status = bank.get_epoch_reward_status_for_test();
+    let epoch_reward_status = bank
+        .get_epoch_reward_status_to_serialize()
+        .unwrap_or(&EpochRewardStatus::Inactive);
     assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
     if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
         parent_start_block_height,
@@ -662,7 +664,9 @@ fn test_extra_fields_full_snapshot_archive() {
     );
 
     // assert epoch_reward_status is the same as the set epoch reward status
-    let epoch_reward_status = bank.get_epoch_reward_status_for_test();
+    let epoch_reward_status = bank
+        .get_epoch_reward_status_to_serialize()
+        .unwrap_or(&EpochRewardStatus::Inactive);
     assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
     if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
         parent_start_block_height,
@@ -747,7 +751,9 @@ fn test_blank_extra_fields() {
     assert_eq!(0, dbank.fee_rate_governor.lamports_per_signature);
 
     // epoch_reward status should defaults to `Inactive`
-    let epoch_reward_status = bank.get_epoch_reward_status_for_test();
+    let epoch_reward_status = bank
+        .get_epoch_reward_status_to_serialize()
+        .unwrap_or(&EpochRewardStatus::Inactive);
     assert!(matches!(epoch_reward_status, EpochRewardStatus::Inactive));
 }
 
