@@ -113,9 +113,10 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches).unwrap();
             let seed = Seed::new(&mnemonic, &passphrase);
 
+            let silent = matches.is_present("silent");
+
             match key_type {
                 KeyType::ElGamal => {
-                    let silent = matches.is_present("silent");
                     if !silent {
                         eprintln!("Generating a new ElGamal keypair");
                     }
@@ -136,7 +137,6 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                     }
                 }
                 KeyType::Aes128 => {
-                    let silent = matches.is_present("silent");
                     if !silent {
                         eprintln!("Generating a new AES128 encryption key");
                     }
