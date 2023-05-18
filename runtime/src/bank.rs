@@ -2584,7 +2584,7 @@ impl Bank {
         let RewardCalculationResult {
             stake_rewards,
             total_stake_rewards_lamports,
-        } = self.do_calculate_validator_rewards_and_distribute_vote_rewards_with_thread_pool(
+        } = self.calculate_validator_rewards_and_distribute_vote_rewards(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
@@ -3101,9 +3101,42 @@ impl Bank {
         stake_rewards.shuffle(&mut rng);
     }
 
-    /// Calculate epoch reward and payout vote rewards (optimized with cache and no-join of vote/stake accounts)
+    /// Calculate epoch reward and return vote and stake rewards.
+    fn calculate_validator_rewards(
+        &mut self,
+        rewarded_epoch: Epoch,
+        rewards: u64,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
+        credits_auto_rewind: bool,
+        thread_pool: &ThreadPool,
+        metrics: &mut RewardsMetrics,
+    ) -> Option<(VoteRewardsAccounts, RewardCalculationResult)> {
+        let stakes = self.stakes_cache.stakes();
+        let reward_calculate_param = self.get_epoch_reward_calculate_param_info(&stakes);
+
+        self.calculate_reward_points_partitioned(
+            &reward_calculate_param,
+            rewards,
+            thread_pool,
+            metrics,
+        )
+        .map(|point_value| {
+            self.calculate_stake_vote_rewards(
+                &reward_calculate_param,
+                rewarded_epoch,
+                point_value,
+                credits_auto_rewind,
+                thread_pool,
+                reward_calc_tracer,
+                metrics,
+            )
+        })
+    }
+
+    /// Calculate epoch reward and payout vote rewards.
+    /// Store vote accounts.
     /// Returns rewards for stake accounts and total rewards to distribute for vote accounts
-    fn do_calculate_validator_rewards_and_distribute_vote_rewards_with_thread_pool(
+    fn calculate_validator_rewards_and_distribute_vote_rewards(
         &mut self,
         rewarded_epoch: Epoch,
         rewards: u64,
@@ -3112,29 +3145,16 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) -> RewardCalculationResult {
-        let stakes = self.stakes_cache.stakes();
-        let reward_calculate_param = self.get_epoch_reward_calculate_param_info(&stakes);
-
-        let Some(point_value) = self.calculate_reward_points_partitioned(
-            &reward_calculate_param,
+        let Some((vote_account_rewards, mut stake_rewards)) = self.calculate_validator_rewards(
+            rewarded_epoch,
             rewards,
+            reward_calc_tracer,
+            credits_auto_rewind,
             thread_pool,
             metrics,
         ) else {
             return RewardCalculationResult::default();
         };
-
-        let (vote_account_rewards, mut stake_rewards) = self.calculate_stake_vote_rewards(
-            &reward_calculate_param,
-            rewarded_epoch,
-            point_value,
-            credits_auto_rewind,
-            thread_pool,
-            reward_calc_tracer,
-            metrics,
-        );
-        drop(reward_calculate_param);
-        drop(stakes);
 
         let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
 
