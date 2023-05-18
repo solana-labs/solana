@@ -1109,6 +1109,20 @@ type VoteRewardsAccounts = Vec<(
     Option<(Pubkey, AccountSharedData)>,
 )>;
 
+/// Hold all results from calculating the rewards for partitioned distribution.
+/// This struct exists so we can have a function which does all the calculation with no
+/// side effects.
+struct PartitionedRewardsCalculation {
+    vote_account_rewards: VoteRewardsAccounts,
+    stake_rewards: StakeRewardCalculation,
+    old_vote_balance_and_staked: u64,
+    validator_rewards: u64,
+    validator_rate: f64,
+    foundation_rate: f64,
+    prev_epoch_duration_in_years: f64,
+    capitalization: u64,
+}
+
 struct EpochRewardCalculateParamInfo<'a> {
     stake_history: StakeHistory,
     stake_delegations: Vec<(&'a Pubkey, &'a StakeAccount<Delegation>)>,
@@ -2562,6 +2576,52 @@ impl Bank {
         }
     }
 
+    /// Calculate rewards from previous epoch to prepare for partitioned distribution.
+    fn calculate_rewards_for_partitioning(
+        &self,
+        prev_epoch: Epoch,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        thread_pool: &ThreadPool,
+        metrics: &mut RewardsMetrics,
+    ) -> PartitionedRewardsCalculation {
+        let capitalization = self.capitalization();
+        let PrevEpochInflationRewards {
+            validator_rewards,
+            prev_epoch_duration_in_years,
+            validator_rate,
+            foundation_rate,
+        } = self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
+
+        let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
+
+        let (vote_account_rewards, mut stake_rewards) = self
+            .calculate_validator_rewards(
+                prev_epoch,
+                validator_rewards,
+                reward_calc_tracer,
+                self.credits_auto_rewind(),
+                thread_pool,
+                metrics,
+            )
+            .unwrap_or_default();
+
+        Self::sort_and_shuffle_partitioned_rewards(
+            &mut stake_rewards.stake_rewards,
+            prev_epoch,
+            validator_rewards,
+        );
+        PartitionedRewardsCalculation {
+            vote_account_rewards,
+            stake_rewards,
+            old_vote_balance_and_staked,
+            validator_rewards,
+            validator_rate,
+            foundation_rate,
+            prev_epoch_duration_in_years,
+            capitalization,
+        }
+    }
+
     // Calculate rewards from previous epoch and distribute vote rewards
     // return
     //    - total rewards for the epoch (including both vote rewards and stake reward)
@@ -2574,31 +2634,21 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) -> (u64, u64, StakeRewards) {
-        let capitalization = self.capitalization();
-        let PrevEpochInflationRewards {
+        let PartitionedRewardsCalculation {
+            vote_account_rewards,
+            stake_rewards,
+            old_vote_balance_and_staked,
             validator_rewards,
-            prev_epoch_duration_in_years,
             validator_rate,
             foundation_rate,
-        } = self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
-
-        let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
-
-        let (vote_account_rewards, mut stake_rewards) = self.calculate_validator_rewards(
+            prev_epoch_duration_in_years,
+            capitalization,
+        } = self.calculate_rewards_for_partitioning(
             prev_epoch,
-            validator_rewards,
             reward_calc_tracer,
-            self.credits_auto_rewind(),
             thread_pool,
             metrics,
-        ).unwrap_or_default();
-
-        Self::sort_and_shuffle_partitioned_rewards(
-            &mut stake_rewards.stake_rewards,
-            prev_epoch,
-            validator_rewards,
         );
-
         let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
 
         self.update_reward_history(vec![], vote_rewards);
