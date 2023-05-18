@@ -232,13 +232,11 @@ build() {
   echo "Build took $SECONDS seconds"
 }
 
-# shellcheck disable=SC2088
-SOLANA_HOME="~/solana"
-# shellcheck disable=SC2088
-CARGO_BIN="~/.cargo/bin"
-
 startCommon() {
   declare ipAddress=$1
+  remoteHome="$(ssh "${sshOptions[@]}" "$ipAddress" "echo \$HOME")"
+  SOLANA_HOME="${remoteHome}/solana"
+  CARGO_BIN="${remoteHome}/.cargo/bin"
   test -d "$SOLANA_ROOT"
   if $skipSetup; then
     # shellcheck disable=SC2029
@@ -266,6 +264,8 @@ startCommon() {
 syncScripts() {
   echo "rsyncing scripts... to $ipAddress"
   declare ipAddress=$1
+  remoteHome="$(ssh "${sshOptions[@]}" "$ipAddress" "echo \$HOME")"
+  SOLANA_HOME="${remoteHome}/solana"
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     --exclude 'net/log*' \
     "$SOLANA_ROOT"/{fetch-perf-libs.sh,fetch-spl.sh,scripts,net,multinode-demo} \
@@ -276,6 +276,9 @@ syncScripts() {
 # binaries from it
 deployBootstrapValidator() {
   declare ipAddress=$1
+
+  remoteHome="$(ssh "${sshOptions[@]}" "$ipAddress" "echo \$HOME")"
+  CARGO_BIN="${remoteHome}/.cargo/bin"
 
   echo "Deploying software to bootstrap validator ($ipAddress)"
   case $deployMethod in
@@ -1181,6 +1184,8 @@ netem)
     remoteNetemConfigFile="$(basename "$netemConfigFile")"
     if [[ $netemCommand = "add" ]]; then
       for ipAddress in "${validatorIpList[@]}"; do
+        remoteHome="$(ssh "${sshOptions[@]}" "$ipAddress" "echo \$HOME")"
+        SOLANA_HOME="${remoteHome}/solana"
         "$here"/scp.sh "$netemConfigFile" solana@"$ipAddress":"$SOLANA_HOME"
       done
     fi
