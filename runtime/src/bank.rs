@@ -2662,24 +2662,7 @@ impl Bank {
 
         // This is for vote rewards only.
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
-
-        assert_eq!(
-            validator_rewards_paid,
-            u64::try_from(
-                self.rewards
-                    .read()
-                    .unwrap()
-                    .par_iter()
-                    .map(|(_address, reward_info)| {
-                        match reward_info.reward_type {
-                            RewardType::Voting | RewardType::Staking => reward_info.lamports,
-                            _ => 0,
-                        }
-                    })
-                    .sum::<i64>()
-            )
-            .unwrap()
-        );
+        self.assert_validator_rewards_paid(validator_rewards_paid);
 
         // verify that we didn't pay any more than we expected to
         assert!(validator_rewards >= validator_rewards_paid + total_stake_rewards_lamports);
@@ -2727,6 +2710,26 @@ impl Bank {
             validator_rewards_paid,
             stake_rewards,
         )
+    }
+
+    fn assert_validator_rewards_paid(&self, validator_rewards_paid: u64) {
+        assert_eq!(
+            validator_rewards_paid,
+            u64::try_from(
+                self.rewards
+                    .read()
+                    .unwrap()
+                    .par_iter()
+                    .map(|(_address, reward_info)| {
+                        match reward_info.reward_type {
+                            RewardType::Voting | RewardType::Staking => reward_info.lamports,
+                            _ => 0,
+                        }
+                    })
+                    .sum::<i64>()
+            )
+            .unwrap()
+        );
     }
 
     // update rewards based on the previous epoch
