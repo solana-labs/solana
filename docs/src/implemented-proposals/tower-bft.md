@@ -148,7 +148,7 @@ block returned by the fork choice rule above `[Fork Choice](tower-bft.md#Fork Ch
 3. Switching threshold: Have sufficiently many votes on other forks if switching forks. Let `Btop` denote the block at the top of the stack. If `Btop` is not an ancestor of `B`, then
 – Let `VBtop ∈ V` be the set of votes on `Btop` or ancestors or descendents of `Btop`.
 – We need `|V \VBtop | > 38%`.
-More details on this can be found in `[Optimistic Confirmation](ooptimistic_confirmation.md#Primitives)`
+More details on this can be found in `[Optimistic Confirmation](optimistic_confirmation.md#Primitives)`
 
 If all the conditions are satisfied and validator `i` votes for block `B` then it adjusts its tower as follows (same rules described above in `[Vote Tower](tower-bft.md#Vote Tower)`).
 1. Add block to tower. `T(l) := B`, `lockexp(B) := slot(B) + 2`, and sets `l := l + 1`.
