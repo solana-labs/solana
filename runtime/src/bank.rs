@@ -2584,17 +2584,29 @@ impl Bank {
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
 
-        let StakeRewardCalculation {
-            stake_rewards,
-            total_stake_rewards_lamports,
-        } = self.calculate_validator_rewards_and_distribute_vote_rewards(
+        let (vote_account_rewards, mut stake_rewards) = self.calculate_validator_rewards(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
             self.credits_auto_rewind(),
             thread_pool,
             metrics,
+        ).unwrap_or_default();
+
+        let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
+
+        Self::sort_and_shuffle_partitioned_rewards(
+            &mut stake_rewards.stake_rewards,
+            prev_epoch,
+            validator_rewards,
         );
+
+        self.update_reward_history(vec![], vote_rewards);
+
+        let StakeRewardCalculation {
+            stake_rewards,
+            total_stake_rewards_lamports,
+        } = stake_rewards;
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
 
@@ -3134,42 +3146,6 @@ impl Bank {
                 metrics,
             )
         })
-    }
-
-    /// Calculate epoch reward and payout vote rewards.
-    /// Store vote accounts.
-    /// Returns rewards for stake accounts and total rewards to distribute for vote accounts
-    fn calculate_validator_rewards_and_distribute_vote_rewards(
-        &mut self,
-        rewarded_epoch: Epoch,
-        rewards: u64,
-        reward_calc_tracer: Option<impl RewardCalcTracer>,
-        credits_auto_rewind: bool,
-        thread_pool: &ThreadPool,
-        metrics: &mut RewardsMetrics,
-    ) -> StakeRewardCalculation {
-        let Some((vote_account_rewards, mut stake_rewards)) = self.calculate_validator_rewards(
-            rewarded_epoch,
-            rewards,
-            reward_calc_tracer,
-            credits_auto_rewind,
-            thread_pool,
-            metrics,
-        ) else {
-            return StakeRewardCalculation::default();
-        };
-
-        let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
-
-        Self::sort_and_shuffle_partitioned_rewards(
-            &mut stake_rewards.stake_rewards,
-            rewarded_epoch,
-            rewards,
-        );
-
-        self.update_reward_history(vec![], vote_rewards);
-
-        stake_rewards
     }
 
     /// Load, calculate and payout epoch rewards for stake and vote accounts
