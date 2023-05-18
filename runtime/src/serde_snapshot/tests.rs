@@ -532,7 +532,7 @@ fn test_extra_fields_eof() {
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
     // Set epoch reward status
-    bank.set_epoch_reward_status_active_for_test(100, vec![]);
+    bank.set_epoch_reward_status_active(vec![]);
 
     // Serialize
     let snapshot_storages = bank.get_snapshot_storages(None);
@@ -588,7 +588,7 @@ fn test_extra_fields_eof() {
         .unwrap_or(&EpochRewardStatus::Inactive);
     assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
     if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
-        parent_start_block_height,
+        start_block_height: parent_start_block_height,
         calculated_epoch_stake_rewards: ref stake_rewards,
     }) = epoch_reward_status
     {
@@ -616,7 +616,7 @@ fn test_extra_fields_full_snapshot_archive() {
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
     // Set epoch reward status
-    bank.set_epoch_reward_status_active_for_test(100, vec![]);
+    bank.set_epoch_reward_status_active(vec![]);
 
     let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
     let bank_snapshots_dir = TempDir::new().unwrap();
@@ -669,11 +669,11 @@ fn test_extra_fields_full_snapshot_archive() {
         .unwrap_or(&EpochRewardStatus::Inactive);
     assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
     if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
-        parent_start_block_height,
+        start_block_height,
         calculated_epoch_stake_rewards: ref stake_rewards,
     }) = epoch_reward_status
     {
-        assert_eq!(*parent_start_block_height, 100);
+        assert_eq!(*start_block_height, 1);
         assert_eq!(stake_rewards.len(), 0);
     } else {
         unreachable!("Epoch reward status should NOT be inactive.");

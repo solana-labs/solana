@@ -1460,29 +1460,11 @@ impl Bank {
             .is_active(&enable_partitioned_epoch_reward::id())
     }
 
-    fn set_epoch_reward_status_active(&mut self, parent_height: u64, stake_rewards: StakeRewards) {
+    pub(crate) fn set_epoch_reward_status_active(&mut self, stake_rewards: StakeRewards) {
         self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
-            // Use the parent slot/block height here. Storing the parent_slot, we could possible reuse the reward computation results during forks.
-            //  N1
-            //   \ --> N2
-            //   \ --> N3
-            //   \ --> N4
-            // Let's say there are 3 forks at the epoch boundaries, where N2/N3/N4 are the start blocks in the current epoch and N1 is the parent of these three in previous epoch.
-            // Then the rewards computed from N2,N3,N4 should all be the same.
-            // To avoid redundant computation, we could store the calculated rewards in a map indexed by parent block N1's slot number, then computation from N3 and N4 can be avoided.
-            // This optimization is also applicable for the current design in theory, i.e. change `calculated_rewards` into a map of parent_slot->StakeRewards, to avoid repeated computation in forks.
-            parent_start_block_height: parent_height,
+            start_block_height: self.block_height,
             calculated_epoch_stake_rewards: Arc::new(stake_rewards),
         });
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_epoch_reward_status_active_for_test(
-        &mut self,
-        parent_height: u64,
-        stake_rewards: StakeRewards,
-    ) {
-        self.set_epoch_reward_status_active(parent_height, stake_rewards);
     }
 
     #[cfg(test)]
@@ -1505,7 +1487,7 @@ impl Bank {
             1
         } else {
             let num_chunks = if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
-                parent_start_block_height: _parent_start_block_height,
+                start_block_height: _start_block_height,
                 calculated_epoch_stake_rewards: ref stake_rewards,
             }) = self.epoch_reward_status
             {
@@ -1858,7 +1840,7 @@ impl Bank {
                 rewards_metrics,
             );
 
-        self.set_epoch_reward_status_active(parent_height, stake_rewards);
+        self.set_epoch_reward_status_active(stake_rewards);
 
         datapoint_warn!(
             "reward-status-update",
@@ -1870,13 +1852,13 @@ impl Bank {
         );
 
         let slot = self.slot();
-        let credit_start = parent_slot + Self::REWARD_CALCULATION_NUM_BLOCKS + 1;
+        let credit_start = self.block_height() + Self::REWARD_CALCULATION_NUM_BLOCKS;
         let credit_end_exclusive = credit_start + self.get_reward_credit_num_blocks();
 
         // create EpochRewards sysvar that holds the balance of undistributed rewards with
         // (total_rewards, distributed_rewards, credit_end_exclusive), total capital will increase by (total-rewards - distributed_rewards)
         info!("EpochRewards Start: {slot} {total_rewards} {distributed_rewards} {credit_end_exclusive}");
-        self.create_epoch_rewards(total_rewards, distributed_rewards, credit_end_exclusive);
+        self.create_epoch_rewards_sys_var(total_rewards, distributed_rewards, credit_end_exclusive);
     }
 
     /// Process reward distribution for the block if it is inside reward interval.
@@ -1887,9 +1869,8 @@ impl Bank {
                     > self.get_reward_total_num_blocks()
             );
             let height = self.block_height();
-            let parent_start_block_height = status.parent_start_block_height;
-            // + 1 because parent_start_block_height is the parent block of the current epoch.
-            let credit_start = parent_start_block_height + 1 + Self::REWARD_CALCULATION_NUM_BLOCKS;
+            let start_block_height = status.start_block_height;
+            let credit_start = start_block_height + Self::REWARD_CALCULATION_NUM_BLOCKS;
             let credit_end_exclusive = credit_start + self.get_reward_credit_num_blocks();
 
             if height >= credit_start && height < credit_end_exclusive {
@@ -1904,7 +1885,7 @@ impl Bank {
                     ("slot", self.slot(), i64),
                     ("height", height, i64),
                     ("activate", 0, i64),
-                    ("parent_start_height", parent_start_block_height, i64),
+                    ("start_height", start_block_height, i64),
                 );
 
                 self.deactivate_epoch_reward_status();
@@ -3848,7 +3829,7 @@ impl Bank {
     }
 
     /// Create EpochRewards syavar with calculated rewards
-    fn create_epoch_rewards(
+    fn create_epoch_rewards_sys_var(
         &self,
         total_rewards: u64,
         distributed_rewards: u64,
