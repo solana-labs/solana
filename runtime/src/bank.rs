@@ -1833,7 +1833,7 @@ impl Bank {
         rewards_metrics: &mut RewardsMetrics,
     ) {
         let (total_rewards, distributed_rewards, stake_rewards) = self
-            .calculate_rewards_and_distribute_vote_rewards_with_thread_pool(
+            .calculate_rewards_and_distribute_vote_rewards(
                 parent_epoch,
                 reward_calc_tracer,
                 thread_pool,
@@ -2564,7 +2564,7 @@ impl Bank {
     //    - total rewards for the epoch (including both vote rewards and stake reward)
     //    - distributed vote rewards
     //    - stake rewards
-    fn calculate_rewards_and_distribute_vote_rewards_with_thread_pool(
+    fn calculate_rewards_and_distribute_vote_rewards(
         &mut self,
         prev_epoch: Epoch,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
