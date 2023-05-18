@@ -16,7 +16,7 @@ pub struct EpochRewards {
     pub distributed_rewards: u64,
 
     // distribution of all staking rewards for the current
-    // epoch will be completed before this block height
+    // epoch will be completed at this block height
     pub distribution_complete_block_height: u64,
 }
 
