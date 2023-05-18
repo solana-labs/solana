@@ -7193,7 +7193,7 @@ impl AccountsDb {
         &self,
         storages: &SortedStorages,
         slots_per_epoch: Slot,
-        mut stats: &mut crate::accounts_hash::HashStats,
+        stats: &mut crate::accounts_hash::HashStats,
     ) {
         // Nothing to do if ancient append vecs are enabled.
         // Ancient slots will be visited by the ancient append vec code and dealt with correctly.
@@ -7428,7 +7428,7 @@ impl AccountsDb {
         &self,
         cache_hash_data: &CacheHashData,
         storages: &SortedStorages,
-        mut stats: &mut crate::accounts_hash::HashStats,
+        stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
         config: &CalcAccountsHashConfig<'_>,

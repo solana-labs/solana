@@ -321,7 +321,7 @@ impl CacheHashData {
             capacity,
         };
 
-        let mut header = cache_file.get_header_mut();
+        let header = cache_file.get_header_mut();
         header.count = entries;
 
         stats.cache_file_size = capacity as usize;
