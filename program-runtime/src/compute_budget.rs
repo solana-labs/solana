@@ -171,7 +171,6 @@ impl ComputeBudget {
     pub fn process_instructions<'a>(
         &mut self,
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-        default_units_per_instruction: bool,
         support_request_units_deprecated: bool,
         enable_request_heap_frame_ix: bool,
         support_set_loaded_accounts_data_size_limit_ix: bool,
@@ -255,17 +254,10 @@ impl ComputeBudget {
             self.heap_size = Some(bytes as usize);
         }
 
-        self.compute_unit_limit = if default_units_per_instruction {
-            updated_compute_unit_limit.or_else(|| {
-                Some(
+        self.compute_unit_limit = updated_compute_unit_limit.or_else(|| {
                     (num_non_compute_budget_instructions as u32)
                         .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
-                )
             })
-        } else {
-            updated_compute_unit_limit
-        }
-        .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
         .min(MAX_COMPUTE_UNIT_LIMIT) as u64;
 
         self.loaded_accounts_data_size_limit = updated_loaded_accounts_data_size_limit

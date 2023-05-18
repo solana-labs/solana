@@ -4882,7 +4882,6 @@ impl Bank {
         message: &SanitizedMessage,
         lamports_per_signature: u64,
         fee_structure: &FeeStructure,
-        use_default_units_per_instruction: bool,
         support_request_units_deprecated: bool,
         remove_congestion_multiplier: bool,
         enable_request_heap_frame_ix: bool,
@@ -4904,7 +4903,6 @@ impl Bank {
         let prioritization_fee_details = compute_budget
             .process_instructions(
                 message.program_instructions_iter(),
-                use_default_units_per_instruction,
                 support_request_units_deprecated,
                 enable_request_heap_frame_ix,
                 support_set_accounts_data_size_limit_ix,

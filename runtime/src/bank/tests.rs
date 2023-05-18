@@ -10426,7 +10426,6 @@ fn test_calculate_prioritization_fee() {
         &message,
         fee_structure.lamports_per_signature,
         &fee_structure,
-        true,  // use_default_units_per_instruction
         false, // not support_request_units_deprecated
         true,  // remove_congestion_multiplier
         true,  // enable_request_heap_frame_ix
