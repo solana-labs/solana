@@ -236,14 +236,62 @@ sudo mount /dev/nvme1n1 /mnt/accounts
 
 ## System Tuning
 
-In order for your validator to run properly, you will need to tune the system. (If you skip this step, you will likely get an out of memory error).
+### Linux
 
-> You can find more advanced information about [manual tuning options](../../running-validator/validator-start#system-tuning) here.
+Your system will need to be tuned in order to run properly. Your validator may not start without the settings below.
 
-To get started, the automated `solana-sys-tuner` will work well for us. Run the following:
+#### **Optimize sysctl knobs**
+
+```bash
+sudo bash -c "cat >/etc/sysctl.d/21-solana-validator.conf <<EOF
+# Increase UDP buffer sizes
+net.core.rmem_default = 134217728
+net.core.rmem_max = 134217728
+net.core.wmem_default = 134217728
+net.core.wmem_max = 134217728
+
+# Increase memory mapped files limit
+vm.max_map_count = 1000000
+
+# Increase number of allowed open file descriptors
+fs.nr_open = 1000000
+EOF"
+```
+
+```bash
+sudo sysctl -p /etc/sysctl.d/21-solana-validator.conf
+```
+
+#### **Increase systemd and session file limits**
+
+Add
 
 ```
-sudo $(command -v solana-sys-tuner) --user sol > sys-tuner.log 2>&1
+LimitNOFILE=1000000
+```
+
+to the `[Service]` section of your systemd service file, if you use one,
+otherwise add
+
+```
+DefaultLimitNOFILE=1000000
+```
+
+to the `[Manager]` section of `/etc/systemd/system.conf`.
+
+```bash
+sudo systemctl daemon-reload
+```
+
+```bash
+sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
+# Increase process file descriptor count limit
+* - nofile 1000000
+EOF"
+```
+
+```bash
+### Close all open sessions (log out then, in again) ###
 ```
 
 ## Copy Key Pairs
@@ -341,7 +389,7 @@ Assuming you do not see any error messages, exit out of the command.
 
 ### Gossip Protocol
 
-Gossip is a protocol used in the Solana network to pass non-critical messages between validators. To verify that your validator is running properly, you should make sure that the validator has registered itself with the gossip network.
+Gossip is a protocol used in the Solana clusters to communicate between validator nodes. For more information on gossip, see [Gossip Service](../gossip.md).  To verify that your validator is running properly, make sure that the validator has registered itself with the gossip network.
 
 In a new terminal window, connect to your server via ssh. Identify your validator's pubkey:
 
@@ -415,8 +463,8 @@ tail -f /home/sol/solana-validator*.log
 
 ### Out of disk space
 
-Make sure your ledger is on drive with at least `1TB` of space
+Make sure your ledger is on drive with at least `1TB` of space.
 
 ### Validator not catching up
 
-This could be a networking/hardware issue, or you may just need to get the latest snapshot from someone
+This could be a networking/hardware issue, or you may need to get the latest snapshot from another validator node.
