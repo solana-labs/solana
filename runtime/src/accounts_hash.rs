@@ -86,7 +86,7 @@ impl AccountHashesFile {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
             self.count_and_writer = Some((0, BufWriter::new(tempfile().unwrap())));
         }
-        let mut count_and_writer = self.count_and_writer.as_mut().unwrap();
+        let count_and_writer = self.count_and_writer.as_mut().unwrap();
         assert_eq!(
             std::mem::size_of::<Hash>(),
             count_and_writer.1.write(hash.as_ref()).unwrap()
@@ -1041,7 +1041,7 @@ impl AccountsHasher {
     pub fn rest_of_hash_calculation(
         &self,
         data_sections_by_pubkey: Vec<SortedDataByPubkey<'_>>,
-        mut stats: &mut HashStats,
+        stats: &mut HashStats,
     ) -> (Hash, u64) {
         let (hashes, total_lamports) = self.de_dup_accounts(
             &data_sections_by_pubkey,

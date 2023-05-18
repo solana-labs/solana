@@ -113,25 +113,25 @@ impl fmt::Debug for DecryptHandle {
     }
 }
 
-/// Serialization of `CtxtCommEqualityProof`
+/// Serialization of `CiphertextCommitmentEqualityProof`
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct CtxtCommEqualityProof(pub [u8; 192]);
+pub struct CiphertextCommitmentEqualityProof(pub [u8; 192]);
 
-// `CtxtCommEqualityProof` is a Pod and Zeroable.
+// `CiphertextCommitmentEqualityProof` is a Pod and Zeroable.
 // Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
-unsafe impl Zeroable for CtxtCommEqualityProof {}
-unsafe impl Pod for CtxtCommEqualityProof {}
+unsafe impl Zeroable for CiphertextCommitmentEqualityProof {}
+unsafe impl Pod for CiphertextCommitmentEqualityProof {}
 
 /// Serialization of `CtxtCtxtEqualityProof`
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct CtxtCtxtEqualityProof(pub [u8; 224]);
+pub struct CiphertextCiphertextEqualityProof(pub [u8; 224]);
 
 // `CtxtCtxtEqualityProof` is a Pod and Zeroable.
 // Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
-unsafe impl Zeroable for CtxtCtxtEqualityProof {}
-unsafe impl Pod for CtxtCtxtEqualityProof {}
+unsafe impl Zeroable for CiphertextCiphertextEqualityProof {}
+unsafe impl Pod for CiphertextCiphertextEqualityProof {}
 
 /// Serialization of validity proofs
 #[derive(Clone, Copy)]
@@ -171,7 +171,7 @@ pub struct FeeSigmaProof(pub [u8; 256]);
 /// Serialization of public-key sigma proof
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(transparent)]
-pub struct PubkeySigmaProof(pub [u8; 64]);
+pub struct PubkeyValidityProof(pub [u8; 64]);
 
 /// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
 #[derive(Clone, Copy)]

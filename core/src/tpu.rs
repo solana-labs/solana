@@ -15,6 +15,7 @@ use {
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
+        validator::GeneratorConfig,
     },
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::{ConnectionCache, Protocol},
@@ -106,6 +107,7 @@ impl Tpu {
         tracer_thread_hdl: TracerThread,
         tpu_enable_udp: bool,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        _generator_config: Option<GeneratorConfig>, /* vestigial code for replay invalidator */
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
