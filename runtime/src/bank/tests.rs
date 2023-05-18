@@ -13145,7 +13145,7 @@ fn test_epoch_reward_sysvar() {
 
     // create epoch rewards sysvar
     let expected_epoch_rewards = sysvar::epoch_rewards::EpochRewards::new(total_rewards, 10, 42);
-    bank.create_epoch_rewards_sys_var(total_rewards, 10, 42);
+    bank.create_epoch_rewards_sysvar(total_rewards, 10, 42);
     let account = bank.get_account(&sysvar::epoch_rewards::id()).unwrap();
     assert_eq!(account.lamports(), total_rewards - 10);
     let epoch_rewards: sysvar::epoch_rewards::EpochRewards = from_account(&account).unwrap();

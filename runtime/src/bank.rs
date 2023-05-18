@@ -1858,7 +1858,7 @@ impl Bank {
         // create EpochRewards sysvar that holds the balance of undistributed rewards with
         // (total_rewards, distributed_rewards, credit_end_exclusive), total capital will increase by (total-rewards - distributed_rewards)
         info!("EpochRewards Start: {slot} {total_rewards} {distributed_rewards} {credit_end_exclusive}");
-        self.create_epoch_rewards_sys_var(total_rewards, distributed_rewards, credit_end_exclusive);
+        self.create_epoch_rewards_sysvar(total_rewards, distributed_rewards, credit_end_exclusive);
     }
 
     /// Process reward distribution for the block if it is inside reward interval.
@@ -3829,7 +3829,7 @@ impl Bank {
     }
 
     /// Create EpochRewards syavar with calculated rewards
-    fn create_epoch_rewards_sys_var(
+    fn create_epoch_rewards_sysvar(
         &self,
         total_rewards: u64,
         distributed_rewards: u64,
