@@ -12877,7 +12877,7 @@ fn test_rewards_computation() {
     let RewardCalculationResult {
         stake_rewards,
         total_stake_rewards_lamports,
-    } = bank.do_calculate_validator_rewards_and_distribute_vote_rewards_with_thread_pool(
+    } = bank.do_calculate_validator_rewards_and_distribute_vote_rewards(
         1,
         expected_rewards,
         null_tracer(),
