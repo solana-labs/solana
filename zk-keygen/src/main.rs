@@ -41,8 +41,8 @@ fn app(crate_version: &str) -> Command {
                 .about("Generate a new encryption key/keypair file from a random seed phrase and optional BIP39 passphrase")
                 .disable_version_flag(true)
                 .arg(
-                    Arg::new("key_type")
-                        .long("key-type")
+                    Arg::new("type")
+                        .long("type")
                         .takes_value(true)
                         .possible_values(["elgamal", "aes128"])
                         .value_name("TYPE")
@@ -83,7 +83,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     let subcommand = matches.subcommand().unwrap();
     match subcommand {
         ("new", matches) => {
-            let key_type = match matches.value_of("key_type").unwrap() {
+            let key_type = match matches.value_of("type").unwrap() {
                 "elgamal" => KeyType::ElGamal,
                 "aes128" => KeyType::Aes128,
                 _ => unreachable!(),
@@ -215,7 +215,7 @@ mod tests {
         process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--key-type",
+            "--type",
             "elgamal",
             "--outfile",
             &outfile_path,
@@ -227,7 +227,7 @@ mod tests {
         let result = process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--key-type",
+            "--type",
             "elgamal",
             "--outfile",
             &outfile_path,
@@ -243,7 +243,7 @@ mod tests {
         process_test_command(&[
             "solana-keygen",
             "new",
-            "--key-type",
+            "--type",
             "elgamal",
             "--no-bip39-passphrase",
             "--no-outfile",
@@ -261,7 +261,7 @@ mod tests {
         process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--key-type",
+            "--type",
             "aes128",
             "--outfile",
             &outfile_path,
@@ -273,7 +273,7 @@ mod tests {
         let result = process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--key-type",
+            "--type",
             "aes128",
             "--outfile",
             &outfile_path,
@@ -289,7 +289,7 @@ mod tests {
         process_test_command(&[
             "solana-keygen",
             "new",
-            "--key-type",
+            "--type",
             "aes128",
             "--no-bip39-passphrase",
             "--no-outfile",
