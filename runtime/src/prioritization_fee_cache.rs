@@ -475,7 +475,7 @@ mod tests {
         let write_account_c = Pubkey::new_unique();
 
         // Set up test with 3 transactions, in format of [fee, write-accounts...],
-        // Shall expect fee cache is updated in following sequence:
+        // Shall expect fee cache is updated in following sequence (fee in lamport):
         // transaction                    block minimum prioritization fee cache
         // [fee, write_accounts...]  -->  [block, account_a, account_b, account_c]
         // -----------------------------------------------------------------------
@@ -484,9 +484,9 @@ mod tests {
         // [2,   a,    c          ]  -->  [2,     2,         5,         2        ]
         //
         let txs = vec![
-            build_sanitized_transaction_for_test(5, &write_account_a, &write_account_b),
-            build_sanitized_transaction_for_test(9, &write_account_b, &write_account_c),
-            build_sanitized_transaction_for_test(2, &write_account_a, &write_account_c),
+            build_sanitized_transaction_for_test(5_000_000_000, &write_account_a, &write_account_b),
+            build_sanitized_transaction_for_test(9_000_000_000, &write_account_b, &write_account_c),
+            build_sanitized_transaction_for_test(2_000_000_000, &write_account_a, &write_account_c),
         ];
 
         let bank = Arc::new(Bank::default_for_tests());
@@ -502,10 +502,19 @@ mod tests {
                 &slot,
             );
             let fee = fee.lock().unwrap();
-            assert_eq!(2, fee.get_min_transaction_fee().unwrap());
-            assert_eq!(2, fee.get_writable_account_fee(&write_account_a).unwrap());
-            assert_eq!(5, fee.get_writable_account_fee(&write_account_b).unwrap());
-            assert_eq!(2, fee.get_writable_account_fee(&write_account_c).unwrap());
+            assert_eq!(2_000_000_000, fee.get_min_transaction_fee().unwrap());
+            assert_eq!(
+                2_000_000_000,
+                fee.get_writable_account_fee(&write_account_a).unwrap()
+            );
+            assert_eq!(
+                5_000_000_000,
+                fee.get_writable_account_fee(&write_account_b).unwrap()
+            );
+            assert_eq!(
+                2_000_000_000,
+                fee.get_writable_account_fee(&write_account_c).unwrap()
+            );
             // assert unknown account d fee
             assert!(fee
                 .get_writable_account_fee(&Pubkey::new_unique())
@@ -520,9 +529,12 @@ mod tests {
                 &slot,
             );
             let fee = fee.lock().unwrap();
-            assert_eq!(2, fee.get_min_transaction_fee().unwrap());
+            assert_eq!(2_000_000_000, fee.get_min_transaction_fee().unwrap());
             assert!(fee.get_writable_account_fee(&write_account_a).is_none());
-            assert_eq!(5, fee.get_writable_account_fee(&write_account_b).unwrap());
+            assert_eq!(
+                5_000_000_000,
+                fee.get_writable_account_fee(&write_account_b).unwrap()
+            );
             assert!(fee.get_writable_account_fee(&write_account_c).is_none());
         }
     }
@@ -599,9 +611,13 @@ mod tests {
         // Assert after add one transaction for slot 1
         {
             let txs = vec![
-                build_sanitized_transaction_for_test(2, &write_account_a, &write_account_b),
                 build_sanitized_transaction_for_test(
-                    1,
+                    2_000_000_000,
+                    &write_account_a,
+                    &write_account_b,
+                ),
+                build_sanitized_transaction_for_test(
+                    1_000_000_000,
                     &Pubkey::new_unique(),
                     &Pubkey::new_unique(),
                 ),
@@ -629,28 +645,28 @@ mod tests {
             // after block is completed
             sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 1);
             assert_eq!(
-                hashmap_of(vec![(1, 1)]),
+                hashmap_of(vec![(1, 1_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[])
             );
             assert_eq!(
-                hashmap_of(vec![(1, 2)]),
+                hashmap_of(vec![(1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_a])
             );
             assert_eq!(
-                hashmap_of(vec![(1, 2)]),
+                hashmap_of(vec![(1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_b])
             );
             assert_eq!(
-                hashmap_of(vec![(1, 1)]),
+                hashmap_of(vec![(1, 1_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_c])
             );
             assert_eq!(
-                hashmap_of(vec![(1, 2)]),
+                hashmap_of(vec![(1, 2_000_000_000)]),
                 prioritization_fee_cache
                     .get_prioritization_fees(&[write_account_a, write_account_b])
             );
             assert_eq!(
-                hashmap_of(vec![(1, 2)]),
+                hashmap_of(vec![(1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[
                     write_account_a,
                     write_account_b,
@@ -662,9 +678,13 @@ mod tests {
         // Assert after add one transaction for slot 2
         {
             let txs = vec![
-                build_sanitized_transaction_for_test(4, &write_account_b, &write_account_c),
                 build_sanitized_transaction_for_test(
-                    3,
+                    4_000_000_000,
+                    &write_account_b,
+                    &write_account_c,
+                ),
+                build_sanitized_transaction_for_test(
+                    3_000_000_000,
                     &Pubkey::new_unique(),
                     &Pubkey::new_unique(),
                 ),
@@ -672,28 +692,28 @@ mod tests {
             sync_update(&mut prioritization_fee_cache, bank2, txs.iter());
             // before block is marked as completed
             assert_eq!(
-                hashmap_of(vec![(1, 1)]),
+                hashmap_of(vec![(1, 1_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[])
             );
             assert_eq!(
-                hashmap_of(vec![(1, 2)]),
+                hashmap_of(vec![(1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_a])
             );
             assert_eq!(
-                hashmap_of(vec![(1, 2)]),
+                hashmap_of(vec![(1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_b])
             );
             assert_eq!(
-                hashmap_of(vec![(1, 1)]),
+                hashmap_of(vec![(1, 1_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_c])
             );
             assert_eq!(
-                hashmap_of(vec![(1, 2)]),
+                hashmap_of(vec![(1, 2_000_000_000)]),
                 prioritization_fee_cache
                     .get_prioritization_fees(&[write_account_a, write_account_b])
             );
             assert_eq!(
-                hashmap_of(vec![(1, 2)]),
+                hashmap_of(vec![(1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[
                     write_account_a,
                     write_account_b,
@@ -703,28 +723,28 @@ mod tests {
             // after block is completed
             sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 2);
             assert_eq!(
-                hashmap_of(vec![(2, 3), (1, 1)]),
+                hashmap_of(vec![(2, 3_000_000_000), (1, 1_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[]),
             );
             assert_eq!(
-                hashmap_of(vec![(2, 3), (1, 2)]),
+                hashmap_of(vec![(2, 3_000_000_000), (1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_a]),
             );
             assert_eq!(
-                hashmap_of(vec![(2, 4), (1, 2)]),
+                hashmap_of(vec![(2, 4_000_000_000), (1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_b]),
             );
             assert_eq!(
-                hashmap_of(vec![(2, 4), (1, 1)]),
+                hashmap_of(vec![(2, 4_000_000_000), (1, 1_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_c]),
             );
             assert_eq!(
-                hashmap_of(vec![(2, 4), (1, 2)]),
+                hashmap_of(vec![(2, 4_000_000_000), (1, 2_000_000_000)]),
                 prioritization_fee_cache
                     .get_prioritization_fees(&[write_account_a, write_account_b]),
             );
             assert_eq!(
-                hashmap_of(vec![(2, 4), (1, 2)]),
+                hashmap_of(vec![(2, 4_000_000_000), (1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[
                     write_account_a,
                     write_account_b,
@@ -736,9 +756,13 @@ mod tests {
         // Assert after add one transaction for slot 3
         {
             let txs = vec![
-                build_sanitized_transaction_for_test(6, &write_account_a, &write_account_c),
                 build_sanitized_transaction_for_test(
-                    5,
+                    6_000_000_000,
+                    &write_account_a,
+                    &write_account_c,
+                ),
+                build_sanitized_transaction_for_test(
+                    5_000_000_000,
                     &Pubkey::new_unique(),
                     &Pubkey::new_unique(),
                 ),
@@ -746,28 +770,28 @@ mod tests {
             sync_update(&mut prioritization_fee_cache, bank3, txs.iter());
             // before block is marked as completed
             assert_eq!(
-                hashmap_of(vec![(2, 3), (1, 1)]),
+                hashmap_of(vec![(2, 3_000_000_000), (1, 1_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[]),
             );
             assert_eq!(
-                hashmap_of(vec![(2, 3), (1, 2)]),
+                hashmap_of(vec![(2, 3_000_000_000), (1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_a]),
             );
             assert_eq!(
-                hashmap_of(vec![(2, 4), (1, 2)]),
+                hashmap_of(vec![(2, 4_000_000_000), (1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_b]),
             );
             assert_eq!(
-                hashmap_of(vec![(2, 4), (1, 1)]),
+                hashmap_of(vec![(2, 4_000_000_000), (1, 1_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_c]),
             );
             assert_eq!(
-                hashmap_of(vec![(2, 4), (1, 2)]),
+                hashmap_of(vec![(2, 4_000_000_000), (1, 2_000_000_000)]),
                 prioritization_fee_cache
                     .get_prioritization_fees(&[write_account_a, write_account_b]),
             );
             assert_eq!(
-                hashmap_of(vec![(2, 4), (1, 2)]),
+                hashmap_of(vec![(2, 4_000_000_000), (1, 2_000_000_000)]),
                 prioritization_fee_cache.get_prioritization_fees(&[
                     write_account_a,
                     write_account_b,
@@ -777,28 +801,52 @@ mod tests {
             // after block is completed
             sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 3);
             assert_eq!(
-                hashmap_of(vec![(3, 5), (2, 3), (1, 1)]),
+                hashmap_of(vec![
+                    (3, 5_000_000_000),
+                    (2, 3_000_000_000),
+                    (1, 1_000_000_000)
+                ]),
                 prioritization_fee_cache.get_prioritization_fees(&[]),
             );
             assert_eq!(
-                hashmap_of(vec![(3, 6), (2, 3), (1, 2)]),
+                hashmap_of(vec![
+                    (3, 6_000_000_000),
+                    (2, 3_000_000_000),
+                    (1, 2_000_000_000)
+                ]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_a]),
             );
             assert_eq!(
-                hashmap_of(vec![(3, 5), (2, 4), (1, 2)]),
+                hashmap_of(vec![
+                    (3, 5_000_000_000),
+                    (2, 4_000_000_000),
+                    (1, 2_000_000_000)
+                ]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_b]),
             );
             assert_eq!(
-                hashmap_of(vec![(3, 6), (2, 4), (1, 1)]),
+                hashmap_of(vec![
+                    (3, 6_000_000_000),
+                    (2, 4_000_000_000),
+                    (1, 1_000_000_000)
+                ]),
                 prioritization_fee_cache.get_prioritization_fees(&[write_account_c]),
             );
             assert_eq!(
-                hashmap_of(vec![(3, 6), (2, 4), (1, 2)]),
+                hashmap_of(vec![
+                    (3, 6_000_000_000),
+                    (2, 4_000_000_000),
+                    (1, 2_000_000_000)
+                ]),
                 prioritization_fee_cache
                     .get_prioritization_fees(&[write_account_a, write_account_b]),
             );
             assert_eq!(
-                hashmap_of(vec![(3, 6), (2, 4), (1, 2)]),
+                hashmap_of(vec![
+                    (3, 6_000_000_000),
+                    (2, 4_000_000_000),
+                    (1, 2_000_000_000)
+                ]),
                 prioritization_fee_cache.get_prioritization_fees(&[
                     write_account_a,
                     write_account_b,

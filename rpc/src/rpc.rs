@@ -8660,7 +8660,7 @@ pub mod tests {
         let account0 = Pubkey::new_unique();
         let account1 = Pubkey::new_unique();
         let account2 = Pubkey::new_unique();
-        let price0 = 42;
+        let price0 = 4_000_000_000;
         let transactions = vec![
             Transaction::new_unsigned(Message::new(
                 &[
@@ -8720,7 +8720,7 @@ pub mod tests {
 
         rpc.advance_bank_to_confirmed_slot(1);
         let slot1 = rpc.working_bank().slot();
-        let price1 = 11;
+        let price1 = 1_000_000_000;
         let transactions = vec![
             Transaction::new_unsigned(Message::new(
                 &[

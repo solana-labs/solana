@@ -10488,7 +10488,7 @@ fn test_calculate_prioritization_fee() {
         ),
         fee_structure.lamports_per_signature
             + PrioritizationFeeDetails::new(
-                PrioritizationFeeType::ComputeUnitPrice(2_000_999_999_u64),
+                PrioritizationFeeType::ComputeUnitPrice(2_000_000_000_u64),
                 request_units as u64,
             )
             .get_fee()
