@@ -3202,11 +3202,11 @@ impl Bank {
     }
 
     /// Load, calculate and payout epoch rewards for stake and vote accounts
-    fn pay_validator_rewards_with_thread_pool(
+    fn pay_validator_rewards_with_thread_pool<T: RewardCalcTracer>(
         &mut self,
         rewarded_epoch: Epoch,
         rewards: u64,
-        reward_calc_tracer: Option<impl RewardCalcTracer>,
+        reward_calc_tracer: Option<T>,
         credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
@@ -3240,10 +3240,72 @@ impl Bank {
                 metrics,
             );
 
+            if self.rc.accounts.accounts_db.test_partitioned_epoch_rewards {
+                self.compare_with_partitioned_rewards(
+                    &stake_rewards,
+                    &vote_account_rewards,
+                    rewarded_epoch,
+                    thread_pool,
+                    reward_calc_tracer.as_ref(),
+                );
+            }
+
             self.store_stake_accounts(&stake_rewards, metrics);
             let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
             self.update_reward_history(stake_rewards, vote_rewards);
         }
+    }
+
+    fn compare_with_partitioned_rewards<T: RewardCalcTracer>(
+        &self,
+        stake_rewards_expected: &[StakeReward],
+        vote_rewards_expected: &DashMap<Pubkey, VoteReward>,
+        rewarded_epoch: Epoch,
+        thread_pool: &ThreadPool,
+        _reward_calc_tracer: Option<T>,
+    ) {
+        let partitioned_rewards = self.calculate_rewards_for_partitioning(
+            rewarded_epoch,
+            None::<T>,
+            thread_pool,
+            &mut RewardsMetrics::default(),
+        );
+        // put partitioned stake rewards in a hashmap
+        let mut stake_rewards: HashMap<Pubkey, &StakeReward> = HashMap::default();
+        partitioned_rewards
+            .stake_rewards
+            .stake_rewards
+            .iter()
+            .for_each(|stake_reward| {
+                stake_rewards.insert(stake_reward.stake_pubkey, stake_reward);
+            });
+
+        // verify stake rewards match expected
+        stake_rewards_expected.iter().for_each(|stake_reward| {
+            let partitioned = stake_rewards.remove(&stake_reward.stake_pubkey).unwrap();
+            assert_eq!(partitioned, stake_reward);
+        });
+        assert!(stake_rewards.is_empty());
+
+        let mut vote_rewards: HashMap<Pubkey, (RewardInfo, AccountSharedData)> = HashMap::default();
+        partitioned_rewards
+            .vote_account_rewards
+            .iter()
+            .for_each(|vote_reward| {
+                if let Some((k, v)) = &vote_reward.1 {
+                    vote_rewards.insert(*k, (vote_reward.0.unwrap().1, v.clone()));
+                }
+            });
+
+        // verify vote rewards match expected
+        vote_rewards_expected.iter().for_each(|entry| {
+            if entry.value().vote_needs_store {
+                let partitioned = vote_rewards.remove(entry.key()).unwrap();
+                assert_eq!(partitioned.1, entry.value().vote_account);
+                assert_eq!(partitioned.0.lamports as u64, entry.value().vote_rewards);
+            }
+        });
+        assert!(vote_rewards.is_empty());
     }
 
     fn load_vote_and_stake_accounts(
