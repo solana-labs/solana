@@ -28,7 +28,8 @@ For more details, see [fork generation](../cluster/fork-generation.md) and [lead
 ## Votes
 
 Validators communicate which fork they think is the heaviest through votes.
-Each vote `v` is signed by the validator that produces it, and is of the form `(i, B)`, where `i` is the validator producing the vote and `B` is the block being voted for.
+Each vote `v` is signed by the validator that produces it, and is of the form `(i, B)`, where `i` is the validator producing the vote and `B` is a hash
+identifying the block being voted for.
 
 ## Lockouts
 
