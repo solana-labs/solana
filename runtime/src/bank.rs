@@ -3118,7 +3118,7 @@ impl Bank {
 
     /// Calculate epoch reward and return vote and stake rewards.
     fn calculate_validator_rewards(
-        &mut self,
+        &self,
         rewarded_epoch: Epoch,
         rewards: u64,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
