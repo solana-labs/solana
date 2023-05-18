@@ -51,6 +51,7 @@ fn app(crate_version: &str) -> Command {
                 )
                 .arg(
                     Arg::new("outfile")
+                        .short('o')
                         .long("outfile")
                         .value_name("FILEPATH")
                         .takes_value(true)
