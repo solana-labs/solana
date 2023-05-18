@@ -427,10 +427,7 @@ impl LoadedPrograms {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
-                if matches!(existing.program, LoadedProgramType::Builtin(_)) {
-                    // Allow built-ins to be overwritten
-                    second_level.swap_remove(entry_index);
-                } else if matches!(existing.program, LoadedProgramType::Unloaded) {
+                if matches!(existing.program, LoadedProgramType::Unloaded) {
                     // The unloaded program is getting reloaded
                     // Copy over the usage counter to the new entry
                     entry.usage_counter.store(

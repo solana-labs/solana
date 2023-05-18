@@ -4857,7 +4857,7 @@ fn test_add_duplicate_static_program() {
         mint_keypair,
         ..
     } = create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 0);
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     declare_process_instruction!(process_instruction, 1, |_invoke_context| {
         Err(InstructionError::Custom(42))
@@ -4885,6 +4885,9 @@ fn test_add_duplicate_static_program() {
         message,
         bank.last_blockhash(),
     );
+
+    let slot = bank.slot().saturating_add(1);
+    let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), slot);
 
     let vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
     bank.add_mockup_builtin(solana_vote_program::id(), process_instruction);
