@@ -412,8 +412,8 @@ impl Banks for BanksServer {
     async fn get_fee_for_message_with_commitment_and_context(
         self,
         _: Context,
-        commitment: CommitmentLevel,
         message: Message,
+        commitment: CommitmentLevel,
     ) -> Option<u64> {
         let bank = self.bank(commitment);
         let sanitized_message = SanitizedMessage::try_from(message).ok()?;
