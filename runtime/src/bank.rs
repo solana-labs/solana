@@ -7730,6 +7730,13 @@ impl Bank {
         Some(epoch_accounts_hash)
     }
 
+    /// Return the epoch_reward_status field on the bank to serialize
+    /// Returns none if we are NOT in the reward interval.
+    pub(crate) fn get_epoch_reward_status_to_serialize(&self) -> Option<&EpochRewardStatus> {
+        matches!(self.epoch_reward_status, EpochRewardStatus::Active(_))
+            .then_some(&self.epoch_reward_status)
+    }
+
     /// Convenience fn to get the Epoch Accounts Hash
     pub fn epoch_accounts_hash(&self) -> Option<EpochAccountsHash> {
         self.rc
