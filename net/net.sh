@@ -241,7 +241,8 @@ remoteHomeDir() {
 
 startCommon() {
   declare ipAddress=$1
-  local remoteHome=$(remoteHomeDir "$ipAddress")
+  declare remoteHome
+  remoteHome=$(remoteHomeDir "$ipAddress")
   local remoteSolanaHome="${remoteHome}/solana"
   local remoteCargoBin="${remoteHome}/.cargo/bin"
   test -d "$SOLANA_ROOT"
@@ -271,7 +272,8 @@ startCommon() {
 syncScripts() {
   echo "rsyncing scripts... to $ipAddress"
   declare ipAddress=$1
-  local remoteHome=$(remoteHomeDir "$ipAddress")
+  declare remoteHome
+  remoteHome=$(remoteHomeDir "$ipAddress")
   local remoteSolanaHome="${remoteHome}/solana"
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     --exclude 'net/log*' \
@@ -284,7 +286,8 @@ syncScripts() {
 deployBootstrapValidator() {
   declare ipAddress=$1
 
-  local remoteHome=$(remoteHomeDir "$ipAddress")
+  declare remoteHome
+  remoteHome=$(remoteHomeDir "$ipAddress")
   local remoteCargoBin="${remoteHome}/.cargo/bin"
 
   echo "Deploying software to bootstrap validator ($ipAddress)"
