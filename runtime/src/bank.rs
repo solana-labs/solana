@@ -87,6 +87,7 @@ use {
     percentage::Percentage,
     rand::seq::SliceRandom,
     rand_chacha::{rand_core::SeedableRng, ChaChaRng},
+    rayon::slice::ParallelSliceMut,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
@@ -3161,7 +3162,8 @@ impl Bank {
         rewards: u64,
     ) {
         // sort reward results by pubkey so stores per partition are consistent on every node
-        stake_rewards.sort_by(|a, b| a.stake_pubkey.partial_cmp(&b.stake_pubkey).unwrap());
+        stake_rewards
+            .par_sort_unstable_by(|a, b| a.stake_pubkey.partial_cmp(&b.stake_pubkey).unwrap());
 
         // deterministically random shuffle the rewards with rewarded_epoch and rewards as the seed
         let seed = rewarded_epoch ^ rewards;
