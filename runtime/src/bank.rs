@@ -89,7 +89,6 @@ use {
     rand_chacha::{rand_core::SeedableRng, ChaChaRng},
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
-        slice::ParallelSlice,
         ThreadPool, ThreadPoolBuilder,
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment,
@@ -3158,34 +3157,15 @@ impl Bank {
 
         let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
 
-        Self::sort_and_shuffle_partitioned_rewards(&mut stake_rewards, rewarded_epoch, rewards);
+        Self::sort_and_shuffle_partitioned_rewards(
+            &mut stake_rewards.stake_rewards,
+            rewarded_epoch,
+            rewards,
+        );
 
         self.update_reward_history(vec![], vote_rewards);
 
-        RewardCalculationResult {
-            total_stake_rewards_lamports: Self::calc_total_stake_rewards_lamports(
-                &stake_rewards,
-                thread_pool,
-            ),
-            stake_rewards,
-        }
-    }
-
-    fn calc_total_stake_rewards_lamports(
-        stake_rewards: &[StakeReward],
-        thread_pool: &ThreadPool,
-    ) -> u64 {
-        thread_pool.install(|| {
-            stake_rewards
-                .par_chunks(10_000)
-                .map(|stake_rewards| {
-                    stake_rewards
-                        .iter()
-                        .map(|stake_reward| stake_reward.stake_reward_info.lamports)
-                        .sum::<i64>()
-                })
-                .sum::<i64>()
-        }) as u64
+        stake_rewards
     }
 
     /// Load, calculate and payout epoch rewards for stake and vote accounts
@@ -3393,7 +3373,7 @@ impl Bank {
     /// * reward_calc_tracer: tracer fn for reward calculation
     /// * metrics: reward metrics
     ///
-    /// Returns vote rewards and stake rewards
+    /// Returns vote rewards, stake rewards, and the sum of all stake rewards in lamports
     fn calculate_stake_vote_rewards(
         &self,
         reward_calculate_params: &EpochRewardCalculateParamInfo,
@@ -3403,7 +3383,7 @@ impl Bank {
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
-    ) -> (VoteRewardsAccounts, StakeRewards) {
+    ) -> (VoteRewardsAccounts, RewardCalculationResult) {
         let EpochRewardCalculateParamInfo {
             stake_history,
             stake_delegations,
@@ -3421,6 +3401,7 @@ impl Bank {
         };
 
         let vote_account_rewards: VoteRewards = DashMap::new();
+        let total_stake_rewards = AtomicU64::default();
         let (stake_rewards, measure_stake_rewards_us) = measure_us!(thread_pool.install(|| {
             stake_delegations
                 .par_iter()
@@ -3493,6 +3474,7 @@ impl Bank {
                             .saturating_add(voters_reward);
 
                         let post_balance = stake_account.lamports();
+                        total_stake_rewards.fetch_add(stakers_reward, Relaxed);
                         return Some(StakeReward {
                             stake_pubkey,
                             stake_reward_info: RewardInfo {
@@ -3518,7 +3500,13 @@ impl Bank {
 
         metrics.redeem_rewards_us += measure_stake_rewards_us + measure_vote_rewards_us;
 
-        (vote_rewards, stake_rewards)
+        (
+            vote_rewards,
+            RewardCalculationResult {
+                stake_rewards,
+                total_stake_rewards_lamports: total_stake_rewards.load(Relaxed),
+            },
+        )
     }
 
     fn calc_vote_rewards(vote_account_rewards: DashMap<Pubkey, VoteReward>) -> VoteRewardsAccounts {
