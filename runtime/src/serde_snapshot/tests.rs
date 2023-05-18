@@ -588,11 +588,11 @@ fn test_extra_fields_eof() {
         .unwrap_or(&EpochRewardStatus::Inactive);
     assert!(matches!(epoch_reward_status, EpochRewardStatus::Active(_)));
     if let EpochRewardStatus::Active(StartBlockHeightAndRewards {
-        start_block_height: parent_start_block_height,
+        start_block_height,
         calculated_epoch_stake_rewards: ref stake_rewards,
     }) = epoch_reward_status
     {
-        assert_eq!(*parent_start_block_height, 100);
+        assert_eq!(*start_block_height, 1);
         assert_eq!(stake_rewards.len(), 0);
     } else {
         unreachable!("Epoch reward status should NOT be inactive.");
