@@ -1188,8 +1188,11 @@ impl WorkingSlot for Bank {
 }
 
 #[derive(Default)]
-struct RewardCalculationResult {
+/// result of calculating the stake rewards at end of epoch
+struct StakeRewardCalculation {
+    /// each individual stake account to reward
     stake_rewards: StakeRewards,
+    /// total lamports across all `stake_rewards`
     total_stake_rewards_lamports: u64,
 }
 
@@ -2581,7 +2584,7 @@ impl Bank {
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
 
-        let RewardCalculationResult {
+        let StakeRewardCalculation {
             stake_rewards,
             total_stake_rewards_lamports,
         } = self.calculate_validator_rewards_and_distribute_vote_rewards(
@@ -3110,7 +3113,7 @@ impl Bank {
         credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
-    ) -> Option<(VoteRewardsAccounts, RewardCalculationResult)> {
+    ) -> Option<(VoteRewardsAccounts, StakeRewardCalculation)> {
         let stakes = self.stakes_cache.stakes();
         let reward_calculate_param = self.get_epoch_reward_calculate_param_info(&stakes);
 
@@ -3144,7 +3147,7 @@ impl Bank {
         credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
-    ) -> RewardCalculationResult {
+    ) -> StakeRewardCalculation {
         let Some((vote_account_rewards, mut stake_rewards)) = self.calculate_validator_rewards(
             rewarded_epoch,
             rewards,
@@ -3153,7 +3156,7 @@ impl Bank {
             thread_pool,
             metrics,
         ) else {
-            return RewardCalculationResult::default();
+            return StakeRewardCalculation::default();
         };
 
         let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
@@ -3384,7 +3387,7 @@ impl Bank {
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         metrics: &mut RewardsMetrics,
-    ) -> (VoteRewardsAccounts, RewardCalculationResult) {
+    ) -> (VoteRewardsAccounts, StakeRewardCalculation) {
         let EpochRewardCalculateParamInfo {
             stake_history,
             stake_delegations,
@@ -3503,7 +3506,7 @@ impl Bank {
 
         (
             vote_rewards,
-            RewardCalculationResult {
+            StakeRewardCalculation {
                 stake_rewards,
                 total_stake_rewards_lamports: total_stake_rewards.load(Relaxed),
             },

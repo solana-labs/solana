@@ -12903,7 +12903,7 @@ fn test_rewards_computation() {
     let mut rewards_metrics = RewardsMetrics::default();
     let expected_rewards = 100_000_000_000;
 
-    let RewardCalculationResult {
+    let StakeRewardCalculation {
         stake_rewards,
         total_stake_rewards_lamports,
     } = bank.do_calculate_validator_rewards_and_distribute_vote_rewards(
