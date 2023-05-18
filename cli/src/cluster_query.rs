@@ -1131,7 +1131,7 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
                     .get_block_time(first_block_in_epoch)
                     .ok()
                     .map(|time| {
-                        time + (((first_block_in_epoch - epoch_expected_start_slot)
+                        time - (((first_block_in_epoch - epoch_expected_start_slot)
                             * average_slot_time_ms)
                             / 1000) as i64
                     });
