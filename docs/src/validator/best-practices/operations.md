@@ -134,4 +134,15 @@ solana balance validator-keypair.json
 
 As a reminder, your withdrawer's keypair should **_NEVER_** be stored on your server. It should be stored on a hardware wallet or another secure location that mitigates hacking and theft of funds.
 
-To withdraw your funds from your vote account, you will need to run `solana withdraw-from-vote-account` on a separate computer. To get more information on the command, use `solana withdraw-from-vote-account --help`. For a more detailed explanation of the different keypairs and other related operations refer to the [vote account management page](../../running-validator/vote-accounts.md) of the Solana docs.
+To withdraw your funds from your vote account, you will need to run `solana withdraw-from-vote-account` on a trusted computer. For example, on a trusted computer, you could withdraw all of the funds from your vote account (excluding the rent exempt minimum). The below example assumes you have a separate keypair to store your funds called `person-keypair.json`
+
+```
+solana withdraw-from-vote-account \
+   vote-account-keypair.json \
+   person-keypair.json ALL \
+   --authorized-withdrawer authorized-withdrawer-keypair.json
+```
+
+To get more information on the command, use `solana withdraw-from-vote-account --help`.
+
+For a more detailed explanation of the different keypairs and other related operations refer to [vote account management](../../running-validator/vote-accounts.md).

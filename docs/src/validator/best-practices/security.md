@@ -16,7 +16,7 @@ sudo apt upgrade
 
 ## DO NOT Store Your Withdrawer Key On Your Validator Machine
 
-Your withdrawer key gives you full access to the vote account of your validator. It is highly sensitive information and should not be stored on the validator itself. Make sure you create this key is either stored on a hardware wallet or created on a trusted computer (other than your validator computer) and that you store it somewhere safe. Ideally you should store this key in cold storage like a hardware wallet, or at the very least in a password protector.
+Your withdrawer key gives you full access to the vote account of your validator. It is highly sensitive information and should not be stored on the validator itself. Make sure the authorized withdrawer key is either stored on a hardware wallet or created on a trusted computer (other than your validator computer) and that you store it somewhere safe. Many operators choose to store the key in cold storage like a hardware wallet.
 
 Again, this should never be stored on your validator at any time.
 
@@ -39,3 +39,7 @@ The default setup should work out-of-the-box by doing the simply installing `fai
 ```
 sudo apt install fail2ban
 ```
+
+## DO NOT Use Password Authentication for SSH
+
+In addition to installing `fail2ban`, it is recommended to disable password based authentication for SSH access.  SSH key based authentication is preferred.
