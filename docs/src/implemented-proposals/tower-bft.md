@@ -16,7 +16,7 @@ For brevity this design assumes that a single voter with a stake is deployed as 
 
 The Solana cluster generates a source of time via a Verifiable Delay Function we are calling [Proof of History](../cluster/synchronization.md).
 
-Proof of History is used to create a deterministic round robin schedule for all the active leaders. 
+Proof of History is used to create a deterministic round robin schedule for all the active leaders.
 
 The unit of time is called a "slot". Each slot has a designated leader that can
 produce a block `B`. The `slot` of block `B` is designated `slot(B)`. Leaders
@@ -28,7 +28,7 @@ For more details, see [fork generation](../cluster/fork-generation.md) and [lead
 ## Votes
 
 Validators communicate which fork they think is the heaviest through votes.
-Each vote `v` is signed by the validator that produces it, and is of the form `(i, B)`, where `i` is the validaotr producing the vote and `B` is the block being voted for.
+Each vote `v` is signed by the validator that produces it, and is of the form `(i, B)`, where `i` is the validator producing the vote and `B` is the block being voted for.
 
 ## Lockouts
 
@@ -45,11 +45,12 @@ The basic idea to this approach is to stack consensus votes and double lockouts.
 
 We call this stack the Vote Tower.
 
-When a vote is added to the tower, the lockouts of all the previous votes in the tower are doubled \(more on this in [Rollback](tower-bft.md#Rollback)\). With each new vote, a validator commits the previous votes to an ever-increasing lockout. At 32 votes we can consider the vote to be at `max lockout` any votes with a lockout equal to or above `1<<32` are dequeued \(FIFO\). Dequeuing a vote is the trigger for a reward. If a vote expires before it is dequeued, it and all the votes above it are popped \(LIFO\) from the vote tower. The validator needs to start rebuilding the tower from that point.
+When a vote is added to the tower, the lockouts of all the previous votes in the tower are doubled \(more on this in [Vote Tower](tower-bft.md#Vote Tower)\). With each new vote, a validator commits the previous votes to an ever-increasing lockout. At 32 votes we can consider the vote to be at `max lockout` any votes with a lockout equal to or above `1<<32` are dequeued \(FIFO\). Dequeuing a vote is the trigger for a reward. If a vote expires before it is dequeued, it and all the votes above it are popped \(LIFO\) from the vote tower. The validator needs to start rebuilding the tower from that point.
 
 ### Vote Tower
 
-Before a vote is pushed to the tower, all the votes leading up to vote with a lower lock expiration slot than the new vote are popped. After rollback lockouts are not doubled until the validator catches up to the rollback height of votes.
+Before a vote is pushed to the tower, all the votes leading up to vote with a lower lock expiration slot than the new vote are popped. After rollback
+lockouts are not doubled until the validator catches up to the rollback height of votes.
 
 For example, a vote tower with the following state:
 
@@ -86,10 +87,6 @@ At slot 10 the new votes caught up to the previous votes. But _vote 2_ expires a
 
 The lockout for vote 1 will not increase from 16 until the tower contains 5 votes.
 
-### Slashing and Rewards
-
-Validators should be rewarded for selecting the fork that the rest of the cluster selected as often as possible. This is well-aligned with generating a reward when the vote tower is full and the oldest vote needs to be dequeued. Thus a reward should be generated for each successful dequeue.
-
 ### Cost of Rollback
 
 Cost of rollback of _fork A_ is defined as the cost in terms of lockout time to the validator to confirm any other fork that does not include _fork A_ as an ancestor.
@@ -107,8 +104,7 @@ In deciding whether to vote for a block `B`:
 2. Pop off all the votes that would be expired by `B`
 3. Now index every vote in the tower from `[0, tower.length()]`, assuming that the most recent simulated vote `B` is index 0, the second most recent vote is index 1, etc.
 4. Let `threshold_check_depth = 8` (the "depth" of 8 refers to this), now let `T` be the vote in the tower with index equal to threshold_check_depth.
-
-Now check all the blocks descended from `T`. If those blocks contain votes for `T` or any descendants of `T` totaling `>= 2/3` of the stake of the network, then we commit a vote to `T`.
+5. Check all the blocks descended from `T`. If those blocks contain votes for `T` or any descendants of `T` totaling `>= 2/3` of the stake of the network, then we commit a vote to `T`.
 
 ### Algorithm parameters
 
@@ -122,8 +118,9 @@ The following parameters need to be tuned:
 
 ### Fork Choice
 
-Fork choice is how validators determine which fork to vote on given multiple
-concurrent forks. Fork weights are based on the latest votes made by the validator set, and validators vote on the "heaviest" such fork.
+Fork choice is how each validator determines which fork to vote on when multiple
+concurrent forks exist. Forks are weighted are based on the latest votes made by the validator set, and individual validators then vote on the "heaviest"
+such fork.
 
 Given the view of a single validator `i`:
 
@@ -133,9 +130,10 @@ Now the algorithm proceeds as follows:
 
 1. For each vote `(j, B)` in `V`, add the stake of `j` to `B` and all of its
 ancestors.
-2. Now Set `B` to be the rooted block. Set `finish := 0`. 
+2. Now Set `B` to be the rooted block. Set `finish := 0`.
 
-While `finish == 0` do: If `i` has received no children of `B` then set `finish := 1` and return `B`. Otherwise let `B′` be the child of `B` (amongst those received by `i`) with most supporting votes in `V`, breaking ties by the smallest slot.
+*While `finish == 0`
+*do*: If `i` has received no children of `B` then set `finish := 1` and return `B`. Otherwise let `B′` be the child of `B` (amongst those received by `i`) with most the most stake-weighted votes in `V`, breaking ties by the smallest slot.
 
 ### Voting Algorithm
 
