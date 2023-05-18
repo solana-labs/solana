@@ -2593,13 +2593,13 @@ impl Bank {
             metrics,
         ).unwrap_or_default();
 
-        let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
-
         Self::sort_and_shuffle_partitioned_rewards(
             &mut stake_rewards.stake_rewards,
             prev_epoch,
             validator_rewards,
         );
+
+        let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
 
         self.update_reward_history(vec![], vote_rewards);
 
