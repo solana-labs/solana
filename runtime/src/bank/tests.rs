@@ -6293,7 +6293,7 @@ fn test_transaction_with_program_ids_passed_to_programs() {
 fn test_account_ids_after_program_ids() {
     solana_logger::setup();
     let (genesis_config, mint_keypair) = create_genesis_config(500);
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     let from_pubkey = solana_sdk::pubkey::new_rand();
     let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -6312,6 +6312,9 @@ fn test_account_ids_after_program_ids() {
     );
 
     tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
+
+    let slot = bank.slot().saturating_add(1);
+    let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), slot);
 
     bank.add_mockup_builtin(solana_vote_program::id(), process_instruction);
     let result = bank.process_transaction(&tx);
@@ -6458,7 +6461,7 @@ fn test_program_id_as_payer() {
 #[test]
 fn test_ref_account_key_after_program_id() {
     let (genesis_config, mint_keypair) = create_genesis_config(500);
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     let from_pubkey = solana_sdk::pubkey::new_rand();
     let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -6467,6 +6470,9 @@ fn test_ref_account_key_after_program_id() {
         AccountMeta::new(from_pubkey, false),
         AccountMeta::new(to_pubkey, false),
     ];
+
+    let slot = bank.slot().saturating_add(1);
+    let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), slot);
 
     bank.add_mockup_builtin(solana_vote_program::id(), process_instruction);
 
