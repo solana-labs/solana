@@ -12823,14 +12823,7 @@ fn test_sort_and_shuffle_partitioned_rewards() {
     assert_eq!(total, total_after_sort_shuffle);
 }
 
-/// Test reward computation at epoch boundary
-#[test]
-fn test_rewards_computation() {
-    solana_logger::setup();
-
-    // setup the expected number of stake delegations
-    let expected_num_delegations = 100;
-
+fn create_reward_bank(expected_num_delegations: usize) -> Bank {
     let validator_keypairs = (0..expected_num_delegations)
         .map(|_| ValidatorVoteKeypairs::new_rand())
         .collect::<Vec<_>>();
@@ -12841,7 +12834,7 @@ fn test_rewards_computation() {
         vec![2_000_000_000; expected_num_delegations],
     );
 
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
 
     // Fill bank_forks with banks with votes landing in the next slot
     // Create enough banks such that vote account will root
@@ -12865,6 +12858,16 @@ fn test_rewards_computation() {
         }
         bank.store_account_and_update_capitalization(&vote_id, &vote_account);
     }
+    bank
+}
+
+/// Test reward computation at epoch boundary
+#[test]
+fn test_rewards_computation() {
+    solana_logger::setup();
+
+    let expected_num_delegations = 100;
+    let mut bank = create_reward_bank(expected_num_delegations);
 
     // Calculate rewards
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
