@@ -12823,6 +12823,7 @@ fn test_sort_and_shuffle_partitioned_rewards() {
     assert_eq!(total, total_after_sort_shuffle);
 }
 
+/// Helper function to create a bank that pays some rewards
 fn create_reward_bank(expected_num_delegations: usize) -> Bank {
     let validator_keypairs = (0..expected_num_delegations)
         .map(|_| ValidatorVoteKeypairs::new_rand())
@@ -12859,6 +12860,34 @@ fn create_reward_bank(expected_num_delegations: usize) -> Bank {
         bank.store_account_and_update_capitalization(&vote_id, &vote_account);
     }
     bank
+}
+
+/// Test reward points calculation
+#[test]
+fn test_rewards_point_calculation() {
+    solana_logger::setup();
+
+    let expected_num_delegations = 100;
+    let bank = create_reward_bank(expected_num_delegations);
+
+    // Calculate reward points
+    let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    let mut rewards_metrics = RewardsMetrics::default();
+    let expected_rewards = 100_000_000_000;
+
+    let stakes = bank.stakes_cache.stakes();
+    let reward_calculate_param = bank.get_epoch_reward_calculate_param_info(&stakes);
+
+    let point_value = bank.calculate_reward_points_partitioned(
+        &reward_calculate_param,
+        expected_rewards,
+        &thread_pool,
+        &mut rewards_metrics,
+    );
+
+    assert!(point_value.is_some());
+    assert_eq!(point_value.as_ref().unwrap().rewards, expected_rewards);
+    assert_eq!(point_value.as_ref().unwrap().points, 8400000000000);
 }
 
 /// Test reward computation at epoch boundary
