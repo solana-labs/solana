@@ -12640,7 +12640,7 @@ fn test_reward_credit_num_blocks_cap() {
     );
 }
 
-/// Test get_reward_interval during warm up epoch gives the expected result.
+/// Test get_reward_credit_num_blocks during warm up epoch gives the expected result.
 /// The num_credit_blocks should be 1 during warm up epoch.
 #[test]
 fn test_reward_credit_num_blocks_warmup() {
@@ -12796,6 +12796,31 @@ fn test_epoch_partitoned_reward_history_update() {
         total_num_updates,
         post_update_history_len - pre_update_history_len
     );
+}
+
+// Test sort and shuffle partitioned rewards
+#[test]
+fn test_sort_and_shuffle_partitioned_rewards() {
+    // setup the expected number of stake rewards
+    let expected_num = 12345;
+
+    let mut stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::random())
+        .collect::<Vec<_>>();
+
+    let total = stake_rewards
+        .iter()
+        .map(|stake_reward| stake_reward.stake_reward_info.lamports)
+        .sum::<i64>();
+
+    Bank::sort_and_shuffle_partitioned_rewards(&mut stake_rewards, 1, total as u64);
+
+    let total_after_sort_shuffle = stake_rewards
+        .iter()
+        .map(|stake_reward| stake_reward.stake_reward_info.lamports)
+        .sum::<i64>();
+
+    assert_eq!(total, total_after_sort_shuffle);
 }
 
 /// Test reward computation at epoch boundary
