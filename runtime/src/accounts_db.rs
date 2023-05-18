@@ -8360,7 +8360,10 @@ impl AccountsDb {
         );
     }
 
-    pub fn store_cached_inline_update_index<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+    pub(crate) fn store_cached_inline_update_index<
+        'a,
+        T: ReadableAccount + Sync + ZeroLamport + 'a,
+    >(
         &self,
         accounts: impl StorableAccounts<'a, T>,
         transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
@@ -9491,7 +9494,7 @@ impl CalcAccountsHashFlavor {
     }
 }
 
-pub enum UpdateIndexThreadSelection {
+pub(crate) enum UpdateIndexThreadSelection {
     /// Use current thread only
     Inline,
     /// Use a thread-pool if the number of updates exceeds a threshold
