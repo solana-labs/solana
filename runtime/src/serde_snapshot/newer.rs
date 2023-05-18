@@ -345,8 +345,8 @@ impl<'a> TypeContext<'a> for Context {
         let epoch_accounts_hash = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.epoch_accounts_hash = epoch_accounts_hash;
 
-        let _epoch_reward_status: EpochRewardStatus =
-            ignore_eof_error(deserialize_from(&mut stream))?;
+        let epoch_reward_status = ignore_eof_error(deserialize_from(&mut stream))?;
+        bank_fields.epoch_reward_status = epoch_reward_status;
 
         Ok((bank_fields, accounts_db_fields))
     }
