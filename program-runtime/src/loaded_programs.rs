@@ -1,7 +1,10 @@
 #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
 use solana_rbpf::error::EbpfError;
 use {
-    crate::{invoke_context::InvokeContext, timings::ExecuteDetailsTimings},
+    crate::{
+        invoke_context::{InvokeContext, ProcessInstructionWithContext},
+        timings::ExecuteDetailsTimings,
+    },
     itertools::Itertools,
     log::{debug, log_enabled, trace},
     percentage::PercentageInteger,
@@ -68,7 +71,7 @@ pub enum LoadedProgramType {
     Typed(Executable<RequisiteVerifier, InvokeContext<'static>>),
     #[cfg(test)]
     TestLoaded,
-    Builtin(String, BuiltInProgram<InvokeContext<'static>>),
+    Builtin(BuiltInProgram<InvokeContext<'static>>),
 }
 
 impl Debug for LoadedProgramType {
@@ -85,9 +88,7 @@ impl Debug for LoadedProgramType {
             LoadedProgramType::Typed(_) => write!(f, "LoadedProgramType::Typed"),
             #[cfg(test)]
             LoadedProgramType::TestLoaded => write!(f, "LoadedProgramType::TestLoaded"),
-            LoadedProgramType::Builtin(name, _) => {
-                write!(f, "LoadedProgramType::Builtin({name})")
-            }
+            LoadedProgramType::Builtin(_) => write!(f, "LoadedProgramType::Builtin"),
         }
     }
 }
@@ -268,17 +269,21 @@ impl LoadedProgram {
 
     /// Creates a new built-in program
     pub fn new_builtin(
-        name: String,
         deployment_slot: Slot,
-        program: BuiltInProgram<InvokeContext<'static>>,
+        account_size: usize,
+        entrypoint: ProcessInstructionWithContext,
     ) -> Self {
+        let mut program = BuiltInProgram::default();
+        program
+            .register_function(b"entrypoint", entrypoint)
+            .unwrap();
         Self {
             deployment_slot,
-            account_size: 0,
-            effective_slot: deployment_slot.saturating_add(1),
+            account_size,
+            effective_slot: deployment_slot,
             maybe_expiration_slot: None,
             usage_counter: AtomicU64::new(0),
-            program: LoadedProgramType::Builtin(name, program),
+            program: LoadedProgramType::Builtin(program),
         }
     }
 
@@ -318,7 +323,9 @@ impl LoadedProgram {
     }
 
     fn is_implicit_delay_visibility_tombstone(&self, slot: Slot) -> bool {
-        self.effective_slot.saturating_sub(self.deployment_slot) == DELAY_VISIBILITY_SLOT_OFFSET
+        !matches!(self.program, LoadedProgramType::Builtin(_))
+            && self.effective_slot.saturating_sub(self.deployment_slot)
+                == DELAY_VISIBILITY_SLOT_OFFSET
             && slot >= self.deployment_slot
             && slot < self.effective_slot
     }
@@ -420,7 +427,10 @@ impl LoadedPrograms {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
-                if matches!(existing.program, LoadedProgramType::Unloaded) {
+                if matches!(existing.program, LoadedProgramType::Builtin(_)) {
+                    // Allow built-ins to be overwritten
+                    second_level.swap_remove(entry_index);
+                } else if matches!(existing.program, LoadedProgramType::Unloaded) {
                     // The unloaded program is getting reloaded
                     // Copy over the usage counter to the new entry
                     entry.usage_counter.store(
@@ -463,7 +473,9 @@ impl LoadedPrograms {
                 .rev()
                 .filter(|entry| {
                     let relation = fork_graph.relationship(entry.deployment_slot, new_root);
-                    if entry.deployment_slot >= new_root {
+                    if matches!(entry.program, LoadedProgramType::Builtin(_)) {
+                        true
+                    } else if entry.deployment_slot >= new_root {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
                     } else if !first_ancestor_found
                         && (matches!(relation, BlockRelation::Ancestor)
@@ -603,7 +615,7 @@ impl LoadedPrograms {
                         | LoadedProgramType::FailedVerification
                         | LoadedProgramType::Closed
                         | LoadedProgramType::DelayVisibility
-                        | LoadedProgramType::Builtin(_, _) => None,
+                        | LoadedProgramType::Builtin(_) => None,
                     })
             })
             .sorted_by_cached_key(|(_id, program)| program.usage_counter.load(Ordering::Relaxed))
@@ -712,7 +724,7 @@ mod tests {
 
     fn new_test_builtin_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
-            program: LoadedProgramType::Builtin("mockup".to_string(), BuiltInProgram::default()),
+            program: LoadedProgramType::Builtin(BuiltInProgram::default()),
             account_size: 0,
             deployment_slot,
             effective_slot,
