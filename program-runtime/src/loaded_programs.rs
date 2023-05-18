@@ -129,7 +129,7 @@ impl Stats {
         let one_hit_wonders = self.one_hit_wonders.load(Ordering::Relaxed);
         let evictions: u64 = self.evictions.values().sum();
         datapoint_info!(
-            "bank-executor-cache-stats",
+            "loaded-programs-cache-stats",
             ("slot", slot, i64),
             ("hits", hits, i64),
             ("misses", misses, i64),
