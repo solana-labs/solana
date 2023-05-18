@@ -140,44 +140,20 @@ pub fn process_instruction(
             ic_msg!(invoke_context, "CloseContextState");
             process_close_proof_context(invoke_context)
         }
-<<<<<<< HEAD
-        ProofInstruction::VerifyCloseAccount => {
-            ic_msg!(invoke_context, "VerifyCloseAccount");
-            process_verify_proof::<CloseAccountData, CloseAccountProofContext>(invoke_context)
-=======
         ProofInstruction::VerifyZeroBalance => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(6_012)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
-            ic_msg!(invoke_context, "VerifyZeroBalance");
+            ic_msg!(invoke_context, "VerifyCloseAccount");
             process_verify_proof::<ZeroBalanceProofData, ZeroBalanceProofContext>(invoke_context)
->>>>>>> f9b0691eb4 ([zk-token-sdk] rename and restructure `CloseAccount` and `WithdrawWithheld` proof instructions (#31608))
         }
         ProofInstruction::VerifyWithdraw => {
             ic_msg!(invoke_context, "VerifyWithdraw");
             process_verify_proof::<WithdrawData, WithdrawProofContext>(invoke_context)
         }
-<<<<<<< HEAD
-        ProofInstruction::VerifyWithdrawWithheldTokens => {
-            ic_msg!(invoke_context, "VerifyWithdrawWithheldTokens");
-            process_verify_proof::<WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext>(
-                invoke_context,
-            )
-=======
         ProofInstruction::VerifyCiphertextCiphertextEquality => {
-            if native_programs_consume_cu {
-                invoke_context
-                    .consume_checked(7_943)
-                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
-            }
-            ic_msg!(invoke_context, "VerifyCiphertextCiphertextEquality");
+            ic_msg!(invoke_context, "VerifyWithdrawWithheldTokens");
             process_verify_proof::<
                 CiphertextCiphertextEqualityProofData,
                 CiphertextCiphertextEqualityProofContext,
             >(invoke_context)
->>>>>>> f9b0691eb4 ([zk-token-sdk] rename and restructure `CloseAccount` and `WithdrawWithheld` proof instructions (#31608))
         }
         ProofInstruction::VerifyTransfer => {
             ic_msg!(invoke_context, "VerifyTransfer");
