@@ -12596,7 +12596,7 @@ fn test_partitioned_reward_enable() {
 
 /// Test get_reward_credit_num_blocks during normal epoch gives the expected result
 #[test]
-fn test_reward_interval_normal() {
+fn test_reward_credit_num_blocks_normal() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
 
@@ -12619,7 +12619,7 @@ fn test_reward_interval_normal() {
 /// Test get_reward_credit_num_blocks during small epoch
 /// The num_credit_blocks should be cap to 5% of the total number of blocks in the epoch.
 #[test]
-fn test_reward_interval_cap() {
+fn test_reward_credit_num_blocks_cap() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
 
@@ -12643,7 +12643,7 @@ fn test_reward_interval_cap() {
 /// Test get_reward_interval during warm up epoch gives the expected result.
 /// The num_credit_blocks should be 1 during warm up epoch.
 #[test]
-fn test_reward_interval_warmup() {
+fn test_reward_credit_num_blocks_warmup() {
     let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
 
     let bank = Bank::new_for_tests(&genesis_config);
@@ -12656,7 +12656,7 @@ fn test_reward_interval_warmup() {
 
 /// Test reward partition range that covers all the rewards slice.
 #[test]
-fn test_get_epoch_reward_partition_range() {
+fn test_get_stake_rewards_partition_range() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
     let mut bank = Bank::new_for_tests(&genesis_config);
@@ -12694,7 +12694,7 @@ fn test_get_epoch_reward_partition_range() {
 #[should_panic(
     expected = "assertion failed: partition_index < self.get_reward_credit_num_blocks()"
 )]
-fn test_get_epoch_reward_partition_range_panic() {
+fn test_get_stake_rewards_partition_range_panic() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
     genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
     let mut bank = Bank::new_for_tests(&genesis_config);
@@ -13134,6 +13134,7 @@ fn test_reward_accounts_lock() {
 }
 
 /// Test `EpochRewards` sysvar creation, distribution, and burning.
+/// This test covers `create_epoch_rewards_sysvar`, `update_epoch_rewards_sysvar`, `burn_and_purge_account` member functions.
 #[test]
 fn test_epoch_reward_sysvar() {
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
