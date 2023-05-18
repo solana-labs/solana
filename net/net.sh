@@ -234,7 +234,8 @@ build() {
 
 remoteHomeDir() {
   declare ipAddress=$1
-  local remoteHome="$(ssh "${sshOptions[@]}" "$ipAddress" "echo \$HOME")"
+  declare remoteHome
+  remoteHome="$(ssh "${sshOptions[@]}" "$ipAddress" "echo \$HOME")"
   echo "$remoteHome"
 }
 
