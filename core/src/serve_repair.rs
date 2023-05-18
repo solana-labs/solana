@@ -24,7 +24,6 @@ use {
         blockstore::Blockstore,
         shred::{Nonce, Shred, ShredFetchStats, SIZE_OF_NONCE},
     },
-    solana_metrics::inc_new_counter_debug,
     solana_perf::{
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PacketBatchRecycler},
@@ -729,7 +728,6 @@ impl ServeRepair {
                 "{}: Ignored received repair requests from ME: {}",
                 my_id, stats.err_self_repair,
             );
-            inc_new_counter_debug!("serve_repair-handle-repair--eq", stats.err_self_repair);
         }
 
         datapoint_info!(
