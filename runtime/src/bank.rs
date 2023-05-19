@@ -1902,7 +1902,9 @@ impl Bank {
                     &status.calculated_epoch_stake_rewards,
                     partition_index,
                 );
-            } else if height >= credit_end_exclusive {
+            }
+
+            if height.saturating_add(1) >= credit_end_exclusive {
                 datapoint_warn!(
                     "reward-status-update",
                     ("slot", self.slot(), i64),
