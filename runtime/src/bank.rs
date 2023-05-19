@@ -1715,10 +1715,9 @@ impl Bank {
                 // Save a snapshot of stakes for use in consensus and stake weighted networking
                 let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
                 new.update_epoch_stakes(leader_schedule_epoch);
-
-                if new.partitioned_rewards_feature_enabled() {
-                    new.distribute_partitioned_epoch_rewards();
-                }
+            }
+            if new.partitioned_rewards_feature_enabled() {
+                new.distribute_partitioned_epoch_rewards();
             }
         });
 
