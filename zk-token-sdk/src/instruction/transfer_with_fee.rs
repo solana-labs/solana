@@ -14,7 +14,7 @@ use {
         },
         range_proof::RangeProof,
         sigma_proofs::{
-            equality_proof::CtxtCommEqualityProof, fee_proof::FeeSigmaProof,
+            ctxt_comm_equality_proof::CiphertextCommitmentEqualityProof, fee_proof::FeeSigmaProof,
             validity_proof::AggregatedValidityProof,
         },
         transcript::TranscriptProtocol,
@@ -60,7 +60,10 @@ lazy_static::lazy_static! {
     pub static ref COMMITMENT_MAX_FEE_BASIS_POINTS: PedersenCommitment = Pedersen::encode(MAX_FEE_BASIS_POINTS);
 }
 
-// #[derive(Clone, Copy, Pod, Zeroable)]
+/// The instruction data that is needed for the `ProofInstruction::TransferWithFee` instruction.
+///
+/// It includes the cryptographic proof as well as the cotnext data information needed to verify
+/// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeeData {
@@ -71,6 +74,7 @@ pub struct TransferWithFeeData {
     pub proof: TransferWithFeeProof,
 }
 
+/// The context data needed to verify a transfer-with-fee proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeeProofContext {
@@ -386,7 +390,7 @@ impl ZkProofData<TransferWithFeeProofContext> for TransferWithFeeData {
 pub struct TransferWithFeeProof {
     pub new_source_commitment: pod::PedersenCommitment,
     pub claimed_commitment: pod::PedersenCommitment,
-    pub equality_proof: pod::CtxtCommEqualityProof,
+    pub equality_proof: pod::CiphertextCommitmentEqualityProof,
     pub ciphertext_amount_validity_proof: pod::AggregatedValidityProof,
     pub fee_sigma_proof: pod::FeeSigmaProof,
     pub fee_ciphertext_validity_proof: pod::AggregatedValidityProof,
@@ -472,11 +476,11 @@ impl TransferWithFeeProof {
         transcript.append_commitment(b"commitment-new-source", &pod_new_source_commitment);
 
         // generate equality_proof
-        let equality_proof = CtxtCommEqualityProof::new(
+        let equality_proof = CiphertextCommitmentEqualityProof::new(
             source_keypair,
             new_source_ciphertext,
-            source_new_balance,
             &opening_source,
+            source_new_balance,
             transcript,
         );
 
@@ -602,7 +606,7 @@ impl TransferWithFeeProof {
         let new_source_commitment: PedersenCommitment = self.new_source_commitment.try_into()?;
         let claimed_commitment: PedersenCommitment = self.claimed_commitment.try_into()?;
 
-        let equality_proof: CtxtCommEqualityProof = self.equality_proof.try_into()?;
+        let equality_proof: CiphertextCommitmentEqualityProof = self.equality_proof.try_into()?;
         let ciphertext_amount_validity_proof: AggregatedValidityProof =
             self.ciphertext_amount_validity_proof.try_into()?;
         let fee_sigma_proof: FeeSigmaProof = self.fee_sigma_proof.try_into()?;

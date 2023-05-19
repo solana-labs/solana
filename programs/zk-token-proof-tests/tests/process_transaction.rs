@@ -9,69 +9,79 @@ use {
         transaction::{Transaction, TransactionError},
     },
     solana_zk_token_sdk::{
-        encryption::elgamal::ElGamalKeypair, instruction::*, zk_token_proof_instruction::*,
-        zk_token_proof_program, zk_token_proof_state::ProofContextState,
+        encryption::{elgamal::ElGamalKeypair, pedersen::PedersenOpening},
+        instruction::*,
+        zk_token_proof_instruction::*,
+        zk_token_proof_program,
+        zk_token_proof_state::ProofContextState,
     },
     std::mem::size_of,
 };
 
 const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 6] = [
-    ProofInstruction::VerifyCloseAccount,
+    ProofInstruction::VerifyZeroBalance,
     ProofInstruction::VerifyWithdraw,
-    ProofInstruction::VerifyWithdrawWithheldTokens,
+    ProofInstruction::VerifyCiphertextCiphertextEquality,
     ProofInstruction::VerifyTransfer,
     ProofInstruction::VerifyTransferWithFee,
     ProofInstruction::VerifyPubkeyValidity,
 ];
 
 #[tokio::test]
-async fn test_close_account() {
+async fn test_zero_balance() {
     let elgamal_keypair = ElGamalKeypair::new_rand();
 
     let zero_ciphertext = elgamal_keypair.public.encrypt(0_u64);
-    let success_proof_data = CloseAccountData::new(&elgamal_keypair, &zero_ciphertext).unwrap();
+    let success_proof_data = ZeroBalanceProofData::new(&elgamal_keypair, &zero_ciphertext).unwrap();
 
     let incorrect_keypair = ElGamalKeypair {
         public: ElGamalKeypair::new_rand().public,
         secret: ElGamalKeypair::new_rand().secret,
     };
-    let fail_proof_data = CloseAccountData::new(&incorrect_keypair, &zero_ciphertext).unwrap();
+    let fail_proof_data = ZeroBalanceProofData::new(&incorrect_keypair, &zero_ciphertext).unwrap();
 
     test_verify_proof_without_context(
-        ProofInstruction::VerifyCloseAccount,
+        ProofInstruction::VerifyZeroBalance,
         &success_proof_data,
         &fail_proof_data,
     )
     .await;
 
     test_verify_proof_with_context(
-        ProofInstruction::VerifyCloseAccount,
-        size_of::<ProofContextState<CloseAccountProofContext>>(),
+        ProofInstruction::VerifyZeroBalance,
+        size_of::<ProofContextState<ZeroBalanceProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
     )
     .await;
 
     test_close_context_state(
-        ProofInstruction::VerifyCloseAccount,
-        size_of::<ProofContextState<CloseAccountProofContext>>(),
+        ProofInstruction::VerifyZeroBalance,
+        size_of::<ProofContextState<ZeroBalanceProofContext>>(),
         &success_proof_data,
     )
     .await;
 }
 
 #[tokio::test]
-async fn test_withdraw_withheld_tokens() {
-    let elgamal_keypair = ElGamalKeypair::new_rand();
+async fn test_ciphertext_ciphertext_equality() {
+    let source_keypair = ElGamalKeypair::new_rand();
     let destination_keypair = ElGamalKeypair::new_rand();
 
     let amount: u64 = 0;
-    let withdraw_withheld_authority_ciphertext = elgamal_keypair.public.encrypt(amount);
+    let source_ciphertext = source_keypair.public.encrypt(amount);
 
-    let success_proof_data = WithdrawWithheldTokensData::new(
-        &elgamal_keypair,
+    let destination_opening = PedersenOpening::new_rand();
+    let destination_ciphertext = destination_keypair
+        .public
+        .encrypt_with(amount, &destination_opening);
+
+    let success_proof_data = CiphertextCiphertextEqualityProofData::new(
+        &source_keypair,
         &destination_keypair.public,
-        &withdraw_withheld_authority_ciphertext,
+        &source_ciphertext,
+        &destination_ciphertext,
+        &destination_opening,
         amount,
     )
     .unwrap();
@@ -80,32 +90,34 @@ async fn test_withdraw_withheld_tokens() {
         public: ElGamalKeypair::new_rand().public,
         secret: ElGamalKeypair::new_rand().secret,
     };
-    let fail_proof_data = WithdrawWithheldTokensData::new(
+    let fail_proof_data = CiphertextCiphertextEqualityProofData::new(
         &incorrect_keypair,
         &destination_keypair.public,
-        &withdraw_withheld_authority_ciphertext,
+        &source_ciphertext,
+        &destination_ciphertext,
+        &destination_opening,
         amount,
     )
     .unwrap();
 
     test_verify_proof_without_context(
-        ProofInstruction::VerifyWithdrawWithheldTokens,
+        ProofInstruction::VerifyCiphertextCiphertextEquality,
         &success_proof_data,
         &fail_proof_data,
     )
     .await;
 
     test_verify_proof_with_context(
-        ProofInstruction::VerifyWithdrawWithheldTokens,
-        size_of::<ProofContextState<WithdrawWithheldTokensProofContext>>(),
+        ProofInstruction::VerifyCiphertextCiphertextEquality,
+        size_of::<ProofContextState<CiphertextCiphertextEqualityProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
     )
     .await;
 
     test_close_context_state(
-        ProofInstruction::VerifyWithdrawWithheldTokens,
-        size_of::<ProofContextState<WithdrawWithheldTokensProofContext>>(),
+        ProofInstruction::VerifyCiphertextCiphertextEquality,
+        size_of::<ProofContextState<CiphertextCiphertextEqualityProofContext>>(),
         &success_proof_data,
     )
     .await;

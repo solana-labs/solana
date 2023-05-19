@@ -140,19 +140,20 @@ pub fn process_instruction(
             ic_msg!(invoke_context, "CloseContextState");
             process_close_proof_context(invoke_context)
         }
-        ProofInstruction::VerifyCloseAccount => {
+        ProofInstruction::VerifyZeroBalance => {
             ic_msg!(invoke_context, "VerifyCloseAccount");
-            process_verify_proof::<CloseAccountData, CloseAccountProofContext>(invoke_context)
+            process_verify_proof::<ZeroBalanceProofData, ZeroBalanceProofContext>(invoke_context)
         }
         ProofInstruction::VerifyWithdraw => {
             ic_msg!(invoke_context, "VerifyWithdraw");
             process_verify_proof::<WithdrawData, WithdrawProofContext>(invoke_context)
         }
-        ProofInstruction::VerifyWithdrawWithheldTokens => {
+        ProofInstruction::VerifyCiphertextCiphertextEquality => {
             ic_msg!(invoke_context, "VerifyWithdrawWithheldTokens");
-            process_verify_proof::<WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext>(
-                invoke_context,
-            )
+            process_verify_proof::<
+                CiphertextCiphertextEqualityProofData,
+                CiphertextCiphertextEqualityProofContext,
+            >(invoke_context)
         }
         ProofInstruction::VerifyTransfer => {
             ic_msg!(invoke_context, "VerifyTransfer");
