@@ -78,12 +78,7 @@ impl CiphertextCiphertextEqualityProofData {
             destination_ciphertext: pod_destination_ciphertext,
         };
 
-        let mut transcript = CiphertextCiphertextEqualityProof::transcript_new(
-            &pod_source_pubkey,
-            &pod_destination_pubkey,
-            &pod_source_ciphertext,
-            &pod_destination_ciphertext,
-        );
+        let mut transcript = context.new_transcript();
 
         let proof = CiphertextCiphertextEqualityProof::new(
             source_keypair,
@@ -110,12 +105,7 @@ impl ZkProofData<CiphertextCiphertextEqualityProofContext>
 
     #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError> {
-        let mut transcript = CiphertextCiphertextEqualityProof::transcript_new(
-            &self.context.source_pubkey,
-            &self.context.destination_pubkey,
-            &self.context.source_ciphertext,
-            &self.context.destination_ciphertext,
-        );
+        let mut transcript = self.context.new_transcript();
 
         let source_pubkey = self.context.source_pubkey.try_into()?;
         let destination_pubkey = self.context.destination_pubkey.try_into()?;
@@ -137,20 +127,15 @@ impl ZkProofData<CiphertextCiphertextEqualityProofContext>
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
-impl CiphertextCiphertextEqualityProof {
-    fn transcript_new(
-        source_pubkey: &pod::ElGamalPubkey,
-        destination_pubkey: &pod::ElGamalPubkey,
-        source_ciphertext: &pod::ElGamalCiphertext,
-        destination_ciphertext: &pod::ElGamalCiphertext,
-    ) -> Transcript {
+impl CiphertextCiphertextEqualityProofContext {
+    fn new_transcript(&self) -> Transcript {
         let mut transcript = Transcript::new(b"CiphertextCiphertextEqualityProof");
 
-        transcript.append_pubkey(b"pubkey-source", source_pubkey);
-        transcript.append_pubkey(b"pubkey-dest", destination_pubkey);
+        transcript.append_pubkey(b"source-pubkey", &self.source_pubkey);
+        transcript.append_pubkey(b"destination-pubkey", &self.destination_pubkey);
 
-        transcript.append_ciphertext(b"ciphertext-source", source_ciphertext);
-        transcript.append_ciphertext(b"ciphertext-dest", destination_ciphertext);
+        transcript.append_ciphertext(b"source-ciphertext", &self.source_ciphertext);
+        transcript.append_ciphertext(b"destination-ciphertext", &self.destination_ciphertext);
 
         transcript
     }

@@ -77,7 +77,7 @@ impl WithdrawData {
             final_ciphertext: pod_final_ciphertext,
         };
 
-        let mut transcript = WithdrawProof::transcript_new(&pod_pubkey, &pod_final_ciphertext);
+        let mut transcript = context.new_transcript();
         let proof = WithdrawProof::new(keypair, final_balance, &final_ciphertext, &mut transcript);
 
         Ok(Self { context, proof })
@@ -93,13 +93,25 @@ impl ZkProofData<WithdrawProofContext> for WithdrawData {
 
     #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError> {
-        let mut transcript =
-            WithdrawProof::transcript_new(&self.context.pubkey, &self.context.final_ciphertext);
+        let mut transcript = self.context.new_transcript();
 
         let elgamal_pubkey = self.context.pubkey.try_into()?;
         let final_balance_ciphertext = self.context.final_ciphertext.try_into()?;
         self.proof
             .verify(&elgamal_pubkey, &final_balance_ciphertext, &mut transcript)
+    }
+}
+
+#[allow(non_snake_case)]
+#[cfg(not(target_os = "solana"))]
+impl WithdrawProofContext {
+    fn new_transcript(&self) -> Transcript {
+        let mut transcript = Transcript::new(b"WithdrawProof");
+
+        transcript.append_pubkey(b"pubkey", &self.pubkey);
+        transcript.append_ciphertext(b"ciphertext", &self.final_ciphertext);
+
+        transcript
     }
 }
 
@@ -123,18 +135,6 @@ pub struct WithdrawProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl WithdrawProof {
-    fn transcript_new(
-        pubkey: &pod::ElGamalPubkey,
-        ciphertext: &pod::ElGamalCiphertext,
-    ) -> Transcript {
-        let mut transcript = Transcript::new(b"WithdrawProof");
-
-        transcript.append_pubkey(b"pubkey", pubkey);
-        transcript.append_ciphertext(b"ciphertext", ciphertext);
-
-        transcript
-    }
-
     pub fn new(
         keypair: &ElGamalKeypair,
         final_balance: u64,
