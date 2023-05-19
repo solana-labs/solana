@@ -247,7 +247,7 @@ impl TransferProofContext {
         let mut transcript = Transcript::new(b"transfer-proof");
         transcript.append_message(b"ciphertext-lo", bytes_of(&self.ciphertext_lo));
         transcript.append_message(b"ciphertext-hi", bytes_of(&self.ciphertext_hi));
-        transcript.append_message(b"transfer_pubkeys", bytes_of(&self.transfer_pubkeys));
+        transcript.append_message(b"transfer-pubkeys", bytes_of(&self.transfer_pubkeys));
         transcript.append_message(
             b"new-source-ciphertext",
             bytes_of(&self.new_source_ciphertext),
