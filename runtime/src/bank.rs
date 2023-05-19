@@ -87,9 +87,9 @@ use {
     percentage::Percentage,
     rand::seq::SliceRandom,
     rand_chacha::{rand_core::SeedableRng, ChaChaRng},
-    rayon::slice::ParallelSliceMut,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+        slice::ParallelSliceMut,
         ThreadPool, ThreadPoolBuilder,
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment,
