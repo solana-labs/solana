@@ -3833,8 +3833,8 @@ fn test_program_fees() {
         true,
         true,
         true,
-        false,
-        false,
+        true,
+        true,
     );
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -3845,7 +3845,7 @@ fn test_program_fees() {
     let pre_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::set_compute_unit_price(1),
+            ComputeBudgetInstruction::set_compute_unit_price(1_000_000_000),
             Instruction::new_with_bytes(program_id, &[], vec![]),
         ],
         Some(&mint_keypair.pubkey()),
@@ -3860,8 +3860,8 @@ fn test_program_fees() {
         true,
         true,
         true,
-        false,
-        false,
+        true,
+        true,
     );
     assert!(expected_normal_fee < expected_prioritized_fee);
 
