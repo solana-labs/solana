@@ -1716,7 +1716,7 @@ impl Bank {
                 let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
                 new.update_epoch_stakes(leader_schedule_epoch);
             }
-            if new.partitioned_rewards_feature_enabled() {
+            if new.partitioned_rewards_code_enabled() {
                 new.distribute_partitioned_epoch_rewards();
             }
         });
@@ -3950,6 +3950,12 @@ impl Bank {
         report_partitioned_reward_metrics(self, metrics);
     }
 
+    /// true if it is ok to run partitioned rewards code.
+    /// This means the feature is activated or certain testing situations.
+    fn partitioned_rewards_code_enabled(&self) -> bool {
+        self.partitioned_rewards_feature_enabled()
+    }
+
     /// Create EpochRewards syavar with calculated rewards
     fn create_epoch_rewards_sysvar(
         &self,
@@ -3957,7 +3963,7 @@ impl Bank {
         distributed_rewards: u64,
         distribution_complete_block_height: u64,
     ) {
-        assert!(self.partitioned_rewards_feature_enabled());
+        assert!(self.partitioned_rewards_code_enabled());
 
         let epoch_rewards = sysvar::epoch_rewards::EpochRewards::new(
             total_rewards,
@@ -3978,7 +3984,7 @@ impl Bank {
 
     /// Update EpochRewards sysvar with distributed rewards
     fn update_epoch_rewards_sysvar(&self, distributed: u64) {
-        assert!(self.partitioned_rewards_feature_enabled());
+        assert!(self.partitioned_rewards_code_enabled());
 
         let mut epoch_rewards: sysvar::epoch_rewards::EpochRewards =
             from_account(&self.get_account(&sysvar::epoch_rewards::id()).unwrap()).unwrap();
