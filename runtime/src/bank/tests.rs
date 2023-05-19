@@ -12893,22 +12893,17 @@ fn test_rewards_point_calculation() {
 /// Test reward computation at epoch boundary
 #[test]
 fn test_rewards_computation() {
-    todo!("refactored, rewrite this test");
-    /*
     solana_logger::setup();
 
     let expected_num_delegations = 100;
-    let mut bank = create_reward_bank(expected_num_delegations);
+    let bank = create_reward_bank(expected_num_delegations);
 
     // Calculate rewards
     let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
     let mut rewards_metrics = RewardsMetrics::default();
     let expected_rewards = 100_000_000_000;
 
-    let StakeRewardCalculation {
-        stake_rewards,
-        total_stake_rewards_lamports,
-    } = bank.calculate_validator_rewards_and_distribute_vote_rewards(
+    let calculated_rewards = bank.calculate_validator_rewards(
         1,
         expected_rewards,
         null_tracer(),
@@ -12917,12 +12912,28 @@ fn test_rewards_computation() {
         &mut rewards_metrics,
     );
 
-    // assert that total rewards matches
-    assert_eq!(total_stake_rewards_lamports, expected_rewards);
+    let vote_rewards = &calculated_rewards.as_ref().unwrap().0;
+    let stake_rewards = &calculated_rewards.as_ref().unwrap().1;
 
-    // assert that number of rewards matches
-    assert_eq!(stake_rewards.len(), expected_num_delegations);
-    */
+    let total_vote_rewards: u64 = vote_rewards
+        .iter()
+        .map(|reward| {
+            if let Some(ref entry) = reward.0 {
+                entry.1.lamports
+            } else {
+                0
+            }
+        })
+        .sum::<i64>() as u64;
+
+    // assert that total rewards matches the sum of vote rewards and stake rewards
+    assert_eq!(
+        stake_rewards.total_stake_rewards_lamports + total_vote_rewards,
+        expected_rewards
+    );
+
+    // assert that number of stake rewards matches
+    assert_eq!(stake_rewards.stake_rewards.len(), expected_num_delegations);
 }
 
 /// Test rewards compuation and partitioned rewards distribution at the epoch boundary
