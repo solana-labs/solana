@@ -22,7 +22,7 @@ solana_rbpf = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-memoffset = "0.8"
+memoffset = "0.9"
 
 [lib]
 crate-type = ["lib"]
