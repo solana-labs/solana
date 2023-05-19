@@ -62,6 +62,7 @@ use {
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
+        partitioned_rewards::PartitionedEpochRewardsConfig,
         rent_collector::{CollectedInfo, RentCollector},
         rent_debits::RentDebits,
         runtime_config::RuntimeConfig,
@@ -1492,10 +1493,7 @@ impl Bank {
 
     /// # stake accounts to store in one block during partitioned reward interval
     fn partition_rewards_stores_per_block(&self) -> u64 {
-        // Target to store 64 rewards per entry/tick in a block. A block has a minimum of 64
-        // entries/tick. This gives 4096 total rewards to store in one block.
-        // This constant affects consensus.
-        4096
+        PartitionedEpochRewardsConfig::default().stake_account_stores_per_block
     }
 
     /// Calculate the number of blocks required to store rewards in all accounts.
@@ -1528,7 +1526,7 @@ impl Bank {
     /// reward calculation happens synchronously during the first block of the epoch boundary.
     /// So, # blocks for reward calculation is 1.
     fn reward_calculation_num_blocks(&self) -> Slot {
-        1
+        PartitionedEpochRewardsConfig::default().reward_calculation_num_blocks
     }
 
     /// Return the total number of blocks in reward interval (including both calculation and crediting).
