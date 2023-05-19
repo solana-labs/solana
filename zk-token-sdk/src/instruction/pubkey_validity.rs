@@ -52,7 +52,7 @@ impl PubkeyValidityData {
 
         let context = PubkeyValidityProofContext { pubkey: pod_pubkey };
 
-        let mut transcript = PubkeyValidityProof::transcript_new(&pod_pubkey);
+        let mut transcript = context.new_transcript();
         let proof = PubkeyValidityProof::new(keypair, &mut transcript).into();
 
         Ok(PubkeyValidityData { context, proof })
@@ -68,7 +68,7 @@ impl ZkProofData<PubkeyValidityProofContext> for PubkeyValidityData {
 
     #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError> {
-        let mut transcript = PubkeyValidityProof::transcript_new(&self.context.pubkey);
+        let mut transcript = self.context.new_transcript();
         let pubkey = self.context.pubkey.try_into()?;
         let proof: PubkeyValidityProof = self.proof.try_into()?;
         proof.verify(&pubkey, &mut transcript).map_err(|e| e.into())
@@ -77,10 +77,10 @@ impl ZkProofData<PubkeyValidityProofContext> for PubkeyValidityData {
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
-impl PubkeyValidityProof {
-    fn transcript_new(pubkey: &pod::ElGamalPubkey) -> Transcript {
+impl PubkeyValidityProofContext {
+    fn new_transcript(&self) -> Transcript {
         let mut transcript = Transcript::new(b"PubkeyProof");
-        transcript.append_pubkey(b"pubkey", pubkey);
+        transcript.append_pubkey(b"pubkey", &self.pubkey);
         transcript
     }
 }
