@@ -1490,10 +1490,6 @@ impl Bank {
         self.activate_feature(&enable_partitioned_epoch_reward::id())
     }
 
-    /// reward calculation happens synchronously during the first block of the epoch boundary.
-    /// So, # blocks for reward calculation is 1.
-    const REWARD_CALCULATION_NUM_BLOCKS: u64 = 1;
-
     /// # stake accounts to store in one block during partitioned reward interval
     fn partition_rewards_stores_per_block(&self) -> u64 {
         // Target to store 64 rewards per entry/tick in a block. A block has a minimum of 64
@@ -1529,9 +1525,15 @@ impl Bank {
         }
     }
 
+    /// reward calculation happens synchronously during the first block of the epoch boundary.
+    /// So, # blocks for reward calculation is 1.
+    fn reward_calculation_num_blocks(&self) -> Slot {
+        1
+    }
+
     /// Return the total number of blocks in reward interval (including both calculation and crediting).
     fn get_reward_total_num_blocks(&self) -> u64 {
-        Self::REWARD_CALCULATION_NUM_BLOCKS + self.get_reward_credit_num_blocks()
+        self.reward_calculation_num_blocks() + self.get_reward_credit_num_blocks()
     }
 
     /// Return `RewardInterval` enum for current bank
@@ -1873,7 +1875,7 @@ impl Bank {
         );
 
         let slot = self.slot();
-        let credit_start = self.block_height() + Self::REWARD_CALCULATION_NUM_BLOCKS;
+        let credit_start = self.block_height() + self.reward_calculation_num_blocks();
         let credit_end_exclusive = credit_start + self.get_reward_credit_num_blocks();
 
         // create EpochRewards sysvar that holds the balance of undistributed rewards with
@@ -1891,7 +1893,7 @@ impl Bank {
             );
             let height = self.block_height();
             let start_block_height = status.start_block_height;
-            let credit_start = start_block_height + Self::REWARD_CALCULATION_NUM_BLOCKS;
+            let credit_start = start_block_height + self.reward_calculation_num_blocks();
             let credit_end_exclusive = credit_start + self.get_reward_credit_num_blocks();
 
             if height >= credit_start && height < credit_end_exclusive {
