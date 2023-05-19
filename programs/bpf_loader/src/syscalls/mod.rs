@@ -142,12 +142,12 @@ macro_rules! register_feature_gated_function {
     };
 }
 
-pub fn create_loader<'a>(
+pub fn create_program_runtime_environment<'a>(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     reject_deployment_of_broken_elfs: bool,
     debugging_features: bool,
-) -> Result<Arc<BuiltInProgram<InvokeContext<'a>>>, Error> {
+) -> Result<BuiltInProgram<InvokeContext<'a>>, Error> {
     use rand::Rng;
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
@@ -312,7 +312,7 @@ pub fn create_loader<'a>(
     // Log data
     result.register_function(b"sol_log_data", SyscallLogData::call)?;
 
-    Ok(Arc::new(result))
+    Ok(result)
 }
 
 fn translate(

@@ -7,7 +7,6 @@ pub mod syscalls;
 use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
-        compute_budget::ComputeBudget,
         ic_logger_msg, ic_msg,
         invoke_context::{BpfAllocator, InvokeContext, SyscallContext},
         loaded_programs::{
@@ -24,7 +23,7 @@ use {
         error::EbpfError,
         memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
         verifier::RequisiteVerifier,
-        vm::{ContextObject, EbpfVm, ProgramResult},
+        vm::{BuiltInProgram, ContextObject, EbpfVm, ProgramResult},
     },
     solana_sdk::{
         account::WritableAccount,
@@ -60,34 +59,20 @@ use {
         rc::Rc,
         sync::{atomic::Ordering, Arc},
     },
+    syscalls::create_program_runtime_environment,
 };
 
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
     feature_set: &FeatureSet,
-    compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     load_program_metrics: &mut LoadProgramMetrics,
     programdata: &[u8],
     loader_key: &Pubkey,
     account_size: usize,
     deployment_slot: Slot,
-    reject_deployment_of_broken_elfs: bool,
-    debugging_features: bool,
+    program_runtime_environment: Arc<BuiltInProgram<InvokeContext<'static>>>,
 ) -> Result<LoadedProgram, InstructionError> {
-    let mut register_syscalls_time = Measure::start("register_syscalls_time");
-    let loader = syscalls::create_loader(
-        feature_set,
-        compute_budget,
-        reject_deployment_of_broken_elfs,
-        debugging_features,
-    )
-    .map_err(|e| {
-        ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
-        InstructionError::ProgramEnvironmentSetupFailure
-    })?;
-    register_syscalls_time.stop();
-    load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
     let effective_slot = if feature_set.is_active(&delay_visibility_of_program_deployment::id()) {
         deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET)
     } else {
@@ -95,7 +80,7 @@ pub fn load_program_from_bytes(
     };
     let loaded_program = LoadedProgram::new(
         loader_key,
-        loader,
+        program_runtime_environment,
         deployment_slot,
         effective_slot,
         None,
@@ -110,42 +95,12 @@ pub fn load_program_from_bytes(
     Ok(loaded_program)
 }
 
-fn get_programdata_offset_and_deployment_offset(
-    log_collector: &Option<Rc<RefCell<LogCollector>>>,
-    program: &BorrowedAccount,
-    programdata: &BorrowedAccount,
-) -> Result<(usize, Slot), InstructionError> {
-    if bpf_loader_upgradeable::check_id(program.get_owner()) {
-        if let UpgradeableLoaderState::Program {
-            programdata_address: _,
-        } = program.get_state()?
-        {
-            if let UpgradeableLoaderState::ProgramData {
-                slot,
-                upgrade_authority_address: _,
-            } = programdata.get_state()?
-            {
-                Ok((UpgradeableLoaderState::size_of_programdata_metadata(), slot))
-            } else {
-                ic_logger_msg!(log_collector, "Program has been closed");
-                Err(InstructionError::InvalidAccountData)
-            }
-        } else {
-            ic_logger_msg!(log_collector, "Invalid Program account");
-            Err(InstructionError::InvalidAccountData)
-        }
-    } else {
-        Ok((0, 0))
-    }
-}
-
 pub fn load_program_from_account(
     feature_set: &FeatureSet,
-    compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
-    debugging_features: bool,
+    program_runtime_environment: Arc<BuiltInProgram<InvokeContext<'static>>>,
 ) -> Result<(Arc<LoadedProgram>, LoadProgramMetrics), InstructionError> {
     if !check_loader_id(program.get_owner()) {
         ic_logger_msg!(
@@ -156,7 +111,28 @@ pub fn load_program_from_account(
     }
 
     let (programdata_offset, deployment_slot) =
-        get_programdata_offset_and_deployment_offset(&log_collector, program, programdata)?;
+        if bpf_loader_upgradeable::check_id(program.get_owner()) {
+            if let UpgradeableLoaderState::Program {
+                programdata_address: _,
+            } = program.get_state()?
+            {
+                if let UpgradeableLoaderState::ProgramData {
+                    slot,
+                    upgrade_authority_address: _,
+                } = programdata.get_state()?
+                {
+                    (UpgradeableLoaderState::size_of_programdata_metadata(), slot)
+                } else {
+                    ic_logger_msg!(log_collector, "Program has been closed");
+                    return Err(InstructionError::InvalidAccountData);
+                }
+            } else {
+                ic_logger_msg!(log_collector, "Invalid Program account");
+                return Err(InstructionError::InvalidAccountData);
+            }
+        } else {
+            (0, 0)
+        };
 
     let programdata_size = if programdata_offset != 0 {
         programdata.get_data().len()
@@ -171,7 +147,6 @@ pub fn load_program_from_account(
 
     let loaded_program = Arc::new(load_program_from_bytes(
         feature_set,
-        compute_budget,
         log_collector,
         &mut load_program_metrics,
         programdata
@@ -181,8 +156,7 @@ pub fn load_program_from_account(
         program.get_owner(),
         program.get_data().len().saturating_add(programdata_size),
         deployment_slot,
-        false, /* reject_deployment_of_broken_elfs */
-        debugging_features,
+        program_runtime_environment,
     )?);
 
     Ok((loaded_program, load_program_metrics))
@@ -204,17 +178,27 @@ macro_rules! deploy_program {
     ($invoke_context:expr, $program_id:expr, $loader_key:expr,
      $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
         let mut load_program_metrics = LoadProgramMetrics::default();
-        let executor = load_program_from_bytes(
+        let mut register_syscalls_time = Measure::start("register_syscalls_time");
+        let program_runtime_environment = create_program_runtime_environment(
             &$invoke_context.feature_set,
             $invoke_context.get_compute_budget(),
+            true, /* deployment */
+            false, /* debugging_features */
+        ).map_err(|e| {
+            ic_msg!($invoke_context, "Failed to register syscalls: {}", e);
+            InstructionError::ProgramEnvironmentSetupFailure
+        })?;
+        register_syscalls_time.stop();
+        load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
+        let executor = load_program_from_bytes(
+            &$invoke_context.feature_set,
             $invoke_context.get_log_collector(),
             &mut load_program_metrics,
             $new_programdata,
             $loader_key,
             $account_size,
             $slot,
-            true, /* reject_deployment_of_broken_elfs */
-            false, /* debugging_features */
+            Arc::new(program_runtime_environment),
         )?;
         if let Some(old_entry) = find_program_in_cache($invoke_context, &$program_id) {
             let usage_counter = old_entry.usage_counter.load(Ordering::Relaxed);
@@ -1675,6 +1659,14 @@ pub mod test_utils {
     };
 
     pub fn load_all_invoked_programs(invoke_context: &mut InvokeContext) {
+        let mut load_program_metrics = LoadProgramMetrics::default();
+        let program_runtime_environment = create_program_runtime_environment(
+            &invoke_context.feature_set,
+            invoke_context.get_compute_budget(),
+            false, /* deployment */
+            false, /* debugging_features */
+        );
+        let program_runtime_environment = Arc::new(program_runtime_environment.unwrap());
         let num_accounts = invoke_context.transaction_context.get_number_of_accounts();
         for index in 0..num_accounts {
             let account = invoke_context
@@ -1690,19 +1682,15 @@ pub mod test_utils {
                     .get_key_of_account_at_index(index)
                     .expect("Failed to get account key");
 
-                let mut load_program_metrics = LoadProgramMetrics::default();
-
                 if let Ok(loaded_program) = load_program_from_bytes(
                     &FeatureSet::all_enabled(),
-                    &ComputeBudget::default(),
                     None,
                     &mut load_program_metrics,
                     account.data(),
                     owner,
                     account.data().len(),
                     0,
-                    true,
-                    false,
+                    program_runtime_environment.clone(),
                 ) {
                     invoke_context
                         .programs_modified_by_tx

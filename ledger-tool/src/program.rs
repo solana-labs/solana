@@ -6,7 +6,7 @@ use {
     serde_json::Result,
     solana_bpf_loader_program::{
         create_vm, load_program_from_bytes, serialization::serialize_parameters,
-        syscalls::create_loader,
+        syscalls::create_program_runtime_environment,
     },
     solana_clap_utils::input_parsers::pubkeys_of,
     solana_ledger::{
@@ -341,8 +341,6 @@ fn load_program<'a>(
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
     let slot = Slot::default();
-    let reject_deployment_of_broken_elfs = false;
-    let debugging_features = true;
     let log_collector = invoke_context.get_log_collector();
     let loader_key = bpf_loader_upgradeable::id();
     let mut load_program_metrics = LoadProgramMetrics {
@@ -350,46 +348,51 @@ fn load_program<'a>(
         ..LoadProgramMetrics::default()
     };
     let account_size = contents.len();
+    let program_runtime_environment = create_program_runtime_environment(
+        &invoke_context.feature_set,
+        invoke_context.get_compute_budget(),
+        false, /* deployment */
+        true,  /* debugging_features */
+    )
+    .unwrap();
     // Allowing mut here, since it may be needed for jit compile, which is under a config flag
     #[allow(unused_mut)]
     let mut verified_executable = if is_elf {
         let result = load_program_from_bytes(
             &invoke_context.feature_set,
-            invoke_context.get_compute_budget(),
             log_collector,
             &mut load_program_metrics,
             &contents,
             &loader_key,
             account_size,
             slot,
-            reject_deployment_of_broken_elfs,
-            debugging_features,
+            Arc::new(program_runtime_environment),
         );
         match result {
             Ok(loaded_program) => match loaded_program.program {
-                LoadedProgramType::LegacyV1(program) => Ok(unsafe { std::mem::transmute(program) }),
+                LoadedProgramType::LegacyV1(program) => Ok(program),
                 _ => unreachable!(),
             },
             Err(err) => Err(format!("Loading executable failed: {err:?}")),
         }
     } else {
-        let loader = create_loader(
-            &invoke_context.feature_set,
-            invoke_context.get_compute_budget(),
-            true,
-            true,
+        let executable = assemble::<InvokeContext>(
+            std::str::from_utf8(contents.as_slice()).unwrap(),
+            Arc::new(program_runtime_environment),
         )
         .unwrap();
-        let executable =
-            assemble::<InvokeContext>(std::str::from_utf8(contents.as_slice()).unwrap(), loader)
-                .unwrap();
         Executable::<RequisiteVerifier, InvokeContext>::verified(executable)
             .map_err(|err| format!("Assembling executable failed: {err:?}"))
     }
     .unwrap();
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();
-    verified_executable
+    unsafe {
+        std::mem::transmute::<
+            Executable<RequisiteVerifier, InvokeContext<'static>>,
+            Executable<RequisiteVerifier, InvokeContext<'a>>,
+        >(verified_executable)
+    }
 }
 
 enum Action {
@@ -537,7 +540,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
     let mut loaded_programs =
         LoadedProgramsForTxBatch::new(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
     for key in cached_account_keys {
-        let program = bank.load_program(&key, true).unwrap_or_else(|err| {
+        let program = bank.load_program(&key).unwrap_or_else(|err| {
             // Create a tombstone for the program in the cache
             debug!("Failed to load program {}, error {:?}", key, err);
             Arc::new(LoadedProgram::new_tombstone(
