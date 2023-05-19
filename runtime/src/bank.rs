@@ -4528,9 +4528,6 @@ impl Bank {
             &self.blockhash_queue.read().unwrap(),
         );
         let native_loader = native_loader::id();
-        for precompile in get_precompiles() {
-            program_accounts_map.remove(&precompile.program_id);
-        }
         for builtin_program in self.builtin_programs.iter() {
             program_accounts_map.insert(*builtin_program, &native_loader);
         }
