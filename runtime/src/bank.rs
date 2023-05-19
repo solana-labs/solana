@@ -1500,7 +1500,7 @@ impl Bank {
     }
 
     /// # stake accounts to store in one block during partitioned reward interval
-    fn partition_rewards_stores_per_block(&self) -> u64 {
+    fn partitioned_rewards_stake_account_stores_per_block(&self) -> u64 {
         self.partitioned_epoch_rewards_config()
             .stake_account_stores_per_block
     }
@@ -1517,7 +1517,7 @@ impl Bank {
             {
                 crate::accounts_hash::AccountsHasher::div_ceil(
                     stake_rewards.len(),
-                    self.partition_rewards_stores_per_block() as usize,
+                    self.partitioned_rewards_stake_account_stores_per_block() as usize,
                 ) as u64
             } else {
                 // To be consistent to the meaning of `num_chunks`. When stake_rewards is none. num_chunks = 0
@@ -3797,9 +3797,9 @@ impl Bank {
         stake_rewards: &'a [StakeReward],
     ) -> &'a [StakeReward] {
         assert!(partition_index < self.get_reward_credit_num_blocks());
-        let begin = self.partition_rewards_stores_per_block() * partition_index;
+        let begin = self.partitioned_rewards_stake_account_stores_per_block() * partition_index;
         let end_exclusive =
-            (begin + self.partition_rewards_stores_per_block()).min(stake_rewards.len() as u64);
+            (begin + self.partitioned_rewards_stake_account_stores_per_block()).min(stake_rewards.len() as u64);
         &stake_rewards[(begin as usize)..(end_exclusive as usize)]
     }
 
