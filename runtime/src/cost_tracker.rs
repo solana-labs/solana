@@ -169,7 +169,7 @@ impl CostTracker {
         );
     }
 
-    fn find_costliest_account(&self) -> (Pubkey, u64) {
+    pub fn find_costliest_account(&self) -> (Pubkey, u64) {
         self.cost_by_writable_accounts
             .iter()
             .max_by_key(|(_, &cost)| cost)

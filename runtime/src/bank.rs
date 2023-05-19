@@ -4451,6 +4451,113 @@ impl Bank {
         loaded_programs_for_txs
     }
 
+    // ledger-tool print:
+    // tx_sig, calculated_fee, is_vote, compute_budget_ix_count,
+    // non_compute_budget_instruction_count, set_cu_limit?, set_cu_price?, use_deprecated_ix?, cu_limit_used,
+    // cu_price_used, num_signatures,
+    // slot, block_cost, costliest_account_cost, costliest_account_key
+    // WHERE:
+    // cu_limit_used * cu_price_used => priority fee
+    // num_signatures * 5_000 => signature_fee
+    fn ledger_tool_print_fee_detail(&self, tx: &SanitizedTransaction) {
+        use {
+            solana_program_runtime::compute_budget::MAX_COMPUTE_UNIT_LIMIT,
+            solana_sdk::{
+                borsh::try_from_slice_unchecked,
+                compute_budget::{self, ComputeBudgetInstruction},
+            },
+        };
+
+        let mut requested_cu_limit = None;
+        let mut set_cu_price = None;
+        let mut non_cb_ix_count: usize = 0;
+        let mut cb_ix_count: usize = 0;
+        let mut deprecated_request_units_count: usize = 0;
+
+        let fee = if let Some(lamports_per_signature) =
+            self.get_lamports_per_signature_for_blockhash(tx.message().recent_blockhash())
+        {
+            Self::calculate_fee(
+                tx.message(),
+                lamports_per_signature,
+                &self.fee_structure,
+                self.feature_set
+                    .is_active(&use_default_units_in_fee_calculation::id()),
+                !self
+                    .feature_set
+                    .is_active(&remove_deprecated_request_unit_ix::id()),
+                self.feature_set
+                    .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+                self.enable_request_heap_frame_ix(),
+                self.feature_set
+                    .is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
+                self.feature_set
+                    .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+            )
+        } else {
+            return; // (Err(TransactionError::BlockhashNotFound), None);
+        };
+
+        // get cost tracker stats
+        let (block_cost, costliest_account) = {
+            let cost_tracker = self.read_cost_tracker().unwrap();
+            (
+                cost_tracker.block_cost(),
+                cost_tracker.find_costliest_account(),
+            )
+        };
+
+        for (program_id, ix) in tx.message().program_instructions_iter() {
+            if compute_budget::check_id(program_id) {
+                cb_ix_count += 1;
+                match try_from_slice_unchecked(&ix.data) {
+                    Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
+                        units: compute_unit_limit,
+                        additional_fee,
+                    }) => {
+                        deprecated_request_units_count += 1;
+
+                        requested_cu_limit = Some(compute_unit_limit);
+                        set_cu_price = Some(
+                            ((additional_fee as u128) * 1_000_000 / (compute_unit_limit as u128))
+                                as u64,
+                        );
+                    }
+                    Ok(ComputeBudgetInstruction::SetComputeUnitLimit(compute_unit_limit)) => {
+                        requested_cu_limit = Some(compute_unit_limit);
+                    }
+                    Ok(ComputeBudgetInstruction::SetComputeUnitPrice(micro_lamports)) => {
+                        set_cu_price = Some(micro_lamports);
+                    }
+                    _ => (),
+                }
+            } else {
+                non_cb_ix_count += 1;
+            }
+        }
+
+        let num_signatures = u64::from(tx.message().header().num_required_signatures);
+
+        println!("==== {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, ",
+                 tx.signature(),
+                 fee,
+                 tx.is_simple_vote_transaction(),
+                 cb_ix_count,
+                 non_cb_ix_count,
+                 requested_cu_limit.is_some(),
+                 set_cu_price.is_some(),
+                 deprecated_request_units_count,
+                 // mnb has not yet enabled default_units_per_instruction, the default would be MAX_COMPUTE_UNIT_LIMIT
+                 requested_cu_limit.unwrap_or(MAX_COMPUTE_UNIT_LIMIT),
+                 set_cu_price.unwrap_or(0),
+                 num_signatures,
+                 self.slot(),
+                 block_cost,
+                 costliest_account.1,
+                 costliest_account.0,
+                 );
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -4465,6 +4572,7 @@ impl Bank {
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
+
         let mut error_counters = TransactionErrorMetrics::default();
 
         let retryable_transaction_indexes: Vec<_> = batch
@@ -4625,12 +4733,29 @@ impl Bank {
                         }
                     }
 
+                    // ledger-tool print, mimicing leader cost tracking during replay,
+                    // allows to block/account cost with submitted priority fee.
+                    match result.details() {
+                        Some(details) => {
+                            let mut tx_cost =
+                                crate::cost_model::CostModel::calculate_cost(tx, &self.feature_set);
+                            tx_cost.bpf_execution_cost = details.executed_units;
+                            let _ = self.write_cost_tracker().unwrap().try_add(&tx_cost);
+                        }
+                        _ => (),
+                    };
+
                     result
                 }
             })
             .collect();
 
         execution_time.stop();
+
+        // ledger-tool print replayed transaction's fee and priority distribution
+        sanitized_txs.iter().for_each(|tx| {
+            self.ledger_tool_print_fee_detail(tx);
+        });
 
         const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
         self.loaded_programs_cache
