@@ -1491,9 +1491,18 @@ impl Bank {
         self.activate_feature(&enable_partitioned_epoch_reward::id())
     }
 
+    fn partitioned_epoch_rewards_config(&self) -> &PartitionedEpochRewardsConfig {
+        &self
+            .rc
+            .accounts
+            .accounts_db
+            .partitioned_epoch_rewards_config
+    }
+
     /// # stake accounts to store in one block during partitioned reward interval
     fn partition_rewards_stores_per_block(&self) -> u64 {
-        PartitionedEpochRewardsConfig::default().stake_account_stores_per_block
+        self.partitioned_epoch_rewards_config()
+            .stake_account_stores_per_block
     }
 
     /// Calculate the number of blocks required to store rewards in all accounts.
@@ -1526,7 +1535,8 @@ impl Bank {
     /// reward calculation happens synchronously during the first block of the epoch boundary.
     /// So, # blocks for reward calculation is 1.
     fn reward_calculation_num_blocks(&self) -> Slot {
-        PartitionedEpochRewardsConfig::default().reward_calculation_num_blocks
+        self.partitioned_epoch_rewards_config()
+            .reward_calculation_num_blocks
     }
 
     /// Return the total number of blocks in reward interval (including both calculation and crediting).
@@ -3246,7 +3256,10 @@ impl Bank {
                 metrics,
             );
 
-            if PartitionedEpochRewardsConfig::default().test_compare_partitioned_epoch_rewards {
+            if self
+                .partitioned_epoch_rewards_config()
+                .test_compare_partitioned_epoch_rewards
+            {
                 self.compare_with_partitioned_rewards(
                     &stake_rewards,
                     &vote_account_rewards,
@@ -3963,6 +3976,9 @@ impl Bank {
     /// This means the feature is activated or certain testing situations.
     fn partitioned_rewards_code_enabled(&self) -> bool {
         self.partitioned_rewards_feature_enabled()
+            || self
+                .partitioned_epoch_rewards_config()
+                .test_enable_partitioned_rewards
     }
 
     /// Create EpochRewards syavar with calculated rewards
