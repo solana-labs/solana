@@ -477,7 +477,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: true,
     create_ancient_storage: CreateAncientStorage::Pack,
-    test_partitioned_epoch_rewards: true,
+    test_compare_partitioned_epoch_rewards: true,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -489,7 +489,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: false,
     create_ancient_storage: CreateAncientStorage::Pack,
-    test_partitioned_epoch_rewards: true,
+    test_compare_partitioned_epoch_rewards: true,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -554,7 +554,7 @@ pub struct AccountsDbConfig {
     /// how to create ancient storages
     pub create_ancient_storage: CreateAncientStorage,
     /// if true, end of epoch bank rewards will test the partitioned rewards distribution code
-    pub test_partitioned_epoch_rewards: bool,
+    pub test_compare_partitioned_epoch_rewards: bool,
 }
 
 #[cfg(not(test))]
@@ -1501,7 +1501,7 @@ pub struct AccountsDb {
     exhaustively_verify_refcounts: bool,
 
     /// if true, end of epoch bank rewards will test the partitioned rewards distribution code
-    pub(crate) test_partitioned_epoch_rewards: bool,
+    pub(crate) test_compare_partitioned_epoch_rewards: bool,
 
     /// the full accounts hash calculation as of a predetermined block height 'N'
     /// to be included in the bank hash at a predetermined block height 'M'
@@ -2447,7 +2447,7 @@ impl AccountsDb {
             filler_account_suffix: None,
             log_dead_slots: AtomicBool::new(true),
             exhaustively_verify_refcounts: false,
-            test_partitioned_epoch_rewards: false,
+            test_compare_partitioned_epoch_rewards: false,
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
         }
     }
@@ -2522,9 +2522,9 @@ impl AccountsDb {
             .map(|config| config.create_ancient_storage)
             .unwrap_or(CreateAncientStorage::Append);
 
-        let test_partitioned_epoch_rewards = accounts_db_config
+        let test_compare_partitioned_epoch_rewards = accounts_db_config
             .as_ref()
-            .map(|config| config.test_partitioned_epoch_rewards)
+            .map(|config| config.test_compare_partitioned_epoch_rewards)
             .unwrap_or(true /* note this is hacked for testing atm */);
 
         let filler_account_suffix = if filler_accounts_config.count > 0 {
@@ -2548,7 +2548,7 @@ impl AccountsDb {
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
                 .and_then(|x| x.write_cache_limit_bytes),
-            test_partitioned_epoch_rewards,
+            test_compare_partitioned_epoch_rewards,
             exhaustively_verify_refcounts,
             ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
         };

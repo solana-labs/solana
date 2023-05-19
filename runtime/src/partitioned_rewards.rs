@@ -16,7 +16,7 @@ pub(crate) struct PartitionedEpochRewardsConfig {
     pub(crate) force_use_partitioned_rewards: bool,
     /// if true, end of epoch non-partitioned bank rewards will test the partitioned rewards distribution vote and stake accounts
     /// This has a significant performance impact on the first slot in each new epoch.
-    pub(crate) test_partitioned_epoch_rewards: bool,
+    pub(crate) test_compare_partitioned_epoch_rewards: bool,
 }
 
 impl Default for PartitionedEpochRewardsConfig {
@@ -31,7 +31,7 @@ impl Default for PartitionedEpochRewardsConfig {
             /// This constant affects consensus.
             stake_account_stores_per_block: 4096,
             force_use_partitioned_rewards: false,
-            test_partitioned_epoch_rewards: false,
+            test_compare_partitioned_epoch_rewards: false,
         }
     }
 }
