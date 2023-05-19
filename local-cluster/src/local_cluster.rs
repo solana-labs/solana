@@ -31,6 +31,7 @@ use {
         clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
+        feature_set,
         genesis_config::{ClusterType, GenesisConfig},
         message::Message,
         poh_config::PohConfig,
@@ -656,6 +657,16 @@ impl LocalCluster {
             == 0
         {
             // 1) Create vote account
+            // Unlike the bootstrap validator we have to check if the new vote state is being used
+            // as the cluster is already running, and using the wrong account size will cause the
+            // InitializeAccount tx to fail
+            let use_current_vote_state = client
+                .poll_get_balance_with_commitment(
+                    &feature_set::vote_state_add_vote_latency::id(),
+                    CommitmentConfig::processed(),
+                )
+                .unwrap_or(0)
+                > 0;
 
             let instructions = vote_instruction::create_account_with_config(
                 &from_account.pubkey(),
@@ -668,7 +679,8 @@ impl LocalCluster {
                 },
                 amount,
                 vote_instruction::CreateVoteAccountConfig {
-                    space: vote_state::VoteStateVersions::vote_state_size_of(true) as u64,
+                    space: vote_state::VoteStateVersions::vote_state_size_of(use_current_vote_state)
+                        as u64,
                     ..vote_instruction::CreateVoteAccountConfig::default()
                 },
             );
