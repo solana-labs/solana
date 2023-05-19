@@ -1938,7 +1938,7 @@ impl Bank {
         if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
             if account.lamports() > 0 {
                 warn!(
-                    "burn {} extra lamports in EpochRewards sysvar account at slot {}",
+                    "burning {} extra lamports in EpochRewards sysvar account at slot {}",
                     account.lamports(),
                     self.slot()
                 );
