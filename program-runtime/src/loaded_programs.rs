@@ -470,13 +470,11 @@ impl LoadedPrograms {
                 .rev()
                 .filter(|entry| {
                     let relation = fork_graph.relationship(entry.deployment_slot, new_root);
-                    if matches!(entry.program, LoadedProgramType::Builtin(_)) {
-                        true
-                    } else if entry.deployment_slot >= new_root {
+                    if entry.deployment_slot >= new_root {
                         matches!(relation, BlockRelation::Equal | BlockRelation::Descendant)
                     } else if !first_ancestor_found
                         && (matches!(relation, BlockRelation::Ancestor)
-                            || entry.deployment_slot < previous_root)
+                            || entry.deployment_slot <= previous_root)
                     {
                         first_ancestor_found = true;
                         first_ancestor_found
