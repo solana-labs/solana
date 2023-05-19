@@ -1814,7 +1814,11 @@ impl Bank {
         // After saving a snapshot of stakes, apply stake rewards and commission
         let (_, update_rewards_with_thread_pool_time) = measure!(
             {
-                if self.partitioned_rewards_feature_enabled() {
+                if self.partitioned_rewards_feature_enabled()
+                    || self
+                        .partitioned_epoch_rewards_config()
+                        .test_enable_partitioned_rewards
+                {
                     self.begin_partitioned_rewards(
                         parent_epoch,
                         reward_calc_tracer,
