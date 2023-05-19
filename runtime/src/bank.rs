@@ -3218,11 +3218,11 @@ impl Bank {
     }
 
     /// Load, calculate and payout epoch rewards for stake and vote accounts
-    fn pay_validator_rewards_with_thread_pool<T: RewardCalcTracer>(
+    fn pay_validator_rewards_with_thread_pool(
         &mut self,
         rewarded_epoch: Epoch,
         rewards: u64,
-        reward_calc_tracer: Option<T>,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
         credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
@@ -3260,12 +3260,16 @@ impl Bank {
                 .partitioned_epoch_rewards_config()
                 .test_compare_partitioned_epoch_rewards
             {
-                self.compare_with_partitioned_rewards(
+                // immutable `self` to avoid side effects
+                let me: &Bank = self;
+                // we need the type, but we want a None value to avoid any possible side effects
+                let none_reward_calc_tracer = reward_calc_tracer.filter(|_| false);
+                me.compare_with_partitioned_rewards(
                     &stake_rewards,
                     &vote_account_rewards,
                     rewarded_epoch,
                     thread_pool,
-                    reward_calc_tracer.as_ref(),
+                    none_reward_calc_tracer,
                 );
             }
 
@@ -3278,17 +3282,18 @@ impl Bank {
     /// compare the vote and stake accounts between the normal rewards calculation code
     /// and the partitioned rewards calculation code
     /// `stake_rewards_expected` and `vote_rewards_expected` are the results of the normal rewards calculation code
-    fn compare_with_partitioned_rewards<T: RewardCalcTracer>(
+    /// This fn should have NO side effects.
+    fn compare_with_partitioned_rewards(
         &self,
         stake_rewards_expected: &[StakeReward],
         vote_rewards_expected: &DashMap<Pubkey, VoteReward>,
         rewarded_epoch: Epoch,
         thread_pool: &ThreadPool,
-        _reward_calc_tracer: Option<T>,
+        reward_calc_tracer: Option<impl RewardCalcTracer>,
     ) {
         let partitioned_rewards = self.calculate_rewards_for_partitioning(
             rewarded_epoch,
-            None::<T>,
+            reward_calc_tracer,
             thread_pool,
             &mut RewardsMetrics::default(),
         );
