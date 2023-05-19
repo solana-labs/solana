@@ -22,7 +22,7 @@ solana-version = { workspace = true }
 tiny-bip39 = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.5.0"
+tempfile = { workspace = true }
 
 [[bin]]
 name = "solana-keygen"
