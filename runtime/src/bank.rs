@@ -1494,10 +1494,13 @@ impl Bank {
     /// So, # blocks for reward calculation is 1.
     const REWARD_CALCULATION_NUM_BLOCKS: u64 = 1;
 
-    /// Target to store 64 rewards per entry/tick in a block. A block has a minimal of 64
-    /// entries/ticks. This gives 4096 total rewards to store in one block.
-    /// This constant affects consensus.
-    const PARTITION_REWARDS_STORES_PER_BLOCK: u64 = 4096;
+    /// # stake accounts to store in one block during partitioned reward interval
+    fn partition_rewards_stores_per_block(&self) -> u64 {
+        // Target to store 64 rewards per entry/tick in a block. A block has a minimum of 64
+        // entries/tick. This gives 4096 total rewards to store in one block.
+        // This constant affects consensus.
+        4096
+    }
 
     /// Calculate the number of blocks required to store rewards in all accounts.
     fn get_reward_credit_num_blocks(&self) -> u64 {
@@ -1511,7 +1514,7 @@ impl Bank {
             {
                 crate::accounts_hash::AccountsHasher::div_ceil(
                     stake_rewards.len(),
-                    Self::PARTITION_REWARDS_STORES_PER_BLOCK as usize,
+                    self.partition_rewards_stores_per_block() as usize,
                 ) as u64
             } else {
                 // To be consistent to the meaning of `num_chunks`. When stake_rewards is none. num_chunks = 0
@@ -3760,9 +3763,9 @@ impl Bank {
         stake_rewards: &'a [StakeReward],
     ) -> &'a [StakeReward] {
         assert!(partition_index < self.get_reward_credit_num_blocks());
-        let begin = Self::PARTITION_REWARDS_STORES_PER_BLOCK * partition_index;
+        let begin = self.partition_rewards_stores_per_block() * partition_index;
         let end_exclusive =
-            (begin + Self::PARTITION_REWARDS_STORES_PER_BLOCK).min(stake_rewards.len() as u64);
+            (begin + self.partition_rewards_stores_per_block()).min(stake_rewards.len() as u64);
         &stake_rewards[(begin as usize)..(end_exclusive as usize)]
     }
 
