@@ -13,7 +13,8 @@ extern crate test;
 use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_bpf_loader_program::{
-        create_vm, serialization::serialize_parameters, syscalls::create_loader,
+        create_vm, serialization::serialize_parameters,
+        syscalls::create_program_runtime_environment,
     },
     solana_measure::measure::Measure,
     solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
@@ -89,16 +90,19 @@ macro_rules! with_mock_invoke_context {
 fn bench_program_create_executable(bencher: &mut Bencher) {
     let elf = load_program_from_file("bench_alu");
 
-    let loader = create_loader(
+    let program_runtime_environment = create_program_runtime_environment(
         &FeatureSet::default(),
         &ComputeBudget::default(),
         true,
         false,
-    )
-    .unwrap();
+    );
+    let program_runtime_environment = Arc::new(program_runtime_environment.unwrap());
     bencher.iter(|| {
-        let _ =
-            Executable::<TautologyVerifier, InvokeContext>::from_elf(&elf, loader.clone()).unwrap();
+        let _ = Executable::<TautologyVerifier, InvokeContext>::from_elf(
+            &elf,
+            program_runtime_environment.clone(),
+        )
+        .unwrap();
     });
 }
 
@@ -114,15 +118,17 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let elf = load_program_from_file("bench_alu");
     with_mock_invoke_context!(invoke_context, bpf_loader::id(), 10000001);
 
-    let loader = create_loader(
+    let program_runtime_environment = create_program_runtime_environment(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
         false,
+    );
+    let executable = Executable::<TautologyVerifier, InvokeContext>::from_elf(
+        &elf,
+        Arc::new(program_runtime_environment.unwrap()),
     )
     .unwrap();
-    let executable =
-        Executable::<TautologyVerifier, InvokeContext>::from_elf(&elf, loader).unwrap();
 
     let mut verified_executable =
         Executable::<RequisiteVerifier, InvokeContext>::verified(executable).unwrap();
@@ -231,15 +237,17 @@ fn bench_create_vm(bencher: &mut Bencher) {
     let direct_mapping = invoke_context
         .feature_set
         .is_active(&bpf_account_data_direct_mapping::id());
-    let loader = create_loader(
+    let program_runtime_environment = create_program_runtime_environment(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
         false,
+    );
+    let executable = Executable::<TautologyVerifier, InvokeContext>::from_elf(
+        &elf,
+        Arc::new(program_runtime_environment.unwrap()),
     )
     .unwrap();
-    let executable =
-        Executable::<TautologyVerifier, InvokeContext>::from_elf(&elf, loader).unwrap();
 
     let verified_executable =
         Executable::<RequisiteVerifier, InvokeContext>::verified(executable).unwrap();
@@ -291,15 +299,17 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     )
     .unwrap();
 
-    let loader = create_loader(
+    let program_runtime_environment = create_program_runtime_environment(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
         false,
+    );
+    let executable = Executable::<TautologyVerifier, InvokeContext>::from_elf(
+        &elf,
+        Arc::new(program_runtime_environment.unwrap()),
     )
     .unwrap();
-    let executable =
-        Executable::<TautologyVerifier, InvokeContext>::from_elf(&elf, loader).unwrap();
 
     let verified_executable =
         Executable::<RequisiteVerifier, InvokeContext>::verified(executable).unwrap();

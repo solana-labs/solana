@@ -204,7 +204,7 @@ impl LoadedProgram {
     /// Creates a new user program
     pub fn new(
         loader_key: &Pubkey,
-        loader: Arc<BuiltInProgram<InvokeContext<'static>>>,
+        program_runtime_environment: Arc<BuiltInProgram<InvokeContext<'static>>>,
         deployment_slot: Slot,
         effective_slot: Slot,
         maybe_expiration_slot: Option<Slot>,
@@ -213,7 +213,7 @@ impl LoadedProgram {
         metrics: &mut LoadProgramMetrics,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut load_elf_time = Measure::start("load_elf_time");
-        let executable = Executable::load(elf_bytes, loader.clone())?;
+        let executable = Executable::load(elf_bytes, program_runtime_environment.clone())?;
         load_elf_time.stop();
         metrics.load_elf_us = load_elf_time.as_us();
 
@@ -337,7 +337,8 @@ pub struct LoadedPrograms {
     ///
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
-
+    /// Globally shared RBPF config and syscall registry
+    pub program_runtime_environment_v1: Arc<BuiltInProgram<InvokeContext<'static>>>,
     latest_root: Slot,
     pub stats: Stats,
 }

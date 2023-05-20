@@ -89,6 +89,7 @@ use {
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
     },
+    solana_bpf_loader_program::syscalls::create_program_runtime_environment,
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
     solana_program_runtime::{
@@ -4117,11 +4118,7 @@ impl Bank {
         }
     }
 
-    pub fn load_program(
-        &self,
-        pubkey: &Pubkey,
-        debugging_features: bool,
-    ) -> Result<Arc<LoadedProgram>> {
+    pub fn load_program(&self, pubkey: &Pubkey) -> Result<Arc<LoadedProgram>> {
         let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
             program
         } else {
@@ -4174,13 +4171,18 @@ impl Bank {
         } else {
             None
         };
+        let program_runtime_environment_v1 = self
+            .loaded_programs_cache
+            .read()
+            .unwrap()
+            .program_runtime_environment_v1
+            .clone();
         solana_bpf_loader_program::load_program_from_account(
             &self.feature_set,
-            &self.runtime_config.compute_budget.unwrap_or_default(),
             None, // log_collector
             &program,
             programdata.as_ref().unwrap_or(&program),
-            debugging_features,
+            program_runtime_environment_v1,
         )
         .map(|(loaded_program, metrics)| {
             let mut timings = ExecuteDetailsTimings::default();
@@ -4428,7 +4430,7 @@ impl Bank {
         let missing_programs: Vec<(Pubkey, Arc<LoadedProgram>)> = missing_programs
             .iter()
             .map(|key| {
-                let program = self.load_program(key, false).unwrap_or_else(|err| {
+                let program = self.load_program(key).unwrap_or_else(|err| {
                     // Create a tombstone for the program in the cache
                     debug!("Failed to load program {}, error {:?}", key, err);
                     Arc::new(LoadedProgram::new_tombstone(
@@ -4525,9 +4527,6 @@ impl Bank {
             &program_owners_refs,
             &self.blockhash_queue.read().unwrap(),
         );
-        for precompile in get_precompiles() {
-            program_accounts_map.remove(&precompile.program_id);
-        }
         let native_loader = native_loader::id();
         for builtin_program in self.builtin_programs.iter() {
             program_accounts_map.insert(*builtin_program, &native_loader);
@@ -6265,7 +6264,23 @@ impl Bank {
         self.rewards_pool_pubkeys =
             Arc::new(genesis_config.rewards_pools.keys().cloned().collect());
 
+        self.apply_feature_activations(
+            ApplyFeatureActivationsCaller::FinishInit,
+            debug_do_not_add_builtins,
+        );
+
         if !debug_do_not_add_builtins {
+            let program_runtime_environment_v1 = create_program_runtime_environment(
+                &self.feature_set,
+                &self.runtime_config.compute_budget.unwrap_or_default(),
+                false, /* deployment */
+                false, /* debugging_features */
+            )
+            .unwrap();
+            self.loaded_programs_cache
+                .write()
+                .unwrap()
+                .program_runtime_environment_v1 = Arc::new(program_runtime_environment_v1);
             for builtin in BUILTINS
                 .iter()
                 .chain(additional_builtins.unwrap_or(&[]).iter())
@@ -6284,11 +6299,6 @@ impl Bank {
                 }
             }
         }
-
-        self.apply_feature_activations(
-            ApplyFeatureActivationsCaller::FinishInit,
-            debug_do_not_add_builtins,
-        );
 
         if self
             .feature_set
