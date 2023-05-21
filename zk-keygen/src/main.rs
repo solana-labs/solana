@@ -8,6 +8,7 @@ use {
             mnemonic::{acquire_language, acquire_passphrase_and_message, WORD_COUNT_ARG},
             no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
         },
+        keypair::{elgamal_keypair_from_path, SKIP_SEED_PHRASE_VALIDATION_ARG},
         DisplayError,
     },
     solana_sdk::signer::{EncodableKey, SeedDerivable},
@@ -70,6 +71,46 @@ fn app(crate_version: &str) -> Command {
                 .key_generation_common_args()
                 .arg(no_outfile_arg().conflicts_with_all(&["outfile", "silent"]))
         )
+        .subcommand(
+            Command::new("pubkey")
+                .about("Display the pubkey from a keypair file")
+                .disable_version_flag(true)
+                .arg(
+                    Arg::new("keypair")
+                        .index(1)
+                        .value_name("KEYPAIR")
+                        .takes_value(true)
+                        .help("Filepath or URL to a keypair"),
+                )
+                .arg(
+                    Arg::new(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                        .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
+                        .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
+                )
+                .arg(
+                    Arg::new("type")
+                        .long("type")
+                        .takes_value(true)
+                        .possible_values(["elgamal"])
+                        .value_name("TYPE")
+                        .required(true)
+                        .help("The type of keypair")
+                )
+                .arg(
+                    Arg::new("outfile")
+                        .short('o')
+                        .long("outfile")
+                        .value_name("FILEPATH")
+                        .takes_value(true)
+                        .help("Path to generated file"),
+                )
+                .arg(
+                    Arg::new("force")
+                        .short('f')
+                        .long("force")
+                        .help("Overwrite the output file if it exists"),
+                )
+        )
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -83,11 +124,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     let subcommand = matches.subcommand().unwrap();
     match subcommand {
         ("new", matches) => {
-            let key_type = match matches.value_of("type").unwrap() {
-                "elgamal" => KeyType::ElGamal,
-                "aes128" => KeyType::Aes128,
-                _ => unreachable!(),
-            };
+            let key_type = KeyType::get_key_type(matches);
 
             let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
@@ -158,6 +195,35 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 }
             }
         }
+        ("pubkey", matches) => {
+            let key_type = KeyType::get_key_type(matches);
+
+            let mut path = dirs_next::home_dir().expect("home directory");
+            let path = if matches.is_present("keypair") {
+                matches.value_of("keypair").unwrap()
+            } else {
+                path.extend([".config", "solana", key_type.default_file_name()]);
+                path.to_str().unwrap()
+            };
+
+            // wrap the logic inside a match statement in case more keys are supported in the
+            // future
+            match key_type {
+                KeyType::ElGamal => {
+                    let elgamal_pubkey =
+                        elgamal_keypair_from_path(matches, path, "pubkey recovery", false)?.public;
+
+                    if matches.is_present("outfile") {
+                        let outfile = matches.value_of("outfile").unwrap();
+                        check_for_overwrite(outfile, matches)?;
+                        elgamal_pubkey.write_to_file(outfile)?;
+                    } else {
+                        println!("{elgamal_pubkey}");
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
         _ => unreachable!(),
     }
 
@@ -174,6 +240,14 @@ impl KeyType {
         match self {
             KeyType::ElGamal => "elgamal.json",
             KeyType::Aes128 => "aes128.json",
+        }
+    }
+
+    fn get_key_type(matches: &ArgMatches) -> Self {
+        match matches.value_of("type").unwrap() {
+            "elgamal" => Self::ElGamal,
+            "aes128" => Self::Aes128,
+            _ => unreachable!(),
         }
     }
 }
