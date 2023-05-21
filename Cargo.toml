@@ -102,6 +102,7 @@ members = [
     "validator",
     "version",
     "watchtower",
+    "zk-keygen",
     "zk-token-sdk",
 ]
 
@@ -356,6 +357,7 @@ solana-transaction-status = { path = "transaction-status", version = "=1.16.0" }
 solana-udp-client = { path = "udp-client", version = "=1.16.0" }
 solana-version = { path = "version", version = "=1.16.0" }
 solana-vote-program = { path = "programs/vote", version = "=1.16.0" }
+solana-zk-keygen = { path = "zk-keygen", version = "=1.16.0" }
 solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=1.16.0" }
 solana-zk-token-sdk = { path = "zk-token-sdk", version = "=1.16.0" }
 spl-associated-token-account = "=1.1.3"

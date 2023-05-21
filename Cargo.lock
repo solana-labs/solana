@@ -7062,6 +7062,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-zk-keygen"
+version = "1.16.0"
+dependencies = [
+ "bs58",
+ "clap 3.2.23",
+ "dirs-next",
+ "num_cpus",
+ "solana-clap-v3-utils",
+ "solana-cli-config",
+ "solana-remote-wallet",
+ "solana-sdk 1.16.0",
+ "solana-version",
+ "solana-zk-token-sdk 1.16.0",
+ "tempfile",
+ "tiny-bip39",
+]
+
+[[package]]
 name = "solana-zk-token-proof-program"
 version = "1.16.0"
 dependencies = [
