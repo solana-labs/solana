@@ -347,6 +347,7 @@ mod tests {
     use {
         super::*,
         solana_sdk::pubkey::Pubkey,
+        solana_zk_token_sdk::encryption::elgamal::ElGamalPubkey,
         tempfile::{tempdir, TempDir},
     };
 
@@ -459,5 +460,51 @@ mod tests {
             "--no-outfile",
         ])
         .unwrap();
+    }
+
+    #[test]
+    fn test_pubkey() {
+        let keypair_out_dir = tempdir().unwrap();
+        // use `Pubkey::new_unique()` to generate names for temporary key files
+        let keypair_path = tmp_outfile_path(&keypair_out_dir, &Pubkey::new_unique().to_string());
+
+        let keypair = ElGamalKeypair::new_rand();
+        keypair.write_to_file(&keypair_path).unwrap();
+
+        let expected_elgamal_pubkey = keypair.public;
+
+        // success case using a keypair file
+        let outfile_dir = tempdir().unwrap();
+        let outfile_path = tmp_outfile_path(&outfile_dir, &Pubkey::new_unique().to_string());
+
+        process_test_command(&[
+            "solana-keygen",
+            "pubkey",
+            &keypair_path,
+            "--type",
+            "elgamal",
+            "--outfile",
+            &outfile_path,
+        ])
+        .unwrap();
+
+        let result_pubkey = ElGamalPubkey::read_from_file(outfile_path.clone()).unwrap();
+        assert_eq!(result_pubkey, expected_elgamal_pubkey);
+
+        // refuse to overwrite file
+        let result = process_test_command(&[
+            "solana-keygen",
+            "pubkey",
+            &keypair_path,
+            "--type",
+            "elgamal",
+            "--outfile",
+            &outfile_path,
+        ])
+        .unwrap_err()
+        .to_string();
+
+        let expected = format!("Refusing to overwrite {outfile_path} without --force flag");
+        assert_eq!(result, expected);
     }
 }
