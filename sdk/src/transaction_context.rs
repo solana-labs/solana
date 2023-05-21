@@ -393,7 +393,7 @@ impl TransactionContext {
                         }
                         self.instruction_accounts_lamport_sum(instruction_context)
                             .map(|instruction_accounts_lamport_sum| {
-                                instruction_context.instruction_accounts_lamport_sum
+                                instruction_context.get_instruction_accounts_lamport_sum()
                                     != instruction_accounts_lamport_sum
                             })
                     })
