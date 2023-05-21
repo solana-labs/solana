@@ -10,7 +10,7 @@ use {
         },
         DisplayError,
     },
-    solana_sdk::signer::EncodableKey,
+    solana_sdk::signer::{EncodableKey, SeedDerivable},
     solana_zk_token_sdk::encryption::{auth_encryption::AeKey, elgamal::ElGamalKeypair},
     std::error,
 };
