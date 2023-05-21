@@ -110,7 +110,6 @@ fn app(crate_version: &str) -> Command {
                 )
                 .arg(
                     Arg::new("force")
-                        .short('f')
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
