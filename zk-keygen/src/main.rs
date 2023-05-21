@@ -3,12 +3,16 @@ use {
     clap::{crate_description, crate_name, Arg, ArgMatches, Command},
     solana_clap_v3_utils::{
         input_parsers::STDOUT_OUTFILE_TOKEN,
+        input_validators::is_prompt_signer_source,
         keygen::{
             check_for_overwrite,
             mnemonic::{acquire_language, acquire_passphrase_and_message, WORD_COUNT_ARG},
             no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
         },
-        keypair::{elgamal_keypair_from_path, SKIP_SEED_PHRASE_VALIDATION_ARG},
+        keypair::{
+            ae_key_from_path, ae_key_from_seed_phrase, elgamal_keypair_from_path,
+            elgamal_keypair_from_seed_phrase, SKIP_SEED_PHRASE_VALIDATION_ARG,
+        },
         DisplayError,
     },
     solana_sdk::signer::{EncodableKey, SeedDerivable},
@@ -110,6 +114,46 @@ fn app(crate_version: &str) -> Command {
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
+        )
+        .subcommand(
+            Command::new("recover")
+                .about("Recover keypair from seed phrase and optional BIP39 passphrase")
+                .disable_version_flag(true)
+                .arg(
+                    Arg::new("prompt_signer")
+                        .index(1)
+                        .value_name("KEYPAIR")
+                        .takes_value(true)
+                        .validator(is_prompt_signer_source)
+                        .help("`prompt:` URI scheme or `ASK` keyword"),
+                )
+                .arg(
+                    Arg::new("type")
+                        .long("type")
+                        .takes_value(true)
+                        .possible_values(["elgamal", "aes128"])
+                        .value_name("TYPE")
+                        .required(true)
+                        .help("The type of keypair")
+                )
+                .arg(
+                    Arg::new("outfile")
+                        .short('o')
+                        .long("outfile")
+                        .value_name("FILEPATH")
+                        .takes_value(true)
+                        .help("Path to generated file"),
+                )
+                .arg(
+                    Arg::new("force")
+                        .long("force")
+                        .help("Overwrite the output file if it exists"),
+                )
+                .arg(
+                    Arg::new(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                        .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
+                        .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
+                ),
         )
 }
 
@@ -222,6 +266,52 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                     }
                 }
                 _ => unreachable!(),
+            }
+        }
+        ("recover", matches) => {
+            let key_type = KeyType::get_key_type(matches);
+
+            let mut path = dirs_next::home_dir().expect("home directory");
+            let outfile = if matches.is_present("outfile") {
+                matches.value_of("outfile").unwrap()
+            } else {
+                path.extend([".config", "solana", key_type.default_file_name()]);
+                path.to_str().unwrap()
+            };
+
+            if outfile != STDOUT_OUTFILE_TOKEN {
+                check_for_overwrite(outfile, matches)?;
+            }
+
+            match key_type {
+                KeyType::ElGamal => {
+                    let keypair_name = "recover";
+                    let keypair = if let Some(path) = matches.value_of("prompt_signer") {
+                        elgamal_keypair_from_path(matches, path, keypair_name, true)?
+                    } else {
+                        let skip_validation =
+                            matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                        elgamal_keypair_from_seed_phrase(
+                            keypair_name,
+                            skip_validation,
+                            true,
+                            None,
+                            true,
+                        )?
+                    };
+                    output_encodable_key(&keypair, outfile, "recovered ElGamal keypair")?;
+                }
+                KeyType::Aes128 => {
+                    let key_name = "recover";
+                    let key = if let Some(path) = matches.value_of("prompt_signer") {
+                        ae_key_from_path(matches, path, key_name)?
+                    } else {
+                        let skip_validation =
+                            matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                        ae_key_from_seed_phrase(key_name, skip_validation, None, true)?
+                    };
+                    output_encodable_key(&key, outfile, "recovered AES128 key")?;
+                }
             }
         }
         _ => unreachable!(),
