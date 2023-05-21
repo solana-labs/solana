@@ -7072,9 +7072,9 @@ dependencies = [
  "solana-clap-v3-utils",
  "solana-cli-config",
  "solana-remote-wallet",
- "solana-sdk 1.16.0",
+ "solana-sdk",
  "solana-version",
- "solana-zk-token-sdk 1.16.0",
+ "solana-zk-token-sdk",
  "tempfile",
  "tiny-bip39",
 ]
