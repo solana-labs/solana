@@ -1248,7 +1248,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("partitioned-epoch-rewards-compare_calculation")
                 .takes_value(false)
                 .help("Do normal epoch rewards distribution, but also calculate rewards using the partitioned rewards code path and compare the resulting vote and stake accounts")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
         )
         .arg(
             Arg::with_name("partitioned-epoch-rewards-force-enable-single-slot")
@@ -1256,7 +1256,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(false)
                 .help("Force the partitioned rewards distribution, but distribute all rewards in the first slot in the epoch. This should match consensus with the normal rewards distribution.")
                 .conflicts_with("partitioned-epoch-rewards-compare_calculation")
-                .hidden(true)
+                .hidden(hidden_unless_forced())
         )
         .arg(
             Arg::with_name("accounts_index_path")
