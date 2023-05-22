@@ -3177,6 +3177,7 @@ impl Bank {
         }
     }
 
+    /// Sort and shuffle rewards for partitioned distribution
     fn sort_and_shuffle_partitioned_rewards(
         stake_rewards: &mut StakeRewards,
         rewarded_epoch: Epoch,
@@ -3993,6 +3994,7 @@ impl Bank {
                 .test_enable_partitioned_rewards
     }
 
+    /// Helper fn to log epoch_rewards sysvar
     fn log_epoch_reward_sysvar(&self, prefix: &str) {
         if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
             let epoch_rewards: sysvar::epoch_rewards::EpochRewards =
