@@ -9,7 +9,7 @@ use {
     crossbeam_channel::Receiver,
     log::*,
     solana_rpc::{
-        optimistically_confirmed_bank_tracker::BankNotification,
+        optimistically_confirmed_bank_tracker::SlotNotification,
         transaction_notifier_interface::TransactionNotifierLock,
     },
     solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -68,7 +68,7 @@ impl GeyserPluginService {
     ///    It is usually used to configure the connection information for the external data store.
 
     pub fn new(
-        confirmed_bank_receiver: Receiver<BankNotification>,
+        confirmed_bank_receiver: Receiver<SlotNotification>,
         geyser_plugin_config_files: &[PathBuf],
     ) -> Result<Self, GeyserPluginServiceError> {
         info!(

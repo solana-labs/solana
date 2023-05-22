@@ -57,7 +57,8 @@ use {
     solana_rpc::{
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::{
-            OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
+            BankNotificationSenderConfig, OptimisticallyConfirmedBank,
+            OptimisticallyConfirmedBankTracker,
         },
         rpc::JsonRpcConfig,
         rpc_completed_slots_service::RpcCompletedSlotsService,
@@ -879,7 +880,10 @@ impl Validator {
                     rpc_subscriptions.clone(),
                     confirmed_bank_subscribers,
                 )),
-                Some(bank_notification_sender),
+                Some(BankNotificationSenderConfig {
+                    sender: bank_notification_sender,
+                    should_send_parents: geyser_plugin_service.is_some(),
+                }),
             )
         } else {
             (None, None, None, None)
@@ -1063,7 +1067,7 @@ impl Validator {
             gossip_verified_vote_hash_sender,
             replay_vote_receiver,
             replay_vote_sender,
-            bank_notification_sender,
+            bank_notification_sender.map(|sender| sender.sender),
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
             &cost_model,
