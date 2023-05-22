@@ -55,7 +55,6 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
         slot_hashes::SlotHashes,
-        system_program,
         sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
@@ -224,19 +223,10 @@ impl Accounts {
         }
     }
 
-    fn construct_instructions_account(
-        message: &SanitizedMessage,
-        is_owned_by_sysvar: bool,
-    ) -> AccountSharedData {
-        let data = construct_instructions_data(&message.decompile_instructions());
-        let owner = if is_owned_by_sysvar {
-            sysvar::id()
-        } else {
-            system_program::id()
-        };
+    fn construct_instructions_account(message: &SanitizedMessage) -> AccountSharedData {
         AccountSharedData::from(Account {
-            data,
-            owner,
+            data: construct_instructions_data(&message.decompile_instructions()),
+            owner: sysvar::id(),
             ..Account::default()
         })
     }
@@ -382,11 +372,7 @@ impl Accounts {
                 let mut account_found = true;
                 #[allow(clippy::collapsible_else_if)]
                 let account = if solana_sdk::sysvar::instructions::check_id(key) {
-                    Self::construct_instructions_account(
-                        message,
-                        feature_set
-                            .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
-                    )
+                    Self::construct_instructions_account(message)
                 } else {
                     let instruction_account = u8::try_from(i)
                         .map(|i| instruction_accounts.contains(&&i))
