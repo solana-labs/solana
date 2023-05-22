@@ -1943,6 +1943,8 @@ impl Bank {
                     self.slot()
                 );
             }
+
+            self.log_epoch_reward_sysvar("burn");
             self.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
             self.clear_epoch_rewards_sysvar_cache();
         }
@@ -3991,6 +3993,19 @@ impl Bank {
                 .test_enable_partitioned_rewards
     }
 
+    fn log_epoch_reward_sysvar(&self, prefix: &str) {
+        if let Some(account) = self.get_account(&sysvar::epoch_rewards::id()) {
+            let epoch_rewards: sysvar::epoch_rewards::EpochRewards =
+                from_account(&account).unwrap();
+            info!(
+                "{prefix} epoch_rewards sysvar: {:?}",
+                (account.lamports(), epoch_rewards)
+            );
+        } else {
+            info!("{prefix} epoch_rewards sysvar: none");
+        }
+    }
+
     /// Create EpochRewards syavar with calculated rewards
     fn create_epoch_rewards_sysvar(
         &self,
@@ -4017,6 +4032,8 @@ impl Bank {
         });
 
         self.fill_missing_sysvar_cache_entries();
+
+        self.log_epoch_reward_sysvar("create");
     }
 
     /// Update EpochRewards sysvar with distributed rewards
@@ -4036,6 +4053,8 @@ impl Bank {
             inherited_account_fields.0 = lamports - distributed;
             create_account(&epoch_rewards, inherited_account_fields)
         });
+
+        self.log_epoch_reward_sysvar("update");
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
