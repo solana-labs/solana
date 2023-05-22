@@ -159,7 +159,7 @@ determining whether epoch rewards distribution has finished.
 
 ## LastRestartSlot
 
-The LastRestartSlot sysvar contains the slot number of the last restart (hard fork).
+The LastRestartSlot sysvar contains the slot number of the last restart or _0_ (zero) if none ever happened.
 
 - Address: `SysvarLastRestartS1ot1111111111111111111111`
 - Layout:
