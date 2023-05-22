@@ -2118,7 +2118,7 @@ impl ReplayStage {
                 .map_or(false, |sender| sender.should_send_parents)
                 .then(|| {
                     let mut new_chain = rooted_slots.clone();
-                    new_chain.push(oldest_parent.unwrap_or(bank.parent_slot()));
+                    new_chain.push(oldest_parent.unwrap_or_else(|| bank.parent_slot()));
                     new_chain
                 });
 
