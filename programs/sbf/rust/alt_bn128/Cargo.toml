@@ -1,5 +1,5 @@
 [package]
-name = "solana-bpf-rust-alt-bn128"
+name = "solana-sbf-rust-alt-bn128"
 description = "Solana BPF test program written in Rust"
 version = { workspace = true }
 authors = { workspace = true }
@@ -10,8 +10,6 @@ edition = { workspace = true }
 
 [dependencies]
 array-bytes = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 solana-program = { workspace = true }
 
 [lib]
