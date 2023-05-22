@@ -21,7 +21,7 @@ solana-ledger = { workspace = true }
 solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-perf = { workspace = true }
-solana-poh = { workspace = true }
+solana-poh = { workspace = true, features = ["test-in-workspace"] }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }
