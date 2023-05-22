@@ -3798,8 +3798,8 @@ impl Bank {
     ) -> &'a [StakeReward] {
         assert!(partition_index < self.get_reward_credit_num_blocks());
         let begin = self.partitioned_rewards_stake_account_stores_per_block() * partition_index;
-        let end_exclusive =
-            (begin + self.partitioned_rewards_stake_account_stores_per_block()).min(stake_rewards.len() as u64);
+        let end_exclusive = (begin + self.partitioned_rewards_stake_account_stores_per_block())
+            .min(stake_rewards.len() as u64);
         &stake_rewards[(begin as usize)..(end_exclusive as usize)]
     }
 
