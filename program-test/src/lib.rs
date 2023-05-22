@@ -22,6 +22,7 @@ use {
         commitment::BlockCommitmentCache,
         epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
+        installed_scheduler_pool::BankWithScheduler,
         runtime_config::RuntimeConfig,
     },
     solana_sdk::{
@@ -879,7 +880,10 @@ impl ProgramTest {
                     .read()
                     .unwrap()
                     .working_bank()
-                    .register_recent_blockhash(&Hash::new_unique());
+                    .register_recent_blockhash(
+                        &Hash::new_unique(),
+                        &BankWithScheduler::no_scheduler_available(),
+                    );
             }
         });
 
@@ -1031,7 +1035,10 @@ impl ProgramTestContext {
                         .read()
                         .unwrap()
                         .working_bank()
-                        .register_recent_blockhash(&Hash::new_unique());
+                        .register_recent_blockhash(
+                            &Hash::new_unique(),
+                            &BankWithScheduler::no_scheduler_available(),
+                        );
                 }
             }),
         );
@@ -1120,13 +1127,15 @@ impl ProgramTestContext {
             bank.freeze();
             bank
         } else {
-            bank_forks.insert(Bank::warp_from_parent(
-                &bank,
-                &Pubkey::default(),
-                pre_warp_slot,
-                // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
-                solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
-            ))
+            bank_forks
+                .insert(Bank::warp_from_parent(
+                    &bank,
+                    &Pubkey::default(),
+                    pre_warp_slot,
+                    // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
+                    solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
+                ))
+                .bank_cloned()
         };
 
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();

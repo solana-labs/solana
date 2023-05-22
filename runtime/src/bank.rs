@@ -60,7 +60,7 @@ use {
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_associated_token_account, inline_spl_token,
-        installed_scheduler_pool::InstalledSchedulerBoxInBank,
+        installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerRwLock},
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
         rent_debits::RentDebits,
@@ -831,7 +831,6 @@ impl PartialEq for Bank {
             fee_structure: _,
             incremental_snapshot_persistence: _,
             loaded_programs_cache: _,
-            scheduler: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -1101,7 +1100,6 @@ pub struct Bank {
 
     /// true when the bank's freezing or destruction has completed
     bank_freeze_or_destruction_incremented: AtomicBool,
-    pub(crate) scheduler: RwLock<InstalledSchedulerBoxInBank>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1323,7 +1321,6 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
-            scheduler: RwLock::<InstalledSchedulerBoxInBank>::default(),
         };
 
         bank.bank_created();
@@ -1475,10 +1472,6 @@ impl Bank {
         let mut time = Measure::start("bank::new_from_parent");
         let NewBankOptions { vote_only_bank } = new_bank_options;
 
-        // there should be no active scheduler at this point, which
-        // might be actively mutating bank state...
-        assert!(!parent.with_scheduler());
-
         parent.freeze();
         assert_ne!(slot, parent.slot());
 
@@ -1626,7 +1619,6 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             loaded_programs_cache: parent.loaded_programs_cache.clone(),
-            scheduler: RwLock::<InstalledSchedulerBoxInBank>::default(),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1953,7 +1945,6 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
-            scheduler: RwLock::<InstalledSchedulerBoxInBank>::default(),
         };
         bank.bank_created();
 
@@ -3682,11 +3673,15 @@ impl Bank {
     /// Register a new recent blockhash in the bank's recent blockhash queue. Called when a bank
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
-    pub fn register_recent_blockhash(&self, blockhash: &Hash) {
+    pub fn register_recent_blockhash(
+        &self,
+        blockhash: &Hash,
+        scheduler: &InstalledSchedulerRwLock,
+    ) {
         // This is needed until we activate fix_recent_blockhashes because intra-slot
         // recent_blockhash updates necessitates synchronization for consistent tx check_age
         // handling.
-        self.wait_for_reusable_scheduler();
+        BankWithScheduler::wait_for_reusable_scheduler(self, scheduler);
         // Only acquire the write lock for the blockhash queue on block boundaries because
         // readers can starve this write lock acquisition and ticks would be slowed down too
         // much if the write lock is acquired for each tick.
@@ -3701,7 +3696,7 @@ impl Bank {
     ///
     /// This is NOT thread safe because if tick height is updated by two different threads, the
     /// block boundary condition could be missed.
-    pub fn register_tick(&self, hash: &Hash) {
+    pub fn register_tick(&self, hash: &Hash, scheduler: &InstalledSchedulerRwLock) {
         assert!(
             !self.freeze_started(),
             "register_tick() working on a bank that is already frozen or is undergoing freezing!"
@@ -3709,7 +3704,7 @@ impl Bank {
 
         inc_new_counter_debug!("bank-register_tick-registered", 1);
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
-            self.register_recent_blockhash(hash);
+            self.register_recent_blockhash(hash, scheduler);
         }
 
         // ReplayStage will start computing the accounts delta hash when it
@@ -3718,6 +3713,26 @@ impl Bank {
         // committed before this tick height is incremented (like the blockhash
         // sysvar above)
         self.tick_height.fetch_add(1, Relaxed);
+    }
+
+    #[cfg(any(test, feature = "test-in-workspace"))]
+    pub fn register_tick_for_test(&self, hash: &Hash) {
+        self.register_tick(hash, &BankWithScheduler::no_scheduler_available())
+    }
+
+    #[cfg(any(test, feature = "test-in-workspace"))]
+    pub fn register_default_tick_for_test(&self) {
+        self.register_tick(
+            &Hash::default(),
+            &BankWithScheduler::no_scheduler_available(),
+        )
+    }
+
+    pub fn register_unique_tick(&self) {
+        self.register_tick(
+            &Hash::new_unique(),
+            &BankWithScheduler::no_scheduler_available(),
+        )
     }
 
     pub fn is_complete(&self) -> bool {
@@ -7810,7 +7825,10 @@ impl Bank {
         if self.tick_height.load(Relaxed) < self.max_tick_height {
             let last_blockhash = self.last_blockhash();
             while self.last_blockhash() == last_blockhash {
-                self.register_tick(&Hash::new_unique())
+                self.register_tick(
+                    &Hash::new_unique(),
+                    &BankWithScheduler::no_scheduler_available(),
+                )
             }
         } else {
             warn!("Bank already reached max tick height, cannot fill it with more ticks");
@@ -8296,7 +8314,6 @@ impl TotalAccountsStats {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        self.drop_scheduler();
         self.bank_frozen_or_destroyed();
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
@@ -8314,19 +8331,28 @@ impl Drop for Bank {
 pub mod test_utils {
     use {
         super::Bank,
+        crate::installed_scheduler_pool::BankWithScheduler,
         solana_sdk::{hash::hashv, pubkey::Pubkey},
         solana_vote_program::vote_state::{self, BlockTimestamp, VoteStateVersions},
+        std::sync::Arc,
     };
-    pub fn goto_end_of_slot(bank: &mut Bank) {
+
+    pub fn goto_end_of_slot(bank: &BankWithScheduler) {
         let mut tick_hash = bank.last_blockhash();
         loop {
             tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
-            bank.register_tick(&tick_hash);
+            bank.with_scheduler_lock(|scheduler| {
+                bank.register_tick(&tick_hash, scheduler);
+            });
             if tick_hash == bank.last_blockhash() {
                 bank.freeze();
                 return;
             }
         }
+    }
+
+    pub fn goto_end_of_slot_without_scheduler(bank: &Arc<Bank>) {
+        goto_end_of_slot(&BankWithScheduler::new_without_scheduler(bank.clone()))
     }
 
     pub fn update_vote_account_timestamp(

@@ -28,6 +28,10 @@ matches = { workspace = true }
 rand = { workspace = true }
 solana-logger = { workspace = true }
 solana-perf = { workspace = true }
+solana-runtime = { workspace = true, features = ["test-in-workspace"] }
+
+[features]
+test-in-workspace = []
 
 [lib]
 crate-type = ["lib"]

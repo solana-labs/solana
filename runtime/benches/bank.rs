@@ -7,7 +7,7 @@ use {
     log::*,
     solana_program_runtime::invoke_context::InvokeContext,
     solana_runtime::{
-        bank::{test_utils::goto_end_of_slot, *},
+        bank::{test_utils::goto_end_of_slot_without_scheduler, *},
         bank_client::BankClient,
         loader_utils::create_invoke_instruction,
     },
@@ -189,7 +189,7 @@ fn bench_bank_async_process_native_loader_transactions(bencher: &mut Bencher) {
 fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
     let (genesis_config, _mint_keypair) = create_genesis_config(100);
     let mut bank = Arc::new(Bank::new_for_benches(&genesis_config));
-    goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+    goto_end_of_slot_without_scheduler(&bank);
     let genesis_hash = bank.last_blockhash();
     // Prime blockhash_queue
     for i in 0..(MAX_RECENT_BLOCKHASHES + 1) {
@@ -198,7 +198,7 @@ fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
             &Pubkey::default(),
             (i + 1) as u64,
         ));
-        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        goto_end_of_slot_without_scheduler(&bank);
     }
     // Verify blockhash_queue is full (genesis hash has been kicked out)
     assert!(!bank.is_hash_valid_for_age(&genesis_hash, MAX_RECENT_BLOCKHASHES));

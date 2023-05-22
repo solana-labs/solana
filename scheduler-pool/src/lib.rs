@@ -86,8 +86,6 @@ impl SchedulerPool {
 
 impl InstalledSchedulerPool for SchedulerPool {
     fn take_from_pool(&self, context: SchedulingContext) -> InstalledSchedulerBox {
-        assert!(!context.bank().with_scheduler());
-
         let mut schedulers = self.schedulers.lock().expect("not poisoned");
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
@@ -214,22 +212,13 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
         }
     }
 
-    fn schedule_termination(&mut self) {
-        drop::<Option<SchedulingContext>>(self.context.take());
-    }
-
     fn wait_for_termination(&mut self, wait_reason: &WaitReason) -> Option<ResultWithTimings> {
         let keep_result_with_timings = match wait_reason {
-            WaitReason::ReinitializedForRecentBlockhash => {
-                // rustfmt...
-                true
-            }
-            WaitReason::TerminatedToFreeze
-            | WaitReason::TerminatedFromBankDrop
-            | WaitReason::TerminatedInternallyByScheduler => false,
+            WaitReason::ReinitializedForRecentBlockhash => true,
+            WaitReason::TerminatedToFreeze | WaitReason::DroppedFromBankForks => false,
         };
 
-        self.schedule_termination();
+        drop::<Option<SchedulingContext>>(self.context.take());
 
         // current simplest form of this trait impl doesn't block the current thread materially
         // just with the following single mutex lock. Suppose more elaborated synchronization
@@ -265,7 +254,7 @@ mod tests {
             bank::Bank,
             bank_forks::BankForks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            installed_scheduler_pool::SchedulingContext,
+            installed_scheduler_pool::{BankWithScheduler, SchedulingContext},
             prioritization_fee_cache::PrioritizationFeeCache,
         },
         solana_sdk::{
@@ -409,17 +398,19 @@ mod tests {
 
         // existing banks in bank_forks shouldn't process transactions anymore in general, so
         // shouldn't be touched
-        assert!(!bank_forks.working_bank().with_scheduler());
+        assert!(!bank_forks
+            .working_bank_with_scheduler()
+            .has_installed_scheduler());
         bank_forks.install_scheduler_pool(pool);
-        assert!(!bank_forks.working_bank().with_scheduler());
+        assert!(!bank_forks
+            .working_bank_with_scheduler()
+            .has_installed_scheduler());
 
-        assert!(!child_bank.with_scheduler());
-        bank_forks.insert(child_bank);
-        let child_bank = bank_forks.working_bank();
-        assert!(child_bank.with_scheduler());
-        assert!(child_bank.with_scheduling_context());
+        let child_bank = bank_forks.insert(child_bank);
+        assert!(child_bank.has_installed_scheduler());
         bank_forks.remove(child_bank.slot());
-        assert!(!child_bank.with_scheduling_context());
+        child_bank.drop_scheduler();
+        assert!(!child_bank.has_installed_scheduler());
     }
 
     #[test]
@@ -437,7 +428,7 @@ mod tests {
             2,
             genesis_config.hash(),
         ));
-        let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
@@ -445,9 +436,9 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
         let scheduler = pool.take_from_pool(context);
         scheduler.schedule_execution(&(tx0, 0));
-        assert_eq!(bank.transaction_count(), 1);
-        bank.install_scheduler(scheduler);
+        let bank = BankWithScheduler::new_for_test(bank, Some(scheduler));
         assert_matches!(bank.wait_for_completed_scheduler(), Some((Ok(()), _)));
+        assert_eq!(bank.transaction_count(), 1);
     }
 
     #[test]
@@ -466,7 +457,7 @@ mod tests {
             2,
             genesis_config.hash(),
         ));
-        let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::new_dyn(None, None, None, _ignored_prioritization_fee_cache);
         let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
@@ -490,7 +481,7 @@ mod tests {
         // transaction_count should remain same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
 
-        bank.install_scheduler(scheduler);
+        let bank = BankWithScheduler::new_for_test(bank.clone(), Some(scheduler));
         assert_matches!(
             bank.wait_for_completed_scheduler(),
             Some((

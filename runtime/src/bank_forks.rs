@@ -5,12 +5,15 @@ use {
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
         bank::{Bank, SquashTiming},
         epoch_accounts_hash,
-        installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerPoolArc},
+        installed_scheduler_pool::{
+            BankWithScheduler, InstalledSchedulerPoolArc, SchedulingContext,
+        },
         snapshot_config::SnapshotConfig,
     },
     log::*,
     solana_measure::measure::Measure,
     solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph, WorkingSlot},
+    solana_scheduler::SchedulingMode,
     solana_sdk::{clock::Slot, feature_set, hash::Hash, timing},
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
@@ -136,7 +139,11 @@ impl BankForks {
     }
 
     pub fn get(&self, bank_slot: Slot) -> Option<Arc<Bank>> {
-        self.banks.get(&bank_slot).map(|b| b.bank_cloned())
+        self.get_with_scheduler(bank_slot).map(|b| b.bank_cloned())
+    }
+
+    pub fn get_with_scheduler(&self, bank_slot: Slot) -> Option<BankWithScheduler> {
+        self.banks.get(&bank_slot).cloned()
     }
 
     pub fn get_with_checked_hash(
@@ -163,11 +170,11 @@ impl BankForks {
 
         // Iterate through the heads of all the different forks
         for bank in initial_forks {
-            banks.insert(bank.slot(), BankWithScheduler::new(bank.clone()));
+            banks.insert(bank.slot(), BankWithScheduler::new(bank.clone(), None));
             let parents = bank.parents();
             for parent in parents {
                 if banks
-                    .insert(parent.slot(), BankWithScheduler::new(parent.clone()))
+                    .insert(parent.slot(), BankWithScheduler::new(parent.clone(), None))
                     .is_some()
                 {
                     // All ancestors have already been inserted by another fork
@@ -194,19 +201,23 @@ impl BankForks {
         }
     }
 
-    pub fn insert(&mut self, bank: Bank) -> Arc<Bank> {
+    pub fn insert(&mut self, bank: Bank) -> BankWithScheduler {
         let bank = Arc::new(bank);
-        let prev = self
-            .banks
-            .insert(bank.slot(), BankWithScheduler::new(bank.clone()));
+        let bank_with_scheduler = if let Some(scheduler_pool) = &self.scheduler_pool {
+            let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
+            let scheduler = scheduler_pool.take_from_pool(context);
+            BankWithScheduler::new(bank.clone(), Some(scheduler))
+        } else {
+            BankWithScheduler::new(bank.clone(), None)
+        };
+        let prev = self.banks.insert(bank.slot(), bank_with_scheduler.clone());
         assert!(prev.is_none());
         let slot = bank.slot();
         self.descendants.entry(slot).or_default();
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        self.install_scheduler_into_bank(&bank);
-        bank
+        bank_with_scheduler
     }
 
     pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
@@ -237,6 +248,10 @@ impl BankForks {
 
     pub fn working_bank(&self) -> Arc<Bank> {
         self[self.highest_slot()].clone()
+    }
+
+    pub fn working_bank_with_scheduler(&self) -> &BankWithScheduler {
+        &self.banks[&self.highest_slot()]
     }
 
     fn do_set_root_return_metrics(
@@ -701,7 +716,7 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
-        child_bank.register_tick(&Hash::default());
+        child_bank.register_default_tick_for_test();
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
         assert_eq!(bank_forks.working_bank().tick_height(), 1);
@@ -884,9 +899,10 @@ mod tests {
     #[test]
     fn test_bank_forks_with_set_root() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let mut banks = vec![Arc::new(Bank::new_for_tests(&genesis_config))];
-        assert_eq!(banks[0].slot(), 0);
-        let mut bank_forks = BankForks::new_from_banks(&banks, 0);
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        assert_eq!(bank0.slot(), 0);
+        let mut bank_forks = BankForks::new_from_banks(&[bank0], 0);
+        let mut banks = vec![bank_forks.get_with_scheduler(0).unwrap()];
         banks.push(bank_forks.insert(Bank::new_from_parent(&banks[0], &Pubkey::default(), 1)));
         banks.push(bank_forks.insert(Bank::new_from_parent(&banks[1], &Pubkey::default(), 2)));
         banks.push(bank_forks.insert(Bank::new_from_parent(&banks[0], &Pubkey::default(), 3)));
@@ -943,9 +959,10 @@ mod tests {
     #[test]
     fn test_bank_forks_with_highest_confirmed_root() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let mut banks = vec![Arc::new(Bank::new_for_tests(&genesis_config))];
-        assert_eq!(banks[0].slot(), 0);
-        let mut bank_forks = BankForks::new_from_banks(&banks, 0);
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        assert_eq!(bank0.slot(), 0);
+        let mut bank_forks = BankForks::new_from_banks(&[bank0], 0);
+        let mut banks = vec![bank_forks.get_with_scheduler(0).unwrap()];
         banks.push(bank_forks.insert(Bank::new_from_parent(&banks[0], &Pubkey::default(), 1)));
         banks.push(bank_forks.insert(Bank::new_from_parent(&banks[1], &Pubkey::default(), 2)));
         banks.push(bank_forks.insert(Bank::new_from_parent(&banks[0], &Pubkey::default(), 3)));

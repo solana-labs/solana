@@ -23,3 +23,4 @@ crossbeam-channel = { workspace = true }
 jemallocator = { workspace = true }
 log = { workspace = true }
 solana-logger = { workspace = true }
+solana-runtime = { workspace = true, features = ["test-in-workspace"] }

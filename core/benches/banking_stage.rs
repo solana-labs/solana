@@ -30,7 +30,8 @@ use {
     solana_perf::{packet::to_packet_batches, test_tx::test_tx},
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
     solana_runtime::{
-        bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
+        bank::Bank, bank_forks::BankForks, installed_scheduler_pool::BankWithScheduler,
+        prioritization_fee_cache::PrioritizationFeeCache,
     },
     solana_sdk::{
         genesis_config::GenesisConfig,
@@ -385,6 +386,7 @@ fn simulate_process_entries(
     num_accounts: usize,
 ) {
     let bank = Arc::new(Bank::new_for_benches(genesis_config));
+    let bank = BankWithScheduler::new_without_scheduler(bank);
 
     for i in 0..(num_accounts / 2) {
         bank.transfer(initial_lamports, mint_keypair, &keypairs[i * 2].pubkey())

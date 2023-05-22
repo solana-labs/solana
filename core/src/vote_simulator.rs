@@ -21,6 +21,7 @@ use {
         genesis_utils::{
             create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
         },
+        installed_scheduler_pool::BankWithScheduler,
     },
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer},
     solana_vote_program::vote_transaction,
@@ -115,7 +116,10 @@ impl VoteSimulator {
                 }
             }
             while new_bank.tick_height() < new_bank.max_tick_height() {
-                new_bank.register_tick(&Hash::new_unique());
+                new_bank.register_tick(
+                    &Hash::new_unique(),
+                    &BankWithScheduler::no_scheduler_available(),
+                );
             }
             if !visit.node().has_no_child() || is_frozen {
                 new_bank.freeze();
@@ -358,7 +362,10 @@ pub fn initialize_state(
     }
 
     while bank0.tick_height() < bank0.max_tick_height() {
-        bank0.register_tick(&Hash::new_unique());
+        bank0.register_tick(
+            &Hash::new_unique(),
+            &BankWithScheduler::no_scheduler_available(),
+        );
     }
     bank0.freeze();
     let mut progress = ProgressMap::default();

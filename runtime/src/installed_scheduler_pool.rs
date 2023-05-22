@@ -34,7 +34,12 @@ use {
         slot_history::Slot,
         transaction::{Result, SanitizedTransaction},
     },
-    std::{borrow::Borrow, fmt::Debug, ops::Deref, sync::Arc},
+    std::{
+        borrow::Borrow,
+        fmt::Debug,
+        ops::Deref,
+        sync::{Arc, RwLock},
+    },
 };
 
 // Send + Sync is needed to be a field of BankForks
@@ -109,12 +114,6 @@ pub trait InstalledScheduler<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
     // Calling this is illegal as soon as schedule_termiantion is called on &self.
     fn schedule_execution<'a>(&'a self, transaction_with_index: SEA::TransactionWithIndex<'a>);
 
-    // This optionally signals scheduling termination request to the scheduler.
-    // This is subtle but important, to break circular dependency of Arc<Bank> => Scheduler =>
-    // SchedulingContext => Arc<Bank> in the middle of the tear-down process, otherwise it would
-    // prevent Bank::drop()'s last resort scheduling termination attempt indefinitely
-    fn schedule_termination(&mut self);
-
     #[must_use]
     fn wait_for_termination(&mut self, reason: &WaitReason) -> Option<ResultWithTimings>;
 
@@ -161,26 +160,12 @@ pub enum WaitReason {
     // most normal termination waiting mode; couldn't be done implicitly inside Bank::freeze() -> () to return
     // the result and timing in some way to higher-layer subsystems;
     TerminatedToFreeze,
-    TerminatedFromBankDrop,
-    TerminatedInternallyByScheduler,
+    DroppedFromBankForks,
     // scheduler will be restarted without being returned to pool in order to reuse it immediately.
     ReinitializedForRecentBlockhash,
 }
 
 pub type InstalledSchedulerBox = Box<dyn InstalledScheduler<DefaultScheduleExecutionArg>>;
-// somewhat arbitrary new type just to pacify Bank's frozen_abi...
-#[derive(Debug, Default)]
-pub(crate) struct InstalledSchedulerBoxInBank(Option<InstalledSchedulerBox>);
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-use solana_frozen_abi::abi_example::AbiExample;
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for InstalledSchedulerBoxInBank {
-    fn example() -> Self {
-        Self(None)
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct SchedulingContext {
@@ -222,21 +207,58 @@ impl SchedulingContext {
     }
 }
 
-// tiny wrapper to ensure to call schedule_termination() via ::drop() inside
+// tiny wrapper to ensure to call wait_for_termination() via ::drop() inside
 // BankForks::set_root()'s pruning.
-pub(crate) struct BankWithScheduler(Arc<Bank>);
+#[derive(Clone)]
+pub struct BankWithScheduler {
+    inner: Arc<BankWithSchedulerInner>,
+}
+
+#[derive(Debug)]
+pub struct BankWithSchedulerInner {
+    bank: Arc<Bank>,
+    scheduler: InstalledSchedulerRwLock,
+}
+pub type InstalledSchedulerRwLock = RwLock<Option<InstalledSchedulerBox>>;
+
+#[allow(clippy::declare_interior_mutable_const)]
+pub const NO_INSTALLED_SCHEDULER_RW_LOCK: InstalledSchedulerRwLock = RwLock::new(None);
 
 impl BankWithScheduler {
-    pub(crate) fn new(bank: Arc<Bank>) -> Self {
-        Self(bank)
+    pub(crate) fn new(bank: Arc<Bank>, scheduler: Option<InstalledSchedulerBox>) -> Self {
+        Self {
+            inner: Arc::new(BankWithSchedulerInner {
+                bank,
+                scheduler: RwLock::new(scheduler),
+            }),
+        }
     }
 
-    pub(crate) fn bank_cloned(&self) -> Arc<Bank> {
-        self.0.clone()
+    #[cfg(any(test, feature = "test-in-workspace"))]
+    pub fn new_for_test(bank: Arc<Bank>, scheduler: Option<InstalledSchedulerBox>) -> Self {
+        Self::new(bank, scheduler)
     }
 
-    pub(crate) fn bank(&self) -> &Arc<Bank> {
-        &self.0
+    pub fn new_without_scheduler(bank: Arc<Bank>) -> Self {
+        Self::new(bank, None)
+    }
+
+    pub fn bank_cloned(&self) -> Arc<Bank> {
+        self.bank().clone()
+    }
+
+    pub fn bank(&self) -> &Arc<Bank> {
+        &self.inner.bank
+    }
+
+    // don't indefintely lend out scheduler refs to avoid accidental mix because scheduler should
+    // strictly tied to bank
+    pub fn with_scheduler_lock(&self, callback: impl FnOnce(&InstalledSchedulerRwLock)) {
+        callback(&self.inner.scheduler)
+    }
+
+    pub fn has_installed_scheduler(&self) -> bool {
+        self.inner.scheduler.read().unwrap().is_some()
     }
 
     pub(crate) fn into_bank(self) -> Arc<Bank> {
@@ -244,54 +266,15 @@ impl BankWithScheduler {
         drop(self);
         bank
     }
-}
 
-impl Drop for BankWithScheduler {
-    fn drop(&mut self) {
-        self.0.schedule_termination();
-    }
-}
-
-impl Deref for BankWithScheduler {
-    type Target = Bank;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl BankForks {
-    pub fn install_scheduler_pool(&mut self, pool: InstalledSchedulerPoolArc) {
-        info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
-        assert!(self.scheduler_pool.replace(pool).is_none());
+    #[must_use]
+    pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
+        self.inner
+            .wait_for_scheduler(WaitReason::TerminatedToFreeze)
     }
 
-    pub(crate) fn install_scheduler_into_bank(&self, bank: &Arc<Bank>) {
-        if let Some(scheduler_pool) = &self.scheduler_pool {
-            let context = SchedulingContext::new(SchedulingMode::BlockVerification, bank.clone());
-            bank.install_scheduler(scheduler_pool.take_from_pool(context));
-        }
-    }
-}
-
-impl Bank {
-    pub fn install_scheduler(&self, scheduler: InstalledSchedulerBox) {
-        let mut scheduler_guard = self.scheduler.write().expect("not poisoned");
-        assert!(scheduler_guard.0.replace(scheduler).is_none());
-    }
-
-    pub fn with_scheduler(&self) -> bool {
-        self.scheduler.read().expect("not poisoned").0.is_some()
-    }
-
-    pub fn with_scheduling_context(&self) -> bool {
-        self.scheduler
-            .read()
-            .expect("not poisoned")
-            .0
-            .as_ref()
-            .and_then(|scheduler| scheduler.context())
-            .is_some()
+    pub(crate) fn wait_for_reusable_scheduler(bank: &Bank, scheduler: &InstalledSchedulerRwLock) {
+        BankWithSchedulerInner::wait_for_reusable_scheduler(bank, scheduler);
     }
 
     pub fn schedule_transaction_executions<'a>(
@@ -304,31 +287,42 @@ impl Bank {
             transactions.len()
         );
 
-        let scheduler_guard = self.scheduler.read().expect("not poisoned");
-        let scheduler = scheduler_guard.0.as_ref().expect("active scheduler");
+        let scheduler_guard = self.inner.scheduler.read().unwrap();
+        let scheduler = scheduler_guard.as_ref().unwrap();
 
         for (sanitized_transaction, &index) in transactions.iter().zip(transaction_indexes) {
             scheduler.schedule_execution(&(sanitized_transaction, index));
         }
     }
 
-    fn schedule_termination(&self) {
-        let mut scheduler_guard = self.scheduler.write().expect("not poisoned");
-        if let Some(scheduler) = scheduler_guard.0.as_mut() {
-            scheduler.schedule_termination();
-        }
+    pub const fn no_scheduler_available() -> InstalledSchedulerRwLock {
+        NO_INSTALLED_SCHEDULER_RW_LOCK
+    }
+
+    #[cfg(any(test, feature = "test-in-workspace"))]
+    pub fn drop_scheduler(&self) {
+        self.inner.drop_scheduler();
+    }
+}
+
+impl BankWithSchedulerInner {
+    #[must_use]
+    fn wait_for_scheduler(&self, reason: WaitReason) -> Option<ResultWithTimings> {
+        Self::do_wait_for_scheduler(&self.bank, &self.scheduler, reason)
     }
 
     #[must_use]
-    fn wait_for_scheduler(&self, reason: WaitReason) -> Option<ResultWithTimings> {
+    fn do_wait_for_scheduler(
+        bank: &Bank,
+        scheduler: &InstalledSchedulerRwLock,
+        reason: WaitReason,
+    ) -> Option<ResultWithTimings> {
         debug!(
             "wait_for_scheduler(slot: {}, reason: {reason:?}): started...",
-            self.slot()
+            bank.slot()
         );
 
-        let mut scheduler_guard = self.scheduler.write().expect("not poisoned");
-        let scheduler = &mut scheduler_guard.0;
-
+        let mut scheduler = scheduler.write().unwrap();
         let result_with_timings = if scheduler.is_some() {
             let result_with_timings = scheduler
                 .as_mut()
@@ -343,7 +337,7 @@ impl Bank {
         };
         debug!(
             "wait_for_scheduler(slot: {}, reason: {reason:?}): finished with: {:?}...",
-            self.slot(),
+            bank.slot(),
             result_with_timings.as_ref().map(|(result, _)| result)
         );
 
@@ -351,37 +345,49 @@ impl Bank {
     }
 
     #[must_use]
-    pub fn wait_for_completed_scheduler(&self) -> Option<ResultWithTimings> {
-        self.wait_for_scheduler(WaitReason::TerminatedToFreeze)
-    }
-
-    #[must_use]
     fn wait_for_completed_scheduler_from_drop(&self) -> Option<Result<()>> {
-        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::TerminatedFromBankDrop);
+        let maybe_timings_and_result = self.wait_for_scheduler(WaitReason::DroppedFromBankForks);
         maybe_timings_and_result.map(|(result, _timings)| result)
     }
 
-    pub fn wait_for_completed_scheduler_from_scheduler_drop(self) {
-        let maybe_timings_and_result =
-            self.wait_for_scheduler(WaitReason::TerminatedInternallyByScheduler);
-        assert!(maybe_timings_and_result.is_some());
-    }
-
-    pub(crate) fn wait_for_reusable_scheduler(&self) {
-        let maybe_timings_and_result =
-            self.wait_for_scheduler(WaitReason::ReinitializedForRecentBlockhash);
+    fn wait_for_reusable_scheduler(bank: &Bank, scheduler: &InstalledSchedulerRwLock) {
+        let maybe_timings_and_result = Self::do_wait_for_scheduler(
+            bank,
+            scheduler,
+            WaitReason::ReinitializedForRecentBlockhash,
+        );
         assert!(maybe_timings_and_result.is_none());
     }
 
-    pub(crate) fn drop_scheduler(&mut self) {
-        if self.with_scheduler() {
-            if let Some(Err(err)) = self.wait_for_completed_scheduler_from_drop() {
-                warn!(
-                    "Bank::drop(): slot: {} discarding error from scheduler: {err:?}",
-                    self.slot(),
-                );
-            }
+    fn drop_scheduler(&self) {
+        if let Some(Err(err)) = self.wait_for_completed_scheduler_from_drop() {
+            warn!(
+                "BankWithSchedulerInner::drop(): slot: {} discarding error from scheduler: {:?}",
+                self.bank.slot(),
+                err,
+            );
         }
+    }
+}
+
+impl Drop for BankWithSchedulerInner {
+    fn drop(&mut self) {
+        self.drop_scheduler();
+    }
+}
+
+impl Deref for BankWithScheduler {
+    type Target = Arc<Bank>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner.bank
+    }
+}
+
+impl BankForks {
+    pub fn install_scheduler_pool(&mut self, pool: InstalledSchedulerPoolArc) {
+        info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
+        assert!(self.scheduler_pool.replace(pool).is_none());
     }
 }
 
@@ -462,10 +468,13 @@ mod tests {
     fn test_scheduler_normal_termination() {
         solana_logger::setup();
 
-        let bank = Bank::default_for_tests();
-        bank.install_scheduler(setup_mocked_scheduler(
-            [WaitReason::TerminatedToFreeze].into_iter(),
-        ));
+        let bank = Arc::new(Bank::default_for_tests());
+        let bank = BankWithScheduler::new_for_test(
+            bank,
+            Some(setup_mocked_scheduler(
+                [WaitReason::TerminatedToFreeze].into_iter(),
+            )),
+        );
         assert!(bank.wait_for_completed_scheduler().is_none());
     }
 
@@ -473,10 +482,13 @@ mod tests {
     fn test_scheduler_termination_from_drop() {
         solana_logger::setup();
 
-        let bank = Bank::default_for_tests();
-        bank.install_scheduler(setup_mocked_scheduler(
-            [WaitReason::TerminatedFromBankDrop].into_iter(),
-        ));
+        let bank = Arc::new(Bank::default_for_tests());
+        let bank = BankWithScheduler::new_for_test(
+            bank,
+            Some(setup_mocked_scheduler(
+                [WaitReason::DroppedFromBankForks].into_iter(),
+            )),
+        );
         drop(bank);
     }
 
@@ -484,15 +496,18 @@ mod tests {
     fn test_scheduler_reinitialization() {
         solana_logger::setup();
 
-        let mut bank = crate::bank::tests::create_simple_test_bank(42);
-        bank.install_scheduler(setup_mocked_scheduler(
-            [
-                WaitReason::ReinitializedForRecentBlockhash,
-                WaitReason::TerminatedFromBankDrop,
-            ]
-            .into_iter(),
-        ));
-        goto_end_of_slot(&mut bank);
+        let bank = Arc::new(crate::bank::tests::create_simple_test_bank(42));
+        let bank = BankWithScheduler::new_for_test(
+            bank,
+            Some(setup_mocked_scheduler(
+                [
+                    WaitReason::ReinitializedForRecentBlockhash,
+                    WaitReason::DroppedFromBankForks,
+                ]
+                .into_iter(),
+            )),
+        );
+        goto_end_of_slot(&bank);
     }
 
     #[test]
@@ -510,9 +525,9 @@ mod tests {
             2,
             genesis_config.hash(),
         ));
-        let bank = &Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mocked_scheduler = setup_mocked_scheduler_with_extra(
-            [WaitReason::TerminatedFromBankDrop].into_iter(),
+            [WaitReason::DroppedFromBankForks].into_iter(),
             Some(
                 |mocked: &mut MockInstalledScheduler<DefaultScheduleExecutionArg>| {
                     mocked
@@ -523,7 +538,7 @@ mod tests {
             ),
         );
 
-        bank.install_scheduler(mocked_scheduler);
+        let bank = BankWithScheduler::new_for_test(bank, Some(mocked_scheduler));
         bank.schedule_transaction_executions(&[tx0], [0].iter());
     }
 }

@@ -300,10 +300,6 @@ mod nonblocking {
                 .unwrap();
         }
 
-        fn schedule_termination(&mut self) {
-            unimplemented!("not needed for this bench");
-        }
-
         fn wait_for_termination(&mut self, _wait_reason: &WaitReason) -> Option<ResultWithTimings> {
             let (next_transaction_sender, next_transaction_receiver) =
                 crossbeam_channel::unbounded::<ChainedChannel>();
