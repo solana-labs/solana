@@ -5,6 +5,7 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig, AtomicAppendVecId,
             CalcAccountsHashDataSource,
         },
+        accounts_file::AccountsFileError,
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -307,6 +308,9 @@ pub(crate) struct StorageAndNextAppendVecId {
 pub enum SnapshotError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("AccountsFile error: {0}")]
+    AccountsFileError(#[from] AccountsFileError),
 
     #[error("serialization error: {0}")]
     Serialize(#[from] bincode::Error),

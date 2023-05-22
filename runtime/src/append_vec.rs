@@ -10,7 +10,7 @@ use {
             AccountMeta, StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo,
             StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
         },
-        accounts_file::ALIGN_BOUNDARY_OFFSET,
+        accounts_file::{AccountsFileError, Result, ALIGN_BOUNDARY_OFFSET},
         storable_accounts::StorableAccounts,
         u64_align,
     },
@@ -27,7 +27,7 @@ use {
         borrow::Borrow,
         convert::TryFrom,
         fs::{remove_file, OpenOptions},
-        io::{self, Seek, SeekFrom, Write},
+        io::{Seek, SeekFrom, Write},
         mem,
         path::{Path, PathBuf},
         sync::{
@@ -295,32 +295,33 @@ impl AppendVec {
         self.remove_on_drop = false;
     }
 
-    fn sanitize_len_and_size(current_len: usize, file_size: usize) -> io::Result<()> {
+    fn sanitize_len_and_size(current_len: usize, file_size: usize) -> Result<()> {
         if file_size == 0 {
-            Err(std::io::Error::new(
+            Err(AccountsFileError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("too small file size {file_size} for AppendVec"),
-            ))
+            )))
         } else if usize::try_from(MAXIMUM_APPEND_VEC_FILE_SIZE)
             .map(|max| file_size > max)
             .unwrap_or(true)
         {
-            Err(std::io::Error::new(
+            Err(AccountsFileError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("too large file size {file_size} for AppendVec"),
-            ))
+            )))
         } else if current_len > file_size {
-            Err(std::io::Error::new(
+            Err(AccountsFileError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("current_len is larger than file size ({file_size})"),
-            ))
+            )))
         } else {
             Ok(())
         }
     }
 
-    pub fn flush(&self) -> io::Result<()> {
-        self.map.flush()
+    pub fn flush(&self) -> Result<()> {
+        self.map.flush()?;
+        Ok(())
     }
 
     pub fn reset(&self) {
@@ -351,7 +352,7 @@ impl AppendVec {
         format!("{slot}.{id}")
     }
 
-    pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
+    pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> Result<(Self, usize)> {
         let new = Self::new_from_file_unchecked(&path, current_len)?;
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
@@ -362,17 +363,17 @@ impl AppendVec {
                 "incorrect layout/length/data in the appendvec at path {}",
                 path.as_ref().display()
             );
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, err_msg));
+            return Err(AccountsFileError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                err_msg,
+            )));
         }
 
         Ok((new, num_accounts))
     }
 
     /// Creates an appendvec from file without performing sanitize checks or counting the number of accounts
-    pub fn new_from_file_unchecked<P: AsRef<Path>>(
-        path: P,
-        current_len: usize,
-    ) -> io::Result<Self> {
+    pub fn new_from_file_unchecked<P: AsRef<Path>>(path: P, current_len: usize) -> Result<Self> {
         let file_size = std::fs::metadata(&path)?.len();
         Self::sanitize_len_and_size(current_len, file_size as usize)?;
 
@@ -531,7 +532,7 @@ impl AppendVec {
         &self,
         offset: usize,
         owners: &[&Pubkey],
-    ) -> Result<usize, MatchAccountOwnerError> {
+    ) -> std::result::Result<usize, MatchAccountOwnerError> {
         let account_meta = self
             .get_account_meta(offset)
             .ok_or(MatchAccountOwnerError::UnableToLoad)?;
@@ -937,7 +938,7 @@ pub mod tests {
             .expect("create a test file for mmap");
 
         let result = AppendVec::new_from_file(path, 0);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"too small file size 0 for AppendVec");
+        assert_matches!(result, Err(ref message) if message.to_string().contains("too small file size 0 for AppendVec"));
     }
 
     #[test]
@@ -945,7 +946,7 @@ pub mod tests {
         const LEN: usize = 0;
         const SIZE: usize = 0;
         let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"too small file size 0 for AppendVec");
+        assert_matches!(result, Err(ref message) if message.to_string().contains("too small file size 0 for AppendVec"));
     }
 
     #[test]
@@ -961,7 +962,7 @@ pub mod tests {
         const LEN: usize = 0;
         const SIZE: usize = 16 * 1024 * 1024 * 1024 + 1;
         let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"too large file size 17179869185 for AppendVec");
+        assert_matches!(result, Err(ref message) if message.to_string().contains("too large file size 17179869185 for AppendVec"));
     }
 
     #[test]
@@ -977,7 +978,7 @@ pub mod tests {
         const LEN: usize = 1024 * 1024 + 1;
         const SIZE: usize = 1024 * 1024;
         let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"current_len is larger than file size (1048576)");
+        assert_matches!(result, Err(ref message) if message.to_string().contains("current_len is larger than file size (1048576)"));
     }
 
     #[test]
@@ -1165,7 +1166,7 @@ pub mod tests {
         }
 
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
+        assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1193,7 +1194,7 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
+        assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1219,7 +1220,7 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
+        assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1281,7 +1282,7 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
+        assert_matches!(result, Err(ref message) if message.to_string().contains("incorrect layout/length/data"));
     }
 
     #[test]
