@@ -13127,10 +13127,10 @@ fn test_reward_status_transtions_at_epoch_boundary() {
     let bank2 = Arc::new(bank2);
     bank2.freeze();
 
-    // assert stake rewards reward status transition to `active`.
+    // assert stake rewards reward status transition to `inactive`.
     assert!(matches!(
         bank2.get_reward_interval(),
-        RewardInterval::InsideInterval
+        RewardInterval::OutsideInterval
     ));
 
     // assert num_credit blocks
@@ -13187,7 +13187,7 @@ fn test_reward_accounts_lock() {
 
         // Insert a transfer transaction to stake account to violate the
         // StakeProgramUnavailable at the beginning of epoch 1.
-        if slot == 32 {
+        if slot == 31 {
             let tx = system_transaction::transfer(
                 node_key,
                 &stake_key.pubkey(),
