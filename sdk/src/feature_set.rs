@@ -341,6 +341,8 @@ pub mod stake_split_uses_rent_sysvar {
     solana_sdk::declare_id!("FQnc7U4koHqWgRvFaBJjZnV8VPg6L6wWK33yJeDp4yvV");
 }
 
+
+
 pub mod add_get_minimum_delegation_instruction_to_stake_program {
     solana_sdk::declare_id!("St8k9dVXP97xT6faW24YmRSYConLbhsMJA4TJTBLmMT");
 }
@@ -665,6 +667,10 @@ pub mod checked_arithmetic_in_fee_validation {
     solana_sdk::declare_id!("5Pecy6ie6XGm22pc9d4P9W5c31BugcFBuy6hsP2zkETv");
 }
 
+pub mod last_restart_slot_sysvar {
+    solana_sdk::declare_id!("C4QcP9KXjMLirtZGAW4AFzqLH99PaHjsxYx1N48V5LF");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -826,6 +832,7 @@ lazy_static! {
         (vote_state_add_vote_latency::id(), "replace Lockout with LandedVote (including vote latency) in vote state #31264"),
         (checked_arithmetic_in_fee_validation::id(), "checked arithmetic in fee validation #31273"),
         (bpf_account_data_direct_mapping::id(), "use memory regions to map account data into the rbpf vm instead of copying the data"),
+        (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

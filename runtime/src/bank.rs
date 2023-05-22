@@ -2276,18 +2276,26 @@ impl Bank {
     }
 
     pub fn update_last_restart_slot(&self) {
-        let last_restart_slot = {
-            let tmp = self.hard_forks();
-            let hard_forks = tmp.read().unwrap();
-            hard_forks.iter().last().map(|(slot, _)| *slot).unwrap_or(0)
-        };
+        let feature_flag = self.feature_set
+            .is_active(&feature_set::last_restart_slot_sysvar::id());
 
-        self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
-            create_account(
-                &LastRestartSlot { last_restart_slot },
-                self.inherit_specially_retained_account_fields(account),
-            )
-        });
+        println!("FEATURE FLAG last_restart_slot?: {}",
+                 feature_flag);
+
+        if feature_flag {
+            let last_restart_slot = {
+                let tmp = self.hard_forks();
+                let hard_forks = tmp.read().unwrap();
+                hard_forks.iter().last().map(|(slot, _)| *slot).unwrap_or(0)
+            };
+
+            self.update_sysvar_account(&sysvar::last_restart_slot::id(), |account| {
+                create_account(
+                    &LastRestartSlot { last_restart_slot },
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            });
+        }
     }
 
     pub fn set_sysvar_for_tests<T>(&self, sysvar: &T)

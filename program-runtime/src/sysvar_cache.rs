@@ -15,6 +15,8 @@ use {
     },
     std::sync::Arc,
 };
+use solana_sdk::feature_set;
+use solana_sdk::feature_set::FeatureSet;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl ::solana_frozen_abi::abi_example::AbiExample for SysvarCache {
@@ -125,7 +127,7 @@ impl SysvarCache {
 
     pub fn fill_missing_entries<F: FnMut(&Pubkey, &mut dyn FnMut(&[u8]))>(
         &mut self,
-        mut get_account_data: F,
+        mut get_account_data: F
     ) {
         if self.clock.is_none() {
             get_account_data(&Clock::id(), &mut |data: &[u8]| {
