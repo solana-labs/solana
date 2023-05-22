@@ -320,7 +320,8 @@ impl AppendVec {
     }
 
     pub fn flush(&self) -> Result<()> {
-        Ok(self.map.flush()?)
+        self.map.flush()?;
+        Ok(())
     }
 
     pub fn reset(&self) {
