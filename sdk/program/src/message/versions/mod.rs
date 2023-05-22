@@ -39,10 +39,10 @@ pub enum VersionedMessage {
 }
 
 impl VersionedMessage {
-    pub fn sanitize(&self, require_static_program_ids: bool) -> Result<(), SanitizeError> {
+    pub fn sanitize(&self) -> Result<(), SanitizeError> {
         match self {
             Self::Legacy(message) => message.sanitize(),
-            Self::V0(message) => message.sanitize(require_static_program_ids),
+            Self::V0(message) => message.sanitize(),
         }
     }
 
