@@ -2995,8 +2995,8 @@ pub fn purge_old_bank_snapshots(
 pub fn purge_old_bank_snapshots_at_startup(bank_snapshots_dir: impl AsRef<Path>) {
     purge_old_bank_snapshots(&bank_snapshots_dir, 0, Some(BankSnapshotType::Pre));
     purge_old_bank_snapshots(&bank_snapshots_dir, 1, Some(BankSnapshotType::Post));
-    let highest_bank_snapshot_post = get_bank_snapshots_post(&bank_snapshots_dir).pop();
 
+    let highest_bank_snapshot_post = get_highest_bank_snapshot_post(&bank_snapshots_dir);
     if let Some(highest_bank_snapshot_post) = highest_bank_snapshot_post {
         debug!(
             "Retained bank snapshot for slot {}, and purged the rest.",
