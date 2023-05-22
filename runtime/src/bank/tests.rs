@@ -13000,20 +13000,19 @@ fn test_rewards_computation_and_partitioned_distribution() {
             assert!(post_cap > pre_cap);
         } else if curr_slot == 33 {
             // This is the 2nd block of epoch 1. Reward distribution should happen in this block.
-            // assert stake rewards are paid at the first block after epoch boundary
+            // assert stake rewards are paid at the first block after epoch boundary and the reward_status
+            // transitioned to inactive.
             assert!(matches!(
                 bank.get_reward_interval(),
-                RewardInterval::InsideInterval
+                RewardInterval::OutsideInterval
             ));
             assert_eq!(bank.get_reward_credit_num_blocks(), 1);
-            assert_eq!(post_cap, pre_cap + 1); // due to that default min lamport for sysvar is 1.
         } else if curr_slot == 34 {
             // This is the 3nd block of epoch 1. Reward distribution should have completed.
             assert!(matches!(
                 bank.get_reward_interval(),
                 RewardInterval::OutsideInterval
             ));
-            assert_eq!(post_cap, pre_cap - 1); // due to burning sysvar
         } else if slot > 0 {
             // slot is not in rewards, cap should not change
             assert_eq!(post_cap, pre_cap);
