@@ -2993,13 +2993,9 @@ pub fn purge_old_bank_snapshots(
 /// Only a single bank snapshot could be needed at startup (when using fast boot), so
 /// retain the highest bank snapshot "post", and purge the rest.
 pub fn purge_old_bank_snapshots_at_startup(bank_snapshots_dir: impl AsRef<Path>) {
-    let bank_snapshots_pre = get_bank_snapshots_pre(&bank_snapshots_dir);
-    purge_bank_snapshots(&bank_snapshots_pre);
-
-    let mut bank_snapshots_post = get_bank_snapshots_post(&bank_snapshots_dir);
-    bank_snapshots_post.sort_unstable();
-    let highest_bank_snapshot_post = bank_snapshots_post.pop();
-    purge_bank_snapshots(&bank_snapshots_post);
+    purge_old_bank_snapshots(&bank_snapshots_dir, 0, Some(BankSnapshotType::Pre));
+    purge_old_bank_snapshots(&bank_snapshots_dir, 1, Some(BankSnapshotType::Post));
+    let highest_bank_snapshot_post = get_bank_snapshots_post(&bank_snapshots_dir).pop();
 
     if let Some(highest_bank_snapshot_post) = highest_bank_snapshot_post {
         debug!(
