@@ -26,7 +26,7 @@ macro_rules! u64_align {
 }
 
 #[derive(Error, Debug)]
-/// An enum for AccountsFile related error.
+/// An enum for AccountsFile related errors.
 pub enum AccountsFileError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
