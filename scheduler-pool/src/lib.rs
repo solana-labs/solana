@@ -481,7 +481,7 @@ mod tests {
         // transaction_count should remain same as scheduler should be bailing out.
         assert_eq!(bank.transaction_count(), 0);
 
-        let bank = BankWithScheduler::new_for_test(bank.clone(), Some(scheduler));
+        let bank = BankWithScheduler::new_for_test(bank, Some(scheduler));
         assert_matches!(
             bank.wait_for_completed_scheduler(),
             Some((
