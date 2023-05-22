@@ -1066,14 +1066,6 @@ mod tests {
             instruction_accounts.clone(),
             Ok(()),
         );
-
-        // should fail, if vote_withdraw_authority_may_change_authorized_voter is disabled
-        process_instruction_disabled_features(
-            &instruction_data,
-            transaction_accounts,
-            instruction_accounts,
-            Err(InstructionError::MissingRequiredSignature),
-        );
     }
 
     #[test]
