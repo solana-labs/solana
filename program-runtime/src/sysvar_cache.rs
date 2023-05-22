@@ -67,6 +67,10 @@ impl SysvarCache {
         self.epoch_rewards = Some(Arc::new(epoch_rewards));
     }
 
+    pub fn clear_epoch_rewards(&mut self) {
+        self.epoch_rewards = None;
+    }
+
     #[deprecated]
     #[allow(deprecated)]
     pub fn get_fees(&self) -> Result<Arc<Fees>, InstructionError> {

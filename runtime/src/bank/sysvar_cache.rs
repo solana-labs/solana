@@ -13,6 +13,11 @@ impl Bank {
         });
     }
 
+    pub(crate) fn clear_epoch_rewards_sysvar_cache(&self) {
+        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
+        sysvar_cache.clear_epoch_rewards();
+    }
+
     pub(crate) fn reset_sysvar_cache(&self) {
         let mut sysvar_cache = self.sysvar_cache.write().unwrap();
         sysvar_cache.reset();

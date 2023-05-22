@@ -1944,6 +1944,7 @@ impl Bank {
                 );
             }
             self.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
+            self.clear_epoch_rewards_sysvar_cache();
         }
     }
 
