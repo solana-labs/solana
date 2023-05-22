@@ -12,7 +12,7 @@ use {
         accounts_hash::{AccountsDeltaHash, AccountsHash},
         bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
-        genesis_utils::{self, activate_all_features, activate_feature},
+        genesis_utils::{activate_all_features, activate_feature},
         snapshot_utils::{
             create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
         },
@@ -23,7 +23,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
-        feature_set::{self, disable_fee_calculator},
+        feature_set,
         genesis_config::{create_genesis_config, ClusterType},
         hash::Hash,
         pubkey::Pubkey,
@@ -236,7 +236,7 @@ fn test_bank_serialize_style(
 ) {
     solana_logger::setup();
     let (mut genesis_config, _) = create_genesis_config(500);
-    genesis_utils::activate_feature(&mut genesis_config, feature_set::epoch_accounts_hash::id());
+    activate_feature(&mut genesis_config, feature_set::epoch_accounts_hash::id());
     genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
     let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
     let eah_start_slot = epoch_accounts_hash::calculation_start(&bank0);
@@ -509,8 +509,7 @@ fn add_root_and_flush_write_cache(bank: &Bank) {
 #[test]
 fn test_extra_fields_eof() {
     solana_logger::setup();
-    let (mut genesis_config, _) = create_genesis_config(500);
-    activate_feature(&mut genesis_config, disable_fee_calculator::id());
+    let (genesis_config, _) = create_genesis_config(500);
 
     let bank0 = Arc::new(Bank::new_for_tests_with_config(
         &genesis_config,
@@ -646,8 +645,7 @@ fn test_extra_fields_full_snapshot_archive() {
 #[test]
 fn test_blank_extra_fields() {
     solana_logger::setup();
-    let (mut genesis_config, _) = create_genesis_config(500);
-    activate_feature(&mut genesis_config, disable_fee_calculator::id());
+    let (genesis_config, _) = create_genesis_config(500);
 
     let bank0 = Arc::new(Bank::new_for_tests_with_config(
         &genesis_config,
