@@ -67,6 +67,7 @@ use {
     },
     thiserror::Error as ThisError,
 };
+use solana_sdk::feature_set::last_restart_slot_sysvar;
 
 mod cpi;
 mod logging;
@@ -188,6 +189,7 @@ pub fn create_program_runtime_environment<'a>(
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
+    let last_restart_slot_syscall_enabled = feature_set.is_active(&last_restart_slot_sysvar::id());
 
     let mut result = BuiltinProgram::new_loader(config);
 
@@ -263,8 +265,11 @@ pub fn create_program_runtime_environment<'a>(
         SyscallGetFeesSysvar::call,
     )?;
     result.register_function(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
-    result.register_function(
-        b"sol_get_last_restart_slot_sysvar",
+
+    register_feature_gated_function!(
+        result,
+        last_restart_slot_syscall_enabled,
+        b"sol_get_last_restart_slot",
         SyscallGetLastRestartSlotSysvar::call,
     )?;
 

@@ -54,7 +54,7 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_get_epoch_rewards_sysvar(&self, _var_addr: *mut u8) -> u64 {
         UNSUPPORTED_SYSVAR
     }
-    fn sol_get_last_restart_slot_sysvar(&self, _var_addr: *mut u8) -> u64 {
+    fn sol_get_last_restart_slot(&self, _var_addr: *mut u8) -> u64 {
         UNSUPPORTED_SYSVAR
     }
     /// # Safety
@@ -156,11 +156,11 @@ pub(crate) fn sol_get_rent_sysvar(var_addr: *mut u8) -> u64 {
     SYSCALL_STUBS.read().unwrap().sol_get_rent_sysvar(var_addr)
 }
 
-pub(crate) fn sol_get_last_restart_slot_sysvar(_var_addr: *mut u8) -> u64 {
+pub(crate) fn sol_get_last_restart_slot(_var_addr: *mut u8) -> u64 {
     SYSCALL_STUBS
         .read()
         .unwrap()
-        .sol_get_last_restart_slot_sysvar(_var_addr)
+        .sol_get_last_restart_slot(_var_addr)
 }
 
 pub(crate) fn sol_memcpy(dst: *mut u8, src: *const u8, n: usize) {

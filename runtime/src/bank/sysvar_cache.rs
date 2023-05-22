@@ -4,7 +4,6 @@ use {
 };
 use solana_program_runtime::sysvar_cache::get_sysvar_with_account_check::last_restart_slot;
 use solana_sdk::feature_set;
-use solana_sdk::sysvar::last_restart_slot::LastRestartSlot;
 
 impl Bank {
     pub(crate) fn fill_missing_sysvar_cache_entries(&self) {
