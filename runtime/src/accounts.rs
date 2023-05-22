@@ -623,9 +623,7 @@ impl Accounts {
             &payer_post_rent_state,
             payer_address,
             payer_account,
-            feature_set
-                .is_active(&feature_set::include_account_index_in_rent_error::ID)
-                .then_some(payer_index),
+            payer_index,
         )
     }
 
