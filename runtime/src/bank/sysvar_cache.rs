@@ -175,5 +175,11 @@ mod tests {
             *bank1_sysvar_cache.get_epoch_rewards().unwrap(),
             expected_epoch_rewards,
         );
+
+        drop(bank1_sysvar_cache);
+
+        bank1.clear_epoch_rewards_sysvar_cache();
+        let bank1_sysvar_cache = bank1.sysvar_cache.read().unwrap();
+        assert!(bank1_sysvar_cache.get_epoch_rewards().is_err());
     }
 }
