@@ -157,7 +157,6 @@ mod tests {
             MessageHash::Compute,
             Some(false),
             bank,
-            true, // require_static_program_ids
         )
         .unwrap()
     }

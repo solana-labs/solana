@@ -922,7 +922,6 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                     MessageHash::Compute,
                     None,
                     SimpleAddressLoader::Disabled,
-                    true, // require_static_program_ids
                 )
                 .map_err(|err| {
                     warn!("Failed to compute cost of transaction: {:?}", err);
