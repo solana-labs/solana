@@ -53,6 +53,19 @@ pub fn aligned_stored_size(data_len: usize) -> usize {
 
 pub const MAXIMUM_APPEND_VEC_FILE_SIZE: u64 = 16 * 1024 * 1024 * 1024; // 16 GiB
 
+#[derive(Error, Debug)]
+/// An enum for AppendVec related errors.
+pub enum AppendVecError {
+    #[error("Unsupported file size: {0}")]
+    UnsupportedFileSize(String),
+
+    #[error("Incorrect layout: {0}")]
+    IncorrectLayout(String),
+
+    #[error("Offset out of boundary: {0}")]
+    OffsetOutOfBoundary(String),
+}
+
 pub struct AppendVecAccountsIter<'append_vec> {
     append_vec: &'append_vec AppendVec,
     offset: usize,
@@ -297,23 +310,26 @@ impl AppendVec {
 
     fn sanitize_len_and_size(current_len: usize, file_size: usize) -> Result<()> {
         if file_size == 0 {
-            Err(AccountsFileError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("too small file size {file_size} for AppendVec"),
-            )))
+            Err(AccountsFileError::AppendVecError(
+                AppendVecError::UnsupportedFileSize(format!(
+                    "too small file size {file_size} for AppendVec"
+                )),
+            ))
         } else if usize::try_from(MAXIMUM_APPEND_VEC_FILE_SIZE)
             .map(|max| file_size > max)
             .unwrap_or(true)
         {
-            Err(AccountsFileError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("too large file size {file_size} for AppendVec"),
-            )))
+            Err(AccountsFileError::AppendVecError(
+                AppendVecError::UnsupportedFileSize(format!(
+                    "too large file size {file_size} for AppendVec"
+                )),
+            ))
         } else if current_len > file_size {
-            Err(AccountsFileError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("current_len is larger than file size ({file_size})"),
-            )))
+            Err(AccountsFileError::AppendVecError(
+                AppendVecError::OffsetOutOfBoundary(format!(
+                    "current_len is larger than file size ({file_size})"
+                )),
+            ))
         } else {
             Ok(())
         }
@@ -359,14 +375,12 @@ impl AppendVec {
         if !sanitized {
             // This info show the failing accountvec file path.  It helps debugging
             // the appendvec data corrupution issues related to recycling.
-            let err_msg = format!(
-                "incorrect layout/length/data in the appendvec at path {}",
-                path.as_ref().display()
-            );
-            return Err(AccountsFileError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                err_msg,
-            )));
+            return Err(AccountsFileError::AppendVecError(
+                AppendVecError::IncorrectLayout(format!(
+                    "incorrect layout/length/data in the appendvec at path {}",
+                    path.as_ref().display(),
+                )),
+            ));
         }
 
         Ok((new, num_accounts))
