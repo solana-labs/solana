@@ -225,19 +225,6 @@ impl ConnectionManager for QuicConnectionManager {
     fn new_connection_config(&self) -> QuicConfig {
         QuicConfig::new().unwrap()
     }
-
-
-    fn get_port_offset(&self) -> u16 {
-        if self
-            .connection_config
-            .as_ref()
-            .map_or(true, |config| config.do_port_offset)
-        {
-            QUIC_PORT_OFFSET
-        } else {
-            0
-        }
-    }
 }
 
 impl QuicConnectionManager {

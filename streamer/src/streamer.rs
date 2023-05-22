@@ -475,7 +475,7 @@ mod test {
         crossbeam_channel::unbounded,
         solana_connection_cache::{
             client_connection::ClientConnection as BlockingClientConnection,
-            connection_cache::{BaseClientConnection, ClientError, ConnectionPoolError},
+            connection_cache::{BaseClientConnection, ClientError, ConnectionPoolError, Protocol},
             connection_cache_stats::ConnectionCacheStats,
             nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
         },
@@ -584,13 +584,12 @@ mod test {
     impl ConnectionManager for MockConnectionManager {
         type ConnectionPool = MockUdpPool;
         type NewConnectionConfig = MockUdpConfig;
+        const PROTOCOL: Protocol = Protocol::QUIC;
+
         fn new_connection_pool(&self) -> Self::ConnectionPool {
             unimplemented!()
         }
         fn new_connection_config(&self) -> Self::NewConnectionConfig {
-            unimplemented!()
-        }
-        fn get_port_offset(&self) -> u16 {
             unimplemented!()
         }
     }
