@@ -128,21 +128,12 @@ impl From<NonceErrorAdapter> for NonceError {
     }
 }
 
-pub fn nonce_to_instruction_error(error: NonceError, use_system_variant: bool) -> InstructionError {
-    if use_system_variant {
-        match error {
-            NonceError::NoRecentBlockhashes => SystemError::NonceNoRecentBlockhashes.into(),
-            NonceError::NotExpired => SystemError::NonceBlockhashNotExpired.into(),
-            NonceError::UnexpectedValue => SystemError::NonceUnexpectedBlockhashValue.into(),
-            NonceError::BadAccountState => InstructionError::InvalidAccountData,
-        }
-    } else {
-        match error {
-            NonceError::NoRecentBlockhashes => NonceErrorAdapter::NoRecentBlockhashes.into(),
-            NonceError::NotExpired => NonceErrorAdapter::NotExpired.into(),
-            NonceError::UnexpectedValue => NonceErrorAdapter::UnexpectedValue.into(),
-            NonceError::BadAccountState => NonceErrorAdapter::BadAccountState.into(),
-        }
+pub fn nonce_to_instruction_error(error: NonceError) -> InstructionError {
+    match error {
+        NonceError::NoRecentBlockhashes => SystemError::NonceNoRecentBlockhashes.into(),
+        NonceError::NotExpired => SystemError::NonceBlockhashNotExpired.into(),
+        NonceError::UnexpectedValue => SystemError::NonceUnexpectedBlockhashValue.into(),
+        NonceError::BadAccountState => InstructionError::InvalidAccountData,
     }
 }
 
@@ -1945,35 +1936,19 @@ mod tests {
     #[test]
     fn test_nonce_to_instruction_error() {
         assert_eq!(
-            nonce_to_instruction_error(NonceError::NoRecentBlockhashes, false),
-            NonceError::NoRecentBlockhashes.into(),
-        );
-        assert_eq!(
-            nonce_to_instruction_error(NonceError::NotExpired, false),
-            NonceError::NotExpired.into(),
-        );
-        assert_eq!(
-            nonce_to_instruction_error(NonceError::UnexpectedValue, false),
-            NonceError::UnexpectedValue.into(),
-        );
-        assert_eq!(
-            nonce_to_instruction_error(NonceError::BadAccountState, false),
-            NonceError::BadAccountState.into(),
-        );
-        assert_eq!(
-            nonce_to_instruction_error(NonceError::NoRecentBlockhashes, true),
+            nonce_to_instruction_error(NonceError::NoRecentBlockhashes),
             SystemError::NonceNoRecentBlockhashes.into(),
         );
         assert_eq!(
-            nonce_to_instruction_error(NonceError::NotExpired, true),
+            nonce_to_instruction_error(NonceError::NotExpired),
             SystemError::NonceBlockhashNotExpired.into(),
         );
         assert_eq!(
-            nonce_to_instruction_error(NonceError::UnexpectedValue, true),
+            nonce_to_instruction_error(NonceError::UnexpectedValue),
             SystemError::NonceUnexpectedBlockhashValue.into(),
         );
         assert_eq!(
-            nonce_to_instruction_error(NonceError::BadAccountState, true),
+            nonce_to_instruction_error(NonceError::BadAccountState),
             InstructionError::InvalidAccountData,
         );
     }
