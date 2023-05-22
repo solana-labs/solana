@@ -4015,6 +4015,8 @@ impl Bank {
             inherited_account_fields.0 = total_rewards - distributed_rewards;
             create_account(&epoch_rewards, inherited_account_fields)
         });
+
+        self.fill_missing_sysvar_cache_entries();
     }
 
     /// Update EpochRewards sysvar with distributed rewards
