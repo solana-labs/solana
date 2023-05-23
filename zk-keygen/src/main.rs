@@ -2,7 +2,7 @@ use {
     bip39::{Mnemonic, MnemonicType, Seed},
     clap::{crate_description, crate_name, Arg, ArgMatches, Command},
     solana_clap_v3_utils::{
-        input_parsers::STDOUT_OUTFILE_TOKEN,
+        input_parsers::{value_of, STDOUT_OUTFILE_TOKEN},
         input_validators::is_prompt_signer_source,
         keygen::{
             check_for_overwrite,
@@ -17,7 +17,8 @@ use {
     },
     solana_sdk::signer::{EncodableKey, SeedDerivable},
     solana_zk_token_sdk::encryption::{auth_encryption::AeKey, elgamal::ElGamalKeypair},
-    std::error,
+    std::{error, str::FromStr},
+    thiserror::Error,
 };
 
 fn output_encodable_key<K: EncodableKey>(
@@ -167,7 +168,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     let subcommand = matches.subcommand().unwrap();
     match subcommand {
         ("new", matches) => {
-            let key_type = KeyType::get_key_type(matches);
+            let key_type: KeyType = value_of(matches, "type").unwrap();
 
             let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
@@ -239,7 +240,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("pubkey", matches) => {
-            let key_type = KeyType::get_key_type(matches);
+            let key_type: KeyType = value_of(matches, "type").unwrap();
 
             let mut path = dirs_next::home_dir().expect("home directory");
             let path = if matches.is_present("keypair") {
@@ -268,7 +269,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("recover", matches) => {
-            let key_type = KeyType::get_key_type(matches);
+            let key_type: KeyType = value_of(matches, "type").unwrap();
 
             let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
@@ -331,12 +332,20 @@ impl KeyType {
             KeyType::Aes128 => "aes128.json",
         }
     }
+}
 
-    fn get_key_type(matches: &ArgMatches) -> Self {
-        match matches.value_of("type").unwrap() {
-            "elgamal" => Self::ElGamal,
-            "aes128" => Self::Aes128,
-            _ => unreachable!(),
+#[derive(Debug, Error)]
+#[error("unsupported key type: \"{0}\"")]
+pub struct KeyTypeError(pub String);
+
+impl FromStr for KeyType {
+    type Err = KeyTypeError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.to_ascii_lowercase();
+        match s.as_str() {
+            "elgamal" => Ok(Self::ElGamal),
+            "aes128" => Ok(Self::Aes128),
+            _ => Err(KeyTypeError(s)),
         }
     }
 }

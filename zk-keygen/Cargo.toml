@@ -27,6 +27,7 @@ solana-sdk = { workspace = true }
 solana-version = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
 tiny-bip39 = { workspace = true }
+thiserror = { worskapce = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
