@@ -465,8 +465,8 @@ fn delete_contents_of_path(path: impl AsRef<Path>) {
     }
 }
 
-/// Deletes the contents of a directory asynchronously to avoid blocking on it,
-/// but leaves the top directory in place.
+/// Moves and asynchronously deletes the contents of a directory to avoid blocking on it.
+/// The directory is re-created after the move, and should now be empty.
 pub fn move_and_async_delete_path_contents(path: impl AsRef<Path>) {
     move_and_async_delete_path(&path);
     // The following could fail if the rename failed.
