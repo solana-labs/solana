@@ -778,7 +778,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("repair_use_quic")
                 .long("repair-use-quic")
                 .takes_value(false)
-                .hidden(true)
+                .hidden(hidden_unless_forced())
                 .help("Use QUIC to send repair requests."),
         )
         .arg(
