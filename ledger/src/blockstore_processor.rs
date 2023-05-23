@@ -1149,7 +1149,7 @@ fn confirm_slot_entries(
                     index: entry_index,
                     entry: entry.into(),
                 }) {
-                    trace!(
+                    warn!(
                         "Slot {}, entry {} entry_notification_sender send failed: {:?}",
                         slot, entry_index, err
                     );
