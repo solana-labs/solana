@@ -25,7 +25,7 @@ use {
 use {
     crate::{
         instruction::{ProofType, ZkProofData},
-        zk_token_elgamal::pod,
+        pod,
     },
     bytemuck::{Pod, Zeroable},
 };

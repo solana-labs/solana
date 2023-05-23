@@ -1,5 +1,5 @@
 use {
-    crate::{errors::TranscriptError, zk_token_elgamal::pod},
+    crate::{errors::TranscriptError, pod},
     curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar, traits::IsIdentity},
     merlin::Transcript,
 };

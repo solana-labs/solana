@@ -2,7 +2,7 @@ use {
     crate::{
         encryption::elgamal,
         errors::ProofError,
-        zk_token_elgamal::{Pod, Zeroable},
+        pod::{Pod, Zeroable},
     },
     base64::{prelude::BASE64_STANDARD, Engine},
     curve25519_dalek::ristretto::CompressedRistretto,

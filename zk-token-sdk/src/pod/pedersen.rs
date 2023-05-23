@@ -2,7 +2,7 @@ use {
     crate::{
         encryption::pedersen,
         errors::ProofError,
-        zk_token_elgamal::{Pod, Zeroable},
+        pod::{Pod, Zeroable},
     },
     curve25519_dalek::ristretto::CompressedRistretto,
     std::fmt,

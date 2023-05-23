@@ -34,7 +34,7 @@ mod transcript;
 // TODO: re-organize visibility
 pub mod curve25519;
 pub mod instruction;
-pub mod zk_token_elgamal;
+pub mod pod;
 pub mod zk_token_proof_instruction;
 pub mod zk_token_proof_program;
 pub mod zk_token_proof_state;

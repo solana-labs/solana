@@ -1,6 +1,6 @@
 pub use bytemuck::{Pod, Zeroable};
 use {
-    crate::zk_token_elgamal::{elgamal::*, pedersen::*, PodU16, PodU64},
+    crate::pod::{elgamal::*, pedersen::*, PodU16, PodU64},
     base64::{prelude::BASE64_STANDARD, Engine},
     std::fmt,
 };
