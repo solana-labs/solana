@@ -1,6 +1,7 @@
 pub mod auth_encryption;
 pub mod elgamal;
 pub mod instruction;
+pub mod ops;
 pub mod pedersen;
 pub mod range_proof;
 pub mod sigma_proofs;

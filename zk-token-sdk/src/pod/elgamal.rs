@@ -1,8 +1,9 @@
 use {
     crate::{
+        curve25519::ristretto::PodRistrettoPoint,
         encryption::elgamal,
         errors::ProofError,
-        pod::{Pod, Zeroable},
+        pod::{pedersen::PedersenCommitment, Pod, Zeroable},
     },
     base64::{prelude::BASE64_STANDARD, Engine},
     curve25519_dalek::ristretto::CompressedRistretto,
@@ -79,6 +80,24 @@ impl TryFrom<ElGamalCiphertext> for elgamal::ElGamalCiphertext {
     }
 }
 
+impl From<(PedersenCommitment, DecryptHandle)> for ElGamalCiphertext {
+    fn from((commitment, handle): (PedersenCommitment, DecryptHandle)) -> Self {
+        let mut buf = [0_u8; 64];
+        buf[..32].copy_from_slice(&commitment.0);
+        buf[32..].copy_from_slice(&handle.0);
+        ElGamalCiphertext(buf)
+    }
+}
+
+impl From<ElGamalCiphertext> for (PedersenCommitment, DecryptHandle) {
+    fn from(ciphertext: ElGamalCiphertext) -> Self {
+        let commitment: [u8; 32] = ciphertext.0[..32].try_into().unwrap();
+        let handle: [u8; 32] = ciphertext.0[32..].try_into().unwrap();
+
+        (PedersenCommitment(commitment), DecryptHandle(handle))
+    }
+}
+
 #[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct DecryptHandle(pub [u8; 32]);
@@ -110,5 +129,17 @@ impl TryFrom<DecryptHandle> for elgamal::DecryptHandle {
 
     fn try_from(pod: DecryptHandle) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
+    }
+}
+
+impl From<DecryptHandle> for PodRistrettoPoint {
+    fn from(handle: DecryptHandle) -> Self {
+        PodRistrettoPoint(handle.0)
+    }
+}
+
+impl From<PodRistrettoPoint> for DecryptHandle {
+    fn from(point: PodRistrettoPoint) -> Self {
+        DecryptHandle(point.0)
     }
 }

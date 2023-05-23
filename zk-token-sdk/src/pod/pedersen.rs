@@ -1,5 +1,6 @@
 use {
     crate::{
+        curve25519::ristretto::PodRistrettoPoint,
         encryption::pedersen,
         errors::ProofError,
         pod::{Pod, Zeroable},
@@ -39,5 +40,17 @@ impl TryFrom<PedersenCommitment> for pedersen::PedersenCommitment {
 
     fn try_from(pod: PedersenCommitment) -> Result<Self, Self::Error> {
         Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
+    }
+}
+
+impl From<PedersenCommitment> for PodRistrettoPoint {
+    fn from(commitment: PedersenCommitment) -> Self {
+        PodRistrettoPoint(commitment.0)
+    }
+}
+
+impl From<PodRistrettoPoint> for PedersenCommitment {
+    fn from(point: PodRistrettoPoint) -> Self {
+        PedersenCommitment(point.0)
     }
 }
