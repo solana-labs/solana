@@ -99,20 +99,6 @@ mod target_arch {
         }
     }
 
-    impl From<AeCiphertext> for pod::AeCiphertext {
-        fn from(ct: AeCiphertext) -> Self {
-            Self(ct.to_bytes())
-        }
-    }
-
-    impl TryFrom<pod::AeCiphertext> for AeCiphertext {
-        type Error = ProofError;
-
-        fn try_from(ct: pod::AeCiphertext) -> Result<Self, Self::Error> {
-            Self::from_bytes(&ct.0).ok_or(ProofError::CiphertextDeserialization)
-        }
-    }
-
     impl From<CiphertextCommitmentEqualityProof> for pod::CiphertextCommitmentEqualityProof {
         fn from(proof: CiphertextCommitmentEqualityProof) -> Self {
             Self(proof.to_bytes())

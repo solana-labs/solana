@@ -2,6 +2,7 @@ pub mod convert;
 // pub mod decryption;
 pub mod elgamal;
 // pub mod ops;
+pub mod auth_encryption;
 pub mod pedersen;
 pub mod pod;
 
