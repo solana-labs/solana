@@ -5,6 +5,8 @@ pub mod elgamal;
 pub mod auth_encryption;
 pub mod pedersen;
 pub mod pod;
+pub mod range_proof;
+pub mod sigma_proofs;
 
 use {
     crate::zk_token_proof_instruction::ProofType,
@@ -13,9 +15,16 @@ use {
 };
 
 pub use {
+    auth_encryption::AeCiphertext,
     bytemuck::{Pod, Zeroable},
     elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
     pedersen::PedersenCommitment,
+    range_proof::{RangeProof128, RangeProof256, RangeProof64},
+    sigma_proofs::{
+        AggregatedValidityProof, CiphertextCiphertextEqualityProof,
+        CiphertextCommitmentEqualityProof, FeeSigmaProof, PubkeyValidityProof, ValidityProof,
+        ZeroBalanceProof,
+    },
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
