@@ -1090,6 +1090,7 @@ struct LoadVoteAndStakeAccountsResult {
     vote_accounts_cache_miss_count: usize,
 }
 
+#[derive(Debug)]
 struct VoteReward {
     vote_account: AccountSharedData,
     commission: u8,
