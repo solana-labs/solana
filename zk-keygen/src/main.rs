@@ -48,7 +48,7 @@ fn app(crate_version: &str) -> Command {
                 .disable_version_flag(true)
                 .arg(
                     Arg::new("type")
-                        .long("type")
+                        .index(1)
                         .takes_value(true)
                         .possible_values(["elgamal", "aes128"])
                         .value_name("TYPE")
@@ -81,8 +81,17 @@ fn app(crate_version: &str) -> Command {
                 .about("Display the pubkey from a keypair file")
                 .disable_version_flag(true)
                 .arg(
-                    Arg::new("keypair")
+                    Arg::new("type")
                         .index(1)
+                        .takes_value(true)
+                        .possible_values(["elgamal"])
+                        .value_name("TYPE")
+                        .required(true)
+                        .help("The type of keypair")
+                )
+                .arg(
+                    Arg::new("keypair")
+                        .index(2)
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .help("Filepath or URL to a keypair"),
@@ -92,36 +101,27 @@ fn app(crate_version: &str) -> Command {
                         .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
                         .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
                 )
-                .arg(
-                    Arg::new("type")
-                        .long("type")
-                        .takes_value(true)
-                        .possible_values(["elgamal"])
-                        .value_name("TYPE")
-                        .required(true)
-                        .help("The type of keypair")
-                )
         )
         .subcommand(
             Command::new("recover")
                 .about("Recover keypair from seed phrase and optional BIP39 passphrase")
                 .disable_version_flag(true)
                 .arg(
-                    Arg::new("prompt_signer")
-                        .index(1)
-                        .value_name("KEYPAIR")
-                        .takes_value(true)
-                        .validator(is_prompt_signer_source)
-                        .help("`prompt:` URI scheme or `ASK` keyword"),
-                )
-                .arg(
                     Arg::new("type")
-                        .long("type")
+                        .index(1)
                         .takes_value(true)
                         .possible_values(["elgamal", "aes128"])
                         .value_name("TYPE")
                         .required(true)
                         .help("The type of keypair")
+                )
+                .arg(
+                    Arg::new("prompt_signer")
+                        .index(2)
+                        .value_name("KEYPAIR")
+                        .takes_value(true)
+                        .validator(is_prompt_signer_source)
+                        .help("`prompt:` URI scheme or `ASK` keyword"),
                 )
                 .arg(
                     Arg::new("outfile")
@@ -360,7 +360,6 @@ mod tests {
         process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--type",
             "elgamal",
             "--outfile",
             &outfile_path,
@@ -372,7 +371,6 @@ mod tests {
         let result = process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--type",
             "elgamal",
             "--outfile",
             &outfile_path,
@@ -388,7 +386,6 @@ mod tests {
         process_test_command(&[
             "solana-keygen",
             "new",
-            "--type",
             "elgamal",
             "--no-bip39-passphrase",
             "--no-outfile",
@@ -406,7 +403,6 @@ mod tests {
         process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--type",
             "aes128",
             "--outfile",
             &outfile_path,
@@ -418,7 +414,6 @@ mod tests {
         let result = process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--type",
             "aes128",
             "--outfile",
             &outfile_path,
@@ -434,7 +429,6 @@ mod tests {
         process_test_command(&[
             "solana-keygen",
             "new",
-            "--type",
             "aes128",
             "--no-bip39-passphrase",
             "--no-outfile",
@@ -451,13 +445,6 @@ mod tests {
         let keypair = ElGamalKeypair::new_rand();
         keypair.write_to_file(&keypair_path).unwrap();
 
-        process_test_command(&[
-            "solana-keygen",
-            "pubkey",
-            &keypair_path,
-            "--type",
-            "elgamal",
-        ])
-        .unwrap();
+        process_test_command(&["solana-keygen", "pubkey", "elgamal", &keypair_path]).unwrap();
     }
 }
