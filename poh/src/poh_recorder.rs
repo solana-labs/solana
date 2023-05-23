@@ -573,14 +573,14 @@ impl PohRecorder {
         self.leader_last_tick_height = leader_last_tick_height;
     }
 
-    pub fn set_bank(&mut self, bank: &Arc<Bank>, track_transaction_indexes: bool) {
+    pub fn set_bank(&mut self, bank: Arc<Bank>, track_transaction_indexes: bool) {
         assert!(self.working_bank.is_none());
-        self.leader_bank_notifier.set_in_progress(bank);
+        self.leader_bank_notifier.set_in_progress(&bank);
         let working_bank = WorkingBank {
-            bank: bank.clone(),
-            start: Arc::new(Instant::now()),
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.max_tick_height(),
+            bank,
+            start: Arc::new(Instant::now()),
             transaction_index: track_transaction_indexes.then_some(0),
         };
         trace!("new working bank");
@@ -595,7 +595,7 @@ impl PohRecorder {
                     "resetting poh due to hashes per tick change detected at {}",
                     working_bank.bank.slot()
                 );
-                self.reset_poh(working_bank.clone().bank, false);
+                self.reset_poh(working_bank.bank.clone(), false);
             }
         }
         self.working_bank = Some(working_bank);
@@ -1057,7 +1057,7 @@ pub fn create_test_recorder(
         &poh_config,
         exit.clone(),
     );
-    poh_recorder.set_bank(bank, false);
+    poh_recorder.set_bank(bank.clone(), false);
 
     let poh_recorder = Arc::new(RwLock::new(poh_recorder));
     let poh_service = PohService::new(
@@ -1195,7 +1195,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank(&bank, false);
+            poh_recorder.set_bank(bank, false);
             assert!(poh_recorder.working_bank.is_some());
             poh_recorder.clear_bank();
             assert!(poh_recorder.working_bank.is_none());
@@ -1229,7 +1229,7 @@ mod tests {
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
 
             // Set a working bank
-            poh_recorder.set_bank(&bank1, false);
+            poh_recorder.set_bank(bank1.clone(), false);
 
             // Tick until poh_recorder.tick_height == working bank's min_tick_height
             let num_new_ticks = bank1.tick_height() - poh_recorder.tick_height();
@@ -1298,7 +1298,7 @@ mod tests {
             );
             assert_eq!(poh_recorder.tick_height, bank.max_tick_height() + 1);
 
-            poh_recorder.set_bank(&bank, false);
+            poh_recorder.set_bank(bank.clone(), false);
             poh_recorder.tick();
 
             assert_eq!(poh_recorder.tick_height, bank.max_tick_height() + 2);
@@ -1339,7 +1339,7 @@ mod tests {
 
             bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-            poh_recorder.set_bank(&bank1, false);
+            poh_recorder.set_bank(bank1.clone(), false);
             // Let poh_recorder tick up to bank1.tick_height() - 1
             for _ in 0..bank1.tick_height() - 1 {
                 poh_recorder.tick()
@@ -1380,7 +1380,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank(&bank, false);
+            poh_recorder.set_bank(bank.clone(), false);
             let tx = test_tx();
             let h1 = hash(b"hello world!");
 
@@ -1424,7 +1424,7 @@ mod tests {
 
             bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-            poh_recorder.set_bank(&bank1, false);
+            poh_recorder.set_bank(bank1.clone(), false);
 
             // Record up to exactly min tick height
             let min_tick_height = poh_recorder.working_bank.as_ref().unwrap().min_tick_height;
@@ -1478,7 +1478,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank(&bank, false);
+            poh_recorder.set_bank(bank.clone(), false);
             let num_ticks_to_max = bank.max_tick_height() - poh_recorder.tick_height;
             for _ in 0..num_ticks_to_max {
                 poh_recorder.tick();
@@ -1518,7 +1518,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank(&bank, true);
+            poh_recorder.set_bank(bank.clone(), true);
             poh_recorder.tick();
             assert_eq!(
                 poh_recorder
@@ -1592,7 +1592,7 @@ mod tests {
 
             bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-            poh_recorder.set_bank(&bank1, false);
+            poh_recorder.set_bank(bank1, false);
 
             // Check we can make two ticks without hitting min_tick_height
             let remaining_ticks_to_min =
@@ -1740,7 +1740,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank(&bank, false);
+            poh_recorder.set_bank(bank.clone(), false);
             assert_eq!(bank.slot(), 0);
             poh_recorder.reset(bank, Some((4, 4)));
             assert!(poh_recorder.working_bank.is_none());
@@ -1772,7 +1772,7 @@ mod tests {
                     None,
                     Arc::new(AtomicBool::default()),
                 );
-            poh_recorder.set_bank(&bank, false);
+            poh_recorder.set_bank(bank, false);
             poh_recorder.clear_bank();
             assert!(receiver.try_recv().is_ok());
         }
@@ -1807,7 +1807,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank(&bank, false);
+            poh_recorder.set_bank(bank.clone(), false);
 
             // Simulate ticking much further than working_bank.max_tick_height
             let max_tick_height = poh_recorder.working_bank.as_ref().unwrap().max_tick_height;
@@ -2102,7 +2102,7 @@ mod tests {
             // Move the bank up a slot (so that max_tick_height > slot 0's tick_height)
             let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 1));
             // If we set the working bank, the node should be leader within next 2 slots
-            poh_recorder.set_bank(&bank, false);
+            poh_recorder.set_bank(bank.clone(), false);
             assert!(poh_recorder.would_be_leader(2 * bank.ticks_per_slot()));
         }
     }
@@ -2136,7 +2136,7 @@ mod tests {
             for _ in 0..(bank.ticks_per_slot() * 3) {
                 poh_recorder.tick();
             }
-            poh_recorder.set_bank(&bank, false);
+            poh_recorder.set_bank(bank.clone(), false);
             assert!(!bank.is_hash_valid_for_age(&genesis_hash, 0));
             assert!(bank.is_hash_valid_for_age(&genesis_hash, 1));
         }
