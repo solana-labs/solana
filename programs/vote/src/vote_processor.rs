@@ -224,15 +224,7 @@ declare_process_instruction!(process_instruction, 2100, |invoke_context| {
         VoteInstruction::Withdraw(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             let rent_sysvar = invoke_context.get_sysvar_cache().get_rent()?;
-
-            let clock_if_feature_active = if invoke_context
-                .feature_set
-                .is_active(&feature_set::reject_vote_account_close_unless_zero_credit_epoch::id())
-            {
-                Some(invoke_context.get_sysvar_cache().get_clock()?)
-            } else {
-                None
-            };
+            let clock_sysvar = invoke_context.get_sysvar_cache().get_clock()?;
 
             drop(me);
             vote_state::withdraw(
@@ -243,7 +235,7 @@ declare_process_instruction!(process_instruction, 2100, |invoke_context| {
                 1,
                 &signers,
                 &rent_sysvar,
-                clock_if_feature_active.as_deref(),
+                &clock_sysvar,
                 &invoke_context.feature_set,
             )
         }
@@ -1231,30 +1223,9 @@ mod tests {
         instruction_accounts[0].pubkey = vote_pubkey_2;
         process_instruction(
             &serialize(&VoteInstruction::Withdraw(lamports)).unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Err(VoteError::ActiveVoteAccountClose.into()),
-        );
-
-        // Following features disabled:
-        // reject_vote_account_close_unless_zero_credit_epoch
-
-        // full withdraw, with 0 credit epoch
-        instruction_accounts[0].pubkey = vote_pubkey_1;
-        process_instruction_disabled_features(
-            &serialize(&VoteInstruction::Withdraw(lamports)).unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Ok(()),
-        );
-
-        // full withdraw, without 0 credit epoch
-        instruction_accounts[0].pubkey = vote_pubkey_2;
-        process_instruction_disabled_features(
-            &serialize(&VoteInstruction::Withdraw(lamports)).unwrap(),
             transaction_accounts,
             instruction_accounts,
-            Ok(()),
+            Err(VoteError::ActiveVoteAccountClose.into()),
         );
     }
 
