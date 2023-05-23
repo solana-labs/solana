@@ -32,7 +32,7 @@ pub enum AccountsFileError {
     Io(#[from] std::io::Error),
 }
 
-pub type Result<T> = std::result::Result<T, AccountsFileError>;
+pub type AccountsFileResult<T> = std::result::Result<T, AccountsFileError>;
 
 #[derive(Debug)]
 /// An enum for accessing an accounts file which can be implemented
@@ -46,7 +46,10 @@ impl AccountsFile {
     ///
     /// The second element of the returned tuple is the number of accounts in the
     /// accounts file.
-    pub fn new_from_file(path: impl AsRef<Path>, current_len: usize) -> Result<(Self, usize)> {
+    pub fn new_from_file(
+        path: impl AsRef<Path>,
+        current_len: usize,
+    ) -> AccountsFileResult<(Self, usize)> {
         let (av, num_accounts) = AppendVec::new_from_file(path, current_len)?;
         Ok((Self::AppendVec(av), num_accounts))
     }
@@ -60,7 +63,7 @@ impl AccountsFile {
         }
     }
 
-    pub fn flush(&self) -> Result<()> {
+    pub fn flush(&self) -> AccountsFileResult<()> {
         match self {
             Self::AppendVec(av) => av.flush(),
         }

@@ -10,7 +10,7 @@ use {
             AccountMeta, StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo,
             StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
         },
-        accounts_file::{AccountsFileError, Result, ALIGN_BOUNDARY_OFFSET},
+        accounts_file::{AccountsFileError, AccountsFileResult as AfResult, ALIGN_BOUNDARY_OFFSET},
         storable_accounts::StorableAccounts,
         u64_align,
     },
@@ -295,7 +295,7 @@ impl AppendVec {
         self.remove_on_drop = false;
     }
 
-    fn sanitize_len_and_size(current_len: usize, file_size: usize) -> Result<()> {
+    fn sanitize_len_and_size(current_len: usize, file_size: usize) -> AfResult<()> {
         if file_size == 0 {
             Err(AccountsFileError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
@@ -319,7 +319,7 @@ impl AppendVec {
         }
     }
 
-    pub fn flush(&self) -> Result<()> {
+    pub fn flush(&self) -> AfResult<()> {
         self.map.flush()?;
         Ok(())
     }
@@ -352,7 +352,7 @@ impl AppendVec {
         format!("{slot}.{id}")
     }
 
-    pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> Result<(Self, usize)> {
+    pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> AfResult<(Self, usize)> {
         let new = Self::new_from_file_unchecked(&path, current_len)?;
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
@@ -373,7 +373,7 @@ impl AppendVec {
     }
 
     /// Creates an appendvec from file without performing sanitize checks or counting the number of accounts
-    pub fn new_from_file_unchecked<P: AsRef<Path>>(path: P, current_len: usize) -> Result<Self> {
+    pub fn new_from_file_unchecked<P: AsRef<Path>>(path: P, current_len: usize) -> AfResult<Self> {
         let file_size = std::fs::metadata(&path)?.len();
         Self::sanitize_len_and_size(current_len, file_size as usize)?;
 
