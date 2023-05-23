@@ -1946,7 +1946,6 @@ impl Bank {
 
             self.log_epoch_reward_sysvar("burn");
             self.burn_and_purge_account(&sysvar::epoch_rewards::id(), account);
-            self.clear_epoch_rewards_sysvar_cache();
         }
     }
 
@@ -4033,8 +4032,6 @@ impl Bank {
             create_account(&epoch_rewards, inherited_account_fields)
         });
 
-        self.fill_missing_sysvar_cache_entries();
-
         self.log_epoch_reward_sysvar("create");
     }
 
@@ -4055,8 +4052,6 @@ impl Bank {
             inherited_account_fields.0 = lamports - distributed;
             create_account(&epoch_rewards, inherited_account_fields)
         });
-
-        self.refresh_epoch_rewards_sysvar_cache();
 
         self.log_epoch_reward_sysvar("update");
     }

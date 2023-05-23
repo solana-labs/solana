@@ -12,21 +12,6 @@ impl Bank {
             }
         });
     }
-
-    pub(crate) fn clear_epoch_rewards_sysvar_cache(&self) {
-        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
-        sysvar_cache.clear_epoch_rewards();
-    }
-
-    pub(crate) fn refresh_epoch_rewards_sysvar_cache(&self) {
-        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
-        sysvar_cache.refresh_epoch_rewards(|pubkey, callback| {
-            if let Some(account) = self.get_account_with_fixed_root(pubkey) {
-                callback(account.data());
-            }
-        });
-    }
-
     pub(crate) fn reset_sysvar_cache(&self) {
         let mut sysvar_cache = self.sysvar_cache.write().unwrap();
         sysvar_cache.reset();
@@ -194,9 +179,5 @@ mod tests {
             expected_epoch_rewards,
         );
         drop(bank1_sysvar_cache);
-
-        bank1.clear_epoch_rewards_sysvar_cache();
-        let bank1_sysvar_cache = bank1.sysvar_cache.read().unwrap();
-        assert!(bank1_sysvar_cache.get_epoch_rewards().is_err());
     }
 }
