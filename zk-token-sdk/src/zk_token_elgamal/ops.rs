@@ -129,7 +129,7 @@ mod tests {
                 pedersen::{Pedersen, PedersenOpening},
             },
             instruction::split_u64,
-            zk_token_elgamal::pod::{self, ops},
+            zk_token_elgamal::{ops, pod},
         },
         bytemuck::Zeroable,
         curve25519_dalek::scalar::Scalar,
