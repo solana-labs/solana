@@ -801,13 +801,8 @@ pub fn authorize<S: std::hash::BuildHasher>(
 
     match vote_authorize {
         VoteAuthorize::Voter => {
-            let authorized_withdrawer_signer = if feature_set
-                .is_active(&feature_set::vote_withdraw_authority_may_change_authorized_voter::id())
-            {
-                verify_authorized_signer(&vote_state.authorized_withdrawer, signers).is_ok()
-            } else {
-                false
-            };
+            let authorized_withdrawer_signer =
+                verify_authorized_signer(&vote_state.authorized_withdrawer, signers).is_ok();
 
             vote_state.set_new_authorized_voter(
                 authorized,
