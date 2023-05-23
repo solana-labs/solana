@@ -20,12 +20,13 @@ use {
         convert::TryInto,
         fs::File,
         io::{BufWriter, Write},
+        path::{Path, PathBuf},
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc, Mutex,
         },
     },
-    tempfile::tempfile,
+    tempfile::tempfile_in,
 };
 pub const MERKLE_FANOUT: usize = 16;
 
@@ -81,10 +82,13 @@ impl AccountHashesFile {
 
     /// write 'hash' to the file
     /// If the file isn't open, create it first.
-    pub fn write(&mut self, hash: &Hash) {
+    pub fn write(&mut self, hash: &Hash, dir_for_temp_cache_files: impl AsRef<Path>) {
         if self.count_and_writer.is_none() {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
-            self.count_and_writer = Some((0, BufWriter::new(tempfile().unwrap())));
+            self.count_and_writer = Some((
+                0,
+                BufWriter::new(tempfile_in(dir_for_temp_cache_files).unwrap()),
+            ));
         }
         let count_and_writer = self.count_and_writer.as_mut().unwrap();
         assert_eq!(
@@ -455,15 +459,8 @@ impl CumulativeOffsets {
 pub struct AccountsHasher {
     pub filler_account_suffix: Option<Pubkey>,
     pub zero_lamport_accounts: ZeroLamportAccounts,
-}
-
-impl Default for AccountsHasher {
-    fn default() -> Self {
-        Self {
-            filler_account_suffix: None,
-            zero_lamport_accounts: ZeroLamportAccounts::Excluded,
-        }
-    }
+    /// The directory where temporary cache files are put
+    pub dir_for_temp_cache_files: PathBuf,
 }
 
 impl AccountsHasher {
@@ -994,7 +991,7 @@ impl AccountsHasher {
                     overall_sum = Self::checked_cast_for_capitalization(
                         item.lamports as u128 + overall_sum as u128,
                     );
-                    hashes.write(&item.hash);
+                    hashes.write(&item.hash, &self.dir_for_temp_cache_files);
                 }
             } else {
                 // if lamports == 0, check if they should be included
@@ -1003,7 +1000,7 @@ impl AccountsHasher {
                     // the hash of its pubkey
                     let hash = blake3::hash(bytemuck::bytes_of(&item.pubkey));
                     let hash = Hash::new_from_array(hash.into());
-                    hashes.write(&hash);
+                    hashes.write(&hash, &self.dir_for_temp_cache_files);
                 }
             }
 
@@ -1111,17 +1108,28 @@ pub struct AccountsDeltaHash(pub Hash);
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, std::str::FromStr};
+    use {super::*, std::str::FromStr, tempfile::tempdir};
+
+    impl AccountsHasher {
+        fn new(dir_for_temp_cache_files: PathBuf) -> Self {
+            Self {
+                filler_account_suffix: None,
+                zero_lamport_accounts: ZeroLamportAccounts::Excluded,
+                dir_for_temp_cache_files,
+            }
+        }
+    }
 
     #[test]
     fn test_account_hashes_file() {
+        let dir_for_temp_cache_files = tempdir().unwrap();
         // 0 hashes
         let mut file = AccountHashesFile::default();
         assert!(file.get_reader().is_none());
         let hashes = (0..2).map(|i| Hash::new(&[i; 32])).collect::<Vec<_>>();
 
         // 1 hash
-        file.write(&hashes[0]);
+        file.write(&hashes[0], &dir_for_temp_cache_files);
         let reader = file.get_reader().unwrap();
         assert_eq!(&[hashes[0]][..], reader.1.read(0));
         assert!(reader.1.read(1).is_empty());
@@ -1129,7 +1137,9 @@ pub mod tests {
         // multiple hashes
         let mut file = AccountHashesFile::default();
         assert!(file.get_reader().is_none());
-        hashes.iter().for_each(|hash| file.write(hash));
+        hashes
+            .iter()
+            .for_each(|hash| file.write(hash, &dir_for_temp_cache_files));
         let reader = file.get_reader().unwrap();
         (0..2).for_each(|i| assert_eq!(&hashes[i..], reader.1.read(i)));
         assert!(reader.1.read(2).is_empty());
@@ -1137,6 +1147,7 @@ pub mod tests {
 
     #[test]
     fn test_cumulative_hashes_from_files() {
+        let dir_for_temp_cache_files = tempdir().unwrap();
         (0..4).for_each(|permutation| {
             let hashes = (0..2).map(|i| Hash::new(&[i + 1; 32])).collect::<Vec<_>>();
 
@@ -1147,13 +1158,13 @@ pub mod tests {
 
             // 1 hash
             let mut file1 = AccountHashesFile::default();
-            file1.write(&hashes[0]);
+            file1.write(&hashes[0], &dir_for_temp_cache_files);
             combined.push(hashes[0]);
 
             // multiple hashes
             let mut file2 = AccountHashesFile::default();
             hashes.iter().for_each(|hash| {
-                file2.write(hash);
+                file2.write(hash, &dir_for_temp_cache_files);
                 combined.push(*hash);
             });
 
@@ -1240,7 +1251,8 @@ pub mod tests {
         let val = CalculateHashIntermediate::new(hash, 0, key);
         account_maps.push(val);
 
-        let accounts_hash = AccountsHasher::default();
+        let dir_for_temp_cache_files = tempdir().unwrap();
+        let accounts_hash = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
         let result = accounts_hash
             .rest_of_hash_calculation(for_rest(&account_maps), &mut HashStats::default());
         let expected_hash = Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
@@ -1285,8 +1297,9 @@ pub mod tests {
         }]]];
         let temp_vec = vec.to_vec();
         let slice = convert_to_slice2(&temp_vec);
-        let (mut hashes, lamports, _) =
-            AccountsHasher::default().de_dup_accounts_in_parallel(&slice, 0);
+        let dir_for_temp_cache_files = tempdir().unwrap();
+        let accounts_hasher = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
+        let (mut hashes, lamports, _) = accounts_hasher.de_dup_accounts_in_parallel(&slice, 0);
         assert_eq!(&[Hash::default()], hashes.get_reader().unwrap().1.read(0));
         assert_eq!(lamports, 1);
     }
@@ -1304,7 +1317,8 @@ pub mod tests {
     #[test]
     fn test_accountsdb_de_dup_accounts_empty() {
         solana_logger::setup();
-        let accounts_hash = AccountsHasher::default();
+        let dir_for_temp_cache_files = tempdir().unwrap();
+        let accounts_hash = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
 
         let vec = vec![vec![], vec![]];
         let (hashes, lamports) =
@@ -1399,7 +1413,8 @@ pub mod tests {
                 result
             }).collect();
 
-        let hash = AccountsHasher::default();
+        let dir_for_temp_cache_files = tempdir().unwrap();
+        let hash = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
         let mut expected_index = 0;
         for last_slice in 0..2 {
             for start in 0..COUNT {
@@ -1532,7 +1547,9 @@ pub mod tests {
     fn test_de_dup_accounts_in_parallel<'a>(
         account_maps: &'a [SortedDataByPubkey<'a>],
     ) -> (AccountHashesFile, u64, usize) {
-        AccountsHasher::default().de_dup_accounts_in_parallel(account_maps, 0)
+        let dir_for_temp_cache_files = tempdir().unwrap();
+        let accounts_hasher = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
+        accounts_hasher.de_dup_accounts_in_parallel(account_maps, 0)
     }
 
     #[test]
@@ -1908,7 +1925,9 @@ pub mod tests {
             ),
             CalculateHashIntermediate::new(Hash::new(&[2u8; 32]), offset + 1, Pubkey::new_unique()),
         ];
-        AccountsHasher::default().de_dup_accounts_in_parallel(&[convert_to_slice(&[input])], 0);
+        let dir_for_temp_cache_files = tempdir().unwrap();
+        let accounts_hasher = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
+        accounts_hasher.de_dup_accounts_in_parallel(&[convert_to_slice(&[input])], 0);
     }
 
     fn convert_to_slice(
@@ -1944,7 +1963,9 @@ pub mod tests {
                 Pubkey::new_unique(),
             )],
         ];
-        AccountsHasher::default().de_dup_accounts(
+        let dir_for_temp_cache_files = tempdir().unwrap();
+        let accounts_hasher = AccountsHasher::new(dir_for_temp_cache_files.path().to_path_buf());
+        accounts_hasher.de_dup_accounts(
             &[convert_to_slice(&input)],
             &mut HashStats::default(),
             2, // accounts above are in 2 groups
