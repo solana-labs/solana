@@ -3,7 +3,7 @@ use crate::{
         ristretto::{add_ristretto, multiply_ristretto, subtract_ristretto, PodRistrettoPoint},
         scalar::PodScalar,
     },
-    zk_token_elgamal::pod,
+    zk_token_elgamal::{elgamal::*, pedersen::*},
 };
 
 const SHIFT_BITS: usize = 16;
@@ -15,45 +15,42 @@ const G: PodRistrettoPoint = PodRistrettoPoint([
 
 /// Add two ElGamal ciphertexts
 pub fn add(
-    left_ciphertext: &pod::ElGamalCiphertext,
-    right_ciphertext: &pod::ElGamalCiphertext,
-) -> Option<pod::ElGamalCiphertext> {
-    let (left_commitment, left_handle): (pod::PedersenCommitment, pod::DecryptHandle) =
+    left_ciphertext: &ElGamalCiphertext,
+    right_ciphertext: &ElGamalCiphertext,
+) -> Option<ElGamalCiphertext> {
+    let (left_commitment, left_handle): (PedersenCommitment, DecryptHandle) =
         (*left_ciphertext).into();
-    let (right_commitment, right_handle): (pod::PedersenCommitment, pod::DecryptHandle) =
+    let (right_commitment, right_handle): (PedersenCommitment, DecryptHandle) =
         (*right_ciphertext).into();
 
-    let result_commitment: pod::PedersenCommitment =
+    let result_commitment: PedersenCommitment =
         add_ristretto(&left_commitment.into(), &right_commitment.into())?.into();
-    let result_handle: pod::DecryptHandle =
+    let result_handle: DecryptHandle =
         add_ristretto(&left_handle.into(), &right_handle.into())?.into();
 
     Some((result_commitment, result_handle).into())
 }
 
 /// Multiply an ElGamal ciphertext by a scalar
-pub fn multiply(
-    scalar: &PodScalar,
-    ciphertext: &pod::ElGamalCiphertext,
-) -> Option<pod::ElGamalCiphertext> {
-    let (commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*ciphertext).into();
+pub fn multiply(scalar: &PodScalar, ciphertext: &ElGamalCiphertext) -> Option<ElGamalCiphertext> {
+    let (commitment, handle): (PedersenCommitment, DecryptHandle) = (*ciphertext).into();
 
     let commitment_point: PodRistrettoPoint = commitment.into();
     let handle_point: PodRistrettoPoint = handle.into();
 
-    let result_commitment: pod::PedersenCommitment =
+    let result_commitment: PedersenCommitment =
         multiply_ristretto(scalar, &commitment_point)?.into();
-    let result_handle: pod::DecryptHandle = multiply_ristretto(scalar, &handle_point)?.into();
+    let result_handle: DecryptHandle = multiply_ristretto(scalar, &handle_point)?.into();
 
     Some((result_commitment, result_handle).into())
 }
 
 /// Compute `left_ciphertext + (right_ciphertext_lo + 2^16 * right_ciphertext_hi)`
 pub fn add_with_lo_hi(
-    left_ciphertext: &pod::ElGamalCiphertext,
-    right_ciphertext_lo: &pod::ElGamalCiphertext,
-    right_ciphertext_hi: &pod::ElGamalCiphertext,
-) -> Option<pod::ElGamalCiphertext> {
+    left_ciphertext: &ElGamalCiphertext,
+    right_ciphertext_lo: &ElGamalCiphertext,
+    right_ciphertext_hi: &ElGamalCiphertext,
+) -> Option<ElGamalCiphertext> {
     let shift_scalar = to_scalar(1_u64 << SHIFT_BITS);
     let shifted_right_ciphertext_hi = multiply(&shift_scalar, right_ciphertext_hi)?;
     let combined_right_ciphertext = add(right_ciphertext_lo, &shifted_right_ciphertext_hi)?;
@@ -62,17 +59,17 @@ pub fn add_with_lo_hi(
 
 /// Subtract two ElGamal ciphertexts
 pub fn subtract(
-    left_ciphertext: &pod::ElGamalCiphertext,
-    right_ciphertext: &pod::ElGamalCiphertext,
-) -> Option<pod::ElGamalCiphertext> {
-    let (left_commitment, left_handle): (pod::PedersenCommitment, pod::DecryptHandle) =
+    left_ciphertext: &ElGamalCiphertext,
+    right_ciphertext: &ElGamalCiphertext,
+) -> Option<ElGamalCiphertext> {
+    let (left_commitment, left_handle): (PedersenCommitment, DecryptHandle) =
         (*left_ciphertext).into();
-    let (right_commitment, right_handle): (pod::PedersenCommitment, pod::DecryptHandle) =
+    let (right_commitment, right_handle): (PedersenCommitment, DecryptHandle) =
         (*right_ciphertext).into();
 
-    let result_commitment: pod::PedersenCommitment =
+    let result_commitment: PedersenCommitment =
         subtract_ristretto(&left_commitment.into(), &right_commitment.into())?.into();
-    let result_handle: pod::DecryptHandle =
+    let result_handle: DecryptHandle =
         subtract_ristretto(&left_handle.into(), &right_handle.into())?.into();
 
     Some((result_commitment, result_handle).into())
@@ -80,10 +77,10 @@ pub fn subtract(
 
 /// Compute `left_ciphertext - (right_ciphertext_lo + 2^16 * right_ciphertext_hi)`
 pub fn subtract_with_lo_hi(
-    left_ciphertext: &pod::ElGamalCiphertext,
-    right_ciphertext_lo: &pod::ElGamalCiphertext,
-    right_ciphertext_hi: &pod::ElGamalCiphertext,
-) -> Option<pod::ElGamalCiphertext> {
+    left_ciphertext: &ElGamalCiphertext,
+    right_ciphertext_lo: &ElGamalCiphertext,
+    right_ciphertext_hi: &ElGamalCiphertext,
+) -> Option<ElGamalCiphertext> {
     let shift_scalar = to_scalar(1_u64 << SHIFT_BITS);
     let shifted_right_ciphertext_hi = multiply(&shift_scalar, right_ciphertext_hi)?;
     let combined_right_ciphertext = add(right_ciphertext_lo, &shifted_right_ciphertext_hi)?;
@@ -91,30 +88,27 @@ pub fn subtract_with_lo_hi(
 }
 
 /// Add a constant amount to a ciphertext
-pub fn add_to(ciphertext: &pod::ElGamalCiphertext, amount: u64) -> Option<pod::ElGamalCiphertext> {
+pub fn add_to(ciphertext: &ElGamalCiphertext, amount: u64) -> Option<ElGamalCiphertext> {
     let amount_scalar = to_scalar(amount);
     let amount_point = multiply_ristretto(&amount_scalar, &G)?;
 
-    let (commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*ciphertext).into();
+    let (commitment, handle): (PedersenCommitment, DecryptHandle) = (*ciphertext).into();
     let commitment_point: PodRistrettoPoint = commitment.into();
 
-    let result_commitment: pod::PedersenCommitment =
+    let result_commitment: PedersenCommitment =
         add_ristretto(&commitment_point, &amount_point)?.into();
     Some((result_commitment, handle).into())
 }
 
 /// Subtract a constant amount to a ciphertext
-pub fn subtract_from(
-    ciphertext: &pod::ElGamalCiphertext,
-    amount: u64,
-) -> Option<pod::ElGamalCiphertext> {
+pub fn subtract_from(ciphertext: &ElGamalCiphertext, amount: u64) -> Option<ElGamalCiphertext> {
     let amount_scalar = to_scalar(amount);
     let amount_point = multiply_ristretto(&amount_scalar, &G)?;
 
-    let (commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*ciphertext).into();
+    let (commitment, handle): (PedersenCommitment, DecryptHandle) = (*ciphertext).into();
     let commitment_point: PodRistrettoPoint = commitment.into();
 
-    let result_commitment: pod::PedersenCommitment =
+    let result_commitment: PedersenCommitment =
         subtract_ristretto(&commitment_point, &amount_point)?.into();
     Some((result_commitment, handle).into())
 }

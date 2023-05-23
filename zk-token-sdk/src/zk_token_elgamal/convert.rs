@@ -1,50 +1,50 @@
 pub use target_arch::*;
 use {super::pod, crate::curve25519::ristretto::PodRistrettoPoint};
 
-impl From<(pod::PedersenCommitment, pod::DecryptHandle)> for pod::ElGamalCiphertext {
-    fn from((commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle)) -> Self {
-        let mut buf = [0_u8; 64];
-        buf[..32].copy_from_slice(&commitment.0);
-        buf[32..].copy_from_slice(&handle.0);
-        pod::ElGamalCiphertext(buf)
-    }
-}
+// impl From<(pod::PedersenCommitment, pod::DecryptHandle)> for pod::ElGamalCiphertext {
+//     fn from((commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle)) -> Self {
+//         let mut buf = [0_u8; 64];
+//         buf[..32].copy_from_slice(&commitment.0);
+//         buf[32..].copy_from_slice(&handle.0);
+//         pod::ElGamalCiphertext(buf)
+//     }
+// }
 
-impl From<pod::ElGamalCiphertext> for (pod::PedersenCommitment, pod::DecryptHandle) {
-    fn from(ciphertext: pod::ElGamalCiphertext) -> Self {
-        let commitment: [u8; 32] = ciphertext.0[..32].try_into().unwrap();
-        let handle: [u8; 32] = ciphertext.0[32..].try_into().unwrap();
+// impl From<pod::ElGamalCiphertext> for (pod::PedersenCommitment, pod::DecryptHandle) {
+//     fn from(ciphertext: pod::ElGamalCiphertext) -> Self {
+//         let commitment: [u8; 32] = ciphertext.0[..32].try_into().unwrap();
+//         let handle: [u8; 32] = ciphertext.0[32..].try_into().unwrap();
 
-        (
-            pod::PedersenCommitment(commitment),
-            pod::DecryptHandle(handle),
-        )
-    }
-}
+//         (
+//             pod::PedersenCommitment(commitment),
+//             pod::DecryptHandle(handle),
+//         )
+//     }
+// }
 
-impl From<pod::PedersenCommitment> for PodRistrettoPoint {
-    fn from(commitment: pod::PedersenCommitment) -> Self {
-        PodRistrettoPoint(commitment.0)
-    }
-}
+// impl From<pod::PedersenCommitment> for PodRistrettoPoint {
+//     fn from(commitment: pod::PedersenCommitment) -> Self {
+//         PodRistrettoPoint(commitment.0)
+//     }
+// }
 
-impl From<PodRistrettoPoint> for pod::PedersenCommitment {
-    fn from(point: PodRistrettoPoint) -> Self {
-        pod::PedersenCommitment(point.0)
-    }
-}
+// impl From<PodRistrettoPoint> for pod::PedersenCommitment {
+//     fn from(point: PodRistrettoPoint) -> Self {
+//         pod::PedersenCommitment(point.0)
+//     }
+// }
 
-impl From<pod::DecryptHandle> for PodRistrettoPoint {
-    fn from(handle: pod::DecryptHandle) -> Self {
-        PodRistrettoPoint(handle.0)
-    }
-}
+// impl From<pod::DecryptHandle> for PodRistrettoPoint {
+//     fn from(handle: pod::DecryptHandle) -> Self {
+//         PodRistrettoPoint(handle.0)
+//     }
+// }
 
-impl From<PodRistrettoPoint> for pod::DecryptHandle {
-    fn from(point: PodRistrettoPoint) -> Self {
-        pod::DecryptHandle(point.0)
-    }
-}
+// impl From<PodRistrettoPoint> for pod::DecryptHandle {
+//     fn from(point: PodRistrettoPoint) -> Self {
+//         pod::DecryptHandle(point.0)
+//     }
+// }
 
 #[cfg(not(target_os = "solana"))]
 mod target_arch {
@@ -52,11 +52,7 @@ mod target_arch {
         super::pod,
         crate::{
             curve25519::scalar::PodScalar,
-            encryption::{
-                auth_encryption::AeCiphertext,
-                elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
-                pedersen::PedersenCommitment,
-            },
+            encryption::auth_encryption::AeCiphertext,
             errors::{ProofError, ProofVerificationError},
             instruction::{
                 transfer::{TransferAmountEncryption, TransferPubkeys},
@@ -91,34 +87,6 @@ mod target_arch {
         }
     }
 
-    impl From<ElGamalCiphertext> for pod::ElGamalCiphertext {
-        fn from(ct: ElGamalCiphertext) -> Self {
-            Self(ct.to_bytes())
-        }
-    }
-
-    impl TryFrom<pod::ElGamalCiphertext> for ElGamalCiphertext {
-        type Error = ProofError;
-
-        fn try_from(ct: pod::ElGamalCiphertext) -> Result<Self, Self::Error> {
-            Self::from_bytes(&ct.0).ok_or(ProofError::CiphertextDeserialization)
-        }
-    }
-
-    impl From<ElGamalPubkey> for pod::ElGamalPubkey {
-        fn from(pk: ElGamalPubkey) -> Self {
-            Self(pk.to_bytes())
-        }
-    }
-
-    impl TryFrom<pod::ElGamalPubkey> for ElGamalPubkey {
-        type Error = ProofError;
-
-        fn try_from(pk: pod::ElGamalPubkey) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pk.0).ok_or(ProofError::CiphertextDeserialization)
-        }
-    }
-
     impl From<CompressedRistretto> for pod::CompressedRistretto {
         fn from(cr: CompressedRistretto) -> Self {
             Self(cr.to_bytes())
@@ -128,53 +96,6 @@ mod target_arch {
     impl From<pod::CompressedRistretto> for CompressedRistretto {
         fn from(pod: pod::CompressedRistretto) -> Self {
             Self(pod.0)
-        }
-    }
-
-    impl From<PedersenCommitment> for pod::PedersenCommitment {
-        fn from(comm: PedersenCommitment) -> Self {
-            Self(comm.to_bytes())
-        }
-    }
-
-    // For proof verification, interpret pod::PedersenComm directly as CompressedRistretto
-    #[cfg(not(target_os = "solana"))]
-    impl From<pod::PedersenCommitment> for CompressedRistretto {
-        fn from(pod: pod::PedersenCommitment) -> Self {
-            Self(pod.0)
-        }
-    }
-
-    #[cfg(not(target_os = "solana"))]
-    impl TryFrom<pod::PedersenCommitment> for PedersenCommitment {
-        type Error = ProofError;
-
-        fn try_from(pod: pod::PedersenCommitment) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
-        }
-    }
-
-    #[cfg(not(target_os = "solana"))]
-    impl From<DecryptHandle> for pod::DecryptHandle {
-        fn from(handle: DecryptHandle) -> Self {
-            Self(handle.to_bytes())
-        }
-    }
-
-    // For proof verification, interpret pod::PedersenDecHandle as CompressedRistretto
-    #[cfg(not(target_os = "solana"))]
-    impl From<pod::DecryptHandle> for CompressedRistretto {
-        fn from(pod: pod::DecryptHandle) -> Self {
-            Self(pod.0)
-        }
-    }
-
-    #[cfg(not(target_os = "solana"))]
-    impl TryFrom<pod::DecryptHandle> for DecryptHandle {
-        type Error = ProofError;
-
-        fn try_from(pod: pod::DecryptHandle) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 

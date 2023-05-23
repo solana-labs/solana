@@ -1,6 +1,6 @@
 pub use bytemuck::{Pod, Zeroable};
 use {
-    crate::zk_token_elgamal::{PodU16, PodU64},
+    crate::zk_token_elgamal::{elgamal::*, pedersen::*, PodU16, PodU64},
     base64::{prelude::BASE64_STANDARD, Engine},
     std::fmt,
 };
@@ -8,64 +8,6 @@ use {
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct CompressedRistretto(pub [u8; 32]);
-
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct ElGamalCiphertext(pub [u8; 64]);
-
-impl fmt::Debug for ElGamalCiphertext {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-impl fmt::Display for ElGamalCiphertext {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", BASE64_STANDARD.encode(self.0))
-    }
-}
-
-impl Default for ElGamalCiphertext {
-    fn default() -> Self {
-        Self::zeroed()
-    }
-}
-
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct ElGamalPubkey(pub [u8; 32]);
-
-impl fmt::Debug for ElGamalPubkey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-impl fmt::Display for ElGamalPubkey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", BASE64_STANDARD.encode(self.0))
-    }
-}
-
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct PedersenCommitment(pub [u8; 32]);
-
-impl fmt::Debug for PedersenCommitment {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct DecryptHandle(pub [u8; 32]);
-
-impl fmt::Debug for DecryptHandle {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
 
 /// Serialization of `CiphertextCommitmentEqualityProof`
 #[derive(Clone, Copy)]

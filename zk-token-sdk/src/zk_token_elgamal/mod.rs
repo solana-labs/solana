@@ -1,4 +1,9 @@
-pub use bytemuck::{Pod, Zeroable};
+pub mod convert;
+// pub mod decryption;
+pub mod elgamal;
+// pub mod ops;
+pub mod pedersen;
+pub mod pod;
 
 use {
     crate::zk_token_proof_instruction::ProofType,
@@ -6,10 +11,11 @@ use {
     solana_program::instruction::InstructionError,
 };
 
-pub mod convert;
-pub mod decryption;
-pub mod ops;
-pub mod pod;
+pub use {
+    bytemuck::{Pod, Zeroable},
+    elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
+    pedersen::PedersenCommitment,
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
