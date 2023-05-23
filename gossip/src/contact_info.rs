@@ -35,8 +35,9 @@ const SOCKET_TAG_TPU_VOTE: u8 = 9;
 const SOCKET_TAG_TVU: u8 = 10;
 const SOCKET_TAG_TVU_FORWARDS: u8 = 11;
 const SOCKET_TAG_TVU_QUIC: u8 = 12;
-const_assert_eq!(SOCKET_CACHE_SIZE, 13);
-const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_TVU_QUIC as usize + 1usize;
+const SOCKET_TAG_REPAIR_QUIC: u8 = 13;
+const_assert_eq!(SOCKET_CACHE_SIZE, 14);
+const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_REPAIR_QUIC as usize + 1usize;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -213,7 +214,7 @@ impl ContactInfo {
     }
 
     get_socket!(gossip, SOCKET_TAG_GOSSIP);
-    get_socket!(repair, SOCKET_TAG_REPAIR);
+    get_socket!(repair, SOCKET_TAG_REPAIR, SOCKET_TAG_REPAIR_QUIC);
     get_socket!(rpc, SOCKET_TAG_RPC);
     get_socket!(rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
     get_socket!(serve_repair, SOCKET_TAG_SERVE_REPAIR);
@@ -228,7 +229,7 @@ impl ContactInfo {
     get_socket!(tvu_forwards, SOCKET_TAG_TVU_FORWARDS);
 
     set_socket!(set_gossip, SOCKET_TAG_GOSSIP);
-    set_socket!(set_repair, SOCKET_TAG_REPAIR);
+    set_socket!(set_repair, SOCKET_TAG_REPAIR, SOCKET_TAG_REPAIR_QUIC);
     set_socket!(set_rpc, SOCKET_TAG_RPC);
     set_socket!(set_rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
     set_socket!(set_serve_repair, SOCKET_TAG_SERVE_REPAIR);
@@ -711,7 +712,7 @@ mod tests {
                 }
             }
             assert_eq!(node.gossip().ok().as_ref(), sockets.get(&SOCKET_TAG_GOSSIP));
-            assert_eq!(node.repair().ok().as_ref(), sockets.get(&SOCKET_TAG_REPAIR));
+            assert_eq!(node.repair(Protocol::UDP).ok().as_ref(), sockets.get(&SOCKET_TAG_REPAIR));
             assert_eq!(node.rpc().ok().as_ref(), sockets.get(&SOCKET_TAG_RPC));
             assert_eq!(
                 node.rpc_pubsub().ok().as_ref(),
@@ -800,7 +801,15 @@ mod tests {
     fn cross_verify_with_legacy(node: &ContactInfo) {
         let old = LegacyContactInfo::try_from(node).unwrap();
         assert_eq!(old.gossip().unwrap(), node.gossip().unwrap());
-        assert_eq!(old.repair().unwrap(), node.repair().unwrap());
+        assert_eq!(
+            old.repair(Protocol::QUIC).unwrap(),
+            node.repair(Protocol::QUIC).unwrap()
+        );
+        assert_eq!(
+            old.repair(Protocol::UDP).unwrap(),
+            node.repair(Protocol::UDP).unwrap()
+        );
+
         assert_eq!(old.rpc().unwrap(), node.rpc().unwrap());
         assert_eq!(old.rpc_pubsub().unwrap(), node.rpc_pubsub().unwrap());
         assert_eq!(old.serve_repair().unwrap(), node.serve_repair().unwrap());

@@ -849,7 +849,7 @@ impl ClusterInfo {
                         self.addr_to_string(&ip_addr, &node.tpu_forwards(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tvu_forwards().ok()),
-                        self.addr_to_string(&ip_addr, &node.repair().ok()),
+                        self.addr_to_string(&ip_addr, &node.repair(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.serve_repair().ok()),
                         node.shred_version(),
                     ))

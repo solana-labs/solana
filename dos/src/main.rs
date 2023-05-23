@@ -449,7 +449,7 @@ fn get_target(
                     Mode::TpuForwards => {
                         Some((*node.pubkey(), node.tpu_forwards(protocol).unwrap()))
                     }
-                    Mode::Repair => Some((*node.pubkey(), node.repair().unwrap())),
+                    Mode::Repair => Some((*node.pubkey(), node.repair(Protocol::UDP).unwrap())),
                     Mode::ServeRepair => Some((*node.pubkey(), node.serve_repair().unwrap())),
                     Mode::Rpc => None,
                 };

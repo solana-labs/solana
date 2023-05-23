@@ -197,7 +197,7 @@ impl LegacyContactInfo {
     get_socket!(gossip);
     get_socket!(@quic tvu);
     get_socket!(tvu_forwards);
-    get_socket!(repair);
+    get_socket!(@quic repair);
     get_socket!(@quic tpu);
     get_socket!(@quic tpu_forwards);
     get_socket!(tpu_vote);
@@ -265,7 +265,7 @@ impl TryFrom<&ContactInfo> for LegacyContactInfo {
             gossip: unwrap_socket!(gossip),
             tvu: unwrap_socket!(tvu, Protocol::UDP),
             tvu_forwards: unwrap_socket!(tvu_forwards),
-            repair: unwrap_socket!(repair),
+            repair: unwrap_socket!(repair, Protocol::UDP),
             tpu: unwrap_socket!(tpu, Protocol::UDP),
             tpu_forwards: unwrap_socket!(tpu_forwards, Protocol::UDP),
             tpu_vote: unwrap_socket!(tpu_vote),
