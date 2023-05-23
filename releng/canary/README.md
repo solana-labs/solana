@@ -43,7 +43,7 @@ The canaries update themselves every few days according to the schedule above. T
 
 These are handy commands to see what versions are currently running on each  node:
 ```
-solana gossip -um | grep -E " (edge|beta|[sm]c[ebs]\d)" TODO add staked
+solana gossip -um | grep -E " (edge|beta|[sm]c[ebs]\d)"
 
 solana gossip -ut | grep -E " (tc[ebs]\d)"
 ```
