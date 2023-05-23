@@ -1,8 +1,7 @@
 use {
     crate::tiered_storage::{
-        error::{TieredStorageError, TieredStorageResult as TsResult},
-        file::TieredStorageFile,
-        mmap_utils::get_type,
+        error::TieredStorageError, file::TieredStorageFile, mmap_utils::get_type,
+        TieredStorageResult as TsResult,
     },
     memmap2::Mmap,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
