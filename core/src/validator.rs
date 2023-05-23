@@ -565,6 +565,9 @@ impl Validator {
         info!("done. {}", start);
 
         snapshot_utils::purge_incomplete_bank_snapshots(&config.snapshot_config.bank_snapshots_dir);
+        snapshot_utils::purge_old_bank_snapshots_at_startup(
+            &config.snapshot_config.bank_snapshots_dir,
+        );
 
         info!("Cleaning orphaned account snapshot directories..");
         if let Err(e) = clean_orphaned_account_snapshot_dirs(
