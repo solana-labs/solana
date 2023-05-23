@@ -71,6 +71,19 @@ impl SysvarCache {
         self.epoch_rewards = None;
     }
 
+    pub fn refresh_epoch_rewards<F: FnMut(&Pubkey, &mut dyn FnMut(&[u8]))>(
+        &mut self,
+        mut get_account_data: F,
+    ) {
+        get_account_data(&EpochRewards::id(), &mut |data: &[u8]| {
+            if let Ok(epoch_rewards) = bincode::deserialize(data) {
+                self.set_epoch_rewards(epoch_rewards);
+            } else {
+                self.clear_epoch_rewards();
+            }
+        });
+    }
+
     #[deprecated]
     #[allow(deprecated)]
     pub fn get_fees(&self) -> Result<Arc<Fees>, InstructionError> {

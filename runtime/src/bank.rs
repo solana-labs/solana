@@ -4056,6 +4056,8 @@ impl Bank {
             create_account(&epoch_rewards, inherited_account_fields)
         });
 
+        self.refresh_epoch_rewards_sysvar_cache();
+
         self.log_epoch_reward_sysvar("update");
     }
 

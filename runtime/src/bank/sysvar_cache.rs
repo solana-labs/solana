@@ -18,6 +18,15 @@ impl Bank {
         sysvar_cache.clear_epoch_rewards();
     }
 
+    pub(crate) fn refresh_epoch_rewards_sysvar_cache(&self) {
+        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
+        sysvar_cache.refresh_epoch_rewards(|pubkey, callback| {
+            if let Some(account) = self.get_account_with_fixed_root(pubkey) {
+                callback(account.data());
+            }
+        });
+    }
+
     pub(crate) fn reset_sysvar_cache(&self) {
         let mut sysvar_cache = self.sysvar_cache.write().unwrap();
         sysvar_cache.reset();
@@ -145,7 +154,7 @@ mod tests {
 
         // inject a reward sysvar for test
         bank1.set_partitioned_rewards_feature_enabled_for_tests();
-        let expected_epoch_rewards = EpochRewards {
+        let mut expected_epoch_rewards = EpochRewards {
             total_rewards: 100,
             distributed_rewards: 10,
             distribution_complete_block_height: 42,
@@ -175,7 +184,15 @@ mod tests {
             *bank1_sysvar_cache.get_epoch_rewards().unwrap(),
             expected_epoch_rewards,
         );
+        drop(bank1_sysvar_cache);
 
+        expected_epoch_rewards.distribute(10);
+        bank1.update_epoch_rewards_sysvar(10);
+        let bank1_sysvar_cache = bank1.sysvar_cache.read().unwrap();
+        assert_eq!(
+            *bank1_sysvar_cache.get_epoch_rewards().unwrap(),
+            expected_epoch_rewards,
+        );
         drop(bank1_sysvar_cache);
 
         bank1.clear_epoch_rewards_sysvar_cache();
