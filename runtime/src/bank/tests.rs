@@ -2663,8 +2663,7 @@ fn test_insufficient_funds() {
 fn test_executed_transaction_count_post_bank_transaction_count_fix() {
     let mint_amount = sol_to_lamports(1.);
     let (genesis_config, mint_keypair) = create_genesis_config(mint_amount);
-    let mut bank = Bank::new_for_tests(&genesis_config);
-    bank.activate_feature(&feature_set::bank_transaction_count_fix::id());
+    let bank = Bank::new_for_tests(&genesis_config);
     let pubkey = solana_sdk::pubkey::new_rand();
     let amount = genesis_config.rent.minimum_balance(0);
     bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
