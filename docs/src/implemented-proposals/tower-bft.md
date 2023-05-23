@@ -129,11 +129,17 @@ Now the algorithm proceeds as follows:
 1. For each vote `(j, B)` in `V`, add the stake of `j` to `B` and all of its
 ancestors.
 2. Now Set `B` to be the rooted block. Set `finish := 0`.
+3. Perform the following loop:
 
-*While `finish == 0`
-*do*: 
-    *If*: `i` has received no children of `B` then set `finish := 1` and return `B`. 
-    *Else*: Let `B′` be the child of `B` (amongst those received by `i`) with most the most stake-weighted votes in `V`, breaking ties by the smallest slot. Set `B` equal to `B'`.
+```
+*While* `finish == 0`
+*Do*:
+    *If*: `i` has received no children of `B` then set `finish := 1` and return
+    `B`.
+    *Else*: Let `B′` be the child of `B` (amongst those received by `i`) with
+    most the most stake-weighted votes in `V`, breaking ties by the smallest
+    slot. Set `B` equal to `B'`.
+```
 
 ### Voting Algorithm
 
@@ -144,10 +150,9 @@ block returned by the fork choice rule above `[Fork Choice](tower-bft.md#Fork Ch
 
 1. Respecting lockouts: For any block `B′` in the tower that is not an ancestor of `B`, `lockexp(B′) ≤ slot(B)`.
 2. Threshold check: Described above in `[Threshold Check](tower-bft.md#Threshold Check)`
-3. Switching threshold: Have sufficiently many votes on other forks if switching forks. Let `Btop` denote the block at the top of the stack. If `Btop` is not an ancestor of `B`, then
-– Let `VBtop ∈ V` be the set of votes on `Btop` or ancestors or descendents of `Btop`.
-– We need `|V \VBtop | > 38%`.
-More details on this can be found in `[Optimistic Confirmation](optimistic_confirmation.md#Primitives)`
+3. Switching threshold: Have sufficiently many votes on other forks if switching forks. Let `Btop` denote the block at the top of the stack. If `Btop` is not an ancestor of `B`, then:
+    - Let `VBtop ∈ V` be the set of votes on `Btop` or ancestors or descendents of `Btop`.
+    - We need `|V \VBtop | > 38%`. More details on this can be found in `[Optimistic Confirmation](optimistic_confirmation.md#Primitives)`
 
 If all the conditions are satisfied and validator `i` votes for block `B` then it adjusts its tower as follows (same rules described above in `[Vote Tower](tower-bft.md#Vote Tower)`).
 1. Add block to tower. `T(l) := B`, `lockexp(B) := slot(B) + 2`, and sets `l := l + 1`.
