@@ -7544,7 +7544,7 @@ impl Bank {
             .rc
             .accounts
             .accounts_db
-            .calculate_accounts_delta_hash(slot, ignore);
+            .calculate_accounts_delta_hash_internal(slot, ignore);
 
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count());
