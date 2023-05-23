@@ -16,11 +16,9 @@ For brevity this design assumes that a single voter with a stake is deployed as 
 
 The Solana cluster generates a source of time via a Verifiable Delay Function we are calling [Proof of History](../cluster/synchronization.md).
 
-Proof of History is used to create a deterministic round robin schedule for all the active leaders.
-
 The unit of time is called a "slot". Each slot has a designated leader that can
-produce a block `B`. The `slot` of block `B` is designated `slot(B)`. Leaders
-do not necessarily need to generate a block for their slot, in which case there
+produce a block `B`. The `slot` of block `B` is designated `slot(B)`. A leader
+does not necessarily need to generate a block for its slot, in which case there
 may not be blocks for some slots.
 
 For more details, see [fork generation](../cluster/fork-generation.md) and [leader rotation](../cluster/leader-rotation.md).
@@ -28,8 +26,7 @@ For more details, see [fork generation](../cluster/fork-generation.md) and [lead
 ## Votes
 
 Validators communicate which fork they think is the heaviest through votes.
-Each vote `v` is signed by the validator that produces it, and is of the form `(i, B)`, where `i` is the validator producing the vote and `B` is a hash
-identifying the block being voted for.
+Each vote `v` is signed by the validator that produces it, and is of the form `(i, B)`, where `i` is the public key of the validator producing the vote and `B` is a hash identifying the block being voted for.
 
 ## Lockouts
 
@@ -95,17 +92,17 @@ Cost of rollback of _fork A_ is defined as the cost in terms of lockout time to 
 The **Economic Finality** of _fork A_ can be calculated as the loss of all the rewards from rollback of _fork A_ and its descendants, plus the opportunity cost of reward due to the exponentially growing lockout of the votes that have confirmed _fork A_.
 
 ### Threshold Check
-In order to prevent a validator from locking themselves out on the wrong fork
+In order to prevent a validator from locking itself out on the wrong fork
 in the case of a partition, there also needs to be a check to ensure that the rest of the cluster is committing to the same fork. This check is called the
 "threshold check", and is outlined as follows.
 
 In deciding whether to vote for a block `B`:
 
 1. Simulate a vote for `B` on your current tower
-2. Pop off all the votes that would be expired by `B`
+2. Simulate popping off all the votes that would be expired by `B`
 3. Now index every vote in the tower from `[0, tower.length()]`, assuming that the most recent simulated vote `B` is index 0, the second most recent vote is index 1, etc.
-4. Let `threshold_check_depth = 8` (the "depth" of 8 refers to this), now let `T` be the vote in the tower with index equal to threshold_check_depth.
-5. Check all the blocks descended from `T`. If those blocks contain votes for `T` or any descendants of `T` totaling `>= 2/3` of the stake of the network, then we commit a vote to `T`.
+4. Let `T` be the vote in the tower with index equal to `threshold_check_depth`, currently hardcoded to `8`.
+5. Check all the blocks descended from `T`. Let `Votes` be the set of all votes in these blocks for `T` or any descendants `D_n` of `T`. Let `V` be the set of all validators that have made a vote in `V`. If the sum of the validators' stakes in `V` totals `>= 2/3` of the stake of the network, then we commit a vote to `T`.
 
 ### Algorithm parameters
 
@@ -120,12 +117,12 @@ The following parameters need to be tuned:
 ### Fork Choice
 
 Fork choice is how each validator determines which fork to vote on when multiple
-concurrent forks exist. Forks are weighted are based on the latest votes made by the validator set, and individual validators then vote on the "heaviest"
+concurrent forks exist. Forks are weighted based on the latest votes made by the validator set, and individual validators then vote on the "heaviest"
 such fork.
 
 Given the view of a single validator `i`:
 
-Let `V` be the set of "most recent" valid votes received by `i`, i.e., `v = (j, B)` is in `V` and if `i` has not also received a vote of the form `(j, B′) `such that `slot(B′) > slot(B)`.
+Let `V` be the set of "most recent" valid votes received by `i`, i.e., `v = (j, B)` is in `V` and `i` has not also received a vote of the form `(j, B′) `such that `slot(B′) > slot(B)`.
 
 Now the algorithm proceeds as follows:
 
@@ -134,7 +131,9 @@ ancestors.
 2. Now Set `B` to be the rooted block. Set `finish := 0`.
 
 *While `finish == 0`
-*do*: If `i` has received no children of `B` then set `finish := 1` and return `B`. Otherwise let `B′` be the child of `B` (amongst those received by `i`) with most the most stake-weighted votes in `V`, breaking ties by the smallest slot.
+*do*: 
+    *If*: `i` has received no children of `B` then set `finish := 1` and return `B`. 
+    *Else*: Let `B′` be the child of `B` (amongst those received by `i`) with most the most stake-weighted votes in `V`, breaking ties by the smallest slot. Set `B` equal to `B'`.
 
 ### Voting Algorithm
 
