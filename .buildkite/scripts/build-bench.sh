@@ -22,5 +22,5 @@ EOF
 
 # shellcheck disable=SC2016
 group "bench" \
-  "$(build_steps "1" "ci/bench/part1.sh")" \
-  "$(build_steps "2" "ci/bench/part2.sh")"
+  "$(build_steps "bench-part-1" "ci/bench/part1.sh")" \
+  "$(build_steps "bench-part-2" "ci/bench/part2.sh")"

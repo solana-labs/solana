@@ -10,7 +10,7 @@ want=$(
   cat <<'EOF'
   - group: "bench"
     steps:
-      - name: "1"
+      - name: "bench-part-1"
         command: "ci/bench/part1.sh"
         timeout_in_minutes: 30
         agents:
@@ -18,7 +18,7 @@ want=$(
         retry:
           automatic:
             - limit: 3
-      - name: "2"
+      - name: "bench-part-2"
         command: "ci/bench/part2.sh"
         timeout_in_minutes: 30
         agents:
