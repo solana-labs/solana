@@ -5,7 +5,6 @@ use {
     },
     solana_sdk::{
         account::ReadableAccount,
-        feature_set,
         message::SanitizedMessage,
         native_loader,
         transaction::Result,
@@ -61,9 +60,6 @@ impl Bank {
         post_state_infos: &[TransactionAccountStateInfo],
         transaction_context: &TransactionContext,
     ) -> Result<()> {
-        let include_account_index_in_err = self
-            .feature_set
-            .is_active(&feature_set::include_account_index_in_rent_error::id());
         for (i, (pre_state_info, post_state_info)) in
             pre_state_infos.iter().zip(post_state_infos).enumerate()
         {
@@ -72,7 +68,6 @@ impl Bank {
                 post_state_info.rent_state.as_ref(),
                 transaction_context,
                 i as IndexOfAccount,
-                include_account_index_in_err,
             )?;
         }
         Ok(())

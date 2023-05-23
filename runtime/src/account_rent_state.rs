@@ -78,7 +78,6 @@ pub(crate) fn check_rent_state(
     post_rent_state: Option<&RentState>,
     transaction_context: &TransactionContext,
     index: IndexOfAccount,
-    include_account_index_in_err: bool,
 ) -> Result<()> {
     if let Some((pre_rent_state, post_rent_state)) = pre_rent_state.zip(post_rent_state) {
         let expect_msg = "account must exist at TransactionContext index if rent-states are Some";
@@ -92,7 +91,7 @@ pub(crate) fn check_rent_state(
                 .get_account_at_index(index)
                 .expect(expect_msg)
                 .borrow(),
-            include_account_index_in_err.then_some(index),
+            index,
         )?;
     }
     Ok(())
@@ -103,7 +102,7 @@ pub(crate) fn check_rent_state_with_account(
     post_rent_state: &RentState,
     address: &Pubkey,
     account_state: &AccountSharedData,
-    account_index: Option<IndexOfAccount>,
+    account_index: IndexOfAccount,
 ) -> Result<()> {
     submit_rent_state_metrics(pre_rent_state, post_rent_state);
     if !solana_sdk::incinerator::check_id(address)
@@ -113,12 +112,8 @@ pub(crate) fn check_rent_state_with_account(
             "Account {} not rent exempt, state {:?}",
             address, account_state,
         );
-        if let Some(account_index) = account_index {
-            let account_index = account_index as u8;
-            Err(TransactionError::InsufficientFundsForRent { account_index })
-        } else {
-            Err(TransactionError::InvalidRentPayingAccount)
-        }
+        let account_index = account_index as u8;
+        Err(TransactionError::InsufficientFundsForRent { account_index })
     } else {
         Ok(())
     }
