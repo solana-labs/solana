@@ -469,8 +469,18 @@ fn delete_contents_of_path(path: impl AsRef<Path>) {
     }
 }
 
+/// Moves and asynchronously deletes the contents of a directory to avoid blocking on it.
+/// The directory is re-created after the move, and should now be empty.
+pub fn move_and_async_delete_path_contents(path: impl AsRef<Path>) {
+    move_and_async_delete_path(&path);
+    // The following could fail if the rename failed.
+    // If that happens, the directory should be left as is.
+    // So we ignore errors here.
+    let _ = std::fs::create_dir(path);
+}
+
 /// Delete directories/files asynchronously to avoid blocking on it.
-/// Fist, in sync context, rename the original path to *_deleted,
+/// First, in sync context, rename the original path to *_deleted,
 /// then spawn a thread to delete the renamed path.
 /// If the process is killed and the deleting process is not done,
 /// the leftover path will be deleted in the next process life, so

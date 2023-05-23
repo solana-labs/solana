@@ -35,7 +35,7 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
             self, clean_orphaned_account_snapshot_dirs, create_all_accounts_run_and_snapshot_dirs,
-            move_and_async_delete_path,
+            move_and_async_delete_path_contents,
         },
     },
     solana_sdk::{
@@ -186,7 +186,7 @@ pub fn load_bank_forks(
     let mut measure = Measure::start("clean_accounts_paths");
     account_paths.iter().for_each(|path| {
         if path.exists() {
-            move_and_async_delete_path(path);
+            move_and_async_delete_path_contents(path);
         }
     });
     measure.stop();

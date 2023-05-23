@@ -93,7 +93,9 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_utils::{self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path},
+        snapshot_utils::{
+            self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
+        },
     },
     solana_sdk::{
         clock::Slot,
@@ -2238,11 +2240,11 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 
 fn cleanup_accounts_paths(config: &ValidatorConfig) {
     for accounts_path in &config.account_paths {
-        move_and_async_delete_path(accounts_path);
+        move_and_async_delete_path_contents(accounts_path);
     }
     if let Some(ref shrink_paths) = config.account_shrink_paths {
         for accounts_path in shrink_paths {
-            move_and_async_delete_path(accounts_path);
+            move_and_async_delete_path_contents(accounts_path);
         }
     }
 }
