@@ -283,32 +283,25 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 check_for_overwrite(outfile, matches)?;
             }
 
+            let name = "recover";
             match key_type {
                 KeyType::ElGamal => {
-                    let keypair_name = "recover";
                     let keypair = if let Some(path) = matches.value_of("prompt_signer") {
-                        elgamal_keypair_from_path(matches, path, keypair_name, true)?
+                        elgamal_keypair_from_path(matches, path, name, true)?
                     } else {
                         let skip_validation =
                             matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-                        elgamal_keypair_from_seed_phrase(
-                            keypair_name,
-                            skip_validation,
-                            true,
-                            None,
-                            true,
-                        )?
+                        elgamal_keypair_from_seed_phrase(name, skip_validation, true, None, true)?
                     };
                     output_encodable_key(&keypair, outfile, "recovered ElGamal keypair")?;
                 }
                 KeyType::Aes128 => {
-                    let key_name = "recover";
                     let key = if let Some(path) = matches.value_of("prompt_signer") {
-                        ae_key_from_path(matches, path, key_name)?
+                        ae_key_from_path(matches, path, name)?
                     } else {
                         let skip_validation =
                             matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-                        ae_key_from_seed_phrase(key_name, skip_validation, None, true)?
+                        ae_key_from_seed_phrase(name, skip_validation, None, true)?
                     };
                     output_encodable_key(&key, outfile, "recovered AES128 key")?;
                 }
