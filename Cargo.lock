@@ -7076,6 +7076,7 @@ dependencies = [
  "solana-version",
  "solana-zk-token-sdk",
  "tempfile",
+ "thiserror",
  "tiny-bip39",
 ]
 

@@ -26,6 +26,7 @@ solana-remote-wallet = { workspace = true, features = ["default"] }
 solana-sdk = { workspace = true }
 solana-version = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
+thiserror = { worskapce = true }
 tiny-bip39 = { workspace = true }
 
 [dev-dependencies]

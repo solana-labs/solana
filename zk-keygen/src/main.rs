@@ -2,17 +2,23 @@ use {
     bip39::{Mnemonic, MnemonicType, Seed},
     clap::{crate_description, crate_name, Arg, ArgMatches, Command},
     solana_clap_v3_utils::{
-        input_parsers::STDOUT_OUTFILE_TOKEN,
+        input_parsers::{value_of, STDOUT_OUTFILE_TOKEN},
+        input_validators::is_prompt_signer_source,
         keygen::{
             check_for_overwrite,
             mnemonic::{acquire_language, acquire_passphrase_and_message, WORD_COUNT_ARG},
             no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
         },
+        keypair::{
+            ae_key_from_path, ae_key_from_seed_phrase, elgamal_keypair_from_path,
+            elgamal_keypair_from_seed_phrase, SKIP_SEED_PHRASE_VALIDATION_ARG,
+        },
         DisplayError,
     },
     solana_sdk::signer::{EncodableKey, SeedDerivable},
     solana_zk_token_sdk::encryption::{auth_encryption::AeKey, elgamal::ElGamalKeypair},
-    std::error,
+    std::{error, str::FromStr},
+    thiserror::Error,
 };
 
 fn output_encodable_key<K: EncodableKey>(
@@ -42,7 +48,7 @@ fn app(crate_version: &str) -> Command {
                 .disable_version_flag(true)
                 .arg(
                     Arg::new("type")
-                        .long("type")
+                        .index(1)
                         .takes_value(true)
                         .possible_values(["elgamal", "aes128"])
                         .value_name("TYPE")
@@ -70,6 +76,72 @@ fn app(crate_version: &str) -> Command {
                 .key_generation_common_args()
                 .arg(no_outfile_arg().conflicts_with_all(&["outfile", "silent"]))
         )
+        .subcommand(
+            Command::new("pubkey")
+                .about("Display the pubkey from a keypair file")
+                .disable_version_flag(true)
+                .arg(
+                    Arg::new("type")
+                        .index(1)
+                        .takes_value(true)
+                        .possible_values(["elgamal"])
+                        .value_name("TYPE")
+                        .required(true)
+                        .help("The type of keypair")
+                )
+                .arg(
+                    Arg::new("keypair")
+                        .index(2)
+                        .value_name("KEYPAIR")
+                        .takes_value(true)
+                        .help("Filepath or URL to a keypair"),
+                )
+                .arg(
+                    Arg::new(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                        .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
+                        .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
+                )
+        )
+        .subcommand(
+            Command::new("recover")
+                .about("Recover keypair from seed phrase and optional BIP39 passphrase")
+                .disable_version_flag(true)
+                .arg(
+                    Arg::new("type")
+                        .index(1)
+                        .takes_value(true)
+                        .possible_values(["elgamal", "aes128"])
+                        .value_name("TYPE")
+                        .required(true)
+                        .help("The type of keypair")
+                )
+                .arg(
+                    Arg::new("prompt_signer")
+                        .index(2)
+                        .value_name("KEYPAIR")
+                        .takes_value(true)
+                        .validator(is_prompt_signer_source)
+                        .help("`prompt:` URI scheme or `ASK` keyword"),
+                )
+                .arg(
+                    Arg::new("outfile")
+                        .short('o')
+                        .long("outfile")
+                        .value_name("FILEPATH")
+                        .takes_value(true)
+                        .help("Path to generated file"),
+                )
+                .arg(
+                    Arg::new("force")
+                        .long("force")
+                        .help("Overwrite the output file if it exists"),
+                )
+                .arg(
+                    Arg::new(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                        .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
+                        .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
+                ),
+        )
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -83,11 +155,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     let subcommand = matches.subcommand().unwrap();
     match subcommand {
         ("new", matches) => {
-            let key_type = match matches.value_of("type").unwrap() {
-                "elgamal" => KeyType::ElGamal,
-                "aes128" => KeyType::Aes128,
-                _ => unreachable!(),
-            };
+            let key_type: KeyType = value_of(matches, "type").unwrap();
 
             let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
@@ -158,6 +226,67 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 }
             }
         }
+        ("pubkey", matches) => {
+            let key_type: KeyType = value_of(matches, "type").unwrap();
+
+            let mut path = dirs_next::home_dir().expect("home directory");
+            let path = if matches.is_present("keypair") {
+                matches.value_of("keypair").unwrap()
+            } else {
+                path.extend([".config", "solana", key_type.default_file_name()]);
+                path.to_str().unwrap()
+            };
+
+            // wrap the logic inside a match statement in case more keys are supported in the
+            // future
+            match key_type {
+                KeyType::ElGamal => {
+                    let elgamal_pubkey =
+                        elgamal_keypair_from_path(matches, path, "pubkey recovery", false)?.public;
+                    println!("{elgamal_pubkey}");
+                }
+                _ => unreachable!(),
+            }
+        }
+        ("recover", matches) => {
+            let key_type: KeyType = value_of(matches, "type").unwrap();
+
+            let mut path = dirs_next::home_dir().expect("home directory");
+            let outfile = if matches.is_present("outfile") {
+                matches.value_of("outfile").unwrap()
+            } else {
+                path.extend([".config", "solana", key_type.default_file_name()]);
+                path.to_str().unwrap()
+            };
+
+            if outfile != STDOUT_OUTFILE_TOKEN {
+                check_for_overwrite(outfile, matches)?;
+            }
+
+            let name = "recover";
+            match key_type {
+                KeyType::ElGamal => {
+                    let keypair = if let Some(path) = matches.value_of("prompt_signer") {
+                        elgamal_keypair_from_path(matches, path, name, true)?
+                    } else {
+                        let skip_validation =
+                            matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                        elgamal_keypair_from_seed_phrase(name, skip_validation, true, None, true)?
+                    };
+                    output_encodable_key(&keypair, outfile, "recovered ElGamal keypair")?;
+                }
+                KeyType::Aes128 => {
+                    let key = if let Some(path) = matches.value_of("prompt_signer") {
+                        ae_key_from_path(matches, path, name)?
+                    } else {
+                        let skip_validation =
+                            matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                        ae_key_from_seed_phrase(name, skip_validation, None, true)?
+                    };
+                    output_encodable_key(&key, outfile, "recovered AES128 key")?;
+                }
+            }
+        }
         _ => unreachable!(),
     }
 
@@ -174,6 +303,22 @@ impl KeyType {
         match self {
             KeyType::ElGamal => "elgamal.json",
             KeyType::Aes128 => "aes128.json",
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("unsupported key type: \"{0}\"")]
+pub struct KeyTypeError(pub String);
+
+impl FromStr for KeyType {
+    type Err = KeyTypeError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.to_ascii_lowercase();
+        match s.as_str() {
+            "elgamal" => Ok(Self::ElGamal),
+            "aes128" => Ok(Self::Aes128),
+            _ => Err(KeyTypeError(s)),
         }
     }
 }
@@ -215,7 +360,6 @@ mod tests {
         process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--type",
             "elgamal",
             "--outfile",
             &outfile_path,
@@ -227,7 +371,6 @@ mod tests {
         let result = process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--type",
             "elgamal",
             "--outfile",
             &outfile_path,
@@ -243,7 +386,6 @@ mod tests {
         process_test_command(&[
             "solana-keygen",
             "new",
-            "--type",
             "elgamal",
             "--no-bip39-passphrase",
             "--no-outfile",
@@ -261,7 +403,6 @@ mod tests {
         process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--type",
             "aes128",
             "--outfile",
             &outfile_path,
@@ -273,7 +414,6 @@ mod tests {
         let result = process_test_command(&[
             "solana-zk-keygen",
             "new",
-            "--type",
             "aes128",
             "--outfile",
             &outfile_path,
@@ -289,11 +429,22 @@ mod tests {
         process_test_command(&[
             "solana-keygen",
             "new",
-            "--type",
             "aes128",
             "--no-bip39-passphrase",
             "--no-outfile",
         ])
         .unwrap();
+    }
+
+    #[test]
+    fn test_pubkey() {
+        let keypair_out_dir = tempdir().unwrap();
+        // use `Pubkey::new_unique()` to generate names for temporary key files
+        let keypair_path = tmp_outfile_path(&keypair_out_dir, &Pubkey::new_unique().to_string());
+
+        let keypair = ElGamalKeypair::new_rand();
+        keypair.write_to_file(&keypair_path).unwrap();
+
+        process_test_command(&["solana-keygen", "pubkey", "elgamal", &keypair_path]).unwrap();
     }
 }
