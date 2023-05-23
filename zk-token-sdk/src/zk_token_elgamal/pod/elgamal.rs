@@ -3,7 +3,7 @@ use {
         curve25519::ristretto::PodRistrettoPoint,
         encryption::elgamal,
         errors::ProofError,
-        pod::{pedersen::PedersenCommitment, Pod, Zeroable},
+        zk_token_elgamal::pod::{pedersen::PedersenCommitment, Pod, Zeroable},
     },
     base64::{prelude::BASE64_STANDARD, Engine},
     curve25519_dalek::ristretto::CompressedRistretto,

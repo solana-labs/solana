@@ -1,9 +1,9 @@
 use crate::{
-    pod::{Pod, Zeroable},
     sigma_proofs::{
         ctxt_comm_equality_proof, ctxt_ctxt_equality_proof, errors::*, fee_proof, pubkey_proof,
         validity_proof, zero_balance_proof,
     },
+    zk_token_elgamal::pod::{Pod, Zeroable},
 };
 
 /// Serialization of `CiphertextCommitmentEqualityProof`

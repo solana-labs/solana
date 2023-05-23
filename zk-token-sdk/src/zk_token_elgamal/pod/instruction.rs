@@ -1,7 +1,7 @@
 use crate::{
     errors::ProofError,
     instruction::{transfer, transfer_with_fee},
-    pod::{elgamal::*, pedersen::*, Pod, PodU16, PodU64, Zeroable},
+    zk_token_elgamal::pod::{elgamal::*, pedersen::*, Pod, PodU16, PodU64, Zeroable},
 };
 
 #[derive(Clone, Copy, Pod, Zeroable)]

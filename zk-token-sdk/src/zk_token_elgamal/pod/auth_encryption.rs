@@ -2,7 +2,7 @@ use {
     crate::{
         encryption::auth_encryption,
         errors::ProofError,
-        pod::{Pod, Zeroable},
+        zk_token_elgamal::pod::{Pod, Zeroable},
     },
     base64::{prelude::BASE64_STANDARD, Engine},
     std::fmt,

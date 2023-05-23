@@ -3,7 +3,7 @@ use crate::{
         ristretto::{add_ristretto, multiply_ristretto, subtract_ristretto, PodRistrettoPoint},
         scalar::PodScalar,
     },
-    pod::{elgamal::*, pedersen::*},
+    zk_token_elgamal::pod::{elgamal::*, pedersen::*},
 };
 
 const SHIFT_BITS: usize = 16;
@@ -129,7 +129,7 @@ mod tests {
                 pedersen::{Pedersen, PedersenOpening},
             },
             instruction::split_u64,
-            pod::{self, ops},
+            zk_token_elgamal::pod::{self, ops},
         },
         bytemuck::Zeroable,
         curve25519_dalek::scalar::Scalar,

@@ -3,7 +3,7 @@ use {
         curve25519::ristretto::PodRistrettoPoint,
         encryption::pedersen,
         errors::ProofError,
-        pod::{Pod, Zeroable},
+        zk_token_elgamal::pod::{Pod, Zeroable},
     },
     curve25519_dalek::ristretto::CompressedRistretto,
     std::fmt,
