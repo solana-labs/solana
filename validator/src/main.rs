@@ -1390,16 +1390,6 @@ pub fn main() {
             .map(|shrink_paths| shrink_paths.into_iter().map(PathBuf::from).collect())
             .ok();
 
-    // Create and canonicalize account paths to avoid issues with symlink creation
-    account_paths.iter().for_each(|account_path| {
-        fs::create_dir_all(account_path)
-            .and_then(|_| fs::canonicalize(account_path))
-            .unwrap_or_else(|err| {
-                eprintln!("Unable to access account path: {account_path:?}, err: {err:?}");
-                exit(1);
-            });
-    });
-
     let (account_run_paths, account_snapshot_paths) =
         create_all_accounts_run_and_snapshot_dirs(&account_paths).unwrap_or_else(|err| {
             eprintln!("Error: {err:?}");
