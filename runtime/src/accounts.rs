@@ -2977,23 +2977,19 @@ mod tests {
         let counter_clone = counter.clone();
         let accounts_clone = accounts_arc.clone();
         let exit_clone = exit.clone();
-        thread::spawn(move || {
-            let counter_clone = counter_clone.clone();
-            let exit_clone = exit_clone.clone();
-            loop {
-                let txs = vec![writable_tx.clone()];
-                let results = accounts_clone
-                    .clone()
-                    .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
-                for result in results.iter() {
-                    if result.is_ok() {
-                        counter_clone.clone().fetch_add(1, Ordering::SeqCst);
-                    }
+        thread::spawn(move || loop {
+            let txs = vec![writable_tx.clone()];
+            let results = accounts_clone
+                .clone()
+                .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
+            for result in results.iter() {
+                if result.is_ok() {
+                    counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                 }
-                accounts_clone.unlock_accounts(txs.iter(), &results);
-                if exit_clone.clone().load(Ordering::Relaxed) {
-                    break;
-                }
+            }
+            accounts_clone.unlock_accounts(txs.iter(), &results);
+            if exit_clone.clone().load(Ordering::Relaxed) {
+                break;
             }
         });
         let counter_clone = counter;

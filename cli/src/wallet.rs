@@ -651,7 +651,7 @@ pub fn process_show_account(
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let account = rpc_client.get_account(account_pubkey)?;
-    let data = account.data.clone();
+    let data = &account.data;
     let cli_account = CliAccount::new(account_pubkey, &account, use_lamports_unit);
 
     let mut account_string = config.output_format.formatted_string(&cli_account);
@@ -668,7 +668,7 @@ pub fn process_show_account(
         OutputFormat::Display | OutputFormat::DisplayVerbose => {
             if let Some(output_file) = output_file {
                 let mut f = File::create(output_file)?;
-                f.write_all(&data)?;
+                f.write_all(data)?;
                 writeln!(&mut account_string)?;
                 writeln!(&mut account_string, "Wrote account data to {output_file}")?;
             } else if !data.is_empty() {
