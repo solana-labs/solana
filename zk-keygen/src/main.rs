@@ -101,19 +101,6 @@ fn app(crate_version: &str) -> Command {
                         .required(true)
                         .help("The type of keypair")
                 )
-                .arg(
-                    Arg::new("outfile")
-                        .short('o')
-                        .long("outfile")
-                        .value_name("FILEPATH")
-                        .takes_value(true)
-                        .help("Path to generated file"),
-                )
-                .arg(
-                    Arg::new("force")
-                        .long("force")
-                        .help("Overwrite the output file if it exists"),
-                )
         )
         .subcommand(
             Command::new("recover")
@@ -256,14 +243,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 KeyType::ElGamal => {
                     let elgamal_pubkey =
                         elgamal_keypair_from_path(matches, path, "pubkey recovery", false)?.public;
-
-                    if matches.is_present("outfile") {
-                        let outfile = matches.value_of("outfile").unwrap();
-                        check_for_overwrite(outfile, matches)?;
-                        elgamal_pubkey.write_to_file(outfile)?;
-                    } else {
-                        println!("{elgamal_pubkey}");
-                    }
+                    println!("{elgamal_pubkey}");
                 }
                 _ => unreachable!(),
             }
@@ -348,7 +328,6 @@ mod tests {
     use {
         super::*,
         solana_sdk::pubkey::Pubkey,
-        solana_zk_token_sdk::encryption::elgamal::ElGamalPubkey,
         tempfile::{tempdir, TempDir},
     };
 
@@ -472,40 +451,13 @@ mod tests {
         let keypair = ElGamalKeypair::new_rand();
         keypair.write_to_file(&keypair_path).unwrap();
 
-        let expected_elgamal_pubkey = keypair.public;
-
-        // success case using a keypair file
-        let outfile_dir = tempdir().unwrap();
-        let outfile_path = tmp_outfile_path(&outfile_dir, &Pubkey::new_unique().to_string());
-
         process_test_command(&[
             "solana-keygen",
             "pubkey",
             &keypair_path,
             "--type",
             "elgamal",
-            "--outfile",
-            &outfile_path,
         ])
         .unwrap();
-
-        let result_pubkey = ElGamalPubkey::read_from_file(outfile_path.clone()).unwrap();
-        assert_eq!(result_pubkey, expected_elgamal_pubkey);
-
-        // refuse to overwrite file
-        let result = process_test_command(&[
-            "solana-keygen",
-            "pubkey",
-            &keypair_path,
-            "--type",
-            "elgamal",
-            "--outfile",
-            &outfile_path,
-        ])
-        .unwrap_err()
-        .to_string();
-
-        let expected = format!("Refusing to overwrite {outfile_path} without --force flag");
-        assert_eq!(result, expected);
     }
 }
