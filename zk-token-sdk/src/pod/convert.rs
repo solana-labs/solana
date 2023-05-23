@@ -57,15 +57,6 @@ mod target_arch {
                 transfer::{TransferAmountEncryption, TransferPubkeys},
                 transfer_with_fee::{FeeEncryption, FeeParameters, TransferWithFeePubkeys},
             },
-            sigma_proofs::{
-                ctxt_comm_equality_proof::CiphertextCommitmentEqualityProof,
-                ctxt_ctxt_equality_proof::CiphertextCiphertextEqualityProof,
-                errors::*,
-                fee_proof::FeeSigmaProof,
-                pubkey_proof::PubkeyValidityProof,
-                validity_proof::{AggregatedValidityProof, ValidityProof},
-                zero_balance_proof::ZeroBalanceProof,
-            },
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
         std::convert::TryFrom,
@@ -94,122 +85,6 @@ mod target_arch {
     impl From<pod::CompressedRistretto> for CompressedRistretto {
         fn from(pod: pod::CompressedRistretto) -> Self {
             Self(pod.0)
-        }
-    }
-
-    impl From<TransferPubkeys> for pod::TransferPubkeys {
-        fn from(keys: TransferPubkeys) -> Self {
-            Self {
-                source_pubkey: keys.source_pubkey.into(),
-                destination_pubkey: keys.destination_pubkey.into(),
-                auditor_pubkey: keys.auditor_pubkey.into(),
-            }
-        }
-    }
-
-    impl TryFrom<pod::TransferPubkeys> for TransferPubkeys {
-        type Error = ProofError;
-
-        fn try_from(pod: pod::TransferPubkeys) -> Result<Self, Self::Error> {
-            Ok(Self {
-                source_pubkey: pod.source_pubkey.try_into()?,
-                destination_pubkey: pod.destination_pubkey.try_into()?,
-                auditor_pubkey: pod.auditor_pubkey.try_into()?,
-            })
-        }
-    }
-
-    impl From<TransferWithFeePubkeys> for pod::TransferWithFeePubkeys {
-        fn from(keys: TransferWithFeePubkeys) -> Self {
-            Self {
-                source_pubkey: keys.source_pubkey.into(),
-                destination_pubkey: keys.destination_pubkey.into(),
-                auditor_pubkey: keys.auditor_pubkey.into(),
-                withdraw_withheld_authority_pubkey: keys.withdraw_withheld_authority_pubkey.into(),
-            }
-        }
-    }
-
-    impl TryFrom<pod::TransferWithFeePubkeys> for TransferWithFeePubkeys {
-        type Error = ProofError;
-
-        fn try_from(pod: pod::TransferWithFeePubkeys) -> Result<Self, Self::Error> {
-            Ok(Self {
-                source_pubkey: pod.source_pubkey.try_into()?,
-                destination_pubkey: pod.destination_pubkey.try_into()?,
-                auditor_pubkey: pod.auditor_pubkey.try_into()?,
-                withdraw_withheld_authority_pubkey: pod
-                    .withdraw_withheld_authority_pubkey
-                    .try_into()?,
-            })
-        }
-    }
-
-    impl From<TransferAmountEncryption> for pod::TransferAmountEncryption {
-        fn from(ciphertext: TransferAmountEncryption) -> Self {
-            Self {
-                commitment: ciphertext.commitment.into(),
-                source_handle: ciphertext.source_handle.into(),
-                destination_handle: ciphertext.destination_handle.into(),
-                auditor_handle: ciphertext.auditor_handle.into(),
-            }
-        }
-    }
-
-    impl TryFrom<pod::TransferAmountEncryption> for TransferAmountEncryption {
-        type Error = ProofError;
-
-        fn try_from(pod: pod::TransferAmountEncryption) -> Result<Self, Self::Error> {
-            Ok(Self {
-                commitment: pod.commitment.try_into()?,
-                source_handle: pod.source_handle.try_into()?,
-                destination_handle: pod.destination_handle.try_into()?,
-                auditor_handle: pod.auditor_handle.try_into()?,
-            })
-        }
-    }
-
-    impl From<FeeEncryption> for pod::FeeEncryption {
-        fn from(ciphertext: FeeEncryption) -> Self {
-            Self {
-                commitment: ciphertext.commitment.into(),
-                destination_handle: ciphertext.destination_handle.into(),
-                withdraw_withheld_authority_handle: ciphertext
-                    .withdraw_withheld_authority_handle
-                    .into(),
-            }
-        }
-    }
-
-    impl TryFrom<pod::FeeEncryption> for FeeEncryption {
-        type Error = ProofError;
-
-        fn try_from(pod: pod::FeeEncryption) -> Result<Self, Self::Error> {
-            Ok(Self {
-                commitment: pod.commitment.try_into()?,
-                destination_handle: pod.destination_handle.try_into()?,
-                withdraw_withheld_authority_handle: pod
-                    .withdraw_withheld_authority_handle
-                    .try_into()?,
-            })
-        }
-    }
-
-    impl From<FeeParameters> for pod::FeeParameters {
-        fn from(parameters: FeeParameters) -> Self {
-            Self {
-                fee_rate_basis_points: parameters.fee_rate_basis_points.into(),
-                maximum_fee: parameters.maximum_fee.into(),
-            }
-        }
-    }
-
-    impl From<pod::FeeParameters> for FeeParameters {
-        fn from(pod: pod::FeeParameters) -> Self {
-            Self {
-                fee_rate_basis_points: pod.fee_rate_basis_points.into(),
-                maximum_fee: pod.maximum_fee.into(),
-            }
         }
     }
 }
