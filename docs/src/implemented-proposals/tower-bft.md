@@ -16,11 +16,24 @@ For brevity this design assumes that a single voter with a stake is deployed as 
 
 The Solana cluster generates a source of time via a Verifiable Delay Function we are calling [Proof of History](../cluster/synchronization.md).
 
-Proof of History is used to create a deterministic round robin schedule for all the active leaders. At any given time only 1 leader, which can be computed from the ledger itself, can propose a fork. For more details, see [fork generation](../cluster/fork-generation.md) and [leader rotation](../cluster/leader-rotation.md).
+The unit of time is called a "slot". Each slot has a designated leader that can
+produce a block `B`. The `slot` of block `B` is designated `slot(B)`. A leader
+does not necessarily need to generate a block for its slot, in which case there
+may not be blocks for some slots.
+
+For more details, see [fork generation](../cluster/fork-generation.md) and [leader rotation](../cluster/leader-rotation.md).
+
+## Votes
+
+Validators communicate which fork they think is the heaviest through votes.
+Each vote `v` is signed by the validator that produces it, and is of the form `(i, B)`, where `i` is the public key of the validator producing the vote and `B` is a hash identifying the block being voted for.
 
 ## Lockouts
 
-The purpose of the lockout is to force a validator to commit opportunity cost to a specific fork. Lockouts are measured in slots, and therefore represent a real-time forced delay that a validator needs to wait before breaking the commitment to a fork.
+Making votes on a particular fork incurs a lockout on that particular fork. A lockout is a designated period of time, measured in slots, within which a validator cannot vote on another fork. The purpose of the lockout is to force a
+validator to commit opportunity cost to a specific fork. Lockouts are measured
+in slots, and therefore represent a real-time forced delay that a validator
+needs to wait before breaking the commitment to a fork.
 
 Validators that violate the lockouts and vote for a diverging fork within the lockout should be punished. The proposed punishment is to slash the validator stake if a concurrent vote within a lockout for a non-descendant fork can be proven to the cluster.
 
@@ -28,13 +41,16 @@ Validators that violate the lockouts and vote for a diverging fork within the lo
 
 The basic idea to this approach is to stack consensus votes and double lockouts. Each vote in the stack is a confirmation of a fork. Each confirmed fork is an ancestor of the fork above it. Each vote has a `lockout` in units of slots before the validator can submit a vote that does not contain the confirmed fork as an ancestor.
 
-When a vote is added to the stack, the lockouts of all the previous votes in the stack are doubled \(more on this in [Rollback](tower-bft.md#Rollback)\). With each new vote, a validator commits the previous votes to an ever-increasing lockout. At 32 votes we can consider the vote to be at `max lockout` any votes with a lockout equal to or above `1<<32` are dequeued \(FIFO\). Dequeuing a vote is the trigger for a reward. If a vote expires before it is dequeued, it and all the votes above it are popped \(LIFO\) from the vote stack. The validator needs to start rebuilding the stack from that point.
+We call this stack the Vote Tower.
 
-### Rollback
+When a vote is added to the tower, the lockouts of all the previous votes in the tower are doubled \(more on this in [Vote Tower](tower-bft.md#Vote Tower)\). With each new vote, a validator commits the previous votes to an ever-increasing lockout. At 32 votes we can consider the vote to be at `max lockout` any votes with a lockout equal to or above `1<<32` are dequeued \(FIFO\). Dequeuing a vote is the trigger for a reward. If a vote expires before it is dequeued, it and all the votes above it are popped \(LIFO\) from the vote tower. The validator needs to start rebuilding the tower from that point.
 
-Before a vote is pushed to the stack, all the votes leading up to vote with a lower lock expiration slot than the new vote are popped. After rollback lockouts are not doubled until the validator catches up to the rollback height of votes.
+### Vote Tower
 
-For example, a vote stack with the following state:
+Before a vote is pushed to the tower, all the votes leading up to vote with a lower lock expiration slot than the new vote are popped. After rollback
+lockouts are not doubled until the validator catches up to the rollback height of votes.
+
+For example, a vote tower with the following state:
 
 | vote | vote slot | lockout | lock expiration slot |
 | ---: | --------: | ------: | -------------------: |
@@ -67,11 +83,7 @@ At slot 10 the new votes caught up to the previous votes. But _vote 2_ expires a
 |    7 |        11 |       2 |                   13 |
 |    1 |         1 |      16 |                   17 |
 
-The lockout for vote 1 will not increase from 16 until the stack contains 5 votes.
-
-### Slashing and Rewards
-
-Validators should be rewarded for selecting the fork that the rest of the cluster selected as often as possible. This is well-aligned with generating a reward when the vote stack is full and the oldest vote needs to be dequeued. Thus a reward should be generated for each successful dequeue.
+The lockout for vote 1 will not increase from 16 until the tower contains 5 votes.
 
 ### Cost of Rollback
 
@@ -79,9 +91,18 @@ Cost of rollback of _fork A_ is defined as the cost in terms of lockout time to 
 
 The **Economic Finality** of _fork A_ can be calculated as the loss of all the rewards from rollback of _fork A_ and its descendants, plus the opportunity cost of reward due to the exponentially growing lockout of the votes that have confirmed _fork A_.
 
-### Thresholds
+### Threshold Check
+In order to prevent a validator from locking itself out on the wrong fork
+in the case of a partition, there also needs to be a check to ensure that the rest of the cluster is committing to the same fork. This check is called the
+"threshold check", and is outlined as follows.
 
-Each validator can independently set a threshold of cluster commitment to a fork before that validator commits to a fork. For example, at vote stack index 7, the lockout is 256 slots. A validator may withhold votes and let votes 0-7 expire unless the vote at index 7 has at greater than 50% commitment in the cluster. This allows each validator to independently control how much risk to commit to a fork. Committing to forks at a higher frequency would allow the validator to earn more rewards.
+In deciding whether to vote for a block `B`:
+
+1. Simulate a vote for `B` on your current tower
+2. Simulate popping off all the votes that would be expired by `B`
+3. Now index every vote in the tower from `[0, tower.length()]`, assuming that the most recent simulated vote `B` is index 0, the second most recent vote is index 1, etc.
+4. Let `T` be the vote in the tower with index equal to `threshold_check_depth`, currently hardcoded to `8`.
+5. Check all the blocks descended from `T`. Let `Votes` be the set of all votes in these blocks for `T` or any descendants `D_n` of `T`. Let `V` be the set of all validators that have made a vote in `V`. If the sum of the validators' stakes in `V` totals `>= 2/3` of the stake of the network, then we commit a vote to `T`.
 
 ### Algorithm parameters
 
@@ -90,42 +111,56 @@ The following parameters need to be tuned:
 - Number of votes in the stack before dequeue occurs \(32\).
 - Rate of growth for lockouts in the stack \(2x\).
 - Starting default lockout \(2\).
-- Threshold depth for minimum cluster commitment before committing to the fork \(8\).
+- Threshold check depth for minimum cluster commitment before committing to the fork \(8\).
 - Minimum cluster commitment size at threshold depth \(50%+\).
 
-### Free Choice
+### Fork Choice
 
-A "Free Choice" is an unenforcible validator action. There is no way for the protocol to encode and enforce these actions since each validator can modify the code and adjust the algorithm. A validator that maximizes self-reward over all possible futures should behave in such a way that the system is stable, and the local greedy choice should result in a greedy choice over all possible futures. A set of validator that are engaging in choices to disrupt the protocol should be bound by their stake weight to the denial of service. Two options exits for validator:
+Fork choice is how each validator determines which fork to vote on when multiple
+concurrent forks exist. Forks are weighted based on the latest votes made by the validator set, and individual validators then vote on the "heaviest"
+such fork.
 
-- a validator can outrun previous validator in virtual generation and submit a concurrent fork
-- a validator can withhold a vote to observe multiple forks before voting
+Given the view of a single validator `i`:
 
-In both cases, the validator in the cluster have several forks to pick from concurrently, even though each fork represents a different height. In both cases it is impossible for the protocol to detect if the validator behavior is intentional or not.
+Let `V` be the set of "most recent" valid votes received by `i`, i.e., `v = (j, B)` is in `V` and `i` has not also received a vote of the form `(j, B′) `such that `slot(B′) > slot(B)`.
 
-### Greedy Choice for Concurrent Forks
+Now the algorithm proceeds as follows:
 
-When evaluating multiple forks, each validator should use the following rules:
+1. For each vote `(j, B)` in `V`, add the stake of `j` to `B` and all of its
+ancestors.
+2. Now Set `B` to be the rooted block. Set `finish := 0`.
+3. Perform the following loop:
 
-1. Forks must satisfy the _Threshold_ rule.
-2. Pick the fork that maximizes the total cluster lockout time for all the ancestor forks.
-3. Pick the fork that has the greatest amount of cluster transaction fees.
-4. Pick the latest fork in terms of PoH.
+```
+*While* `finish == 0`
+*Do*:
+    *If*: `i` has received no children of `B` then set `finish := 1` and return
+    `B`.
+    *Else*: Let `B′` be the child of `B` (amongst those received by `i`) with
+    most the most stake-weighted votes in `V`, breaking ties by the smallest
+    slot. Set `B` equal to `B'`.
+```
 
-Cluster transaction fees are fees that are deposited to the mining pool as described in the [Staking Rewards](staking-rewards.md) section.
+### Voting Algorithm
+
+Each validator maintains a vote tower `T` which follows the rules described above in `[Vote Tower](tower-bft.md#Vote Tower)`, which is a sequence of blocks it has voted for (initially empty). The variable `l` records the length of the stack. For each entry in the tower, denoted by `B = T(x)` for `x < l` where `B` is the `xth` entry in the tower, we record also a value `lockexp(B)`.
+
+The validator `i` runs a voting loop as as follows. Let `B` be the heaviest
+block returned by the fork choice rule above `[Fork Choice](tower-bft.md#Fork Choice)`. If `i` has not voted for `B` before, then `i` votes for `B` so long as the following conditions are satisfied:
+
+1. Respecting lockouts: For any block `B′` in the tower that is not an ancestor of `B`, `lockexp(B′) ≤ slot(B)`.
+2. Threshold check: Described above in `[Threshold Check](tower-bft.md#Threshold Check)`
+3. Switching threshold: Have sufficiently many votes on other forks if switching forks. Let `Btop` denote the block at the top of the stack. If `Btop` is not an ancestor of `B`, then:
+    - Let `VBtop ∈ V` be the set of votes on `Btop` or ancestors or descendents of `Btop`.
+    - We need `|V \VBtop | > 38%`. More details on this can be found in `[Optimistic Confirmation](optimistic_confirmation.md#Primitives)`
+
+If all the conditions are satisfied and validator `i` votes for block `B` then it adjusts its tower as follows (same rules described above in `[Vote Tower](tower-bft.md#Vote Tower)`).
+1. Add block to tower. `T(l) := B`, `lockexp(B) := slot(B) + 2`, and sets `l := l + 1`.
+2. Remove expired blocks. For each element `B′ = S(x)` for `x < l − 1`, if `lockexp(B′) ≤ slot(B)`, remove `B′` from the tower.
 
 ## PoH ASIC Resistance
 
-Votes and lockouts grow exponentially while ASIC speed up is linear. There are two possible attack vectors involving a faster ASIC.
-
-### ASIC censorship
-
-An attacker generates a concurrent fork that outruns previous leaders in an effort to censor them. A fork proposed by this attacker will be available concurrently with the next available leader. For nodes to pick this fork it must satisfy the _Greedy Choice_ rule.
-
-1. Fork must have equal number of votes for the ancestor fork.
-2. Fork cannot be so far ahead as to cause expired votes.
-3. Fork must have a greater amount of cluster transaction fees.
-
-This attack is then limited to censoring the previous leaders fees, and individual transactions. But it cannot halt the cluster, or reduce the validator set compared to the concurrent fork. Fee censorship is limited to access fees going to the leaders but not the validators.
+Votes and lockouts grow exponentially while ASIC speed up is linear. There are possible attack vectors involving a faster ASIC outlined below.
 
 ### ASIC Rollback
 
