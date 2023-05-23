@@ -20,7 +20,7 @@ use {
         convert::TryInto,
         fs::File,
         io::{BufWriter, Write},
-        path::{Path, PathBuf},
+        path::PathBuf,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc, Mutex,
@@ -52,10 +52,11 @@ impl MmapAccountHashesFile {
 }
 
 /// 1 file containing account hashes sorted by pubkey
-#[derive(Default)]
 pub struct AccountHashesFile {
     /// # hashes and an open file that will be deleted on drop. None if there are zero hashes to represent, and thus, no file.
     count_and_writer: Option<(usize, BufWriter<File>)>,
+    /// The directory where temporary cache files are put
+    dir_for_temp_cache_files: PathBuf,
 }
 
 impl AccountHashesFile {
@@ -82,12 +83,12 @@ impl AccountHashesFile {
 
     /// write 'hash' to the file
     /// If the file isn't open, create it first.
-    pub fn write(&mut self, hash: &Hash, dir_for_temp_cache_files: impl AsRef<Path>) {
+    pub fn write(&mut self, hash: &Hash) {
         if self.count_and_writer.is_none() {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
             self.count_and_writer = Some((
                 0,
-                BufWriter::new(tempfile_in(dir_for_temp_cache_files).unwrap()),
+                BufWriter::new(tempfile_in(&self.dir_for_temp_cache_files).unwrap()),
             ));
         }
         let count_and_writer = self.count_and_writer.as_mut().unwrap();
@@ -928,7 +929,10 @@ impl AccountsHasher {
         // map from index of an item in first_items[] to index of the corresponding item in pubkey_division[]
         // this will change as items in pubkey_division[] are exhausted
         let mut first_item_to_pubkey_division = Vec::with_capacity(len);
-        let mut hashes = AccountHashesFile::default();
+        let mut hashes = AccountHashesFile {
+            count_and_writer: None,
+            dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
+        };
         // initialize 'first_items', which holds the current lowest item in each slot group
         pubkey_division.iter().enumerate().for_each(|(i, bins)| {
             // check to make sure we can do bins[pubkey_bin]
@@ -991,7 +995,7 @@ impl AccountsHasher {
                     overall_sum = Self::checked_cast_for_capitalization(
                         item.lamports as u128 + overall_sum as u128,
                     );
-                    hashes.write(&item.hash, &self.dir_for_temp_cache_files);
+                    hashes.write(&item.hash);
                 }
             } else {
                 // if lamports == 0, check if they should be included
@@ -1000,7 +1004,7 @@ impl AccountsHasher {
                     // the hash of its pubkey
                     let hash = blake3::hash(bytemuck::bytes_of(&item.pubkey));
                     let hash = Hash::new_from_array(hash.into());
-                    hashes.write(&hash, &self.dir_for_temp_cache_files);
+                    hashes.write(&hash);
                 }
             }
 
@@ -1120,26 +1124,33 @@ pub mod tests {
         }
     }
 
+    impl AccountHashesFile {
+        fn new(dir_for_temp_cache_files: PathBuf) -> Self {
+            Self {
+                count_and_writer: None,
+                dir_for_temp_cache_files,
+            }
+        }
+    }
+
     #[test]
     fn test_account_hashes_file() {
         let dir_for_temp_cache_files = tempdir().unwrap();
         // 0 hashes
-        let mut file = AccountHashesFile::default();
+        let mut file = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
         assert!(file.get_reader().is_none());
         let hashes = (0..2).map(|i| Hash::new(&[i; 32])).collect::<Vec<_>>();
 
         // 1 hash
-        file.write(&hashes[0], &dir_for_temp_cache_files);
+        file.write(&hashes[0]);
         let reader = file.get_reader().unwrap();
         assert_eq!(&[hashes[0]][..], reader.1.read(0));
         assert!(reader.1.read(1).is_empty());
 
         // multiple hashes
-        let mut file = AccountHashesFile::default();
+        let mut file = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
         assert!(file.get_reader().is_none());
-        hashes
-            .iter()
-            .for_each(|hash| file.write(hash, &dir_for_temp_cache_files));
+        hashes.iter().for_each(|hash| file.write(hash));
         let reader = file.get_reader().unwrap();
         (0..2).for_each(|i| assert_eq!(&hashes[i..], reader.1.read(i)));
         assert!(reader.1.read(2).is_empty());
@@ -1154,17 +1165,17 @@ pub mod tests {
             let mut combined = Vec::default();
 
             // 0 hashes
-            let file0 = AccountHashesFile::default();
+            let file0 = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
 
             // 1 hash
-            let mut file1 = AccountHashesFile::default();
-            file1.write(&hashes[0], &dir_for_temp_cache_files);
+            let mut file1 = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
+            file1.write(&hashes[0]);
             combined.push(hashes[0]);
 
             // multiple hashes
-            let mut file2 = AccountHashesFile::default();
+            let mut file2 = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
             hashes.iter().for_each(|hash| {
-                file2.write(hash, &dir_for_temp_cache_files);
+                file2.write(hash);
                 combined.push(*hash);
             });
 
@@ -1175,9 +1186,9 @@ pub mod tests {
                 vec![
                     file0,
                     file1,
-                    AccountHashesFile::default(),
+                    AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf()),
                     file2,
-                    AccountHashesFile::default(),
+                    AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf()),
                 ]
             } else if permutation == 2 {
                 vec![file1, file2]
@@ -1187,8 +1198,8 @@ pub mod tests {
                 combined.push(one);
                 vec![
                     file2,
-                    AccountHashesFile::default(),
-                    AccountHashesFile::default(),
+                    AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf()),
+                    AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf()),
                     file1,
                 ]
             };
