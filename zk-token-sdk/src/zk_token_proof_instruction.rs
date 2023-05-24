@@ -156,6 +156,60 @@ pub enum ProofInstruction {
     ///   `RangeProofU64Data`
     ///
     VerifyRangeProofU64,
+
+    /// Verify an aggregate 64-bit range proof.
+    ///
+    /// This instruction can be configured to optionally create a proof context state account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `AggregateRangeProof64Data`
+    ///
+    VerifyAggregateRangeProof64,
+
+    /// Verify an aggregate 128-bit range proof.
+    ///
+    /// This instruction can be configured to optionally create a proof context state account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `AggregateRangeProof128Data`
+    ///
+    VerifyAggregateRangeProof128,
+
+    /// Verify an aggregate 256-bit range proof.
+    ///
+    /// This instruction can be configured to optionally create a proof context state account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `AggregateRangeProof256Data`
+    ///
+    VerifyAggregateRangeProof256,
 }
 
 /// Pubkeys associated with a context state account to be used as parameters to functions.
@@ -240,6 +294,33 @@ pub fn verify_range_proof_u64(
     proof_data: &RangeProofU64Data,
 ) -> Instruction {
     ProofInstruction::VerifyRangeProofU64.encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyAggregateRangeProof64` instruction.
+pub fn verify_aggregate_verify_range_proof_64(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &AggregateRangeProof64Data,
+) -> Instruction {
+    ProofInstruction::VerifyAggregateRangeProof64
+        .encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyAggregateRangeProof128` instruction.
+pub fn verify_aggregate_verify_range_proof_128(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &AggregateRangeProof128Data,
+) -> Instruction {
+    ProofInstruction::VerifyAggregateRangeProof128
+        .encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyAggregateRangeProof64` instruction.
+pub fn verify_aggregate_verify_range_proof_256(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &AggregateRangeProof256Data,
+) -> Instruction {
+    ProofInstruction::VerifyAggregateRangeProof256
+        .encode_verify_proof(context_state_info, proof_data)
 }
 
 impl ProofInstruction {

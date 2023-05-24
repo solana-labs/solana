@@ -1,3 +1,4 @@
+pub mod aggregate_range_proof;
 pub mod ctxt_ctxt_equality;
 pub mod pubkey_validity;
 pub mod range_proof;
@@ -19,6 +20,11 @@ use {
     curve25519_dalek::scalar::Scalar,
 };
 pub use {
+    aggregate_range_proof::{
+        aggregate_range_proof_128::AggregateRangeProof128Data,
+        aggregate_range_proof_256::AggregateRangeProof256Data,
+        aggregate_range_proof_64::AggregateRangeProof64Data, AggregateRangeProofContext,
+    },
     bytemuck::Pod,
     ctxt_ctxt_equality::{
         CiphertextCiphertextEqualityProofContext, CiphertextCiphertextEqualityProofData,
@@ -43,6 +49,9 @@ pub enum ProofType {
     TransferWithFee,
     PubkeyValidity,
     RangeProofU64,
+    AggregateRangeProof64,
+    AggregateRangeProof128,
+    AggregateRangeProof256,
 }
 
 pub trait ZkProofData<T: Pod> {
