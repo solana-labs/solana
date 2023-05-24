@@ -161,6 +161,10 @@ pub enum TransactionError {
     /// Sanitized transaction differed before/after feature activiation. Needs to be resanitized.
     #[error("ResanitizationNeeded")]
     ResanitizationNeeded,
+
+    /// Stake program is unavailable during reward period
+    #[error("Stake program is unavailable during reward period")]
+    StakeProgramUnavailable,
 }
 
 impl From<SanitizeError> for TransactionError {
