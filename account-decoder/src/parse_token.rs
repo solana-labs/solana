@@ -30,12 +30,12 @@ pub(crate) fn spl_token_2022_id() -> Pubkey {
 
 // Returns all known SPL Token program ids
 pub fn spl_token_ids() -> Vec<Pubkey> {
-    vec![spl_token_id(), spl_token_2022_id()]
+    vec![spl_token::id(), spl_token_2022::id()]
 }
 
 // Check if the provided program id as a known SPL Token program id
 pub fn is_known_spl_token_id(program_id: &Pubkey) -> bool {
-    *program_id == spl_token_id() || *program_id == spl_token_2022_id()
+    *program_id == spl_token::id() || *program_id == spl_token_2022::id()
 }
 
 // A helper function to convert spl_token::native_mint::id() as spl_sdk::pubkey::Pubkey to
