@@ -3,7 +3,7 @@ use {
         account_storage::meta::{
             StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredAccountMeta,
         },
-        append_vec::{AppendVec, MatchAccountOwnerError},
+        append_vec::{AppendVec, AppendVecError, MatchAccountOwnerError},
         storable_accounts::StorableAccounts,
         tiered_storage::error::TieredStorageError,
     },
@@ -31,6 +31,9 @@ macro_rules! u64_align {
 pub enum AccountsFileError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("AppendVecError: {0}")]
+    AppendVecError(#[from] AppendVecError),
 
     #[error("TieredStorageError: {0}")]
     TieredStorageError(#[from] TieredStorageError),
