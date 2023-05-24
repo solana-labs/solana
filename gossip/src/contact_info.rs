@@ -237,7 +237,7 @@ impl ContactInfo {
     set_socket!(set_repair, SOCKET_TAG_REPAIR, SOCKET_TAG_REPAIR_QUIC);
     set_socket!(set_rpc, SOCKET_TAG_RPC);
     set_socket!(set_rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
-    set_socket!(set_serve_repair, SOCKET_TAG_SERVE_REPAIR);
+    set_socket!(set_serve_repair, SOCKET_TAG_SERVE_REPAIR, SOCKET_TAG_SERVE_REPAIR_QUIC);
     set_socket!(set_tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
     set_socket!(
         set_tpu_forwards,
