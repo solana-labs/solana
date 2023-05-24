@@ -5057,7 +5057,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         bank.transfer(20, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let request_processor = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -5076,7 +5076,7 @@ pub mod tests {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -5108,7 +5108,7 @@ pub mod tests {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -5235,7 +5235,7 @@ pub mod tests {
         bank.transfer(4, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
 
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -6381,7 +6381,7 @@ pub mod tests {
     fn test_rpc_send_bad_tx() {
         let genesis = create_genesis_config(100);
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -6421,7 +6421,7 @@ pub mod tests {
             );
             ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
         });
-        let connection_cache = Arc::<ConnectionCache>::default();
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let tpu_address = cluster_info
             .my_contact_info()
             .tpu(connection_cache.protocol())
@@ -6693,7 +6693,7 @@ pub mod tests {
         )));
 
         let cluster_info = Arc::new(new_test_cluster_info());
-        let connection_cache = Arc::<ConnectionCache>::default();
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let tpu_address = cluster_info
             .my_contact_info()
             .tpu(connection_cache.protocol())

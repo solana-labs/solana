@@ -44,13 +44,29 @@ pub enum NonblockingClientConnection {
 }
 
 impl ConnectionCache {
+    pub fn new(name: &'static str) -> Self {
+        if DEFAULT_CONNECTION_CACHE_USE_QUIC {
+            let cert_info = (&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)));
+            ConnectionCache::new_with_client_options(
+                name,
+                DEFAULT_CONNECTION_POOL_SIZE,
+                None, // client_endpoint
+                Some(cert_info),
+                None, // stake_info
+            )
+        } else {
+            ConnectionCache::with_udp(name, DEFAULT_CONNECTION_POOL_SIZE)
+        }
+    }
+
     /// Create a quic connection_cache
-    pub fn new(connection_pool_size: usize) -> Self {
-        Self::new_with_client_options(connection_pool_size, None, None, None)
+    pub fn new_quic(name: &'static str, connection_pool_size: usize) -> Self {
+        Self::new_with_client_options(name, connection_pool_size, None, None, None)
     }
 
     /// Create a quic conneciton_cache with more client options
     pub fn new_with_client_options(
+        name: &'static str,
         connection_pool_size: usize,
         client_endpoint: Option<Endpoint>,
         cert_info: Option<(&Keypair, IpAddr)>,
@@ -71,7 +87,8 @@ impl ConnectionCache {
             config.set_staked_nodes(stake_info.0, stake_info.1);
         }
         let connection_manager = QuicConnectionManager::new_with_connection_config(config);
-        let cache = BackendConnectionCache::new(connection_manager, connection_pool_size).unwrap();
+        let cache =
+            BackendConnectionCache::new(name, connection_manager, connection_pool_size).unwrap();
         Self::Quic(Arc::new(cache))
     }
 
@@ -106,11 +123,12 @@ impl ConnectionCache {
     ) {
     }
 
-    pub fn with_udp(connection_pool_size: usize) -> Self {
+    pub fn with_udp(name: &'static str, connection_pool_size: usize) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         let connection_manager = UdpConnectionManager::default();
-        let cache = BackendConnectionCache::new(connection_manager, connection_pool_size).unwrap();
+        let cache =
+            BackendConnectionCache::new(name, connection_manager, connection_pool_size).unwrap();
         Self::Udp(Arc::new(cache))
     }
 
@@ -133,22 +151,6 @@ impl ConnectionCache {
             Self::Udp(cache) => {
                 NonblockingClientConnection::Udp(cache.get_nonblocking_connection(addr))
             }
-        }
-    }
-}
-
-impl Default for ConnectionCache {
-    fn default() -> Self {
-        if DEFAULT_CONNECTION_CACHE_USE_QUIC {
-            let cert_info = (&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)));
-            ConnectionCache::new_with_client_options(
-                DEFAULT_CONNECTION_POOL_SIZE,
-                None,
-                Some(cert_info),
-                None,
-            )
-        } else {
-            ConnectionCache::with_udp(DEFAULT_CONNECTION_POOL_SIZE)
         }
     }
 }
@@ -273,8 +275,13 @@ mod tests {
         )
         .unwrap();
 
-        let connection_cache =
-            ConnectionCache::new_with_client_options(1, Some(response_recv_endpoint), None, None);
+        let connection_cache = ConnectionCache::new_with_client_options(
+            "connection_cache_test",
+            1,                            // connection_pool_size
+            Some(response_recv_endpoint), // client_endpoint
+            None,                         // cert_info
+            None,                         // stake_info
+        );
 
         // server port 1:
         let port1 = 9001;

@@ -18,6 +18,7 @@ async fn test_tpu_send_transaction() {
     let (test_validator, mint_keypair) = TestValidatorGenesis::default().start_async().await;
     let rpc_client = Arc::new(test_validator.get_async_rpc_client());
     let mut tpu_client = TpuClient::new(
+        "tpu_client_test",
         rpc_client.clone(),
         &test_validator.rpc_pubsub_url(),
         TpuClientConfig::default(),

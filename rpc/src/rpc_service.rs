@@ -629,7 +629,7 @@ mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let connection_cache = Arc::new(ConnectionCache::default());
+        let connection_cache = Arc::new(ConnectionCache::new("connection_cache_test"));
         let mut rpc_service = JsonRpcService::new(
             rpc_addr,
             JsonRpcConfig::default(),

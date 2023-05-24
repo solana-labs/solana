@@ -879,6 +879,7 @@ impl Validator {
         let connection_cache = match use_quic {
             true => {
                 let connection_cache = ConnectionCache::new_with_client_options(
+                    "connection_cache_tpu_quic",
                     tpu_connection_pool_size,
                     None,
                     Some((
@@ -892,7 +893,10 @@ impl Validator {
                 );
                 Arc::new(connection_cache)
             }
-            false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
+            false => Arc::new(ConnectionCache::with_udp(
+                "connection_cache_tpu_udp",
+                tpu_connection_pool_size,
+            )),
         };
 
         // block min prioritization fee cache should be readable by RPC, and writable by validator
