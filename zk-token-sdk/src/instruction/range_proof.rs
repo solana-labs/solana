@@ -23,6 +23,7 @@ use {
     bytemuck::{Pod, Zeroable},
 };
 
+#[cfg(not(target_os = "solana"))]
 const RANGEPROOF64_BIT_LENGTH: usize = 64;
 
 /// The context data needed to verify a range-proof for a committed value in a Pedersen commitment.
