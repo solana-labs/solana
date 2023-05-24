@@ -804,6 +804,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             29 => TransactionError::WouldExceedAccountDataTotalLimit,
             32 => TransactionError::MaxLoadedAccountsDataSizeExceeded,
             33 => TransactionError::InvalidLoadedAccountsDataSizeLimit,
+            34 => TransactionError::ResanitizationNeeded,
             _ => return Err("Invalid TransactionError"),
         })
     }
