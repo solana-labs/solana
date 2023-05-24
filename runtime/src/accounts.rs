@@ -84,8 +84,11 @@ pub struct AccountLocks {
     readonly_locks: HashMap<Pubkey, u64>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(crate) enum RewardInterval {
+    /// the slot within the epoch is INSIDE the reward distribution interval
+    InsideInterval,
     /// the slot within the epoch is OUTSIDE the reward distribution interval
     OutsideInterval,
 }
@@ -335,10 +338,12 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
-        _reward_interval: RewardInterval,
+        reward_interval: RewardInterval,
         program_accounts: &HashMap<Pubkey, (&Pubkey, u64)>,
         loaded_programs: &LoadedProgramsForTxBatch,
     ) -> Result<LoadedTransaction> {
+        let in_reward_interval = reward_interval == RewardInterval::InsideInterval;
+
         // NOTE: this check will never fail because `tx` is sanitized
         if tx.signatures().is_empty() && fee != 0 {
             return Err(TransactionError::MissingSignatureForFee);
@@ -467,6 +472,14 @@ impl Accounts {
                     } else if account.executable() && message.is_writable(i) {
                         error_counters.invalid_writable_account += 1;
                         return Err(TransactionError::InvalidWritableAccount);
+                    } else if in_reward_interval
+                        && message.is_writable(i)
+                        && solana_stake_program::check_id(account.owner())
+                    {
+                        error_counters.program_execution_temporarily_restricted += 1;
+                        return Err(TransactionError::ProgramExecutionTemporarilyRestricted {
+                            account_index: i as u8,
+                        });
                     }
 
                     tx_rent += rent;
