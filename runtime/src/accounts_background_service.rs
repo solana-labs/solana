@@ -245,7 +245,7 @@ impl SnapshotRequestHandler {
                 // dropped.  We do not want to drop a FullSnapshot request in this case because it
                 // will cause subsequent IncrementalSnapshot requests to fail.
                 //
-                // So, if `z` is an EpochAccountsHash request, check `y`.  We known there can only
+                // So, if `z` is an EpochAccountsHash request, check `y`.  We know there can only
                 // be at most one EpochAccountsHash request, so `y` is the only other request we
                 // need to check.  If `y` is a FullSnapshot request *with a lower slot* than `z`,
                 // then handle `y` first.
