@@ -238,7 +238,7 @@ impl SnapshotRequestHandler {
                     requests.select_nth_unstable_by(requests_len - 2, cmp_requests_by_priority);
                 assert_eq!(z.len(), 1);
                 let z = z.first().unwrap();
-                let y = &*y; // reborrow to remove `mut`
+                let y: &_ = y; // reborrow to remove `mut`
 
                 // If the highest priority request (`z`) is EpochAccountsHash, we need to check if
                 // there's a FullSnapshot request with a lower slot in `y` that is about to be
