@@ -927,7 +927,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "too small file size 0 for AppendVec")]
+    #[should_panic(expected = "AppendVecError(FileSizeTooSmall(0))")]
     fn test_append_vec_new_bad_size() {
         let path = get_append_vec_path("test_append_vec_new_bad_size");
         let _av = AppendVec::new(&path.path, true, 0);
