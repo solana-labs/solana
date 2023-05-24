@@ -28,10 +28,7 @@ use {
         clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
         feature_set, saturating_add_assign,
         timing::timestamp,
-        transaction::{
-            self, AddressLoader, SanitizedTransaction, SanitizedVersionedTransaction,
-            TransactionError,
-        },
+        transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
     },
     std::{
         sync::{atomic::Ordering, Arc},
@@ -407,26 +404,6 @@ impl Consumer {
         txs: &[SanitizedTransaction],
         max_slot_ages: &[Slot],
     ) -> ProcessTransactionBatchOutput {
-        /// Re-sanitize a transaction for epoch cross.
-        fn resanitize(
-            transaction: &SanitizedTransaction,
-            bank: &Bank,
-        ) -> transaction::Result<SanitizedTransaction> {
-            let versioned_transaction = transaction.to_versioned_transaction();
-            let sanitized_versioned_transaction =
-                SanitizedVersionedTransaction::try_from(versioned_transaction)?;
-
-            let message_hash = *transaction.message_hash();
-            let is_simple_vote_tx = transaction.is_simple_vote_transaction();
-
-            SanitizedTransaction::try_new(
-                sanitized_versioned_transaction,
-                message_hash,
-                is_simple_vote_tx,
-                bank,
-            )
-        }
-
         // Need to filter out transactions since they were sanitized earlier.
         // This means that the transaction may cross and epoch boundary (not allowed),
         //  or account lookup tables may have been closed.
@@ -435,7 +412,12 @@ impl Consumer {
                 // Attempt re-sanitization after epoch-cross.
                 // Re-sanitized transaction should be equal to the original transaction,
                 // but whether it will pass sanitization needs to be checked.
-                resanitize(tx, bank)?;
+                let resanitized_tx =
+                    bank.fully_verify_transaction(tx.to_versioned_transaction())?;
+                if resanitized_tx != *tx {
+                    // Sanitization before/after epoch give different transaction data - do not execute.
+                    return Err(TransactionError::ResanitizationNeeded);
+                }
             } else {
                 // Any transaction executed between sanitization time and now may have closed the lookup table(s).
                 // Above re-sanitization already loads addresses, so don't need to re-check in that case.

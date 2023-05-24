@@ -913,6 +913,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 TransactionError::InvalidLoadedAccountsDataSizeLimit => {
                     tx_by_addr::TransactionErrorType::InvalidLoadedAccountsDataSizeLimit
                 }
+                TransactionError::ResanitizationNeeded => {
+                    tx_by_addr::TransactionErrorType::ResanitizationNeeded
+                }
             } as i32,
             instruction_error: match transaction_error {
                 TransactionError::InstructionError(index, ref instruction_error) => {
