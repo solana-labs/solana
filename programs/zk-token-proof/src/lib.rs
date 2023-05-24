@@ -201,5 +201,38 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
             ic_msg!(invoke_context, "VerifyRangeProof");
             process_verify_proof::<RangeProofU64Data, RangeProofContext>(invoke_context)
         }
+        ProofInstruction::VerifyAggregateRangeProof64 => {
+            if native_programs_consume_cu {
+                invoke_context
+                    .consume_checked(111_478)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            }
+            ic_msg!(invoke_context, "VerifyAggregateRangeProof64");
+            process_verify_proof::<AggregateRangeProof64Data, AggregateRangeProofContext>(
+                invoke_context,
+            )
+        }
+        ProofInstruction::VerifyAggregateRangeProof128 => {
+            if native_programs_consume_cu {
+                invoke_context
+                    .consume_checked(204_512)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            }
+            ic_msg!(invoke_context, "VerifyAggregateRangeProof128");
+            process_verify_proof::<AggregateRangeProof128Data, AggregateRangeProofContext>(
+                invoke_context,
+            )
+        }
+        ProofInstruction::VerifyAggregateRangeProof256 => {
+            if native_programs_consume_cu {
+                invoke_context
+                    .consume_checked(368_000)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            }
+            ic_msg!(invoke_context, "VerifyAggregateRangeProof256");
+            process_verify_proof::<AggregateRangeProof256Data, AggregateRangeProofContext>(
+                invoke_context,
+            )
+        }
     }
 });
