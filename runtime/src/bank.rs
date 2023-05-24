@@ -4411,8 +4411,17 @@ impl Bank {
                 let program = self.load_program(key).unwrap_or_else(|err| {
                     // Create a tombstone for the program in the cache
                     debug!("Failed to load program {}, error {:?}", key, err);
+                    let slot = if let Some(program) = self.get_account_with_fixed_root(key) {
+                        if bpf_loader_upgradeable::check_id(program.owner()) {
+                            self.slot
+                        } else {
+                            0
+                        }
+                    } else {
+                        self.slot
+                    };
                     Arc::new(LoadedProgram::new_tombstone(
-                        self.slot,
+                        slot,
                         LoadedProgramType::FailedVerification,
                     ))
                 });
