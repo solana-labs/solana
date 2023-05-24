@@ -1130,6 +1130,13 @@ struct EpochRewardCalculateParamInfo<'a> {
     stake_delegations: Vec<(&'a Pubkey, &'a StakeAccount<Delegation>)>,
     cached_vote_accounts: &'a VoteAccounts,
 }
+
+struct CalculateRewardsAndDistributeVoteRewardsResult {
+    total_rewards: u64,
+    distributed_rewards: u64,
+    stake_rewards: StakeRewards,
+}
+
 pub(crate) type StakeRewards = Vec<StakeReward>;
 
 #[derive(Debug, Default)]
@@ -1866,13 +1873,16 @@ impl Bank {
         parent_height: u64,
         rewards_metrics: &mut RewardsMetrics,
     ) {
-        let (total_rewards, distributed_rewards, stake_rewards) = self
-            .calculate_rewards_and_distribute_vote_rewards(
-                parent_epoch,
-                reward_calc_tracer,
-                thread_pool,
-                rewards_metrics,
-            );
+        let CalculateRewardsAndDistributeVoteRewardsResult {
+            total_rewards,
+            distributed_rewards,
+            stake_rewards,
+        } = self.calculate_rewards_and_distribute_vote_rewards(
+            parent_epoch,
+            reward_calc_tracer,
+            thread_pool,
+            rewards_metrics,
+        );
 
         self.set_epoch_reward_status_active(stake_rewards);
 
@@ -1929,6 +1939,8 @@ impl Bank {
         }
     }
 
+    /// partitioned reward distribution is complete.
+    /// So, deactivate the epoch rewards sysvar.
     fn deactivate_epoch_reward_status(&mut self) {
         assert!(matches!(
             self.epoch_reward_status,
@@ -2654,7 +2666,7 @@ impl Bank {
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
-    ) -> (u64, u64, StakeRewards) {
+    ) -> CalculateRewardsAndDistributeVoteRewardsResult {
         let PartitionedRewardsCalculation {
             vote_account_rewards,
             stake_rewards,
@@ -2672,12 +2684,15 @@ impl Bank {
         );
         let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
 
+        // update reward history of JUST vote_rewards, stake_rewards is vec![] here
         self.update_reward_history(vec![], vote_rewards);
 
         let StakeRewardCalculation {
             stake_rewards,
             total_stake_rewards_lamports,
         } = stake_rewards;
+
+        // the remaining code mirrors `update_rewards_with_thread_pool()`
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
 
@@ -2726,11 +2741,11 @@ impl Bank {
             ("num_vote_accounts", num_vote_accounts, i64),
         );
 
-        (
-            validator_rewards_paid + total_stake_rewards_lamports,
-            validator_rewards_paid,
+        CalculateRewardsAndDistributeVoteRewardsResult {
+            total_rewards: validator_rewards_paid + total_stake_rewards_lamports,
+            distributed_rewards: validator_rewards_paid,
             stake_rewards,
-        )
+        }
     }
 
     fn assert_validator_rewards_paid(&self, validator_rewards_paid: u64) {
