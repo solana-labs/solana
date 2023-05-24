@@ -38,9 +38,8 @@ use {
             disable_fees_sysvar, enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
             enable_early_verification_of_account_modifications,
             error_on_syscall_bpf_function_hash_collisions, libsecp256k1_0_5_upgrade_enabled,
-            limit_secp256k1_recovery_id, reject_callx_r10,
-            stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
-            switch_to_new_elf_parser,
+            reject_callx_r10, stop_sibling_instruction_search_at_parent,
+            stop_truncating_strings_in_syscalls, switch_to_new_elf_parser,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -870,18 +869,11 @@ declare_syscall!(
                 return Ok(Secp256k1RecoverError::InvalidHash.into());
             }
         };
-        let adjusted_recover_id_val = if invoke_context
-            .feature_set
-            .is_active(&limit_secp256k1_recovery_id::id())
-        {
-            match recovery_id_val.try_into() {
-                Ok(adjusted_recover_id_val) => adjusted_recover_id_val,
-                Err(_) => {
-                    return Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
-                }
+        let adjusted_recover_id_val = match recovery_id_val.try_into() {
+            Ok(adjusted_recover_id_val) => adjusted_recover_id_val,
+            Err(_) => {
+                return Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
             }
-        } else {
-            recovery_id_val as u8
         };
         let recovery_id = match libsecp256k1::RecoveryId::parse(adjusted_recover_id_val) {
             Ok(id) => id,
