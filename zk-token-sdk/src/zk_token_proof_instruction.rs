@@ -135,7 +135,10 @@ pub enum ProofInstruction {
 
     /// Verify a 64-bit range proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<RangeProofContext>` and assigned to the ZkToken proof program prior to
+    /// the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
