@@ -40,6 +40,7 @@ use {
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
             AccountsIndexConfig, IndexLimitMb,
         },
+        partitioned_rewards::TestPartitionedEpochRewards,
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
@@ -1119,6 +1120,15 @@ pub fn main() {
         accounts_index_config.bins = Some(bins);
     }
 
+    let test_partitioned_epoch_rewards =
+        if matches.is_present("partitioned_epoch_rewards_compare_calculation") {
+            TestPartitionedEpochRewards::CompareResults
+        } else if matches.is_present("partitioned_epoch_rewards_force_enable_single_slot") {
+            TestPartitionedEpochRewards::ForcePartitionedEpochRewardsInOneBlock
+        } else {
+            TestPartitionedEpochRewards::None
+        };
+
     accounts_index_config.index_limit_mb =
         if let Ok(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize) {
             IndexLimitMb::Limit(limit)
@@ -1167,6 +1177,7 @@ pub fn main() {
             .is_present("accounts_db_create_ancient_storage_packed")
             .then_some(CreateAncientStorage::Pack)
             .unwrap_or_default(),
+        test_partitioned_epoch_rewards,
         ..AccountsDbConfig::default()
     };
 

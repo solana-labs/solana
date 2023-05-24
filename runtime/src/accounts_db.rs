@@ -59,6 +59,7 @@ use {
         cache_hash_data::{CacheHashData, CacheHashDataFile},
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
+        partitioned_rewards::{PartitionedEpochRewardsConfig, TestPartitionedEpochRewards},
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
@@ -477,6 +478,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: true,
     create_ancient_storage: CreateAncientStorage::Pack,
+    test_partitioned_epoch_rewards: TestPartitionedEpochRewards::CompareResults,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -488,6 +490,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: false,
     create_ancient_storage: CreateAncientStorage::Pack,
+    test_partitioned_epoch_rewards: TestPartitionedEpochRewards::None,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -551,6 +554,7 @@ pub struct AccountsDbConfig {
     pub assert_stakes_cache_consistency: bool,
     /// how to create ancient storages
     pub create_ancient_storage: CreateAncientStorage,
+    pub test_partitioned_epoch_rewards: TestPartitionedEpochRewards,
 }
 
 #[cfg(not(test))]
@@ -1496,6 +1500,11 @@ pub struct AccountsDb {
     /// debug feature to scan every append vec and verify refcounts are equal
     exhaustively_verify_refcounts: bool,
 
+    /// this will live here until the feature for partitioned epoch rewards is activated.
+    /// At that point, this and other code can be deleted.
+    #[allow(dead_code)]
+    pub(crate) partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig,
+
     /// the full accounts hash calculation as of a predetermined block height 'N'
     /// to be included in the bank hash at a predetermined block height 'M'
     /// The cadence is once per epoch, all nodes calculate a full accounts hash as of a known slot calculated using 'N'
@@ -2440,6 +2449,7 @@ impl AccountsDb {
             filler_account_suffix: None,
             log_dead_slots: AtomicBool::new(true),
             exhaustively_verify_refcounts: false,
+            partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig::default(),
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
         }
     }
@@ -2514,6 +2524,14 @@ impl AccountsDb {
             .map(|config| config.create_ancient_storage)
             .unwrap_or(CreateAncientStorage::Append);
 
+        let test_partitioned_epoch_rewards = accounts_db_config
+            .as_ref()
+            .map(|config| config.test_partitioned_epoch_rewards)
+            .unwrap_or_default();
+
+        let partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig =
+            PartitionedEpochRewardsConfig::new(test_partitioned_epoch_rewards);
+
         let filler_account_suffix = if filler_accounts_config.count > 0 {
             Some(solana_sdk::pubkey::new_rand())
         } else {
@@ -2535,6 +2553,7 @@ impl AccountsDb {
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
                 .and_then(|x| x.write_cache_limit_bytes),
+            partitioned_epoch_rewards_config,
             exhaustively_verify_refcounts,
             ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
         };
