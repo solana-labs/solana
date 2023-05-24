@@ -3158,6 +3158,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nohash-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
+
+[[package]]
 name = "nom"
 version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6785,8 +6791,10 @@ name = "solana-scheduler-pool"
 version = "1.16.0"
 dependencies = [
  "assert_matches",
+ "bincode",
  "crossbeam-channel",
  "log",
+ "nohash-hasher",
  "rand 0.7.3",
  "solana-ledger",
  "solana-logger 1.16.0",

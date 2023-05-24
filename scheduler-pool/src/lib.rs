@@ -94,10 +94,11 @@ impl InstalledSchedulerPool for SchedulerPool {
             scheduler.replace_context(context);
             scheduler
         } else {
-            Box::new(PooledScheduler::<
+            Box::new(PooledScheduler::<_, DefaultScheduleExecutionArg>::spawn(
+                self.self_arc(),
+                context,
                 DefaultTransactionHandler,
-                DefaultScheduleExecutionArg,
-            >::spawn(self.self_arc(), context))
+            ))
         }
     }
 
@@ -113,6 +114,7 @@ impl InstalledSchedulerPool for SchedulerPool {
 
 pub trait ScheduledTransactionHandler<SEA: ScheduleExecutionArg>: Send + Sync + Debug {
     fn handle(
+        &self,
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
@@ -126,6 +128,7 @@ struct DefaultTransactionHandler;
 
 impl<SEA: ScheduleExecutionArg> ScheduledTransactionHandler<SEA> for DefaultTransactionHandler {
     fn handle(
+        &self,
         result: &mut Result<()>,
         timings: &mut ExecuteTimings,
         bank: &Arc<Bank>,
@@ -161,16 +164,22 @@ pub struct PooledScheduler<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleEx
     pool: Arc<SchedulerPool>,
     context: Option<SchedulingContext>,
     result_with_timings: Mutex<Option<ResultWithTimings>>,
-    _phantom: PhantomData<(TH, SEA)>,
+    handler: TH,
+    _phantom: PhantomData<SEA>,
 }
 
 impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> PooledScheduler<TH, SEA> {
-    pub fn spawn(pool: Arc<SchedulerPool>, initial_context: SchedulingContext) -> Self {
+    pub fn spawn(
+        pool: Arc<SchedulerPool>,
+        initial_context: SchedulingContext,
+        handler: TH,
+    ) -> Self {
         Self {
             id: thread_rng().gen::<SchedulerId>(),
             pool,
             context: Some(initial_context),
             result_with_timings: Mutex::default(),
+            handler,
             _phantom: PhantomData::default(),
         }
     }
@@ -203,6 +212,7 @@ impl<TH: ScheduledTransactionHandler<SEA>, SEA: ScheduleExecutionArg> InstalledS
         // to solve inter-tx locking deps only in the case of single-thread fifo like this....
         if result.is_ok() || !fail_fast {
             TH::handle(
+                &self.handler,
                 result,
                 timings,
                 context.bank(),
