@@ -86,8 +86,11 @@ use {
     dashmap::{DashMap, DashSet},
     log::*,
     percentage::Percentage,
+    rand::seq::SliceRandom,
+    rand_chacha::{rand_core::SeedableRng, ChaChaRng},
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+        slice::ParallelSliceMut,
         ThreadPool, ThreadPoolBuilder,
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment,
@@ -2789,6 +2792,35 @@ impl Bank {
             invalid_cached_stake_accounts_rent_epoch: 0,
             vote_accounts_cache_miss_count: vote_accounts_cache_miss_count.into_inner(),
         }
+    }
+
+    /// Sort and shuffle rewards for partitioned distribution
+    /// return (us time to sort, us time to shuffle)
+    #[allow(dead_code)]
+    fn sort_and_shuffle_partitioned_rewards(
+        stake_rewards: &mut StakeRewards,
+        rewarded_epoch: Epoch,
+        rewards: u64,
+        thread_pool: &ThreadPool,
+    ) -> (u64, u64) {
+        thread_pool.install(|| {
+            let (_, us_sort) = measure_us!(
+                // sort reward results by pubkey so stores per partition are consistent on every node
+                stake_rewards.par_sort_unstable_by(|a, b| a
+                    .stake_pubkey
+                    .partial_cmp(&b.stake_pubkey)
+                    .unwrap())
+            );
+
+            // deterministically random shuffle the rewards with rewarded_epoch and rewards as the seed
+            // so that no pubkeys consistently get rewards earlier than others
+            let (_, us_shuffle) = measure_us!({
+                let seed = rewarded_epoch ^ rewards;
+                let mut rng = ChaChaRng::seed_from_u64(seed);
+                stake_rewards.shuffle(&mut rng);
+            });
+            (us_sort, us_shuffle)
+        })
     }
 
     /// Load, calculate and payout epoch rewards for stake and vote accounts

@@ -119,6 +119,46 @@ use {
     test_case::test_case,
 };
 
+impl StakeReward {
+    pub fn random() -> Self {
+        let mut rng = rand::thread_rng();
+
+        let rent = Rent::free();
+
+        let validator_pubkey = solana_sdk::pubkey::new_rand();
+        let validator_stake_lamports = 20;
+        let validator_staking_keypair = Keypair::new();
+        let validator_voting_keypair = Keypair::new();
+
+        let validator_vote_account = vote_state::create_account(
+            &validator_voting_keypair.pubkey(),
+            &validator_pubkey,
+            10,
+            validator_stake_lamports,
+        );
+
+        let validator_stake_account = stake_state::create_account(
+            &validator_staking_keypair.pubkey(),
+            &validator_voting_keypair.pubkey(),
+            &validator_vote_account,
+            &rent,
+            validator_stake_lamports,
+        );
+
+        Self {
+            stake_pubkey: Pubkey::new_unique(),
+            stake_reward_info: RewardInfo {
+                reward_type: RewardType::Staking,
+                lamports: rng.gen_range(1, 200),
+                post_balance: rng.gen_range(1, 2000),
+                commission: Some(rng.gen_range(1, 10)),
+            },
+
+            stake_account: validator_stake_account,
+        }
+    }
+}
+
 #[test]
 fn test_race_register_tick_freeze() {
     solana_logger::setup();
@@ -12484,6 +12524,63 @@ fn test_squash_timing_add_assign() {
     t0 += t1;
 
     assert!(t0 == expected);
+}
+
+// Test sort and shuffle partitioned rewards
+#[test]
+fn test_sort_and_shuffle_partitioned_rewards() {
+    // setup the expected number of stake rewards
+    let expected_num = 12345;
+
+    let mut stake_rewards = (0..expected_num)
+        .map(|_| StakeReward::random())
+        .collect::<Vec<_>>();
+    let mut stake_rewards_bk = stake_rewards.clone();
+
+    let total = stake_rewards
+        .iter()
+        .map(|stake_reward| stake_reward.stake_reward_info.lamports)
+        .sum::<i64>();
+
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+
+    Bank::sort_and_shuffle_partitioned_rewards(&mut stake_rewards, 1, total as u64, &thread_pool);
+    compare(&stake_rewards, &stake_rewards_bk);
+    let stake_rewards_sorted = stake_rewards.clone();
+
+    let total_after_sort_shuffle = stake_rewards
+        .iter()
+        .map(|stake_reward| stake_reward.stake_reward_info.lamports)
+        .sum::<i64>();
+
+    // assert total is same, so nothing is dropped or duplicated
+    assert_eq!(total, total_after_sort_shuffle);
+
+    // sort and shuffle again
+    Bank::sort_and_shuffle_partitioned_rewards(&mut stake_rewards, 1, total as u64, &thread_pool);
+    assert_eq!(stake_rewards, stake_rewards_sorted);
+    compare(&stake_rewards_sorted, &stake_rewards_bk);
+
+    // sort the copy
+    Bank::sort_and_shuffle_partitioned_rewards(
+        &mut stake_rewards_bk,
+        1,
+        total as u64,
+        &thread_pool,
+    );
+    assert_eq!(stake_rewards, stake_rewards_sorted);
+}
+
+fn compare(a: &StakeRewards, b: &StakeRewards) {
+    let mut a = a
+        .iter()
+        .map(|stake_reward| (stake_reward.stake_pubkey, stake_reward.clone()))
+        .collect::<HashMap<_, _>>();
+    b.iter().for_each(|stake_reward| {
+        let reward = a.remove(&stake_reward.stake_pubkey).unwrap();
+        assert_eq!(&reward, stake_reward);
+    });
+    assert!(a.is_empty());
 }
 
 #[test]
