@@ -38,7 +38,6 @@ use {
         hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
         pubkey::{Pubkey, PUBKEY_BYTES},
-        quic::QUIC_PORT_OFFSET,
         signature::{Signable, Signature, Signer, SIGNATURE_BYTES},
         signer::keypair::Keypair,
         timing::{duration_as_ms, timestamp},
@@ -1217,16 +1216,7 @@ impl ServeRepair {
                 if let Ok(pong) = Pong::new(&ping, keypair) {
                     let pong = RepairProtocol::Pong(pong);
                     if let Ok(pong_bytes) = serialize(&pong) {
-                        let from_addr = if matches!(repair_socket, RepairTransportConfig::Quic(_)) {
-                            // As we are using the same connection cache which is doing the port offset logic
-                            // we need to substract the offset here.
-                            SocketAddr::new(
-                                packet.meta().socket_addr().ip(),
-                                packet.meta().socket_addr().port() - QUIC_PORT_OFFSET,
-                            )
-                        } else {
-                            packet.meta().socket_addr()
-                        };
+                        let from_addr = packet.meta().socket_addr();
                         pending_pongs.push((pong_bytes, from_addr));
                     }
                 }
