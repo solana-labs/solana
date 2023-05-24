@@ -148,6 +148,8 @@ pub fn create_program_runtime_environment<'a>(
     debugging_features: bool,
 ) -> Result<BuiltinProgram<InvokeContext<'a>>, Error> {
     use rand::Rng;
+    // When adding new features for RBPF,
+    // also add them to `Bank::apply_builtin_program_feature_transitions()`.
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
