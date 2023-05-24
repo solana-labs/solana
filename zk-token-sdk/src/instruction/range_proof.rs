@@ -60,7 +60,7 @@ impl RangeProof64Data {
             commitment: pod_commitment,
         };
 
-        let mut transcript = context.transcript_new();
+        let mut transcript = context.new_transcript();
 
         let proof = RangeProof::new(
             vec![amount],
@@ -83,7 +83,7 @@ impl ZkProofData<RangeProofContext> for RangeProof64Data {
 
     #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError> {
-        let mut transcript = self.context_data().transcript_new();
+        let mut transcript = self.context_data().new_transcript();
         let commitment = self.context.commitment.try_into()?;
         let proof: RangeProof = self.proof.try_into()?;
 
@@ -100,7 +100,7 @@ impl ZkProofData<RangeProofContext> for RangeProof64Data {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl RangeProofContext {
-    fn transcript_new(&self) -> Transcript {
+    fn new_transcript(&self) -> Transcript {
         let mut transcript = Transcript::new(b"RangeProof");
         transcript.append_commitment(b"commitment", &self.commitment);
         transcript
