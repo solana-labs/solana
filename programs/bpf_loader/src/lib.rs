@@ -1480,7 +1480,7 @@ fn process_loader_instruction(invoke_context: &mut InvokeContext) -> Result<(), 
                 *program.get_key(),
                 program.get_owner(),
                 program.get_data().len(),
-                0,
+                invoke_context.programs_loaded_for_tx_batch.slot(),
                 {},
                 program.get_data(),
             );
