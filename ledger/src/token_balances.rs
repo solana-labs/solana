@@ -1,7 +1,6 @@
 use {
     solana_account_decoder::parse_token::{
-        is_known_spl_token_id, pubkey_from_spl_token, spl_token_native_mint,
-        token_amount_to_ui_amount, UiTokenAmount,
+        is_known_spl_token_id, spl_token_native_mint, token_amount_to_ui_amount, UiTokenAmount,
     },
     solana_measure::measure::Measure,
     solana_metrics::datapoint_debug,
@@ -101,7 +100,7 @@ fn collect_token_balance_from_account(
     }
 
     let token_account = StateWithExtensions::<TokenAccount>::unpack(account.data()).ok()?;
-    let mint = pubkey_from_spl_token(&token_account.base.mint);
+    let mint = token_account.base.mint;
 
     let decimals = mint_decimals.get(&mint).cloned().or_else(|| {
         let decimals = get_mint_decimals(bank, &mint)?;
@@ -121,7 +120,7 @@ fn collect_token_balance_from_account(
 mod test {
     use {
         super::*,
-        solana_account_decoder::parse_token::{pubkey_from_spl_token, spl_token_pubkey},
+        solana_account_decoder::parse_token::spl_token_pubkey,
         solana_sdk::{account::Account, genesis_config::create_genesis_config},
         spl_token_2022::{
             extension::{
@@ -154,7 +153,7 @@ mod test {
         let mint = Account {
             lamports: 100,
             data: data.to_vec(),
-            owner: pubkey_from_spl_token(&spl_token::id()),
+            owner: spl_token::id(),
             executable: false,
             rent_epoch: 0,
         };
@@ -184,7 +183,7 @@ mod test {
         let spl_token_account = Account {
             lamports: 100,
             data: data.to_vec(),
-            owner: pubkey_from_spl_token(&spl_token::id()),
+            owner: spl_token::id(),
             executable: false,
             rent_epoch: 0,
         };
@@ -212,7 +211,7 @@ mod test {
         let other_mint_token_account = Account {
             lamports: 100,
             data: data.to_vec(),
-            owner: pubkey_from_spl_token(&spl_token::id()),
+            owner: spl_token::id(),
             executable: false,
             rent_epoch: 0,
         };
@@ -317,7 +316,7 @@ mod test {
         let mint = Account {
             lamports: 100,
             data: mint_data.to_vec(),
-            owner: pubkey_from_spl_token(&spl_token_2022::id()),
+            owner: spl_token_2022::id(),
             executable: false,
             rent_epoch: 0,
         };
@@ -361,7 +360,7 @@ mod test {
         let spl_token_account = Account {
             lamports: 100,
             data: account_data.to_vec(),
-            owner: pubkey_from_spl_token(&spl_token_2022::id()),
+            owner: spl_token_2022::id(),
             executable: false,
             rent_epoch: 0,
         };
@@ -403,7 +402,7 @@ mod test {
         let other_mint_token_account = Account {
             lamports: 100,
             data: account_data.to_vec(),
-            owner: pubkey_from_spl_token(&spl_token_2022::id()),
+            owner: spl_token_2022::id(),
             executable: false,
             rent_epoch: 0,
         };

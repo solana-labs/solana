@@ -43,6 +43,7 @@ pub fn spl_token_pubkey(pubkey: &Pubkey) -> SplTokenPubkey {
 }
 
 // A helper function to convert a spl_sdk::pubkey::Pubkey to solana_sdk::pubkey::Pubkey
+#[deprecated(since = "1.16.0", note = "Pubkey conversions no longer needed")]
 pub fn pubkey_from_spl_token(pubkey: &SplTokenPubkey) -> Pubkey {
     Pubkey::new_from_array(pubkey.to_bytes())
 }

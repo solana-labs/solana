@@ -5,7 +5,7 @@ use {
     },
     console::style,
     solana_account_decoder::parse_token::{
-        pubkey_from_spl_token, real_number_string, real_number_string_trimmed, spl_token_pubkey,
+        real_number_string, real_number_string_trimmed, spl_token_pubkey,
     },
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{instruction::Instruction, message::Message, native_token::lamports_to_sol},
@@ -24,9 +24,7 @@ pub fn update_token_args(client: &RpcClient, args: &mut Option<SplTokenArgs>) ->
         let sender_account = client
             .get_account(&spl_token_args.token_account_address)
             .unwrap_or_default();
-        let mint_address =
-            pubkey_from_spl_token(&SplTokenAccount::unpack(&sender_account.data)?.mint);
-        spl_token_args.mint = mint_address;
+        spl_token_args.mint = SplTokenAccount::unpack(&sender_account.data)?.mint;
         update_decimals(client, args)?;
     }
     Ok(())
@@ -133,7 +131,7 @@ pub fn print_token_balances(
         &spl_token_pubkey(&spl_token_args.mint),
     );
     let recipient_account = client
-        .get_account(&pubkey_from_spl_token(&associated_token_address))
+        .get_account(&associated_token_address)
         .unwrap_or_default();
     let (actual, difference) = if let Ok(recipient_token) =
         SplTokenAccount::unpack(&recipient_account.data)
