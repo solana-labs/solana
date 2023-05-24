@@ -49,4 +49,3 @@ solana gossip -ut | grep -E " (tc[ebs]\d)"
 ```
 
 # Alerts
-
