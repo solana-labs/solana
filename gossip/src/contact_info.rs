@@ -712,7 +712,10 @@ mod tests {
                 }
             }
             assert_eq!(node.gossip().ok().as_ref(), sockets.get(&SOCKET_TAG_GOSSIP));
-            assert_eq!(node.repair(Protocol::UDP).ok().as_ref(), sockets.get(&SOCKET_TAG_REPAIR));
+            assert_eq!(
+                node.repair(Protocol::UDP).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_REPAIR)
+            );
             assert_eq!(node.rpc().ok().as_ref(), sockets.get(&SOCKET_TAG_RPC));
             assert_eq!(
                 node.rpc_pubsub().ok().as_ref(),
