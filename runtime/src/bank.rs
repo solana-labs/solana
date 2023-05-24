@@ -878,8 +878,8 @@ impl AbiExample for OptionalDropCallback {
 
 #[derive(AbiExample, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct StartBlockHeightAndRewards {
-    /// the block height of the parent of the slot at which rewards distribution began
-    pub(crate) parent_start_block_height: u64,
+    /// the block height of the slot at which rewards distribution began
+    pub(crate) start_block_height: u64,
     /// calculated epoch rewards pending distribution
     pub(crate) calculated_epoch_stake_rewards: Arc<StakeRewards>,
 }
