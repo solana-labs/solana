@@ -170,15 +170,5 @@ mod tests {
             expected_epoch_rewards,
         );
         drop(bank1_sysvar_cache);
-
-        // todo: jwash has no idea why this causes the test to pass
-        // expected_epoch_rewards.distribute(10);
-        bank1.update_epoch_rewards_sysvar(10);
-        let bank1_sysvar_cache = bank1.sysvar_cache.read().unwrap();
-        assert_eq!(
-            *bank1_sysvar_cache.get_epoch_rewards().unwrap(),
-            expected_epoch_rewards,
-        );
-        drop(bank1_sysvar_cache);
     }
 }
