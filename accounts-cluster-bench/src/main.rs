@@ -4,7 +4,6 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_account_decoder::parse_token::spl_token_pubkey,
     solana_clap_utils::{
         hidden_unless_forced, input_parsers::pubkey_of, input_validators::is_url_or_moniker,
     },
@@ -163,9 +162,9 @@ fn make_create_message(
                 instructions.push(spl_token_instruction(
                     spl_token::instruction::initialize_account(
                         &spl_token::id(),
-                        &spl_token_pubkey(&to_pubkey),
-                        &spl_token_pubkey(&mint_address),
-                        &spl_token_pubkey(&base_keypair.pubkey()),
+                        &to_pubkey,
+                        &mint_address,
+                        &base_keypair.pubkey(),
                     )
                     .unwrap(),
                 ));
@@ -206,9 +205,9 @@ fn make_close_message(
                 Some(spl_token_instruction(
                     spl_token::instruction::close_account(
                         &spl_token::id(),
-                        &spl_token_pubkey(&address),
-                        &spl_token_pubkey(&keypair.pubkey()),
-                        &spl_token_pubkey(&base_keypair.pubkey()),
+                        &address,
+                        &keypair.pubkey(),
+                        &base_keypair.pubkey(),
                         &[],
                     )
                     .unwrap(),
@@ -815,8 +814,8 @@ pub mod test {
                 spl_token_instruction(
                     spl_token::instruction::initialize_mint(
                         &spl_token::id(),
-                        &spl_token_pubkey(&spl_mint_keypair.pubkey()),
-                        &spl_token_pubkey(&spl_mint_keypair.pubkey()),
+                        &spl_mint_keypair.pubkey(),
+                        &spl_mint_keypair.pubkey(),
                         None,
                         2,
                     )

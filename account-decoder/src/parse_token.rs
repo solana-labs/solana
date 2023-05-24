@@ -38,6 +38,7 @@ pub fn spl_token_native_mint_program_id() -> Pubkey {
 }
 
 // A helper function to convert a solana_sdk::pubkey::Pubkey to spl_sdk::pubkey::Pubkey
+#[deprecated(since = "1.16.0", note = "Pubkey conversions no longer needed")]
 pub fn spl_token_pubkey(pubkey: &Pubkey) -> SplTokenPubkey {
     SplTokenPubkey::new_from_array(pubkey.to_bytes())
 }

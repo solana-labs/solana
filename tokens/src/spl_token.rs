@@ -4,9 +4,7 @@ use {
         commands::{get_fee_estimate_for_messages, Allocation, Error, FundingSource},
     },
     console::style,
-    solana_account_decoder::parse_token::{
-        real_number_string, real_number_string_trimmed, spl_token_pubkey,
-    },
+    solana_account_decoder::parse_token::{real_number_string, real_number_string_trimmed},
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{instruction::Instruction, message::Message, native_token::lamports_to_sol},
     solana_transaction_status::parse_token::spl_token_instruction,
@@ -54,13 +52,13 @@ pub fn build_spl_token_instructions(
         .expect("spl_token_args must be some");
     let wallet_address = allocation.recipient.parse().unwrap();
     let associated_token_address =
-        get_associated_token_address(&wallet_address, &spl_token_pubkey(&spl_token_args.mint));
+        get_associated_token_address(&wallet_address, &spl_token_args.mint);
     let mut instructions = vec![];
     if do_create_associated_token_account {
         let create_associated_token_account_instruction = create_associated_token_account(
-            &spl_token_pubkey(&args.fee_payer.pubkey()),
+            &args.fee_payer.pubkey(),
             &wallet_address,
-            &spl_token_pubkey(&spl_token_args.mint),
+            &spl_token_args.mint,
             &spl_token::id(),
         );
         instructions.push(spl_token_instruction(
@@ -69,10 +67,10 @@ pub fn build_spl_token_instructions(
     }
     let spl_instruction = spl_token::instruction::transfer_checked(
         &spl_token::id(),
-        &spl_token_pubkey(&spl_token_args.token_account_address),
-        &spl_token_pubkey(&spl_token_args.mint),
+        &spl_token_args.token_account_address,
+        &spl_token_args.mint,
         &associated_token_address,
-        &spl_token_pubkey(&args.sender_keypair.pubkey()),
+        &args.sender_keypair.pubkey(),
         &[],
         allocation.amount,
         spl_token_args.decimals,
@@ -126,10 +124,7 @@ pub fn print_token_balances(
 ) -> Result<(), Error> {
     let address = allocation.recipient.parse().unwrap();
     let expected = allocation.amount;
-    let associated_token_address = get_associated_token_address(
-        &spl_token_pubkey(&address),
-        &spl_token_pubkey(&spl_token_args.mint),
-    );
+    let associated_token_address = get_associated_token_address(&address, &spl_token_args.mint);
     let recipient_account = client
         .get_account(&associated_token_address)
         .unwrap_or_default();

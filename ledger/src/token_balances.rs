@@ -120,7 +120,6 @@ fn collect_token_balance_from_account(
 mod test {
     use {
         super::*,
-        solana_account_decoder::parse_token::spl_token_pubkey,
         solana_sdk::{account::Account, genesis_config::create_genesis_config},
         spl_token_2022::{
             extension::{
@@ -168,8 +167,8 @@ mod test {
 
         let token_owner = Pubkey::new_unique();
         let token_data = TokenAccount {
-            mint: spl_token_pubkey(&mint_pubkey),
-            owner: spl_token_pubkey(&token_owner),
+            mint: mint_pubkey,
+            owner: token_owner,
             amount: 42,
             delegate: COption::None,
             state: spl_token_2022::state::AccountState::Initialized,
@@ -196,8 +195,8 @@ mod test {
         };
 
         let other_mint_data = TokenAccount {
-            mint: spl_token_pubkey(&other_mint_pubkey),
-            owner: spl_token_pubkey(&token_owner),
+            mint: other_mint_pubkey,
+            owner: token_owner,
             amount: 42,
             delegate: COption::None,
             state: spl_token_2022::state::AccountState::Initialized,
@@ -310,7 +309,7 @@ mod test {
             .init_extension::<MintCloseAuthority>(true)
             .unwrap();
         mint_close_authority.close_authority =
-            OptionalNonZeroPubkey::try_from(Some(spl_token_pubkey(&mint_authority))).unwrap();
+            OptionalNonZeroPubkey::try_from(Some(mint_authority)).unwrap();
 
         let mint_pubkey = Pubkey::new_unique();
         let mint = Account {
@@ -331,8 +330,8 @@ mod test {
 
         let token_owner = Pubkey::new_unique();
         let token_base = TokenAccount {
-            mint: spl_token_pubkey(&mint_pubkey),
-            owner: spl_token_pubkey(&token_owner),
+            mint: mint_pubkey,
+            owner: token_owner,
             amount: 42,
             delegate: COption::None,
             state: spl_token_2022::state::AccountState::Initialized,
@@ -373,8 +372,8 @@ mod test {
         };
 
         let other_mint_token_base = TokenAccount {
-            mint: spl_token_pubkey(&other_mint_pubkey),
-            owner: spl_token_pubkey(&token_owner),
+            mint: other_mint_pubkey,
+            owner: token_owner,
             amount: 42,
             delegate: COption::None,
             state: spl_token_2022::state::AccountState::Initialized,
