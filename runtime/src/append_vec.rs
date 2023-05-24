@@ -65,7 +65,7 @@ pub enum AppendVecError {
     #[error("incorrect layout/length/data in the appendvec at path {}", .0.display())]
     IncorrectLayout(PathBuf),
 
-    #[error("{0} is larger than file size ({1})")]
+    #[error("offset ({0}) is larger than file size ({1})")]
     OffsetOutOfBounds(usize, usize),
 }
 
