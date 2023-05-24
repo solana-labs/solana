@@ -60,7 +60,7 @@ use {
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
-        inline_spl_associated_token_account, inline_spl_token,
+        inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
         rent_debits::RentDebits,
@@ -4058,14 +4058,6 @@ impl Bank {
         balances
     }
 
-    /// Unload a program from the bank's cache
-    fn remove_program_from_cache(&self, pubkey: &Pubkey) {
-        self.loaded_programs_cache
-            .write()
-            .unwrap()
-            .remove_programs([*pubkey].into_iter());
-    }
-
     fn program_modification_slot(&self, pubkey: &Pubkey) -> Result<Slot> {
         let program = self
             .get_account_with_fixed_root(pubkey)
@@ -7456,23 +7448,6 @@ impl Bank {
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
         }
 
-        if new_feature_activations.contains(&feature_set::spl_token_v3_4_0::id()) {
-            self.replace_program_account(
-                &inline_spl_token::id(),
-                &inline_spl_token::program_v3_4_0::id(),
-                "bank-apply_spl_token_v3_4_0",
-            );
-        }
-
-        if new_feature_activations.contains(&feature_set::spl_associated_token_account_v1_1_0::id())
-        {
-            self.replace_program_account(
-                &inline_spl_associated_token_account::id(),
-                &inline_spl_associated_token_account::program_v1_1_0::id(),
-                "bank-apply_spl_associated_token_account_v1_1_0",
-            );
-        }
-
         if !debug_do_not_add_builtins {
             self.apply_builtin_program_feature_transitions(
                 allow_new_activations,
@@ -7588,6 +7563,8 @@ impl Bank {
         }
     }
 
+    /// Use to replace programs by feature activation
+    #[allow(dead_code)]
     fn replace_program_account(
         &mut self,
         old_address: &Pubkey,
@@ -7608,7 +7585,11 @@ impl Bank {
                 // Clear new account
                 self.store_account(new_address, &AccountSharedData::default());
 
-                self.remove_program_from_cache(old_address);
+                // Unload a program from the bank's cache
+                self.loaded_programs_cache
+                    .write()
+                    .unwrap()
+                    .remove_programs([*old_address].into_iter());
 
                 self.calculate_and_update_accounts_data_size_delta_off_chain(
                     old_account.data().len(),
