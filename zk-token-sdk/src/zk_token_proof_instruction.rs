@@ -27,7 +27,10 @@ pub enum ProofInstruction {
 
     /// Verify a zero-balance proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<ZeroBalanceProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -45,7 +48,10 @@ pub enum ProofInstruction {
 
     /// Verify a withdraw zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<WithdrawProofContext>` and assigned to the ZkToken proof program prior
+    /// to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -63,7 +69,10 @@ pub enum ProofInstruction {
 
     /// Verify a ciphertext-ciphertext equality proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<CiphertextCiphertextEqualityProofContext>` and assigned to the ZkToken
+    /// proof program prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -81,7 +90,10 @@ pub enum ProofInstruction {
 
     /// Verify a transfer zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<TransferProofContext>` and assigned to the ZkToken proof program prior
+    /// to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -99,7 +111,10 @@ pub enum ProofInstruction {
 
     /// Verify a transfer with fee zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<TransferWithFeeProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -117,7 +132,10 @@ pub enum ProofInstruction {
 
     /// Verify a pubkey validity zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<PubkeyValidityProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -159,7 +177,10 @@ pub enum ProofInstruction {
 
     /// Verify an aggregate 64-bit range proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<AggregateRangeProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -177,7 +198,10 @@ pub enum ProofInstruction {
 
     /// Verify an aggregate 128-bit range proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<AggregateRangeProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -195,7 +219,10 @@ pub enum ProofInstruction {
 
     /// Verify an aggregate 256-bit range proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<AggregateRangeProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
