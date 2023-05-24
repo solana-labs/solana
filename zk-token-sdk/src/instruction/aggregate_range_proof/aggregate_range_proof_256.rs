@@ -63,7 +63,7 @@ impl AggregateRangeProof256Data {
 }
 
 impl ZkProofData<AggregateRangeProofContext> for AggregateRangeProof256Data {
-    const PROOF_TYPE: ProofType = ProofType::AggregateRangeProof64;
+    const PROOF_TYPE: ProofType = ProofType::AggregateRangeProof256;
 
     fn context_data(&self) -> &AggregateRangeProofContext {
         &self.context
