@@ -33,10 +33,10 @@ use {
         feature_set::bpf_account_data_direct_mapping,
         feature_set::FeatureSet,
         feature_set::{
-            self, blake3_syscall_enabled, check_syscall_outputs_do_not_overlap,
-            curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
-            disable_deploy_of_alloc_free_syscall, disable_fees_sysvar, enable_alt_bn128_syscall,
-            enable_big_mod_exp_syscall, enable_early_verification_of_account_modifications,
+            self, blake3_syscall_enabled, curve25519_syscall_enabled,
+            disable_cpi_setting_executable_and_rent_epoch, disable_deploy_of_alloc_free_syscall,
+            disable_fees_sysvar, enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
+            enable_early_verification_of_account_modifications,
             error_on_syscall_bpf_function_hash_collisions, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, reject_callx_r10,
             stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
@@ -686,10 +686,7 @@ declare_syscall!(
                         std::mem::size_of_val(bump_seed_ref),
                         address.as_ptr() as usize,
                         std::mem::size_of::<Pubkey>(),
-                    ) && invoke_context
-                        .feature_set
-                        .is_active(&check_syscall_outputs_do_not_overlap::id())
-                    {
+                    ) {
                         return Err(SyscallError::CopyOverlapping.into());
                     }
                     *bump_seed_ref = bump_seed[0];
@@ -1446,10 +1443,7 @@ declare_syscall!(
                 length as usize,
                 program_id_result as *const _ as usize,
                 std::mem::size_of::<Pubkey>(),
-            ) && invoke_context
-                .feature_set
-                .is_active(&check_syscall_outputs_do_not_overlap::id())
-            {
+            ) {
                 return Err(SyscallError::CopyOverlapping.into());
             }
 
@@ -1538,7 +1532,7 @@ declare_syscall!(
                     invoke_context.get_check_size(),
                 )?;
 
-                if (!is_nonoverlapping(
+                if !is_nonoverlapping(
                     result_header as *const _ as usize,
                     std::mem::size_of::<ProcessedSiblingInstruction>(),
                     program_id as *const _ as usize,
@@ -1571,10 +1565,7 @@ declare_syscall!(
                     accounts.as_ptr() as usize,
                     std::mem::size_of::<AccountMeta>()
                         .saturating_mul(result_header.accounts_len as usize),
-                )) && invoke_context
-                    .feature_set
-                    .is_active(&check_syscall_outputs_do_not_overlap::id())
-                {
+                ) {
                     return Err(SyscallError::CopyOverlapping.into());
                 }
 
