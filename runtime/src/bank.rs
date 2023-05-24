@@ -7591,6 +7591,7 @@ impl Bank {
                 loaded_programs_cache.program_runtime_environment_v1 =
                     Arc::new(program_runtime_environment_v1);
             }
+            loaded_programs_cache.prune_feature_set_transition();
         }
         for builtin in BUILTINS.iter() {
             if let Some(feature_id) = builtin.feature_id {
