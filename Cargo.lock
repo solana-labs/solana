@@ -7129,6 +7129,7 @@ dependencies = [
  "solana-sdk",
  "subtle",
  "thiserror",
+ "tiny-bip39",
  "zeroize",
 ]
 
