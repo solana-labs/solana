@@ -203,7 +203,7 @@ impl LegacyContactInfo {
     get_socket!(tpu_vote);
     get_socket!(rpc);
     get_socket!(rpc_pubsub);
-    get_socket!(serve_repair);
+    get_socket!(@quic serve_repair);
 
     set_socket!(set_gossip, gossip);
     set_socket!(set_rpc, rpc);
@@ -271,7 +271,7 @@ impl TryFrom<&ContactInfo> for LegacyContactInfo {
             tpu_vote: unwrap_socket!(tpu_vote),
             rpc: unwrap_socket!(rpc),
             rpc_pubsub: unwrap_socket!(rpc_pubsub),
-            serve_repair: unwrap_socket!(serve_repair),
+            serve_repair: unwrap_socket!(serve_repair, Protocol::UDP),
             wallclock: node.wallclock(),
             shred_version: node.shred_version(),
         })

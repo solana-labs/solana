@@ -850,7 +850,7 @@ impl ClusterInfo {
                         self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tvu_forwards().ok()),
                         self.addr_to_string(&ip_addr, &node.repair(contact_info::Protocol::UDP).ok()),
-                        self.addr_to_string(&ip_addr, &node.serve_repair().ok()),
+                        self.addr_to_string(&ip_addr, &node.serve_repair(contact_info::Protocol::UDP).ok()),
                         node.shred_version(),
                     ))
                 }
@@ -1348,7 +1348,7 @@ impl ClusterInfo {
                 node.pubkey() != &self_pubkey
                     && node.shred_version() == self_shred_version
                     && self.check_socket_addr_space(&node.tvu(contact_info::Protocol::UDP))
-                    && self.check_socket_addr_space(&node.serve_repair())
+                    && self.check_socket_addr_space(&node.serve_repair(contact_info::Protocol::UDP))
                     && match gossip_crds.get::<&LowestSlot>(*node.pubkey()) {
                         None => true, // fallback to legacy behavior
                         Some(lowest_slot) => lowest_slot.lowest <= slot,

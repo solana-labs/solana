@@ -36,8 +36,9 @@ const SOCKET_TAG_TVU: u8 = 10;
 const SOCKET_TAG_TVU_FORWARDS: u8 = 11;
 const SOCKET_TAG_TVU_QUIC: u8 = 12;
 const SOCKET_TAG_REPAIR_QUIC: u8 = 13;
-const_assert_eq!(SOCKET_CACHE_SIZE, 14);
-const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_REPAIR_QUIC as usize + 1usize;
+const SOCKET_TAG_SERVE_REPAIR_QUIC: u8 = 14;
+const_assert_eq!(SOCKET_CACHE_SIZE, 15);
+const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_SERVE_REPAIR_QUIC as usize + 1usize;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -217,7 +218,11 @@ impl ContactInfo {
     get_socket!(repair, SOCKET_TAG_REPAIR, SOCKET_TAG_REPAIR_QUIC);
     get_socket!(rpc, SOCKET_TAG_RPC);
     get_socket!(rpc_pubsub, SOCKET_TAG_RPC_PUBSUB);
-    get_socket!(serve_repair, SOCKET_TAG_SERVE_REPAIR);
+    get_socket!(
+        serve_repair,
+        SOCKET_TAG_SERVE_REPAIR,
+        SOCKET_TAG_SERVE_REPAIR_QUIC
+    );
     get_socket!(tpu, SOCKET_TAG_TPU, SOCKET_TAG_TPU_QUIC);
     get_socket!(
         tpu_forwards,
@@ -722,7 +727,7 @@ mod tests {
                 sockets.get(&SOCKET_TAG_RPC_PUBSUB)
             );
             assert_eq!(
-                node.serve_repair().ok().as_ref(),
+                node.serve_repair(Protocol::UDP).ok().as_ref(),
                 sockets.get(&SOCKET_TAG_SERVE_REPAIR)
             );
             assert_eq!(
@@ -815,7 +820,15 @@ mod tests {
 
         assert_eq!(old.rpc().unwrap(), node.rpc().unwrap());
         assert_eq!(old.rpc_pubsub().unwrap(), node.rpc_pubsub().unwrap());
-        assert_eq!(old.serve_repair().unwrap(), node.serve_repair().unwrap());
+        assert_eq!(
+            old.serve_repair(Protocol::QUIC).unwrap(),
+            node.serve_repair(Protocol::QUIC).unwrap()
+        );
+        assert_eq!(
+            old.serve_repair(Protocol::UDP).unwrap(),
+            node.serve_repair(Protocol::UDP).unwrap()
+        );
+
         assert_eq!(
             old.tpu(Protocol::QUIC).unwrap(),
             node.tpu(Protocol::QUIC).unwrap()

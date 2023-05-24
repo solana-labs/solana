@@ -450,6 +450,7 @@ impl RepairService {
                                 &repair_info.repair_validators,
                                 &mut outstanding_requests,
                                 identity_keypair,
+                                quic_repair_option.is_some(),
                             )
                             .ok()?;
                         Some((req, to))
@@ -765,6 +766,7 @@ impl RepairService {
                 cluster_slots,
                 serve_repair,
                 repair_validators,
+                false,
             );
             if let Some((repair_pubkey, repair_addr)) = status.repair_pubkey_and_addr {
                 let repairs = Self::generate_duplicate_repairs_for_slot(blockstore, *slot);
@@ -828,6 +830,7 @@ impl RepairService {
         cluster_slots: &ClusterSlots,
         serve_repair: &ServeRepair,
         repair_validators: &Option<HashSet<Pubkey>>,
+        use_quic: bool,
     ) {
         let now = timestamp();
         if status.repair_pubkey_and_addr.is_none()
@@ -837,6 +840,7 @@ impl RepairService {
                 slot,
                 cluster_slots,
                 repair_validators,
+                use_quic,
             );
             status.repair_pubkey_and_addr = repair_pubkey_and_addr.ok();
             status.start_ts = timestamp();
@@ -851,6 +855,7 @@ impl RepairService {
         cluster_slots: &ClusterSlots,
         serve_repair: &ServeRepair,
         repair_validators: &Option<HashSet<Pubkey>>,
+        use_quic: bool,
     ) {
         // If we're already in the middle of repairing this, ignore the signal.
         if duplicate_slot_repair_statuses.contains_key(&slot) {
@@ -859,7 +864,12 @@ impl RepairService {
         // Mark this slot as special repair, try to download from single
         // validator to avoid corruption
         let repair_pubkey_and_addr = serve_repair
-            .repair_request_duplicate_compute_best_peer(slot, cluster_slots, repair_validators)
+            .repair_request_duplicate_compute_best_peer(
+                slot,
+                cluster_slots,
+                repair_validators,
+                use_quic,
+            )
             .ok();
         let new_duplicate_slot_repair_status = DuplicateSlotRepairStatus {
             correct_ancestors_to_repair: vec![(slot, Hash::default())],
@@ -1365,6 +1375,7 @@ mod test {
             &cluster_slots,
             &serve_repair,
             &None,
+            false,
         );
         assert_eq!(duplicate_status.repair_pubkey_and_addr, dummy_addr);
 
@@ -1380,6 +1391,7 @@ mod test {
             &cluster_slots,
             &serve_repair,
             &None,
+            false,
         );
         assert!(duplicate_status.repair_pubkey_and_addr.is_some());
 
@@ -1395,6 +1407,7 @@ mod test {
             &cluster_slots,
             &serve_repair,
             &None,
+            false,
         );
         assert_ne!(duplicate_status.repair_pubkey_and_addr, dummy_addr);
     }

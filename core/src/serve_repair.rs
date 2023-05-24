@@ -18,6 +18,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
+        contact_info::Protocol,
         legacy_contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
         ping_pong::{self, PingCache, Pong},
         weighted_shuffle::WeightedShuffle,
@@ -360,7 +361,12 @@ pub(crate) struct RepairPeers {
 }
 
 impl RepairPeers {
-    fn new(asof: Instant, peers: &[ContactInfo], weights: &[u64]) -> Result<Self> {
+    fn new(
+        asof: Instant,
+        peers: &[ContactInfo],
+        weights: &[u64],
+        protocol: Protocol,
+    ) -> Result<Self> {
         if peers.len() != weights.len() {
             return Err(Error::from(WeightedError::InvalidWeight));
         }
@@ -368,7 +374,7 @@ impl RepairPeers {
             .iter()
             .zip(weights)
             .filter_map(|(peer, &weight)| {
-                let addr = peer.serve_repair().ok()?;
+                let addr = peer.serve_repair(protocol).ok()?;
                 Some(((*peer.pubkey(), addr), weight))
             })
             .unzip();
@@ -1061,6 +1067,7 @@ impl ServeRepair {
         repair_validators: &Option<HashSet<Pubkey>>,
         outstanding_requests: &mut OutstandingShredRepairs,
         identity_keypair: &Keypair,
+        use_quic: bool,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
@@ -1071,7 +1078,13 @@ impl ServeRepair {
                 peers_cache.pop(&slot);
                 let repair_peers = self.repair_peers(repair_validators, slot);
                 let weights = cluster_slots.compute_weights(slot, &repair_peers);
-                let repair_peers = RepairPeers::new(Instant::now(), &repair_peers, &weights)?;
+                let protocol = if use_quic {
+                    Protocol::QUIC
+                } else {
+                    Protocol::UDP
+                };
+                let repair_peers =
+                    RepairPeers::new(Instant::now(), &repair_peers, &weights, protocol)?;
                 peers_cache.put(slot, repair_peers);
                 peers_cache.get(&slot).unwrap()
             }
@@ -1100,6 +1113,7 @@ impl ServeRepair {
         slot: Slot,
         cluster_slots: &ClusterSlots,
         repair_validators: &Option<HashSet<Pubkey>>,
+        use_quic: bool,
     ) -> Result<Vec<(Pubkey, SocketAddr)>> {
         let repair_peers: Vec<_> = self.repair_peers(repair_validators, slot);
         if repair_peers.is_empty() {
@@ -1109,11 +1123,16 @@ impl ServeRepair {
             .compute_weights_exclude_nonfrozen(slot, &repair_peers)
             .into_iter()
             .unzip();
+        let protocol = if use_quic {
+            Protocol::QUIC
+        } else {
+            Protocol::UDP
+        };
         let peers = WeightedShuffle::new("repair_request_ancestor_hashes", &weights)
             .shuffle(&mut rand::thread_rng())
             .map(|i| index[i])
             .filter_map(|i| {
-                let addr = repair_peers[i].serve_repair().ok()?;
+                let addr = repair_peers[i].serve_repair(protocol).ok()?;
                 Some((*repair_peers[i].pubkey(), addr))
             })
             .take(get_ancestor_hash_repair_sample_size())
@@ -1126,6 +1145,7 @@ impl ServeRepair {
         slot: Slot,
         cluster_slots: &ClusterSlots,
         repair_validators: &Option<HashSet<Pubkey>>,
+        use_quic: bool,
     ) -> Result<(Pubkey, SocketAddr)> {
         let repair_peers: Vec<_> = self.repair_peers(repair_validators, slot);
         if repair_peers.is_empty() {
@@ -1137,7 +1157,15 @@ impl ServeRepair {
             .unzip();
         let k = WeightedIndex::new(weights)?.sample(&mut rand::thread_rng());
         let n = index[k];
-        Ok((*repair_peers[n].pubkey(), repair_peers[n].serve_repair()?))
+        let protocol = if use_quic {
+            Protocol::QUIC
+        } else {
+            Protocol::UDP
+        };
+        Ok((
+            *repair_peers[n].pubkey(),
+            repair_peers[n].serve_repair(protocol)?,
+        ))
     }
 
     pub(crate) fn map_repair_request(
@@ -1952,6 +1980,7 @@ mod tests {
             &None,
             &mut outstanding_requests,
             &identity_keypair,
+            false,
         );
         assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
@@ -1981,10 +2010,11 @@ mod tests {
                 &None,
                 &mut outstanding_requests,
                 &identity_keypair,
+                false,
             )
             .unwrap();
-        assert_eq!(nxt.serve_repair().unwrap(), serve_repair_addr);
-        assert_eq!(rv.0, nxt.serve_repair().unwrap());
+        assert_eq!(nxt.serve_repair(Protocol::UDP).unwrap(), serve_repair_addr);
+        assert_eq!(rv.0, nxt.serve_repair(Protocol::UDP).unwrap());
 
         let serve_repair_addr2 = socketaddr!([127, 0, 0, 2], 1243);
         let mut nxt = ContactInfo::new(
@@ -2016,6 +2046,7 @@ mod tests {
                     &None,
                     &mut outstanding_requests,
                     &identity_keypair,
+                    false,
                 )
                 .unwrap();
             if rv.0 == serve_repair_addr {
@@ -2294,6 +2325,7 @@ mod tests {
                     &known_validators,
                     &mut OutstandingShredRepairs::default(),
                     &identity_keypair,
+                    false,
                 )
                 .is_err());
         }
@@ -2312,6 +2344,7 @@ mod tests {
                 &known_validators,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
+                false,
             )
             .is_ok());
 
@@ -2334,6 +2367,7 @@ mod tests {
                 &None,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
+                false,
             )
             .is_ok());
     }
