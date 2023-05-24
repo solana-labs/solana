@@ -228,6 +228,14 @@ pub fn verify_pubkey_validity(
     ProofInstruction::VerifyPubkeyValidity.encode_verify_proof(context_state_info, proof_data)
 }
 
+/// Create a `VerifyRangeProof64` instruction.
+pub fn verify_range_proof_64(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &RangeProof64Data,
+) -> Instruction {
+    ProofInstruction::VerifyRangeProof64.encode_verify_proof(context_state_info, proof_data)
+}
+
 impl ProofInstruction {
     pub fn encode_verify_proof<T, U>(
         &self,
