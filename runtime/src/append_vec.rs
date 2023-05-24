@@ -56,16 +56,16 @@ pub const MAXIMUM_APPEND_VEC_FILE_SIZE: u64 = 16 * 1024 * 1024 * 1024; // 16 GiB
 #[derive(Error, Debug)]
 /// An enum for AppendVec related errors.
 pub enum AppendVecError {
-    #[error("File size too small: too small file size {0} for AppendVec")]
+    #[error("too small file size {0} for AppendVec")]
     FileSizeTooSmall(usize),
 
-    #[error("File size too large: too large file size {0} for AppendVec")]
+    #[error("too large file size {0} for AppendVec")]
     FileSizeTooLarge(usize),
 
-    #[error("Incorrect layout: incorrect layout/length/data in the appendvec at path {}", .0.display())]
+    #[error("incorrect layout/length/data in the appendvec at path {}", .0.display())]
     IncorrectLayout(PathBuf),
 
-    #[error("Offset out of bounds: {0} is larger than file size ({1})")]
+    #[error("{0} is larger than file size ({1})")]
     OffsetOutOfBounds(usize, usize),
 }
 
