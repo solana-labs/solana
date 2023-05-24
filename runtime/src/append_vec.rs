@@ -986,7 +986,7 @@ pub mod tests {
         const LEN: usize = 1024 * 1024 + 1;
         const SIZE: usize = 1024 * 1024;
         let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
-        assert_matches!(result, Err(ref message) if message.to_string().contains("current_len is larger than file size (1048576)"));
+        assert_matches!(result, Err(ref message) if message.to_string().contains("is larger than file size (1048576)"));
     }
 
     #[test]
