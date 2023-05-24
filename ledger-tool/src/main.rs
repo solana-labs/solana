@@ -1541,6 +1541,21 @@ fn main() {
                     .help("After 'verify' completes, run a final accounts hash calculation. Final hash calculation could race with accounts background service tasks and assert."),
             )
             .arg(
+                Arg::with_name("partitioned-epoch-rewards-compare-calculation")
+                    .long("partitioned_epoch_rewards_compare_calculation")
+                    .takes_value(false)
+                    .help("Do normal epoch rewards distribution, but also calculate rewards using the partitioned rewards code path and compare the resulting vote and stake accounts")
+                    .hidden(hidden_unless_forced())
+            )
+            .arg(
+                Arg::with_name("partitioned-epoch-rewards-force-enable-single-slot")
+                    .long("partitioned_epoch_rewards_force_enable_single_slot")
+                    .takes_value(false)
+                    .help("Force the partitioned rewards distribution, but distribute all rewards in the first slot in the epoch. This should match consensus with the normal rewards distribution.")
+                    .conflicts_with("partitioned_epoch_rewards_compare_calculation")
+                    .hidden(hidden_unless_forced())
+            )
+            .arg(
                 Arg::with_name("print_accounts_stats")
                     .long("print-accounts-stats")
                     .takes_value(false)
