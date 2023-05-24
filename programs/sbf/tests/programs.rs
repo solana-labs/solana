@@ -1593,6 +1593,9 @@ fn test_program_sbf_test_use_latest_executor() {
         )],
         Some(&mint_keypair.pubkey()),
     );
+    bank_client
+        .advance_slot(1, &Pubkey::default())
+        .expect("Failed to advance the slot");
     assert!(bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
         .is_ok());
