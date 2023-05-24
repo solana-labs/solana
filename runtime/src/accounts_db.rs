@@ -7772,8 +7772,23 @@ impl AccountsDb {
     /// As part of calculating the accounts delta hash, get a list of accounts modified this slot
     /// (aka dirty pubkeys) and add them to `self.uncleaned_pubkeys` for future cleaning.
     pub fn calculate_accounts_delta_hash(&self, slot: Slot) -> AccountsDeltaHash {
+        self.calculate_accounts_delta_hash_internal(slot, None)
+    }
+
+    /// Calculate accounts delta hash for `slot`
+    ///
+    /// As part of calculating the accounts delta hash, get a list of accounts modified this slot
+    /// (aka dirty pubkeys) and add them to `self.uncleaned_pubkeys` for future cleaning.
+    pub(crate) fn calculate_accounts_delta_hash_internal(
+        &self,
+        slot: Slot,
+        ignore: Option<Pubkey>,
+    ) -> AccountsDeltaHash {
         let (mut hashes, scan_us, mut accumulate) = self.get_pubkey_hash_for_slot(slot);
         let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
+        if let Some(ignore) = ignore {
+            hashes.retain(|k| k.0 != ignore);
+        }
 
         if self.filler_accounts_enabled() {
             // filler accounts must be added to 'dirty_keys' above but cannot be used to calculate hash
