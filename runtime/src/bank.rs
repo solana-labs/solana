@@ -3900,8 +3900,10 @@ impl Bank {
         if batch.needs_unlock() {
             batch.set_needs_unlock(false);
             self.rc.accounts.unlock_accounts(
-                batch.sanitized_transactions().iter(),
-                batch.lock_results().iter(),
+                batch
+                    .sanitized_transactions()
+                    .iter()
+                    .zip(batch.lock_results().iter()),
             )
         }
     }
