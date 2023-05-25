@@ -120,7 +120,7 @@ use {
 };
 
 impl StakeReward {
-    pub fn random() -> Self {
+    pub fn new_random() -> Self {
         let mut rng = rand::thread_rng();
 
         let rent = Rent::free();
