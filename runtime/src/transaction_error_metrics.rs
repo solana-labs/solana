@@ -82,7 +82,10 @@ impl TransactionErrorMetrics {
             self.max_loaded_accounts_data_size_exceeded,
             other.max_loaded_accounts_data_size_exceeded
         );
-        saturating_add_assign!(self.program_execution_temporarily_restricted, other.program_execution_temporarily_restricted);
+        saturating_add_assign!(
+            self.program_execution_temporarily_restricted,
+            other.program_execution_temporarily_restricted
+        );
     }
 
     pub fn report(&self, id: u32, slot: Slot) {
