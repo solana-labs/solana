@@ -2163,9 +2163,9 @@ fn send_deploy_messages(
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
             let connection_cache = if config.use_quic {
-                ConnectionCache::new(1)
+                ConnectionCache::new_quic("connection_cache_cli_program_quic", 1)
             } else {
-                ConnectionCache::with_udp(1)
+                ConnectionCache::with_udp("connection_cache_cli_program_udp", 1)
             };
             let transaction_errors = match connection_cache {
                 ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(

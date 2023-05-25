@@ -70,9 +70,9 @@ impl ConnectionCacheStats {
         }
     }
 
-    pub fn report(&self) {
+    pub(super) fn report(&self, name: &'static str) {
         datapoint_info!(
-            "quic-client-connection-stats",
+            name,
             (
                 "cache_hits",
                 self.cache_hits.swap(0, Ordering::Relaxed),

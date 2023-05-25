@@ -42,6 +42,7 @@ pub struct ConnectionCache<
     S, // ConnectionManager
     T, // NewConnectionConfig
 > {
+    name: &'static str,
     map: RwLock<IndexMap<SocketAddr, /*ConnectionPool:*/ R>>,
     connection_manager: S,
     stats: Arc<ConnectionCacheStats>,
@@ -56,9 +57,14 @@ where
     M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
     C: NewConnectionConfig,
 {
-    pub fn new(connection_manager: M, connection_pool_size: usize) -> Result<Self, ClientError> {
+    pub fn new(
+        name: &'static str,
+        connection_manager: M,
+        connection_pool_size: usize,
+    ) -> Result<Self, ClientError> {
         let config = connection_manager.new_connection_config();
         Ok(Self::new_with_config(
+            name,
             connection_pool_size,
             config,
             connection_manager,
@@ -66,11 +72,13 @@ where
     }
 
     pub fn new_with_config(
+        name: &'static str,
         connection_pool_size: usize,
         connection_config: C,
         connection_manager: M,
     ) -> Self {
         Self {
+            name,
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
             stats: Arc::new(ConnectionCacheStats::default()),
             connection_manager,
@@ -227,7 +235,7 @@ where
         } = self.get_or_add_connection(addr);
 
         if report_stats {
-            connection_cache_stats.report();
+            connection_cache_stats.report(self.name);
         }
 
         if cache_hit {
@@ -555,8 +563,12 @@ mod tests {
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
         let connection_manager = MockConnectionManager::default();
-        let connection_cache =
-            ConnectionCache::new(connection_manager, DEFAULT_CONNECTION_POOL_SIZE).unwrap();
+        let connection_cache = ConnectionCache::new(
+            "connection_cache_test",
+            connection_manager,
+            DEFAULT_CONNECTION_POOL_SIZE,
+        )
+        .unwrap();
         let addrs = (0..MAX_CONNECTIONS)
             .map(|_| {
                 let addr = get_addr(&mut rng);
@@ -599,7 +611,8 @@ mod tests {
         let port = u16::MAX;
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
         let connection_manager = MockConnectionManager::default();
-        let connection_cache = ConnectionCache::new(connection_manager, 1).unwrap();
+        let connection_cache =
+            ConnectionCache::new("connection_cache_test", connection_manager, 1).unwrap();
 
         let conn = connection_cache.get_connection(&addr);
         // We (intentionally) don't have an interface that allows us to distinguish between
