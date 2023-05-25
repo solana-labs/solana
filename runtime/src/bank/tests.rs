@@ -150,8 +150,8 @@ impl StakeReward {
             stake_reward_info: RewardInfo {
                 reward_type: RewardType::Staking,
                 lamports: rng.gen_range(1, 200),
-                post_balance: 0, /* unused atm */
-                commission: 0, /* unused atm */
+                post_balance: 0,  /* unused atm */
+                commission: None, /* unused atm */
             },
 
             stake_account: validator_stake_account,
@@ -12532,7 +12532,7 @@ fn test_hash_rewards_into_partitions() {
     let expected_num = 12345;
 
     let stake_rewards = (0..expected_num)
-        .map(|_| StakeReward::random())
+        .map(|_| StakeReward::new_random())
         .collect::<Vec<_>>();
 
     let total = stake_rewards
