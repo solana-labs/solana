@@ -2810,8 +2810,8 @@ impl Bank {
                 .map(|reward| address_to_partition(num_partitions, seed, &reward.stake_pubkey))
                 .collect::<Vec<_>>();
 
-            for (bucket, reward) in std::iter::zip(buckets, stake_rewards) {
-                result[bucket].push(reward.clone());
+            for (index, reward) in std::iter::zip(partitions, stake_rewards) {
+                result[index].push(reward.clone());
             }
             result
         })
