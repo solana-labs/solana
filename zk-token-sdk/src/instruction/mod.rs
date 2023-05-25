@@ -1,4 +1,5 @@
 pub mod batched_range_proof;
+pub mod ctxt_comm_equality;
 pub mod ctxt_ctxt_equality;
 pub mod pubkey_validity;
 pub mod range_proof;
@@ -26,6 +27,9 @@ pub use {
         batched_range_proof_u64::BatchedRangeProofU64Data, BatchedRangeProofContext,
     },
     bytemuck::Pod,
+    ctxt_comm_equality::{
+        CiphertextCommitmentEqualityProofContext, CiphertextCommitmentEqualityProofData,
+    },
     ctxt_ctxt_equality::{
         CiphertextCiphertextEqualityProofContext, CiphertextCiphertextEqualityProofData,
     },
@@ -52,6 +56,7 @@ pub enum ProofType {
     BatchedRangeProofU64,
     BatchedRangeProofU128,
     BatchedRangeProofU256,
+    CiphertextCommitmentEquality,
 }
 
 pub trait ZkProofData<T: Pod> {
