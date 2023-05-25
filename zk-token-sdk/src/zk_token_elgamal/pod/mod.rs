@@ -1,4 +1,5 @@
 mod elgamal;
+mod pedersen;
 
 use {
     crate::zk_token_proof_instruction::ProofType,
@@ -10,6 +11,7 @@ use {
 pub use {
     bytemuck::{Pod, Zeroable},
     elgamal::{ElGamalCiphertext, ElGamalPubkey},
+    pedersen::{DecryptHandle, PedersenCommitment},
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
@@ -59,26 +61,6 @@ impl TryFrom<PodProofType> for ProofType {
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct CompressedRistretto(pub [u8; 32]);
-
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct PedersenCommitment(pub [u8; 32]);
-
-impl fmt::Debug for PedersenCommitment {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct DecryptHandle(pub [u8; 32]);
-
-impl fmt::Debug for DecryptHandle {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
 
 /// Serialization of `CiphertextCommitmentEqualityProof`
 #[derive(Clone, Copy)]
