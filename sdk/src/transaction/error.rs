@@ -162,9 +162,9 @@ pub enum TransactionError {
     #[error("ResanitizationNeeded")]
     ResanitizationNeeded,
 
-    /// Stake program is unavailable during reward period
-    #[error("Stake program is unavailable during reward period")]
-    StakeProgramUnavailable,
+    /// Program execution is temporarily restricted.
+    #[error("Program execution is temporarily restricted.")]
+    ProgramExecutionTemporarilyRestricted,
 }
 
 impl From<SanitizeError> for TransactionError {
