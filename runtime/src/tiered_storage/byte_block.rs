@@ -21,7 +21,7 @@ impl ByteBlockWriter {
 
     pub fn write_type<T>(&mut self, value: &T) -> std::io::Result<usize> {
         let size = mem::size_of::<T>();
-        let ptr = (value as *const T) as *const u8;
+        let ptr = value as *const _ as *const u8;
         let slice = unsafe { std::slice::from_raw_parts(ptr, size) };
         self.write(slice)?;
         Ok(size)
@@ -29,7 +29,7 @@ impl ByteBlockWriter {
 
     pub fn write(&mut self, buf: &[u8]) -> std::io::Result<()> {
         match self {
-            Self::Raw(cursor) => cursor.write_all(&buf)?,
+            Self::Raw(cursor) => cursor.write_all(buf)?,
         };
         Ok(())
     }
