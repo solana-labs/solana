@@ -535,7 +535,8 @@ async fn test_ciphertext_commitment_equality() {
         &commitment,
         &opening,
         amount,
-    ).unwrap();
+    )
+    .unwrap();
 
     let incorrect_keypair = ElGamalKeypair {
         public: ElGamalKeypair::new_rand().public,
@@ -548,7 +549,8 @@ async fn test_ciphertext_commitment_equality() {
         &commitment,
         &opening,
         amount,
-    ).unwrap();
+    )
+    .unwrap();
 
     test_verify_proof_without_context(
         ProofInstruction::VerifyCiphertextCommitmentEquality,
