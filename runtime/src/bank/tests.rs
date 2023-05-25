@@ -3396,10 +3396,10 @@ fn test_interleaving_locks() {
     );
     let pay_alice = vec![tx1];
 
-    let lock_result = bank.prepare_batch_for_tests(pay_alice);
+    let mut batch = bank.prepare_batch_for_tests(pay_alice);
     let results_alice = bank
         .load_execute_and_commit_transactions(
-            &lock_result,
+            &mut batch,
             MAX_PROCESSING_AGE,
             false,
             false,
@@ -3424,7 +3424,7 @@ fn test_interleaving_locks() {
         Err(TransactionError::AccountInUse)
     );
 
-    drop(lock_result);
+    drop(batch);
 
     assert!(bank
         .transfer(2 * amount, &mint_keypair, &bob.pubkey())
@@ -6138,10 +6138,10 @@ fn test_pre_post_transaction_balances() {
     let tx2 = system_transaction::transfer(&keypair1, &pubkey2, 912_000, blockhash);
     let txs = vec![tx0, tx1, tx2];
 
-    let lock_result = bank0.prepare_batch_for_tests(txs);
+    let mut batch = bank0.prepare_batch_for_tests(txs);
     let (transaction_results, transaction_balances_set) = bank0
         .load_execute_and_commit_transactions(
-            &lock_result,
+            &mut batch,
             MAX_PROCESSING_AGE,
             true,
             false,
@@ -9461,11 +9461,11 @@ fn test_tx_log_order() {
     let failure_sig = tx1.signatures[0];
     let tx2 = system_transaction::transfer(&sender0, &recipient0, 1, blockhash);
     let txs = vec![tx0, tx1, tx2];
-    let batch = bank.prepare_batch_for_tests(txs);
+    let mut batch = bank.prepare_batch_for_tests(txs);
 
     let execution_results = bank
         .load_execute_and_commit_transactions(
-            &batch,
+            &mut batch,
             MAX_PROCESSING_AGE,
             false,
             false,
@@ -9569,10 +9569,10 @@ fn test_tx_return_data() {
             &[&mint_keypair],
             blockhash,
         )];
-        let batch = bank.prepare_batch_for_tests(txs);
+        let mut batch = bank.prepare_batch_for_tests(txs);
         let return_data = bank
             .load_execute_and_commit_transactions(
-                &batch,
+                &mut batch,
                 MAX_PROCESSING_AGE,
                 false,
                 false,

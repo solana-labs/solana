@@ -3810,7 +3810,7 @@ impl Bank {
         let account_keys = transaction.message().account_keys();
         let number_of_accounts = account_keys.len();
         let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
-        let batch = self.prepare_simulation_batch(transaction);
+        let mut batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 
         let LoadAndExecuteTransactionsOutput {
@@ -3818,7 +3818,7 @@ impl Bank {
             mut execution_results,
             ..
         } = self.load_and_execute_transactions(
-            &batch,
+            &mut batch,
             // After simulation, transactions will need to be forwarded to the leader
             // for processing. During forwarding, the transaction could expire if the
             // delay is not accounted for.
@@ -4417,7 +4417,7 @@ impl Bank {
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
-        batch: &TransactionBatch,
+        batch: &mut TransactionBatch,
         max_age: usize,
         enable_cpi_recording: bool,
         enable_log_recording: bool,
@@ -4426,8 +4426,10 @@ impl Bank {
         account_overrides: Option<&AccountOverrides>,
         log_messages_bytes_limit: Option<usize>,
     ) -> LoadAndExecuteTransactionsOutput {
-        let sanitized_txs = batch.sanitized_transactions();
-        debug!("processing transactions: {}", sanitized_txs.len());
+        debug!(
+            "processing transactions: {}",
+            batch.sanitized_transactions().len()
+        );
         let mut error_counters = TransactionErrorMetrics::default();
 
         let retryable_transaction_indexes: Vec<_> = batch
@@ -4468,7 +4470,7 @@ impl Bank {
 
         let mut check_time = Measure::start("check_transactions");
         let mut check_results = self.check_transactions(
-            sanitized_txs,
+            batch.sanitized_transactions(),
             batch.lock_results(),
             max_age,
             &mut error_counters,
@@ -4483,7 +4485,7 @@ impl Bank {
         let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
         let mut program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
             &self.ancestors,
-            sanitized_txs,
+            batch.sanitized_transactions(),
             &mut check_results,
             &program_owners_refs,
             &self.blockhash_queue.read().unwrap(),
@@ -4500,7 +4502,7 @@ impl Bank {
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = self.rc.accounts.load_accounts(
             &self.ancestors,
-            sanitized_txs,
+            batch.sanitized_transactions(),
             check_results,
             &self.blockhash_queue.read().unwrap(),
             &mut error_counters,
@@ -4514,12 +4516,17 @@ impl Bank {
         );
         load_time.stop();
 
+        batch.release_locks_early(loaded_transactions.iter().map(|r| match &r.0 {
+            Ok(_) => Ok(()),
+            Err(err) => Err(err.clone()),
+        }));
+
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
 
         let execution_results: Vec<TransactionExecutionResult> = loaded_transactions
             .iter_mut()
-            .zip(sanitized_txs.iter())
+            .zip(batch.sanitized_transactions())
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
                 (Ok(loaded_transaction), nonce) => {
@@ -4603,7 +4610,7 @@ impl Bank {
             check_time.as_us(),
             load_time.as_us(),
             execution_time.as_us(),
-            sanitized_txs.len(),
+            batch.sanitized_transactions().len(),
         );
 
         timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_time.as_us());
@@ -4618,7 +4625,7 @@ impl Bank {
             self.transaction_log_collector_config.read().unwrap();
 
         let mut collect_logs_time = Measure::start("collect_logs_time");
-        for (execution_result, tx) in execution_results.iter().zip(sanitized_txs) {
+        for (execution_result, tx) in execution_results.iter().zip(batch.sanitized_transactions()) {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in tx.message().account_keys().iter() {
                     if debug_keys.contains(key) {
@@ -5862,7 +5869,7 @@ impl Bank {
     #[must_use]
     pub fn load_execute_and_commit_transactions(
         &self,
-        batch: &TransactionBatch,
+        batch: &mut TransactionBatch,
         max_age: usize,
         collect_balances: bool,
         enable_cpi_recording: bool,
@@ -5942,7 +5949,7 @@ impl Bank {
         tx: impl Into<VersionedTransaction>,
     ) -> TransactionExecutionResult {
         let txs = vec![tx.into()];
-        let batch = match self.prepare_entry_batch(txs) {
+        let mut batch = match self.prepare_entry_batch(txs) {
             Ok(batch) => batch,
             Err(err) => return TransactionExecutionResult::NotExecuted(err),
         };
@@ -5954,7 +5961,7 @@ impl Bank {
             },
             ..,
         ) = self.load_execute_and_commit_transactions(
-            &batch,
+            &mut batch,
             MAX_PROCESSING_AGE,
             false, // collect_balances
             false, // enable_cpi_recording
@@ -6008,12 +6015,12 @@ impl Bank {
         &self,
         txs: Vec<VersionedTransaction>,
     ) -> Result<Vec<Result<()>>> {
-        let batch = self.prepare_entry_batch(txs)?;
-        Ok(self.process_transaction_batch(&batch))
+        let mut batch = self.prepare_entry_batch(txs)?;
+        Ok(self.process_transaction_batch(&mut batch))
     }
 
     #[must_use]
-    fn process_transaction_batch(&self, batch: &TransactionBatch) -> Vec<Result<()>> {
+    fn process_transaction_batch(&self, batch: &mut TransactionBatch) -> Vec<Result<()>> {
         self.load_execute_and_commit_transactions(
             batch,
             MAX_PROCESSING_AGE,

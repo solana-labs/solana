@@ -133,7 +133,7 @@ fn get_first_error(
 }
 
 fn execute_batch(
-    batch: &TransactionBatchWithIndexes,
+    batch: &mut TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -155,7 +155,7 @@ fn execute_batch(
         vec![]
     };
 
-    let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
+    let (tx_results, balances) = bank.load_execute_and_commit_transactions(
         batch,
         MAX_PROCESSING_AGE,
         transaction_status_sender.is_some(),
@@ -237,14 +237,14 @@ fn execute_batches_internal(
     let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
-            .map(|transaction_batch| {
+            .map(|mut transaction_batch| {
                 let transaction_count =
                     transaction_batch.batch.sanitized_transactions().len() as u64;
                 let mut timings = ExecuteTimings::default();
                 let (result, execute_batches_time): (Result<()>, Measure) = measure!(
                     {
                         execute_batch(
-                            &transaction_batch,
+                            &mut transaction_batch,
                             bank,
                             transaction_status_sender,
                             replay_vote_sender,
@@ -3857,15 +3857,15 @@ pub mod tests {
             Hash::default(),
         );
         let txs = vec![account_not_found_tx, invalid_blockhash_tx];
-        let batch = bank.prepare_batch_for_tests(txs);
+        let mut batch = bank.prepare_batch_for_tests(txs);
         let (
             TransactionResults {
                 fee_collection_results,
                 ..
             },
             _balances,
-        ) = batch.bank().load_execute_and_commit_transactions(
-            &batch,
+        ) = bank.load_execute_and_commit_transactions(
+            &mut batch,
             MAX_PROCESSING_AGE,
             false,
             false,
