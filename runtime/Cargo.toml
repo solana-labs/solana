@@ -71,6 +71,7 @@ tar = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 zstd = { workspace = true }
+siphasher = { workspace = true }
 
 [lib]
 crate-type = ["lib"]

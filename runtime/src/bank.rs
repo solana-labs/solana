@@ -59,7 +59,7 @@ use {
         builtins::{BuiltinPrototype, BUILTINS},
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
-        epoch_rewards_hasher::address_to_partition,
+        epoch_rewards_hasher::{address_to_partition, create_epoch_reward_hasher},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         message_processor::MessageProcessor,
         partitioned_rewards::PartitionedEpochRewardsConfig,
@@ -2801,13 +2801,16 @@ impl Bank {
         thread_pool: &ThreadPool,
     ) -> Vec<StakeRewards> {
         let seed = rewarded_epoch ^ rewards;
+        let hasher = create_epoch_reward_hasher(seed);
 
         let mut result = vec![vec![]; num_partitions];
 
         thread_pool.install(|| {
             let partitions = stake_rewards
                 .par_iter()
-                .map(|reward| address_to_partition(num_partitions, seed, &reward.stake_pubkey))
+                .map(|reward| {
+                    address_to_partition(hasher.clone(), num_partitions, &reward.stake_pubkey)
+                })
                 .collect::<Vec<_>>();
 
             for (index, reward) in std::iter::zip(partitions, stake_rewards) {
