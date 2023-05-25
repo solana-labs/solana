@@ -5,7 +5,7 @@ pub(crate) fn create_epoch_reward_hasher(seed: u64) -> SipHasher13 {
     SipHasher13::new_with_keys(seed, seed)
 }
 
-/// Return partition index (0..partitions) by hashing `seed` and `address`
+/// Return partition index (0..partitions) by hashing `address` with the `hasher`
 pub(crate) fn address_to_partition<H: Hasher + Clone>(
     mut hasher: H,
     partitions: usize,
