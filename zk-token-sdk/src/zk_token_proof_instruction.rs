@@ -135,6 +135,9 @@ pub enum ProofInstruction {
 
     /// Verify a 64-bit range proof.
     ///
+    /// A range proof is defined with respect to a Pedersen commitment. The 64-bit range proof
+    /// certifies that a Pedersen commitment holds an unsigned 64-bit number.
+    ///
     /// This instruction can be configured to optionally initialize a proof context state account.
     /// If creating a context state account, an account must be pre-allocated to the exact size of
     /// `ProofContextState<RangeProofContext>` and assigned to the ZkToken proof program prior to
