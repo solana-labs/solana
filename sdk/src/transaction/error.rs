@@ -162,9 +162,9 @@ pub enum TransactionError {
     #[error("ResanitizationNeeded")]
     ResanitizationNeeded,
 
-    /// Program execution is temporarily restricted.
-    #[error("Program execution is temporarily restricted.")]
-    ProgramExecutionTemporarilyRestricted,
+    /// Program execution is temporarily restricted on an account.
+    #[error("Program execution is temporarily restricted on an account ({account_index}).")]
+    ProgramExecutionTemporarilyRestricted { account_index: u8 },
 }
 
 impl From<SanitizeError> for TransactionError {
