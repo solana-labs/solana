@@ -1,10 +1,12 @@
 use {
+    crate::inline_spl_token,
     solana_sdk::{
         account::{Account, AccountSharedData},
         feature::{self, Feature},
         feature_set::FeatureSet,
         fee_calculator::FeeRateGovernor,
         genesis_config::{ClusterType, GenesisConfig},
+        native_token::sol_to_lamports,
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
@@ -252,6 +254,15 @@ pub fn create_genesis_config_with_leader_ex(
     ));
     initial_accounts.push((*validator_vote_account_pubkey, validator_vote_account));
     initial_accounts.push((*validator_stake_account_pubkey, validator_stake_account));
+
+    let native_mint_account = solana_sdk::account::AccountSharedData::from(Account {
+        owner: inline_spl_token::id(),
+        data: inline_spl_token::native_mint::ACCOUNT_DATA.to_vec(),
+        lamports: sol_to_lamports(1.),
+        executable: false,
+        rent_epoch: 1,
+    });
+    initial_accounts.push((inline_spl_token::native_mint::id(), native_mint_account));
 
     let mut genesis_config = GenesisConfig {
         accounts: initial_accounts
