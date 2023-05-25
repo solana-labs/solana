@@ -24,7 +24,7 @@ pub struct TransactionErrorMetrics {
     pub would_exceed_max_vote_cost_limit: usize,
     pub would_exceed_account_data_block_limit: usize,
     pub max_loaded_accounts_data_size_exceeded: usize,
-    pub locked_reward_account: usize,
+    pub program_execution_temporarily_restricted: usize,
 }
 
 impl TransactionErrorMetrics {
@@ -82,7 +82,7 @@ impl TransactionErrorMetrics {
             self.max_loaded_accounts_data_size_exceeded,
             other.max_loaded_accounts_data_size_exceeded
         );
-        saturating_add_assign!(self.locked_reward_account, other.locked_reward_account);
+        saturating_add_assign!(self.program_execution_temporarily_restricted, other.program_execution_temporarily_restricted);
     }
 
     pub fn report(&self, id: u32, slot: Slot) {
@@ -165,8 +165,8 @@ impl TransactionErrorMetrics {
                 i64
             ),
             (
-                "locked_reward_account",
-                self.locked_reward_account as i64,
+                "program_execution_temporarily_restricted",
+                self.program_execution_temporarily_restricted as i64,
                 i64
             ),
         );
