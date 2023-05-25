@@ -768,6 +768,12 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                         account_index: transaction_details.index as u8,
                     });
                 }
+
+                35 => {
+                    return Ok(TransactionError::ProgramExecutionTemporarilyRestricted {
+                        account_index: transaction_details.index as u8,
+                    });
+                }
                 _ => {}
             }
         }
@@ -805,7 +811,6 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             32 => TransactionError::MaxLoadedAccountsDataSizeExceeded,
             33 => TransactionError::InvalidLoadedAccountsDataSizeLimit,
             34 => TransactionError::ResanitizationNeeded,
-            35 => TransactionError::ProgramExecutionTemporarilyRestricted,
             _ => return Err("Invalid TransactionError"),
         })
     }
