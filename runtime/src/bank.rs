@@ -2807,9 +2807,7 @@ impl Bank {
         thread_pool.install(|| {
             let buckets = stake_rewards
                 .par_iter()
-                .map(|reward| {
-                    address_to_partition(num_partitions, seed, &reward.stake_pubkey)
-                })
+                .map(|reward| address_to_partition(num_partitions, seed, &reward.stake_pubkey))
                 .collect::<Vec<_>>();
 
             for (bucket, reward) in std::iter::zip(buckets, stake_rewards) {
