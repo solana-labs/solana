@@ -334,13 +334,25 @@ mod tests {
             assert!(vote_transaction.is_simple_vote_transaction());
         }
 
-        // single legacy vote ix, 3 signatures
         {
-            vote_tx.signatures.push(Signature::default());
-            vote_tx.message.header.num_required_signatures = 3;
-
+            // call side says it is not a vote
             let vote_transaction = SanitizedTransaction::try_create(
-                VersionedTransaction::from(vote_tx),
+                VersionedTransaction::from(vote_tx.clone()),
+                MessageHash::Compute,
+                Some(false),
+                SimpleAddressLoader::Disabled,
+                true, // require_static_program_ids
+            )
+            .unwrap();
+            assert!(!vote_transaction.is_simple_vote_transaction());
+        }
+
+        // single legacy vote ix, 3 signatures
+        vote_tx.signatures.push(Signature::default());
+        vote_tx.message.header.num_required_signatures = 3;
+        {
+            let vote_transaction = SanitizedTransaction::try_create(
+                VersionedTransaction::from(vote_tx.clone()),
                 MessageHash::Compute,
                 None,
                 SimpleAddressLoader::Disabled,
@@ -348,6 +360,19 @@ mod tests {
             )
             .unwrap();
             assert!(!vote_transaction.is_simple_vote_transaction());
+        }
+
+        {
+            // call site says it is simple vote
+            let vote_transaction = SanitizedTransaction::try_create(
+                VersionedTransaction::from(vote_tx),
+                MessageHash::Compute,
+                Some(true),
+                SimpleAddressLoader::Disabled,
+                true, // require_static_program_ids
+            )
+            .unwrap();
+            assert!(vote_transaction.is_simple_vote_transaction());
         }
     }
 }
