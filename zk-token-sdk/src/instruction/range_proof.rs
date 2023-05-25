@@ -23,9 +23,6 @@ use {
     bytemuck::{Pod, Zeroable},
 };
 
-#[cfg(not(target_os = "solana"))]
-const RANGEPROOFU64_BIT_LENGTH: usize = 64;
-
 /// The context data needed to verify a range-proof for a committed value in a Pedersen commitment.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
@@ -62,13 +59,13 @@ impl RangeProofU64Data {
 
         let mut transcript = context.new_transcript();
 
-        let proof = RangeProof::new(
-            vec![amount],
-            vec![RANGEPROOFU64_BIT_LENGTH],
-            vec![opening],
-            &mut transcript,
-        )
-        .try_into()?;
+        // `u64::BITS` is 64, which fits in a single byte and should not overflow to `usize` for an
+        // overwhelming number of platforms. However, to be extra cautious, use `try_from` and
+        // `unwrap` here. A simple case `u64::BITS as usize` can silently overflow.
+        let bit_size = usize::try_from(u64::BITS).unwrap();
+
+        let proof = RangeProof::new(vec![amount], vec![bit_size], vec![opening], &mut transcript)
+            .try_into()?;
 
         Ok(Self { context, proof })
     }
@@ -87,12 +84,9 @@ impl ZkProofData<RangeProofContext> for RangeProofU64Data {
         let commitment = self.context.commitment.try_into()?;
         let proof: RangeProof = self.proof.try_into()?;
 
+        let bit_size = usize::try_from(u64::BITS).unwrap();
         proof
-            .verify(
-                vec![&commitment],
-                vec![RANGEPROOFU64_BIT_LENGTH],
-                &mut transcript,
-            )
+            .verify(vec![&commitment], vec![bit_size], &mut transcript)
             .map_err(|e| e.into())
     }
 }
