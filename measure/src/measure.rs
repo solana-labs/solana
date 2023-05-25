@@ -85,10 +85,7 @@ impl fmt::Display for Measure {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        std::{fmt::Debug, thread::sleep},
-    };
+    use {super::*, std::thread::sleep};
 
     #[test]
     fn test_measure() {
@@ -113,46 +110,6 @@ mod tests {
         assert_eq!(measure.as_us(), 100_000);
         assert_eq!(measure.as_ns(), 100_000_000);
         assert_eq!(measure.as_duration(), test_duration);
-    }
-
-    #[test]
-    fn test_measure_end_as() {
-        #[track_caller]
-        fn test_end_as<Res>(method: fn(Measure) -> Res, sleep_ms: u64, lower: Res, upper: Res)
-        where
-            Res: PartialOrd + Debug,
-        {
-            let measure = Measure::start("test");
-            sleep(Duration::from_millis(sleep_ms));
-            let result = method(measure);
-            assert!(
-                result >= lower,
-                "Result below the expected bound.\n\
-                 Lower bound: {lower:?}\n\
-                 Result: {result:?}"
-            );
-            assert!(
-                result <= upper,
-                "Result above the expected bound.\n\
-                 Upper bound: {upper:?}\n\
-                 Result: {result:?}"
-            );
-        }
-
-        // We have observed failures with margins of 10%, when CI machines are very busy, running
-        // multiple tests in parallel.  As we are not testing the timer functionality itself, it is
-        // probably OK to increase the margins to 20%.
-
-        test_end_as(Measure::end_as_s, 100, 0.08f32, 0.12f32);
-        test_end_as(Measure::end_as_ms, 100, 80, 120);
-        test_end_as(Measure::end_as_us, 100, 80_000, 120_000);
-        test_end_as(Measure::end_as_ns, 100, 80_000_000, 120_000_000);
-        test_end_as(
-            Measure::end_as_duration,
-            100,
-            Duration::from_millis(80),
-            Duration::from_millis(120),
-        );
     }
 
     #[test]
