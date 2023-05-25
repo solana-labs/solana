@@ -30,7 +30,6 @@ use {
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         pubkey::Pubkey,
-        quic::QUIC_PORT_OFFSET,
         signature::{Signable, Signer},
         signer::keypair::Keypair,
         timing::timestamp,
@@ -42,7 +41,7 @@ use {
     std::{
         collections::HashSet,
         io::{Cursor, Read},
-        net::{SocketAddr, UdpSocket},
+        net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
