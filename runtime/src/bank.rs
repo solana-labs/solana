@@ -2805,7 +2805,7 @@ impl Bank {
         let mut result = vec![vec![]; num_partitions];
 
         thread_pool.install(|| {
-            let buckets = stake_rewards
+            let partitions = stake_rewards
                 .par_iter()
                 .map(|reward| address_to_partition(num_partitions, seed, &reward.stake_pubkey))
                 .collect::<Vec<_>>();
