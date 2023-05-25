@@ -21,7 +21,7 @@ use {
     std::mem::size_of,
 };
 
-const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 10] = [
+const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 11] = [
     ProofInstruction::VerifyZeroBalance,
     ProofInstruction::VerifyWithdraw,
     ProofInstruction::VerifyCiphertextCiphertextEquality,
@@ -32,6 +32,7 @@ const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 10] = [
     ProofInstruction::VerifyBatchedRangeProofU64,
     ProofInstruction::VerifyBatchedRangeProofU128,
     ProofInstruction::VerifyBatchedRangeProofU256,
+    ProofInstruction::VerifyCiphertextCommitmentEquality,
 ];
 
 #[tokio::test]
@@ -337,6 +338,7 @@ async fn test_pubkey_validity() {
     .await;
 }
 
+<<<<<<< HEAD
 #[tokio::test]
 async fn test_range_proof_u64() {
     let amount = 123_u64;
@@ -518,6 +520,60 @@ async fn test_batched_range_proof_u256() {
     .await;
 }
 
+||||||| parent of 8d11d8a829 (update proof program processor for ciphertext-commitment equality proof)
+=======
+#[tokio::test]
+async fn test_ciphertext_commitment_equality() {
+    let keypair = ElGamalKeypair::new_rand();
+    let amount: u64 = 55;
+    let ciphertext = keypair.public.encrypt(amount);
+    let (commitment, opening) = Pedersen::new(amount);
+
+    let success_proof_data = CiphertextCommitmentEqualityProofData::new(
+        &keypair,
+        &ciphertext,
+        &commitment,
+        &opening,
+        amount,
+    ).unwrap();
+
+    let incorrect_keypair = ElGamalKeypair {
+        public: ElGamalKeypair::new_rand().public,
+        secret: ElGamalKeypair::new_rand().secret,
+    };
+
+    let fail_proof_data = CiphertextCommitmentEqualityProofData::new(
+        &incorrect_keypair,
+        &ciphertext,
+        &commitment,
+        &opening,
+        amount,
+    ).unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyCiphertextCommitmentEquality,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyCiphertextCommitmentEquality,
+        size_of::<ProofContextState<CiphertextCommitmentEqualityProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyCiphertextCommitmentEquality,
+        size_of::<ProofContextState<CiphertextCommitmentEqualityProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+>>>>>>> 8d11d8a829 (update proof program processor for ciphertext-commitment equality proof)
 async fn test_verify_proof_without_context<T, U>(
     proof_instruction: ProofInstruction,
     success_proof_data: &T,
