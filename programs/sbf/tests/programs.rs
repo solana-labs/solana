@@ -95,10 +95,10 @@ fn process_transaction_and_record_inner(
 ) {
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
-    let tx_batch = bank.prepare_batch_for_tests(txs);
+    let mut tx_batch = bank.prepare_batch_for_tests(txs);
     let mut results = bank
         .load_execute_and_commit_transactions(
-            &tx_batch,
+            &mut tx_batch,
             MAX_PROCESSING_AGE,
             false,
             true,
@@ -132,7 +132,7 @@ fn execute_transactions(
     bank: &Bank,
     txs: Vec<Transaction>,
 ) -> Vec<Result<ConfirmedTransactionWithStatusMeta, TransactionError>> {
-    let batch = bank.prepare_batch_for_tests(txs.clone());
+    let mut batch = bank.prepare_batch_for_tests(txs.clone());
     let mut timings = ExecuteTimings::default();
     let mut mint_decimals = HashMap::new();
     let tx_pre_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
@@ -146,7 +146,7 @@ fn execute_transactions(
             ..
         },
     ) = bank.load_execute_and_commit_transactions(
-        &batch,
+        &mut batch,
         std::usize::MAX,
         true,
         true,
