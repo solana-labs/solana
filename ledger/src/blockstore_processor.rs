@@ -222,7 +222,7 @@ struct ExecuteBatchesInternalMetrics {
 
 fn execute_batches_internal(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatchWithIndexes],
+    batches: Vec<TransactionBatchWithIndexes>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
@@ -233,6 +233,7 @@ fn execute_batches_internal(
         Mutex::new(HashMap::new());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
+    let total_batches_len = batches.len() as u64;
     let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
@@ -243,7 +244,7 @@ fn execute_batches_internal(
                 let (result, execute_batches_time): (Result<()>, Measure) = measure!(
                     {
                         execute_batch(
-                            transaction_batch,
+                            &transaction_batch,
                             bank,
                             transaction_status_sender,
                             replay_vote_sender,
@@ -254,6 +255,7 @@ fn execute_batches_internal(
                     },
                     "execute_batch",
                 );
+                drop(transaction_batch);
 
                 let thread_index = PAR_THREAD_POOL.current_thread_index().unwrap();
                 execution_timings_per_thread
@@ -287,7 +289,7 @@ fn execute_batches_internal(
 
     Ok(ExecuteBatchesInternalMetrics {
         execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
-        total_batches_len: batches.len() as u64,
+        total_batches_len,
         execute_batches_us: execute_batches_elapsed.as_us(),
     })
 }
@@ -314,7 +316,7 @@ fn rebatch_transactions<'a>(
 
 fn execute_batches(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatchWithIndexes],
+    batches: Vec<TransactionBatchWithIndexes>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timing: &mut BatchExecutionTiming,
@@ -390,7 +392,7 @@ fn execute_batches(
                     batch_cost = 0;
                 }
             });
-        &tx_batches[..]
+        tx_batches
     } else {
         batches
     };
@@ -491,16 +493,16 @@ fn process_entries(
                 if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
                     // If it's a tick that will cause a new blockhash to be created,
                     // execute the group and register the tick
+                    let executing_batches = core::mem::take(&mut batches);
                     execute_batches(
                         bank,
-                        &batches,
+                        executing_batches,
                         transaction_status_sender,
                         replay_vote_sender,
                         batch_timing,
                         log_messages_bytes_limit,
                         prioritization_fee_cache,
                     )?;
-                    batches.clear();
                     for hash in &tick_hashes {
                         bank.register_tick(hash);
                     }
@@ -554,16 +556,16 @@ fn process_entries(
                     } else {
                         // else we have an entry that conflicts with a prior entry
                         // execute the current queue and try to process this entry again
+                        let executing_batches = core::mem::take(&mut batches);
                         execute_batches(
                             bank,
-                            &batches,
+                            executing_batches,
                             transaction_status_sender,
                             replay_vote_sender,
                             batch_timing,
                             log_messages_bytes_limit,
                             prioritization_fee_cache,
                         )?;
-                        batches.clear();
                     }
                 }
             }
@@ -571,7 +573,7 @@ fn process_entries(
     }
     execute_batches(
         bank,
-        &batches,
+        batches,
         transaction_status_sender,
         replay_vote_sender,
         batch_timing,
