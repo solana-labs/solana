@@ -28,7 +28,7 @@ const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 7] = [
     ProofInstruction::VerifyTransfer,
     ProofInstruction::VerifyTransferWithFee,
     ProofInstruction::VerifyPubkeyValidity,
-    ProofInstruction::VerifyRangeProof64,
+    ProofInstruction::VerifyRangeProofU64,
 ];
 
 #[tokio::test]
@@ -335,24 +335,24 @@ async fn test_pubkey_validity() {
 }
 
 #[tokio::test]
-async fn test_range_proof_64() {
+async fn test_range_proof_u64() {
     let amount = 123_u64;
     let (comm, open) = Pedersen::new(amount);
 
-    let success_proof_data = RangeProof64Data::new(&comm, amount, &open).unwrap();
+    let success_proof_data = RangeProofU64Data::new(&comm, amount, &open).unwrap();
 
     let incorrect_amount = 124_u64;
-    let fail_proof_data = RangeProof64Data::new(&comm, incorrect_amount, &open).unwrap();
+    let fail_proof_data = RangeProofU64Data::new(&comm, incorrect_amount, &open).unwrap();
 
     test_verify_proof_without_context(
-        ProofInstruction::VerifyRangeProof64,
+        ProofInstruction::VerifyRangeProofU64,
         &success_proof_data,
         &fail_proof_data,
     )
     .await;
 
     test_verify_proof_with_context(
-        ProofInstruction::VerifyRangeProof64,
+        ProofInstruction::VerifyRangeProofU64,
         size_of::<ProofContextState<RangeProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
@@ -360,7 +360,7 @@ async fn test_range_proof_64() {
     .await;
 
     test_close_context_state(
-        ProofInstruction::VerifyRangeProof64,
+        ProofInstruction::VerifyRangeProofU64,
         size_of::<ProofContextState<RangeProofContext>>(),
         &success_proof_data,
     )

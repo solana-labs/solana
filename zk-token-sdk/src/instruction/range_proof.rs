@@ -1,7 +1,7 @@
 //! The range proof instruction.
 //!
 //! A range proof certifies that a committed value in a Pedersen commitment is a number from a
-//! certain range. Currently, only 64-bit range proof `VerifyRangeProof64` is supported in the
+//! certain range. Currently, only 64-bit range proof `VerifyRangeProofU64` is supported in the
 //! proof program. It certifies that a committed number is an unsigned 64-bit number.
 
 #[cfg(not(target_os = "solana"))]
@@ -24,7 +24,7 @@ use {
 };
 
 #[cfg(not(target_os = "solana"))]
-const RANGEPROOF64_BIT_LENGTH: usize = 64;
+const RANGEPROOFU64_BIT_LENGTH: usize = 64;
 
 /// The context data needed to verify a range-proof for a committed value in a Pedersen commitment.
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -33,13 +33,13 @@ pub struct RangeProofContext {
     pub commitment: pod::PedersenCommitment, // 32 bytes
 }
 
-/// The instruction data that is needed for the `ProofInstruction::VerifyRangeProof64` instruction.
+/// The instruction data that is needed for the `ProofInstruction::VerifyRangeProofU64` instruction.
 ///
 /// It includes the cryptographic proof as well as the context data information needed to verify
 /// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub struct RangeProof64Data {
+pub struct RangeProofU64Data {
     /// The context data for a range proof
     pub context: RangeProofContext,
 
@@ -48,7 +48,7 @@ pub struct RangeProof64Data {
 }
 
 #[cfg(not(target_os = "solana"))]
-impl RangeProof64Data {
+impl RangeProofU64Data {
     pub fn new(
         commitment: &PedersenCommitment,
         amount: u64,
@@ -64,7 +64,7 @@ impl RangeProof64Data {
 
         let proof = RangeProof::new(
             vec![amount],
-            vec![RANGEPROOF64_BIT_LENGTH],
+            vec![RANGEPROOFU64_BIT_LENGTH],
             vec![opening],
             &mut transcript,
         )
@@ -74,8 +74,8 @@ impl RangeProof64Data {
     }
 }
 
-impl ZkProofData<RangeProofContext> for RangeProof64Data {
-    const PROOF_TYPE: ProofType = ProofType::RangeProof64;
+impl ZkProofData<RangeProofContext> for RangeProofU64Data {
+    const PROOF_TYPE: ProofType = ProofType::RangeProofU64;
 
     fn context_data(&self) -> &RangeProofContext {
         &self.context
@@ -90,7 +90,7 @@ impl ZkProofData<RangeProofContext> for RangeProof64Data {
         proof
             .verify(
                 vec![&commitment],
-                vec![RANGEPROOF64_BIT_LENGTH],
+                vec![RANGEPROOFU64_BIT_LENGTH],
                 &mut transcript,
             )
             .map_err(|e| e.into())
@@ -116,7 +116,7 @@ mod test {
         let amount = std::u64::MAX;
         let (comm, open) = Pedersen::new(amount);
 
-        let proof_data = RangeProof64Data::new(&comm, amount, &open).unwrap();
+        let proof_data = RangeProofU64Data::new(&comm, amount, &open).unwrap();
         assert!(proof_data.verify_proof().is_ok());
     }
 }

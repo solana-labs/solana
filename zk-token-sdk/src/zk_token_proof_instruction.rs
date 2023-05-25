@@ -155,7 +155,7 @@ pub enum ProofInstruction {
     /// Data expected by this instruction:
     ///   `VerifyRangeProof64Data`
     ///
-    VerifyRangeProof64,
+    VerifyRangeProofU64,
 }
 
 /// Pubkeys associated with a context state account to be used as parameters to functions.
@@ -235,11 +235,11 @@ pub fn verify_pubkey_validity(
 }
 
 /// Create a `VerifyRangeProof64` instruction.
-pub fn verify_range_proof_64(
+pub fn verify_range_proof_u64(
     context_state_info: Option<ContextStateInfo>,
-    proof_data: &RangeProof64Data,
+    proof_data: &RangeProofU64Data,
 ) -> Instruction {
-    ProofInstruction::VerifyRangeProof64.encode_verify_proof(context_state_info, proof_data)
+    ProofInstruction::VerifyRangeProofU64.encode_verify_proof(context_state_info, proof_data)
 }
 
 impl ProofInstruction {

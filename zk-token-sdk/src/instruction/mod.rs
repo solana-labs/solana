@@ -24,7 +24,7 @@ pub use {
         CiphertextCiphertextEqualityProofContext, CiphertextCiphertextEqualityProofData,
     },
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
-    range_proof::{RangeProof64Data, RangeProofContext},
+    range_proof::{RangeProofContext, RangeProofU64Data},
     transfer::{TransferData, TransferProofContext},
     transfer_with_fee::{FeeParameters, TransferWithFeeData, TransferWithFeeProofContext},
     withdraw::{WithdrawData, WithdrawProofContext},
@@ -42,7 +42,7 @@ pub enum ProofType {
     Transfer,
     TransferWithFee,
     PubkeyValidity,
-    RangeProof64,
+    RangeProofU64,
 }
 
 pub trait ZkProofData<T: Pod> {
