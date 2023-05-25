@@ -52,7 +52,7 @@ mod tests {
         let data = &buffer[offset..next];
         let ptr = data.as_ptr() as *const T;
 
-        (unsafe {std::ptr::read_unaligned(ptr)}, next)
+        (unsafe { std::ptr::read_unaligned(ptr) }, next)
     }
 
     #[test]
