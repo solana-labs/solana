@@ -1,6 +1,7 @@
 mod elgamal;
 mod pedersen;
-mod sigma_proof;
+mod range_proof;
+mod sigma_proofs;
 
 use {
     crate::zk_token_proof_instruction::ProofType,
@@ -13,7 +14,8 @@ pub use {
     bytemuck::{Pod, Zeroable},
     elgamal::{ElGamalCiphertext, ElGamalPubkey},
     pedersen::{DecryptHandle, PedersenCommitment},
-    sigma_proof::{
+    range_proof::{RangeProof128, RangeProof256, RangeProof64},
+    sigma_proofs::{
         AggregatedValidityProof, CiphertextCiphertextEqualityProof,
         CiphertextCommitmentEqualityProof, FeeSigmaProof, PubkeyValidityProof, ValidityProof,
         ZeroBalanceProof,
@@ -67,36 +69,6 @@ impl TryFrom<PodProofType> for ProofType {
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct CompressedRistretto(pub [u8; 32]);
-
-/// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub struct RangeProof64(pub [u8; 672]);
-
-// `PodRangeProof64` is a Pod and Zeroable.
-// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
-unsafe impl Zeroable for RangeProof64 {}
-unsafe impl Pod for RangeProof64 {}
-
-/// Serialization of range proofs for 128-bit numbers (for `TransferRangeProof` instruction)
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub struct RangeProof128(pub [u8; 736]);
-
-// `PodRangeProof128` is a Pod and Zeroable.
-// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
-unsafe impl Zeroable for RangeProof128 {}
-unsafe impl Pod for RangeProof128 {}
-
-/// Serialization of range proofs for 128-bit numbers (for `TransferRangeProof` instruction)
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub struct RangeProof256(pub [u8; 800]);
-
-// `PodRangeProof256` is a Pod and Zeroable.
-// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
-unsafe impl Zeroable for RangeProof256 {}
-unsafe impl Pod for RangeProof256 {}
 
 /// Serialization for AeCiphertext
 #[derive(Clone, Copy, PartialEq, Eq)]
