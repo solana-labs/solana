@@ -29,6 +29,6 @@ impl Blake3Hasher {
 pub(crate) fn address_to_partition(partitions: usize, seed: u64, address: &Pubkey) -> usize {
     let mut hasher = Blake3Hasher::new_with_seed(seed);
     hasher.write(address.as_ref());
-    let hash = hasher.finish();
-    ((partitions as u128) * (hash as u128) / ((u64::MAX as u128) + 1)) as usize
+    let hash64 = hasher.finish();
+    ((partitions as u128) * (hash64 as u128) / ((u64::MAX as u128) + 1)) as usize
 }
