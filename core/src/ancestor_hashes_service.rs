@@ -885,9 +885,9 @@ impl AncestorHashesService {
             }
 
             let ancestor_request_status = AncestorRequestStatus::new(
-                sampled_validators.into_iter().map(|(_pk, socket_addr)| {
-                        socket_addr
-                }),
+                sampled_validators
+                    .into_iter()
+                    .map(|(_pk, socket_addr)| socket_addr),
                 duplicate_slot,
                 request_type,
             );
