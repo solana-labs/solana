@@ -1263,7 +1263,7 @@ impl Accounts {
     pub fn unlock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        results: &[Result<()>],
+        results: impl Iterator<Item = &'a Result<()>>,
     ) {
         let keys: Vec<_> = txs
             .zip(results)
@@ -2794,7 +2794,7 @@ mod tests {
             let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
             let results = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
             assert_eq!(results[0], Ok(()));
-            accounts.unlock_accounts(txs.iter(), &results);
+            accounts.unlock_accounts(txs.iter(), results.iter());
         }
 
         // Disallow over MAX_TX_ACCOUNT_LOCKS
@@ -2902,8 +2902,8 @@ mod tests {
             2
         );
 
-        accounts.unlock_accounts([tx].iter(), &results0);
-        accounts.unlock_accounts(txs.iter(), &results1);
+        accounts.unlock_accounts([tx].iter(), results0.iter());
+        accounts.unlock_accounts(txs.iter(), results1.iter());
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -2987,7 +2987,7 @@ mod tests {
                     counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                 }
             }
-            accounts_clone.unlock_accounts(txs.iter(), &results);
+            accounts_clone.unlock_accounts(txs.iter(), results.iter());
             if exit_clone.clone().load(Ordering::Relaxed) {
                 break;
             }
@@ -3003,7 +3003,7 @@ mod tests {
                 thread::sleep(time::Duration::from_millis(50));
                 assert_eq!(counter_value, counter_clone.clone().load(Ordering::SeqCst));
             }
-            accounts_arc.unlock_accounts(txs.iter(), &results);
+            accounts_arc.unlock_accounts(txs.iter(), results.iter());
             thread::sleep(time::Duration::from_millis(50));
         }
         exit.store(true, Ordering::Relaxed);
@@ -3176,7 +3176,7 @@ mod tests {
             .get(&keypair2.pubkey())
             .is_none());
 
-        accounts.unlock_accounts(txs.iter(), &results);
+        accounts.unlock_accounts(txs.iter(), results.iter());
 
         // check all locks to be removed
         assert!(accounts

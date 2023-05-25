@@ -3899,9 +3899,10 @@ impl Bank {
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
         if batch.needs_unlock() {
             batch.set_needs_unlock(false);
-            self.rc
-                .accounts
-                .unlock_accounts(batch.sanitized_transactions().iter(), batch.lock_results())
+            self.rc.accounts.unlock_accounts(
+                batch.sanitized_transactions().iter(),
+                batch.lock_results().iter(),
+            )
         }
     }
 
