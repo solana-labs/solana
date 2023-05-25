@@ -62,7 +62,7 @@ pub enum AccountMetaFormat {
     num_enum::IntoPrimitive,
     num_enum::TryFromPrimitive,
 )]
-pub enum ByteBlockFormat {
+pub enum AccountBlockFormat {
     #[default]
     AlignedRaw = 0,
     Lz4 = 1,
@@ -118,7 +118,7 @@ pub struct TieredStorageFooter {
     /// The format of the account index block.
     pub account_index_format: AccountIndexFormat,
     /// The format of the account block.
-    pub account_block_format: ByteBlockFormat,
+    pub account_block_format: AccountBlockFormat,
 
     // Account-block related
     /// The number of account entries.
@@ -171,7 +171,7 @@ impl Default for TieredStorageFooter {
             account_meta_format: AccountMetaFormat::default(),
             owners_block_format: OwnersBlockFormat::default(),
             account_index_format: AccountIndexFormat::default(),
-            account_block_format: ByteBlockFormat::default(),
+            account_block_format: AccountBlockFormat::default(),
             account_entry_count: 0,
             account_meta_entry_size: 0,
             account_block_size: 0,
@@ -263,7 +263,7 @@ mod tests {
             account_meta_format: AccountMetaFormat::Hot,
             owners_block_format: OwnersBlockFormat::LocalIndex,
             account_index_format: AccountIndexFormat::Linear,
-            account_block_format: ByteBlockFormat::AlignedRaw,
+            account_block_format: AccountBlockFormat::AlignedRaw,
             account_entry_count: 300,
             account_meta_entry_size: 24,
             account_block_size: 4096,
