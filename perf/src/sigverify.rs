@@ -1411,7 +1411,7 @@ mod tests {
             assert!(!packet.meta().is_simple_vote_tx());
         }
 
-        // single legacy vote tx with extra (invalaid) signature is not
+        // single legacy vote tx with extra (invalid) signature is not
         {
             let mut tx = new_test_vote_tx(&mut rng);
             tx.signatures.push(Signature::default());
