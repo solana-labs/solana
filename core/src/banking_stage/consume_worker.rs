@@ -287,7 +287,7 @@ mod tests {
             ..
         } = &test_frame;
         let worker_thread = std::thread::spawn(move || worker.run());
-        poh_recorder.write().unwrap().set_bank(bank, false);
+        poh_recorder.write().unwrap().set_bank(bank.clone(), false);
 
         let pubkey1 = Pubkey::new_unique();
 
@@ -329,7 +329,7 @@ mod tests {
             ..
         } = &test_frame;
         let worker_thread = std::thread::spawn(move || worker.run());
-        poh_recorder.write().unwrap().set_bank(bank, false);
+        poh_recorder.write().unwrap().set_bank(bank.clone(), false);
 
         let pubkey1 = Pubkey::new_unique();
         let pubkey2 = Pubkey::new_unique();
@@ -374,7 +374,7 @@ mod tests {
             ..
         } = &test_frame;
         let worker_thread = std::thread::spawn(move || worker.run());
-        poh_recorder.write().unwrap().set_bank(bank, false);
+        poh_recorder.write().unwrap().set_bank(bank.clone(), false);
 
         let pubkey1 = Pubkey::new_unique();
         let pubkey2 = Pubkey::new_unique();

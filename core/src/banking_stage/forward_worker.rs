@@ -92,6 +92,7 @@ mod tests {
             immutable_deserialized_packet::ImmutableDeserializedPacket,
         },
         crossbeam_channel::unbounded,
+        solana_client::connection_cache::ConnectionCache,
         solana_ledger::{
             blockstore::Blockstore, genesis_utils::GenesisConfigInfo,
             get_tmp_ledger_path_auto_delete, leader_schedule_cache::LeaderScheduleCache,
@@ -157,7 +158,7 @@ mod tests {
             poh_recorder,
             bank_forks,
             cluster_info,
-            Arc::default(),
+            Arc::new(ConnectionCache::new("test")),
             Arc::default(),
         );
 
