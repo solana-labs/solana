@@ -163,6 +163,7 @@ pub enum TransactionError {
     ResanitizationNeeded,
 
     /// Program execution is temporarily restricted.
+    /// Consider program-logging an explicit restriction reason when practical
     #[error("Program execution is temporarily restricted.")]
     ProgramExecutionTemporarilyRestricted,
 }
