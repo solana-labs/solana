@@ -1262,22 +1262,12 @@ impl Accounts {
     #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(
         &self,
-        tx_and_results: impl Iterator<Item = (&'a SanitizedTransaction, &'a Result<()>)>,
+        tx_and_is_locked: impl Iterator<Item = (&'a SanitizedTransaction, bool)>,
     ) {
-        let keys: Vec<_> = tx_and_results
-            .filter_map(|(tx, res)| match res {
-                Err(TransactionError::AccountLoadedTwice)
-                | Err(TransactionError::AccountInUse)
-                | Err(TransactionError::SanitizeFailure)
-                | Err(TransactionError::TooManyAccountLocks)
-                | Err(TransactionError::WouldExceedMaxBlockCostLimit)
-                | Err(TransactionError::WouldExceedMaxVoteCostLimit)
-                | Err(TransactionError::WouldExceedMaxAccountCostLimit)
-                | Err(TransactionError::WouldExceedAccountDataBlockLimit)
-                | Err(TransactionError::WouldExceedAccountDataTotalLimit) => None,
-                _ => Some(tx.get_account_locks_unchecked()),
-            })
-            .collect();
+        let keys = tx_and_is_locked
+            .filter(|(_, is_locked)| *is_locked)
+            .map(|(tx, _)| tx.get_account_locks_unchecked())
+            .collect_vec();
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
         keys.into_iter().for_each(|keys| {
@@ -2792,7 +2782,7 @@ mod tests {
             let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
             let results = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
             assert_eq!(results[0], Ok(()));
-            accounts.unlock_accounts(txs.iter().zip(results.iter()));
+            accounts.unlock_accounts(txs.iter().zip(results.iter().map(|r| r.is_ok())));
         }
 
         // Disallow over MAX_TX_ACCOUNT_LOCKS
@@ -2900,8 +2890,8 @@ mod tests {
             2
         );
 
-        accounts.unlock_accounts([tx].iter().zip(results0.iter()));
-        accounts.unlock_accounts(txs.iter().zip(results1.iter()));
+        accounts.unlock_accounts([tx].iter().zip(results0.iter().map(|r| r.is_ok())));
+        accounts.unlock_accounts(txs.iter().zip(results1.iter().map(|r| r.is_ok())));
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -2985,7 +2975,7 @@ mod tests {
                     counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                 }
             }
-            accounts_clone.unlock_accounts(txs.iter().zip(results.iter()));
+            accounts_clone.unlock_accounts(txs.iter().zip(results.iter().map(|r| r.is_ok())));
             if exit_clone.clone().load(Ordering::Relaxed) {
                 break;
             }
@@ -3001,7 +2991,7 @@ mod tests {
                 thread::sleep(time::Duration::from_millis(50));
                 assert_eq!(counter_value, counter_clone.clone().load(Ordering::SeqCst));
             }
-            accounts_arc.unlock_accounts(txs.iter().zip(results.iter()));
+            accounts_arc.unlock_accounts(txs.iter().zip(results.iter().map(|r| r.is_ok())));
             thread::sleep(time::Duration::from_millis(50));
         }
         exit.store(true, Ordering::Relaxed);
@@ -3174,7 +3164,7 @@ mod tests {
             .get(&keypair2.pubkey())
             .is_none());
 
-        accounts.unlock_accounts(txs.iter().zip(results.iter()));
+        accounts.unlock_accounts(txs.iter().zip(results.iter().map(|r| r.is_ok())));
 
         // check all locks to be removed
         assert!(accounts

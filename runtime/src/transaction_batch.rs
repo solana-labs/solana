@@ -46,12 +46,47 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn needs_unlock(&self) -> bool {
         self.needs_unlock
     }
+
+    /// Release unnecessary locks before execution.
+    pub fn release_locks_early(&mut self, results: impl Iterator<Item = Result<()>>) {
+        // If we don't need to unlock, then we don't need to release locks early
+        if !self.needs_unlock() {
+            return;
+        }
+
+        let Self {
+            ref mut lock_results,
+            bank,
+            ref sanitized_txs,
+            ..
+        } = self;
+
+        let tx_and_is_locked = results
+            .zip(sanitized_txs.iter())
+            .zip(lock_results.iter_mut())
+            .filter(|(_, lock_result)| lock_result.is_ok())
+            .filter(|((result, _), _)| result.is_err())
+            .map(|((result, tx), lock_result)| {
+                *lock_result = result; // modify `lock_result` so it won't be unlocked later on drop
+                (tx, true)
+            });
+
+        bank.accounts().unlock_accounts(tx_and_is_locked);
+    }
 }
 
 // Unlock all locked accounts in destructor.
 impl<'a, 'b> Drop for TransactionBatch<'a, 'b> {
     fn drop(&mut self) {
-        self.bank.unlock_accounts(self)
+        if self.needs_unlock() {
+            self.bank.accounts().unlock_accounts(
+                self.sanitized_transactions()
+                    .iter()
+                    .zip(self.lock_results().iter().map(|r| r.is_ok())),
+            )
+        }
+
+        self.needs_unlock = false;
     }
 }
 
