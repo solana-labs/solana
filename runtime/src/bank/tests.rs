@@ -150,8 +150,8 @@ impl StakeReward {
             stake_reward_info: RewardInfo {
                 reward_type: RewardType::Staking,
                 lamports: rng.gen_range(1, 200),
-                post_balance: rng.gen_range(1, 2000),
-                commission: Some(rng.gen_range(1, 10)),
+                post_balance: 0, /* unused atm */
+                commission: 0, /* unused atm */
             },
 
             stake_account: validator_stake_account,
