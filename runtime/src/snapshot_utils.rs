@@ -86,8 +86,6 @@ const MAX_SNAPSHOT_VERSION_FILE_SIZE: u64 = 8; // byte
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 pub const TMP_SNAPSHOT_ARCHIVE_PREFIX: &str = "tmp-snapshot-archive-";
 pub const BANK_SNAPSHOT_PRE_FILENAME_EXTENSION: &str = "pre";
-// Save some bank snapshots but not too many
-pub const MAX_BANK_SNAPSHOTS_TO_RETAIN: usize = 8;
 // The following unsafes are
 // - Safe because the values are fixed, known non-zero constants
 // - Necessary in order to have a plain NonZeroUsize as the constant, NonZeroUsize
