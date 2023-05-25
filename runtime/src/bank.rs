@@ -59,6 +59,7 @@ use {
         builtins::{BuiltinPrototype, BUILTINS},
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
+        epoch_rewards_hasher::address_to_partition,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         message_processor::MessageProcessor,
         partitioned_rewards::PartitionedEpochRewardsConfig,
@@ -86,11 +87,8 @@ use {
     dashmap::{DashMap, DashSet},
     log::*,
     percentage::Percentage,
-    rand::seq::SliceRandom,
-    rand_chacha::{rand_core::SeedableRng, ChaChaRng},
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
-        slice::ParallelSliceMut,
         ThreadPool, ThreadPoolBuilder,
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment,
@@ -885,7 +883,7 @@ pub(crate) struct StartBlockHeightAndRewards {
     /// the block height of the slot at which rewards distribution began
     pub(crate) start_block_height: u64,
     /// calculated epoch rewards pending distribution
-    pub(crate) calculated_epoch_stake_rewards: Arc<StakeRewards>,
+    pub(crate) calculated_epoch_stake_rewards: Arc<Vec<StakeRewards>>,
 }
 
 /// Represent whether bank is in the reward phase or not.
@@ -2794,32 +2792,30 @@ impl Bank {
         }
     }
 
-    /// Sort and shuffle rewards for partitioned distribution
-    /// return (us time to sort, us time to shuffle)
     #[allow(dead_code)]
-    fn sort_and_shuffle_partitioned_rewards(
-        stake_rewards: &mut StakeRewards,
+    fn hash_rewards_into_partitions(
+        stake_rewards: &StakeRewards,
         rewarded_epoch: Epoch,
         rewards: u64,
+        num_partitions: usize,
         thread_pool: &ThreadPool,
-    ) -> (u64, u64) {
-        thread_pool.install(|| {
-            let (_, us_sort) = measure_us!(
-                // sort reward results by pubkey so stores per partition are consistent on every node
-                stake_rewards.par_sort_unstable_by(|a, b| a
-                    .stake_pubkey
-                    .partial_cmp(&b.stake_pubkey)
-                    .unwrap())
-            );
+    ) -> Vec<StakeRewards> {
+        let seed = rewarded_epoch ^ rewards;
 
-            // deterministically random shuffle the rewards with rewarded_epoch and rewards as the seed
-            // so that no pubkeys consistently get rewards earlier than others
-            let (_, us_shuffle) = measure_us!({
-                let seed = rewarded_epoch ^ rewards;
-                let mut rng = ChaChaRng::seed_from_u64(seed);
-                stake_rewards.shuffle(&mut rng);
-            });
-            (us_sort, us_shuffle)
+        let mut result = vec![vec![]; num_partitions];
+
+        thread_pool.install(|| {
+            let buckets = stake_rewards
+                .par_iter()
+                .map(|reward| {
+                    address_to_partition(num_partitions, seed, &reward.stake_pubkey)
+                })
+                .collect::<Vec<_>>();
+
+            for (bucket, reward) in std::iter::zip(buckets, stake_rewards) {
+                result[bucket].push(reward.clone());
+            }
+            result
         })
     }
 

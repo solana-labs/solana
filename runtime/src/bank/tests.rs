@@ -12526,16 +12526,14 @@ fn test_squash_timing_add_assign() {
     assert!(t0 == expected);
 }
 
-// Test sort and shuffle partitioned rewards
 #[test]
-fn test_sort_and_shuffle_partitioned_rewards() {
+fn test_hash_rewards_into_partitions() {
     // setup the expected number of stake rewards
     let expected_num = 12345;
 
-    let mut stake_rewards = (0..expected_num)
+    let stake_rewards = (0..expected_num)
         .map(|_| StakeReward::random())
         .collect::<Vec<_>>();
-    let mut stake_rewards_bk = stake_rewards.clone();
 
     let total = stake_rewards
         .iter()
@@ -12543,32 +12541,42 @@ fn test_sort_and_shuffle_partitioned_rewards() {
         .sum::<i64>();
 
     let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let stake_rewards_in_bucket =
+        Bank::hash_rewards_into_partitions(&stake_rewards, 1, 0, 5, &thread_pool);
 
-    Bank::sort_and_shuffle_partitioned_rewards(&mut stake_rewards, 1, total as u64, &thread_pool);
-    compare(&stake_rewards, &stake_rewards_bk);
-    let stake_rewards_sorted = stake_rewards.clone();
+    let stake_rewards_in_bucket_clone = stake_rewards_in_bucket.iter().flatten().cloned().collect();
+    compare(&stake_rewards, &stake_rewards_in_bucket_clone);
 
-    let total_after_sort_shuffle = stake_rewards
+    let total_after_hash_partition = stake_rewards_in_bucket
         .iter()
+        .flatten()
         .map(|stake_reward| stake_reward.stake_reward_info.lamports)
         .sum::<i64>();
 
+    let total_num_after_hash_partition: usize =
+        stake_rewards_in_bucket.iter().map(|x| x.len()).sum();
+
     // assert total is same, so nothing is dropped or duplicated
+    assert_eq!(total, total_after_hash_partition);
+    assert_eq!(expected_num, total_num_after_hash_partition);
+}
+
+#[test]
+fn test_hash_rewards_into_partitions_empty() {
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let stake_rewards = vec![];
+    let total = 0;
+
+    let stake_rewards_in_bucket =
+        Bank::hash_rewards_into_partitions(&stake_rewards, 1, 0, 1, &thread_pool);
+
+    let total_after_sort_shuffle = stake_rewards_in_bucket
+        .iter()
+        .flatten()
+        .map(|stake_reward| stake_reward.stake_reward_info.lamports)
+        .sum::<i64>();
+
     assert_eq!(total, total_after_sort_shuffle);
-
-    // sort and shuffle again
-    Bank::sort_and_shuffle_partitioned_rewards(&mut stake_rewards, 1, total as u64, &thread_pool);
-    assert_eq!(stake_rewards, stake_rewards_sorted);
-    compare(&stake_rewards_sorted, &stake_rewards_bk);
-
-    // sort the copy
-    Bank::sort_and_shuffle_partitioned_rewards(
-        &mut stake_rewards_bk,
-        1,
-        total as u64,
-        &thread_pool,
-    );
-    assert_eq!(stake_rewards, stake_rewards_sorted);
 }
 
 fn compare(a: &StakeRewards, b: &StakeRewards) {
