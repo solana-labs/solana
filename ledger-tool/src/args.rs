@@ -32,7 +32,7 @@ pub fn get_accounts_db_config(
         } else if arg_matches.is_present("partitioned_epoch_rewards_force_enable_single_slot") {
             TestPartitionedEpochRewards::ForcePartitionedEpochRewardsInOneBlock
         } else {
-            TestPartitionedEpochRewards::None
+            TestPartitionedEpochRewards::NoTesting
         };
 
     let accounts_index_drives: Vec<PathBuf> = if arg_matches.is_present("accounts_index_path") {

@@ -490,7 +490,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: false,
     create_ancient_storage: CreateAncientStorage::Pack,
-    test_partitioned_epoch_rewards: TestPartitionedEpochRewards::None,
+    test_partitioned_epoch_rewards: TestPartitionedEpochRewards::NoTesting,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;

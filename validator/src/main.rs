@@ -1126,7 +1126,7 @@ pub fn main() {
         } else if matches.is_present("partitioned_epoch_rewards_force_enable_single_slot") {
             TestPartitionedEpochRewards::ForcePartitionedEpochRewardsInOneBlock
         } else {
-            TestPartitionedEpochRewards::None
+            TestPartitionedEpochRewards::NoTesting
         };
 
     accounts_index_config.index_limit_mb =

@@ -17,7 +17,7 @@ pub(crate) struct PartitionedEpochRewardsConfig {
     /// if force_one_slot_partitioned_rewards, this will usually be u64::MAX so that all stake accounts are written in the first block
     pub(crate) stake_account_stores_per_block: Slot,
     /// if true, end of epoch bank rewards will force using partitioned rewards distribution.
-    /// see `set_test_enable_partitioned_rewards`
+    /// see `new_test_enable_partitioned_rewards`
     pub(crate) test_enable_partitioned_rewards: bool,
     /// if true, end of epoch non-partitioned bank rewards will test the partitioned rewards distribution vote and stake accounts
     /// This has a significant performance impact on the first slot in each new epoch.
@@ -44,8 +44,11 @@ impl Default for PartitionedEpochRewardsConfig {
 #[derive(Debug, Default, Clone, Copy)]
 pub enum TestPartitionedEpochRewards {
     #[default]
-    None,
+    /// if partitioned epoch rewards are not enabled, then the rewards code path is unchanged.
+    NoTesting,
+    /// calculate rewards normal way and the partitioned way. Compare vote and stake accounts.
     CompareResults,
+    /// calculate rewards using partitioned code, but force all results to take place in 1 slot to match consensus
     ForcePartitionedEpochRewardsInOneBlock,
 }
 
@@ -53,12 +56,12 @@ pub enum TestPartitionedEpochRewards {
 impl PartitionedEpochRewardsConfig {
     pub(crate) fn new(test: TestPartitionedEpochRewards) -> Self {
         match test {
-            TestPartitionedEpochRewards::None => Self::default(),
+            TestPartitionedEpochRewards::NoTesting => Self::default(),
             TestPartitionedEpochRewards::CompareResults => {
-                Self::set_test_compare_partitioned_epoch_rewards()
+                Self::new_test_compare_partitioned_epoch_rewards()
             }
             TestPartitionedEpochRewards::ForcePartitionedEpochRewardsInOneBlock => {
-                Self::set_test_enable_partitioned_rewards()
+                Self::new_test_enable_partitioned_rewards()
             }
         }
     }
@@ -66,7 +69,7 @@ impl PartitionedEpochRewardsConfig {
     /// All rewards will be distributed in the first block in the epoch, maching
     /// consensus for the non-partitioned rewards, but running all the partitioned rewards
     /// code.
-    fn set_test_enable_partitioned_rewards() -> Self {
+    fn new_test_enable_partitioned_rewards() -> Self {
         Self {
             reward_calculation_num_blocks: 0,
             stake_account_stores_per_block: u64::MAX,
@@ -79,7 +82,7 @@ impl PartitionedEpochRewardsConfig {
     /// All rewards will be distributed in the first block in the epoch as normal.
     /// Then, the partitioned rewards code will calculate expected results and compare to
     /// the old code path's results.
-    fn set_test_compare_partitioned_epoch_rewards() -> Self {
+    fn new_test_compare_partitioned_epoch_rewards() -> Self {
         Self {
             test_compare_partitioned_epoch_rewards: true,
             ..PartitionedEpochRewardsConfig::default()
