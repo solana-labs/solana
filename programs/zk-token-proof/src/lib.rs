@@ -237,7 +237,7 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
         ProofInstruction::VerifyCiphertextCommitmentEquality => {
             if native_programs_consume_cu {
                 invoke_context
-                    .consume_checked(100_000)
+                    .consume_checked(6_424)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
             ic_msg!(invoke_context, "VerifyCiphertextCommitmentEquality");
