@@ -45,16 +45,14 @@ impl ByteBlockWriter {
 mod tests {
     use super::*;
 
-    fn read_type<T>(buffer: &[u8], offset: usize) -> (&T, usize) {
+    fn read_type<T>(buffer: &[u8], offset: usize) -> (T, usize) {
         let size = std::mem::size_of::<T>();
         let (next, overflow) = offset.overflowing_add(size);
         assert!(!overflow && next <= buffer.len());
         let data = &buffer[offset..next];
-        let ptr = data.as_ptr() as *const u8;
+        let ptr = data.as_ptr() as *const T;
 
-        let slice = unsafe { std::slice::from_raw_parts(ptr, size) };
-        let slice_ptr = slice.as_ptr() as *const T;
-        (unsafe { &*slice_ptr }, next)
+        (unsafe {std::ptr::read_unaligned(ptr)}, next)
     }
 
     #[test]
@@ -68,7 +66,7 @@ mod tests {
         assert_eq!(buffer.len(), mem::size_of::<u32>());
 
         let (value_from_buffer, next) = read_type::<u32>(&buffer, 0);
-        assert_eq!(value, *value_from_buffer);
+        assert_eq!(value, value_from_buffer);
         assert_eq!(next, mem::size_of::<u32>());
     }
 
@@ -122,19 +120,19 @@ mod tests {
 
         // verify meta1 and its data
         let (meta1_from_buffer, next1) = read_type::<TestMetaStruct>(&buffer, 0);
-        assert_eq!(test_metas[0], *meta1_from_buffer);
+        assert_eq!(test_metas[0], meta1_from_buffer);
         assert_eq!(test_data1, buffer[next1..][..meta1_from_buffer.data_len]);
 
         // verify meta2 and its data
         let (meta2_from_buffer, next2) =
             read_type::<TestMetaStruct>(&buffer, next1 + meta1_from_buffer.data_len);
-        assert_eq!(test_metas[1], *meta2_from_buffer);
+        assert_eq!(test_metas[1], meta2_from_buffer);
         assert_eq!(test_data2, buffer[next2..][..meta2_from_buffer.data_len]);
 
         // verify meta3 and its data
         let (meta3_from_buffer, next3) =
             read_type::<TestMetaStruct>(&buffer, next2 + meta2_from_buffer.data_len);
-        assert_eq!(test_metas[2], *meta3_from_buffer);
+        assert_eq!(test_metas[2], meta3_from_buffer);
         assert_eq!(test_data3, buffer[next3..][..meta3_from_buffer.data_len]);
     }
 }
