@@ -108,7 +108,7 @@ mod test {
     #[test]
     fn test_range_proof_64_instruction_correctness() {
         let amount = std::u64::MAX;
-        let (comm, open) = Pedersen::new(amount);
+        let (commitment, opening) = Pedersen::new(amount);
 
         let proof_data = RangeProofU64Data::new(&comm, amount, &open).unwrap();
         assert!(proof_data.verify_proof().is_ok());

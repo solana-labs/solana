@@ -337,7 +337,7 @@ async fn test_pubkey_validity() {
 #[tokio::test]
 async fn test_range_proof_u64() {
     let amount = 123_u64;
-    let (comm, open) = Pedersen::new(amount);
+    let (commitment, opening) = Pedersen::new(amount);
 
     let success_proof_data = RangeProofU64Data::new(&comm, amount, &open).unwrap();
 

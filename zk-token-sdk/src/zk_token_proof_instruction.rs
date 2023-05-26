@@ -153,7 +153,7 @@ pub enum ProofInstruction {
     ///   None
     ///
     /// Data expected by this instruction:
-    ///   `VerifyRangeProof64Data`
+    ///   `RangeProofU64Data`
     ///
     VerifyRangeProofU64,
 }
