@@ -175,7 +175,17 @@ pub enum ProofInstruction {
     ///
     VerifyRangeProofU64,
 
-    /// Verify an aggregate 64-bit range proof.
+    /// Verify a batched 64-bit range proof.
+    ///
+    /// A batched range proof is defined with respect to a sequence of Pedersen commitments `[C_1,
+    /// ..., C_N]` and bit-lengths `[n_1, ..., n_N]`. It certifies that each commitment `C_i` is a
+    /// commitment to a positive number of bit-length `n_i`. Batch verifying range proofs is more
+    /// efficient than verifying independent range proofs on commitments `C_1, ..., C_N`
+    /// separately.
+    ///
+    /// The bit-length of a batched range proof specifies the sum of the individual bit-lengths
+    /// `n_1, ..., n_N`. For example, this instruction can be used to certify that two commitments
+    /// `C_1` and `C_2` each hold positive 32-bit numbers.
     ///
     /// This instruction can be configured to optionally initialize a proof context state account.
     /// If creating a context state account, an account must be pre-allocated to the exact size of
@@ -198,6 +208,10 @@ pub enum ProofInstruction {
 
     /// Verify an aggregate 128-bit range proof.
     ///
+    /// The bit-length of a batched range proof specifies the sum of the individual bit-lengths
+    /// `n_1, ..., n_N`. For example, this instruction can be used to certify that two commitments
+    /// `C_1` and `C_2` each hold positive 64-bit numbers.
+    ///
     /// This instruction can be configured to optionally initialize a proof context state account.
     /// If creating a context state account, an account must be pre-allocated to the exact size of
     /// `ProofContextState<AggregateRangeProofContext>` and assigned to the ZkToken proof program
@@ -218,6 +232,10 @@ pub enum ProofInstruction {
     VerifyAggregateRangeProof128,
 
     /// Verify an aggregate 256-bit range proof.
+    ///
+    /// The bit-length of a batched range proof specifies the sum of the individual bit-lengths
+    /// `n_1, ..., n_N`. For example, this instruction can be used to certify that four commitments
+    /// `[C_1, C_2, C_3, C_4]` each hold positive 64-bit numbers.
     ///
     /// This instruction can be configured to optionally initialize a proof context state account.
     /// If creating a context state account, an account must be pre-allocated to the exact size of
@@ -341,7 +359,7 @@ pub fn verify_aggregate_verify_range_proof_128(
         .encode_verify_proof(context_state_info, proof_data)
 }
 
-/// Create a `VerifyAggregateRangeProof64` instruction.
+/// Create a `VerifyAggregateRangeProof256` instruction.
 pub fn verify_aggregate_verify_range_proof_256(
     context_state_info: Option<ContextStateInfo>,
     proof_data: &AggregateRangeProof256Data,
