@@ -54,6 +54,8 @@ use {
 pub enum ElGamalError {
     #[error("key derivation method not supported")]
     DerivationMethodNotSupported,
+    #[error("seed length too short for derivation")]
+    SeedLengthTooShort,
 }
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
@@ -373,7 +375,8 @@ impl ElGamalSecretKey {
         public_seed: &[u8],
     ) -> Result<Self, Box<dyn error::Error>> {
         let seed = Self::seed_from_signer(signer, public_seed)?;
-        Self::from_seed(&seed)
+        let key = Self::from_seed(&seed)?;
+        Ok(key)
     }
 
     /// Derive a seed from a Solana signer used to generate an ElGamal secret key.
@@ -407,11 +410,11 @@ impl ElGamalSecretKey {
     }
 
     /// Derive an ElGamal secret key from an entropy seed.
-    pub fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
+    pub fn from_seed(seed: &[u8]) -> Result<Self, ElGamalError> {
         const MINIMUM_SEED_LEN: usize = 32;
 
         if seed.len() < MINIMUM_SEED_LEN {
-            return Err("Seed is too short".into());
+            return Err(ElGamalError::SeedLengthTooShort);
         }
         Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(seed)))
     }
@@ -467,7 +470,8 @@ impl EncodableKey for ElGamalSecretKey {
 
 impl SeedDerivable for ElGamalSecretKey {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
-        Self::from_seed(seed)
+        let key = Self::from_seed(seed)?;
+        Ok(key)
     }
 
     fn from_seed_and_derivation_path(
@@ -481,10 +485,11 @@ impl SeedDerivable for ElGamalSecretKey {
         seed_phrase: &str,
         passphrase: &str,
     ) -> Result<Self, Box<dyn error::Error>> {
-        Self::from_seed(&generate_seed_from_seed_phrase_and_passphrase(
+        let key = Self::from_seed(&generate_seed_from_seed_phrase_and_passphrase(
             seed_phrase,
             passphrase,
-        ))
+        ))?;
+        Ok(key)
     }
 }
 
