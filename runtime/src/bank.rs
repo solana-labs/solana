@@ -2795,13 +2795,11 @@ impl Bank {
     #[allow(dead_code)]
     fn hash_rewards_into_partitions(
         stake_rewards: &StakeRewards,
-        rewarded_epoch: Epoch,
-        rewards: u64,
+        parent_block_hash: &Hash,
         num_partitions: usize,
         thread_pool: &ThreadPool,
     ) -> Vec<StakeRewards> {
-        let seed = rewarded_epoch ^ rewards;
-        let hasher = create_epoch_reward_hasher(seed);
+        let hasher = create_epoch_reward_hasher(parent_block_hash);
 
         let mut result = vec![vec![]; num_partitions];
 

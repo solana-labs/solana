@@ -12542,7 +12542,7 @@ fn test_hash_rewards_into_partitions() {
 
     let thread_pool = ThreadPoolBuilder::new().build().unwrap();
     let stake_rewards_in_bucket =
-        Bank::hash_rewards_into_partitions(&stake_rewards, 1, 0, 5, &thread_pool);
+        Bank::hash_rewards_into_partitions(&stake_rewards, &Hash::default(), 5, &thread_pool);
 
     let stake_rewards_in_bucket_clone = stake_rewards_in_bucket.iter().flatten().cloned().collect();
     compare(&stake_rewards, &stake_rewards_in_bucket_clone);
@@ -12568,7 +12568,7 @@ fn test_hash_rewards_into_partitions_empty() {
     let total = 0;
 
     let stake_rewards_in_bucket =
-        Bank::hash_rewards_into_partitions(&stake_rewards, 1, 0, 1, &thread_pool);
+        Bank::hash_rewards_into_partitions(&stake_rewards, &Hash::default(), 1, &thread_pool);
 
     let total_after_sort_shuffle = stake_rewards_in_bucket
         .iter()
