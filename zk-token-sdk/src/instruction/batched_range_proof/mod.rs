@@ -16,9 +16,9 @@
 //! The maximum number of commitments is fixed at 8. Each bit-length in `[n_1, ..., n_N]` must be a
 //! power-of-two positive integer less than 256.
 
-pub mod aggregate_range_proof_128;
-pub mod aggregate_range_proof_256;
-pub mod aggregate_range_proof_64;
+pub mod batched_range_proof_u128;
+pub mod batched_range_proof_u256;
+pub mod batched_range_proof_u64;
 
 use {
     crate::zk_token_elgamal::pod,

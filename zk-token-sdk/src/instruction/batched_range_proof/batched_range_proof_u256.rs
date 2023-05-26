@@ -11,7 +11,7 @@ use {
 };
 use {
     crate::{
-        instruction::{aggregate_range_proof::BatchedRangeProofContext, ProofType, ZkProofData},
+        instruction::{batched_range_proof::BatchedRangeProofContext, ProofType, ZkProofData},
         zk_token_elgamal::pod,
     },
     bytemuck::{Pod, Zeroable},

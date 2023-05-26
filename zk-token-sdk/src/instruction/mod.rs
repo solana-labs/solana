@@ -1,4 +1,4 @@
-pub mod aggregate_range_proof;
+pub mod batched_range_proof;
 pub mod ctxt_ctxt_equality;
 pub mod pubkey_validity;
 pub mod range_proof;
@@ -20,10 +20,10 @@ use {
     curve25519_dalek::scalar::Scalar,
 };
 pub use {
-    aggregate_range_proof::{
-        aggregate_range_proof_128::BatchedRangeProofU128Data,
-        aggregate_range_proof_256::BatchedRangeProofU256Data,
-        aggregate_range_proof_64::BatchedRangeProofU64Data, BatchedRangeProofContext,
+    batched_range_proof::{
+        batched_range_proof_u128::BatchedRangeProofU128Data,
+        batched_range_proof_u256::BatchedRangeProofU256Data,
+        batched_range_proof_u64::BatchedRangeProofU64Data, BatchedRangeProofContext,
     },
     bytemuck::Pod,
     ctxt_ctxt_equality::{
