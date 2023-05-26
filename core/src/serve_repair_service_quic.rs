@@ -6,7 +6,7 @@ use {
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_sdk::signer::Signer,
     solana_streamer::{
-        quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+        quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         socket::SocketAddrSpace,
         streamer::{self, ResponderOption},
     },
@@ -49,11 +49,11 @@ impl ServeRepairService {
             .local_addr()
             .unwrap()
             .ip();
-        let stats = Arc::new(StreamStats::default());
 
         let (request_sender_quic, request_receiver_quic) = unbounded();
         // Repair server using quic
         let (serve_repair_endpoint, repair_quic_t) = spawn_server(
+            "serve_repair",
             repair_quic_config.serve_repair_address.try_clone().unwrap(),
             &repair_quic_config.identity_keypair,
             host,
@@ -63,7 +63,6 @@ impl ServeRepairService {
             repair_quic_config.staked_nodes.clone(),
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats,
             repair_quic_config.wait_for_chunk_timeout,
             repair_quic_config.repair_packet_coalesce_timeout,
         )
@@ -71,6 +70,7 @@ impl ServeRepairService {
 
         // The connection cache used to send to repair responses back to the client.
         let connection_cache = ConnectionCache::new_with_client_options(
+            "repair_response_connection_cache_quic",
             1,
             Some(serve_repair_endpoint),
             Some((&repair_quic_config.identity_keypair, host)),

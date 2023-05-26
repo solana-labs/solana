@@ -17,7 +17,7 @@ use {
         signer::Signer,
     },
     solana_streamer::{
-        quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+        quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
     },
     std::{
@@ -190,9 +190,9 @@ impl ShredFetchStage {
     ) -> (JoinHandle<()>, JoinHandle<()>, Arc<ConnectionCache>) {
         let (packet_sender, packet_receiver) = unbounded();
 
-        let stats = Arc::new(StreamStats::default());
         let host = repair_quic_config.repair_address.local_addr().unwrap().ip();
         let (endpoint, repair_quic_t) = spawn_server(
+            "shred_fetch",
             repair_quic_config.repair_address.try_clone().unwrap(),
             &repair_quic_config.identity_keypair,
             host,
@@ -202,7 +202,6 @@ impl ShredFetchStage {
             repair_quic_config.staked_nodes.clone(),
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats,
             repair_quic_config.wait_for_chunk_timeout,
             repair_quic_config.repair_packet_coalesce_timeout,
         )
@@ -214,6 +213,7 @@ impl ShredFetchStage {
         ));
         let staked_nodes = &repair_quic_config.staked_nodes;
         let connection_cache = Arc::new(ConnectionCache::new_with_client_options(
+            "shred_response_connection_cache_quic",
             1,
             Some(endpoint),
             cert_info,

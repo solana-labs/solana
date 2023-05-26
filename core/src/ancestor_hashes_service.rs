@@ -35,7 +35,7 @@ use {
         timing::timestamp,
     },
     solana_streamer::{
-        quic::{spawn_server, StreamStats, MAX_UNSTAKED_CONNECTIONS},
+        quic::{spawn_server, MAX_UNSTAKED_CONNECTIONS},
         streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
     },
     std::{
@@ -910,9 +910,9 @@ fn spawn_ancestor_hashes_quic_server(
     let (ancestor_connection_cache, ancestor_quic_t) =
         if let Some(repair_quic_config) = repair_quic_config {
             let host = repair_quic_config.repair_address.local_addr().unwrap().ip();
-            let stats = Arc::new(StreamStats::default());
 
             let (endpoint, ancestor_quic_t) = spawn_server(
+                "ancestor_hashes_quic_server",
                 repair_quic_config
                     .ancestor_hash_address
                     .try_clone()
@@ -925,7 +925,6 @@ fn spawn_ancestor_hashes_quic_server(
                 repair_quic_config.staked_nodes.clone(),
                 solana_streamer::quic::MAX_STAKED_CONNECTIONS,
                 MAX_UNSTAKED_CONNECTIONS,
-                stats,
                 repair_quic_config.wait_for_chunk_timeout,
                 repair_quic_config.repair_packet_coalesce_timeout,
             )
@@ -937,6 +936,7 @@ fn spawn_ancestor_hashes_quic_server(
             ));
 
             let connection_cache = Arc::new(ConnectionCache::new_with_client_options(
+                "repair-connection_cache_quic",
                 1,
                 Some(endpoint),
                 cert_info,
