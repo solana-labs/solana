@@ -1,6 +1,6 @@
 use {
     solana_account_decoder::parse_token::{
-        is_known_spl_token_id, spl_token_native_mint, token_amount_to_ui_amount, UiTokenAmount,
+        is_known_spl_token_id, token_amount_to_ui_amount, UiTokenAmount,
     },
     solana_measure::measure::Measure,
     solana_metrics::datapoint_debug,
@@ -17,7 +17,7 @@ use {
 };
 
 fn get_mint_decimals(bank: &Bank, mint: &Pubkey) -> Option<u8> {
-    if mint == &spl_token_native_mint() {
+    if mint == &spl_token::native_mint::id() {
         Some(spl_token::native_mint::DECIMALS)
     } else {
         let mint_account = bank.get_account(mint)?;

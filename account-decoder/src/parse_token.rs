@@ -28,11 +28,19 @@ pub fn is_known_spl_token_id(program_id: &Pubkey) -> bool {
 
 // A helper function to convert spl_token::native_mint::id() as spl_sdk::pubkey::Pubkey to
 // solana_sdk::pubkey::Pubkey
+#[deprecated(
+    since = "1.16.0",
+    note = "Pubkey conversions no longer needed. Please use spl_token::native_mint::id() directly"
+)]
 pub fn spl_token_native_mint() -> Pubkey {
     Pubkey::new_from_array(spl_token::native_mint::id().to_bytes())
 }
 
 // The program id of the `spl_token_native_mint` account
+#[deprecated(
+    since = "1.16.0",
+    note = "Pubkey conversions no longer needed. Please use spl_token::id() directly"
+)]
 pub fn spl_token_native_mint_program_id() -> Pubkey {
     spl_token::id()
 }
