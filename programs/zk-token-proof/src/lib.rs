@@ -192,5 +192,14 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
             ic_msg!(invoke_context, "VerifyPubkeyValidity");
             process_verify_proof::<PubkeyValidityData, PubkeyValidityProofContext>(invoke_context)
         }
+        ProofInstruction::VerifyRangeProofU64 => {
+            if native_programs_consume_cu {
+                invoke_context
+                    .consume_checked(105_066)
+                    .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
+            }
+            ic_msg!(invoke_context, "VerifyRangeProof");
+            process_verify_proof::<RangeProofU64Data, RangeProofContext>(invoke_context)
+        }
     }
 });

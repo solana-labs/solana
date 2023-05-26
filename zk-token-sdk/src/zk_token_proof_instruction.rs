@@ -132,6 +132,30 @@ pub enum ProofInstruction {
     ///   `PubkeyValidityData`
     ///
     VerifyPubkeyValidity,
+
+    /// Verify a 64-bit range proof.
+    ///
+    /// A range proof is defined with respect to a Pedersen commitment. The 64-bit range proof
+    /// certifies that a Pedersen commitment holds an unsigned 64-bit number.
+    ///
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<RangeProofContext>` and assigned to the ZkToken proof program prior to
+    /// the execution of this instruction.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `RangeProofU64Data`
+    ///
+    VerifyRangeProofU64,
 }
 
 /// Pubkeys associated with a context state account to be used as parameters to functions.
@@ -208,6 +232,14 @@ pub fn verify_pubkey_validity(
     proof_data: &PubkeyValidityData,
 ) -> Instruction {
     ProofInstruction::VerifyPubkeyValidity.encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyRangeProofU64` instruction.
+pub fn verify_range_proof_u64(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &RangeProofU64Data,
+) -> Instruction {
+    ProofInstruction::VerifyRangeProofU64.encode_verify_proof(context_state_info, proof_data)
 }
 
 impl ProofInstruction {

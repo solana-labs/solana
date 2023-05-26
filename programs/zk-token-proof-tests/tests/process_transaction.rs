@@ -9,7 +9,10 @@ use {
         transaction::{Transaction, TransactionError},
     },
     solana_zk_token_sdk::{
-        encryption::{elgamal::ElGamalKeypair, pedersen::PedersenOpening},
+        encryption::{
+            elgamal::ElGamalKeypair,
+            pedersen::{Pedersen, PedersenOpening},
+        },
         instruction::*,
         zk_token_proof_instruction::*,
         zk_token_proof_program,
@@ -18,13 +21,14 @@ use {
     std::mem::size_of,
 };
 
-const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 6] = [
+const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 7] = [
     ProofInstruction::VerifyZeroBalance,
     ProofInstruction::VerifyWithdraw,
     ProofInstruction::VerifyCiphertextCiphertextEquality,
     ProofInstruction::VerifyTransfer,
     ProofInstruction::VerifyTransferWithFee,
     ProofInstruction::VerifyPubkeyValidity,
+    ProofInstruction::VerifyRangeProofU64,
 ];
 
 #[tokio::test]
@@ -325,6 +329,39 @@ async fn test_pubkey_validity() {
     test_close_context_state(
         ProofInstruction::VerifyPubkeyValidity,
         size_of::<ProofContextState<PubkeyValidityProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_range_proof_u64() {
+    let amount = 123_u64;
+    let (commitment, opening) = Pedersen::new(amount);
+
+    let success_proof_data = RangeProofU64Data::new(&commitment, amount, &opening).unwrap();
+
+    let incorrect_amount = 124_u64;
+    let fail_proof_data = RangeProofU64Data::new(&commitment, incorrect_amount, &opening).unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyRangeProofU64,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyRangeProofU64,
+        size_of::<ProofContextState<RangeProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyRangeProofU64,
+        size_of::<ProofContextState<RangeProofContext>>(),
         &success_proof_data,
     )
     .await;
