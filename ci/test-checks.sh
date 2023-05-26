@@ -73,17 +73,17 @@ else
   echo "Note: cargo-for-all-lock-files.sh skipped because $CI_BASE_BRANCH != $EDGE_CHANNEL"
 fi
 
- _ ci/order-crates-for-publishing.py
+_ ci/order-crates-for-publishing.py
 
 nightly_clippy_allows=(--allow=clippy::redundant_clone)
 
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
- _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
-   --deny=warnings \
-   --deny=clippy::default_trait_access \
-   --deny=clippy::integer_arithmetic \
-   --deny=clippy::used_underscore_binding \
-   "${nightly_clippy_allows[@]}"
+_ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
+  --deny=warnings \
+  --deny=clippy::default_trait_access \
+  --deny=clippy::integer_arithmetic \
+  --deny=clippy::used_underscore_binding \
+  "${nightly_clippy_allows[@]}"
 
 # temporarily run stable clippy as well to scan the codebase for
 # `redundant_clone`s, which is disabled as nightly clippy is buggy:
@@ -106,6 +106,6 @@ fi
 
 _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" fmt --all -- --check
 
- _ ci/do-audit.sh
+_ ci/do-audit.sh
 
 echo --- ok
