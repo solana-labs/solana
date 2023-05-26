@@ -1,5 +1,5 @@
 pub mod batched_range_proof;
-pub mod ctxt_comm_equality;
+pub mod ciphertext_commitment_equality;
 pub mod ctxt_ctxt_equality;
 pub mod pubkey_validity;
 pub mod range_proof;
@@ -27,7 +27,7 @@ pub use {
         batched_range_proof_u64::BatchedRangeProofU64Data, BatchedRangeProofContext,
     },
     bytemuck::Pod,
-    ctxt_comm_equality::{
+    ciphertext_commitment_equality::{
         CiphertextCommitmentEqualityProofContext, CiphertextCommitmentEqualityProofData,
     },
     ctxt_ctxt_equality::{
