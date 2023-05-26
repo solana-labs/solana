@@ -222,7 +222,7 @@ struct RentMetrics {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "BzMfUBpuJsPJRaBW3YFz3J4cKKtnDuvQSChcHTPqtoUu")]
+#[frozen_abi(digest = "HcG9ASPjnRg4yBFDXQRgGmpXWxXjjMeLem6ALGLLYBLn")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
