@@ -36,10 +36,6 @@ use {
 pub enum AuthenticatedEncryptionError {
     #[error("key derivation method not supported")]
     DerivationMethodNotSupported,
-
-    #[error("pubkey does not exist")]
-    PubkeyDoesNotExist,
-
     #[error("seed length too short for derivation")]
     SeedLengthTooShort,
 }
