@@ -2818,8 +2818,8 @@ impl Bank {
         });
 
         let mut result = vec![vec![]; num_partitions];
-        for i in 0..num_partitions {
-            result[i] = mem::take(&mut partition_map.get_mut(&i).unwrap());
+        for (i, v) in result.iter_mut().enumerate().take(num_partitions) {
+            *v = mem::take(&mut partition_map.get_mut(&i).unwrap());
         }
         result
     }
