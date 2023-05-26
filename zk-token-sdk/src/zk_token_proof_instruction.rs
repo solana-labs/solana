@@ -234,7 +234,7 @@ pub fn verify_pubkey_validity(
     ProofInstruction::VerifyPubkeyValidity.encode_verify_proof(context_state_info, proof_data)
 }
 
-/// Create a `VerifyRangeProof64` instruction.
+/// Create a `VerifyRangeProofU64` instruction.
 pub fn verify_range_proof_u64(
     context_state_info: Option<ContextStateInfo>,
     proof_data: &RangeProofU64Data,
