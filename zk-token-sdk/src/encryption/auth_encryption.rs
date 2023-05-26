@@ -1,6 +1,7 @@
 //! Authenticated encryption implementation.
 //!
-//! This module is a simple wrapper of the `Aes128GcmSiv` implementation.
+//! This module is a simple wrapper of the `Aes128GcmSiv` implementation specialized for SPL
+//! token-2022 where the plaintext is always `u64`.
 #[cfg(not(target_os = "solana"))]
 use {
     aes_gcm_siv::{
@@ -42,11 +43,16 @@ pub enum AuthenticatedEncryptionError {
 
 struct AuthenticatedEncryption;
 impl AuthenticatedEncryption {
+    /// Generates an authenticated encryption key.
+    ///
+    /// This function is randomized. It internally samples a 128-bit key using `OsRng`.
     #[cfg(not(target_os = "solana"))]
     fn keygen() -> AeKey {
         AeKey(OsRng.gen::<[u8; 16]>())
     }
 
+    /// On input of an authenticated encryption key and an amount, the function returns a
+    /// corresponding authenticated encryption ciphertext.
     #[cfg(not(target_os = "solana"))]
     fn encrypt(key: &AeKey, balance: u64) -> AeCiphertext {
         let mut plaintext = balance.to_le_bytes();
@@ -65,6 +71,8 @@ impl AuthenticatedEncryption {
         }
     }
 
+    /// On input of an authenticated encryption key and a ciphertext, the function returns the
+    /// originally encrypted amount.
     #[cfg(not(target_os = "solana"))]
     fn decrypt(key: &AeKey, ct: &AeCiphertext) -> Option<u64> {
         let plaintext =
@@ -82,11 +90,17 @@ impl AuthenticatedEncryption {
 #[derive(Debug, Zeroize)]
 pub struct AeKey([u8; 16]);
 impl AeKey {
+    /// Deterministically derives an authenticated encryption key from a Solana signer and a tag.
+    ///
+    /// This function exists for applications where a user may not wish to maintain a Solana signer
+    /// and an authenticated encryption key separately. Instead, a user can derive the ElGamal
+    /// keypair on-the-fly whenever encrytion/decryption is needed.
     pub fn new_from_signer(signer: &dyn Signer, tag: &[u8]) -> Result<Self, Box<dyn error::Error>> {
         let seed = Self::seed_from_signer(signer, tag)?;
         Self::from_seed(&seed)
     }
 
+    /// Derive a seed from a Solana signer used to generate an authenticated encryption key.
     pub fn seed_from_signer(signer: &dyn Signer, tag: &[u8]) -> Result<Vec<u8>, SignerError> {
         let message = [b"AeKey", tag].concat();
         let signature = signer.try_sign_message(&message)?;
@@ -104,14 +118,19 @@ impl AeKey {
         Ok(result.to_vec())
     }
 
+    /// Generates a random authenticated encryption key.
+    ///
+    /// This function is randomized. It internally samples a scalar element using `OsRng`.
     pub fn new_rand() -> Self {
         AuthenticatedEncryption::keygen()
     }
 
+    /// Encrypts an amount under the authenticated encryption key.
     pub fn encrypt(&self, amount: u64) -> AeCiphertext {
         AuthenticatedEncryption::encrypt(self, amount)
     }
 
+    /// Recovers an encrypted amount from an authenticated encryption ciphertext.
     pub fn decrypt(&self, ct: &AeCiphertext) -> Option<u64> {
         AuthenticatedEncryption::decrypt(self, ct)
     }
