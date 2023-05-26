@@ -883,7 +883,7 @@ pub(crate) struct StartBlockHeightAndRewards {
     /// the block height of the slot at which rewards distribution began
     pub(crate) start_block_height: u64,
     /// calculated epoch rewards pending distribution
-    pub(crate) calculated_epoch_stake_rewards: Arc<Vec<StakeRewards>>,
+    pub(crate) calculated_epoch_stake_rewards: Arc<StakeRewards>,
 }
 
 /// Represent whether bank is in the reward phase or not.
