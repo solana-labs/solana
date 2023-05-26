@@ -17,9 +17,6 @@ use {
     bytemuck::{Pod, Zeroable},
 };
 
-#[cfg(not(target_os = "solana"))]
-const RANGE_PROOF_64_AGGREGATE_BIT_LENGTH: usize = 64;
-
 /// The instruction data that is needed for the
 /// `ProofInstruction::VerifyAggregateRangeProof64` instruction.
 ///
@@ -48,7 +45,12 @@ impl AggregateRangeProof64Data {
             .iter()
             .try_fold(0_usize, |acc, &x| acc.checked_add(x))
             .ok_or(ProofError::Generation)?;
-        if aggregate_bit_length != RANGE_PROOF_64_AGGREGATE_BIT_LENGTH {
+
+        // `u64::BITS` is 64, which fits in a single byte and should not overflow to `usize` for an
+        // overwhelming number of platforms. However, to be extra cautious, use `try_from` and
+        // `unwrap` here. A simple case `u64::BITS as usize` can silently overflow.
+        let expected_bit_length = usize::try_from(u64::BITS).unwrap();
+        if aggregate_bit_length != expected_bit_length {
             return Err(ProofError::Generation);
         }
 
