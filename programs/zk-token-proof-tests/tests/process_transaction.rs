@@ -370,6 +370,7 @@ async fn test_range_proof_u64() {
     .await;
 }
 
+#[tokio::test]
 async fn test_batched_range_proof_u64() {
     let amount_1 = 23_u64;
     let amount_2 = 24_u64;
