@@ -51,7 +51,7 @@ impl AuthenticatedEncryption {
         AeKey(OsRng.gen::<[u8; 16]>())
     }
 
-    /// On input an authenticated encryption key and an amount, the function returns a
+    /// On input of an authenticated encryption key and an amount, the function returns a
     /// corresponding authenticated encryption ciphertext.
     #[cfg(not(target_os = "solana"))]
     fn encrypt(key: &AeKey, balance: u64) -> AeCiphertext {
@@ -71,7 +71,7 @@ impl AuthenticatedEncryption {
         }
     }
 
-    /// On input an authenticated encryption key and a ciphertext, the function returns the
+    /// On input of an authenticated encryption key and a ciphertext, the function returns the
     /// originally encrypted amount.
     #[cfg(not(target_os = "solana"))]
     fn decrypt(key: &AeKey, ct: &AeCiphertext) -> Option<u64> {
