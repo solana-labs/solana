@@ -77,7 +77,13 @@ _ ci/order-crates-for-publishing.py
 
 nightly_clippy_allows=(--allow=clippy::redundant_clone)
 
-# run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
+# Use nightly clippy, as frozen-abi proc-macro generates a lot of code across
+# various crates in this whole monorepo (frozen-abi is enabled only under nightly
+# due to the use of unstable rust feature). Likewise, frozen-abi(-macro) crates'
+# unit tests are only compiled under nightly.
+# Similarly, nightly is desired to run clippy over all of bench files because
+# the bench itself isn't stabilized yet...
+#   ref: https://github.com/rust-lang/rust/issues/66287
 _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
   --deny=warnings \
   --deny=clippy::default_trait_access \
@@ -87,7 +93,7 @@ _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace -
 
 # temporarily run stable clippy as well to scan the codebase for
 # `redundant_clone`s, which is disabled as nightly clippy is buggy:
-#   https://github.com/rust-lang/rust-clippy/issues/10577
+#   https://github.com/solana-labs/solana/issues/31834
 #
 # can't use --all-targets:
 #   error[E0554]: `#![feature]` may not be used on the stable release channel
