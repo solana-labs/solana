@@ -338,7 +338,6 @@ async fn test_pubkey_validity() {
     .await;
 }
 
-<<<<<<< HEAD
 #[tokio::test]
 async fn test_range_proof_u64() {
     let amount = 123_u64;
@@ -520,8 +519,6 @@ async fn test_batched_range_proof_u256() {
     .await;
 }
 
-||||||| parent of 8d11d8a829 (update proof program processor for ciphertext-commitment equality proof)
-=======
 #[tokio::test]
 async fn test_ciphertext_commitment_equality() {
     let keypair = ElGamalKeypair::new_rand();
@@ -575,7 +572,6 @@ async fn test_ciphertext_commitment_equality() {
     .await;
 }
 
->>>>>>> 8d11d8a829 (update proof program processor for ciphertext-commitment equality proof)
 async fn test_verify_proof_without_context<T, U>(
     proof_instruction: ProofInstruction,
     success_proof_data: &T,
