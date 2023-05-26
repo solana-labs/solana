@@ -13,5 +13,7 @@ pub(crate) fn address_to_partition<H: Hasher + Clone>(
 ) -> usize {
     hasher.write(address.as_ref());
     let hash64 = hasher.finish();
-    ((partitions as u128) * (hash64 as u128) / ((u64::MAX as u128) + 1)) as usize
+    ((partitions as u128)
+        .saturating_mul(hash64 as u128)
+        .saturating_div((u64::MAX as u128).saturating_add(1))) as usize
 }
