@@ -110,7 +110,7 @@ mod test {
         let amount = std::u64::MAX;
         let (commitment, opening) = Pedersen::new(amount);
 
-        let proof_data = RangeProofU64Data::new(&comm, amount, &open).unwrap();
+        let proof_data = RangeProofU64Data::new(&commitment, amount, &opening).unwrap();
         assert!(proof_data.verify_proof().is_ok());
     }
 }

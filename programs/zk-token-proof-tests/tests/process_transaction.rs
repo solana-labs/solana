@@ -339,10 +339,10 @@ async fn test_range_proof_u64() {
     let amount = 123_u64;
     let (commitment, opening) = Pedersen::new(amount);
 
-    let success_proof_data = RangeProofU64Data::new(&comm, amount, &open).unwrap();
+    let success_proof_data = RangeProofU64Data::new(&commitment, amount, &opening).unwrap();
 
     let incorrect_amount = 124_u64;
-    let fail_proof_data = RangeProofU64Data::new(&comm, incorrect_amount, &open).unwrap();
+    let fail_proof_data = RangeProofU64Data::new(&commitment, incorrect_amount, &opening).unwrap();
 
     test_verify_proof_without_context(
         ProofInstruction::VerifyRangeProofU64,
