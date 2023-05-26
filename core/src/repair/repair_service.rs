@@ -11,7 +11,7 @@ use {
         cluster_slots_service::cluster_slots::ClusterSlots,
         repair::{
             ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
-            duplicate_repair_status::AncestorDuplicateSlotsToRepair,
+            duplicate_repair_status::AncestorDuplicateSlotToRepair,
             outstanding_requests::OutstandingRequests,
             repair_weight::RepairWeight,
             serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
@@ -52,8 +52,8 @@ use {
 const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
 const DEFER_REPAIR_THRESHOLD_TICKS: u64 = DEFER_REPAIR_THRESHOLD.as_millis() as u64 / MS_PER_TICK;
 
-pub type AncestorDuplicateSlotsSender = CrossbeamSender<AncestorDuplicateSlotsToRepair>;
-pub type AncestorDuplicateSlotsReceiver = CrossbeamReceiver<AncestorDuplicateSlotsToRepair>;
+pub type AncestorDuplicateSlotsSender = CrossbeamSender<AncestorDuplicateSlotToRepair>;
+pub type AncestorDuplicateSlotsReceiver = CrossbeamReceiver<AncestorDuplicateSlotToRepair>;
 pub type ConfirmedSlotsSender = CrossbeamSender<Vec<Slot>>;
 pub type ConfirmedSlotsReceiver = CrossbeamReceiver<Vec<Slot>>;
 pub type DumpedSlotsSender = CrossbeamSender<Vec<(Slot, Hash)>>;
@@ -822,7 +822,7 @@ impl RepairService {
             .repair_request_duplicate_compute_best_peer(slot, cluster_slots, repair_validators)
             .ok();
         let new_duplicate_slot_repair_status = DuplicateSlotRepairStatus {
-            correct_ancestors_to_repair: vec![(slot, Hash::default())],
+            correct_ancestor_to_repair: (slot, Hash::default()),
             repair_pubkey_and_addr,
             start_ts: timestamp(),
         };
@@ -1206,7 +1206,7 @@ mod test {
         let dead_slot = 9;
         let receive_socket = &UdpSocket::bind("0.0.0.0:0").unwrap();
         let duplicate_status = DuplicateSlotRepairStatus {
-            correct_ancestors_to_repair: vec![(dead_slot, Hash::default())],
+            correct_ancestor_to_repair: (dead_slot, Hash::default()),
             start_ts: std::u64::MAX,
             repair_pubkey_and_addr: None,
         };
@@ -1313,7 +1313,7 @@ mod test {
         // Not enough time has passed, should not update the
         // address
         let mut duplicate_status = DuplicateSlotRepairStatus {
-            correct_ancestors_to_repair: vec![(dead_slot, Hash::default())],
+            correct_ancestor_to_repair: (dead_slot, Hash::default()),
             start_ts: std::u64::MAX,
             repair_pubkey_and_addr: dummy_addr,
         };
@@ -1328,7 +1328,7 @@ mod test {
 
         // If the repair address is None, should try to update
         let mut duplicate_status = DuplicateSlotRepairStatus {
-            correct_ancestors_to_repair: vec![(dead_slot, Hash::default())],
+            correct_ancestor_to_repair: (dead_slot, Hash::default()),
             start_ts: std::u64::MAX,
             repair_pubkey_and_addr: None,
         };
@@ -1343,7 +1343,7 @@ mod test {
 
         // If sufficient time has passed, should try to update
         let mut duplicate_status = DuplicateSlotRepairStatus {
-            correct_ancestors_to_repair: vec![(dead_slot, Hash::default())],
+            correct_ancestor_to_repair: (dead_slot, Hash::default()),
             start_ts: timestamp() - MAX_DUPLICATE_WAIT_MS as u64,
             repair_pubkey_and_addr: dummy_addr,
         };

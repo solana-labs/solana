@@ -22,7 +22,7 @@ use {
         repair::{
             ancestor_hashes_service::AncestorHashesReplayUpdateSender,
             cluster_slot_state_verifier::*,
-            duplicate_repair_status::AncestorDuplicateSlotsToRepair,
+            duplicate_repair_status::AncestorDuplicateSlotToRepair,
             repair_service::{
                 AncestorDuplicateSlotsReceiver, DumpedSlotsSender, PopularPrunedForksReceiver,
             },
@@ -1416,46 +1416,42 @@ impl ReplayStage {
         purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
     ) {
         let root = bank_forks.read().unwrap().root();
-        for AncestorDuplicateSlotsToRepair {
-            slots_to_repair: maybe_repairable_duplicate_slots,
+        for AncestorDuplicateSlotToRepair {
+            slot_to_repair: (epoch_slots_frozen_slot, epoch_slots_frozen_hash),
             request_type,
         } in ancestor_duplicate_slots_receiver.try_iter()
         {
             warn!(
-                "{} ReplayStage notified of duplicate slots from ancestor hashes service but we observed as {}: {:?}",
-                pubkey, if request_type.is_pruned() {"pruned"} else {"dead"}, maybe_repairable_duplicate_slots,
+                "{} ReplayStage notified of duplicate slot from ancestor hashes service but we observed as {}: {:?}",
+                pubkey, if request_type.is_pruned() {"pruned"} else {"dead"}, (epoch_slots_frozen_slot, epoch_slots_frozen_hash),
             );
-            for (epoch_slots_frozen_slot, epoch_slots_frozen_hash) in
-                maybe_repairable_duplicate_slots.into_iter()
-            {
-                let epoch_slots_frozen_state = EpochSlotsFrozenState::new_from_state(
-                    epoch_slots_frozen_slot,
-                    epoch_slots_frozen_hash,
-                    gossip_duplicate_confirmed_slots,
-                    fork_choice,
-                    || progress.is_dead(epoch_slots_frozen_slot).unwrap_or(false),
-                    || {
-                        bank_forks
-                            .read()
-                            .unwrap()
-                            .get(epoch_slots_frozen_slot)
-                            .map(|b| b.hash())
-                    },
-                    request_type.is_pruned(),
-                );
-                check_slot_agrees_with_cluster(
-                    epoch_slots_frozen_slot,
-                    root,
-                    blockstore,
-                    duplicate_slots_tracker,
-                    epoch_slots_frozen_slots,
-                    fork_choice,
-                    duplicate_slots_to_repair,
-                    ancestor_hashes_replay_update_sender,
-                    purge_repair_slot_counter,
-                    SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
-                );
-            }
+            let epoch_slots_frozen_state = EpochSlotsFrozenState::new_from_state(
+                epoch_slots_frozen_slot,
+                epoch_slots_frozen_hash,
+                gossip_duplicate_confirmed_slots,
+                fork_choice,
+                || progress.is_dead(epoch_slots_frozen_slot).unwrap_or(false),
+                || {
+                    bank_forks
+                        .read()
+                        .unwrap()
+                        .get(epoch_slots_frozen_slot)
+                        .map(|b| b.hash())
+                },
+                request_type.is_pruned(),
+            );
+            check_slot_agrees_with_cluster(
+                epoch_slots_frozen_slot,
+                root,
+                blockstore,
+                duplicate_slots_tracker,
+                epoch_slots_frozen_slots,
+                fork_choice,
+                duplicate_slots_to_repair,
+                ancestor_hashes_replay_update_sender,
+                purge_repair_slot_counter,
+                SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
+            );
         }
     }
 

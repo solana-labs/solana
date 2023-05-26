@@ -16,10 +16,14 @@ use {
         validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot_archive,
+    solana_entry::entry::create_ticks,
     solana_gossip::{contact_info::LegacyContactInfo, gossip_service::discover_cluster},
     solana_ledger::{
-        ancestor_iterator::AncestorIterator, bank_forks_utils, blockstore::Blockstore,
-        blockstore_processor::ProcessOptions, leader_schedule::FixedSchedule,
+        ancestor_iterator::AncestorIterator,
+        bank_forks_utils,
+        blockstore::{entries_to_test_shreds, Blockstore},
+        blockstore_processor::ProcessOptions,
+        leader_schedule::FixedSchedule,
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_local_cluster::{
@@ -80,7 +84,6 @@ use {
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
-    trees::tr,
 };
 
 mod common;
@@ -4542,7 +4545,6 @@ fn test_duplicate_with_pruned_ancestor() {
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
         "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
         "4mx9yoFBeYasDKBGDWCTWGJdWuJCKbgqmuP8bN9umybCh5Jzngw7KQxe99Rf5uzfyzgba1i65rJW4Wqk7Ab5S8ye",
-        "3zsEPEDsjfEay7te9XqNjRTCE7vwuT6u4DHzBJC19yp7GS8BuNRMRjnpVrKCBzb3d44kxc4KPGSHkCmk6tEfswCg",
     ]
     .iter()
     .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
@@ -4568,7 +4570,6 @@ fn test_duplicate_with_pruned_ancestor() {
     });
 
     let mut validator_configs = make_identical_validator_configs(&default_config, num_nodes);
-    validator_configs[3].voting_disabled = true;
     // Don't let majority produce anything past the fork by tricking its leader schedule
     validator_configs[0].fixed_leader_schedule = Some(FixedSchedule {
         leader_schedule: Arc::new(create_custom_leader_schedule(
@@ -4704,7 +4705,10 @@ fn test_duplicate_with_pruned_ancestor() {
 
     let last_majority_vote =
         wait_for_last_vote_in_tower_to_land_in_ledger(&majority_ledger_path, &majority_pubkey);
-    info!("Creating duplicate block built off of pruned branch for our node. Last majority vote {last_majority_vote}, Last minority vote {last_minority_vote}");
+    info!(
+        "Creating duplicate block built off of pruned branch for our node.
+           Last majority vote {last_majority_vote}, Last minority vote {last_minority_vote}"
+    );
     {
         {
             // Copy majority fork
@@ -4723,14 +4727,21 @@ fn test_duplicate_with_pruned_ancestor() {
 
         // Change last block parent to chain off of (purged) minority fork
         info!("For our node, changing parent of {last_majority_vote} to {last_minority_vote}");
-        purge_slots_with_count(&our_blockstore, last_majority_vote, 1);
-        our_blockstore.add_tree(
-            tr(last_minority_vote) / tr(last_majority_vote),
-            false,
-            true,
-            64,
+        our_blockstore.clear_unconfirmed_slot(last_majority_vote);
+        let entries = create_ticks(
+            64 * (std::cmp::max(1, last_majority_vote - last_minority_vote)),
+            0,
             Hash::default(),
         );
+        let shreds = entries_to_test_shreds(
+            &entries,
+            last_majority_vote,
+            last_minority_vote,
+            true,
+            0,
+            true, // merkle_variant
+        );
+        our_blockstore.insert_shreds(shreds, None, false).unwrap();
 
         // Update the root to set minority fork back as pruned
         our_blockstore.set_last_root(fork_slot + fork_length);
