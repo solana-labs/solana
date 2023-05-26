@@ -77,7 +77,12 @@ _ ci/order-crates-for-publishing.py
 
 nightly_clippy_allows=(--allow=clippy::redundant_clone)
 
-# run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
+# use nightly clippy as frozen-abi proc-macro generates a lot of code across
+# various crates in this whole mono-repo. Likewise, frozen-abi(-macro) crates'
+# unit tests are only compiled under nightly.
+# similarly nightly is desired to run clippy over all of bench files because
+# the bench itself isn't stabilized yet...
+#   ref: https://github.com/rust-lang/rust/issues/66287
 _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy --workspace --all-targets --features dummy-for-ci-check -- \
   --deny=warnings \
   --deny=clippy::default_trait_access \
