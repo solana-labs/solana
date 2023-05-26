@@ -63,7 +63,13 @@ Solana.
 
 In fact, the mainnet-beta validators operated by the team are currently
 (Mar. 2021) run on GCE `n2-standard-32` (32 vCPUs, 128 GB memory) instances with
-2048 GB SSD for operational convenience.
+2048 GB SSD for operational convenience. If you prefer AWS then (based on tests ran by vendor 
+later on May 2023) `r6a.8xlarge` (32 vCPU, 256 GB memory) instances work well with 
+three EBS gp3 volumes for better perfromance:
+
+- Root: EBS gp3 100GB, 3K IOPS, 125 MB/s throughput;
+- Accounts volume: EBS gp3 1TB, 5K IOPS, 700 MB/s throughput; 
+- Data volume: EBS gp3 10K IOPS, 700 MB/s throughput).
 
 For other cloud platforms, select instance types with similar specs.
 
