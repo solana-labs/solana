@@ -90,19 +90,28 @@ impl AuthenticatedEncryption {
 #[derive(Debug, Zeroize)]
 pub struct AeKey([u8; 16]);
 impl AeKey {
-    /// Deterministically derives an authenticated encryption key from a Solana signer and a tag.
+    /// Deterministically derives an authenticated encryption key from a Solana signer and a public
+    /// seed.
     ///
     /// This function exists for applications where a user may not wish to maintain a Solana signer
     /// and an authenticated encryption key separately. Instead, a user can derive the ElGamal
     /// keypair on-the-fly whenever encrytion/decryption is needed.
-    pub fn new_from_signer(signer: &dyn Signer, tag: &[u8]) -> Result<Self, Box<dyn error::Error>> {
-        let seed = Self::seed_from_signer(signer, tag)?;
+    pub fn new_from_signer(
+        signer: &dyn Signer,
+        public_seed: &[u8],
+    ) -> Result<Self, Box<dyn error::Error>> {
+        let seed = Self::seed_from_signer(signer, public_seed)?;
         Self::from_seed(&seed)
     }
 
     /// Derive a seed from a Solana signer used to generate an authenticated encryption key.
-    pub fn seed_from_signer(signer: &dyn Signer, tag: &[u8]) -> Result<Vec<u8>, SignerError> {
-        let message = [b"AeKey", tag].concat();
+    ///
+    /// The seed is derived as the hash of the signature of a public seed.
+    pub fn seed_from_signer(
+        signer: &dyn Signer,
+        public_seed: &[u8],
+    ) -> Result<Vec<u8>, SignerError> {
+        let message = [b"AeKey", public_seed].concat();
         let signature = signer.try_sign_message(&message)?;
 
         // Some `Signer` implementations return the default signature, which is not suitable for

@@ -159,22 +159,25 @@ pub struct ElGamalKeypair {
 }
 
 impl ElGamalKeypair {
-    /// Deterministically derives an ElGamal keypair from a Solana signer and a tag.
+    /// Deterministically derives an ElGamal keypair from a Solana signer and a public seed..
     ///
     /// This function exists for applications where a user may not wish to maintain a Solana signer
     /// and an ElGamal keypair separately. Instead, a user can derive the ElGamal keypair
     /// on-the-fly whenever encryption/decryption is needed.
     ///
-    /// For the spl-token-2022 confidential extension, the ElGamal public key is
-    /// specified in a token account. A natural way to derive an ElGamal keypair is to define it
-    /// from the hash of a Solana keypair and a Solana address as the tag. However, for general
-    /// hardware wallets, the signing key is not exposed in the API. Therefore, this function uses
-    /// a signer to sign a pre-specified message with respect to a Solana address. The resulting
-    /// signature is then hashed to derive an ElGamal keypair.
+    /// For the spl-token-2022 confidential extension, the ElGamal public key is specified in a
+    /// token account. A natural way to derive an ElGamal keypair is to define it from the hash of
+    /// a Solana keypair and a Solana address as the public seed. However, for general hardware
+    /// wallets, the signing key is not exposed in the API. Therefore, this function uses a signer
+    /// to sign a public seed and the resulting signature is then hashed to derive an ElGamal
+    /// keypair.
     #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
-    pub fn new_from_signer(signer: &dyn Signer, tag: &[u8]) -> Result<Self, Box<dyn error::Error>> {
-        let secret = ElGamalSecretKey::new_from_signer(signer, tag)?;
+    pub fn new_from_signer(
+        signer: &dyn Signer,
+        public_seed: &[u8],
+    ) -> Result<Self, Box<dyn error::Error>> {
+        let secret = ElGamalSecretKey::new_from_signer(signer, public_seed)?;
         let public = ElGamalPubkey::new(&secret);
         Ok(ElGamalKeypair { public, secret })
     }
@@ -362,17 +365,25 @@ impl fmt::Display for ElGamalPubkey {
 #[zeroize(drop)]
 pub struct ElGamalSecretKey(Scalar);
 impl ElGamalSecretKey {
-    /// Deterministically derives an ElGamal secret key from a Solana signer and a tag.
+    /// Deterministically derives an ElGamal secret key from a Solana signer and a public seed.
     ///
     /// See `ElGamalKeypair::new_from_signer` for more context on the key derivation.
-    pub fn new_from_signer(signer: &dyn Signer, tag: &[u8]) -> Result<Self, Box<dyn error::Error>> {
-        let seed = Self::seed_from_signer(signer, tag)?;
+    pub fn new_from_signer(
+        signer: &dyn Signer,
+        public_seed: &[u8],
+    ) -> Result<Self, Box<dyn error::Error>> {
+        let seed = Self::seed_from_signer(signer, public_seed)?;
         Self::from_seed(&seed)
     }
 
     /// Derive a seed from a Solana signer used to generate an ElGamal secret key.
-    pub fn seed_from_signer(signer: &dyn Signer, tag: &[u8]) -> Result<Vec<u8>, SignerError> {
-        let message = [b"ElGamalSecretKey", tag].concat();
+    ///
+    /// The seed is derived as the hash of the signature of a public seed.
+    pub fn seed_from_signer(
+        signer: &dyn Signer,
+        public_seed: &[u8],
+    ) -> Result<Vec<u8>, SignerError> {
+        let message = [b"ElGamalSecretKey", public_seed].concat();
         let signature = signer.try_sign_message(&message)?;
 
         // Some `Signer` implementations return the default signature, which is not suitable for
