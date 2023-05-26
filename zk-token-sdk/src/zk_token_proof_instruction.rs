@@ -27,7 +27,10 @@ pub enum ProofInstruction {
 
     /// Verify a zero-balance proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<ZeroBalanceProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -45,7 +48,10 @@ pub enum ProofInstruction {
 
     /// Verify a withdraw zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<WithdrawProofContext>` and assigned to the ZkToken proof program prior
+    /// to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -63,7 +69,10 @@ pub enum ProofInstruction {
 
     /// Verify a ciphertext-ciphertext equality proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<CiphertextCiphertextEqualityProofContext>` and assigned to the ZkToken
+    /// proof program prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -81,7 +90,10 @@ pub enum ProofInstruction {
 
     /// Verify a transfer zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<TransferProofContext>` and assigned to the ZkToken proof program prior
+    /// to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -99,7 +111,10 @@ pub enum ProofInstruction {
 
     /// Verify a transfer with fee zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<TransferWithFeeProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -117,7 +132,10 @@ pub enum ProofInstruction {
 
     /// Verify a pubkey validity zero-knowledge proof.
     ///
-    /// This instruction can be configured to optionally create a proof context state account.
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<PubkeyValidityProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -156,6 +174,87 @@ pub enum ProofInstruction {
     ///   `RangeProofU64Data`
     ///
     VerifyRangeProofU64,
+
+    /// Verify a 64-bit batched range proof.
+    ///
+    /// A batched range proof is defined with respect to a sequence of Pedersen commitments `[C_1,
+    /// ..., C_N]` and bit-lengths `[n_1, ..., n_N]`. It certifies that each commitment `C_i` is a
+    /// commitment to a positive number of bit-length `n_i`. Batch verifying range proofs is more
+    /// efficient than verifying independent range proofs on commitments `C_1, ..., C_N`
+    /// separately.
+    ///
+    /// The bit-length of a batched range proof specifies the sum of the individual bit-lengths
+    /// `n_1, ..., n_N`. For example, this instruction can be used to certify that two commitments
+    /// `C_1` and `C_2` each hold positive 32-bit numbers.
+    ///
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<BatchedRangeProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `BatchedRangeProof64Data`
+    ///
+    VerifyBatchedRangeProofU64,
+
+    /// Verify 128-bit batched range proof.
+    ///
+    /// The bit-length of a batched range proof specifies the sum of the individual bit-lengths
+    /// `n_1, ..., n_N`. For example, this instruction can be used to certify that two commitments
+    /// `C_1` and `C_2` each hold positive 64-bit numbers.
+    ///
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<BatchedRangeProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `BatchedRangeProof128Data`
+    ///
+    VerifyBatchedRangeProofU128,
+
+    /// Verify 256-bit batched range proof.
+    ///
+    /// The bit-length of a batched range proof specifies the sum of the individual bit-lengths
+    /// `n_1, ..., n_N`. For example, this instruction can be used to certify that four commitments
+    /// `[C_1, C_2, C_3, C_4]` each hold positive 64-bit numbers.
+    ///
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<BatchedRangeProofContext>` and assigned to the ZkToken proof program
+    /// prior to the execution of this instruction.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `BatchedRangeProof256Data`
+    ///
+    VerifyBatchedRangeProofU256,
 }
 
 /// Pubkeys associated with a context state account to be used as parameters to functions.
@@ -240,6 +339,32 @@ pub fn verify_range_proof_u64(
     proof_data: &RangeProofU64Data,
 ) -> Instruction {
     ProofInstruction::VerifyRangeProofU64.encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyBatchedRangeProofU64` instruction.
+pub fn verify_batched_verify_range_proof_u64(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &BatchedRangeProofU64Data,
+) -> Instruction {
+    ProofInstruction::VerifyBatchedRangeProofU64.encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyBatchedRangeProofU128` instruction.
+pub fn verify_batched_verify_range_proof_u128(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &BatchedRangeProofU128Data,
+) -> Instruction {
+    ProofInstruction::VerifyBatchedRangeProofU128
+        .encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyBatchedRangeProofU256` instruction.
+pub fn verify_batched_verify_range_proof_u256(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &BatchedRangeProofU256Data,
+) -> Instruction {
+    ProofInstruction::VerifyBatchedRangeProofU256
+        .encode_verify_proof(context_state_info, proof_data)
 }
 
 impl ProofInstruction {
