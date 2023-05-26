@@ -10,12 +10,12 @@ pub struct CiphertextCommitmentEqualityProof(pub [u8; 192]);
 unsafe impl Zeroable for CiphertextCommitmentEqualityProof {}
 unsafe impl Pod for CiphertextCommitmentEqualityProof {}
 
-/// Serialization of `CtxtCtxtEqualityProof`
+/// Serialization of `CiphertextCiphertextEqualityProof`
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct CiphertextCiphertextEqualityProof(pub [u8; 224]);
 
-// `CtxtCtxtEqualityProof` is a Pod and Zeroable.
+// `CiphertextCiphertextEqualityProof` is a Pod and Zeroable.
 // Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
 unsafe impl Zeroable for CiphertextCiphertextEqualityProof {}
 unsafe impl Pod for CiphertextCiphertextEqualityProof {}
