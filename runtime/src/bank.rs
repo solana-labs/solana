@@ -2801,19 +2801,27 @@ impl Bank {
     ) -> Vec<StakeRewards> {
         let hasher = create_epoch_reward_hasher(parent_block_hash);
 
-        let mut result = vec![vec![]; num_partitions];
+        let partition_map: DashMap<usize, StakeRewards> = DashMap::with_capacity(num_partitions);
+        for i in 0..num_partitions {
+            partition_map.insert(i, vec![]);
+        }
 
         thread_pool.install(|| {
-            let partitions = stake_rewards
-                .par_iter()
-                .map(|reward| address_to_partition(hasher, num_partitions, &reward.stake_pubkey))
-                .collect::<Vec<_>>();
+            stake_rewards.par_iter().for_each(|reward| {
+                let partition_index =
+                    address_to_partition(hasher, num_partitions, &reward.stake_pubkey);
+                partition_map
+                    .get_mut(&partition_index)
+                    .unwrap()
+                    .push(reward.clone());
+            });
+        });
 
-            for (index, reward) in std::iter::zip(partitions, stake_rewards) {
-                result[index].push(reward.clone());
-            }
-            result
-        })
+        let mut result = vec![vec![]; num_partitions];
+        for i in 0..num_partitions {
+            result[i] = mem::take(&mut partition_map.get_mut(&i).unwrap());
+        }
+        result
     }
 
     /// Load, calculate and payout epoch rewards for stake and vote accounts
