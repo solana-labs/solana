@@ -74,9 +74,9 @@ impl AuthenticatedEncryption {
     /// On input of an authenticated encryption key and a ciphertext, the function returns the
     /// originally encrypted amount.
     #[cfg(not(target_os = "solana"))]
-    fn decrypt(key: &AeKey, ct: &AeCiphertext) -> Option<u64> {
-        let plaintext =
-            Aes128GcmSiv::new(&key.0.into()).decrypt(&ct.nonce.into(), ct.ciphertext.as_ref());
+    fn decrypt(key: &AeKey, ciphertext: &AeCiphertext) -> Option<u64> {
+        let plaintext = Aes128GcmSiv::new(&key.0.into())
+            .decrypt(&ciphertext.nonce.into(), ciphertext.ciphertext.as_ref());
 
         if let Ok(plaintext) = plaintext {
             let amount_bytes: [u8; 8] = plaintext.try_into().unwrap();
@@ -139,9 +139,8 @@ impl AeKey {
         AuthenticatedEncryption::encrypt(self, amount)
     }
 
-    /// Recovers an encrypted amount from an authenticated encryption ciphertext.
-    pub fn decrypt(&self, ct: &AeCiphertext) -> Option<u64> {
-        AuthenticatedEncryption::decrypt(self, ct)
+    pub fn decrypt(&self, ciphertext: &AeCiphertext) -> Option<u64> {
+        AuthenticatedEncryption::decrypt(self, ciphertext)
     }
 }
 
@@ -248,8 +247,8 @@ mod tests {
         let key = AeKey::new_rand();
         let amount = 55;
 
-        let ct = key.encrypt(amount);
-        let decrypted_amount = ct.decrypt(&key).unwrap();
+        let ciphertext = key.encrypt(amount);
+        let decrypted_amount = ciphertext.decrypt(&key).unwrap();
 
         assert_eq!(amount, decrypted_amount);
     }
