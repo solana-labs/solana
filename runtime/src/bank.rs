@@ -2808,9 +2808,7 @@ impl Bank {
         thread_pool.install(|| {
             let partitions = stake_rewards
                 .par_iter()
-                .map(|reward| {
-                    address_to_partition(hasher.clone(), num_partitions, &reward.stake_pubkey)
-                })
+                .map(|reward| address_to_partition(hasher, num_partitions, &reward.stake_pubkey))
                 .collect::<Vec<_>>();
 
             for (index, reward) in std::iter::zip(partitions, stake_rewards) {
