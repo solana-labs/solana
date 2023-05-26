@@ -1,4 +1,4 @@
-//! The 64-bit aggregate range proof instruction.
+//! The 256-bit batched range proof instruction.
 
 #[cfg(not(target_os = "solana"))]
 use {
@@ -11,32 +11,32 @@ use {
 };
 use {
     crate::{
-        instruction::{aggregate_range_proof::AggregateRangeProofContext, ProofType, ZkProofData},
+        instruction::{aggregate_range_proof::BatchedRangeProofContext, ProofType, ZkProofData},
         zk_token_elgamal::pod,
     },
     bytemuck::{Pod, Zeroable},
 };
 
 #[cfg(not(target_os = "solana"))]
-const RANGE_PROOF_256_AGGREGATE_BIT_LENGTH: usize = 256;
+const BATCHED_RANGE_PROOF_U256_BIT_LENGTH: usize = 256;
 
 /// The instruction data that is needed for the
-/// `ProofInstruction::VerifyAggregateRangeProof256` instruction.
+/// `ProofInstruction::BatchedRangeProofU256Data` instruction.
 ///
 /// It includes the cryptographic proof as well as the context data information needed to verify
 /// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub struct AggregateRangeProof256Data {
-    /// The context data for an aggregated range proof
-    pub context: AggregateRangeProofContext,
+pub struct BatchedRangeProofU256Data {
+    /// The context data for a batched range proof
+    pub context: BatchedRangeProofContext,
 
-    /// The aggregated range proof
+    /// The batched range proof
     pub proof: pod::RangeProof256,
 }
 
 #[cfg(not(target_os = "solana"))]
-impl AggregateRangeProof256Data {
+impl BatchedRangeProofU256Data {
     pub fn new(
         commitments: Vec<&PedersenCommitment>,
         amounts: Vec<u64>,
@@ -44,16 +44,16 @@ impl AggregateRangeProof256Data {
         openings: Vec<&PedersenOpening>,
     ) -> Result<Self, ProofError> {
         // the sum of the bit lengths must be 64
-        let aggregate_bit_length = bit_lengths
+        let batched_bit_length = bit_lengths
             .iter()
             .try_fold(0_usize, |acc, &x| acc.checked_add(x))
             .ok_or(ProofError::Generation)?;
-        if aggregate_bit_length != RANGE_PROOF_256_AGGREGATE_BIT_LENGTH {
+        if batched_bit_length != BATCHED_RANGE_PROOF_U256_BIT_LENGTH {
             return Err(ProofError::Generation);
         }
 
         let context =
-            AggregateRangeProofContext::new(&commitments, &amounts, &bit_lengths, &openings)?;
+            BatchedRangeProofContext::new(&commitments, &amounts, &bit_lengths, &openings)?;
 
         let mut transcript = context.new_transcript();
         let proof = RangeProof::new(amounts, bit_lengths, openings, &mut transcript).try_into()?;
@@ -62,10 +62,10 @@ impl AggregateRangeProof256Data {
     }
 }
 
-impl ZkProofData<AggregateRangeProofContext> for AggregateRangeProof256Data {
-    const PROOF_TYPE: ProofType = ProofType::AggregateRangeProof256;
+impl ZkProofData<BatchedRangeProofContext> for BatchedRangeProofU256Data {
+    const PROOF_TYPE: ProofType = ProofType::BatchedRangeProofU256;
 
-    fn context_data(&self) -> &AggregateRangeProofContext {
+    fn context_data(&self) -> &BatchedRangeProofContext {
         &self.context
     }
 
@@ -92,7 +92,7 @@ mod test {
     };
 
     #[test]
-    fn test_aggregate_range_proof_256_instruction_correctness() {
+    fn test_batched_range_proof_256_instruction_correctness() {
         let amount_1 = 4294967295_u64;
         let amount_2 = 77_u64;
         let amount_3 = 99_u64;
@@ -111,7 +111,7 @@ mod test {
         let (commitment_7, opening_7) = Pedersen::new(amount_7);
         let (commitment_8, opening_8) = Pedersen::new(amount_8);
 
-        let proof_data = AggregateRangeProof256Data::new(
+        let proof_data = BatchedRangeProofU256Data::new(
             vec![
                 &commitment_1,
                 &commitment_2,
@@ -153,7 +153,7 @@ mod test {
         let (commitment_7, opening_7) = Pedersen::new(amount_7);
         let (commitment_8, opening_8) = Pedersen::new(amount_8);
 
-        let proof_data = AggregateRangeProof256Data::new(
+        let proof_data = BatchedRangeProofU256Data::new(
             vec![
                 &commitment_1,
                 &commitment_2,

@@ -1,17 +1,17 @@
-//! The aggregate range proof instructions.
+//! The batched range proof instructions.
 //!
-//! An aggregated range proof is defined with respect to a sequence of commitments `[C_1, ...,
-//! C_N]` and bit-lengths `[n_1, ..., n_N]`. It certifies that each `C_i` is a commitment to a
-//! number of bit-length `n_i`.
+//! A batched range proof is defined with respect to a sequence of commitments `[C_1, ..., C_N]`
+//! and bit-lengths `[n_1, ..., n_N]`. It certifies that each `C_i` is a commitment to a number of
+//! bit-length `n_i`.
 //!
-//! There are three aggregate range proof instructions: `VerifyAggregateRangeProof64`,
-//! `VerifyAggregateRangeProof128`, and `VerifyAggregateRangeProof256`. The value `N` in
-//! `VerifyAggregateRangeProof{N}` specifies the sum of the bit-lengths that the proof is
-//! certifying for a sequence of commitments.
+//! There are three batched range proof instructions: `VerifyBatchedRangeProof64`,
+//! `VerifyBatchedRangeProof128`, and `VerifyBatchedRangeProof256`. The value `N` in
+//! `VerifyBatchedRangeProof{N}` specifies the sum of the bit-lengths that the proof is certifying
+//! for a sequence of commitments.
 //!
-//! For example to generate an aggregate range proof on a sequence of commitments `[C_1, C_2, C_3]`
-//! on a sequence of bit-lengths `[32, 32, 64]`, one must use `VerifyAggregateRangeProof128` as 128
-//! is the sum of all bit-lengths.
+//! For example to generate a batched range proof on a sequence of commitments `[C_1, C_2, C_3]` on
+//! a sequence of bit-lengths `[32, 32, 64]`, one must use `VerifyBatchedRangeProof128` as 128 is
+//! the sum of all bit-lengths.
 //!
 //! The maximum number of commitments is fixed at 8. Each bit-length in `[n_1, ..., n_N]` must be a
 //! power-of-two positive integer less than 256.
@@ -40,19 +40,19 @@ const MAX_COMMITMENTS: usize = 8;
 
 /// The context data needed to verify a range-proof for a Pedersen committed value.
 ///
-/// The context data is shared by all `VerifyAggregateRangeProof{N}` instructions.
+/// The context data is shared by all `VerifyBatchedRangeProof{N}` instructions.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub struct AggregateRangeProofContext {
+pub struct BatchedRangeProofContext {
     pub commitments: [pod::PedersenCommitment; MAX_COMMITMENTS],
     pub bit_lengths: [u8; MAX_COMMITMENTS],
 }
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
-impl AggregateRangeProofContext {
+impl BatchedRangeProofContext {
     fn new_transcript(&self) -> Transcript {
-        let mut transcript = Transcript::new(b"AggregateRangeProof");
+        let mut transcript = Transcript::new(b"BatchedRangeProof");
         transcript.append_message(b"commitments", bytes_of(&self.commitments));
         transcript.append_message(b"bit-legnths", bytes_of(&self.bit_lengths));
         transcript
@@ -90,7 +90,7 @@ impl AggregateRangeProofContext {
                 .map_err(|_| ProofError::Generation)?;
         }
 
-        Ok(AggregateRangeProofContext {
+        Ok(BatchedRangeProofContext {
             commitments: pod_commitments,
             bit_lengths: pod_bit_lengths,
         })
@@ -98,7 +98,7 @@ impl AggregateRangeProofContext {
 }
 
 #[cfg(not(target_os = "solana"))]
-impl TryInto<(Vec<PedersenCommitment>, Vec<usize>)> for AggregateRangeProofContext {
+impl TryInto<(Vec<PedersenCommitment>, Vec<usize>)> for BatchedRangeProofContext {
     type Error = ProofError;
 
     fn try_into(self) -> Result<(Vec<PedersenCommitment>, Vec<usize>), Self::Error> {

@@ -201,36 +201,36 @@ declare_process_instruction!(process_instruction, 0, |invoke_context| {
             ic_msg!(invoke_context, "VerifyRangeProof");
             process_verify_proof::<RangeProofU64Data, RangeProofContext>(invoke_context)
         }
-        ProofInstruction::VerifyAggregateRangeProof64 => {
+        ProofInstruction::VerifyBatchedRangeProofU64 => {
             if native_programs_consume_cu {
                 invoke_context
                     .consume_checked(111_478)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
-            ic_msg!(invoke_context, "VerifyAggregateRangeProof64");
-            process_verify_proof::<AggregateRangeProof64Data, AggregateRangeProofContext>(
+            ic_msg!(invoke_context, "VerifyBatchedRangeProof64");
+            process_verify_proof::<BatchedRangeProofU64Data, BatchedRangeProofContext>(
                 invoke_context,
             )
         }
-        ProofInstruction::VerifyAggregateRangeProof128 => {
+        ProofInstruction::VerifyBatchedRangeProofU128 => {
             if native_programs_consume_cu {
                 invoke_context
                     .consume_checked(204_512)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
-            ic_msg!(invoke_context, "VerifyAggregateRangeProof128");
-            process_verify_proof::<AggregateRangeProof128Data, AggregateRangeProofContext>(
+            ic_msg!(invoke_context, "VerifyBatchedRangeProof128");
+            process_verify_proof::<BatchedRangeProofU128Data, BatchedRangeProofContext>(
                 invoke_context,
             )
         }
-        ProofInstruction::VerifyAggregateRangeProof256 => {
+        ProofInstruction::VerifyBatchedRangeProofU256 => {
             if native_programs_consume_cu {
                 invoke_context
                     .consume_checked(368_000)
                     .map_err(|_| InstructionError::ComputationalBudgetExceeded)?;
             }
-            ic_msg!(invoke_context, "VerifyAggregateRangeProof256");
-            process_verify_proof::<AggregateRangeProof256Data, AggregateRangeProofContext>(
+            ic_msg!(invoke_context, "VerifyBatchedRangeProof256");
+            process_verify_proof::<BatchedRangeProofU256Data, BatchedRangeProofContext>(
                 invoke_context,
             )
         }

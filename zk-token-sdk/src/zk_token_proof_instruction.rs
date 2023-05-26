@@ -175,7 +175,7 @@ pub enum ProofInstruction {
     ///
     VerifyRangeProofU64,
 
-    /// Verify a batched 64-bit range proof.
+    /// Verify a 64-bit batched range proof.
     ///
     /// A batched range proof is defined with respect to a sequence of Pedersen commitments `[C_1,
     /// ..., C_N]` and bit-lengths `[n_1, ..., n_N]`. It certifies that each commitment `C_i` is a
@@ -189,7 +189,7 @@ pub enum ProofInstruction {
     ///
     /// This instruction can be configured to optionally initialize a proof context state account.
     /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<AggregateRangeProofContext>` and assigned to the ZkToken proof program
+    /// `ProofContextState<BatchedRangeProofContext>` and assigned to the ZkToken proof program
     /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
@@ -202,11 +202,11 @@ pub enum ProofInstruction {
     ///   None
     ///
     /// Data expected by this instruction:
-    ///   `AggregateRangeProof64Data`
+    ///   `BatchedRangeProof64Data`
     ///
-    VerifyAggregateRangeProof64,
+    VerifyBatchedRangeProofU64,
 
-    /// Verify an aggregate 128-bit range proof.
+    /// Verify 128-bit batched range proof.
     ///
     /// The bit-length of a batched range proof specifies the sum of the individual bit-lengths
     /// `n_1, ..., n_N`. For example, this instruction can be used to certify that two commitments
@@ -214,7 +214,7 @@ pub enum ProofInstruction {
     ///
     /// This instruction can be configured to optionally initialize a proof context state account.
     /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<AggregateRangeProofContext>` and assigned to the ZkToken proof program
+    /// `ProofContextState<BatchedRangeProofContext>` and assigned to the ZkToken proof program
     /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
@@ -227,11 +227,11 @@ pub enum ProofInstruction {
     ///   None
     ///
     /// Data expected by this instruction:
-    ///   `AggregateRangeProof128Data`
+    ///   `BatchedRangeProof128Data`
     ///
-    VerifyAggregateRangeProof128,
+    VerifyBatchedRangeProofU128,
 
-    /// Verify an aggregate 256-bit range proof.
+    /// Verify 256-bit batched range proof.
     ///
     /// The bit-length of a batched range proof specifies the sum of the individual bit-lengths
     /// `n_1, ..., n_N`. For example, this instruction can be used to certify that four commitments
@@ -239,7 +239,7 @@ pub enum ProofInstruction {
     ///
     /// This instruction can be configured to optionally initialize a proof context state account.
     /// If creating a context state account, an account must be pre-allocated to the exact size of
-    /// `ProofContextState<AggregateRangeProofContext>` and assigned to the ZkToken proof program
+    /// `ProofContextState<BatchedRangeProofContext>` and assigned to the ZkToken proof program
     /// prior to the execution of this instruction.
     ///
     /// Accounts expected by this instruction:
@@ -252,9 +252,9 @@ pub enum ProofInstruction {
     ///   None
     ///
     /// Data expected by this instruction:
-    ///   `AggregateRangeProof256Data`
+    ///   `BatchedRangeProof256Data`
     ///
-    VerifyAggregateRangeProof256,
+    VerifyBatchedRangeProofU256,
 }
 
 /// Pubkeys associated with a context state account to be used as parameters to functions.
@@ -341,30 +341,29 @@ pub fn verify_range_proof_u64(
     ProofInstruction::VerifyRangeProofU64.encode_verify_proof(context_state_info, proof_data)
 }
 
-/// Create a `VerifyAggregateRangeProof64` instruction.
-pub fn verify_aggregate_verify_range_proof_64(
+/// Create a `VerifyBatchedRangeProofU64` instruction.
+pub fn verify_batched_verify_range_proof_u64(
     context_state_info: Option<ContextStateInfo>,
-    proof_data: &AggregateRangeProof64Data,
+    proof_data: &BatchedRangeProofU64Data,
 ) -> Instruction {
-    ProofInstruction::VerifyAggregateRangeProof64
+    ProofInstruction::VerifyBatchedRangeProofU64.encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyBatchedRangeProofU128` instruction.
+pub fn verify_batched_verify_range_proof_u128(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &BatchedRangeProofU128Data,
+) -> Instruction {
+    ProofInstruction::VerifyBatchedRangeProofU128
         .encode_verify_proof(context_state_info, proof_data)
 }
 
-/// Create a `VerifyAggregateRangeProof128` instruction.
-pub fn verify_aggregate_verify_range_proof_128(
+/// Create a `VerifyBatchedRangeProofU256` instruction.
+pub fn verify_batched_verify_range_proof_u256(
     context_state_info: Option<ContextStateInfo>,
-    proof_data: &AggregateRangeProof128Data,
+    proof_data: &BatchedRangeProofU256Data,
 ) -> Instruction {
-    ProofInstruction::VerifyAggregateRangeProof128
-        .encode_verify_proof(context_state_info, proof_data)
-}
-
-/// Create a `VerifyAggregateRangeProof256` instruction.
-pub fn verify_aggregate_verify_range_proof_256(
-    context_state_info: Option<ContextStateInfo>,
-    proof_data: &AggregateRangeProof256Data,
-) -> Instruction {
-    ProofInstruction::VerifyAggregateRangeProof256
+    ProofInstruction::VerifyBatchedRangeProofU256
         .encode_verify_proof(context_state_info, proof_data)
 }
 

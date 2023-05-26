@@ -21,9 +21,9 @@ use {
 };
 pub use {
     aggregate_range_proof::{
-        aggregate_range_proof_128::AggregateRangeProof128Data,
-        aggregate_range_proof_256::AggregateRangeProof256Data,
-        aggregate_range_proof_64::AggregateRangeProof64Data, AggregateRangeProofContext,
+        aggregate_range_proof_128::BatchedRangeProofU128Data,
+        aggregate_range_proof_256::BatchedRangeProofU256Data,
+        aggregate_range_proof_64::BatchedRangeProofU64Data, BatchedRangeProofContext,
     },
     bytemuck::Pod,
     ctxt_ctxt_equality::{
@@ -49,9 +49,9 @@ pub enum ProofType {
     TransferWithFee,
     PubkeyValidity,
     RangeProofU64,
-    AggregateRangeProof64,
-    AggregateRangeProof128,
-    AggregateRangeProof256,
+    BatchedRangeProofU64,
+    BatchedRangeProofU128,
+    BatchedRangeProofU256,
 }
 
 pub trait ZkProofData<T: Pod> {

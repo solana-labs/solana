@@ -1,4 +1,4 @@
-//! The 128-bit aggregate range proof instruction.
+//! The 128-bit batched range proof instruction.
 
 #[cfg(not(target_os = "solana"))]
 use {
@@ -11,29 +11,29 @@ use {
 };
 use {
     crate::{
-        instruction::{aggregate_range_proof::AggregateRangeProofContext, ProofType, ZkProofData},
+        instruction::{aggregate_range_proof::BatchedRangeProofContext, ProofType, ZkProofData},
         zk_token_elgamal::pod,
     },
     bytemuck::{Pod, Zeroable},
 };
 
 /// The instruction data that is needed for the
-/// `ProofInstruction::VerifyAggregateRangeProof128` instruction.
+/// `ProofInstruction::VerifyBatchedRangeProof128` instruction.
 ///
 /// It includes the cryptographic proof as well as the context data information needed to verify
 /// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub struct AggregateRangeProof128Data {
-    /// The context data for an aggregated range proof
-    pub context: AggregateRangeProofContext,
+pub struct BatchedRangeProofU128Data {
+    /// The context data for a batched range proof
+    pub context: BatchedRangeProofContext,
 
-    /// The aggregated range proof
+    /// The batched range proof
     pub proof: pod::RangeProof128,
 }
 
 #[cfg(not(target_os = "solana"))]
-impl AggregateRangeProof128Data {
+impl BatchedRangeProofU128Data {
     pub fn new(
         commitments: Vec<&PedersenCommitment>,
         amounts: Vec<u64>,
@@ -41,7 +41,7 @@ impl AggregateRangeProof128Data {
         openings: Vec<&PedersenOpening>,
     ) -> Result<Self, ProofError> {
         // the sum of the bit lengths must be 64
-        let aggregate_bit_length = bit_lengths
+        let batched_bit_length = bit_lengths
             .iter()
             .try_fold(0_usize, |acc, &x| acc.checked_add(x))
             .ok_or(ProofError::Generation)?;
@@ -50,12 +50,12 @@ impl AggregateRangeProof128Data {
         // an overwhelming number of platforms. However, to be extra cautious, use `try_from` and
         // `unwrap` here. A simple case `u128::BITS as usize` can silently overflow.
         let expected_bit_length = usize::try_from(u128::BITS).unwrap();
-        if aggregate_bit_length != expected_bit_length {
+        if batched_bit_length != expected_bit_length {
             return Err(ProofError::Generation);
         }
 
         let context =
-            AggregateRangeProofContext::new(&commitments, &amounts, &bit_lengths, &openings)?;
+            BatchedRangeProofContext::new(&commitments, &amounts, &bit_lengths, &openings)?;
 
         let mut transcript = context.new_transcript();
         let proof = RangeProof::new(amounts, bit_lengths, openings, &mut transcript).try_into()?;
@@ -64,10 +64,10 @@ impl AggregateRangeProof128Data {
     }
 }
 
-impl ZkProofData<AggregateRangeProofContext> for AggregateRangeProof128Data {
-    const PROOF_TYPE: ProofType = ProofType::AggregateRangeProof128;
+impl ZkProofData<BatchedRangeProofContext> for BatchedRangeProofU128Data {
+    const PROOF_TYPE: ProofType = ProofType::BatchedRangeProofU128;
 
-    fn context_data(&self) -> &AggregateRangeProofContext {
+    fn context_data(&self) -> &BatchedRangeProofContext {
         &self.context
     }
 
@@ -94,7 +94,7 @@ mod test {
     };
 
     #[test]
-    fn test_aggregate_range_proof_128_instruction_correctness() {
+    fn test_batched_range_proof_u128_instruction_correctness() {
         let amount_1 = 65535_u64;
         let amount_2 = 77_u64;
         let amount_3 = 99_u64;
@@ -113,7 +113,7 @@ mod test {
         let (commitment_7, opening_7) = Pedersen::new(amount_7);
         let (commitment_8, opening_8) = Pedersen::new(amount_8);
 
-        let proof_data = AggregateRangeProof128Data::new(
+        let proof_data = BatchedRangeProofU128Data::new(
             vec![
                 &commitment_1,
                 &commitment_2,
@@ -155,7 +155,7 @@ mod test {
         let (commitment_7, opening_7) = Pedersen::new(amount_7);
         let (commitment_8, opening_8) = Pedersen::new(amount_8);
 
-        let proof_data = AggregateRangeProof128Data::new(
+        let proof_data = BatchedRangeProofU128Data::new(
             vec![
                 &commitment_1,
                 &commitment_2,
