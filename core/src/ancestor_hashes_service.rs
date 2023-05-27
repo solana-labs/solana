@@ -377,7 +377,6 @@ impl AncestorHashesService {
         ancestor_socket: &UdpSocket,
         ancestore_connection_cache: &Option<Arc<ConnectionCache>>,
     ) -> Option<AncestorRequestDecision> {
-        info!("zzzzzz verify_and_process_ancestor_response {packet:?}");
         let from_addr = packet.meta().socket_addr();
         let packet_data = match packet.data(..) {
             Some(data) => data,
@@ -394,7 +393,6 @@ impl AncestorHashesService {
                 return None;
             }
         };
-        info!("zzzzzz verify_and_process_ancestor_response {response:?}");
 
         match response {
             AncestorHashesResponse::Hashes(ref hashes) => {
@@ -403,7 +401,6 @@ impl AncestorHashesService {
                     Ok(nonce) => nonce,
                     Err(_) => {
                         stats.invalid_packets += 1;
-                        info!("zzzzzz verify_and_process_ancestor_response 1");
                         return None;
                     }
                 };
@@ -411,7 +408,6 @@ impl AncestorHashesService {
                 // verify that packet does not contain extraneous data
                 if cursor.bytes().next().is_some() {
                     stats.invalid_packets += 1;
-                    info!("zzzzzz verify_and_process_ancestor_response 2");
                     return None;
                 }
 
@@ -426,7 +422,6 @@ impl AncestorHashesService {
 
                 if request_slot.is_none() {
                     stats.invalid_packets += 1;
-                    info!("zzzzzz verify_and_process_ancestor_response 3");
                     return None;
                 }
 
@@ -454,14 +449,12 @@ impl AncestorHashesService {
                         // In which case we wouldn't want to delete the newly inserted entry here.
                         ancestor_hashes_status_ref.remove();
                     }
-                    info!("zzzzzz verify_and_process_ancestor_response {decision:?}");
                     decision.map(|decision| AncestorRequestDecision {
                         slot: request_slot,
                         decision,
                         request_type,
                     })
                 } else {
-                    info!("zzzzzz verify_and_process_ancestor_response 4");
                     None
                 }
             }
@@ -482,7 +475,6 @@ impl AncestorHashesService {
                         if let Some(connection_cache) = ancestore_connection_cache {
                             let connection = connection_cache.get_connection(&from_addr);
                             let _ignore = connection.send_data(&pong_bytes[..]);
-                            info!("zzzzzzzzzz send result: {_ignore:?} {from_addr:?}")
                         } else {
                             let _ignore = ancestor_socket.send_to(&pong_bytes[..], from_addr);
                         }
@@ -1772,7 +1764,6 @@ mod test {
             )
         );
 
-        info!("zzzzzzz shutdown");
         // Should have removed the ancestor status on successful
         // completion
         assert!(ancestor_hashes_request_statuses.is_empty());
