@@ -377,6 +377,7 @@ impl AncestorHashesService {
         ancestor_socket: &UdpSocket,
         ancestore_connection_cache: &Option<Arc<ConnectionCache>>,
     ) -> Option<AncestorRequestDecision> {
+        info!("zzzzzz verify_and_process_ancestor_response {packet:?}");
         let from_addr = packet.meta().socket_addr();
         let packet_data = match packet.data(..) {
             Some(data) => data,
@@ -393,6 +394,7 @@ impl AncestorHashesService {
                 return None;
             }
         };
+        info!("zzzzzz verify_and_process_ancestor_response {response:?}");
 
         match response {
             AncestorHashesResponse::Hashes(ref hashes) => {
@@ -401,6 +403,7 @@ impl AncestorHashesService {
                     Ok(nonce) => nonce,
                     Err(_) => {
                         stats.invalid_packets += 1;
+                        info!("zzzzzz verify_and_process_ancestor_response 1");
                         return None;
                     }
                 };
@@ -408,6 +411,7 @@ impl AncestorHashesService {
                 // verify that packet does not contain extraneous data
                 if cursor.bytes().next().is_some() {
                     stats.invalid_packets += 1;
+                    info!("zzzzzz verify_and_process_ancestor_response 2");
                     return None;
                 }
 
@@ -422,6 +426,7 @@ impl AncestorHashesService {
 
                 if request_slot.is_none() {
                     stats.invalid_packets += 1;
+                    info!("zzzzzz verify_and_process_ancestor_response 3");
                     return None;
                 }
 
@@ -449,12 +454,14 @@ impl AncestorHashesService {
                         // In which case we wouldn't want to delete the newly inserted entry here.
                         ancestor_hashes_status_ref.remove();
                     }
+                    info!("zzzzzz verify_and_process_ancestor_response {decision:?}");
                     decision.map(|decision| AncestorRequestDecision {
                         slot: request_slot,
                         decision,
                         request_type,
                     })
                 } else {
+                    info!("zzzzzz verify_and_process_ancestor_response 4");
                     None
                 }
             }
@@ -475,6 +482,7 @@ impl AncestorHashesService {
                         if let Some(connection_cache) = ancestore_connection_cache {
                             let connection = connection_cache.get_connection(&from_addr);
                             let _ignore = connection.send_data(&pong_bytes[..]);
+                            info!("zzzzzzzzzz send result: {_ignore:?} {from_addr:?}")
                         } else {
                             let _ignore = ancestor_socket.send_to(&pong_bytes[..], from_addr);
                         }
@@ -965,6 +973,7 @@ mod test {
                 ReplayStage,
             },
             serve_repair::MAX_ANCESTOR_RESPONSES,
+            validator::DEFAULT_REPAIR_USE_QUIC,
             vote_simulator::VoteSimulator,
         },
         solana_gossip::{
@@ -977,7 +986,10 @@ mod test {
             hash::Hash,
             signature::{Keypair, Signer},
         },
-        solana_streamer::socket::SocketAddrSpace,
+        solana_streamer::{
+            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT, quic::MAX_STAKED_CONNECTIONS,
+            socket::SocketAddrSpace, streamer::StakedNodes,
+        },
         std::collections::HashMap,
         trees::tr,
     };
@@ -1289,6 +1301,7 @@ mod test {
         responder_info: ContactInfo,
         response_receiver: PacketBatchReceiver,
         correct_bank_hashes: HashMap<Slot, Hash>,
+        connection_cache: Option<Arc<ConnectionCache>>,
     }
 
     impl ResponderThreads {
@@ -1305,7 +1318,7 @@ mod test {
             let responder_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
             let cluster_info = ClusterInfo::new(
                 responder_node.info.clone(),
-                Arc::new(keypair),
+                Arc::new(keypair.insecure_clone()),
                 SocketAddrSpace::Unspecified,
             );
             let responder_serve_repair = ServeRepair::new(
@@ -1338,18 +1351,58 @@ mod test {
             }
 
             // Set up response threads
-            let t_request_receiver = streamer::receiver(
-                Arc::new(responder_node.sockets.serve_repair),
-                exit.clone(),
-                requests_sender,
-                Recycler::default(),
-                Arc::new(StreamerReceiveStats::new(
-                    "ancestor_hashes_response_receiver",
-                )),
-                Duration::from_millis(1), // coalesce
-                false,
-                None,
-            );
+            let (t_request_receiver, connection_cache) = if !DEFAULT_REPAIR_USE_QUIC {
+                (
+                    streamer::receiver(
+                        Arc::new(responder_node.sockets.serve_repair),
+                        exit.clone(),
+                        requests_sender,
+                        Recycler::default(),
+                        Arc::new(StreamerReceiveStats::new(
+                            "ancestor_hashes_response_receiver",
+                        )),
+                        Duration::from_millis(1), // coalesce
+                        false,
+                        None,
+                    ),
+                    None,
+                )
+            } else {
+                // Repair server using quic
+                let host = responder_node
+                    .sockets
+                    .serve_repair_quic
+                    .local_addr()
+                    .unwrap()
+                    .ip();
+                let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+
+                let (serve_repair_endpoint, repair_quic_t) = spawn_server(
+                    "serve_repair",
+                    responder_node.sockets.serve_repair_quic,
+                    &keypair,
+                    host,
+                    requests_sender,
+                    exit.clone(),
+                    MAX_QUIC_CONNECTIONS_PER_PEER,
+                    staked_nodes.clone(),
+                    MAX_STAKED_CONNECTIONS,
+                    MAX_UNSTAKED_CONNECTIONS,
+                    DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
+                    Duration::from_millis(5),
+                )
+                .unwrap();
+                // The connection cache used to send to repair responses back to the client.
+                let connection_cache = Arc::new(ConnectionCache::new_with_client_options(
+                    "repair_response_connection_cache_quic",
+                    1,
+                    Some(serve_repair_endpoint),
+                    Some((&keypair, host)),
+                    Some((&staked_nodes, &keypair.pubkey())),
+                ));
+                (repair_quic_t, Some(connection_cache))
+            };
+
             let t_listen = responder_serve_repair.listen(
                 blockstore,
                 requests_receiver,
@@ -1364,6 +1417,7 @@ mod test {
                 responder_info: responder_node.info,
                 response_receiver,
                 correct_bank_hashes,
+                connection_cache,
             }
         }
     }
@@ -1484,6 +1538,7 @@ mod test {
         requester_cluster_info: &ClusterInfo,
         responder_info: &ContactInfo,
         ancestor_hashes_request_socket: &UdpSocket,
+        connection_cache: &Option<Arc<ConnectionCache>>,
         dead_slot: Slot,
         nonce: Nonce,
     ) {
@@ -1494,13 +1549,24 @@ mod test {
             nonce,
         );
         if let Ok(request_bytes) = request_bytes {
-            let socket = responder_info.serve_repair(Protocol::UDP).unwrap();
-            let _ = ancestor_hashes_request_socket.send_to(&request_bytes, socket);
+            let protocol = if connection_cache.is_some() {
+                Protocol::QUIC
+            } else {
+                Protocol::UDP
+            };
+            let socket = responder_info.serve_repair(protocol).unwrap();
+            if let Some(connection_cache) = connection_cache {
+                let connection = connection_cache.get_connection(&socket);
+                let _ = connection.send_data(&request_bytes);
+            } else {
+                let _ = ancestor_hashes_request_socket.send_to(&request_bytes, socket);
+            }
         }
     }
 
     #[test]
     fn test_ancestor_hashes_service_initiate_ancestor_hashes_requests_for_duplicate_slot() {
+        solana_logger::setup();
         let dead_slot = MAX_ANCESTOR_RESPONSES as Slot;
         let responder_threads = ResponderThreads::new(dead_slot);
 
@@ -1508,6 +1574,7 @@ mod test {
             ref responder_info,
             ref response_receiver,
             ref correct_bank_hashes,
+            ref connection_cache,
             ..
         } = responder_threads;
 
@@ -1555,6 +1622,7 @@ mod test {
             &requester_cluster_info,
             responder_info,
             &ancestor_hashes_request_socket,
+            connection_cache,
             dead_slot,
             /*nonce*/ 123,
         );
@@ -1563,9 +1631,14 @@ mod test {
             .recv_timeout(Duration::from_millis(10_000))
             .unwrap();
         let packet = &mut response_packet[0];
+        let protocol = if connection_cache.is_some() {
+            Protocol::QUIC
+        } else {
+            Protocol::UDP
+        };
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair(Protocol::UDP).unwrap());
+            .set_socket_addr(&responder_info.serve_repair(protocol).unwrap());
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,
@@ -1574,7 +1647,7 @@ mod test {
             &requester_blockstore,
             &requester_cluster_info.keypair(),
             &ancestor_hashes_request_socket,
-            &None,
+            connection_cache,
         );
         // should have processed a ping packet
         assert_eq!(decision, None);
@@ -1587,7 +1660,7 @@ mod test {
         AncestorHashesService::initiate_ancestor_hashes_requests_for_duplicate_slot(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &None,
+            &connection_cache,
             &cluster_slots,
             &requester_serve_repair,
             &repair_validators,
@@ -1608,7 +1681,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair(Protocol::UDP).unwrap());
+            .set_socket_addr(&responder_info.serve_repair(protocol).unwrap());
         let AncestorRequestDecision {
             slot,
             request_type,
@@ -1621,7 +1694,7 @@ mod test {
             &requester_blockstore,
             &requester_cluster_info.keypair(),
             &ancestor_hashes_request_socket,
-            &None,
+            &connection_cache,
         )
         .unwrap();
 
@@ -1649,7 +1722,7 @@ mod test {
         AncestorHashesService::initiate_ancestor_hashes_requests_for_duplicate_slot(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &None,
+            &connection_cache,
             &cluster_slots,
             &requester_serve_repair,
             &repair_validators,
@@ -1670,7 +1743,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair(Protocol::UDP).unwrap());
+            .set_socket_addr(&responder_info.serve_repair(protocol).unwrap());
         let AncestorRequestDecision {
             slot,
             request_type,
@@ -1696,6 +1769,7 @@ mod test {
             )
         );
 
+        info!("zzzzzzz shutdown");
         // Should have removed the ancestor status on successful
         // completion
         assert!(ancestor_hashes_request_statuses.is_empty());
@@ -1986,6 +2060,7 @@ mod test {
             ref responder_info,
             ref response_receiver,
             ref correct_bank_hashes,
+            ref connection_cache,
             ..
         } = responder_threads;
 
@@ -2037,6 +2112,7 @@ mod test {
             requester_cluster_info,
             responder_info,
             &ancestor_hashes_request_socket,
+            connection_cache,
             dead_slot,
             /*nonce*/ 123,
         );

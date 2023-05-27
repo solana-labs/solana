@@ -1,3 +1,4 @@
+/// ServeRepairService is responsible for serving repair requests via Quic protocol
 use {
     crate::{serve_repair::ServeRepair, tpu::MAX_QUIC_CONNECTIONS_PER_PEER, tvu::RepairQuicConfig},
     crossbeam_channel::{unbounded, Sender},
