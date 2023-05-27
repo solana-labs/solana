@@ -1114,6 +1114,12 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                         index: account_index as u32,
                     })
                 }
+                TransactionError::ProgramExecutionTemporarilyRestricted { account_index } => {
+                    Some(tx_by_addr::TransactionDetails {
+                        index: account_index as u32,
+                    })
+                }
+
                 _ => None,
             },
         }
