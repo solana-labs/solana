@@ -1814,7 +1814,8 @@ mod test {
         for error in all::<tx_by_addr::TransactionErrorType>() {
             match error {
                 tx_by_addr::TransactionErrorType::DuplicateInstruction
-                | tx_by_addr::TransactionErrorType::InsufficientFundsForRent => {
+                | tx_by_addr::TransactionErrorType::InsufficientFundsForRent
+                | tx_by_addr::TransactionErrorType::ProgramExecutionTemporarilyRestricted => {
                     let tx_by_addr_error = tx_by_addr::TransactionError {
                         transaction_error: error as i32,
                         instruction_error: None,
