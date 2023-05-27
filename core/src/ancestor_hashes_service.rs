@@ -2124,9 +2124,14 @@ mod test {
             .recv_timeout(Duration::from_millis(10_000))
             .unwrap();
         let packet = &mut response_packet[0];
+        let protocol = if connection_cache.is_some() {
+            Protocol::QUIC
+        } else {
+            Protocol::UDP
+        };
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair(Protocol::UDP).unwrap());
+            .set_socket_addr(&responder_info.serve_repair(protocol).unwrap());
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,
@@ -2135,7 +2140,7 @@ mod test {
             &requester_blockstore,
             &requester_cluster_info.keypair(),
             &ancestor_hashes_request_socket,
-            &None,
+            &connection_cache,
         );
         // Should have processed a ping packet
         assert_eq!(decision, None);
@@ -2168,7 +2173,7 @@ mod test {
         AncestorHashesService::manage_ancestor_requests(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &None,
+            &connection_cache,
             &repair_info,
             &outstanding_requests,
             &ancestor_hashes_replay_update_receiver,
@@ -2191,7 +2196,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair(Protocol::UDP).unwrap());
+            .set_socket_addr(&responder_info.serve_repair(protocol).unwrap());
         let AncestorRequestDecision {
             slot,
             request_type,
@@ -2204,7 +2209,7 @@ mod test {
             &requester_blockstore,
             &requester_cluster_info.keypair(),
             &ancestor_hashes_request_socket,
-            &None,
+            &connection_cache,
         )
         .unwrap();
 
