@@ -36,9 +36,8 @@ use {
 pub enum AuthenticatedEncryptionError {
     #[error("key derivation method not supported")]
     DerivationMethodNotSupported,
-
-    #[error("pubkey does not exist")]
-    PubkeyDoesNotExist,
+    #[error("seed length too short for derivation")]
+    SeedLengthTooShort,
 }
 
 struct AuthenticatedEncryption;
@@ -163,7 +162,7 @@ impl SeedDerivable for AeKey {
         const MINIMUM_SEED_LEN: usize = 16;
 
         if seed.len() < MINIMUM_SEED_LEN {
-            return Err("Seed is too short".into());
+            return Err(AuthenticatedEncryptionError::SeedLengthTooShort.into());
         }
 
         let mut hasher = Sha3_512::new();
