@@ -52,11 +52,7 @@ mod target_arch {
         super::pod,
         crate::{
             curve25519::scalar::PodScalar,
-            encryption::{
-                auth_encryption::AeCiphertext,
-                elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
-                pedersen::PedersenCommitment,
-            },
+            encryption::auth_encryption::AeCiphertext,
             errors::{ProofError, ProofVerificationError},
             instruction::{
                 transfer::{TransferAmountEncryption, TransferPubkeys},
@@ -100,29 +96,6 @@ mod target_arch {
     impl From<pod::CompressedRistretto> for CompressedRistretto {
         fn from(pod: pod::CompressedRistretto) -> Self {
             Self(pod.0)
-        }
-    }
-
-    impl From<PedersenCommitment> for pod::PedersenCommitment {
-        fn from(comm: PedersenCommitment) -> Self {
-            Self(comm.to_bytes())
-        }
-    }
-
-    // For proof verification, interpret pod::PedersenComm directly as CompressedRistretto
-    #[cfg(not(target_os = "solana"))]
-    impl From<pod::PedersenCommitment> for CompressedRistretto {
-        fn from(pod: pod::PedersenCommitment) -> Self {
-            Self(pod.0)
-        }
-    }
-
-    #[cfg(not(target_os = "solana"))]
-    impl TryFrom<pod::PedersenCommitment> for PedersenCommitment {
-        type Error = ProofError;
-
-        fn try_from(pod: pod::PedersenCommitment) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
