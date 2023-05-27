@@ -33,8 +33,8 @@ impl Default for ElGamalCiphertext {
 
 #[cfg(not(target_os = "solana"))]
 impl From<decoded::ElGamalCiphertext> for ElGamalCiphertext {
-    fn from(ct: decoded::ElGamalCiphertext) -> Self {
-        Self(ct.to_bytes())
+    fn from(decoded_ciphertext: decoded::ElGamalCiphertext) -> Self {
+        Self(decoded_ciphertext.to_bytes())
     }
 }
 
@@ -42,8 +42,8 @@ impl From<decoded::ElGamalCiphertext> for ElGamalCiphertext {
 impl TryFrom<ElGamalCiphertext> for decoded::ElGamalCiphertext {
     type Error = ProofError;
 
-    fn try_from(ct: ElGamalCiphertext) -> Result<Self, Self::Error> {
-        Self::from_bytes(&ct.0).ok_or(ProofError::CiphertextDeserialization)
+    fn try_from(pod_ciphertext: ElGamalCiphertext) -> Result<Self, Self::Error> {
+        Self::from_bytes(&pod_ciphertext.0).ok_or(ProofError::CiphertextDeserialization)
     }
 }
 
@@ -65,8 +65,8 @@ impl fmt::Display for ElGamalPubkey {
 
 #[cfg(not(target_os = "solana"))]
 impl From<decoded::ElGamalPubkey> for ElGamalPubkey {
-    fn from(pk: decoded::ElGamalPubkey) -> Self {
-        Self(pk.to_bytes())
+    fn from(decoded_pubkey: decoded::ElGamalPubkey) -> Self {
+        Self(decoded_pubkey.to_bytes())
     }
 }
 
@@ -74,8 +74,8 @@ impl From<decoded::ElGamalPubkey> for ElGamalPubkey {
 impl TryFrom<ElGamalPubkey> for decoded::ElGamalPubkey {
     type Error = ProofError;
 
-    fn try_from(pk: ElGamalPubkey) -> Result<Self, Self::Error> {
-        Self::from_bytes(&pk.0).ok_or(ProofError::CiphertextDeserialization)
+    fn try_from(pod_pubkey: ElGamalPubkey) -> Result<Self, Self::Error> {
+        Self::from_bytes(&pod_pubkey.0).ok_or(ProofError::CiphertextDeserialization)
     }
 }
 
@@ -91,16 +91,16 @@ impl fmt::Debug for DecryptHandle {
 
 #[cfg(not(target_os = "solana"))]
 impl From<decoded::DecryptHandle> for DecryptHandle {
-    fn from(handle: decoded::DecryptHandle) -> Self {
-        Self(handle.to_bytes())
+    fn from(decoded_handle: decoded::DecryptHandle) -> Self {
+        Self(decoded_handle.to_bytes())
     }
 }
 
 // For proof verification, interpret pod::PedersenDecHandle as CompressedRistretto
 #[cfg(not(target_os = "solana"))]
 impl From<DecryptHandle> for CompressedRistretto {
-    fn from(pod: DecryptHandle) -> Self {
-        Self(pod.0)
+    fn from(pod_handle: DecryptHandle) -> Self {
+        Self(pod_handle.0)
     }
 }
 
@@ -108,7 +108,7 @@ impl From<DecryptHandle> for CompressedRistretto {
 impl TryFrom<DecryptHandle> for decoded::DecryptHandle {
     type Error = ProofError;
 
-    fn try_from(pod: DecryptHandle) -> Result<Self, Self::Error> {
-        Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
+    fn try_from(pod_handle: DecryptHandle) -> Result<Self, Self::Error> {
+        Self::from_bytes(&pod_handle.0).ok_or(ProofError::CiphertextDeserialization)
     }
 }

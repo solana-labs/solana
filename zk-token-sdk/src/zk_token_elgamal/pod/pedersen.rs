@@ -20,16 +20,16 @@ impl fmt::Debug for PedersenCommitment {
 
 #[cfg(not(target_os = "solana"))]
 impl From<decoded::PedersenCommitment> for PedersenCommitment {
-    fn from(comm: decoded::PedersenCommitment) -> Self {
-        Self(comm.to_bytes())
+    fn from(decoded_commitment: decoded::PedersenCommitment) -> Self {
+        Self(decoded_commitment.to_bytes())
     }
 }
 
 // For proof verification, interpret pod::PedersenComm directly as CompressedRistretto
 #[cfg(not(target_os = "solana"))]
 impl From<PedersenCommitment> for CompressedRistretto {
-    fn from(pod: PedersenCommitment) -> Self {
-        Self(pod.0)
+    fn from(pod_commitment: PedersenCommitment) -> Self {
+        Self(pod_commitment.0)
     }
 }
 
@@ -37,7 +37,7 @@ impl From<PedersenCommitment> for CompressedRistretto {
 impl TryFrom<PedersenCommitment> for decoded::PedersenCommitment {
     type Error = ProofError;
 
-    fn try_from(pod: PedersenCommitment) -> Result<Self, Self::Error> {
-        Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
+    fn try_from(pod_commitment: PedersenCommitment) -> Result<Self, Self::Error> {
+        Self::from_bytes(&pod_commitment.0).ok_or(ProofError::CiphertextDeserialization)
     }
 }
