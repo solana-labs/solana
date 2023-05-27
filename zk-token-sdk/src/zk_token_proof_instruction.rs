@@ -255,6 +255,27 @@ pub enum ProofInstruction {
     ///   `BatchedRangeProof256Data`
     ///
     VerifyBatchedRangeProofU256,
+
+    /// Verify a ciphertext-commitment equality proof.
+    ///
+    /// This instruction can be configured to optionally initialize a proof context state account.
+    /// If creating a context state account, an account must be pre-allocated to the exact size of
+    /// `ProofContextState<CiphertextCommitmentEqualityProofContext>` and assigned to the ZkToken
+    /// proof program prior to the execution of this instruction.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `CiphertextCommitmentEqualityProofData`
+    ///
+    VerifyCiphertextCommitmentEquality,
 }
 
 /// Pubkeys associated with a context state account to be used as parameters to functions.
@@ -364,6 +385,15 @@ pub fn verify_batched_verify_range_proof_u256(
     proof_data: &BatchedRangeProofU256Data,
 ) -> Instruction {
     ProofInstruction::VerifyBatchedRangeProofU256
+        .encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyCiphertextCommitmentEquality` instruction.
+pub fn verify_ciphertext_commitment_equality(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &PubkeyValidityData,
+) -> Instruction {
+    ProofInstruction::VerifyCiphertextCommitmentEquality
         .encode_verify_proof(context_state_info, proof_data)
 }
 
