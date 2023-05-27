@@ -673,7 +673,6 @@ impl ServeRepair {
         let mut dropped_requests = 0;
         let mut well_formed_requests = discard_malformed_repair_requests(&mut reqs_v[0], stats);
         for mut more in requests_receiver.try_iter() {
-            info!("zzzzzz got a request packet batch {:?}", more);
             total_requests += more.len();
             if well_formed_requests > max_buffered_packets {
                 // Already exceeded max. Don't waste time discarding
@@ -847,7 +846,6 @@ impl ServeRepair {
                 let mut stats = ServeRepairStats::default();
                 let data_budget = DataBudget::default();
                 loop {
-                    info!("zzzzzz run repair request listener...");
                     let result = self.run_listen(
                         &mut ping_cache,
                         &recycler,
@@ -1020,7 +1018,6 @@ impl ServeRepair {
             };
             let num_response_packets = rsp.len();
             let num_response_bytes = rsp.iter().map(|p| p.meta().size).sum();
-            info!("zzzzzz sending response ...");
             if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
                 stats.total_response_packets += num_response_packets;
                 match stake > 0 {
