@@ -1,3 +1,5 @@
+//! Plain Old Data types for the ElGamal encryption scheme.
+
 use {
     crate::zk_token_elgamal::pod::{Pod, Zeroable},
     base64::{prelude::BASE64_STANDARD, Engine},
@@ -9,6 +11,7 @@ use {
     curve25519_dalek::ristretto::CompressedRistretto,
 };
 
+/// The `ElGamalCiphertext` type as a `Pod`.
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ElGamalCiphertext(pub [u8; 64]);
@@ -47,6 +50,7 @@ impl TryFrom<ElGamalCiphertext> for decoded::ElGamalCiphertext {
     }
 }
 
+/// The `ElGamalPubkey` type as a `Pod`.
 #[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ElGamalPubkey(pub [u8; 32]);
@@ -79,6 +83,7 @@ impl TryFrom<ElGamalPubkey> for decoded::ElGamalPubkey {
     }
 }
 
+/// The `DecryptHandle` type as a `Pod`.
 #[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct DecryptHandle(pub [u8; 32]);

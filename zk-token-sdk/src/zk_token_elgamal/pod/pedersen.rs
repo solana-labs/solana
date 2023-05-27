@@ -1,3 +1,5 @@
+//! Plain Old Data type for the Pedersen commitment scheme.
+
 use {
     crate::zk_token_elgamal::pod::{Pod, Zeroable},
     std::fmt,
@@ -8,6 +10,7 @@ use {
     curve25519_dalek::ristretto::CompressedRistretto,
 };
 
+/// The `PedersenCommitment` type as a `Pod`.
 #[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct PedersenCommitment(pub [u8; 32]);
