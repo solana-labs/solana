@@ -1306,6 +1306,9 @@ mod test {
 
     impl ResponderThreads {
         fn shutdown(self) {
+            // The connection cache holding the endpoint used by the quic server must be first dropped to avoid hung
+            // when being dropped.
+            drop(self.connection_cache);
             self.exit.store(true, Ordering::Relaxed);
             self.t_request_receiver.join().unwrap();
             self.t_listen.join().unwrap();
