@@ -11,7 +11,7 @@ use {
         instruction::{combine_lo_hi_ciphertexts, split_u64, Role},
         range_proof::RangeProof,
         sigma_proofs::{
-            ctxt_comm_equality_proof::CiphertextCommitmentEqualityProof,
+            ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
             validity_proof::AggregatedValidityProof,
         },
         transcript::TranscriptProtocol,
