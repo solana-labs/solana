@@ -3,6 +3,15 @@ mod transfer_with_fee;
 mod transfer_without_fee;
 
 #[cfg(not(target_os = "solana"))]
+use {
+    crate::encryption::{
+        elgamal::ElGamalCiphertext,
+        pedersen::{PedersenCommitment, PedersenOpening},
+    },
+    arrayref::{array_ref, array_refs},
+    curve25519_dalek::scalar::Scalar,
+};
+#[cfg(not(target_os = "solana"))]
 pub use {
     encryption::{FeeEncryption, TransferAmountEncryption},
     transfer_with_fee::TransferWithFeePubkeys,
@@ -11,16 +20,6 @@ pub use {
 pub use {
     transfer_with_fee::{TransferWithFeeData, TransferWithFeeProofContext},
     transfer_without_fee::{TransferData, TransferProofContext},
-};
-
-#[cfg(not(target_os = "solana"))]
-use {
-    crate::encryption::{
-        elgamal::ElGamalCiphertext,
-        pedersen::{PedersenCommitment, PedersenOpening},
-    },
-    arrayref::{array_ref, array_refs},
-    curve25519_dalek::scalar::Scalar,
 };
 
 #[cfg(not(target_os = "solana"))]
