@@ -251,6 +251,7 @@ pub fn process_set_validator_info(
                 })?;
             }
         }
+    }
     let validator_string = serde_json::to_string(&validator_info).unwrap();
     let validator_info = ValidatorInfo {
         info: validator_string,

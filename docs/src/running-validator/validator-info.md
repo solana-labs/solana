@@ -48,7 +48,7 @@ including cryptographic proofs, brand identity, etc. To connect your validator
 pubkey with Github:
 
 1. Create a public repository on github.com with the naming convention `solana-validator-<PUBKEY>` - replace `<PUBKEY>` with your validator's identity public key.
-2. Ensure this repository contains a PNG image in the root directory named `validator-image-<PUBKEY>.png` on the branch named `main`
+2. Ensure this repository contains a PNG image in the root directory named `validator-image-<PUBKEY>.png` on the branch named `main`. The recommended file size for the image is 360x360px. Ensure it is square and not too large on disk.
 3. Add or update your `solana validator-info` with your Github username. The
 
    CLI will verify the `solana-validator-<PUBKEY>` repository exists
