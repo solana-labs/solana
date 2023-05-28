@@ -1,5 +1,6 @@
 mod auth_encryption;
 mod elgamal;
+mod grouped_elgamal;
 mod instruction;
 mod pedersen;
 mod range_proof;
@@ -14,6 +15,7 @@ pub use {
     auth_encryption::AeCiphertext,
     bytemuck::{Pod, Zeroable},
     elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
+    grouped_elgamal::{GroupedElGamalCiphertext2Handles, GroupedElGamalCiphertext3Handles},
     instruction::{
         FeeEncryption, FeeParameters, TransferAmountEncryption, TransferPubkeys,
         TransferWithFeePubkeys,
