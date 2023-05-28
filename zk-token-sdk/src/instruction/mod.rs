@@ -4,7 +4,6 @@ pub mod ciphertext_commitment_equality;
 pub mod pubkey_validity;
 pub mod range_proof;
 pub mod transfer;
-pub mod transfer_with_fee;
 pub mod withdraw;
 pub mod zero_balance;
 
@@ -35,8 +34,10 @@ pub use {
     },
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
     range_proof::{RangeProofContext, RangeProofU64Data},
-    transfer::{TransferData, TransferProofContext},
-    transfer_with_fee::{FeeParameters, TransferWithFeeData, TransferWithFeeProofContext},
+    transfer::{
+        FeeParameters, TransferData, TransferProofContext, TransferWithFeeData,
+        TransferWithFeeProofContext,
+    },
     withdraw::{WithdrawData, WithdrawProofContext},
     zero_balance::{ZeroBalanceProofContext, ZeroBalanceProofData},
 };

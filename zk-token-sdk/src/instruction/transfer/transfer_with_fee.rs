@@ -10,7 +10,7 @@ use {
         errors::ProofError,
         instruction::{
             combine_lo_hi_ciphertexts, combine_lo_hi_commitments, combine_lo_hi_openings,
-            combine_lo_hi_u64, split_u64, transfer::TransferAmountEncryption, Role,
+            combine_lo_hi_u64, split_u64, transfer::transfer::TransferAmountEncryption, Role,
         },
         range_proof::RangeProof,
         sigma_proofs::{
