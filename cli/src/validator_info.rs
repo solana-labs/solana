@@ -64,21 +64,22 @@ pub fn is_short_field(string: String) -> Result<(), String> {
     }
 }
 
-fn verify_keybase(
+fn verify_github(
     validator_pubkey: &Pubkey,
-    keybase_username: &Value,
+    github_username: &Value,
 ) -> Result<(), Box<dyn error::Error>> {
-    if let Some(keybase_username) = keybase_username.as_str() {
+    if let Some(github_username) = github_username.as_str() {
+        // If the repo exists Github will return an HTTP 200 code while it will return 404 for private or non-existant repositories
         let url =
-            format!("https://keybase.pub/{keybase_username}/solana/validator-{validator_pubkey:?}");
+            format!("https://github.com/{github_username}/solana-validator-{validator_pubkey:?}");
         let client = Client::new();
         if client.head(&url).send()?.status().is_success() {
             Ok(())
         } else {
-            Err(format!("keybase_username could not be confirmed at: {url}. Please add this pubkey file to your keybase profile to connect").into())
+            Err(format!("github_username could not be confirmed at: {url}. Please ensure this public repository exists to verify.").into())
         }
     } else {
-        Err(format!("keybase_username could not be parsed as String: {keybase_username}").into())
+        Err(format!("github_username could not be parsed as String: {github_username}").into())
     }
 }
 
@@ -94,10 +95,10 @@ fn parse_args(matches: &ArgMatches<'_>) -> Value {
     if let Some(details) = matches.value_of("details") {
         map.insert("details".to_string(), Value::String(details.to_string()));
     }
-    if let Some(keybase_username) = matches.value_of("keybase_username") {
+    if let Some(github_username) = matches.value_of("github_username") {
         map.insert(
-            "keybaseUsername".to_string(),
-            Value::String(keybase_username.to_string()),
+            "githubUsername".to_string(),
+            Value::String(github_username.to_string()),
         );
     }
     Value::Object(map)
@@ -162,13 +163,13 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
                                 .help("Validator website url"),
                         )
                         .arg(
-                            Arg::with_name("keybase_username")
+                            Arg::with_name("github_username")
                                 .short("n")
-                                .long("keybase")
+                                .long("github")
                                 .value_name("USERNAME")
                                 .takes_value(true)
                                 .validator(is_short_field)
-                                .help("Validator Keybase username"),
+                                .help("Validator Github username"),
                         )
                         .arg(
                             Arg::with_name("details")
@@ -184,7 +185,7 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
                                 .long("force")
                                 .takes_value(false)
                                 .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
-                                .help("Override keybase username validity check"),
+                                .help("Override github username validity check"),
                         ),
                 )
                 .subcommand(
@@ -214,7 +215,7 @@ pub fn parse_validator_info_command(
     Ok(CliCommandInfo {
         command: CliCommand::SetValidatorInfo {
             validator_info,
-            force_keybase: matches.is_present("force"),
+            force_github: matches.is_present("force"),
             info_pubkey,
         },
         signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
@@ -235,22 +236,21 @@ pub fn process_set_validator_info(
     rpc_client: &RpcClient,
     config: &CliConfig,
     validator_info: &Value,
-    force_keybase: bool,
+    force_github: bool,
     info_pubkey: Option<Pubkey>,
 ) -> ProcessResult {
-    // Validate keybase username
-    if let Some(string) = validator_info.get("keybaseUsername") {
-        let result = verify_keybase(&config.signers[0].pubkey(), string);
-        if result.is_err() {
-            if force_keybase {
-                println!("--force supplied, ignoring: {result:?}");
-            } else {
+    // Validate github username
+    if let Some(string) = validator_info.get("githubUsername") {
+        if force_github {
+            println!("--force supplied, skipping Github username verification");
+        } else {
+            let result = verify_github(&config.signers[0].pubkey(), string);
+            if result.is_err() {
                 result.map_err(|err| {
-                    CliError::BadParameter(format!("Invalid validator keybase username: {err}"))
+                    CliError::BadParameter(format!("Invalid validator github username: {err}"))
                 })?;
             }
         }
-    }
     let validator_string = serde_json::to_string(&validator_info).unwrap();
     let validator_info = ValidatorInfo {
         info: validator_string,
@@ -441,13 +441,13 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_keybase_username_not_string() {
+    fn test_verify_github_username_not_string() {
         let pubkey = solana_sdk::pubkey::new_rand();
         let value = Value::Bool(true);
 
         assert_eq!(
-            verify_keybase(&pubkey, &value).unwrap_err().to_string(),
-            "keybase_username could not be parsed as String: true".to_string()
+            verify_github(&pubkey, &value).unwrap_err().to_string(),
+            "github_username could not be parsed as String: true".to_string()
         )
     }
 
@@ -459,7 +459,7 @@ mod tests {
             "publish",
             "Alice",
             "-n",
-            "alice_keybase",
+            "alice_github",
         ]);
         let subcommand_matches = matches.subcommand();
         assert_eq!(subcommand_matches.0, "validator-info");
@@ -470,7 +470,7 @@ mod tests {
         let matches = subcommand_matches.1.unwrap();
         let expected = json!({
             "name": "Alice",
-            "keybaseUsername": "alice_keybase",
+            "githubUsername": "alice_github",
         });
         assert_eq!(parse_args(matches), expected);
     }
@@ -577,7 +577,7 @@ mod tests {
             Value::String(max_short_string.clone()),
         );
         info.insert(
-            "keybaseUsername".to_string(),
+            "githubUsername".to_string(),
             Value::String(max_short_string),
         );
         info.insert("details".to_string(), Value::String(max_long_string));

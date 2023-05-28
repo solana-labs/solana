@@ -306,7 +306,7 @@ pub enum CliCommand {
     GetValidatorInfo(Option<Pubkey>),
     SetValidatorInfo {
         validator_info: Value,
-        force_keybase: bool,
+        force_github: bool,
         info_pubkey: Option<Pubkey>,
     },
     // Vote Commands
@@ -1378,13 +1378,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Publish validator info
         CliCommand::SetValidatorInfo {
             validator_info,
-            force_keybase,
+            force_github,
             info_pubkey,
         } => process_set_validator_info(
             &rpc_client,
             config,
             validator_info,
-            *force_keybase,
+            *force_github,
             *info_pubkey,
         ),
 
