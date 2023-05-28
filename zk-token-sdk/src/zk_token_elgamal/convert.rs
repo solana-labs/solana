@@ -64,8 +64,8 @@ mod target_arch {
             },
             range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
+                ciphertext_ciphertext_equality_proof::CiphertextCiphertextEqualityProof,
                 ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
-                ctxt_ctxt_equality_proof::CiphertextCiphertextEqualityProof,
                 errors::*,
                 fee_proof::FeeSigmaProof,
                 pubkey_proof::PubkeyValidityProof,
