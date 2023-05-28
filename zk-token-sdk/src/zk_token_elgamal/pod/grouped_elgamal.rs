@@ -71,4 +71,3 @@ impl TryFrom<GroupedElGamalCiphertext3Handles> for GroupedElGamalCiphertext<3> {
         Self::from_bytes(&pod_ciphertext.0).ok_or(ProofError::CiphertextDeserialization)
     }
 }
-
