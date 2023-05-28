@@ -1,9 +1,11 @@
 #[cfg(not(target_os = "solana"))]
-use crate::encryption::{
-    elgamal::{DecryptHandle, ElGamalPubkey},
-    pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
+use crate::{
+    encryption::{
+        elgamal::{DecryptHandle, ElGamalPubkey},
+        pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
+    },
+    zk_token_elgamal::pod,
 };
-use crate::zk_token_elgamal::pod;
 
 // TransferAmountEncryption
 #[derive(Clone)]
