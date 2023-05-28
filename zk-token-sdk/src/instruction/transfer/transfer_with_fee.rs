@@ -2,15 +2,14 @@
 use {
     crate::{
         encryption::{
-            elgamal::{
-                DecryptHandle, ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey,
-            },
+            elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey},
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
         instruction::{
             combine_lo_hi_ciphertexts, combine_lo_hi_commitments, combine_lo_hi_openings,
-            combine_lo_hi_u64, split_u64, transfer::transfer_without_fee::TransferAmountEncryption,
+            combine_lo_hi_u64, split_u64,
+            transfer::{FeeEncryption, TransferAmountEncryption},
             Role,
         },
         range_proof::RangeProof,
@@ -719,42 +718,6 @@ impl TransferWithFeePubkeys {
             auditor_pubkey,
             withdraw_withheld_authority_pubkey,
         })
-    }
-}
-
-#[derive(Clone)]
-#[repr(C)]
-#[cfg(not(target_os = "solana"))]
-pub struct FeeEncryption {
-    pub commitment: PedersenCommitment,
-    pub destination_handle: DecryptHandle,
-    pub withdraw_withheld_authority_handle: DecryptHandle,
-}
-
-#[cfg(not(target_os = "solana"))]
-impl FeeEncryption {
-    pub fn new(
-        amount: u64,
-        destination_pubkey: &ElGamalPubkey,
-        withdraw_withheld_authority_pubkey: &ElGamalPubkey,
-    ) -> (Self, PedersenOpening) {
-        let (commitment, opening) = Pedersen::new(amount);
-        let fee_encryption = Self {
-            commitment,
-            destination_handle: destination_pubkey.decrypt_handle(&opening),
-            withdraw_withheld_authority_handle: withdraw_withheld_authority_pubkey
-                .decrypt_handle(&opening),
-        };
-
-        (fee_encryption, opening)
-    }
-
-    pub fn to_pod(&self) -> pod::FeeEncryption {
-        pod::FeeEncryption {
-            commitment: self.commitment.into(),
-            destination_handle: self.destination_handle.into(),
-            withdraw_withheld_authority_handle: self.withdraw_withheld_authority_handle.into(),
-        }
     }
 }
 

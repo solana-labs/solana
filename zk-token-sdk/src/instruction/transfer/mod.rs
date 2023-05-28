@@ -1,12 +1,11 @@
-pub mod transfer_with_fee;
-pub mod transfer_without_fee;
+mod encryption;
+mod transfer_with_fee;
+mod transfer_without_fee;
 
 pub use {
+    encryption::{FeeEncryption, TransferAmountEncryption},
     transfer_with_fee::{
-        FeeEncryption, FeeParameters, TransferWithFeeData, TransferWithFeeProofContext,
-        TransferWithFeePubkeys,
+        FeeParameters, TransferWithFeeData, TransferWithFeeProofContext, TransferWithFeePubkeys,
     },
-    transfer_without_fee::{
-        TransferAmountEncryption, TransferData, TransferProofContext, TransferPubkeys,
-    },
+    transfer_without_fee::{TransferData, TransferProofContext, TransferPubkeys},
 };
