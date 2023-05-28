@@ -9,7 +9,10 @@ use {
         transaction::{Transaction, TransactionError},
     },
     solana_zk_token_sdk::{
-        encryption::{elgamal::ElGamalKeypair, pedersen::PedersenOpening},
+        encryption::{
+            elgamal::ElGamalKeypair,
+            pedersen::{Pedersen, PedersenOpening},
+        },
         instruction::*,
         zk_token_proof_instruction::*,
         zk_token_proof_program,
@@ -18,13 +21,18 @@ use {
     std::mem::size_of,
 };
 
-const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 6] = [
+const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 11] = [
     ProofInstruction::VerifyZeroBalance,
     ProofInstruction::VerifyWithdraw,
     ProofInstruction::VerifyCiphertextCiphertextEquality,
     ProofInstruction::VerifyTransfer,
     ProofInstruction::VerifyTransferWithFee,
     ProofInstruction::VerifyPubkeyValidity,
+    ProofInstruction::VerifyRangeProofU64,
+    ProofInstruction::VerifyBatchedRangeProofU64,
+    ProofInstruction::VerifyBatchedRangeProofU128,
+    ProofInstruction::VerifyBatchedRangeProofU256,
+    ProofInstruction::VerifyCiphertextCommitmentEquality,
 ];
 
 #[tokio::test]
@@ -325,6 +333,240 @@ async fn test_pubkey_validity() {
     test_close_context_state(
         ProofInstruction::VerifyPubkeyValidity,
         size_of::<ProofContextState<PubkeyValidityProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_range_proof_u64() {
+    let amount = 123_u64;
+    let (commitment, opening) = Pedersen::new(amount);
+
+    let success_proof_data = RangeProofU64Data::new(&commitment, amount, &opening).unwrap();
+
+    let incorrect_amount = 124_u64;
+    let fail_proof_data = RangeProofU64Data::new(&commitment, incorrect_amount, &opening).unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyRangeProofU64,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyRangeProofU64,
+        size_of::<ProofContextState<RangeProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyRangeProofU64,
+        size_of::<ProofContextState<RangeProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_batched_range_proof_u64() {
+    let amount_1 = 23_u64;
+    let amount_2 = 24_u64;
+
+    let (commitment_1, opening_1) = Pedersen::new(amount_1);
+    let (commitment_2, opening_2) = Pedersen::new(amount_2);
+
+    let success_proof_data = BatchedRangeProofU64Data::new(
+        vec![&commitment_1, &commitment_2],
+        vec![amount_1, amount_2],
+        vec![32, 32],
+        vec![&opening_1, &opening_2],
+    )
+    .unwrap();
+
+    let incorrect_opening = PedersenOpening::new_rand();
+    let fail_proof_data = BatchedRangeProofU64Data::new(
+        vec![&commitment_1, &commitment_2],
+        vec![amount_1, amount_2],
+        vec![32, 32],
+        vec![&opening_1, &incorrect_opening],
+    )
+    .unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyBatchedRangeProofU64,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyBatchedRangeProofU64,
+        size_of::<ProofContextState<BatchedRangeProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyBatchedRangeProofU64,
+        size_of::<ProofContextState<BatchedRangeProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_batched_range_proof_u128() {
+    let amount_1 = 23_u64;
+    let amount_2 = 24_u64;
+
+    let (commitment_1, opening_1) = Pedersen::new(amount_1);
+    let (commitment_2, opening_2) = Pedersen::new(amount_2);
+
+    let success_proof_data = BatchedRangeProofU128Data::new(
+        vec![&commitment_1, &commitment_2],
+        vec![amount_1, amount_2],
+        vec![64, 64],
+        vec![&opening_1, &opening_2],
+    )
+    .unwrap();
+
+    let incorrect_opening = PedersenOpening::new_rand();
+    let fail_proof_data = BatchedRangeProofU128Data::new(
+        vec![&commitment_1, &commitment_2],
+        vec![amount_1, amount_2],
+        vec![64, 64],
+        vec![&opening_1, &incorrect_opening],
+    )
+    .unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyBatchedRangeProofU128,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyBatchedRangeProofU128,
+        size_of::<ProofContextState<BatchedRangeProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyBatchedRangeProofU128,
+        size_of::<ProofContextState<BatchedRangeProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_batched_range_proof_u256() {
+    let amount_1 = 23_u64;
+    let amount_2 = 24_u64;
+    let amount_3 = 25_u64;
+    let amount_4 = 26_u64;
+
+    let (commitment_1, opening_1) = Pedersen::new(amount_1);
+    let (commitment_2, opening_2) = Pedersen::new(amount_2);
+    let (commitment_3, opening_3) = Pedersen::new(amount_3);
+    let (commitment_4, opening_4) = Pedersen::new(amount_4);
+
+    let success_proof_data = BatchedRangeProofU256Data::new(
+        vec![&commitment_1, &commitment_2, &commitment_3, &commitment_4],
+        vec![amount_1, amount_2, amount_3, amount_4],
+        vec![64, 64, 64, 64],
+        vec![&opening_1, &opening_2, &opening_3, &opening_4],
+    )
+    .unwrap();
+
+    let incorrect_opening = PedersenOpening::new_rand();
+    let fail_proof_data = BatchedRangeProofU256Data::new(
+        vec![&commitment_1, &commitment_2, &commitment_3, &commitment_4],
+        vec![amount_1, amount_2, amount_3, amount_4],
+        vec![64, 64, 64, 64],
+        vec![&opening_1, &opening_2, &opening_3, &incorrect_opening],
+    )
+    .unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyBatchedRangeProofU256,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyBatchedRangeProofU256,
+        size_of::<ProofContextState<BatchedRangeProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyBatchedRangeProofU256,
+        size_of::<ProofContextState<BatchedRangeProofContext>>(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_ciphertext_commitment_equality() {
+    let keypair = ElGamalKeypair::new_rand();
+    let amount: u64 = 55;
+    let ciphertext = keypair.public.encrypt(amount);
+    let (commitment, opening) = Pedersen::new(amount);
+
+    let success_proof_data = CiphertextCommitmentEqualityProofData::new(
+        &keypair,
+        &ciphertext,
+        &commitment,
+        &opening,
+        amount,
+    )
+    .unwrap();
+
+    let incorrect_keypair = ElGamalKeypair {
+        public: ElGamalKeypair::new_rand().public,
+        secret: ElGamalKeypair::new_rand().secret,
+    };
+
+    let fail_proof_data = CiphertextCommitmentEqualityProofData::new(
+        &incorrect_keypair,
+        &ciphertext,
+        &commitment,
+        &opening,
+        amount,
+    )
+    .unwrap();
+
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyCiphertextCommitmentEquality,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofInstruction::VerifyCiphertextCommitmentEquality,
+        size_of::<ProofContextState<CiphertextCommitmentEqualityProofContext>>(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofInstruction::VerifyCiphertextCommitmentEquality,
+        size_of::<ProofContextState<CiphertextCommitmentEqualityProofContext>>(),
         &success_proof_data,
     )
     .await;
