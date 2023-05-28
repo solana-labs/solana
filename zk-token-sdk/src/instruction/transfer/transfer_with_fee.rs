@@ -6,14 +6,11 @@ use {
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
-        instruction::{
+        instruction::transfer::{
             combine_lo_hi_ciphertexts, combine_lo_hi_commitments, combine_lo_hi_openings,
-            combine_lo_hi_u64, split_u64,
-            transfer::{
-                encryption::{FeeEncryption, TransferAmountEncryption},
-                FeeParameters,
-            },
-            Role,
+            combine_lo_hi_u64,
+            encryption::{FeeEncryption, TransferAmountEncryption},
+            split_u64, FeeParameters, Role,
         },
         range_proof::RangeProof,
         sigma_proofs::{

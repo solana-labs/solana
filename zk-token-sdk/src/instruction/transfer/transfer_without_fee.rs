@@ -6,8 +6,8 @@ use {
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
-        instruction::{
-            combine_lo_hi_ciphertexts, split_u64, transfer::TransferAmountEncryption, Role,
+        instruction::transfer::{
+            combine_lo_hi_ciphertexts, encryption::TransferAmountEncryption, split_u64, Role,
         },
         range_proof::RangeProof,
         sigma_proofs::{
