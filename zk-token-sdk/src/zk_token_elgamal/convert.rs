@@ -52,7 +52,6 @@ mod target_arch {
         super::pod,
         crate::{
             curve25519::scalar::PodScalar,
-            encryption::auth_encryption::AeCiphertext,
             errors::{ProofError, ProofVerificationError},
             instruction::{
                 transfer::{TransferAmountEncryption, TransferPubkeys},
@@ -96,20 +95,6 @@ mod target_arch {
     impl From<pod::CompressedRistretto> for CompressedRistretto {
         fn from(pod: pod::CompressedRistretto) -> Self {
             Self(pod.0)
-        }
-    }
-
-    impl From<AeCiphertext> for pod::AeCiphertext {
-        fn from(ct: AeCiphertext) -> Self {
-            Self(ct.to_bytes())
-        }
-    }
-
-    impl TryFrom<pod::AeCiphertext> for AeCiphertext {
-        type Error = ProofError;
-
-        fn try_from(ct: pod::AeCiphertext) -> Result<Self, Self::Error> {
-            Self::from_bytes(&ct.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
