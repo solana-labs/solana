@@ -154,7 +154,6 @@ RUN cargo install svgbob_cli --version 0.7.0
 WORKDIR /solana/docs
 
 COPY ./convert-ascii-to-svg.sh .
-COPY ./art/ ./art/
 
 RUN chmod +x convert-ascii-to-svg.sh
 
@@ -169,7 +168,9 @@ This will take about 600 seconds.
 
 Run it with:
 ```bash
-docker run -it svg-converter
+docker run -it -v "$(pwd)/art:/solana/docs/art" -v "$(pwd)/static/img:/solana/docs/static/img" svg-converter
 ```
 
-This will generate all SVGs in /docs/static/img. You can now run `npm run start` to start the local development server.
+This will generate all SVGs in /docs/static/img. It also mounts your folders so you don't have to build the image every single time - just run it and the SVGs will be updated.
+
+You can now run `npm run start` to start the local development server.
