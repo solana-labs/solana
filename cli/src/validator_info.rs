@@ -64,22 +64,19 @@ pub fn is_short_field(string: String) -> Result<(), String> {
     }
 }
 
-fn verify_github(
-    validator_pubkey: &Pubkey,
-    github_username: &Value,
+fn verify_icon(
+    icon_url: &Value,
 ) -> Result<(), Box<dyn error::Error>> {
-    if let Some(github_username) = github_username.as_str() {
-        // If the repo exists Github will return an HTTP 200 code while it will return 404 for private or non-existant repositories
-        let url =
-            format!("https://github.com/{github_username}/solana-validator-{validator_pubkey:?}");
+    if let Some(url) = icon_url.as_str() {
+        // Check that the Icon URL can be accessed and returns a 200-299 HTTP Status code
         let client = Client::new();
-        if client.head(&url).send()?.status().is_success() {
+        if client.head(&url.to_string()).send()?.status().is_success() {
             Ok(())
         } else {
-            Err(format!("github_username could not be confirmed at: {url}. Please ensure this public repository exists to verify.").into())
+            Err(format!("icon_url could not be confirmed at: {url}. Please ensure the file at this URL exists and returns a HTTP Status code in the 200-299 range.").into())
         }
     } else {
-        Err(format!("github_username could not be parsed as String: {github_username}").into())
+        Err(format!("icon_url could not be parsed as String: {icon_url}").into())
     }
 }
 
@@ -95,10 +92,10 @@ fn parse_args(matches: &ArgMatches<'_>) -> Value {
     if let Some(details) = matches.value_of("details") {
         map.insert("details".to_string(), Value::String(details.to_string()));
     }
-    if let Some(github_username) = matches.value_of("github_username") {
+    if let Some(icon_url) = matches.value_of("icon_url") {
         map.insert(
-            "githubUsername".to_string(),
-            Value::String(github_username.to_string()),
+            "iconUrl".to_string(),
+            Value::String(icon_url.to_string()),
         );
     }
     Value::Object(map)
@@ -163,13 +160,13 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
                                 .help("Validator website url"),
                         )
                         .arg(
-                            Arg::with_name("github_username")
-                                .short("n")
-                                .long("github")
-                                .value_name("USERNAME")
+                            Arg::with_name("icon_url")
+                                .short("i")
+                                .long("icon-url")
+                                .value_name("URL")
                                 .takes_value(true)
                                 .validator(is_short_field)
-                                .help("Validator Github username"),
+                                .help("URL to validator icon (idally 360x360px PNG format)"),
                         )
                         .arg(
                             Arg::with_name("details")
@@ -185,7 +182,7 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
                                 .long("force")
                                 .takes_value(false)
                                 .hidden(hidden_unless_forced()) // Don't document this argument to discourage its use
-                                .help("Override github username validity check"),
+                                .help("Override icon URL validity check"),
                         ),
                 )
                 .subcommand(
@@ -215,7 +212,7 @@ pub fn parse_validator_info_command(
     Ok(CliCommandInfo {
         command: CliCommand::SetValidatorInfo {
             validator_info,
-            force_github: matches.is_present("force"),
+            force_icon: matches.is_present("force"),
             info_pubkey,
         },
         signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
@@ -236,18 +233,18 @@ pub fn process_set_validator_info(
     rpc_client: &RpcClient,
     config: &CliConfig,
     validator_info: &Value,
-    force_github: bool,
+    force_icon: bool,
     info_pubkey: Option<Pubkey>,
 ) -> ProcessResult {
-    // Validate github username
-    if let Some(string) = validator_info.get("githubUsername") {
-        if force_github {
-            println!("--force supplied, skipping Github username verification");
+    // Validate icon URL
+    if let Some(string) = validator_info.get("iconUrl") {
+        if force_icon {
+            println!("--force supplied, skipping icon URL verification");
         } else {
-            let result = verify_github(&config.signers[0].pubkey(), string);
+            let result = verify_icon(string);
             if result.is_err() {
                 result.map_err(|err| {
-                    CliError::BadParameter(format!("Invalid validator github username: {err}"))
+                    CliError::BadParameter(format!("Invalid validator icon url: {err}"))
                 })?;
             }
         }
@@ -442,13 +439,12 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_github_username_not_string() {
-        let pubkey = solana_sdk::pubkey::new_rand();
+    fn test_verify_iconurl_not_string() {
         let value = Value::Bool(true);
 
         assert_eq!(
-            verify_github(&pubkey, &value).unwrap_err().to_string(),
-            "github_username could not be parsed as String: true".to_string()
+            verify_icon(&value).unwrap_err().to_string(),
+            "icon_url could not be parsed as String: true".to_string()
         )
     }
 
@@ -459,8 +455,8 @@ mod tests {
             "validator-info",
             "publish",
             "Alice",
-            "-n",
-            "alice_github",
+            "-i",
+            "http://example.com/image.png",
         ]);
         let subcommand_matches = matches.subcommand();
         assert_eq!(subcommand_matches.0, "validator-info");
@@ -471,7 +467,7 @@ mod tests {
         let matches = subcommand_matches.1.unwrap();
         let expected = json!({
             "name": "Alice",
-            "githubUsername": "alice_github",
+            "iconUrl": "http://example.com/image.png",
         });
         assert_eq!(parse_args(matches), expected);
     }
@@ -578,7 +574,7 @@ mod tests {
             Value::String(max_short_string.clone()),
         );
         info.insert(
-            "githubUsername".to_string(),
+            "iconUrl".to_string(),
             Value::String(max_short_string),
         );
         info.insert("details".to_string(), Value::String(max_long_string));

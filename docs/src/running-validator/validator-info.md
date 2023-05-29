@@ -23,7 +23,7 @@ solana validator-info publish --help
 Example publish command:
 
 ```bash
-solana validator-info publish "Elvis Validator" -n elvis -w "https://elvis-validates.com"
+solana validator-info publish "Elvis Validator" -w "https://elvis-validates.com" -i "https://elvis-validates.com/my-icon.png
 ```
 
 Example query command:
@@ -37,22 +37,11 @@ which outputs
 ```text
 Validator info from 8WdJvDz6obhADdxpGCiJKZsDYwTLNEDFizayqziDc9ah
   Validator pubkey: 6dMH3u76qZ7XG4bVboVRnBHR2FfrxEqTTTyj4xmyDMWo
-  Info: {"githubUsername":"elvis","name":"Elvis Validator","website":"https://elvis-validates.com"}
+  Info: {"iconUrl":"elvis","name":"Elvis Validator","website":"https://elvis-validates.com"}
 ```
 
-## Github
-
-Including a Github username allows client applications \(like the Solana
-Network Explorer\) to automatically pull in your validator public profile,
-including cryptographic proofs, brand identity, etc. To connect your validator
-pubkey with Github:
-
-1. Create a public repository on github.com with the naming convention `solana-validator-<PUBKEY>` - replace `<PUBKEY>` with your validator's identity public key.
-2. Ensure this repository contains a PNG image in the root directory named `validator-image-<PUBKEY>.png` on the branch named `main`. The recommended file size for the image is 360x360px. Ensure it is square and not too large on disk.
-3. Add or update your `solana validator-info` with your Github username. The
-
-   CLI will verify the `solana-validator-<PUBKEY>` repository exists
+For older accounts instead of `iconUrl` you might see `keybaseUsername` as those accounts used Keybase for their validator icon (see next section for further information).
 
 ## Keybase
 
-Previously Keybase was used by validators in place of Github, however Keybase has sunset its service and thus is no longer supported. Some old validator info accounts will still contain keybase usernames this is reflected in the serialized data returend when querying these validator info accounts.
+Previously Keybase was used by validators to provide their validator icon, however Keybase has sunset its service and thus is no longer supported. Some old validator info accounts will still contain keybase usernames this is reflected in the serialized data returend when querying these validator info accounts.
