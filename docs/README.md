@@ -132,3 +132,44 @@ During the build process of the docs (specifically within the `./convert-ascii-t
 To correct this issue, use the steps above to [build the docs locally](#build-locally).
 
 > Note: While not generating and saving these SVG images within your local repo will **NOT** prevent you from running the local development server, it will result in numerous output errors in your terminal.
+
+### `convert-ascii-to-svg.sh` fails on Apple Silicon and SVG files are not generated
+If you're on an M1/M2 Mac you'll see this when running `./build.sh` or `./convert-ascii-to-svg.sh`:
+
+```
+WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+```
+
+Make sure [Rust](https://www.rust-lang.org/tools/install) and [Docker](https://docs.docker.com/get-docker/) are installed. You'll need to create a Dockerfile and build a separate image for creating svgs.
+
+This is necessary as `mscgen`, which is a dependency of `svgbob_cli`, has issues on Apple Silicon and returns memory errors. 
+
+Create a file called `Dockerfile` with this:
+```bash
+FROM rust:latest
+
+RUN apt-get update && apt-get install -y mscgen
+RUN cargo install svgbob_cli --version 0.7.0
+
+WORKDIR /solana/docs
+
+COPY ./convert-ascii-to-svg.sh .
+COPY ./art/ ./art/
+
+RUN chmod +x convert-ascii-to-svg.sh
+
+CMD ["./convert-ascii-to-svg.sh"]
+```
+
+Build the image:
+```bash
+docker build -t svg-converter.
+```
+This will take about 600 seconds.
+
+Run it with:
+```bash
+docker run -it svg-converter
+```
+
+This will generate all SVGs in /docs/static/img. You can now run `npm run start` to start the local development server.
