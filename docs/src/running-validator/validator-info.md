@@ -18,6 +18,8 @@ For details about optional fields for VALIDATOR_INFO_ARGS:
 solana validator-info publish --help
 ```
 
+The recommended dimensions for the validator icon are 360x360px and PNG format. 
+
 ## Example Commands
 
 Example publish command:
