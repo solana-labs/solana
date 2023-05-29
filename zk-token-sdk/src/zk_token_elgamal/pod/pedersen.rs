@@ -28,7 +28,7 @@ impl From<decoded::PedersenCommitment> for PedersenCommitment {
     }
 }
 
-// For proof verification, interpret pod::PedersenComm directly as CompressedRistretto
+// For proof verification, interpret pod::PedersenCommitment directly as CompressedRistretto
 #[cfg(not(target_os = "solana"))]
 impl From<PedersenCommitment> for CompressedRistretto {
     fn from(pod_commitment: PedersenCommitment) -> Self {

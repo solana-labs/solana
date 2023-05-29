@@ -101,7 +101,7 @@ impl From<decoded::DecryptHandle> for DecryptHandle {
     }
 }
 
-// For proof verification, interpret pod::PedersenDecHandle as CompressedRistretto
+// For proof verification, interpret pod::DecryptHandle as CompressedRistretto
 #[cfg(not(target_os = "solana"))]
 impl From<DecryptHandle> for CompressedRistretto {
     fn from(pod_handle: DecryptHandle) -> Self {
