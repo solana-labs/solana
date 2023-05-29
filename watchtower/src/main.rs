@@ -147,6 +147,7 @@ fn get_config() -> Config {
                 .long("active-stake-alert-threshold")
                 .value_name("PERCENTAGE")
                 .takes_value(true)
+                .validator(is_valid_percentage) 
                 .default_value("80")
                 .help("Alert when the current stake for the cluster drops below this value"),
         )
