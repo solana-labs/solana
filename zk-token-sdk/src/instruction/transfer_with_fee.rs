@@ -14,8 +14,8 @@ use {
         },
         range_proof::RangeProof,
         sigma_proofs::{
-            ctxt_comm_equality_proof::CiphertextCommitmentEqualityProof, fee_proof::FeeSigmaProof,
-            validity_proof::AggregatedValidityProof,
+            ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
+            fee_proof::FeeSigmaProof, validity_proof::AggregatedValidityProof,
         },
         transcript::TranscriptProtocol,
     },
