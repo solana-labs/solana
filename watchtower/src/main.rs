@@ -140,7 +140,7 @@ fn get_config() -> Config {
             Arg::with_name("monitor_active_stake")
                 .long("monitor-active-stake")
                 .takes_value(false)
-                .help("Alert when the current stake for the cluster drops below active-stake-alert-threshold (default 80%)"),
+                .help("Alert when the current stake for the cluster drops below the amount specified by --active-stake-alert-threshold"),
         )
         .arg(
             Arg::with_name("active_stake_alert_threshold")
