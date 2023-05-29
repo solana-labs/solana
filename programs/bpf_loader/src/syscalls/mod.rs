@@ -1720,6 +1720,10 @@ declare_syscall!(
         .get(0)
         .ok_or(SyscallError::InvalidLength)?;
 
+        if params.base_len > 512 || params.exponent_len > 512 || params.modulus_len > 512 {
+            return Err(SyscallError::InvalidLength);
+        }
+
         let input_len: u64 = std::cmp::max(params.base_len, params.exponent_len);
         let input_len: u64 = std::cmp::max(input_len, params.modulus_len);
 
