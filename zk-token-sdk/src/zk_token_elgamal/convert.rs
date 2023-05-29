@@ -57,15 +57,6 @@ mod target_arch {
                 transfer::{TransferAmountEncryption, TransferPubkeys},
                 transfer_with_fee::{FeeEncryption, FeeParameters, TransferWithFeePubkeys},
             },
-            sigma_proofs::{
-                ciphertext_ciphertext_equality_proof::CiphertextCiphertextEqualityProof,
-                ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
-                errors::*,
-                fee_proof::FeeSigmaProof,
-                pubkey_proof::PubkeyValidityProof,
-                validity_proof::{AggregatedValidityProof, ValidityProof},
-                zero_balance_proof::ZeroBalanceProof,
-            },
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
         std::convert::TryFrom,
@@ -94,104 +85,6 @@ mod target_arch {
     impl From<pod::CompressedRistretto> for CompressedRistretto {
         fn from(pod: pod::CompressedRistretto) -> Self {
             Self(pod.0)
-        }
-    }
-
-    impl From<CiphertextCommitmentEqualityProof> for pod::CiphertextCommitmentEqualityProof {
-        fn from(proof: CiphertextCommitmentEqualityProof) -> Self {
-            Self(proof.to_bytes())
-        }
-    }
-
-    impl TryFrom<pod::CiphertextCommitmentEqualityProof> for CiphertextCommitmentEqualityProof {
-        type Error = EqualityProofError;
-
-        fn try_from(pod: pod::CiphertextCommitmentEqualityProof) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
-        }
-    }
-
-    impl From<CiphertextCiphertextEqualityProof> for pod::CiphertextCiphertextEqualityProof {
-        fn from(proof: CiphertextCiphertextEqualityProof) -> Self {
-            Self(proof.to_bytes())
-        }
-    }
-
-    impl TryFrom<pod::CiphertextCiphertextEqualityProof> for CiphertextCiphertextEqualityProof {
-        type Error = EqualityProofError;
-
-        fn try_from(pod: pod::CiphertextCiphertextEqualityProof) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
-        }
-    }
-
-    impl From<ValidityProof> for pod::ValidityProof {
-        fn from(proof: ValidityProof) -> Self {
-            Self(proof.to_bytes())
-        }
-    }
-
-    impl TryFrom<pod::ValidityProof> for ValidityProof {
-        type Error = ValidityProofError;
-
-        fn try_from(pod: pod::ValidityProof) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
-        }
-    }
-
-    impl From<AggregatedValidityProof> for pod::AggregatedValidityProof {
-        fn from(proof: AggregatedValidityProof) -> Self {
-            Self(proof.to_bytes())
-        }
-    }
-
-    impl TryFrom<pod::AggregatedValidityProof> for AggregatedValidityProof {
-        type Error = ValidityProofError;
-
-        fn try_from(pod: pod::AggregatedValidityProof) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
-        }
-    }
-
-    impl From<ZeroBalanceProof> for pod::ZeroBalanceProof {
-        fn from(proof: ZeroBalanceProof) -> Self {
-            Self(proof.to_bytes())
-        }
-    }
-
-    impl TryFrom<pod::ZeroBalanceProof> for ZeroBalanceProof {
-        type Error = ZeroBalanceProofError;
-
-        fn try_from(pod: pod::ZeroBalanceProof) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
-        }
-    }
-
-    impl From<FeeSigmaProof> for pod::FeeSigmaProof {
-        fn from(proof: FeeSigmaProof) -> Self {
-            Self(proof.to_bytes())
-        }
-    }
-
-    impl TryFrom<pod::FeeSigmaProof> for FeeSigmaProof {
-        type Error = FeeSigmaProofError;
-
-        fn try_from(pod: pod::FeeSigmaProof) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
-        }
-    }
-
-    impl From<PubkeyValidityProof> for pod::PubkeyValidityProof {
-        fn from(proof: PubkeyValidityProof) -> Self {
-            Self(proof.to_bytes())
-        }
-    }
-
-    impl TryFrom<pod::PubkeyValidityProof> for PubkeyValidityProof {
-        type Error = PubkeyValidityProofError;
-
-        fn try_from(pod: pod::PubkeyValidityProof) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
         }
     }
 
