@@ -52,12 +52,11 @@ mod target_arch {
         super::pod,
         crate::{
             curve25519::scalar::PodScalar,
-            errors::{ProofError, ProofVerificationError},
+            errors::ProofError,
             instruction::{
                 transfer::{TransferAmountEncryption, TransferPubkeys},
                 transfer_with_fee::{FeeEncryption, FeeParameters, TransferWithFeePubkeys},
             },
-            range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
                 ciphertext_ciphertext_equality_proof::CiphertextCiphertextEqualityProof,
                 ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
@@ -192,95 +191,6 @@ mod target_arch {
         type Error = PubkeyValidityProofError;
 
         fn try_from(pod: pod::PubkeyValidityProof) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
-        }
-    }
-
-    impl TryFrom<RangeProof> for pod::RangeProof64 {
-        type Error = RangeProofError;
-
-        fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
-            if proof.ipp_proof.serialized_size() != 448 {
-                return Err(ProofVerificationError::Deserialization.into());
-            }
-
-            let mut buf = [0_u8; 672];
-            buf[..32].copy_from_slice(proof.A.as_bytes());
-            buf[32..64].copy_from_slice(proof.S.as_bytes());
-            buf[64..96].copy_from_slice(proof.T_1.as_bytes());
-            buf[96..128].copy_from_slice(proof.T_2.as_bytes());
-            buf[128..160].copy_from_slice(proof.t_x.as_bytes());
-            buf[160..192].copy_from_slice(proof.t_x_blinding.as_bytes());
-            buf[192..224].copy_from_slice(proof.e_blinding.as_bytes());
-            buf[224..672].copy_from_slice(&proof.ipp_proof.to_bytes());
-            Ok(pod::RangeProof64(buf))
-        }
-    }
-
-    impl TryFrom<pod::RangeProof64> for RangeProof {
-        type Error = RangeProofError;
-
-        fn try_from(pod: pod::RangeProof64) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
-        }
-    }
-
-    #[cfg(not(target_os = "solana"))]
-    impl TryFrom<RangeProof> for pod::RangeProof128 {
-        type Error = RangeProofError;
-
-        fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
-            if proof.ipp_proof.serialized_size() != 512 {
-                return Err(ProofVerificationError::Deserialization.into());
-            }
-
-            let mut buf = [0_u8; 736];
-            buf[..32].copy_from_slice(proof.A.as_bytes());
-            buf[32..64].copy_from_slice(proof.S.as_bytes());
-            buf[64..96].copy_from_slice(proof.T_1.as_bytes());
-            buf[96..128].copy_from_slice(proof.T_2.as_bytes());
-            buf[128..160].copy_from_slice(proof.t_x.as_bytes());
-            buf[160..192].copy_from_slice(proof.t_x_blinding.as_bytes());
-            buf[192..224].copy_from_slice(proof.e_blinding.as_bytes());
-            buf[224..736].copy_from_slice(&proof.ipp_proof.to_bytes());
-            Ok(pod::RangeProof128(buf))
-        }
-    }
-
-    impl TryFrom<pod::RangeProof128> for RangeProof {
-        type Error = RangeProofError;
-
-        fn try_from(pod: pod::RangeProof128) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0)
-        }
-    }
-
-    #[cfg(not(target_os = "solana"))]
-    impl TryFrom<RangeProof> for pod::RangeProof256 {
-        type Error = RangeProofError;
-
-        fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
-            if proof.ipp_proof.serialized_size() != 576 {
-                return Err(ProofVerificationError::Deserialization.into());
-            }
-
-            let mut buf = [0_u8; 800];
-            buf[..32].copy_from_slice(proof.A.as_bytes());
-            buf[32..64].copy_from_slice(proof.S.as_bytes());
-            buf[64..96].copy_from_slice(proof.T_1.as_bytes());
-            buf[96..128].copy_from_slice(proof.T_2.as_bytes());
-            buf[128..160].copy_from_slice(proof.t_x.as_bytes());
-            buf[160..192].copy_from_slice(proof.t_x_blinding.as_bytes());
-            buf[192..224].copy_from_slice(proof.e_blinding.as_bytes());
-            buf[224..800].copy_from_slice(&proof.ipp_proof.to_bytes());
-            Ok(pod::RangeProof256(buf))
-        }
-    }
-
-    impl TryFrom<pod::RangeProof256> for RangeProof {
-        type Error = RangeProofError;
-
-        fn try_from(pod: pod::RangeProof256) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }
