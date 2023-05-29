@@ -7,7 +7,7 @@ use {
     solana_clap_utils::{
         hidden_unless_forced,
         input_parsers::pubkeys_of,
-        input_validators::{is_parsable, is_pubkey_or_keypair, is_url},
+        input_validators::{is_parsable, is_pubkey_or_keypair, is_url, is_valid_percentage},
     },
     solana_cli_output::display::format_labeled_address,
     solana_metrics::{datapoint_error, datapoint_info},
