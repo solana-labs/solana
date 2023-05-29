@@ -7,7 +7,7 @@ use {
         },
         errors::ProofError,
         range_proof::RangeProof,
-        sigma_proofs::ctxt_comm_equality_proof::CiphertextCommitmentEqualityProof,
+        sigma_proofs::ciphertext_commitment_equality_proof::CiphertextCommitmentEqualityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,

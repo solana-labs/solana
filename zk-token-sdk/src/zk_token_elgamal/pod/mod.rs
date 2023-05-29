@@ -13,12 +13,12 @@ use {
 pub use {
     auth_encryption::AeCiphertext,
     bytemuck::{Pod, Zeroable},
-    elgamal::{ElGamalCiphertext, ElGamalPubkey},
+    elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
     instruction::{
         FeeEncryption, FeeParameters, TransferAmountEncryption, TransferPubkeys,
         TransferWithFeePubkeys,
     },
-    pedersen::{DecryptHandle, PedersenCommitment},
+    pedersen::PedersenCommitment,
     range_proof::{RangeProof128, RangeProof256, RangeProof64},
     sigma_proofs::{
         AggregatedValidityProof, CiphertextCiphertextEqualityProof,
