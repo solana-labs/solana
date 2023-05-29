@@ -192,7 +192,8 @@ fn get_config() -> Config {
         .collect();
 
     let monitor_active_stake = matches.is_present("monitor_active_stake");
-    let active_stake_alert_threshold = value_t_or_exit!(matches, "active_stake_alert_threshold", u8);
+    let active_stake_alert_threshold =
+        value_t_or_exit!(matches, "active_stake_alert_threshold", u8);
     let ignore_http_bad_gateway = matches.is_present("ignore_http_bad_gateway");
 
     let name_suffix = value_t_or_exit!(matches, "name_suffix", String);
@@ -312,7 +313,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ));
                 }
 
-                if config.monitor_active_stake && current_stake_percent < config.active_stake_alert_threshold as f64 {
+                if config.monitor_active_stake
+                    && current_stake_percent < config.active_stake_alert_threshold as f64
+                {
                     failures.push((
                         "current-stake",
                         format!("Current stake is {current_stake_percent:.2}%"),
