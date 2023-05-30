@@ -1248,9 +1248,7 @@ mod test {
                 exit.clone(),
                 requests_sender,
                 Recycler::default(),
-                Arc::new(StreamerReceiveStats::new(
-                    "repair_request_receiver",
-                )),
+                Arc::new(StreamerReceiveStats::new("repair_request_receiver")),
                 Duration::from_millis(1), // coalesce
                 false,
                 None,
