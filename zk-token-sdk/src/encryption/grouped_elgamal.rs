@@ -103,11 +103,11 @@ impl<const N: usize> GroupedElGamal<N> {
             .map(|ciphertext| ciphertext.decrypt(secret))
     }
 
-    /// Decrypts a grouped ElGamal ciphertext to a number that is interpretted as a positive 32-bit
+    /// Decrypts a grouped ElGamal ciphertext to a number that is interpreted as a positive 32-bit
     /// number (but still of type `u64`).
     ///
     /// If the originally encrypted amount is not a positive 32-bit number, then the function
-    /// returns `None`.
+    /// Result contains `None`.
     fn decrypt_u32(
         grouped_ciphertext: &GroupedElGamalCiphertext<N>,
         secret: &ElGamalSecretKey,
@@ -120,7 +120,7 @@ impl<const N: usize> GroupedElGamal<N> {
 
 /// A grouped ElGamal ciphertext.
 ///
-/// The type is defined with a generic constant constant parameter that specifies the number of
+/// The type is defined with a generic constant parameter that specifies the number of
 /// decryption handles that the ciphertext holds.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GroupedElGamalCiphertext<const N: usize> {
@@ -142,7 +142,7 @@ impl<const N: usize> GroupedElGamalCiphertext<N> {
         GroupedElGamal::decrypt(self, secret, index)
     }
 
-    /// Decrypts the grouped ElGamal ciphertext to a number that is interpretted as a positive 32-bit
+    /// Decrypts the grouped ElGamal ciphertext to a number that is interpreted as a positive 32-bit
     /// number (but still of type `u64`).
     ///
     /// If the originally encrypted amount is not a positive 32-bit number, then the function
@@ -158,8 +158,8 @@ impl<const N: usize> GroupedElGamalCiphertext<N> {
     /// The expected length of a serialized grouped ElGamal ciphertext.
     ///
     /// A grouped ElGamal ciphertext consists of a Pedersen commitment and an array of decryption
-    /// handles. The commitment and decryption handles are a single Curve25519 group element each
-    /// that is serialized as bytes of length 32.
+    /// handles. The commitment and decryption handles are each a single Curve25519 group element 
+    /// that is serialized as 32 bytes.
     fn expected_byte_length() -> usize {
         N.saturating_add(1).saturating_mul(32)
     }
