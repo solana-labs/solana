@@ -1,15 +1,12 @@
 use {
     super::{
-        committer::{CommitTransactionDetails, Committer},
-        BankingStageStats,
-    },
-    crate::{
-        banking_stage::committer::PreBalanceInfo,
+        committer::{CommitTransactionDetails, Committer, PreBalanceInfo},
         immutable_deserialized_packet::ImmutableDeserializedPacket,
-        leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
-        leader_slot_banking_stage_timing_metrics::LeaderExecuteAndCommitTimings,
+        leader_slot_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
+        leader_slot_timing_metrics::LeaderExecuteAndCommitTimings,
         qos_service::QosService,
         unprocessed_transaction_storage::{ConsumeScannerPayload, UnprocessedTransactionStorage},
+        BankingStageStats,
     },
     itertools::Itertools,
     solana_ledger::token_balances::collect_token_balances,
@@ -720,11 +717,9 @@ impl Consumer {
 mod tests {
     use {
         super::*,
-        crate::{
-            banking_stage::tests::{
-                create_slow_genesis_config, sanitize_transactions, simulate_poh,
-            },
+        crate::banking_stage::{
             immutable_deserialized_packet::DeserializedPacketError,
+            tests::{create_slow_genesis_config, sanitize_transactions, simulate_poh},
             unprocessed_packet_batches::{DeserializedPacket, UnprocessedPacketBatches},
             unprocessed_transaction_storage::ThreadType,
         },
