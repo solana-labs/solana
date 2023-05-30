@@ -114,7 +114,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "1.16.0"
+version = "1.17.0"
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solanalabs.com/"
@@ -290,76 +290,76 @@ smpl_jwt = "0.7.1"
 socket2 = "0.4.9"
 soketto = "0.7"
 solana_rbpf = "=0.4.0"
-solana-account-decoder = { path = "account-decoder", version = "=1.16.0" }
-solana-address-lookup-table-program = { path = "programs/address-lookup-table", version = "=1.16.0" }
-solana-banks-client = { path = "banks-client", version = "=1.16.0" }
-solana-banks-interface = { path = "banks-interface", version = "=1.16.0" }
-solana-banks-server = { path = "banks-server", version = "=1.16.0" }
-solana-bench-tps = { path = "bench-tps", version = "=1.16.0" }
-solana-bloom = { path = "bloom", version = "=1.16.0" }
-solana-bpf-loader-program = { path = "programs/bpf_loader", version = "=1.16.0" }
-solana-bucket-map = { path = "bucket_map", version = "=1.16.0" }
-solana-connection-cache = { path = "connection-cache", version = "=1.16.0", default-features = false }
-solana-clap-utils = { path = "clap-utils", version = "=1.16.0" }
-solana-clap-v3-utils = { path = "clap-v3-utils", version = "=1.16.0" }
-solana-cli = { path = "cli", version = "=1.16.0" }
-solana-cli-config = { path = "cli-config", version = "=1.16.0" }
-solana-cli-output = { path = "cli-output", version = "=1.16.0" }
-solana-client = { path = "client", version = "=1.16.0" }
-solana-compute-budget-program = { path = "programs/compute-budget", version = "=1.16.0" }
-solana-config-program = { path = "programs/config", version = "=1.16.0" }
-solana-core = { path = "core", version = "=1.16.0" }
-solana-download-utils = { path = "download-utils", version = "=1.16.0" }
-solana-entry = { path = "entry", version = "=1.16.0" }
-solana-faucet = { path = "faucet", version = "=1.16.0" }
-solana-frozen-abi = { path = "frozen-abi", version = "=1.16.0" }
-solana-frozen-abi-macro = { path = "frozen-abi/macro", version = "=1.16.0" }
-solana-genesis = { path = "genesis", version = "=1.16.0" }
-solana-genesis-utils = { path = "genesis-utils", version = "=1.16.0" }
-solana-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=1.16.0" }
-solana-geyser-plugin-manager = { path = "geyser-plugin-manager", version = "=1.16.0" }
-solana-gossip = { path = "gossip", version = "=1.16.0" }
-solana-loader-v4-program = { path = "programs/loader-v4", version = "=1.16.0" }
-solana-ledger = { path = "ledger", version = "=1.16.0" }
-solana-local-cluster = { path = "local-cluster", version = "=1.16.0" }
-solana-logger = { path = "logger", version = "=1.16.0" }
-solana-measure = { path = "measure", version = "=1.16.0" }
-solana-merkle-tree = { path = "merkle-tree", version = "=1.16.0" }
-solana-metrics = { path = "metrics", version = "=1.16.0" }
-solana-net-utils = { path = "net-utils", version = "=1.16.0" }
-solana-notifier = { path = "notifier", version = "=1.16.0" }
-solana-perf = { path = "perf", version = "=1.16.0" }
-solana-poh = { path = "poh", version = "=1.16.0" }
-solana-program = { path = "sdk/program", version = "=1.16.0" }
-solana-program-runtime = { path = "program-runtime", version = "=1.16.0" }
-solana-program-test = { path = "program-test", version = "=1.16.0" }
-solana-pubsub-client = { path = "pubsub-client", version = "=1.16.0" }
-solana-quic-client = { path = "quic-client", version = "=1.16.0" }
-solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=1.16.0" }
-solana-remote-wallet = { path = "remote-wallet", version = "=1.16.0", default-features = false }
-solana-rpc = { path = "rpc", version = "=1.16.0" }
-solana-rpc-client = { path = "rpc-client", version = "=1.16.0", default-features = false }
-solana-rpc-client-api = { path = "rpc-client-api", version = "=1.16.0" }
-solana-rpc-client-nonce-utils = { path = "rpc-client-nonce-utils", version = "=1.16.0" }
-solana-runtime = { path = "runtime", version = "=1.16.0" }
-solana-sdk = { path = "sdk", version = "=1.16.0" }
-solana-sdk-macro = { path = "sdk/macro", version = "=1.16.0" }
-solana-send-transaction-service = { path = "send-transaction-service", version = "=1.16.0" }
-solana-stake-program = { path = "programs/stake", version = "=1.16.0" }
-solana-storage-bigtable = { path = "storage-bigtable", version = "=1.16.0" }
-solana-storage-proto = { path = "storage-proto", version = "=1.16.0" }
-solana-streamer = { path = "streamer", version = "=1.16.0" }
-solana-system-program = { path = "programs/system", version = "=1.16.0" }
-solana-test-validator = { path = "test-validator", version = "=1.16.0" }
-solana-thin-client = { path = "thin-client", version = "=1.16.0" }
-solana-tpu-client = { path = "tpu-client", version = "=1.16.0", default-features = false }
-solana-transaction-status = { path = "transaction-status", version = "=1.16.0" }
-solana-udp-client = { path = "udp-client", version = "=1.16.0" }
-solana-version = { path = "version", version = "=1.16.0" }
-solana-vote-program = { path = "programs/vote", version = "=1.16.0" }
-solana-zk-keygen = { path = "zk-keygen", version = "=1.16.0" }
-solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=1.16.0" }
-solana-zk-token-sdk = { path = "zk-token-sdk", version = "=1.16.0" }
+solana-account-decoder = { path = "account-decoder", version = "=1.17.0" }
+solana-address-lookup-table-program = { path = "programs/address-lookup-table", version = "=1.17.0" }
+solana-banks-client = { path = "banks-client", version = "=1.17.0" }
+solana-banks-interface = { path = "banks-interface", version = "=1.17.0" }
+solana-banks-server = { path = "banks-server", version = "=1.17.0" }
+solana-bench-tps = { path = "bench-tps", version = "=1.17.0" }
+solana-bloom = { path = "bloom", version = "=1.17.0" }
+solana-bpf-loader-program = { path = "programs/bpf_loader", version = "=1.17.0" }
+solana-bucket-map = { path = "bucket_map", version = "=1.17.0" }
+solana-connection-cache = { path = "connection-cache", version = "=1.17.0", default-features = false }
+solana-clap-utils = { path = "clap-utils", version = "=1.17.0" }
+solana-clap-v3-utils = { path = "clap-v3-utils", version = "=1.17.0" }
+solana-cli = { path = "cli", version = "=1.17.0" }
+solana-cli-config = { path = "cli-config", version = "=1.17.0" }
+solana-cli-output = { path = "cli-output", version = "=1.17.0" }
+solana-client = { path = "client", version = "=1.17.0" }
+solana-compute-budget-program = { path = "programs/compute-budget", version = "=1.17.0" }
+solana-config-program = { path = "programs/config", version = "=1.17.0" }
+solana-core = { path = "core", version = "=1.17.0" }
+solana-download-utils = { path = "download-utils", version = "=1.17.0" }
+solana-entry = { path = "entry", version = "=1.17.0" }
+solana-faucet = { path = "faucet", version = "=1.17.0" }
+solana-frozen-abi = { path = "frozen-abi", version = "=1.17.0" }
+solana-frozen-abi-macro = { path = "frozen-abi/macro", version = "=1.17.0" }
+solana-genesis = { path = "genesis", version = "=1.17.0" }
+solana-genesis-utils = { path = "genesis-utils", version = "=1.17.0" }
+solana-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=1.17.0" }
+solana-geyser-plugin-manager = { path = "geyser-plugin-manager", version = "=1.17.0" }
+solana-gossip = { path = "gossip", version = "=1.17.0" }
+solana-loader-v4-program = { path = "programs/loader-v4", version = "=1.17.0" }
+solana-ledger = { path = "ledger", version = "=1.17.0" }
+solana-local-cluster = { path = "local-cluster", version = "=1.17.0" }
+solana-logger = { path = "logger", version = "=1.17.0" }
+solana-measure = { path = "measure", version = "=1.17.0" }
+solana-merkle-tree = { path = "merkle-tree", version = "=1.17.0" }
+solana-metrics = { path = "metrics", version = "=1.17.0" }
+solana-net-utils = { path = "net-utils", version = "=1.17.0" }
+solana-notifier = { path = "notifier", version = "=1.17.0" }
+solana-perf = { path = "perf", version = "=1.17.0" }
+solana-poh = { path = "poh", version = "=1.17.0" }
+solana-program = { path = "sdk/program", version = "=1.17.0" }
+solana-program-runtime = { path = "program-runtime", version = "=1.17.0" }
+solana-program-test = { path = "program-test", version = "=1.17.0" }
+solana-pubsub-client = { path = "pubsub-client", version = "=1.17.0" }
+solana-quic-client = { path = "quic-client", version = "=1.17.0" }
+solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=1.17.0" }
+solana-remote-wallet = { path = "remote-wallet", version = "=1.17.0", default-features = false }
+solana-rpc = { path = "rpc", version = "=1.17.0" }
+solana-rpc-client = { path = "rpc-client", version = "=1.17.0", default-features = false }
+solana-rpc-client-api = { path = "rpc-client-api", version = "=1.17.0" }
+solana-rpc-client-nonce-utils = { path = "rpc-client-nonce-utils", version = "=1.17.0" }
+solana-runtime = { path = "runtime", version = "=1.17.0" }
+solana-sdk = { path = "sdk", version = "=1.17.0" }
+solana-sdk-macro = { path = "sdk/macro", version = "=1.17.0" }
+solana-send-transaction-service = { path = "send-transaction-service", version = "=1.17.0" }
+solana-stake-program = { path = "programs/stake", version = "=1.17.0" }
+solana-storage-bigtable = { path = "storage-bigtable", version = "=1.17.0" }
+solana-storage-proto = { path = "storage-proto", version = "=1.17.0" }
+solana-streamer = { path = "streamer", version = "=1.17.0" }
+solana-system-program = { path = "programs/system", version = "=1.17.0" }
+solana-test-validator = { path = "test-validator", version = "=1.17.0" }
+solana-thin-client = { path = "thin-client", version = "=1.17.0" }
+solana-tpu-client = { path = "tpu-client", version = "=1.17.0", default-features = false }
+solana-transaction-status = { path = "transaction-status", version = "=1.17.0" }
+solana-udp-client = { path = "udp-client", version = "=1.17.0" }
+solana-version = { path = "version", version = "=1.17.0" }
+solana-vote-program = { path = "programs/vote", version = "=1.17.0" }
+solana-zk-keygen = { path = "zk-keygen", version = "=1.17.0" }
+solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=1.17.0" }
+solana-zk-token-sdk = { path = "zk-token-sdk", version = "=1.17.0" }
 spl-associated-token-account = "=1.1.3"
 spl-instruction-padding = "0.1"
 spl-memo = "=3.0.1"
