@@ -159,7 +159,8 @@ impl<const N: usize> GroupedElGamalCiphertext<N> {
     ///
     /// A grouped ElGamal ciphertext consists of a Pedersen commitment and an array of decryption
     /// handles. The commitment and decryption handles are each a single Curve25519 group element
-    /// that is serialized as 32 bytes.
+    /// that is serialized as 32 bytes. Therefore, the total byte length of a grouped ciphertext is
+    /// `(N+1) * 32`.
     fn expected_byte_length() -> usize {
         N.saturating_add(1).saturating_mul(32)
     }
