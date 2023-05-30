@@ -868,7 +868,6 @@ mod tests {
         super::*,
         rand::{distributions::Uniform, thread_rng, Rng},
         serde_json::Value,
-        solana_account_decoder::parse_token::spl_token_pubkey,
         solana_core::tower_storage::NullTowerStorage,
         solana_gossip::cluster_info::ClusterInfo,
         solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -1006,7 +1005,7 @@ mod tests {
             let wallet1_pubkey = Pubkey::new_unique();
             let wallet2_pubkey = Pubkey::new_unique();
             let non_existent_pubkey = Pubkey::new_unique();
-            let delegate = spl_token_pubkey(&Pubkey::new_unique());
+            let delegate = Pubkey::new_unique();
 
             let mut num_default_spl_token_program_accounts = 0;
             let mut num_default_system_program_accounts = 0;
@@ -1068,14 +1067,14 @@ mod tests {
             // Add a token account
             let mut account1_data = vec![0; TokenAccount::get_packed_len()];
             let token_account1 = TokenAccount {
-                mint: spl_token_pubkey(&mint1_pubkey),
-                owner: spl_token_pubkey(&wallet1_pubkey),
+                mint: mint1_pubkey,
+                owner: wallet1_pubkey,
                 delegate: COption::Some(delegate),
                 amount: 420,
                 state: TokenAccountState::Initialized,
                 is_native: COption::None,
                 delegated_amount: 30,
-                close_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
+                close_authority: COption::Some(wallet1_pubkey),
             };
             TokenAccount::pack(token_account1, &mut account1_data).unwrap();
             let token_account1 = AccountSharedData::from(Account {
@@ -1089,11 +1088,11 @@ mod tests {
             // Add the mint
             let mut mint1_data = vec![0; Mint::get_packed_len()];
             let mint1_state = Mint {
-                mint_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
+                mint_authority: COption::Some(wallet1_pubkey),
                 supply: 500,
                 decimals: 2,
                 is_initialized: true,
-                freeze_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
+                freeze_authority: COption::Some(wallet1_pubkey),
             };
             Mint::pack(mint1_state, &mut mint1_data).unwrap();
             let mint_account1 = AccountSharedData::from(Account {
@@ -1107,14 +1106,14 @@ mod tests {
             // Add another token account with the different owner, but same delegate, and mint
             let mut account2_data = vec![0; TokenAccount::get_packed_len()];
             let token_account2 = TokenAccount {
-                mint: spl_token_pubkey(&mint1_pubkey),
-                owner: spl_token_pubkey(&wallet2_pubkey),
+                mint: mint1_pubkey,
+                owner: wallet2_pubkey,
                 delegate: COption::Some(delegate),
                 amount: 420,
                 state: TokenAccountState::Initialized,
                 is_native: COption::None,
                 delegated_amount: 30,
-                close_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+                close_authority: COption::Some(wallet2_pubkey),
             };
             TokenAccount::pack(token_account2, &mut account2_data).unwrap();
             let token_account2 = AccountSharedData::from(Account {
@@ -1128,14 +1127,14 @@ mod tests {
             // Add another token account with the same owner and delegate but different mint
             let mut account3_data = vec![0; TokenAccount::get_packed_len()];
             let token_account3 = TokenAccount {
-                mint: spl_token_pubkey(&mint2_pubkey),
-                owner: spl_token_pubkey(&wallet2_pubkey),
+                mint: mint2_pubkey,
+                owner: wallet2_pubkey,
                 delegate: COption::Some(delegate),
                 amount: 42,
                 state: TokenAccountState::Initialized,
                 is_native: COption::None,
                 delegated_amount: 30,
-                close_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+                close_authority: COption::Some(wallet2_pubkey),
             };
             TokenAccount::pack(token_account3, &mut account3_data).unwrap();
             let token_account3 = AccountSharedData::from(Account {
@@ -1149,11 +1148,11 @@ mod tests {
             // Add the new mint
             let mut mint2_data = vec![0; Mint::get_packed_len()];
             let mint2_state = Mint {
-                mint_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+                mint_authority: COption::Some(wallet2_pubkey),
                 supply: 200,
                 decimals: 3,
                 is_initialized: true,
-                freeze_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+                freeze_authority: COption::Some(wallet2_pubkey),
             };
             Mint::pack(mint2_state, &mut mint2_data).unwrap();
             let mint_account2 = AccountSharedData::from(Account {
@@ -1365,14 +1364,14 @@ mod tests {
                 let account_pubkey = Pubkey::new_unique();
                 // Add a token account
                 let token_state = TokenAccount {
-                    mint: spl_token_pubkey(&mint_pubkey),
-                    owner: spl_token_pubkey(&owner_pubkey),
-                    delegate: COption::Some(spl_token_pubkey(&delagate_pubkey)),
+                    mint: mint_pubkey,
+                    owner: owner_pubkey,
+                    delegate: COption::Some(delagate_pubkey),
                     amount: 100,
                     state: TokenAccountState::Initialized,
                     is_native: COption::None,
                     delegated_amount: 10,
-                    close_authority: COption::Some(spl_token_pubkey(&owner_pubkey)),
+                    close_authority: COption::Some(owner_pubkey),
                 };
                 TokenAccount::pack(token_state, &mut account_data).unwrap();
                 let token_account = AccountSharedData::from(Account {
@@ -1389,11 +1388,11 @@ mod tests {
                 .next()
                 .unwrap()];
             let mint_state = Mint {
-                mint_authority: COption::Some(spl_token_pubkey(&mint_authority_pubkey)),
+                mint_authority: COption::Some(mint_authority_pubkey),
                 supply: 100 * (num_token_accounts.unwrap_or(1) as u64),
                 decimals: 2,
                 is_initialized: true,
-                freeze_authority: COption::Some(spl_token_pubkey(&mint_authority_pubkey)),
+                freeze_authority: COption::Some(mint_authority_pubkey),
             };
             Mint::pack(mint_state, &mut mint_data).unwrap();
             let mint_account = AccountSharedData::from(Account {
