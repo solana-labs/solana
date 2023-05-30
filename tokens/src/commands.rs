@@ -14,9 +14,7 @@ use {
     indicatif::{ProgressBar, ProgressStyle},
     pickledb::PickleDb,
     serde::{Deserialize, Serialize},
-    solana_account_decoder::parse_token::{
-        pubkey_from_spl_token, real_number_string, spl_token_pubkey,
-    },
+    solana_account_decoder::parse_token::real_number_string,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
         client_error::{Error as ClientError, Result as ClientResult},
@@ -309,11 +307,7 @@ fn build_messages(
                 .iter()
                 .map(|x| {
                     let wallet_address = x.recipient.parse().unwrap();
-                    let associated_token_address = get_associated_token_address(
-                        &wallet_address,
-                        &spl_token_pubkey(&spl_token_args.mint),
-                    );
-                    pubkey_from_spl_token(&associated_token_address)
+                    get_associated_token_address(&wallet_address, &spl_token_args.mint)
                 })
                 .collect::<Vec<_>>();
             let mut maybe_accounts = client.get_multiple_accounts(&associated_token_addresses)?;

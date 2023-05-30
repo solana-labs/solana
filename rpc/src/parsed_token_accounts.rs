@@ -1,11 +1,8 @@
 use {
     jsonrpc_core::{Error, Result},
     solana_account_decoder::{
-        parse_account_data::AccountAdditionalData,
-        parse_token::{
-            get_token_account_mint, spl_token_native_mint, spl_token_native_mint_program_id,
-        },
-        UiAccount, UiAccountData, UiAccountEncoding,
+        parse_account_data::AccountAdditionalData, parse_token::get_token_account_mint, UiAccount,
+        UiAccountData, UiAccountEncoding,
     },
     solana_rpc_client_api::response::RpcKeyedAccount,
     solana_runtime::bank::Bank,
@@ -76,11 +73,8 @@ where
 /// Analyze a mint Pubkey that may be the native_mint and get the mint-account owner (token
 /// program_id) and decimals
 pub fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubkey, u8)> {
-    if mint == &spl_token_native_mint() {
-        Ok((
-            spl_token_native_mint_program_id(),
-            spl_token::native_mint::DECIMALS,
-        ))
+    if mint == &spl_token::native_mint::id() {
+        Ok((spl_token::id(), spl_token::native_mint::DECIMALS))
     } else {
         let mint_account = bank.get_account(mint).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find mint".to_string())
